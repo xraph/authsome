@@ -1,0 +1,38 @@
+# Example OIDC Provider Configuration
+# This demonstrates how to configure the OIDC Provider with real certificates
+
+auth:
+  oidcprovider:
+    # The issuer URL for the OIDC Provider
+    issuer: "https://auth.example.com"
+    
+    # Key configuration for JWT signing
+    keys:
+      # Path to RSA private key file (PEM format)
+      privateKeyPath: "/path/to/private-key.pem"
+      # Path to RSA public key file (PEM format)
+      publicKeyPath: "/path/to/public-key.pem"
+      # How often to rotate keys (duration string)
+      rotationInterval: "24h"
+      # How long to keep keys valid (duration string)
+      keyLifetime: "168h"  # 7 days
+    
+    # Token expiry settings
+    tokens:
+      # Access token expiry (duration string)
+      accessTokenExpiry: "1h"
+      # ID token expiry (duration string)
+      idTokenExpiry: "1h"
+      # Refresh token expiry (duration string)
+      refreshTokenExpiry: "720h"  # 30 days
+
+# Organization-specific overrides (SaaS mode only)
+orgs:
+  # Example organization with custom OIDC settings
+  org_123:
+    auth:
+      oidcprovider:
+        issuer: "https://org123.auth.example.com"
+        keys:
+          privateKeyPath: "/path/to/org123-private-key.pem"
+          publicKeyPath: "/path/to/org123-public-key.pem"

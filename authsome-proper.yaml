@@ -1,0 +1,35 @@
+auth:
+    mode: standalone
+    password:
+        minLength: 8
+        requireLower: true
+        requireNumbers: true
+        requireSymbols: false
+        requireUpper: true
+    rateLimit:
+        enabled: true
+        maxAttempts: 5
+        windowMs: 900000
+    session:
+        cookieMaxAge: 86400
+        cookieName: authsome-session
+        cookieSecure: false
+database:
+    url: authsome.db
+email:
+    provider: smtp
+    smtp:
+        from: noreply@example.com
+        host: localhost
+        password: ""
+        port: 587
+        username: ""
+plugins:
+    twofa:
+        enabled: false
+    username:
+        enabled: true
+server:
+    baseUrl: http://localhost:8080
+    host: localhost
+    port: 8080
