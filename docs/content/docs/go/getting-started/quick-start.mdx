@@ -1,0 +1,604 @@
+---
+title: Quick Start
+description: Build your first authentication app with AuthSome Go in minutes
+icon: Zap
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Quick Start
+
+This guide will walk you through creating your first authentication application with AuthSome Go. In just a few minutes, you'll have a working authentication system with user registration, login, and session management.
+
+<Callout type="info">
+This guide assumes you have already [installed AuthSome](/docs/go/getting-started/installation) and have a database running.
+</Callout>
+
+## Project Setup
+
+Let's create a new Go project and set up AuthSome:
+
+```bash
+# Create a new directory for your project
+mkdir my-auth-app && cd my-auth-app
+
+# Initialize Go module
+go mod init my-auth-app
+
+# Install required dependencies
+go get github.com/xraph/authsome
+go get github.com/xraph/forge
+go get github.com/lib/pq  # or your preferred database driver
+```
+
+## Basic Configuration
+
+Create a `main.go` file with the basic AuthSome setup:
+
+```go
+package main
+
+import (
+    "log"
+    "os"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/forge"
+)
+
+func main() {
+    // Initialize Forge app
+    app := forge.New()
+
+    // Configure AuthSome
+    auth, err := authsome.New(authsome.Config{
+        Mode: authsome.Standalone,
+        Database: authsome.DatabaseConfig{
+            Driver: "postgres",
+            URL:    getEnv("DATABASE_URL", "postgres://user:pass@localhost/authsome_db?sslmode=disable"),
+        },
+        Session: authsome.SessionConfig{
+            Secret:    getEnv("SESSION_SECRET", "your-super-secret-key-change-in-production"),
+            ExpiresIn: "7d",
+        },
+        Security: authsome.SecurityConfig{
+            AllowedOrigins: []string{"http://localhost:3000"},
+            RateLimit: authsome.RateLimitConfig{
+                Enabled: true,
+                Max:     100,
+                Window:  "1m",
+            },
+        },
+    })
+    if err != nil {
+        log.Fatalf("Failed to initialize AuthSome: %v", err)
+    }
+
+    // Mount AuthSome to your app
+    auth.Mount(app, "/auth")
+
+    // Add a simple home route
+    app.GET("/", func(c *forge.Context) error {
+        return c.JSON(200, map[string]string{
+            "message": "Welcome to AuthSome!",
+            "auth":    "/auth",
+        })
+    })
+
+    // Start the server
+    log.Println("🚀 Server starting on http://localhost:8080")
+    log.Fatal(app.Listen(":8080"))
+}
+
+// Helper function to get environment variables with defaults
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+```
+
+## Environment Configuration
+
+Create a `.env` file for your environment variables:
+
+```bash
+# Database configuration
+DATABASE_URL=postgres://user:pass@localhost/authsome_db?sslmode=disable
+
+# Session secret (generate a secure random string for production)
+SESSION_SECRET=your-super-secret-key-change-in-production
+
+# Optional: Redis for session caching
+REDIS_URL=redis://localhost:6379
+
+# Optional: SMTP for email verification
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+<Callout type="warn">
+**Security Note**: Never commit your `.env` file to version control. Add it to your `.gitignore` file.
+</Callout>
+
+## Database Migration
+
+AuthSome automatically handles database migrations. Run your application to create the necessary tables:
+
+```bash
+go run main.go
+```
+
+You should see output similar to:
+```
+🔄 Running database migrations...
+✅ Migration completed successfully
+🚀 Server starting on http://localhost:8080
+```
+
+## Testing the API
+
+Now let's test the authentication endpoints. AuthSome provides RESTful APIs out of the box:
+
+<Tabs items={['User Registration', 'User Login', 'Get Session', 'Logout']}>
+  <Tab value="User Registration">
+    Register a new user:
+
+    ```bash
+    curl -X POST http://localhost:8080/auth/signup \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "user@example.com",
+        "password": "securepassword123",
+        "name": "John Doe"
+      }'
+    ```
+
+    Expected response:
+    ```json
+    {
+      "user": {
+        "id": "usr_1234567890",
+        "email": "user@example.com",
+        "name": "John Doe",
+        "verified": false,
+        "createdAt": "2024-01-15T10:30:00Z"
+      },
+      "session": {
+        "id": "sess_1234567890",
+        "expiresAt": "2024-01-22T10:30:00Z"
+      }
+    }
+    ```
+  </Tab>
+  <Tab value="User Login">
+    Login with existing credentials:
+
+    ```bash
+    curl -X POST http://localhost:8080/auth/signin \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "user@example.com",
+        "password": "securepassword123"
+      }'
+    ```
+
+    Expected response:
+    ```json
+    {
+      "user": {
+        "id": "usr_1234567890",
+        "email": "user@example.com",
+        "name": "John Doe",
+        "verified": false
+      },
+      "session": {
+        "id": "sess_1234567890",
+        "expiresAt": "2024-01-22T10:30:00Z"
+      }
+    }
+    ```
+  </Tab>
+  <Tab value="Get Session">
+    Get current session (include cookies from login):
+
+    ```bash
+    curl -X GET http://localhost:8080/auth/session \
+      -H "Cookie: authsome.session=your-session-cookie"
+    ```
+
+    Expected response:
+    ```json
+    {
+      "user": {
+        "id": "usr_1234567890",
+        "email": "user@example.com",
+        "name": "John Doe",
+        "verified": false
+      },
+      "session": {
+        "id": "sess_1234567890",
+        "expiresAt": "2024-01-22T10:30:00Z"
+      }
+    }
+    ```
+  </Tab>
+  <Tab value="Logout">
+    Logout and invalidate session:
+
+    ```bash
+    curl -X POST http://localhost:8080/auth/signout \
+      -H "Cookie: authsome.session=your-session-cookie"
+    ```
+
+    Expected response:
+    ```json
+    {
+      "message": "Successfully signed out"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Adding Middleware Protection
+
+Protect your routes with AuthSome middleware:
+
+```go
+package main
+
+import (
+    "log"
+    "os"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/forge"
+)
+
+func main() {
+    app := forge.New()
+
+    // Initialize AuthSome (same as before)
+    auth, err := authsome.New(authsome.Config{
+        // ... configuration
+    })
+    if err != nil {
+        log.Fatalf("Failed to initialize AuthSome: %v", err)
+    }
+
+    // Mount AuthSome
+    auth.Mount(app, "/auth")
+
+    // Public routes
+    app.GET("/", func(c *forge.Context) error {
+        return c.JSON(200, map[string]string{
+            "message": "Welcome to AuthSome!",
+            "auth":    "/auth",
+        })
+    })
+
+    // Protected routes group
+    protected := app.Group("/api")
+    protected.Use(auth.RequireAuth()) // Add authentication middleware
+
+    protected.GET("/profile", func(c *forge.Context) error {
+        // Get user from context (set by middleware)
+        user := auth.GetUser(c)
+        return c.JSON(200, map[string]interface{}{
+            "message": "This is a protected route",
+            "user":    user,
+        })
+    })
+
+    protected.GET("/dashboard", func(c *forge.Context) error {
+        user := auth.GetUser(c)
+        return c.JSON(200, map[string]interface{}{
+            "message": "Welcome to your dashboard!",
+            "user": map[string]interface{}{
+                "id":    user.ID,
+                "email": user.Email,
+                "name":  user.Name,
+            },
+        })
+    })
+
+    log.Println("🚀 Server starting on http://localhost:8080")
+    log.Fatal(app.Listen(":8080"))
+}
+```
+
+## Testing Protected Routes
+
+Test the protected routes:
+
+```bash
+# This should return 401 Unauthorized
+curl -X GET http://localhost:8080/api/profile
+
+# Login first to get session cookie
+curl -X POST http://localhost:8080/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "securepassword123"
+  }' \
+  -c cookies.txt
+
+# Now access protected route with session cookie
+curl -X GET http://localhost:8080/api/profile \
+  -b cookies.txt
+```
+
+## Adding Plugins
+
+Let's add some plugins to enhance functionality:
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/username"
+    "github.com/xraph/authsome/plugins/twofa"
+    "github.com/xraph/forge"
+)
+
+func main() {
+    app := forge.New()
+
+    // Configure AuthSome with plugins
+    auth, err := authsome.New(authsome.Config{
+        Mode: authsome.Standalone,
+        Database: authsome.DatabaseConfig{
+            Driver: "postgres",
+            URL:    os.Getenv("DATABASE_URL"),
+        },
+        Plugins: []authsome.Plugin{
+            username.New(username.Config{
+                Enabled:      true,
+                MinLength:    3,
+                MaxLength:    30,
+                AllowNumbers: true,
+                AllowSpecial: false,
+            }),
+            twofa.New(twofa.Config{
+                Enabled:    true,
+                Issuer:     "My Auth App",
+                BackupCodes: true,
+            }),
+        },
+    })
+    if err != nil {
+        log.Fatalf("Failed to initialize AuthSome: %v", err)
+    }
+
+    // Mount AuthSome
+    auth.Mount(app, "/auth")
+
+    // Your routes here...
+
+    log.Println("🚀 Server with plugins starting on http://localhost:8080")
+    log.Fatal(app.Listen(":8080"))
+}
+```
+
+## Frontend Integration
+
+Here's a simple HTML page to test your authentication:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AuthSome Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; }
+        .form-group { margin: 15px 0; }
+        input { width: 100%; padding: 8px; margin: 5px 0; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+        .hidden { display: none; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>AuthSome Demo</h1>
+    
+    <div id="auth-forms">
+        <h2>Sign Up</h2>
+        <form id="signup-form">
+            <div class="form-group">
+                <input type="text" id="signup-name" placeholder="Full Name" required>
+            </div>
+            <div class="form-group">
+                <input type="email" id="signup-email" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="signup-password" placeholder="Password" required>
+            </div>
+            <button type="submit">Sign Up</button>
+        </form>
+
+        <h2>Sign In</h2>
+        <form id="signin-form">
+            <div class="form-group">
+                <input type="email" id="signin-email" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="signin-password" placeholder="Password" required>
+            </div>
+            <button type="submit">Sign In</button>
+        </form>
+    </div>
+
+    <div id="dashboard" class="hidden">
+        <h2>Dashboard</h2>
+        <p>Welcome, <span id="user-name"></span>!</p>
+        <button id="logout-btn">Logout</button>
+    </div>
+
+    <div id="message"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/auth';
+        
+        // Check if user is already logged in
+        checkSession();
+
+        document.getElementById('signup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signup-name').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, email, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('Account created successfully!', 'success');
+                    showDashboard(data.user);
+                } else {
+                    showMessage(data.message || 'Signup failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error', 'error');
+            }
+        });
+
+        document.getElementById('signin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('signin-email').value;
+            const password = document.getElementById('signin-password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/signin`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('Signed in successfully!', 'success');
+                    showDashboard(data.user);
+                } else {
+                    showMessage(data.message || 'Signin failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error', 'error');
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${API_BASE}/signout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    showMessage('Signed out successfully!', 'success');
+                    showAuthForms();
+                }
+            } catch (error) {
+                showMessage('Logout failed', 'error');
+            }
+        });
+
+        async function checkSession() {
+            try {
+                const response = await fetch(`${API_BASE}/session`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showDashboard(data.user);
+                }
+            } catch (error) {
+                // User not logged in
+            }
+        }
+
+        function showDashboard(user) {
+            document.getElementById('auth-forms').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            document.getElementById('user-name').textContent = user.name;
+        }
+
+        function showAuthForms() {
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('auth-forms').classList.remove('hidden');
+        }
+
+        function showMessage(message, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = message;
+            messageEl.className = type;
+            setTimeout(() => {
+                messageEl.textContent = '';
+                messageEl.className = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+```
+
+Save this as `index.html` and serve it with a simple HTTP server:
+
+```bash
+# Python 3
+python -m http.server 3000
+
+# Node.js (if you have npx)
+npx serve .
+
+# Go (if you have a simple server)
+go run -c "package main; import \"net/http\"; func main() { http.ListenAndServe(\":3000\", http.FileServer(http.Dir(\".\"))) }"
+```
+
+Visit `http://localhost:3000` to test your authentication system!
+
+## What's Next?
+
+<Cards>
+  <Card
+    title="Configuration Guide"
+    description="Learn about all configuration options and environment setup"
+    href="/docs/go/getting-started/configuration"
+  />
+  <Card
+    title="Core Concepts"
+    description="Understand authentication, sessions, and security concepts"
+    href="/docs/go/concepts/authentication"
+  />
+  <Card
+    title="Plugin System"
+    description="Explore available plugins and create custom ones"
+    href="/docs/go/plugins/overview"
+  />
+  <Card
+    title="Production Deployment"
+    description="Deploy your AuthSome app to production"
+    href="/docs/go/guides/deployment"
+  />
+</Cards>
+
+<Callout type="tip">
+**Congratulations!** You've successfully created your first AuthSome application. The system now supports user registration, login, session management, and route protection.
+</Callout>

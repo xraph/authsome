@@ -1,0 +1,1054 @@
+---
+title: Your First App
+description: Build a complete authentication application with AuthSome Go from scratch
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Your First App
+
+In this tutorial, you'll build a complete authentication application using AuthSome Go. We'll create a simple blog application with user registration, login, protected routes, and session management.
+
+## What You'll Build
+
+By the end of this tutorial, you'll have:
+
+- ✅ User registration and login system
+- ✅ Protected routes requiring authentication
+- ✅ Session management with cookies
+- ✅ Password validation and security
+- ✅ Clean logout functionality
+- ✅ Basic user profile management
+
+<Callout type="info">
+**Prerequisites**: Make sure you have Go 1.21+, PostgreSQL, and completed the [Installation](/docs/go/getting-started/installation) guide.
+</Callout>
+
+## Project Setup
+
+Let's start by creating a new Go project:
+
+```bash
+mkdir blog-app
+cd blog-app
+go mod init blog-app
+
+# Install dependencies
+go get github.com/xraph/authsome
+go get github.com/xraph/forge
+go get github.com/lib/pq
+```
+
+Create the basic project structure:
+
+```bash
+mkdir -p {cmd,internal/{handlers,middleware},web/{templates,static},migrations}
+touch cmd/main.go
+touch internal/handlers/{auth,blog}.go
+touch internal/middleware/auth.go
+```
+
+## Database Setup
+
+First, create a PostgreSQL database:
+
+```sql
+CREATE DATABASE blog_app;
+CREATE USER blog_user WITH PASSWORD 'blog_password';
+GRANT ALL PRIVILEGES ON DATABASE blog_app TO blog_user;
+```
+
+Create a `.env` file for configuration:
+
+```bash
+# Database
+DATABASE_URL=postgres://blog_user:blog_password@localhost:5432/blog_app?sslmode=disable
+
+# AuthSome Configuration
+AUTHSOME_MODE=standalone
+AUTHSOME_SESSION_SECRET=your-super-secret-key-change-this-in-production
+AUTHSOME_SESSION_COOKIE_NAME=blog.session
+AUTHSOME_SESSION_EXPIRES_IN=7d
+
+# Server
+PORT=8080
+```
+
+## Main Application
+
+Create the main application file:
+
+<Tabs items={['cmd/main.go', 'Configuration', 'Error Handling']}>
+  <Tab value="cmd/main.go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "syscall"
+        "time"
+
+        "github.com/xraph/authsome"
+        "github.com/xraph/forge"
+        "blog-app/internal/handlers"
+        "blog-app/internal/middleware"
+    )
+
+    func main() {
+        // Load environment variables
+        if err := loadEnv(); err != nil {
+            log.Fatalf("Failed to load environment: %v", err)
+        }
+
+        // Create Forge application
+        app := forge.New(forge.Config{
+            Name:    "Blog App",
+            Version: "1.0.0",
+        })
+
+        // Initialize AuthSome
+        auth, err := initAuthSome()
+        if err != nil {
+            log.Fatalf("Failed to initialize AuthSome: %v", err)
+        }
+
+        // Run database migrations
+        if err := auth.Migrate(context.Background()); err != nil {
+            log.Fatalf("Failed to run migrations: %v", err)
+        }
+
+        // Mount AuthSome to the application
+        auth.Mount(app, "/auth")
+
+        // Initialize handlers
+        authHandler := handlers.NewAuthHandler(auth)
+        blogHandler := handlers.NewBlogHandler(auth)
+        authMiddleware := middleware.NewAuthMiddleware(auth)
+
+        // Setup routes
+        setupRoutes(app, authHandler, blogHandler, authMiddleware)
+
+        // Start server
+        port := getEnv("PORT", "8080")
+        log.Printf("Starting server on port %s", port)
+        
+        if err := startServer(app, port); err != nil {
+            log.Fatalf("Server failed: %v", err)
+        }
+    }
+
+    // initAuthSome initializes AuthSome with configuration
+    func initAuthSome() (*authsome.Auth, error) {
+        config := authsome.Config{
+            Mode: authsome.Standalone,
+            
+            Database: authsome.DatabaseConfig{
+                Driver: "postgres",
+                URL:    getEnv("DATABASE_URL", ""),
+            },
+            
+            Session: authsome.SessionConfig{
+                Secret:    getEnv("AUTHSOME_SESSION_SECRET", ""),
+                ExpiresIn: getEnv("AUTHSOME_SESSION_EXPIRES_IN", "7d"),
+                Cookie: authsome.CookieConfig{
+                    Name:     getEnv("AUTHSOME_SESSION_COOKIE_NAME", "blog.session"),
+                    Path:     "/",
+                    HttpOnly: true,
+                    Secure:   false, // Set to true in production with HTTPS
+                    SameSite: "lax",
+                },
+            },
+            
+            Security: authsome.SecurityConfig{
+                PasswordPolicy: authsome.PasswordPolicyConfig{
+                    MinLength:      8,
+                    RequireUpper:   true,
+                    RequireLower:   true,
+                    RequireNumbers: true,
+                    RequireSymbols: false,
+                },
+                RateLimit: authsome.RateLimitConfig{
+                    Enabled: true,
+                    Max:     100,
+                    Window:  "1m",
+                },
+            },
+        }
+
+        return authsome.New(config)
+    }
+
+    // setupRoutes configures all application routes
+    func setupRoutes(app *forge.App, authHandler *handlers.AuthHandler, 
+                     blogHandler *handlers.BlogHandler, authMiddleware *middleware.AuthMiddleware) {
+        
+        // Public routes
+        app.GET("/", blogHandler.Home)
+        app.GET("/login", authHandler.LoginPage)
+        app.GET("/register", authHandler.RegisterPage)
+        
+        // Protected routes
+        protected := app.Group("/", authMiddleware.RequireAuth)
+        protected.GET("/dashboard", blogHandler.Dashboard)
+        protected.GET("/profile", authHandler.ProfilePage)
+        protected.POST("/posts", blogHandler.CreatePost)
+        protected.GET("/posts/:id/edit", blogHandler.EditPostPage)
+        protected.PUT("/posts/:id", blogHandler.UpdatePost)
+        protected.DELETE("/posts/:id", blogHandler.DeletePost)
+        
+        // Static files
+        app.Static("/static", "./web/static")
+    }
+
+    // startServer starts the HTTP server with graceful shutdown
+    func startServer(app *forge.App, port string) error {
+        server := &http.Server{
+            Addr:    ":" + port,
+            Handler: app,
+        }
+
+        // Start server in a goroutine
+        go func() {
+            if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+                log.Fatalf("Server failed to start: %v", err)
+            }
+        }()
+
+        // Wait for interrupt signal to gracefully shutdown
+        quit := make(chan os.Signal, 1)
+        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+        <-quit
+
+        log.Println("Shutting down server...")
+
+        // Graceful shutdown with timeout
+        ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+        defer cancel()
+
+        return server.Shutdown(ctx)
+    }
+
+    // Helper functions
+    func getEnv(key, defaultValue string) string {
+        if value := os.Getenv(key); value != "" {
+            return value
+        }
+        return defaultValue
+    }
+
+    func loadEnv() error {
+        // Simple .env file loader (you can use a library like godotenv)
+        // For simplicity, we'll rely on environment variables being set
+        return nil
+    }
+    ```
+  </Tab>
+  <Tab value="Configuration">
+    The configuration demonstrates several important concepts:
+
+    **Standalone Mode**: Perfect for single-tenant applications
+    ```go
+    Mode: authsome.Standalone,
+    ```
+
+    **Database Configuration**: Using PostgreSQL with connection string
+    ```go
+    Database: authsome.DatabaseConfig{
+        Driver: "postgres",
+        URL:    getEnv("DATABASE_URL", ""),
+    },
+    ```
+
+    **Session Management**: Secure cookie-based sessions
+    ```go
+    Session: authsome.SessionConfig{
+        Secret:    getEnv("AUTHSOME_SESSION_SECRET", ""),
+        ExpiresIn: "7d",
+        Cookie: authsome.CookieConfig{
+            HttpOnly: true,  // Prevent XSS
+            SameSite: "lax", // CSRF protection
+        },
+    },
+    ```
+
+    **Security Policies**: Password requirements and rate limiting
+    ```go
+    Security: authsome.SecurityConfig{
+        PasswordPolicy: authsome.PasswordPolicyConfig{
+            MinLength:      8,
+            RequireUpper:   true,
+            RequireLower:   true,
+            RequireNumbers: true,
+        },
+        RateLimit: authsome.RateLimitConfig{
+            Enabled: true,
+            Max:     100,
+            Window:  "1m",
+        },
+    },
+    ```
+  </Tab>
+  <Tab value="Error Handling">
+    The application includes proper error handling:
+
+    **Startup Errors**: Fail fast if configuration is invalid
+    ```go
+    if err := auth.Migrate(context.Background()); err != nil {
+        log.Fatalf("Failed to run migrations: %v", err)
+    }
+    ```
+
+    **Graceful Shutdown**: Handle interrupts properly
+    ```go
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    return server.Shutdown(ctx)
+    ```
+
+    **Environment Validation**: Provide defaults and validate required values
+    ```go
+    func getEnv(key, defaultValue string) string {
+        if value := os.Getenv(key); value != "" {
+            return value
+        }
+        return defaultValue
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Authentication Handlers
+
+Create handlers for authentication pages:
+
+<Tabs items={['Auth Handler', 'Login Page', 'Register Page']}>
+  <Tab value="Auth Handler">
+    ```go
+    // internal/handlers/auth.go
+    package handlers
+
+    import (
+        "net/http"
+        
+        "github.com/xraph/authsome"
+        "github.com/xraph/forge"
+    )
+
+    // AuthHandler handles authentication-related requests
+    type AuthHandler struct {
+        auth *authsome.Auth
+    }
+
+    // NewAuthHandler creates a new authentication handler
+    func NewAuthHandler(auth *authsome.Auth) *AuthHandler {
+        return &AuthHandler{auth: auth}
+    }
+
+    // LoginPage renders the login page
+    func (h *AuthHandler) LoginPage(c *forge.Context) error {
+        // Check if user is already logged in
+        if session := h.auth.GetSession(c); session != nil {
+            return c.Redirect(http.StatusFound, "/dashboard")
+        }
+
+        return c.HTML(http.StatusOK, `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Login - Blog App</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+                .form-group { margin-bottom: 15px; }
+                label { display: block; margin-bottom: 5px; font-weight: bold; }
+                input[type="email"], input[type="password"] { 
+                    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                }
+                button { 
+                    width: 100%; padding: 12px; background: #007bff; color: white; 
+                    border: none; border-radius: 4px; cursor: pointer; font-size: 16px;
+                }
+                button:hover { background: #0056b3; }
+                .error { color: red; margin-bottom: 15px; }
+                .link { text-align: center; margin-top: 15px; }
+                .link a { color: #007bff; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <h1>Login</h1>
+            <form action="/auth/sign-in" method="POST">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            <div class="link">
+                <a href="/register">Don't have an account? Register here</a>
+            </div>
+        </body>
+        </html>
+        `)
+    }
+
+    // RegisterPage renders the registration page
+    func (h *AuthHandler) RegisterPage(c *forge.Context) error {
+        // Check if user is already logged in
+        if session := h.auth.GetSession(c); session != nil {
+            return c.Redirect(http.StatusFound, "/dashboard")
+        }
+
+        return c.HTML(http.StatusOK, `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Register - Blog App</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+                .form-group { margin-bottom: 15px; }
+                label { display: block; margin-bottom: 5px; font-weight: bold; }
+                input[type="email"], input[type="password"], input[type="text"] { 
+                    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                }
+                button { 
+                    width: 100%; padding: 12px; background: #28a745; color: white; 
+                    border: none; border-radius: 4px; cursor: pointer; font-size: 16px;
+                }
+                button:hover { background: #1e7e34; }
+                .error { color: red; margin-bottom: 15px; }
+                .link { text-align: center; margin-top: 15px; }
+                .link a { color: #007bff; text-decoration: none; }
+                .password-requirements {
+                    font-size: 12px; color: #666; margin-top: 5px;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Register</h1>
+            <form action="/auth/sign-up" method="POST">
+                <div class="form-group">
+                    <label for="name">Full Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                    <div class="password-requirements">
+                        Password must be at least 8 characters with uppercase, lowercase, and numbers.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password:</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" required>
+                </div>
+                <button type="submit">Register</button>
+            </form>
+            <div class="link">
+                <a href="/login">Already have an account? Login here</a>
+            </div>
+        </body>
+        </html>
+        `)
+    }
+
+    // ProfilePage renders the user profile page
+    func (h *AuthHandler) ProfilePage(c *forge.Context) error {
+        session := h.auth.GetSession(c)
+        if session == nil {
+            return c.Redirect(http.StatusFound, "/login")
+        }
+
+        user, err := h.auth.GetUser(c.Context(), session.UserID)
+        if err != nil {
+            return c.JSON(http.StatusInternalServerError, map[string]string{
+                "error": "Failed to load user profile",
+            })
+        }
+
+        return c.HTML(http.StatusOK, fmt.Sprintf(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Profile - Blog App</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+                .profile-info { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+                .profile-info h2 { margin-top: 0; }
+                .info-row { margin-bottom: 10px; }
+                .label { font-weight: bold; color: #666; }
+                .nav { margin-bottom: 20px; }
+                .nav a { margin-right: 15px; color: #007bff; text-decoration: none; }
+                .nav a:hover { text-decoration: underline; }
+                .logout-btn { 
+                    background: #dc3545; color: white; padding: 8px 16px; 
+                    border: none; border-radius: 4px; cursor: pointer; text-decoration: none;
+                }
+                .logout-btn:hover { background: #c82333; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>User Profile</h1>
+                <form action="/auth/sign-out" method="POST" style="display: inline;">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+            </div>
+            
+            <div class="nav">
+                <a href="/dashboard">Dashboard</a>
+                <a href="/">Home</a>
+            </div>
+
+            <div class="profile-info">
+                <h2>Profile Information</h2>
+                <div class="info-row">
+                    <span class="label">Name:</span> %s
+                </div>
+                <div class="info-row">
+                    <span class="label">Email:</span> %s
+                </div>
+                <div class="info-row">
+                    <span class="label">Member Since:</span> %s
+                </div>
+                <div class="info-row">
+                    <span class="label">Last Login:</span> %s
+                </div>
+            </div>
+        </body>
+        </html>
+        `, user.Name, user.Email, user.CreatedAt.Format("January 2, 2006"), 
+           session.CreatedAt.Format("January 2, 2006 at 3:04 PM")))
+    }
+    ```
+  </Tab>
+  <Tab value="Login Page">
+    The login page includes:
+
+    **Form Validation**: Client-side validation for required fields
+    ```html
+    <input type="email" id="email" name="email" required>
+    <input type="password" id="password" name="password" required>
+    ```
+
+    **AuthSome Integration**: Form posts to AuthSome's sign-in endpoint
+    ```html
+    <form action="/auth/sign-in" method="POST">
+    ```
+
+    **User Experience**: Clean styling and helpful navigation
+    ```html
+    <div class="link">
+        <a href="/register">Don't have an account? Register here</a>
+    </div>
+    ```
+
+    **Security**: Proper form structure and CSRF protection (handled by AuthSome)
+  </Tab>
+  <Tab value="Register Page">
+    The registration page features:
+
+    **Password Requirements**: Clear indication of password policy
+    ```html
+    <div class="password-requirements">
+        Password must be at least 8 characters with uppercase, lowercase, and numbers.
+    </div>
+    ```
+
+    **Form Fields**: All required fields for user registration
+    ```html
+    <input type="text" id="name" name="name" required>
+    <input type="email" id="email" name="email" required>
+    <input type="password" id="password" name="password" required>
+    <input type="password" id="confirmPassword" name="confirmPassword" required>
+    ```
+
+    **AuthSome Integration**: Form posts to AuthSome's sign-up endpoint
+    ```html
+    <form action="/auth/sign-up" method="POST">
+    ```
+  </Tab>
+</Tabs>
+
+## Blog Handlers
+
+Create handlers for the blog functionality:
+
+```go
+// internal/handlers/blog.go
+package handlers
+
+import (
+    "fmt"
+    "net/http"
+    "time"
+    
+    "github.com/xraph/authsome"
+    "github.com/xraph/forge"
+)
+
+// BlogHandler handles blog-related requests
+type BlogHandler struct {
+    auth *authsome.Auth
+}
+
+// NewBlogHandler creates a new blog handler
+func NewBlogHandler(auth *authsome.Auth) *BlogHandler {
+    return &BlogHandler{auth: auth}
+}
+
+// Home renders the home page with public blog posts
+func (h *BlogHandler) Home(c *forge.Context) error {
+    session := h.auth.GetSession(c)
+    
+    return c.HTML(http.StatusOK, fmt.Sprintf(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Blog App</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+            .auth-links a { margin-left: 15px; color: #007bff; text-decoration: none; }
+            .auth-links a:hover { text-decoration: underline; }
+            .welcome { background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+            .post { background: #f8f9fa; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+            .post-meta { color: #666; font-size: 14px; margin-bottom: 10px; }
+            .cta { text-align: center; padding: 40px; background: #f8f9fa; border-radius: 8px; }
+            .btn { 
+                display: inline-block; padding: 12px 24px; background: #007bff; color: white; 
+                text-decoration: none; border-radius: 4px; margin: 0 10px;
+            }
+            .btn:hover { background: #0056b3; }
+            .btn-secondary { background: #28a745; }
+            .btn-secondary:hover { background: #1e7e34; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>My Blog</h1>
+            <div class="auth-links">
+                %s
+            </div>
+        </div>
+
+        %s
+
+        <div class="post">
+            <div class="post-meta">Published on March 15, 2024 by John Doe</div>
+            <h2>Welcome to Our Blog</h2>
+            <p>This is a sample blog post to demonstrate the AuthSome Go authentication system. 
+               You can register for an account to create your own posts and manage your profile.</p>
+        </div>
+
+        <div class="post">
+            <div class="post-meta">Published on March 10, 2024 by Jane Smith</div>
+            <h2>Getting Started with Go</h2>
+            <p>Go is a powerful programming language that's perfect for building web applications. 
+               In this post, we'll explore some basic concepts and best practices.</p>
+        </div>
+
+        %s
+    </body>
+    </html>
+    `, h.getAuthLinks(session), h.getWelcomeMessage(session), h.getCTA(session)))
+}
+
+// Dashboard renders the user dashboard
+func (h *BlogHandler) Dashboard(c *forge.Context) error {
+    session := h.auth.GetSession(c)
+    if session == nil {
+        return c.Redirect(http.StatusFound, "/login")
+    }
+
+    user, err := h.auth.GetUser(c.Context(), session.UserID)
+    if err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{
+            "error": "Failed to load user data",
+        })
+    }
+
+    return c.HTML(http.StatusOK, fmt.Sprintf(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Dashboard - Blog App</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+            .nav { margin-bottom: 20px; }
+            .nav a { margin-right: 15px; color: #007bff; text-decoration: none; }
+            .nav a:hover { text-decoration: underline; }
+            .welcome { background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+            .create-post { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+            .form-group { margin-bottom: 15px; }
+            label { display: block; margin-bottom: 5px; font-weight: bold; }
+            input[type="text"], textarea { 
+                width: 100%%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+            }
+            textarea { height: 120px; resize: vertical; }
+            button { 
+                padding: 10px 20px; background: #28a745; color: white; 
+                border: none; border-radius: 4px; cursor: pointer;
+            }
+            button:hover { background: #1e7e34; }
+            .logout-btn { 
+                background: #dc3545; color: white; padding: 8px 16px; 
+                border: none; border-radius: 4px; cursor: pointer; text-decoration: none;
+            }
+            .logout-btn:hover { background: #c82333; }
+            .posts { margin-top: 30px; }
+            .post { background: #f8f9fa; padding: 20px; margin-bottom: 15px; border-radius: 8px; }
+            .post-actions { margin-top: 10px; }
+            .post-actions button { 
+                margin-right: 10px; padding: 5px 10px; font-size: 12px;
+            }
+            .edit-btn { background: #ffc107; color: #000; }
+            .delete-btn { background: #dc3545; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Dashboard</h1>
+            <form action="/auth/sign-out" method="POST" style="display: inline;">
+                <button type="submit" class="logout-btn">Logout</button>
+            </form>
+        </div>
+
+        <div class="nav">
+            <a href="/">Home</a>
+            <a href="/profile">Profile</a>
+        </div>
+
+        <div class="welcome">
+            <h2>Welcome back, %s!</h2>
+            <p>Manage your blog posts and profile from this dashboard.</p>
+        </div>
+
+        <div class="create-post">
+            <h3>Create New Post</h3>
+            <form action="/posts" method="POST">
+                <div class="form-group">
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="content">Content:</label>
+                    <textarea id="content" name="content" required></textarea>
+                </div>
+                <button type="submit">Publish Post</button>
+            </form>
+        </div>
+
+        <div class="posts">
+            <h3>Your Posts</h3>
+            <div class="post">
+                <h4>Sample Post Title</h4>
+                <p>This is a sample post. In a real application, this would be loaded from the database.</p>
+                <div class="post-actions">
+                    <button class="edit-btn">Edit</button>
+                    <button class="delete-btn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `, user.Name))
+}
+
+// CreatePost handles post creation (placeholder)
+func (h *BlogHandler) CreatePost(c *forge.Context) error {
+    // In a real application, you would save the post to the database
+    return c.Redirect(http.StatusFound, "/dashboard")
+}
+
+// Helper methods for rendering
+func (h *BlogHandler) getAuthLinks(session *authsome.Session) string {
+    if session != nil {
+        return `<a href="/dashboard">Dashboard</a><a href="/profile">Profile</a>`
+    }
+    return `<a href="/login">Login</a><a href="/register">Register</a>`
+}
+
+func (h *BlogHandler) getWelcomeMessage(session *authsome.Session) string {
+    if session != nil {
+        return `<div class="welcome">
+            <p>Welcome back! You're logged in and can access your <a href="/dashboard">dashboard</a>.</p>
+        </div>`
+    }
+    return ""
+}
+
+func (h *BlogHandler) getCTA(session *authsome.Session) string {
+    if session == nil {
+        return `<div class="cta">
+            <h3>Join Our Community</h3>
+            <p>Create an account to start writing your own blog posts!</p>
+            <a href="/register" class="btn btn-secondary">Get Started</a>
+            <a href="/login" class="btn">Login</a>
+        </div>`
+    }
+    return ""
+}
+
+// Placeholder methods for future implementation
+func (h *BlogHandler) EditPostPage(c *forge.Context) error {
+    return c.JSON(http.StatusOK, map[string]string{"message": "Edit post page - coming soon"})
+}
+
+func (h *BlogHandler) UpdatePost(c *forge.Context) error {
+    return c.JSON(http.StatusOK, map[string]string{"message": "Post updated"})
+}
+
+func (h *BlogHandler) DeletePost(c *forge.Context) error {
+    return c.JSON(http.StatusOK, map[string]string{"message": "Post deleted"})
+}
+```
+
+## Authentication Middleware
+
+Create middleware to protect routes:
+
+```go
+// internal/middleware/auth.go
+package middleware
+
+import (
+    "net/http"
+    
+    "github.com/xraph/authsome"
+    "github.com/xraph/forge"
+)
+
+// AuthMiddleware provides authentication middleware
+type AuthMiddleware struct {
+    auth *authsome.Auth
+}
+
+// NewAuthMiddleware creates a new authentication middleware
+func NewAuthMiddleware(auth *authsome.Auth) *AuthMiddleware {
+    return &AuthMiddleware{auth: auth}
+}
+
+// RequireAuth middleware ensures the user is authenticated
+func (m *AuthMiddleware) RequireAuth(c *forge.Context) error {
+    session := m.auth.GetSession(c)
+    if session == nil {
+        // Store the intended URL for redirect after login
+        c.SetCookie(&http.Cookie{
+            Name:  "redirect_after_login",
+            Value: c.Request.URL.Path,
+            Path:  "/",
+        })
+        
+        return c.Redirect(http.StatusFound, "/login")
+    }
+    
+    // Add user information to context for handlers
+    user, err := m.auth.GetUser(c.Context(), session.UserID)
+    if err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{
+            "error": "Failed to load user data",
+        })
+    }
+    
+    c.Set("user", user)
+    c.Set("session", session)
+    
+    return c.Next()
+}
+
+// OptionalAuth middleware adds user information if authenticated
+func (m *AuthMiddleware) OptionalAuth(c *forge.Context) error {
+    session := m.auth.GetSession(c)
+    if session != nil {
+        user, err := m.auth.GetUser(c.Context(), session.UserID)
+        if err == nil {
+            c.Set("user", user)
+            c.Set("session", session)
+        }
+    }
+    
+    return c.Next()
+}
+```
+
+## Running the Application
+
+Now let's run the application:
+
+<Tabs items={['Start Server', 'Test Registration', 'Test Login', 'Test Protection']}>
+  <Tab value="Start Server">
+    ```bash
+    # Set environment variables
+    export DATABASE_URL="postgres://blog_user:blog_password@localhost:5432/blog_app?sslmode=disable"
+    export AUTHSOME_SESSION_SECRET="your-super-secret-key-change-this-in-production"
+    export PORT="8080"
+
+    # Run the application
+    go run cmd/main.go
+    ```
+
+    You should see:
+    ```
+    Starting server on port 8080
+    ```
+
+    Visit http://localhost:8080 to see your application!
+  </Tab>
+  <Tab value="Test Registration">
+    1. Go to http://localhost:8080/register
+    2. Fill out the registration form:
+       - **Name**: John Doe
+       - **Email**: john@example.com
+       - **Password**: Password123
+       - **Confirm Password**: Password123
+    3. Click "Register"
+    4. You should be redirected to the dashboard
+
+    **What happens behind the scenes:**
+    - AuthSome validates the password policy
+    - Creates a new user in the database
+    - Creates a session and sets a cookie
+    - Redirects to the success URL
+  </Tab>
+  <Tab value="Test Login">
+    1. Logout if you're logged in
+    2. Go to http://localhost:8080/login
+    3. Enter your credentials:
+       - **Email**: john@example.com
+       - **Password**: Password123
+    4. Click "Login"
+    5. You should be redirected to the dashboard
+
+    **What happens behind the scenes:**
+    - AuthSome validates credentials
+    - Creates a new session
+    - Sets a secure cookie
+    - Redirects to the dashboard
+  </Tab>
+  <Tab value="Test Protection">
+    1. Try to access http://localhost:8080/dashboard without logging in
+    2. You should be redirected to the login page
+    3. After logging in, you should be redirected back to the dashboard
+
+    **What happens behind the scenes:**
+    - Middleware checks for a valid session
+    - Stores the intended URL in a cookie
+    - Redirects to login page
+    - After successful login, redirects to the original URL
+  </Tab>
+</Tabs>
+
+## Testing the Application
+
+Let's test the authentication flow:
+
+```bash
+# Test user registration
+curl -X POST http://localhost:8080/auth/sign-up \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "TestPassword123"
+  }'
+
+# Test user login
+curl -X POST http://localhost:8080/auth/sign-in \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "TestPassword123"
+  }' \
+  -c cookies.txt
+
+# Test protected route
+curl -X GET http://localhost:8080/dashboard \
+  -b cookies.txt
+
+# Test logout
+curl -X POST http://localhost:8080/auth/sign-out \
+  -b cookies.txt
+```
+
+## What You've Built
+
+Congratulations! You've successfully built a complete authentication application with:
+
+<Cards>
+  <Card
+    title="🔐 Secure Authentication"
+    description="User registration and login with password validation and secure sessions"
+  />
+  <Card
+    title="🛡️ Protected Routes"
+    description="Middleware-based route protection with automatic redirects"
+  />
+  <Card
+    title="👤 User Management"
+    description="User profiles, session management, and secure logout"
+  />
+  <Card
+    title="🎨 Clean UI"
+    description="Responsive HTML pages with proper form handling and navigation"
+  />
+</Cards>
+
+## Next Steps
+
+Now that you have a working authentication system, you can:
+
+<Cards>
+  <Card
+    title="Add Plugins"
+    description="Integrate 2FA, OAuth, or other authentication methods"
+    href="/docs/go/plugins/overview"
+  />
+  <Card
+    title="Learn Concepts"
+    description="Understand sessions, security, and multi-tenancy"
+    href="/docs/go/concepts/authentication"
+  />
+  <Card
+    title="API Integration"
+    description="Build REST APIs with JWT authentication"
+    href="/docs/go/guides/api-integration"
+  />
+  <Card
+    title="Deploy to Production"
+    description="Learn how to deploy your app securely"
+    href="/docs/go/guides/deployment"
+  />
+</Cards>
+
+<Callout type="tip">
+**Pro Tip**: This tutorial covers the basics. In a production application, you'd want to add proper database models for blog posts, implement CSRF protection, add input validation, and use proper templating engines like `html/template`.
+</Callout>

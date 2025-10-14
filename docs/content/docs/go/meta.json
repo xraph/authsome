@@ -1,0 +1,16 @@
+{
+  "title": "Authsome Go",
+  "description": "Comprehensive, pluggable authentication framework for Go applications",
+  "icon": "Code",
+  "root": true,
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "getting-started",
+    "concepts",
+    "plugins",
+    "api",
+    "guides",
+    "examples"
+  ]
+}

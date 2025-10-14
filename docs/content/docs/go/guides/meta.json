@@ -1,0 +1,12 @@
+{
+  "title": "Guides",
+  "icon": "Map",
+  "pages": [
+    "index",
+    "custom-providers",
+    "database-setup",
+    "deployment",
+    "testing",
+    "migration"
+  ]
+}

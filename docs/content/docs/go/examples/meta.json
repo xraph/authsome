@@ -1,0 +1,15 @@
+{
+  "title": "Examples",
+  "icon": "FileText",
+  "pages": [
+    "index",
+    "basic-setup",
+    "user-auth",
+    "session-management",
+    "multi-tenant",
+    "frameworks",
+    "frontend",
+    "security",
+    "testing"
+  ]
+}

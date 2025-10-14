@@ -1,0 +1,166 @@
+---
+title: Introduction
+description: Comprehensive, pluggable authentication framework for Go applications
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card'
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+**AuthSome** is a comprehensive, pluggable authentication framework for Go, inspired by better-auth (TypeScript). It provides enterprise-grade authentication with multi-tenancy support, designed to be mounted on the [Forge framework](https://github.com/xraph/forge).
+
+<Callout type="info">
+AuthSome Go is currently in active development. Check our [GitHub repository](https://github.com/xraph/authsome) for the latest updates and contribute to the project.
+</Callout>
+
+## Key Features
+
+<Cards>
+  <Card
+    title="🔐 Multiple Authentication Methods"
+    description="Support for email/password, OAuth providers, passkeys, magic links, phone authentication, and more through plugins"
+    href="/docs/go/concepts/authentication"
+  />
+  <Card
+    title="🏢 Multi-Tenant Organizations"
+    description="Built-in support for organizations with scoped configurations, similar to Clerk.js architecture"
+    href="/docs/go/concepts/organizations"
+  />
+  <Card
+    title="🔌 Plugin Architecture"
+    description="Extensible plugin system with 12+ authentication methods and custom plugin support"
+    href="/docs/go/plugins/overview"
+  />
+  <Card
+    title="🛡️ Enterprise Security"
+    description="RBAC with policy language, audit system, rate limiting, device tracking, and session management"
+    href="/docs/go/concepts/security"
+  />
+  <Card
+    title="⚡ High Performance"
+    description="Session caching with Redis, optimized database queries, and efficient middleware"
+    href="/docs/go/guides/deployment"
+  />
+  <Card
+    title="🔧 Developer Experience"
+    description="Clean architecture, comprehensive testing, detailed documentation, and CLI tools"
+    href="/docs/go/getting-started/installation"
+  />
+</Cards>
+
+## Architecture Overview
+
+AuthSome follows clean architecture principles with clear separation of concerns:
+
+<Tabs items={['Standalone Mode', 'SaaS Mode']}>
+  <Tab value="Standalone Mode">
+    Perfect for single-tenant applications:
+    - Single default organization (auto-created)
+    - Organization creation APIs disabled
+    - No org-scoped configs
+    - Simple single-tenant setup
+  </Tab>
+  <Tab value="SaaS Mode">
+    Full multi-tenancy support:
+    - Multiple isolated organizations
+    - Organization creation enabled
+    - Org-scoped config overrides
+    - Platform organization for system-wide settings
+  </Tab>
+</Tabs>
+
+## Technology Stack
+
+- **Framework**: [Forge](https://github.com/xraph/forge) - Modern Go web framework
+- **ORM**: [Bun](https://bun.uptrace.dev/) - Fast and simple Go ORM
+- **Forms**: [Smartform](https://github.com/xraph/smartform) - Type-safe form handling
+- **Storage**: Redis for session caching and rate limiting
+- **Database**: PostgreSQL, MySQL, SQLite support
+
+## Quick Start
+
+Get started with AuthSome in minutes:
+
+<Callout type="tip">
+Make sure you have Go 1.21+ installed and a supported database running.
+</Callout>
+
+```bash
+# Install AuthSome
+go get github.com/xraph/authsome
+
+# Create a new project
+mkdir my-auth-app && cd my-auth-app
+go mod init my-auth-app
+
+# Initialize with basic configuration
+authsome init --mode=standalone
+```
+
+```go
+package main
+
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/forge"
+)
+
+func main() {
+    // Create Forge app
+    app := forge.New()
+    
+    // Initialize AuthSome
+    auth, err := authsome.New(authsome.Config{
+        Mode: authsome.Standalone,
+        Database: authsome.DatabaseConfig{
+            Driver: "postgres",
+            URL:    "postgres://user:pass@localhost/mydb",
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+    
+    // Mount AuthSome to your app
+    auth.Mount(app, "/auth")
+    
+    // Start server
+    app.Listen(":8080")
+}
+```
+
+## What's Next?
+
+<Cards>
+  <Card
+    title="📚 Getting Started"
+    description="Learn how to install and configure AuthSome for your project"
+    href="/docs/go/getting-started/installation"
+  />
+  <Card
+    title="💡 Core Concepts"
+    description="Understand authentication, sessions, organizations, and security"
+    href="/docs/go/concepts/authentication"
+  />
+  <Card
+    title="🔌 Explore Plugins"
+    description="Discover available plugins and learn to create custom ones"
+    href="/docs/go/plugins/overview"
+  />
+  <Card
+    title="📖 API Reference"
+    description="Detailed API documentation for all AuthSome services"
+    href="/docs/go/api/overview"
+  />
+</Cards>
+
+## Community & Support
+
+- **GitHub**: [github.com/xraph/authsome](https://github.com/xraph/authsome)
+- **Issues**: Report bugs and request features
+- **Discussions**: Ask questions and share ideas
+- **Contributing**: Help improve AuthSome
+
+<Callout type="warn">
+AuthSome is in active development. APIs may change before the stable release. Please check the changelog for breaking changes.
+</Callout>

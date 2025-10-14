@@ -1,0 +1,1618 @@
+---
+title: Security
+description: Comprehensive security features, best practices, and threat protection in AuthSome Go
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Security
+
+AuthSome Go provides enterprise-grade security features to protect your applications and users. This guide covers password security, rate limiting, device tracking, audit logging, and security best practices.
+
+## Password Security
+
+### Password Hashing
+
+AuthSome Go supports multiple password hashing algorithms with secure defaults:
+
+<Tabs items={['bcrypt (Default)', 'Argon2', 'Custom Hasher']}>
+  <Tab value="bcrypt (Default)">
+    **bcrypt** is the default hashing algorithm, providing excellent security with adaptive cost:
+
+    ```go
+    // Configuration
+    config := authsome.Config{
+        Security: authsome.SecurityConfig{
+            Password: authsome.PasswordConfig{
+                Hasher: "bcrypt",
+                BcryptConfig: authsome.BcryptConfig{
+                    Cost: 12, // Recommended: 10-14
+                },
+            },
+        },
+    }
+
+    // Password hashing service
+    type BcryptHasher struct {
+        cost int
+    }
+
+    func NewBcryptHasher(cost int) *BcryptHasher {
+        if cost < 10 || cost > 15 {
+            cost = 12 // Safe default
+        }
+        return &BcryptHasher{cost: cost}
+    }
+
+    func (h *BcryptHasher) Hash(password string) (string, error) {
+        bytes, err := bcrypt.GenerateFromPassword([]byte(password), h.cost)
+        if err != nil {
+            return "", fmt.Errorf("failed to hash password: %w", err)
+        }
+        return string(bytes), nil
+    }
+
+    func (h *BcryptHasher) Verify(password, hash string) error {
+        err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+        if err != nil {
+            if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+                return ErrInvalidPassword
+            }
+            return fmt.Errorf("failed to verify password: %w", err)
+        }
+        return nil
+    }
+
+    // Automatic cost adjustment based on performance
+    func (h *BcryptHasher) AdjustCost() {
+        start := time.Now()
+        testPassword := "test-password-for-benchmarking"
+        
+        _, err := h.Hash(testPassword)
+        if err != nil {
+            return
+        }
+        
+        duration := time.Since(start)
+        
+        // Target: 250ms per hash
+        if duration < 100*time.Millisecond && h.cost < 15 {
+            h.cost++
+        } else if duration > 500*time.Millisecond && h.cost > 10 {
+            h.cost--
+        }
+    }
+    ```
+
+    **Pros:**
+    - ✅ Battle-tested and widely adopted
+    - ✅ Adaptive cost factor
+    - ✅ Built into Go standard library
+    - ✅ Automatic salt generation
+
+    **Cons:**
+    - ❌ Limited to 72 bytes input
+    - ❌ Less memory-hard than Argon2
+  </Tab>
+  <Tab value="Argon2">
+    **Argon2** provides state-of-the-art password hashing with memory-hard properties:
+
+    ```go
+    import "golang.org/x/crypto/argon2"
+
+    // Configuration
+    config := authsome.Config{
+        Security: authsome.SecurityConfig{
+            Password: authsome.PasswordConfig{
+                Hasher: "argon2",
+                Argon2Config: authsome.Argon2Config{
+                    Memory:      64 * 1024, // 64 MB
+                    Iterations:  3,
+                    Parallelism: 2,
+                    SaltLength:  16,
+                    KeyLength:   32,
+                },
+            },
+        },
+    }
+
+    type Argon2Hasher struct {
+        memory      uint32
+        iterations  uint32
+        parallelism uint8
+        saltLength  uint32
+        keyLength   uint32
+    }
+
+    func NewArgon2Hasher(config authsome.Argon2Config) *Argon2Hasher {
+        return &Argon2Hasher{
+            memory:      config.Memory,
+            iterations:  config.Iterations,
+            parallelism: config.Parallelism,
+            saltLength:  config.SaltLength,
+            keyLength:   config.KeyLength,
+        }
+    }
+
+    func (h *Argon2Hasher) Hash(password string) (string, error) {
+        // Generate random salt
+        salt := make([]byte, h.saltLength)
+        if _, err := rand.Read(salt); err != nil {
+            return "", fmt.Errorf("failed to generate salt: %w", err)
+        }
+
+        // Generate hash
+        hash := argon2.IDKey(
+            []byte(password),
+            salt,
+            h.iterations,
+            h.memory,
+            h.parallelism,
+            h.keyLength,
+        )
+
+        // Encode hash with parameters
+        encoded := fmt.Sprintf(
+            "$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+            argon2.Version,
+            h.memory,
+            h.iterations,
+            h.parallelism,
+            base64.RawStdEncoding.EncodeToString(salt),
+            base64.RawStdEncoding.EncodeToString(hash),
+        )
+
+        return encoded, nil
+    }
+
+    func (h *Argon2Hasher) Verify(password, encodedHash string) error {
+        // Parse encoded hash
+        params, salt, hash, err := h.parseHash(encodedHash)
+        if err != nil {
+            return fmt.Errorf("failed to parse hash: %w", err)
+        }
+
+        // Generate hash with same parameters
+        computedHash := argon2.IDKey(
+            []byte(password),
+            salt,
+            params.iterations,
+            params.memory,
+            params.parallelism,
+            uint32(len(hash)),
+        )
+
+        // Compare hashes
+        if !bytes.Equal(hash, computedHash) {
+            return ErrInvalidPassword
+        }
+
+        return nil
+    }
+
+    func (h *Argon2Hasher) parseHash(encodedHash string) (*Argon2Params, []byte, []byte, error) {
+        // Parse format: $argon2id$v=19$m=65536,t=3,p=2$salt$hash
+        parts := strings.Split(encodedHash, "$")
+        if len(parts) != 6 {
+            return nil, nil, nil, errors.New("invalid hash format")
+        }
+
+        // Parse parameters
+        var params Argon2Params
+        if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", 
+            &params.memory, &params.iterations, &params.parallelism); err != nil {
+            return nil, nil, nil, err
+        }
+
+        // Decode salt and hash
+        salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+        if err != nil {
+            return nil, nil, nil, err
+        }
+
+        hash, err := base64.RawStdEncoding.DecodeString(parts[5])
+        if err != nil {
+            return nil, nil, nil, err
+        }
+
+        return &params, salt, hash, nil
+    }
+    ```
+
+    **Pros:**
+    - ✅ Memory-hard algorithm (resistant to GPU attacks)
+    - ✅ Configurable memory, time, and parallelism
+    - ✅ Winner of Password Hashing Competition
+    - ✅ No input length limitations
+
+    **Cons:**
+    - ❌ Higher memory usage
+    - ❌ Requires external dependency
+  </Tab>
+  <Tab value="Custom Hasher">
+    Implement custom password hashing algorithms:
+
+    ```go
+    // Password hasher interface
+    type PasswordHasher interface {
+        Hash(password string) (string, error)
+        Verify(password, hash string) error
+        NeedsRehash(hash string) bool
+    }
+
+    // Custom PBKDF2 hasher example
+    type PBKDF2Hasher struct {
+        iterations int
+        keyLength  int
+        saltLength int
+    }
+
+    func NewPBKDF2Hasher(iterations, keyLength, saltLength int) *PBKDF2Hasher {
+        return &PBKDF2Hasher{
+            iterations: iterations,
+            keyLength:  keyLength,
+            saltLength: saltLength,
+        }
+    }
+
+    func (h *PBKDF2Hasher) Hash(password string) (string, error) {
+        // Generate salt
+        salt := make([]byte, h.saltLength)
+        if _, err := rand.Read(salt); err != nil {
+            return "", err
+        }
+
+        // Generate hash
+        hash := pbkdf2.Key([]byte(password), salt, h.iterations, h.keyLength, sha256.New)
+
+        // Encode
+        encoded := fmt.Sprintf(
+            "$pbkdf2-sha256$%d$%s$%s",
+            h.iterations,
+            base64.RawStdEncoding.EncodeToString(salt),
+            base64.RawStdEncoding.EncodeToString(hash),
+        )
+
+        return encoded, nil
+    }
+
+    func (h *PBKDF2Hasher) Verify(password, encodedHash string) error {
+        // Parse and verify similar to Argon2 example
+        // Implementation details omitted for brevity
+        return nil
+    }
+
+    func (h *PBKDF2Hasher) NeedsRehash(hash string) bool {
+        // Check if hash was created with old parameters
+        parts := strings.Split(hash, "$")
+        if len(parts) < 3 {
+            return true
+        }
+
+        iterations, err := strconv.Atoi(parts[2])
+        if err != nil {
+            return true
+        }
+
+        return iterations < h.iterations
+    }
+
+    // Register custom hasher
+    func init() {
+        authsome.RegisterPasswordHasher("pbkdf2", func(config map[string]interface{}) PasswordHasher {
+            iterations := config["iterations"].(int)
+            keyLength := config["keyLength"].(int)
+            saltLength := config["saltLength"].(int)
+            return NewPBKDF2Hasher(iterations, keyLength, saltLength)
+        })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Password Policies
+
+Enforce strong password requirements:
+
+```go
+type PasswordPolicy struct {
+    MinLength       int      `json:"minLength"`
+    MaxLength       int      `json:"maxLength"`
+    RequireUpper    bool     `json:"requireUpper"`
+    RequireLower    bool     `json:"requireLower"`
+    RequireNumbers  bool     `json:"requireNumbers"`
+    RequireSymbols  bool     `json:"requireSymbols"`
+    ForbiddenWords  []string `json:"forbiddenWords"`
+    MaxRepeating    int      `json:"maxRepeating"`
+    MinUniqueChars  int      `json:"minUniqueChars"`
+    PreventReuse    int      `json:"preventReuse"` // Number of previous passwords to check
+}
+
+// Password validation service
+type PasswordValidator struct {
+    policy PasswordPolicy
+    repo   PasswordHistoryRepository
+}
+
+func (v *PasswordValidator) ValidatePassword(ctx context.Context, userID, password string) error {
+    // Length validation
+    if len(password) < v.policy.MinLength {
+        return &ValidationError{
+            Field:   "password",
+            Message: fmt.Sprintf("Password must be at least %d characters", v.policy.MinLength),
+        }
+    }
+
+    if v.policy.MaxLength > 0 && len(password) > v.policy.MaxLength {
+        return &ValidationError{
+            Field:   "password",
+            Message: fmt.Sprintf("Password must be no more than %d characters", v.policy.MaxLength),
+        }
+    }
+
+    // Character requirements
+    if v.policy.RequireUpper && !regexp.MustCompile(`[A-Z]`).MatchString(password) {
+        return &ValidationError{
+            Field:   "password",
+            Message: "Password must contain at least one uppercase letter",
+        }
+    }
+
+    if v.policy.RequireLower && !regexp.MustCompile(`[a-z]`).MatchString(password) {
+        return &ValidationError{
+            Field:   "password",
+            Message: "Password must contain at least one lowercase letter",
+        }
+    }
+
+    if v.policy.RequireNumbers && !regexp.MustCompile(`[0-9]`).MatchString(password) {
+        return &ValidationError{
+            Field:   "password",
+            Message: "Password must contain at least one number",
+        }
+    }
+
+    if v.policy.RequireSymbols && !regexp.MustCompile(`[^a-zA-Z0-9]`).MatchString(password) {
+        return &ValidationError{
+            Field:   "password",
+            Message: "Password must contain at least one symbol",
+        }
+    }
+
+    // Forbidden words
+    lowerPassword := strings.ToLower(password)
+    for _, word := range v.policy.ForbiddenWords {
+        if strings.Contains(lowerPassword, strings.ToLower(word)) {
+            return &ValidationError{
+                Field:   "password",
+                Message: "Password contains forbidden words",
+            }
+        }
+    }
+
+    // Repeating characters
+    if v.policy.MaxRepeating > 0 {
+        if v.hasRepeatingChars(password, v.policy.MaxRepeating) {
+            return &ValidationError{
+                Field:   "password",
+                Message: fmt.Sprintf("Password cannot have more than %d repeating characters", v.policy.MaxRepeating),
+            }
+        }
+    }
+
+    // Unique characters
+    if v.policy.MinUniqueChars > 0 {
+        uniqueChars := v.countUniqueChars(password)
+        if uniqueChars < v.policy.MinUniqueChars {
+            return &ValidationError{
+                Field:   "password",
+                Message: fmt.Sprintf("Password must have at least %d unique characters", v.policy.MinUniqueChars),
+            }
+        }
+    }
+
+    // Password reuse prevention
+    if v.policy.PreventReuse > 0 && userID != "" {
+        if reused, err := v.checkPasswordReuse(ctx, userID, password); err != nil {
+            return err
+        } else if reused {
+            return &ValidationError{
+                Field:   "password",
+                Message: fmt.Sprintf("Cannot reuse any of the last %d passwords", v.policy.PreventReuse),
+            }
+        }
+    }
+
+    return nil
+}
+
+func (v *PasswordValidator) hasRepeatingChars(password string, maxRepeating int) bool {
+    count := 1
+    for i := 1; i < len(password); i++ {
+        if password[i] == password[i-1] {
+            count++
+            if count > maxRepeating {
+                return true
+            }
+        } else {
+            count = 1
+        }
+    }
+    return false
+}
+
+func (v *PasswordValidator) countUniqueChars(password string) int {
+    chars := make(map[rune]bool)
+    for _, char := range password {
+        chars[char] = true
+    }
+    return len(chars)
+}
+
+func (v *PasswordValidator) checkPasswordReuse(ctx context.Context, userID, password string) (bool, error) {
+    history, err := v.repo.GetPasswordHistory(ctx, userID, v.policy.PreventReuse)
+    if err != nil {
+        return false, err
+    }
+
+    for _, oldHash := range history {
+        if err := v.hasher.Verify(password, oldHash); err == nil {
+            return true, nil // Password was reused
+        }
+    }
+
+    return false, nil
+}
+
+// Password strength meter
+func (v *PasswordValidator) CalculateStrength(password string) PasswordStrength {
+    score := 0
+    feedback := []string{}
+
+    // Length scoring
+    if len(password) >= 8 {
+        score += 1
+    } else {
+        feedback = append(feedback, "Use at least 8 characters")
+    }
+
+    if len(password) >= 12 {
+        score += 1
+    }
+
+    // Character variety
+    if regexp.MustCompile(`[a-z]`).MatchString(password) {
+        score += 1
+    } else {
+        feedback = append(feedback, "Add lowercase letters")
+    }
+
+    if regexp.MustCompile(`[A-Z]`).MatchString(password) {
+        score += 1
+    } else {
+        feedback = append(feedback, "Add uppercase letters")
+    }
+
+    if regexp.MustCompile(`[0-9]`).MatchString(password) {
+        score += 1
+    } else {
+        feedback = append(feedback, "Add numbers")
+    }
+
+    if regexp.MustCompile(`[^a-zA-Z0-9]`).MatchString(password) {
+        score += 1
+    } else {
+        feedback = append(feedback, "Add symbols")
+    }
+
+    // Pattern detection
+    if !v.hasCommonPatterns(password) {
+        score += 1
+    } else {
+        feedback = append(feedback, "Avoid common patterns")
+    }
+
+    // Determine strength level
+    var level string
+    switch {
+    case score <= 2:
+        level = "weak"
+    case score <= 4:
+        level = "fair"
+    case score <= 5:
+        level = "good"
+    default:
+        level = "strong"
+    }
+
+    return PasswordStrength{
+        Score:    score,
+        Level:    level,
+        Feedback: feedback,
+    }
+}
+```
+
+## Rate Limiting
+
+Protect against brute force attacks and abuse:
+
+<Tabs items={['Redis Rate Limiter', 'Memory Rate Limiter', 'Distributed Rate Limiter']}>
+  <Tab value="Redis Rate Limiter">
+    **Redis-based rate limiting** for distributed applications:
+
+    ```go
+    type RedisRateLimiter struct {
+        client redis.Cmdable
+        config RateLimitConfig
+    }
+
+    type RateLimitConfig struct {
+        MaxAttempts int           `json:"maxAttempts"`
+        Window      time.Duration `json:"window"`
+        Lockout     time.Duration `json:"lockout"`
+    }
+
+    func NewRedisRateLimiter(client redis.Cmdable, config RateLimitConfig) *RedisRateLimiter {
+        return &RedisRateLimiter{
+            client: client,
+            config: config,
+        }
+    }
+
+    func (r *RedisRateLimiter) CheckLimit(ctx context.Context, key string) (*RateLimitResult, error) {
+        now := time.Now()
+        windowStart := now.Add(-r.config.Window)
+
+        // Lua script for atomic rate limiting
+        script := `
+            local key = KEYS[1]
+            local window_start = ARGV[1]
+            local now = ARGV[2]
+            local max_attempts = tonumber(ARGV[3])
+            local lockout_duration = tonumber(ARGV[4])
+
+            -- Check if locked out
+            local lockout_key = key .. ":lockout"
+            local lockout_until = redis.call('GET', lockout_key)
+            if lockout_until and tonumber(lockout_until) > tonumber(now) then
+                return {0, max_attempts, tonumber(lockout_until)}
+            end
+
+            -- Remove old attempts
+            redis.call('ZREMRANGEBYSCORE', key, '-inf', window_start)
+
+            -- Count current attempts
+            local current_attempts = redis.call('ZCARD', key)
+
+            if current_attempts >= max_attempts then
+                -- Set lockout
+                local lockout_until_time = tonumber(now) + lockout_duration
+                redis.call('SET', lockout_key, lockout_until_time, 'EX', lockout_duration)
+                return {0, max_attempts, lockout_until_time}
+            end
+
+            -- Add current attempt
+            redis.call('ZADD', key, now, now)
+            redis.call('EXPIRE', key, math.ceil(lockout_duration))
+
+            local remaining = max_attempts - current_attempts - 1
+            return {remaining, max_attempts, 0}
+        `
+
+        result, err := r.client.Eval(ctx, script, []string{key}, 
+            windowStart.Unix(), now.Unix(), r.config.MaxAttempts, int(r.config.Lockout.Seconds())).Result()
+        if err != nil {
+            return nil, fmt.Errorf("rate limit check failed: %w", err)
+        }
+
+        values := result.([]interface{})
+        remaining := int(values[0].(int64))
+        limit := int(values[1].(int64))
+        lockedUntil := int64(values[2].(int64))
+
+        return &RateLimitResult{
+            Allowed:     remaining >= 0,
+            Remaining:   remaining,
+            Limit:       limit,
+            LockedUntil: time.Unix(lockedUntil, 0),
+        }, nil
+    }
+
+    func (r *RedisRateLimiter) Reset(ctx context.Context, key string) error {
+        pipe := r.client.Pipeline()
+        pipe.Del(ctx, key)
+        pipe.Del(ctx, key+":lockout")
+        _, err := pipe.Exec(ctx)
+        return err
+    }
+
+    // Rate limiting middleware
+    func (r *RedisRateLimiter) Middleware(keyFunc func(*forge.Context) string) forge.MiddlewareFunc {
+        return func(next forge.HandlerFunc) forge.HandlerFunc {
+            return func(c *forge.Context) error {
+                key := keyFunc(c)
+                if key == "" {
+                    return next(c)
+                }
+
+                result, err := r.CheckLimit(c.Context(), key)
+                if err != nil {
+                    return c.JSON(500, ErrorResponse{
+                        Message: "Rate limit check failed",
+                        Code:    "RATE_LIMIT_ERROR",
+                    })
+                }
+
+                // Add rate limit headers
+                c.Header("X-RateLimit-Limit", strconv.Itoa(result.Limit))
+                c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
+                c.Header("X-RateLimit-Reset", strconv.FormatInt(result.LockedUntil.Unix(), 10))
+
+                if !result.Allowed {
+                    return c.JSON(429, ErrorResponse{
+                        Message: "Rate limit exceeded",
+                        Code:    "RATE_LIMIT_EXCEEDED",
+                        Details: map[string]interface{}{
+                            "retryAfter": result.LockedUntil.Sub(time.Now()).Seconds(),
+                        },
+                    })
+                }
+
+                return next(c)
+            }
+        }
+    }
+
+    // Usage examples
+    func setupRateLimiting(app *forge.App, rateLimiter *RedisRateLimiter) {
+        // Global rate limiting by IP
+        app.Use(rateLimiter.Middleware(func(c *forge.Context) string {
+            return "global:" + c.ClientIP()
+        }))
+
+        // Login rate limiting by IP + email
+        app.POST("/auth/login", rateLimiter.Middleware(func(c *forge.Context) string {
+            var req LoginRequest
+            if err := c.BindJSON(&req); err != nil {
+                return ""
+            }
+            return fmt.Sprintf("login:%s:%s", c.ClientIP(), req.Email)
+        }), loginHandler)
+
+        // Registration rate limiting by IP
+        app.POST("/auth/register", rateLimiter.Middleware(func(c *forge.Context) string {
+            return "register:" + c.ClientIP()
+        }), registerHandler)
+
+        // Password reset rate limiting by email
+        app.POST("/auth/password/reset", rateLimiter.Middleware(func(c *forge.Context) string {
+            var req PasswordResetRequest
+            if err := c.BindJSON(&req); err != nil {
+                return ""
+            }
+            return "password_reset:" + req.Email
+        }), passwordResetHandler)
+    }
+    ```
+  </Tab>
+  <Tab value="Memory Rate Limiter">
+    **In-memory rate limiting** for single-instance applications:
+
+    ```go
+    type MemoryRateLimiter struct {
+        buckets map[string]*TokenBucket
+        mutex   sync.RWMutex
+        config  RateLimitConfig
+    }
+
+    type TokenBucket struct {
+        tokens    int
+        lastRefill time.Time
+        lockoutUntil time.Time
+        attempts  []time.Time
+    }
+
+    func NewMemoryRateLimiter(config RateLimitConfig) *MemoryRateLimiter {
+        limiter := &MemoryRateLimiter{
+            buckets: make(map[string]*TokenBucket),
+            config:  config,
+        }
+
+        // Cleanup goroutine
+        go limiter.cleanup()
+
+        return limiter
+    }
+
+    func (r *MemoryRateLimiter) CheckLimit(ctx context.Context, key string) (*RateLimitResult, error) {
+        r.mutex.Lock()
+        defer r.mutex.Unlock()
+
+        now := time.Now()
+        bucket, exists := r.buckets[key]
+        
+        if !exists {
+            bucket = &TokenBucket{
+                tokens:     r.config.MaxAttempts,
+                lastRefill: now,
+                attempts:   make([]time.Time, 0),
+            }
+            r.buckets[key] = bucket
+        }
+
+        // Check lockout
+        if now.Before(bucket.lockoutUntil) {
+            return &RateLimitResult{
+                Allowed:     false,
+                Remaining:   0,
+                Limit:       r.config.MaxAttempts,
+                LockedUntil: bucket.lockoutUntil,
+            }, nil
+        }
+
+        // Clean old attempts
+        windowStart := now.Add(-r.config.Window)
+        validAttempts := make([]time.Time, 0)
+        for _, attempt := range bucket.attempts {
+            if attempt.After(windowStart) {
+                validAttempts = append(validAttempts, attempt)
+            }
+        }
+        bucket.attempts = validAttempts
+
+        // Check if limit exceeded
+        if len(bucket.attempts) >= r.config.MaxAttempts {
+            bucket.lockoutUntil = now.Add(r.config.Lockout)
+            return &RateLimitResult{
+                Allowed:     false,
+                Remaining:   0,
+                Limit:       r.config.MaxAttempts,
+                LockedUntil: bucket.lockoutUntil,
+            }, nil
+        }
+
+        // Add current attempt
+        bucket.attempts = append(bucket.attempts, now)
+        remaining := r.config.MaxAttempts - len(bucket.attempts)
+
+        return &RateLimitResult{
+            Allowed:   true,
+            Remaining: remaining,
+            Limit:     r.config.MaxAttempts,
+        }, nil
+    }
+
+    func (r *MemoryRateLimiter) cleanup() {
+        ticker := time.NewTicker(5 * time.Minute)
+        defer ticker.Stop()
+
+        for range ticker.C {
+            r.mutex.Lock()
+            now := time.Now()
+            
+            for key, bucket := range r.buckets {
+                // Remove expired buckets
+                if now.After(bucket.lockoutUntil) && 
+                   len(bucket.attempts) == 0 || 
+                   (len(bucket.attempts) > 0 && now.Sub(bucket.attempts[len(bucket.attempts)-1]) > r.config.Window) {
+                    delete(r.buckets, key)
+                }
+            }
+            
+            r.mutex.Unlock()
+        }
+    }
+    ```
+  </Tab>
+  <Tab value="Distributed Rate Limiter">
+    **Distributed rate limiting** with multiple Redis instances:
+
+    ```go
+    type DistributedRateLimiter struct {
+        clients []redis.Cmdable
+        hasher  hash.Hash64
+        config  RateLimitConfig
+    }
+
+    func NewDistributedRateLimiter(clients []redis.Cmdable, config RateLimitConfig) *DistributedRateLimiter {
+        return &DistributedRateLimiter{
+            clients: clients,
+            hasher:  fnv.New64a(),
+            config:  config,
+        }
+    }
+
+    func (r *DistributedRateLimiter) getClient(key string) redis.Cmdable {
+        r.hasher.Reset()
+        r.hasher.Write([]byte(key))
+        hash := r.hasher.Sum64()
+        return r.clients[hash%uint64(len(r.clients))]
+    }
+
+    func (r *DistributedRateLimiter) CheckLimit(ctx context.Context, key string) (*RateLimitResult, error) {
+        client := r.getClient(key)
+        
+        // Use the same Redis script as RedisRateLimiter
+        // but with consistent hashing for client selection
+        
+        return r.checkLimitOnClient(ctx, client, key)
+    }
+
+    // Aggregate rate limiting across multiple dimensions
+    type AggregateRateLimiter struct {
+        limiters map[string]RateLimiter
+    }
+
+    func NewAggregateRateLimiter() *AggregateRateLimiter {
+        return &AggregateRateLimiter{
+            limiters: make(map[string]RateLimiter),
+        }
+    }
+
+    func (r *AggregateRateLimiter) AddLimiter(name string, limiter RateLimiter) {
+        r.limiters[name] = limiter
+    }
+
+    func (r *AggregateRateLimiter) CheckLimit(ctx context.Context, keys map[string]string) (*AggregateRateLimitResult, error) {
+        results := make(map[string]*RateLimitResult)
+        
+        for name, key := range keys {
+            if limiter, exists := r.limiters[name]; exists {
+                result, err := limiter.CheckLimit(ctx, key)
+                if err != nil {
+                    return nil, err
+                }
+                results[name] = result
+                
+                // If any limiter blocks, the request is blocked
+                if !result.Allowed {
+                    return &AggregateRateLimitResult{
+                        Allowed:    false,
+                        BlockedBy:  name,
+                        Results:    results,
+                    }, nil
+                }
+            }
+        }
+
+        return &AggregateRateLimitResult{
+            Allowed: true,
+            Results: results,
+        }, nil
+    }
+
+    // Usage with multiple rate limits
+    func setupAdvancedRateLimiting(app *forge.App) {
+        // Different rate limiters for different scenarios
+        globalLimiter := NewRedisRateLimiter(redisClient, RateLimitConfig{
+            MaxAttempts: 1000,
+            Window:      time.Hour,
+            Lockout:     time.Hour,
+        })
+
+        loginLimiter := NewRedisRateLimiter(redisClient, RateLimitConfig{
+            MaxAttempts: 5,
+            Window:      15 * time.Minute,
+            Lockout:     30 * time.Minute,
+        })
+
+        registrationLimiter := NewRedisRateLimiter(redisClient, RateLimitConfig{
+            MaxAttempts: 3,
+            Window:      time.Hour,
+            Lockout:     24 * time.Hour,
+        })
+
+        aggregate := NewAggregateRateLimiter()
+        aggregate.AddLimiter("global", globalLimiter)
+        aggregate.AddLimiter("login", loginLimiter)
+        aggregate.AddLimiter("registration", registrationLimiter)
+
+        // Apply multiple rate limits
+        app.POST("/auth/login", func(c *forge.Context) error {
+            var req LoginRequest
+            if err := c.BindJSON(&req); err != nil {
+                return c.JSON(400, ErrorResponse{Message: "Invalid request"})
+            }
+
+            keys := map[string]string{
+                "global": "global:" + c.ClientIP(),
+                "login":  fmt.Sprintf("login:%s:%s", c.ClientIP(), req.Email),
+            }
+
+            result, err := aggregate.CheckLimit(c.Context(), keys)
+            if err != nil {
+                return c.JSON(500, ErrorResponse{Message: "Rate limit check failed"})
+            }
+
+            if !result.Allowed {
+                return c.JSON(429, ErrorResponse{
+                    Message: fmt.Sprintf("Rate limit exceeded: %s", result.BlockedBy),
+                    Code:    "RATE_LIMIT_EXCEEDED",
+                })
+            }
+
+            return loginHandler(c)
+        })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Device Tracking
+
+Monitor and manage user devices for enhanced security:
+
+```go
+type Device struct {
+    ID           string                 `json:"id" bun:"id,pk"`
+    UserID       string                 `json:"userId" bun:"user_id,notnull"`
+    Name         string                 `json:"name" bun:"name"`
+    Type         string                 `json:"type" bun:"type"` // desktop, mobile, tablet
+    OS           string                 `json:"os" bun:"os"`
+    Browser      string                 `json:"browser" bun:"browser"`
+    IPAddress    string                 `json:"ipAddress" bun:"ip_address"`
+    Location     string                 `json:"location,omitempty" bun:"location"`
+    Fingerprint  string                 `json:"fingerprint" bun:"fingerprint,unique"`
+    Trusted      bool                   `json:"trusted" bun:"trusted,default:false"`
+    LastSeenAt   time.Time              `json:"lastSeenAt" bun:"last_seen_at"`
+    CreatedAt    time.Time              `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
+    
+    // Relationships
+    User     *User     `json:"user,omitempty" bun:"rel:belongs-to,join:user_id=id"`
+    Sessions []*Session `json:"sessions,omitempty" bun:"rel:has-many,join:id=device_id"`
+}
+
+type DeviceService struct {
+    repo         DeviceRepository
+    geoIP        GeoIPService
+    notification NotificationService
+    config       DeviceConfig
+}
+
+type DeviceConfig struct {
+    RequireApproval    bool          `json:"requireApproval"`
+    AutoTrustDuration  time.Duration `json:"autoTrustDuration"`
+    MaxDevicesPerUser  int           `json:"maxDevicesPerUser"`
+    NotifyNewDevice    bool          `json:"notifyNewDevice"`
+    GeoIPEnabled       bool          `json:"geoIPEnabled"`
+}
+
+// Device fingerprinting
+func (s *DeviceService) GenerateFingerprint(c *forge.Context) string {
+    userAgent := c.GetHeader("User-Agent")
+    acceptLanguage := c.GetHeader("Accept-Language")
+    acceptEncoding := c.GetHeader("Accept-Encoding")
+    
+    // Additional fingerprinting data from client
+    var clientData struct {
+        ScreenResolution string `json:"screenResolution"`
+        Timezone         string `json:"timezone"`
+        Platform         string `json:"platform"`
+        Plugins          string `json:"plugins"`
+        Canvas           string `json:"canvas"`
+    }
+    
+    if err := c.BindJSON(&clientData); err == nil {
+        // Include client-side fingerprinting data
+    }
+
+    // Create fingerprint hash
+    h := sha256.New()
+    h.Write([]byte(userAgent))
+    h.Write([]byte(acceptLanguage))
+    h.Write([]byte(acceptEncoding))
+    h.Write([]byte(clientData.ScreenResolution))
+    h.Write([]byte(clientData.Timezone))
+    h.Write([]byte(clientData.Platform))
+    
+    return hex.EncodeToString(h.Sum(nil))
+}
+
+// Device detection and registration
+func (s *DeviceService) DetectOrRegisterDevice(ctx context.Context, userID string, c *forge.Context) (*Device, bool, error) {
+    fingerprint := s.GenerateFingerprint(c)
+    
+    // Check if device exists
+    device, err := s.repo.FindByFingerprint(ctx, fingerprint)
+    if err == nil {
+        // Update last seen
+        device.LastSeenAt = time.Now()
+        device.IPAddress = c.ClientIP()
+        
+        if s.config.GeoIPEnabled {
+            if location, err := s.geoIP.GetLocation(device.IPAddress); err == nil {
+                device.Location = location
+            }
+        }
+        
+        s.repo.Update(ctx, device)
+        return device, false, nil // Existing device
+    }
+
+    // Parse user agent
+    ua := user_agent.New(c.GetHeader("User-Agent"))
+    browserName, browserVersion := ua.Browser()
+    
+    // Create new device
+    device = &Device{
+        ID:          generateID(),
+        UserID:      userID,
+        Name:        s.generateDeviceName(ua),
+        Type:        s.detectDeviceType(ua),
+        OS:          ua.OS(),
+        Browser:     fmt.Sprintf("%s %s", browserName, browserVersion),
+        IPAddress:   c.ClientIP(),
+        Fingerprint: fingerprint,
+        Trusted:     !s.config.RequireApproval,
+        LastSeenAt:  time.Now(),
+    }
+
+    // Get location
+    if s.config.GeoIPEnabled {
+        if location, err := s.geoIP.GetLocation(device.IPAddress); err == nil {
+            device.Location = location
+        }
+    }
+
+    // Check device limit
+    if s.config.MaxDevicesPerUser > 0 {
+        count, err := s.repo.CountByUser(ctx, userID)
+        if err != nil {
+            return nil, false, err
+        }
+        
+        if count >= s.config.MaxDevicesPerUser {
+            return nil, false, ErrTooManyDevices
+        }
+    }
+
+    if err := s.repo.Create(ctx, device); err != nil {
+        return nil, false, err
+    }
+
+    // Send new device notification
+    if s.config.NotifyNewDevice {
+        go s.sendNewDeviceNotification(context.Background(), device)
+    }
+
+    return device, true, nil // New device
+}
+
+func (s *DeviceService) generateDeviceName(ua *user_agent.UserAgent) string {
+    browserName, _ := ua.Browser()
+    os := ua.OS()
+    
+    if ua.Mobile() {
+        return fmt.Sprintf("%s on %s (Mobile)", browserName, os)
+    }
+    
+    return fmt.Sprintf("%s on %s", browserName, os)
+}
+
+func (s *DeviceService) detectDeviceType(ua *user_agent.UserAgent) string {
+    if ua.Mobile() {
+        return "mobile"
+    }
+    if ua.Tablet() {
+        return "tablet"
+    }
+    return "desktop"
+}
+
+// Device approval workflow
+func (s *DeviceService) RequestDeviceApproval(ctx context.Context, deviceID string) error {
+    device, err := s.repo.FindByID(ctx, deviceID)
+    if err != nil {
+        return err
+    }
+
+    // Generate approval token
+    token := generateSecureToken()
+    expiry := time.Now().Add(24 * time.Hour)
+
+    approval := &DeviceApproval{
+        ID:        generateID(),
+        DeviceID:  deviceID,
+        Token:     token,
+        ExpiresAt: expiry,
+    }
+
+    if err := s.approvalRepo.Create(ctx, approval); err != nil {
+        return err
+    }
+
+    // Send approval email
+    return s.sendDeviceApprovalEmail(ctx, device, token)
+}
+
+func (s *DeviceService) ApproveDevice(ctx context.Context, token string) error {
+    approval, err := s.approvalRepo.FindByToken(ctx, token)
+    if err != nil {
+        return ErrInvalidApprovalToken
+    }
+
+    if approval.ExpiresAt.Before(time.Now()) {
+        return ErrApprovalTokenExpired
+    }
+
+    // Mark device as trusted
+    device, err := s.repo.FindByID(ctx, approval.DeviceID)
+    if err != nil {
+        return err
+    }
+
+    device.Trusted = true
+    if err := s.repo.Update(ctx, device); err != nil {
+        return err
+    }
+
+    // Clean up approval
+    return s.approvalRepo.Delete(ctx, approval.ID)
+}
+
+// Device management
+func (s *DeviceService) ListUserDevices(ctx context.Context, userID string) ([]*Device, error) {
+    return s.repo.FindByUser(ctx, userID)
+}
+
+func (s *DeviceService) RevokeDevice(ctx context.Context, userID, deviceID string) error {
+    // Verify device belongs to user
+    device, err := s.repo.FindByID(ctx, deviceID)
+    if err != nil {
+        return err
+    }
+
+    if device.UserID != userID {
+        return ErrDeviceNotFound
+    }
+
+    // Revoke all sessions for this device
+    if err := s.sessionService.RevokeDeviceSessions(ctx, deviceID); err != nil {
+        return err
+    }
+
+    // Delete device
+    return s.repo.Delete(ctx, deviceID)
+}
+
+// Device-based security policies
+func (s *DeviceService) CheckDevicePolicy(ctx context.Context, device *Device, action string) error {
+    // Check if device is trusted
+    if !device.Trusted && s.requiresTrustedDevice(action) {
+        return ErrUntrustedDevice
+    }
+
+    // Check device age
+    if s.isHighRiskAction(action) {
+        deviceAge := time.Since(device.CreatedAt)
+        if deviceAge < 24*time.Hour {
+            return ErrDeviceTooNew
+        }
+    }
+
+    // Check location-based policies
+    if s.config.GeoIPEnabled && s.isLocationRestricted(action) {
+        if err := s.checkLocationPolicy(ctx, device); err != nil {
+            return err
+        }
+    }
+
+    return nil
+}
+
+func (s *DeviceService) requiresTrustedDevice(action string) bool {
+    trustedActions := []string{
+        "password_change",
+        "email_change",
+        "delete_account",
+        "add_payment_method",
+    }
+    
+    for _, trustedAction := range trustedActions {
+        if action == trustedAction {
+            return true
+        }
+    }
+    
+    return false
+}
+
+// Device middleware
+func (s *DeviceService) DeviceMiddleware() forge.MiddlewareFunc {
+    return func(next forge.HandlerFunc) forge.HandlerFunc {
+        return func(c *forge.Context) error {
+            user := GetUserFromContext(c.Context())
+            if user == nil {
+                return next(c)
+            }
+
+            // Detect or register device
+            device, isNew, err := s.DetectOrRegisterDevice(c.Context(), user.ID, c)
+            if err != nil {
+                return c.JSON(500, ErrorResponse{Message: "Device detection failed"})
+            }
+
+            // Check if device requires approval
+            if !device.Trusted && s.config.RequireApproval {
+                return c.JSON(403, ErrorResponse{
+                    Message: "Device requires approval",
+                    Code:    "DEVICE_APPROVAL_REQUIRED",
+                    Details: map[string]interface{}{
+                        "deviceId": device.ID,
+                        "isNew":    isNew,
+                    },
+                })
+            }
+
+            // Add device to context
+            ctx := WithDevice(c.Context(), device)
+            c.SetContext(ctx)
+
+            return next(c)
+        }
+    }
+}
+```
+
+## Audit Logging
+
+Comprehensive audit trail for security and compliance:
+
+```go
+type AuditEvent struct {
+    ID           string                 `json:"id" bun:"id,pk"`
+    UserID       string                 `json:"userId,omitempty" bun:"user_id"`
+    SessionID    string                 `json:"sessionId,omitempty" bun:"session_id"`
+    DeviceID     string                 `json:"deviceId,omitempty" bun:"device_id"`
+    Action       string                 `json:"action" bun:"action,notnull"`
+    Resource     string                 `json:"resource" bun:"resource"`
+    ResourceID   string                 `json:"resourceId,omitempty" bun:"resource_id"`
+    IPAddress    string                 `json:"ipAddress" bun:"ip_address"`
+    UserAgent    string                 `json:"userAgent" bun:"user_agent"`
+    Success      bool                   `json:"success" bun:"success"`
+    ErrorCode    string                 `json:"errorCode,omitempty" bun:"error_code"`
+    ErrorMessage string                 `json:"errorMessage,omitempty" bun:"error_message"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty" bun:"metadata,type:jsonb"`
+    CreatedAt    time.Time              `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
+    
+    // Relationships
+    User    *User    `json:"user,omitempty" bun:"rel:belongs-to,join:user_id=id"`
+    Session *Session `json:"session,omitempty" bun:"rel:belongs-to,join:session_id=id"`
+    Device  *Device  `json:"device,omitempty" bun:"rel:belongs-to,join:device_id=id"`
+}
+
+type AuditService struct {
+    repo   AuditRepository
+    config AuditConfig
+    queue  chan *AuditEvent
+}
+
+type AuditConfig struct {
+    Enabled        bool     `json:"enabled"`
+    BufferSize     int      `json:"bufferSize"`
+    FlushInterval  time.Duration `json:"flushInterval"`
+    RetentionDays  int      `json:"retentionDays"`
+    SensitiveFields []string `json:"sensitiveFields"`
+    ExcludeActions []string `json:"excludeActions"`
+}
+
+func NewAuditService(repo AuditRepository, config AuditConfig) *AuditService {
+    service := &AuditService{
+        repo:   repo,
+        config: config,
+        queue:  make(chan *AuditEvent, config.BufferSize),
+    }
+
+    // Start background processor
+    go service.processEvents()
+    
+    // Start cleanup routine
+    go service.cleanup()
+
+    return service
+}
+
+// Log audit events
+func (s *AuditService) LogEvent(ctx context.Context, event *AuditEvent) {
+    if !s.config.Enabled {
+        return
+    }
+
+    // Skip excluded actions
+    for _, excludedAction := range s.config.ExcludeActions {
+        if event.Action == excludedAction {
+            return
+        }
+    }
+
+    // Sanitize sensitive data
+    event.Metadata = s.sanitizeMetadata(event.Metadata)
+
+    // Extract context information
+    if user := GetUserFromContext(ctx); user != nil {
+        event.UserID = user.ID
+    }
+    
+    if session := GetSessionFromContext(ctx); session != nil {
+        event.SessionID = session.ID
+    }
+    
+    if device := GetDeviceFromContext(ctx); device != nil {
+        event.DeviceID = device.ID
+    }
+
+    // Set timestamp
+    event.CreatedAt = time.Now()
+    
+    // Generate ID if not set
+    if event.ID == "" {
+        event.ID = generateID()
+    }
+
+    // Queue for processing
+    select {
+    case s.queue <- event:
+    default:
+        // Queue is full, log synchronously
+        s.repo.Create(context.Background(), event)
+    }
+}
+
+func (s *AuditService) sanitizeMetadata(metadata map[string]interface{}) map[string]interface{} {
+    if metadata == nil {
+        return nil
+    }
+
+    sanitized := make(map[string]interface{})
+    for key, value := range metadata {
+        // Check if field is sensitive
+        isSensitive := false
+        for _, sensitiveField := range s.config.SensitiveFields {
+            if strings.Contains(strings.ToLower(key), strings.ToLower(sensitiveField)) {
+                isSensitive = true
+                break
+            }
+        }
+
+        if isSensitive {
+            sanitized[key] = "[REDACTED]"
+        } else {
+            sanitized[key] = value
+        }
+    }
+
+    return sanitized
+}
+
+func (s *AuditService) processEvents() {
+    ticker := time.NewTicker(s.config.FlushInterval)
+    defer ticker.Stop()
+
+    events := make([]*AuditEvent, 0, 100)
+
+    for {
+        select {
+        case event := <-s.queue:
+            events = append(events, event)
+            
+            // Flush if buffer is full
+            if len(events) >= 100 {
+                s.flushEvents(events)
+                events = events[:0]
+            }
+
+        case <-ticker.C:
+            // Flush on interval
+            if len(events) > 0 {
+                s.flushEvents(events)
+                events = events[:0]
+            }
+        }
+    }
+}
+
+func (s *AuditService) flushEvents(events []*AuditEvent) {
+    if err := s.repo.CreateBatch(context.Background(), events); err != nil {
+        // Log error but don't fail the application
+        log.Printf("Failed to flush audit events: %v", err)
+    }
+}
+
+func (s *AuditService) cleanup() {
+    ticker := time.NewTicker(24 * time.Hour)
+    defer ticker.Stop()
+
+    for range ticker.C {
+        if s.config.RetentionDays > 0 {
+            cutoff := time.Now().AddDate(0, 0, -s.config.RetentionDays)
+            if err := s.repo.DeleteBefore(context.Background(), cutoff); err != nil {
+                log.Printf("Failed to cleanup old audit events: %v", err)
+            }
+        }
+    }
+}
+
+// Audit middleware
+func (s *AuditService) AuditMiddleware() forge.MiddlewareFunc {
+    return func(next forge.HandlerFunc) forge.HandlerFunc {
+        return func(c *forge.Context) error {
+            start := time.Now()
+            
+            // Execute request
+            err := next(c)
+            
+            // Log audit event
+            event := &AuditEvent{
+                Action:    fmt.Sprintf("%s %s", c.Request().Method, c.Request().URL.Path),
+                Resource:  "api",
+                IPAddress: c.ClientIP(),
+                UserAgent: c.GetHeader("User-Agent"),
+                Success:   err == nil,
+                Metadata: map[string]interface{}{
+                    "method":     c.Request().Method,
+                    "path":       c.Request().URL.Path,
+                    "duration":   time.Since(start).Milliseconds(),
+                    "statusCode": c.Response().Status,
+                },
+            }
+
+            if err != nil {
+                event.ErrorMessage = err.Error()
+            }
+
+            s.LogEvent(c.Context(), event)
+
+            return err
+        }
+    }
+}
+
+// Specific audit helpers
+func (s *AuditService) LogAuthentication(ctx context.Context, email string, success bool, errorCode string) {
+    event := &AuditEvent{
+        Action:   "authentication",
+        Resource: "user",
+        Success:  success,
+        Metadata: map[string]interface{}{
+            "email": email,
+        },
+    }
+
+    if !success {
+        event.ErrorCode = errorCode
+    }
+
+    s.LogEvent(ctx, event)
+}
+
+func (s *AuditService) LogPasswordChange(ctx context.Context, userID string, success bool) {
+    s.LogEvent(ctx, &AuditEvent{
+        Action:     "password_change",
+        Resource:   "user",
+        ResourceID: userID,
+        Success:    success,
+    })
+}
+
+func (s *AuditService) LogSessionCreation(ctx context.Context, sessionID string) {
+    s.LogEvent(ctx, &AuditEvent{
+        Action:     "session_create",
+        Resource:   "session",
+        ResourceID: sessionID,
+        Success:    true,
+    })
+}
+
+func (s *AuditService) LogPermissionDenied(ctx context.Context, action, resource string) {
+    s.LogEvent(ctx, &AuditEvent{
+        Action:       "permission_denied",
+        Resource:     resource,
+        Success:      false,
+        ErrorCode:    "PERMISSION_DENIED",
+        ErrorMessage: fmt.Sprintf("Access denied for action: %s", action),
+        Metadata: map[string]interface{}{
+            "deniedAction": action,
+        },
+    })
+}
+
+// Query audit events
+func (s *AuditService) GetUserAuditTrail(ctx context.Context, userID string, limit int) ([]*AuditEvent, error) {
+    return s.repo.FindByUser(ctx, userID, limit)
+}
+
+func (s *AuditService) GetSecurityEvents(ctx context.Context, since time.Time) ([]*AuditEvent, error) {
+    securityActions := []string{
+        "authentication",
+        "password_change",
+        "email_change",
+        "session_create",
+        "session_revoke",
+        "device_register",
+        "device_revoke",
+        "permission_denied",
+    }
+
+    return s.repo.FindByActionsAfter(ctx, securityActions, since)
+}
+
+func (s *AuditService) GetFailedLoginAttempts(ctx context.Context, since time.Time) ([]*AuditEvent, error) {
+    return s.repo.FindFailedLogins(ctx, since)
+}
+```
+
+## Security Best Practices
+
+<Cards>
+  <Card
+    title="🔐 Strong Password Policies"
+    description="Enforce minimum length, complexity requirements, and prevent password reuse"
+  />
+  <Card
+    title="🛡️ Rate Limiting"
+    description="Implement comprehensive rate limiting for all authentication endpoints"
+  />
+  <Card
+    title="📱 Device Tracking"
+    description="Monitor and manage user devices with approval workflows"
+  />
+  <Card
+    title="📊 Audit Logging"
+    description="Maintain comprehensive audit trails for security and compliance"
+  />
+  <Card
+    title="🔒 Session Security"
+    description="Use secure session management with proper expiration and rotation"
+  />
+  <Card
+    title="🌐 HTTPS Only"
+    description="Enforce HTTPS in production with secure cookie settings"
+  />
+</Cards>
+
+### Security Checklist
+
+- ✅ Strong password hashing (bcrypt/Argon2)
+- ✅ Password complexity requirements
+- ✅ Rate limiting on all auth endpoints
+- ✅ Device fingerprinting and tracking
+- ✅ Comprehensive audit logging
+- ✅ Secure session management
+- ✅ HTTPS enforcement
+- ✅ CSRF protection
+- ✅ Input validation and sanitization
+- ✅ SQL injection prevention
+- ✅ XSS protection
+- ✅ Secure headers (HSTS, CSP, etc.)
+
+<Callout type="warn">
+**Security Warning**: Always keep security dependencies up to date and regularly review your security configuration. Consider hiring security experts for penetration testing.
+</Callout>
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="RBAC Plugin"
+    description="Role-based access control for fine-grained permissions"
+    href="/docs/go/plugins/advanced/rbac"
+  />
+  <Card
+    title="Audit Plugin"
+    description="Advanced audit logging and compliance features"
+    href="/docs/go/plugins/advanced/audit"
+  />
+  <Card
+    title="Security Guide"
+    description="Complete security implementation guide"
+    href="/docs/go/guides/security"
+  />
+  <Card
+    title="Compliance Guide"
+    description="GDPR, SOC2, and other compliance requirements"
+    href="/docs/go/guides/compliance"
+  />
+</Cards>

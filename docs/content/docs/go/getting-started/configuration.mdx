@@ -1,0 +1,578 @@
+---
+title: Configuration
+description: Complete guide to configuring AuthSome Go for your application needs
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Configuration
+
+AuthSome Go provides extensive configuration options to customize authentication behavior, security settings, and integration with your application. This guide covers all available configuration options and best practices.
+
+## Configuration Structure
+
+AuthSome uses a hierarchical configuration system powered by the Forge Config Manager, supporting environment variables, YAML files, and programmatic configuration.
+
+<Tabs items={['Programmatic', 'Environment Variables', 'YAML File']}>
+  <Tab value="Programmatic">
+    Configure AuthSome directly in your Go code:
+
+    ```go
+    package main
+
+    import (
+        "time"
+        "github.com/xraph/authsome"
+    )
+
+    func main() {
+        config := authsome.Config{
+            Mode: authsome.SaaS, // or authsome.Standalone
+            
+            Database: authsome.DatabaseConfig{
+                Driver: "postgres",
+                URL:    "postgres://user:pass@localhost/db",
+                MaxOpenConns: 25,
+                MaxIdleConns: 5,
+                ConnMaxLifetime: time.Hour,
+            },
+            
+            Session: authsome.SessionConfig{
+                Secret:    "your-secret-key",
+                ExpiresIn: "7d",
+                Cookie: authsome.CookieConfig{
+                    Name:     "authsome.session",
+                    Domain:   "yourdomain.com",
+                    Path:     "/",
+                    Secure:   true,
+                    HttpOnly: true,
+                    SameSite: "lax",
+                },
+            },
+            
+            Security: authsome.SecurityConfig{
+                AllowedOrigins: []string{"https://yourdomain.com"},
+                RateLimit: authsome.RateLimitConfig{
+                    Enabled: true,
+                    Max:     100,
+                    Window:  "1m",
+                },
+                PasswordPolicy: authsome.PasswordPolicyConfig{
+                    MinLength:      8,
+                    RequireUpper:   true,
+                    RequireLower:   true,
+                    RequireNumbers: true,
+                    RequireSymbols: false,
+                },
+            },
+        }
+
+        auth, err := authsome.New(config)
+        if err != nil {
+            panic(err)
+        }
+    }
+    ```
+  </Tab>
+  <Tab value="Environment Variables">
+    Configure using environment variables:
+
+    ```bash
+    # Core Configuration
+    AUTHSOME_MODE=saas                    # standalone or saas
+    AUTHSOME_BASE_URL=https://api.yourdomain.com
+
+    # Database Configuration
+    AUTHSOME_DATABASE_DRIVER=postgres
+    AUTHSOME_DATABASE_URL=postgres://user:pass@localhost/db
+    AUTHSOME_DATABASE_MAX_OPEN_CONNS=25
+    AUTHSOME_DATABASE_MAX_IDLE_CONNS=5
+
+    # Session Configuration
+    AUTHSOME_SESSION_SECRET=your-super-secret-key
+    AUTHSOME_SESSION_EXPIRES_IN=7d
+    AUTHSOME_SESSION_COOKIE_NAME=authsome.session
+    AUTHSOME_SESSION_COOKIE_DOMAIN=yourdomain.com
+    AUTHSOME_SESSION_COOKIE_SECURE=true
+    AUTHSOME_SESSION_COOKIE_HTTP_ONLY=true
+    AUTHSOME_SESSION_COOKIE_SAME_SITE=lax
+
+    # Security Configuration
+    AUTHSOME_SECURITY_ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+    AUTHSOME_SECURITY_RATE_LIMIT_ENABLED=true
+    AUTHSOME_SECURITY_RATE_LIMIT_MAX=100
+    AUTHSOME_SECURITY_RATE_LIMIT_WINDOW=1m
+
+    # Password Policy
+    AUTHSOME_SECURITY_PASSWORD_MIN_LENGTH=8
+    AUTHSOME_SECURITY_PASSWORD_REQUIRE_UPPER=true
+    AUTHSOME_SECURITY_PASSWORD_REQUIRE_LOWER=true
+    AUTHSOME_SECURITY_PASSWORD_REQUIRE_NUMBERS=true
+    AUTHSOME_SECURITY_PASSWORD_REQUIRE_SYMBOLS=false
+
+    # Redis Configuration (Optional)
+    AUTHSOME_REDIS_URL=redis://localhost:6379
+    AUTHSOME_REDIS_PASSWORD=your-redis-password
+    AUTHSOME_REDIS_DB=0
+
+    # Email Configuration (Optional)
+    AUTHSOME_EMAIL_PROVIDER=smtp
+    AUTHSOME_EMAIL_SMTP_HOST=smtp.gmail.com
+    AUTHSOME_EMAIL_SMTP_PORT=587
+    AUTHSOME_EMAIL_SMTP_USER=your-email@gmail.com
+    AUTHSOME_EMAIL_SMTP_PASSWORD=your-app-password
+    AUTHSOME_EMAIL_FROM_ADDRESS=noreply@yourdomain.com
+    AUTHSOME_EMAIL_FROM_NAME=Your App Name
+    ```
+  </Tab>
+  <Tab value="YAML File">
+    Create a `config.yaml` file:
+
+    ```yaml
+    authsome:
+      mode: saas
+      baseUrl: https://api.yourdomain.com
+      
+      database:
+        driver: postgres
+        url: postgres://user:pass@localhost/db
+        maxOpenConns: 25
+        maxIdleConns: 5
+        connMaxLifetime: 1h
+      
+      session:
+        secret: your-super-secret-key
+        expiresIn: 7d
+        cookie:
+          name: authsome.session
+          domain: yourdomain.com
+          path: /
+          secure: true
+          httpOnly: true
+          sameSite: lax
+      
+      security:
+        allowedOrigins:
+          - https://yourdomain.com
+          - https://app.yourdomain.com
+        rateLimit:
+          enabled: true
+          max: 100
+          window: 1m
+        passwordPolicy:
+          minLength: 8
+          requireUpper: true
+          requireLower: true
+          requireNumbers: true
+          requireSymbols: false
+      
+      redis:
+        url: redis://localhost:6379
+        password: your-redis-password
+        db: 0
+      
+      email:
+        provider: smtp
+        smtp:
+          host: smtp.gmail.com
+          port: 587
+          user: your-email@gmail.com
+          password: your-app-password
+        from:
+          address: noreply@yourdomain.com
+          name: Your App Name
+    ```
+
+    Load the configuration:
+
+    ```go
+    package main
+
+    import (
+        "github.com/xraph/authsome"
+        "github.com/xraph/forge"
+    )
+
+    func main() {
+        // Create Forge config manager
+        configManager := forge.NewConfigManager()
+        configManager.LoadFile("config.yaml")
+        
+        // Initialize AuthSome with config manager
+        auth, err := authsome.NewWithConfigManager(configManager)
+        if err != nil {
+            panic(err)
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Core Configuration Options
+
+### Mode Configuration
+
+<Callout type="info">
+The mode determines how AuthSome handles multi-tenancy and organization management.
+</Callout>
+
+```go
+type Mode string
+
+const (
+    Standalone Mode = "standalone" // Single-tenant mode
+    SaaS       Mode = "saas"       // Multi-tenant mode
+)
+```
+
+**Standalone Mode:**
+- Single default organization (auto-created)
+- Organization creation APIs disabled
+- No org-scoped configurations
+- Perfect for single-tenant applications
+
+**SaaS Mode:**
+- Full multi-tenancy support
+- Organization creation enabled
+- Org-scoped config overrides
+- Platform organization for system settings
+
+### Database Configuration
+
+```go
+type DatabaseConfig struct {
+    Driver          string        `json:"driver"`          // postgres, mysql, sqlite
+    URL             string        `json:"url"`             // Connection string
+    MaxOpenConns    int           `json:"maxOpenConns"`    // Maximum open connections
+    MaxIdleConns    int           `json:"maxIdleConns"`    // Maximum idle connections
+    ConnMaxLifetime time.Duration `json:"connMaxLifetime"` // Connection lifetime
+    SSLMode         string        `json:"sslMode"`         // SSL mode for postgres
+    Charset         string        `json:"charset"`         // Charset for mysql
+}
+```
+
+<Tabs items={['PostgreSQL', 'MySQL', 'SQLite']}>
+  <Tab value="PostgreSQL">
+    ```go
+    Database: authsome.DatabaseConfig{
+        Driver:          "postgres",
+        URL:             "postgres://user:pass@localhost:5432/authsome?sslmode=disable",
+        MaxOpenConns:    25,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: time.Hour,
+        SSLMode:         "disable", // disable, require, verify-ca, verify-full
+    }
+    ```
+
+    **Connection String Format:**
+    ```
+    postgres://username:password@host:port/database?sslmode=disable&timezone=UTC
+    ```
+  </Tab>
+  <Tab value="MySQL">
+    ```go
+    Database: authsome.DatabaseConfig{
+        Driver:          "mysql",
+        URL:             "user:pass@tcp(localhost:3306)/authsome?parseTime=true&charset=utf8mb4",
+        MaxOpenConns:    25,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: time.Hour,
+        Charset:         "utf8mb4",
+    }
+    ```
+
+    **Connection String Format:**
+    ```
+    username:password@tcp(host:port)/database?parseTime=true&charset=utf8mb4
+    ```
+  </Tab>
+  <Tab value="SQLite">
+    ```go
+    Database: authsome.DatabaseConfig{
+        Driver:          "sqlite",
+        URL:             "./data/authsome.db",
+        MaxOpenConns:    1,  // SQLite doesn't support multiple writers
+        MaxIdleConns:    1,
+        ConnMaxLifetime: 0,  // No limit for SQLite
+    }
+    ```
+
+    **File Path Format:**
+    ```
+    ./data/authsome.db
+    /absolute/path/to/database.db
+    :memory: (for in-memory database)
+    ```
+  </Tab>
+</Tabs>
+
+### Session Configuration
+
+```go
+type SessionConfig struct {
+    Secret    string        `json:"secret"`    // Secret key for signing sessions
+    ExpiresIn string        `json:"expiresIn"` // Session expiration (e.g., "7d", "24h")
+    UpdateAge string        `json:"updateAge"` // How often to update session (e.g., "1h")
+    Cookie    CookieConfig  `json:"cookie"`    // Cookie configuration
+}
+
+type CookieConfig struct {
+    Name     string `json:"name"`     // Cookie name
+    Domain   string `json:"domain"`   // Cookie domain
+    Path     string `json:"path"`     // Cookie path
+    Secure   bool   `json:"secure"`   // HTTPS only
+    HttpOnly bool   `json:"httpOnly"` // No JavaScript access
+    SameSite string `json:"sameSite"` // CSRF protection (strict, lax, none)
+}
+```
+
+<Callout type="warn">
+**Security Best Practices:**
+- Use a strong, random secret key (at least 32 characters)
+- Set `Secure: true` in production (HTTPS)
+- Always use `HttpOnly: true` to prevent XSS
+- Use `SameSite: "lax"` or `"strict"` for CSRF protection
+</Callout>
+
+### Security Configuration
+
+```go
+type SecurityConfig struct {
+    AllowedOrigins   []string             `json:"allowedOrigins"`   // CORS origins
+    RateLimit        RateLimitConfig      `json:"rateLimit"`        // Rate limiting
+    PasswordPolicy   PasswordPolicyConfig `json:"passwordPolicy"`   // Password requirements
+    TrustedProxies   []string             `json:"trustedProxies"`   // Trusted proxy IPs
+    CSRFProtection   CSRFConfig           `json:"csrfProtection"`   // CSRF settings
+}
+
+type RateLimitConfig struct {
+    Enabled bool   `json:"enabled"` // Enable rate limiting
+    Max     int    `json:"max"`     // Maximum requests
+    Window  string `json:"window"`  // Time window (e.g., "1m", "1h")
+    Storage string `json:"storage"` // Storage backend (memory, redis)
+}
+
+type PasswordPolicyConfig struct {
+    MinLength      int  `json:"minLength"`      // Minimum password length
+    MaxLength      int  `json:"maxLength"`      // Maximum password length
+    RequireUpper   bool `json:"requireUpper"`   // Require uppercase letters
+    RequireLower   bool `json:"requireLower"`   // Require lowercase letters
+    RequireNumbers bool `json:"requireNumbers"` // Require numbers
+    RequireSymbols bool `json:"requireSymbols"` // Require symbols
+}
+```
+
+## Plugin Configuration
+
+Configure plugins when initializing AuthSome:
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/username"
+    "github.com/xraph/authsome/plugins/twofa"
+    "github.com/xraph/authsome/plugins/oauth"
+)
+
+config := authsome.Config{
+    // ... other config
+    Plugins: []authsome.Plugin{
+        username.New(username.Config{
+            Enabled:      true,
+            MinLength:    3,
+            MaxLength:    30,
+            AllowNumbers: true,
+            AllowSpecial: false,
+        }),
+        
+        twofa.New(twofa.Config{
+            Enabled:     true,
+            Issuer:      "Your App Name",
+            BackupCodes: true,
+            QRSize:      256,
+        }),
+        
+        oauth.New(oauth.Config{
+            Providers: map[string]oauth.ProviderConfig{
+                "google": {
+                    ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+                    ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+                    Scopes:       []string{"email", "profile"},
+                },
+                "github": {
+                    ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+                    ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+                    Scopes:       []string{"user:email"},
+                },
+            },
+        }),
+    },
+}
+```
+
+## Organization-Scoped Configuration
+
+In SaaS mode, you can override configurations per organization:
+
+```yaml
+# Global configuration
+authsome:
+  session:
+    expiresIn: 7d
+  security:
+    passwordPolicy:
+      minLength: 8
+
+# Organization-specific overrides
+orgs:
+  org_enterprise_123:
+    authsome:
+      session:
+        expiresIn: 30d  # Longer sessions for enterprise
+      security:
+        passwordPolicy:
+          minLength: 12  # Stricter password policy
+          requireSymbols: true
+  
+  org_startup_456:
+    authsome:
+      session:
+        expiresIn: 1d   # Shorter sessions for security
+```
+
+## Environment-Specific Configuration
+
+<Tabs items={['Development', 'Staging', 'Production']}>
+  <Tab value="Development">
+    ```bash
+    # Development environment
+    AUTHSOME_MODE=standalone
+    AUTHSOME_DATABASE_DRIVER=sqlite
+    AUTHSOME_DATABASE_URL=./dev.db
+    AUTHSOME_SESSION_SECRET=dev-secret-key
+    AUTHSOME_SESSION_COOKIE_SECURE=false
+    AUTHSOME_SECURITY_RATE_LIMIT_ENABLED=false
+    AUTHSOME_LOG_LEVEL=debug
+    ```
+  </Tab>
+  <Tab value="Staging">
+    ```bash
+    # Staging environment
+    AUTHSOME_MODE=saas
+    AUTHSOME_DATABASE_DRIVER=postgres
+    AUTHSOME_DATABASE_URL=postgres://user:pass@staging-db:5432/authsome
+    AUTHSOME_SESSION_SECRET=staging-secret-key
+    AUTHSOME_SESSION_COOKIE_SECURE=true
+    AUTHSOME_SECURITY_RATE_LIMIT_ENABLED=true
+    AUTHSOME_SECURITY_RATE_LIMIT_MAX=1000
+    AUTHSOME_LOG_LEVEL=info
+    ```
+  </Tab>
+  <Tab value="Production">
+    ```bash
+    # Production environment
+    AUTHSOME_MODE=saas
+    AUTHSOME_DATABASE_DRIVER=postgres
+    AUTHSOME_DATABASE_URL=postgres://user:pass@prod-db:5432/authsome?sslmode=require
+    AUTHSOME_SESSION_SECRET=${RANDOM_SECRET_FROM_VAULT}
+    AUTHSOME_SESSION_COOKIE_SECURE=true
+    AUTHSOME_SESSION_COOKIE_DOMAIN=yourdomain.com
+    AUTHSOME_SECURITY_RATE_LIMIT_ENABLED=true
+    AUTHSOME_SECURITY_RATE_LIMIT_MAX=100
+    AUTHSOME_REDIS_URL=redis://prod-redis:6379
+    AUTHSOME_LOG_LEVEL=warn
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration Validation
+
+AuthSome automatically validates configuration on startup:
+
+```go
+// Custom validation
+config := authsome.Config{
+    // ... your config
+}
+
+// Validate before creating AuthSome instance
+if err := config.Validate(); err != nil {
+    log.Fatalf("Invalid configuration: %v", err)
+}
+
+auth, err := authsome.New(config)
+if err != nil {
+    log.Fatalf("Failed to initialize AuthSome: %v", err)
+}
+```
+
+## Configuration Best Practices
+
+<Cards>
+  <Card
+    title="🔐 Security"
+    description="Use strong secrets, enable HTTPS, configure CORS properly"
+  />
+  <Card
+    title="🚀 Performance"
+    description="Configure connection pools, enable Redis caching, tune rate limits"
+  />
+  <Card
+    title="📊 Monitoring"
+    description="Set appropriate log levels, enable metrics, configure alerts"
+  />
+  <Card
+    title="🔄 Deployment"
+    description="Use environment variables, validate configs, implement health checks"
+  />
+</Cards>
+
+### Security Checklist
+
+- ✅ Use environment variables for secrets
+- ✅ Enable HTTPS in production (`cookie.secure: true`)
+- ✅ Configure proper CORS origins
+- ✅ Set strong password policies
+- ✅ Enable rate limiting
+- ✅ Use `HttpOnly` and `SameSite` cookies
+- ✅ Validate all configuration values
+
+### Performance Optimization
+
+- ✅ Configure database connection pools
+- ✅ Enable Redis for session caching
+- ✅ Set appropriate session expiration
+- ✅ Tune rate limiting based on usage
+- ✅ Use CDN for static assets
+- ✅ Enable gzip compression
+
+<Callout type="tip">
+**Configuration Management**: Use tools like HashiCorp Vault, AWS Secrets Manager, or Kubernetes secrets for managing sensitive configuration in production.
+</Callout>
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="First App"
+    description="Build your first complete authentication application"
+    href="/docs/go/getting-started/first-app"
+  />
+  <Card
+    title="Core Concepts"
+    description="Learn about authentication, sessions, and security"
+    href="/docs/go/concepts/authentication"
+  />
+  <Card
+    title="Plugin System"
+    description="Explore and configure authentication plugins"
+    href="/docs/go/plugins/overview"
+  />
+  <Card
+    title="Deployment Guide"
+    description="Deploy AuthSome to production environments"
+    href="/docs/go/guides/deployment"
+  />
+</Cards>
