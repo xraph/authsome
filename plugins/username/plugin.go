@@ -6,6 +6,8 @@ import (
     "github.com/xraph/authsome/core/user"
     "github.com/xraph/authsome/core/session"
     "github.com/xraph/authsome/core/auth"
+    "github.com/xraph/authsome/core/hooks"
+    "github.com/xraph/authsome/core/registry"
     "net/http"
     "github.com/xraph/forge"
 )
@@ -55,7 +57,9 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
 }
 
 // RegisterHooks placeholder
-func (p *Plugin) RegisterHooks(_ interface{}) error { return nil }
+func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
+
+func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
 // Migrate placeholder for DB migrations
 func (p *Plugin) Migrate() error { return nil }

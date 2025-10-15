@@ -2,6 +2,9 @@ package plugins
 
 import (
     "fmt"
+
+    "github.com/xraph/authsome/core/hooks"
+    "github.com/xraph/authsome/core/registry"
 )
 
 // Plugin defines the interface for authentication plugins
@@ -9,14 +12,17 @@ type Plugin interface {
     // ID returns the unique plugin identifier
     ID() string
 
-    // Init initializes the plugin
+    // Init initializes the plugin with the auth instance
     Init(auth interface{}) error
 
-    // RegisterRoutes registers plugin routes
+    // RegisterRoutes registers plugin routes with the router
     RegisterRoutes(router interface{}) error
 
-    // RegisterHooks registers plugin hooks
-    RegisterHooks(hooks interface{}) error
+    // RegisterHooks registers plugin hooks with the hook registry
+    RegisterHooks(hooks *hooks.HookRegistry) error
+
+    // RegisterServiceDecorators allows plugins to replace core services with decorated versions
+    RegisterServiceDecorators(services *registry.ServiceRegistry) error
 
     // Migrate runs plugin migrations
     Migrate() error

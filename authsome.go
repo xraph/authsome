@@ -269,3 +269,16 @@ func (a *Auth) GetMode() Mode {
 func (a *Auth) GetConfig() Config {
 	return a.config
 }
+
+// GetDB returns the database instance
+func (a *Auth) GetDB() *bun.DB {
+	if db, ok := a.db.(*bun.DB); ok {
+		return db
+	}
+	return nil
+}
+
+// GetConfigManager returns the forge config manager
+func (a *Auth) GetConfigManager() interface{} {
+	return a.forgeConfig
+}

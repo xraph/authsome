@@ -5,6 +5,8 @@ import (
     "github.com/uptrace/bun"
     "github.com/xraph/forge"
     "github.com/xraph/authsome/core/session"
+    "github.com/xraph/authsome/core/hooks"
+    "github.com/xraph/authsome/core/registry"
     repo "github.com/xraph/authsome/repository"
 )
 
@@ -49,6 +51,8 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     }
 }
 
-func (p *Plugin) RegisterHooks(_ interface{}) error { return nil }
+func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
+
+func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
 func (p *Plugin) Migrate() error { return nil }
