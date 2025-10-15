@@ -242,6 +242,9 @@ scripts/local/
 notes.md
 TODO.local.md
 NOTES.md
+MIGRATION_STRATEGY.md
+
+
 
 # Project specific
 authsome_dev.db
