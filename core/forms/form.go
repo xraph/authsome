@@ -112,10 +112,10 @@ type Repository interface {
 
 // Config represents the forms configuration
 type Config struct {
-	DefaultFormType string `json:"defaultFormType"`
-	MaxFieldCount   int    `json:"maxFieldCount"`
-	MaxFileSize     int64  `json:"maxFileSize"`
-	AllowedTypes    []string `json:"allowedTypes"`
+	DefaultFormType string                 `json:"defaultFormType"`
+	MaxFieldCount   int                    `json:"maxFieldCount"`
+	MaxFileSize     int64                  `json:"maxFileSize"`
+	AllowedTypes    []string               `json:"allowedTypes"`
 	ValidationRules map[string]interface{} `json:"validationRules"`
 }
 

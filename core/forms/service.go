@@ -326,7 +326,7 @@ func (s *Service) schemaToForm(fs *schema.FormSchema) *Form {
 		IsActive:       fs.IsActive,
 		Version:        fs.Version,
 		CreatedAt:      fs.CreatedAt,
-		UpdatedAt:     fs.UpdatedAt.Time,
+		UpdatedAt:      fs.UpdatedAt.Time,
 	}
 }
 
@@ -341,6 +341,6 @@ func (s *Service) schemaToSubmission(fs *schema.FormSubmission) *FormSubmission 
 		UserAgent:    fs.UserAgent,
 		Status:       fs.Status,
 		CreatedAt:    fs.CreatedAt,
-		UpdatedAt:   fs.UpdatedAt.Time,
+		UpdatedAt:    fs.UpdatedAt.Time,
 	}
 }

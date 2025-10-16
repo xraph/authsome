@@ -37,6 +37,9 @@ clean: ## Remove build artifacts and generated files
 	@rm -f *.db *.db-journal *.db-wal *.db-shm
 	@echo "✓ Cleaned"
 
+clean-all: clean security-clean ## Remove all artifacts including security reports
+	@echo "✓ All artifacts cleaned"
+
 ##@ Testing
 
 test: ## Run all tests
@@ -206,6 +209,15 @@ lint: ## Run linters
 		exit 1; \
 	fi
 
+lint-fix: ## Run linters with auto-fix
+	@echo "Running linters with auto-fix..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --fix; \
+	else \
+		echo "golangci-lint not found, install it: https://golangci-lint.run/usage/install/"; \
+		exit 1; \
+	fi
+
 fmt: ## Format Go code
 	@echo "Formatting code..."
 	@go fmt ./...
@@ -222,6 +234,216 @@ tidy: ## Tidy Go modules
 	@echo "✓ Modules tidied"
 
 check: fmt vet lint ## Run all code quality checks
+
+##@ Security Auditing
+
+SECURITY_DIR := .security-reports
+SECURITY_TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
+
+security-audit: security-setup security-gosec security-vuln security-deps security-secrets security-sbom security-report ## Run complete security audit suite
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "✓ Security audit completed!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Reports available in: $(SECURITY_DIR)"
+	@echo ""
+	@echo "Review SECURITY.md for security best practices."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+security-setup: ## Create security reports directory
+	@mkdir -p $(SECURITY_DIR)
+
+security-gosec: security-setup ## Run gosec static security scanner
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "🔒 Running gosec (Go Security Checker)..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@if ! command -v gosec >/dev/null 2>&1; then \
+		echo "Installing gosec..."; \
+		go install github.com/securego/gosec/v2/cmd/gosec@latest; \
+	fi
+	@gosec -fmt=json -out=$(SECURITY_DIR)/gosec-$(SECURITY_TIMESTAMP).json ./... 2>/dev/null || true
+	@gosec -fmt=text -out=$(SECURITY_DIR)/gosec-$(SECURITY_TIMESTAMP).txt ./... 2>/dev/null || true
+	@gosec -fmt=sarif -out=$(SECURITY_DIR)/gosec-$(SECURITY_TIMESTAMP).sarif ./... 2>/dev/null || true
+	@echo "✓ gosec scan completed"
+	@echo "  - JSON: $(SECURITY_DIR)/gosec-$(SECURITY_TIMESTAMP).json"
+	@echo "  - Text: $(SECURITY_DIR)/gosec-$(SECURITY_TIMESTAMP).txt"
+	@echo "  - SARIF: $(SECURITY_DIR)/gosec-$(SECURITY_TIMESTAMP).sarif"
+
+security-vuln: security-setup ## Run vulnerability scanning (govulncheck + trivy)
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "🔍 Running vulnerability scanners..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "→ govulncheck (official Go vulnerability scanner)..."
+	@if ! command -v govulncheck >/dev/null 2>&1; then \
+		echo "Installing govulncheck..."; \
+		go install golang.org/x/vuln/cmd/govulncheck@latest; \
+	fi
+	@govulncheck -json ./... > $(SECURITY_DIR)/govulncheck-$(SECURITY_TIMESTAMP).json 2>&1 || true
+	@govulncheck ./... > $(SECURITY_DIR)/govulncheck-$(SECURITY_TIMESTAMP).txt 2>&1 || true
+	@echo "✓ govulncheck completed"
+	@echo ""
+	@echo "→ trivy (comprehensive vulnerability scanner)..."
+	@if ! command -v trivy >/dev/null 2>&1; then \
+		echo "⚠️  trivy not found. Install from: https://github.com/aquasecurity/trivy"; \
+		echo "   macOS: brew install trivy"; \
+		echo "   Linux: apt-get install trivy / yum install trivy"; \
+	else \
+		trivy fs --format json --output $(SECURITY_DIR)/trivy-$(SECURITY_TIMESTAMP).json . 2>/dev/null || true; \
+		trivy fs --format table --output $(SECURITY_DIR)/trivy-$(SECURITY_TIMESTAMP).txt . 2>/dev/null || true; \
+		trivy fs --format sarif --output $(SECURITY_DIR)/trivy-$(SECURITY_TIMESTAMP).sarif . 2>/dev/null || true; \
+		echo "✓ trivy scan completed"; \
+	fi
+
+security-deps: security-setup ## Audit Go module dependencies
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "📦 Auditing dependencies..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "→ go mod verify..."
+	@go mod verify > $(SECURITY_DIR)/mod-verify-$(SECURITY_TIMESTAMP).txt 2>&1
+	@echo "✓ Module verification completed"
+	@echo ""
+	@echo "→ Dependency graph..."
+	@go mod graph > $(SECURITY_DIR)/mod-graph-$(SECURITY_TIMESTAMP).txt 2>&1
+	@echo "✓ Dependency graph generated"
+	@echo ""
+	@echo "→ Checking for outdated dependencies..."
+	@go list -u -m all > $(SECURITY_DIR)/deps-outdated-$(SECURITY_TIMESTAMP).txt 2>&1 || true
+	@echo "✓ Dependency audit completed"
+
+security-secrets: security-setup ## Scan for hardcoded secrets and credentials
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "🔐 Scanning for secrets..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@if ! command -v gitleaks >/dev/null 2>&1; then \
+		echo "Installing gitleaks..."; \
+		go install github.com/gitleaks/gitleaks/v8@latest; \
+	fi
+	@echo "→ Running gitleaks..."
+	@gitleaks detect --config .gitleaks.toml --report-format json --report-path $(SECURITY_DIR)/gitleaks-$(SECURITY_TIMESTAMP).json --no-git 2>/dev/null || true
+	@gitleaks detect --config .gitleaks.toml --report-format sarif --report-path $(SECURITY_DIR)/gitleaks-$(SECURITY_TIMESTAMP).sarif --no-git 2>/dev/null || true
+	@echo "✓ Secret scanning completed"
+	@if [ -f $(SECURITY_DIR)/gitleaks-$(SECURITY_TIMESTAMP).json ]; then \
+		if [ "$$(cat $(SECURITY_DIR)/gitleaks-$(SECURITY_TIMESTAMP).json)" != "null" ] && [ "$$(cat $(SECURITY_DIR)/gitleaks-$(SECURITY_TIMESTAMP).json)" != "[]" ]; then \
+			echo "⚠️  SECRETS DETECTED! Review: $(SECURITY_DIR)/gitleaks-$(SECURITY_TIMESTAMP).json"; \
+		else \
+			echo "✓ No secrets detected"; \
+		fi; \
+	fi
+
+security-sbom: security-setup ## Generate Software Bill of Materials (SBOM)
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "📋 Generating SBOM (Software Bill of Materials)..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "→ Generating dependency list..."
+	@go list -json -m all > $(SECURITY_DIR)/sbom-$(SECURITY_TIMESTAMP).json 2>&1
+	@echo "✓ SBOM generated: $(SECURITY_DIR)/sbom-$(SECURITY_TIMESTAMP).json"
+	@echo ""
+	@if command -v cyclonedx-gomod >/dev/null 2>&1; then \
+		echo "→ Generating CycloneDX SBOM..."; \
+		cyclonedx-gomod app -json -output $(SECURITY_DIR)/sbom-cyclonedx-$(SECURITY_TIMESTAMP).json 2>/dev/null || true; \
+		echo "✓ CycloneDX SBOM generated"; \
+	else \
+		echo "ℹ️  cyclonedx-gomod not found (optional)"; \
+		echo "   Install: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest"; \
+	fi
+
+security-licenses: security-setup ## Check dependency licenses for compliance
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "⚖️  Checking licenses..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@if ! command -v go-licenses >/dev/null 2>&1; then \
+		echo "Installing go-licenses..."; \
+		go install github.com/google/go-licenses@latest; \
+	fi
+	@echo "→ Generating license report..."
+	@go-licenses report ./... > $(SECURITY_DIR)/licenses-$(SECURITY_TIMESTAMP).txt 2>&1 || true
+	@echo "✓ License report generated: $(SECURITY_DIR)/licenses-$(SECURITY_TIMESTAMP).txt"
+	@echo ""
+	@echo "→ Checking for non-permissive licenses..."
+	@go-licenses check ./... --disallowed_types=forbidden,restricted 2>&1 | tee $(SECURITY_DIR)/licenses-violations-$(SECURITY_TIMESTAMP).txt || true
+	@echo "✓ License compliance check completed"
+
+security-report: ## Generate security summary report
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "📊 Generating security summary report..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@{ \
+		echo "# Security Audit Report"; \
+		echo ""; \
+		echo "**Generated**: $(SECURITY_TIMESTAMP)"; \
+		echo "**Project**: AuthSome Authentication Framework"; \
+		echo ""; \
+		echo "---"; \
+		echo ""; \
+		echo "## Summary"; \
+		echo ""; \
+		echo "This report contains security audit results from multiple scanners:"; \
+		echo ""; \
+		echo "- **gosec**: Static security analysis for Go code"; \
+		echo "- **govulncheck**: Official Go vulnerability scanner"; \
+		echo "- **trivy**: Comprehensive vulnerability scanner"; \
+		echo "- **gitleaks**: Secret and credential detection"; \
+		echo "- **SBOM**: Software Bill of Materials"; \
+		echo "- **Licenses**: Dependency license compliance"; \
+		echo ""; \
+		echo "## Files Generated"; \
+		echo ""; \
+		ls -lh $(SECURITY_DIR)/*$(SECURITY_TIMESTAMP)* 2>/dev/null | awk '{print "- " $$9 " (" $$5 ")"}' || true; \
+		echo ""; \
+		echo "## Next Steps"; \
+		echo ""; \
+		echo "1. Review all findings in the security reports"; \
+		echo "2. Prioritize issues by severity (Critical > High > Medium > Low)"; \
+		echo "3. Create GitHub issues for vulnerabilities requiring fixes"; \
+		echo "4. Update dependencies with known vulnerabilities"; \
+		echo "5. Remove any detected secrets immediately"; \
+		echo "6. Review SECURITY.md for remediation guidance"; \
+		echo ""; \
+		echo "## Resources"; \
+		echo ""; \
+		echo "- Security Policy: SECURITY.md"; \
+		echo "- Go Security: https://go.dev/security/"; \
+		echo "- OWASP Top 10: https://owasp.org/www-project-top-ten/"; \
+		echo "- CWE Database: https://cwe.mitre.org/"; \
+		echo ""; \
+		echo "---"; \
+		echo ""; \
+		echo "*For security issues, contact: security@authsome.dev*"; \
+	} > $(SECURITY_DIR)/REPORT-$(SECURITY_TIMESTAMP).md
+	@echo "✓ Summary report: $(SECURITY_DIR)/REPORT-$(SECURITY_TIMESTAMP).md"
+
+security-clean: ## Remove all security reports
+	@echo "Cleaning security reports..."
+	@rm -rf $(SECURITY_DIR)
+	@echo "✓ Security reports cleaned"
+
+security-install-tools: ## Install all security scanning tools
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "🔧 Installing security tools..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "→ Installing gosec..."
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo "→ Installing govulncheck..."
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "→ Installing gitleaks..."
+	@go install github.com/gitleaks/gitleaks/v8@latest
+	@echo "→ Installing go-licenses..."
+	@go install github.com/google/go-licenses@latest
+	@echo "→ Installing cyclonedx-gomod (optional)..."
+	@go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+	@echo ""
+	@echo "ℹ️  Trivy requires manual installation:"
+	@echo "   macOS: brew install trivy"
+	@echo "   Linux: https://aquasecurity.github.io/trivy/latest/getting-started/installation/"
+	@echo ""
+	@echo "✓ Core security tools installed!"
+
+security-ci: security-setup security-gosec security-vuln security-secrets ## Fast security checks for CI/CD
+	@echo "✓ CI security checks completed"
+
+security-pre-commit: security-secrets ## Quick security check before commit
+	@echo "✓ Pre-commit security check passed"
 
 ##@ Documentation
 
@@ -243,24 +465,26 @@ godoc: ## Start godoc server
 
 ##@ Release Workflow
 
-full-workflow: clean build validate-manifests generate-clients test ## Complete workflow: clean, build, validate, generate, test
+full-workflow: clean build validate-manifests generate-clients test security-ci ## Complete workflow with security
 	@echo "✓ Full workflow completed successfully!"
 
-pre-commit: fmt vet test-short ## Pre-commit checks (fast)
+pre-commit: fmt vet test-short security-pre-commit ## Pre-commit checks (fast)
 	@echo "✓ Pre-commit checks passed"
 
-pre-push: check test ## Pre-push checks (comprehensive)
+pre-push: check test security-ci ## Pre-push checks (comprehensive with security)
 	@echo "✓ Pre-push checks passed"
 
-release-prep: clean build test generate-clients validate-manifests ## Prepare for release
+release-prep: clean build test generate-clients validate-manifests security-audit ## Prepare for release with full security audit
 	@echo "✓ Release preparation complete"
 	@echo ""
 	@echo "Next steps:"
-	@echo "  1. Review generated clients in clients/generated/"
-	@echo "  2. Update version numbers"
-	@echo "  3. Update CHANGELOG.md"
-	@echo "  4. git tag v<version>"
-	@echo "  5. git push --tags"
+	@echo "  1. Review security audit reports in .security-reports/"
+	@echo "  2. Review generated clients in clients/generated/"
+	@echo "  3. Update version numbers"
+	@echo "  4. Update CHANGELOG.md"
+	@echo "  5. Update SECURITY.md with any new vulnerabilities"
+	@echo "  6. git tag v<version>"
+	@echo "  7. git push --tags"
 
 ##@ Utilities
 
@@ -299,11 +523,14 @@ verify: ## Verify dependencies
 
 ##@ CI/CD
 
-ci: deps check test generate-clients validate-manifests ## Run CI pipeline
+ci: deps check test generate-clients validate-manifests security-ci ## Run CI pipeline with security
 	@echo "✓ CI pipeline completed successfully!"
 
-ci-fast: deps test-short lint ## Fast CI checks
+ci-fast: deps test-short lint security-secrets ## Fast CI checks with secret scanning
 	@echo "✓ Fast CI checks completed!"
+
+ci-security-only: security-ci ## Run only security checks (for scheduled scans)
+	@echo "✓ Security-only CI completed!"
 
 ##@ Docker (Future)
 

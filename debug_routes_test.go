@@ -73,7 +73,7 @@ func TestDebugRoutes(t *testing.T) {
 	}
 
 	for _, endpoint := range postEndpoints {
-		resp, err := http.Post(srv.URL + endpoint, "application/json", nil)
+		resp, err := http.Post(srv.URL+endpoint, "application/json", nil)
 		if err != nil {
 			t.Logf("Error accessing POST %s: %v", endpoint, err)
 			continue

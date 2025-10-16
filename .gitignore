@@ -226,6 +226,15 @@ test-reports/
 .cache/
 cache/
 
+# Security scanning reports - NEVER commit these (may contain sensitive findings)
+.security-reports/
+*.sarif
+gitleaks-report.json
+.gitleaks-baseline.json
+trivy-results.json
+gosec-report.json
+govulncheck-report.json
+
 # Profiling files
 *.prof
 *.pprof

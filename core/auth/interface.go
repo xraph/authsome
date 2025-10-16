@@ -21,4 +21,3 @@ type ServiceInterface interface {
 
 // Ensure Service implements ServiceInterface
 var _ ServiceInterface = (*Service)(nil)
-

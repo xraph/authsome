@@ -1,0 +1,9 @@
+# Trivy ignore file for known false positives or accepted risks
+# Format: CVE-ID or vulnerability ID with optional comment
+
+# Example of ignoring a specific CVE (remove these examples):
+# CVE-2021-12345  # False positive - not applicable to our use case
+# CVE-2021-99999  # Accepted risk - documented in SECURITY.md
+
+# Add actual ignored vulnerabilities here with justification
+

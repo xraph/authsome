@@ -55,7 +55,7 @@ var configInitCmd = &cobra.Command{
 		mode, _ := cmd.Flags().GetString("mode")
 		output, _ := cmd.Flags().GetString("output")
 		force, _ := cmd.Flags().GetBool("force")
-		
+
 		return initConfig(mode, output, force)
 	},
 }
@@ -232,25 +232,25 @@ func getStandaloneConfig() map[string]interface{} {
 // getSaaSConfig returns default SaaS configuration
 func getSaaSConfig() map[string]interface{} {
 	config := getStandaloneConfig()
-	
+
 	// Override for SaaS mode
 	auth := config["auth"].(map[string]interface{})
 	auth["mode"] = "saas"
-	
+
 	// Add organization settings
 	config["organizations"] = map[string]interface{}{
-		"allowCreation":    true,
-		"requireApproval":  false,
-		"defaultPlan":      "free",
-		"maxUsersPerOrg":   100,
+		"allowCreation":   true,
+		"requireApproval": false,
+		"defaultPlan":     "free",
+		"maxUsersPerOrg":  100,
 	}
-	
+
 	// Add multi-tenancy settings
 	config["multiTenant"] = map[string]interface{}{
-		"enabled":           true,
-		"subdomainRouting":  false,
-		"pathBasedRouting":  true,
+		"enabled":          true,
+		"subdomainRouting": false,
+		"pathBasedRouting": true,
 	}
-	
+
 	return config
 }

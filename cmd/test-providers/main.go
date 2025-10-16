@@ -54,13 +54,13 @@ func testEmailTemplates() {
 	templates := email.ListTemplates()
 	for _, templateName := range templates {
 		fmt.Printf("  Testing template: %s\n", templateName)
-		
+
 		rendered, err := email.RenderTemplate(templateName, data)
 		if err != nil {
 			fmt.Printf("    ❌ Error: %v\n", err)
 			continue
 		}
-		
+
 		fmt.Printf("    ✅ Subject: %s\n", rendered.Subject)
 		fmt.Printf("    ✅ HTML body: %d characters\n", len(rendered.HTMLBody))
 		fmt.Printf("    ✅ Text body: %d characters\n", len(rendered.TextBody))
@@ -88,16 +88,16 @@ func testSMSTemplates() {
 	templates := sms.ListTemplates()
 	for _, templateName := range templates {
 		fmt.Printf("  Testing template: %s\n", templateName)
-		
+
 		rendered, err := sms.RenderTemplate(templateName, data)
 		if err != nil {
 			fmt.Printf("    ❌ Error: %v\n", err)
 			continue
 		}
-		
+
 		fmt.Printf("    ✅ Body: %s\n", rendered.Body)
 		fmt.Printf("    ✅ Length: %d characters\n", len(rendered.Body))
-		
+
 		// Validate template
 		if err := sms.ValidateTemplate(templateName); err != nil {
 			fmt.Printf("    ⚠️  Validation warning: %v\n", err)
@@ -132,7 +132,7 @@ func testEmailProvider() {
 
 	fmt.Printf("  ✅ Notification request created for: %s\n", notificationReq.Recipient)
 	fmt.Printf("  ✅ Subject: %s\n", notificationReq.Subject)
-	
+
 	// Note: We're not actually sending the email in this test
 	// In a real scenario, you would call: provider.Send(context.Background(), notification)
 	fmt.Printf("  ℹ️  Email sending skipped (test mode)\n")
@@ -161,7 +161,7 @@ func testSMSProvider() {
 
 	fmt.Printf("  ✅ SMS notification request created for: %s\n", notificationReq.Recipient)
 	fmt.Printf("  ✅ Body: %s\n", notificationReq.Body)
-	
+
 	// Note: We're not actually sending the SMS in this test
 	// In a real scenario, you would call: provider.Send(context.Background(), notification)
 	fmt.Printf("  ℹ️  SMS sending skipped (test mode)\n")

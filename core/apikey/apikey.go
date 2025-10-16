@@ -27,7 +27,7 @@ type APIKey struct {
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
-	
+
 	// Transient field - only populated during creation
 	Key string `json:"key,omitempty"`
 }
@@ -75,26 +75,26 @@ type ListAPIKeysResponse struct {
 
 // RotateAPIKeyRequest represents a request to rotate an API key
 type RotateAPIKeyRequest struct {
-	ID     string     `json:"id" validate:"required"`
-	OrgID  string     `json:"org_id" validate:"required"`
-	UserID string     `json:"user_id" validate:"required"`
+	ID        string     `json:"id" validate:"required"`
+	OrgID     string     `json:"org_id" validate:"required"`
+	UserID    string     `json:"user_id" validate:"required"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // VerifyAPIKeyRequest represents a request to verify an API key
 type VerifyAPIKeyRequest struct {
-	Key        string `json:"key" validate:"required"`
-	RequiredScope string `json:"required_scope,omitempty"`
+	Key                string `json:"key" validate:"required"`
+	RequiredScope      string `json:"required_scope,omitempty"`
 	RequiredPermission string `json:"required_permission,omitempty"`
-	IP         string `json:"ip,omitempty"`
-	UserAgent  string `json:"user_agent,omitempty"`
+	IP                 string `json:"ip,omitempty"`
+	UserAgent          string `json:"user_agent,omitempty"`
 }
 
 // VerifyAPIKeyResponse represents a response from API key verification
 type VerifyAPIKeyResponse struct {
-	Valid   bool     `json:"valid"`
-	APIKey  *APIKey  `json:"api_key,omitempty"`
-	Error   string   `json:"error,omitempty"`
+	Valid  bool    `json:"valid"`
+	APIKey *APIKey `json:"api_key,omitempty"`
+	Error  string  `json:"error,omitempty"`
 }
 
 // Repository defines the interface for API key storage

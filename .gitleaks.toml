@@ -1,0 +1,161 @@
+# Gitleaks configuration for secret detection
+# For AuthSome authentication server
+
+title = "AuthSome Secret Detection"
+
+# Baseline file to exclude known false positives
+# Run: gitleaks detect --baseline-path .gitleaks-baseline.json --report-format json --report-path .gitleaks-report.json
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(\bapi[_-]?key\b[^\S\r\n]*[:=][^\S\r\n]*['"][0-9a-z\-]{32,}['"])'''
+entropy = 3.5
+tags = ["api", "key", "generic"]
+
+[[rules]]
+id = "jwt-token"
+description = "JWT Token"
+regex = '''eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'''
+tags = ["jwt", "token"]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key"
+regex = '''(?i)aws[_-]?access[_-]?key[_-]?id[^\S\r\n]*[:=][^\S\r\n]*['"]?[A-Z0-9]{20}['"]?'''
+tags = ["aws", "access-key"]
+
+[[rules]]
+id = "aws-secret-key"
+description = "AWS Secret Key"
+regex = '''(?i)aws[_-]?secret[_-]?access[_-]?key[^\S\r\n]*[:=][^\S\r\n]*['"]?[A-Za-z0-9/+=]{40}['"]?'''
+tags = ["aws", "secret-key"]
+
+[[rules]]
+id = "github-token"
+description = "GitHub Token"
+regex = '''ghp_[0-9a-zA-Z]{36}|github_pat_[0-9a-zA-Z]{22}_[0-9a-zA-Z]{59}'''
+tags = ["github", "token"]
+
+[[rules]]
+id = "google-oauth"
+description = "Google OAuth"
+regex = '''(?i)google[_-]?oauth[^\S\r\n]*[:=][^\S\r\n]*['"][0-9a-zA-Z\-_]{24}['"]'''
+tags = ["google", "oauth"]
+
+[[rules]]
+id = "private-key"
+description = "Private Key (PEM format)"
+regex = '''-----BEGIN[ A-Z]*PRIVATE KEY-----'''
+tags = ["private-key", "pem"]
+
+[[rules]]
+id = "slack-token"
+description = "Slack Token"
+regex = '''xox[baprs]-[0-9]{10,12}-[0-9]{10,12}-[a-zA-Z0-9]{24,32}'''
+tags = ["slack", "token"]
+
+[[rules]]
+id = "stripe-key"
+description = "Stripe Key"
+regex = '''(?i)stripe[_-]?key[^\S\r\n]*[:=][^\S\r\n]*['"]?(sk|pk)_(test|live)_[0-9a-zA-Z]{24,99}['"]?'''
+tags = ["stripe", "key"]
+
+[[rules]]
+id = "twilio-key"
+description = "Twilio API Key"
+regex = '''(?i)twilio[_-]?(api|auth)[_-]?key[^\S\r\n]*[:=][^\S\r\n]*['"]?SK[0-9a-f]{32}['"]?'''
+tags = ["twilio", "key"]
+
+[[rules]]
+id = "mailgun-key"
+description = "Mailgun API Key"
+regex = '''(?i)mailgun[_-]?api[_-]?key[^\S\r\n]*[:=][^\S\r\n]*['"]?key-[0-9a-zA-Z]{32}['"]?'''
+tags = ["mailgun", "key"]
+
+[[rules]]
+id = "sendgrid-key"
+description = "SendGrid API Key"
+regex = '''(?i)sendgrid[_-]?api[_-]?key[^\S\r\n]*[:=][^\S\r\n]*['"]?SG\.[0-9a-zA-Z\-_]{22}\.[0-9a-zA-Z\-_]{43}['"]?'''
+tags = ["sendgrid", "key"]
+
+[[rules]]
+id = "generic-secret"
+description = "Generic Secret"
+regex = '''(?i)(\bsecret\b[^\S\r\n]*[:=][^\S\r\n]*['"][0-9a-zA-Z\-_!@#$%^&*()]{16,}['"])'''
+entropy = 4.0
+tags = ["secret", "generic"]
+
+[[rules]]
+id = "password-in-url"
+description = "Password in URL"
+regex = '''[a-zA-Z]{3,10}:\/\/[^$][^:@\/\n]{3,20}:[^$][^:@\/\n]{3,40}@.{1,100}'''
+tags = ["password", "url"]
+
+[[rules]]
+id = "connection-string"
+description = "Database Connection String"
+regex = '''(?i)(postgres|mysql|mongodb|redis):\/\/[^\s"']+:[^\s"']+@[^\s"']+'''
+tags = ["connection-string", "database"]
+
+[[rules]]
+id = "oauth-client-secret"
+description = "OAuth Client Secret"
+regex = '''(?i)client[_-]?secret[^\S\r\n]*[:=][^\S\r\n]*['"][0-9a-zA-Z\-_]{20,}['"]'''
+tags = ["oauth", "client-secret"]
+
+[allowlist]
+description = "Global allowlist for false positives"
+paths = [
+    # Test files often contain dummy secrets
+    '''.*_test\.go$''',
+    '''test/.*''',
+    '''examples/.*\.yaml$''',
+    
+    # Generated files
+    '''clients/generated/.*''',
+    
+    # Documentation
+    '''\.md$''',
+    '''docs/.*''',
+    
+    # Configuration examples
+    '''authsome-.*\.yaml\.example$''',
+    
+    # Frontend dependencies
+    '''frontend/.*/(node_modules|\.next)/.*''',
+]
+
+# Regexes to exclude from scanning
+regexes = [
+    # Common false positives
+    '''example\.com''',
+    '''localhost''',
+    '''127\.0\.0\.1''',
+    '''0\.0\.0\.0''',
+    
+    # Test/example values
+    '''test[_-]?secret''',
+    '''example[_-]?key''',
+    '''dummy[_-]?token''',
+    '''fake[_-]?password''',
+    
+    # Variable names (not actual secrets)
+    '''(?i)getenv\(['"]''',
+    '''(?i)os\.Getenv''',
+    '''(?i)config\.''',
+]
+
+# Stop words that indicate false positives
+stopwords = [
+    "example",
+    "test",
+    "dummy",
+    "fake",
+    "sample",
+    "template",
+    "placeholder",
+    "TODO",
+    "FIXME",
+]
+

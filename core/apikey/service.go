@@ -28,9 +28,9 @@ type Config struct {
 
 // Service handles API key operations
 type Service struct {
-	repo        *repository.APIKeyRepository
-	auditSvc    *audit.Service
-	config      Config
+	repo     *repository.APIKeyRepository
+	auditSvc *audit.Service
+	config   Config
 }
 
 // NewService creates a new API key service
@@ -439,13 +439,13 @@ func (s *Service) generatePrefix(orgID string) string {
 	bytes := make([]byte, 4)
 	rand.Read(bytes)
 	suffix := base64.URLEncoding.EncodeToString(bytes)[:6]
-	
+
 	// Create prefix: ak_<org_short>_<random>
 	orgShort := orgID
 	if len(orgShort) > 8 {
 		orgShort = orgShort[:8]
 	}
-	
+
 	return fmt.Sprintf("ak_%s_%s", orgShort, suffix)
 }
 

@@ -427,9 +427,9 @@ func testWebhookConfiguration() {
 
 	// Test invalid configurations
 	invalidConfigs := []*webhook.Webhook{
-		{URL: "", Events: []string{webhook.EventUserCreated}},                    // Empty URL
-		{URL: "invalid-url", Events: []string{webhook.EventUserCreated}},         // Invalid URL
-		{URL: "https://example.com/webhook", Events: []string{}},                 // No events
+		{URL: "", Events: []string{webhook.EventUserCreated}},                                            // Empty URL
+		{URL: "invalid-url", Events: []string{webhook.EventUserCreated}},                                 // Invalid URL
+		{URL: "https://example.com/webhook", Events: []string{}},                                         // No events
 		{URL: "https://example.com/webhook", Events: []string{webhook.EventUserCreated}, MaxRetries: -1}, // Invalid retries
 	}
 

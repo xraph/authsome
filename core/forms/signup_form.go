@@ -275,7 +275,7 @@ func (s *SignupFormService) validateFieldValue(name, fieldType string, value int
 
 // contains checks if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (len(substr) == 0 || s[len(s)-len(substr):] == substr || 
+	return len(s) >= len(substr) && (len(substr) == 0 || s[len(s)-len(substr):] == substr ||
 		s[:len(substr)] == substr || containsMiddle(s, substr))
 }
 

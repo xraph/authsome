@@ -26,7 +26,7 @@ var generateKeysCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		keySize, _ := cmd.Flags().GetInt("size")
 		outputDir, _ := cmd.Flags().GetString("output")
-		
+
 		// Ensure output directory exists
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return fmt.Errorf("failed to create output directory: %w", err)
@@ -120,7 +120,7 @@ var generateSecretCmd = &cobra.Command{
 	Long:  `Generate a cryptographically secure secret for session signing or other purposes.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		length, _ := cmd.Flags().GetInt("length")
-		
+
 		bytes := make([]byte, length)
 		if _, err := rand.Read(bytes); err != nil {
 			return fmt.Errorf("failed to generate secret: %w", err)
@@ -129,7 +129,7 @@ var generateSecretCmd = &cobra.Command{
 		// Convert to hex string
 		secret := fmt.Sprintf("%x", bytes)
 		fmt.Printf("Generated secret (%d bytes): %s\n", length, secret)
-		
+
 		return nil
 	},
 }

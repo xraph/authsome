@@ -1,0 +1,89 @@
+# Pre-commit hooks for AuthSome
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # Go formatting
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        name: Format Go code
+        description: Run gofmt on Go files
+      - id: go-vet
+        name: Go vet
+        description: Run go vet on Go files
+      - id: go-imports
+        name: Go imports
+        description: Run goimports on Go files
+      - id: go-mod-tidy
+        name: Go mod tidy
+        description: Run go mod tidy
+
+  # Security: Secret scanning with Gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        name: Detect hardcoded secrets
+        description: Scan for secrets and credentials
+        args: ['--config', '.gitleaks.toml', '--no-git']
+
+  # YAML validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        name: Check YAML syntax
+        args: ['--safe']
+        exclude: ^clients/manifest/data/.*\.yaml$  # Exclude manifests
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-added-large-files
+        name: Prevent large files
+        args: ['--maxkb=1000']
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        args: ['--markdown-linebreak-ext=md']
+      - id: mixed-line-ending
+        name: Fix mixed line endings
+      - id: check-case-conflict
+        name: Check for case conflicts
+
+  # Markdown linting
+  - repo: https://github.com/markdownlint/markdownlint
+    rev: v0.12.0
+    hooks:
+      - id: markdownlint
+        name: Lint Markdown files
+        args: ['--fix']
+
+  # Security: Check for known vulnerabilities
+  - repo: local
+    hooks:
+      - id: go-security-check
+        name: Quick security check
+        entry: make security-pre-commit
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: go-test
+        name: Run Go tests
+        entry: go test -short ./...
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+# Configuration
+fail_fast: false
+minimum_pre_commit_version: '2.20.0'
+
