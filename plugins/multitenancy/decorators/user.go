@@ -13,12 +13,12 @@ import (
 
 // MultiTenantUserService decorates the user service with multi-tenancy support
 type MultiTenantUserService struct {
-	userService user.Service
+	userService user.ServiceInterface
 	orgService  *organization.Service
 }
 
 // NewMultiTenantUserService creates a new multi-tenant user service decorator
-func NewMultiTenantUserService(userService user.Service, orgService *organization.Service) *MultiTenantUserService {
+func NewMultiTenantUserService(userService user.ServiceInterface, orgService *organization.Service) *MultiTenantUserService {
 	return &MultiTenantUserService{
 		userService: userService,
 		orgService:  orgService,

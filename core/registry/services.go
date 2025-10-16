@@ -18,10 +18,10 @@ import (
 
 // ServiceRegistry manages all core services and allows plugins to replace them
 type ServiceRegistry struct {
-	// Core services
-	userService         *user.Service
-	sessionService      *session.Service
-	authService         *auth.Service
+	// Core services (using interfaces to allow decoration)
+	userService         user.ServiceInterface
+	sessionService      session.ServiceInterface
+	authService         auth.ServiceInterface
 	jwtService          *jwt.Service
 	apikeyService       *apikey.Service
 	formsService        *forms.Service
@@ -48,15 +48,15 @@ func NewServiceRegistry() *ServiceRegistry {
 }
 
 // Core service setters (used during initialization)
-func (r *ServiceRegistry) SetUserService(svc *user.Service) {
+func (r *ServiceRegistry) SetUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
 
-func (r *ServiceRegistry) SetSessionService(svc *session.Service) {
+func (r *ServiceRegistry) SetSessionService(svc session.ServiceInterface) {
 	r.sessionService = svc
 }
 
-func (r *ServiceRegistry) SetAuthService(svc *auth.Service) {
+func (r *ServiceRegistry) SetAuthService(svc auth.ServiceInterface) {
 	r.authService = svc
 }
 
@@ -97,15 +97,15 @@ func (r *ServiceRegistry) SetRateLimitService(svc *ratelimit.Service) {
 }
 
 // Core service getters
-func (r *ServiceRegistry) UserService() *user.Service {
+func (r *ServiceRegistry) UserService() user.ServiceInterface {
 	return r.userService
 }
 
-func (r *ServiceRegistry) SessionService() *session.Service {
+func (r *ServiceRegistry) SessionService() session.ServiceInterface {
 	return r.sessionService
 }
 
-func (r *ServiceRegistry) AuthService() *auth.Service {
+func (r *ServiceRegistry) AuthService() auth.ServiceInterface {
 	return r.authService
 }
 
@@ -151,15 +151,15 @@ func (r *ServiceRegistry) HookRegistry() *hooks.HookRegistry {
 }
 
 // Service replacement methods (used by plugins to decorate services)
-func (r *ServiceRegistry) ReplaceUserService(svc *user.Service) {
+func (r *ServiceRegistry) ReplaceUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
 
-func (r *ServiceRegistry) ReplaceSessionService(svc *session.Service) {
+func (r *ServiceRegistry) ReplaceSessionService(svc session.ServiceInterface) {
 	r.sessionService = svc
 }
 
-func (r *ServiceRegistry) ReplaceAuthService(svc *auth.Service) {
+func (r *ServiceRegistry) ReplaceAuthService(svc auth.ServiceInterface) {
 	r.authService = svc
 }
 

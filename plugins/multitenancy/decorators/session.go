@@ -9,14 +9,17 @@ import (
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 )
 
+// Ensure MultiTenantSessionService implements session.ServiceInterface
+var _ session.ServiceInterface = (*MultiTenantSessionService)(nil)
+
 // MultiTenantSessionService decorates the core session service with multi-tenancy capabilities
 type MultiTenantSessionService struct {
-	sessionService *session.Service
+	sessionService session.ServiceInterface
 	orgService     *organization.Service
 }
 
 // NewMultiTenantSessionService creates a new multi-tenant session service
-func NewMultiTenantSessionService(sessionService *session.Service, orgService *organization.Service) *MultiTenantSessionService {
+func NewMultiTenantSessionService(sessionService session.ServiceInterface, orgService *organization.Service) *MultiTenantSessionService {
 	return &MultiTenantSessionService{
 		sessionService: sessionService,
 		orgService:     orgService,

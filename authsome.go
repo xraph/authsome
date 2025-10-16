@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	jwtplugin "github.com/xraph/authsome/plugins/jwt"
     "github.com/xraph/authsome/handlers"
@@ -37,10 +38,10 @@ type Auth struct {
     forgeConfig interface{}
     db          interface{} // Will be *bun.DB
 
-    // Core services
-    userService    *user.Service
-    sessionService *session.Service
-    authService    *auth.Service
+    // Core services (using interfaces to allow plugin decoration)
+    userService    user.ServiceInterface
+    sessionService session.ServiceInterface
+    authService    auth.ServiceInterface
     organizationService *organization.Service
     rateLimitService *rl.Service
     rateLimitStorage rl.Storage
@@ -65,8 +66,9 @@ type Auth struct {
 	// Plugin registry
 	pluginRegistry *plugins.Registry
 	
-	// Service registry
+	// Service registry for plugin decorator pattern
 	serviceRegistry *registry.ServiceRegistry
+	hookRegistry    *hooks.HookRegistry
 }
 
 // New creates a new Auth instance with the given options
@@ -78,6 +80,7 @@ func New(opts ...Option) *Auth {
 		},
 		pluginRegistry:  plugins.NewRegistry(),
 		serviceRegistry: registry.NewServiceRegistry(),
+		hookRegistry:    hooks.NewHookRegistry(),
 	}
 
 	// Apply options
@@ -189,16 +192,54 @@ func (a *Auth) Initialize(ctx context.Context) error {
     a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{})
     a.organizationService = organization.NewService(orgRepo, organization.Config{ModeSaaS: a.config.Mode == ModeSaaS})
 
-    // Initialize plugins with database and run migrations
+    // Populate service registry BEFORE plugin initialization
+    // This allows plugins to access and decorate services
+    a.serviceRegistry.SetUserService(a.userService)
+    a.serviceRegistry.SetSessionService(a.sessionService)
+    a.serviceRegistry.SetAuthService(a.authService)
+    a.serviceRegistry.SetJWTService(a.jwtService)
+    a.serviceRegistry.SetAPIKeyService(a.apikeyService)
+    a.serviceRegistry.SetAuditService(a.auditService)
+    a.serviceRegistry.SetWebhookService(a.webhookService)
+    a.serviceRegistry.SetNotificationService(a.notificationService)
+    a.serviceRegistry.SetDeviceService(a.deviceService)
+    a.serviceRegistry.SetRBACService(a.rbacService)
+    a.serviceRegistry.SetRateLimitService(a.rateLimitService)
+
+    // Initialize plugins with full Auth instance and run complete lifecycle
     if a.pluginRegistry != nil {
         for _, p := range a.pluginRegistry.List() {
-            // Pass the Auth instance to plugin Init so it can access all dependencies
+            // 1. Initialize plugin with Auth instance (not just DB)
             if err := p.Init(a); err != nil {
                 return fmt.Errorf("plugin %s init failed: %w", p.ID(), err)
             }
+            
+            // 2. Register hooks
+            if err := p.RegisterHooks(a.hookRegistry); err != nil {
+                return fmt.Errorf("plugin %s register hooks failed: %w", p.ID(), err)
+            }
+            
+            // 3. Register service decorators (plugins can replace core services)
+            if err := p.RegisterServiceDecorators(a.serviceRegistry); err != nil {
+                return fmt.Errorf("plugin %s register decorators failed: %w", p.ID(), err)
+            }
+            
+            // 4. Run migrations
             if err := p.Migrate(); err != nil {
                 return fmt.Errorf("plugin %s migrate failed: %w", p.ID(), err)
             }
+        }
+        
+        // After plugins have potentially replaced services, update Auth's references
+        // to use the decorated versions from the registry
+        if a.serviceRegistry.UserService() != nil {
+            a.userService = a.serviceRegistry.UserService()
+        }
+        if a.serviceRegistry.SessionService() != nil {
+            a.sessionService = a.serviceRegistry.SessionService()
+        }
+        if a.serviceRegistry.AuthService() != nil {
+            a.authService = a.serviceRegistry.AuthService()
         }
     }
 
@@ -236,12 +277,10 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
         routes.RegisterJWTRoutes(v.Group(basePath), jwtH)
         routes.RegisterAPIKeyRoutes(v.Group(basePath), apikeyH)
         
-        // Register plugin routes with basePath group
+        // Register plugin routes
         if a.pluginRegistry != nil {
-            // Create a group with the basePath so plugins can use relative paths
-            pluginGroup := v.Group(basePath)
             for _, p := range a.pluginRegistry.List() {
-                _ = p.RegisterRoutes(pluginGroup)
+                _ = p.RegisterRoutes(v)
             }
         }
         return nil
@@ -259,10 +298,8 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
         routes.RegisterAPIKeyRoutes(f.Group(basePath), apikeyH)
         
         if a.pluginRegistry != nil {
-            // Create a group with the basePath so plugins can use relative paths
-            pluginGroup := f.Group(basePath)
             for _, p := range a.pluginRegistry.List() {
-                _ = p.RegisterRoutes(pluginGroup)
+                _ = p.RegisterRoutes(f)
             }
         }
         return nil
@@ -299,6 +336,12 @@ func (a *Auth) GetConfigManager() interface{} {
 	return a.forgeConfig
 }
 
+// GetServiceRegistry returns the service registry for plugins
 func (a *Auth) GetServiceRegistry() *registry.ServiceRegistry {
 	return a.serviceRegistry
+}
+
+// GetHookRegistry returns the hook registry for plugins
+func (a *Auth) GetHookRegistry() *hooks.HookRegistry {
+	return a.hookRegistry
 }

@@ -20,7 +20,7 @@ import (
 type OrganizationHandler struct {
     org *organization.Service
     rl  *rl.Service
-    sess *session.Service
+    sess session.ServiceInterface
     rbac *rbac.Service
     roles *repo.UserRoleRepository
     roleRepo *repo.RoleRepository
@@ -28,7 +28,7 @@ type OrganizationHandler struct {
     enforceRBAC bool
 }
 
-func NewOrganizationHandler(s *organization.Service, rlsvc *rl.Service, sess *session.Service, rbacsvc *rbac.Service, roles *repo.UserRoleRepository, roleRepo *repo.RoleRepository, policyRepo *repo.PolicyRepository, enforce bool) *OrganizationHandler {
+func NewOrganizationHandler(s *organization.Service, rlsvc *rl.Service, sess session.ServiceInterface, rbacsvc *rbac.Service, roles *repo.UserRoleRepository, roleRepo *repo.RoleRepository, policyRepo *repo.PolicyRepository, enforce bool) *OrganizationHandler {
     return &OrganizationHandler{org: s, rl: rlsvc, sess: sess, rbac: rbacsvc, roles: roles, roleRepo: roleRepo, policyRepo: policyRepo, enforceRBAC: enforce}
 }
 

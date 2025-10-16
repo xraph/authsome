@@ -19,7 +19,7 @@ import (
 )
 
 type AuthHandler struct {
-    auth *auth.Service
+    auth auth.ServiceInterface
     rl   *rl.Service
     dev  *dev.Service
     sec  *sec.Service
@@ -27,7 +27,7 @@ type AuthHandler struct {
     twofaRepo *repo.TwoFARepository
 }
 
-func NewAuthHandler(a *auth.Service, rlsvc *rl.Service, dsvc *dev.Service, ssvc *sec.Service, asvc *aud.Service, tfrepo *repo.TwoFARepository) *AuthHandler {
+func NewAuthHandler(a auth.ServiceInterface, rlsvc *rl.Service, dsvc *dev.Service, ssvc *sec.Service, asvc *aud.Service, tfrepo *repo.TwoFARepository) *AuthHandler {
     return &AuthHandler{auth: a, rl: rlsvc, dev: dsvc, sec: ssvc, aud: asvc, twofaRepo: tfrepo}
 }
 

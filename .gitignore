@@ -33,6 +33,7 @@ test-keys/
 *.jks
 *.keystore
 
+!authsome-cli/**/*
 # Go specific
 # Binaries for programs and plugins
 *.exe

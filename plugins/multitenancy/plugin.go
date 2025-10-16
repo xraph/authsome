@@ -6,16 +6,17 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/spf13/viper"
+	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins/multitenancy/config"
+	"github.com/xraph/authsome/plugins/multitenancy/decorators"
 	"github.com/xraph/authsome/plugins/multitenancy/handlers"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/authsome/plugins/multitenancy/repository"
 	"github.com/xraph/forge"
-	"github.com/uptrace/bun"
 )
 
 // Plugin implements the multi-tenancy plugin
@@ -85,7 +86,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.db = authInstance.GetDB()
 	configManager := authInstance.GetConfigManager()
 	serviceRegistry := authInstance.GetServiceRegistry()
-	
+
 	// Register models with Bun for relationships to work
 	// Register TeamMember first as it's the join table for m2m relationships
 	p.db.RegisterModel((*organization.TeamMember)(nil))
@@ -95,17 +96,18 @@ func (p *Plugin) Init(auth interface{}) error {
 		(*organization.Team)(nil),
 		(*organization.Invitation)(nil),
 	)
-	
-	// Type assert to viper.Viper
-	viperConfig, ok := configManager.(*viper.Viper)
-	if !ok {
-		return fmt.Errorf("config manager is not a viper instance")
+
+	// Try to bind plugin configuration if viper is available
+	var viperConfig *viper.Viper
+	if v, ok := configManager.(*viper.Viper); ok {
+		viperConfig = v
+		// Bind plugin configuration from viper
+		if err := viperConfig.UnmarshalKey("auth.multitenancy", &p.config); err != nil {
+			// Log but don't fail - use defaults
+			fmt.Printf("Warning: failed to bind multitenancy config from viper: %v\n", err)
+		}
 	}
-	
-	// Bind plugin configuration
-	if err := viperConfig.UnmarshalKey("auth.multitenancy", &p.config); err != nil {
-		return fmt.Errorf("failed to bind multitenancy config: %w", err)
-	}
+	// If not viper, that's OK - we'll use default config values
 
 	// Set default values
 	if p.config.DefaultOrganizationName == "" {
@@ -129,18 +131,22 @@ func (p *Plugin) Init(auth interface{}) error {
 
 	// Create organization service config
 	orgConfig := organization.Config{
-		PlatformOrganizationID:    p.config.PlatformOrganizationID,
-		DefaultOrganizationName:   p.config.DefaultOrganizationName,
+		PlatformOrganizationID:     p.config.PlatformOrganizationID,
+		DefaultOrganizationName:    p.config.DefaultOrganizationName,
 		EnableOrganizationCreation: p.config.EnableOrganizationCreation,
-		MaxMembersPerOrganization: p.config.MaxMembersPerOrganization,
-		MaxTeamsPerOrganization:   p.config.MaxTeamsPerOrganization,
-		RequireInvitation:         p.config.RequireInvitation,
-		InvitationExpiryHours:     p.config.InvitationExpiryHours,
+		MaxMembersPerOrganization:  p.config.MaxMembersPerOrganization,
+		MaxTeamsPerOrganization:    p.config.MaxTeamsPerOrganization,
+		RequireInvitation:          p.config.RequireInvitation,
+		InvitationExpiryHours:      p.config.InvitationExpiryHours,
 	}
 
 	// Create services
 	p.orgService = organization.NewService(orgConfig, orgRepo, memberRepo, teamRepo, invitationRepo)
-	p.configService = config.NewService(viperConfig)
+
+	// Only create config service if viper is available
+	if viperConfig != nil {
+		p.configService = config.NewService(viperConfig)
+	}
 
 	// Create handlers
 	p.orgHandler = handlers.NewOrganizationHandler(p.orgService)
@@ -155,7 +161,7 @@ func (p *Plugin) Init(auth interface{}) error {
 }
 
 // RegisterRoutes registers the plugin's HTTP routes
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router any) error {
 	forgeRouter, ok := router.(forge.Router)
 	if !ok {
 		return fmt.Errorf("invalid router type")
@@ -215,44 +221,26 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 
 // RegisterServiceDecorators replaces core services with multi-tenant aware versions
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
-	// TODO: Implement decorators in future phases
-	// These decorators will wrap core services to add multi-tenant functionality
-	
-	// // Decorate user service
-	// if userService := services.UserService(); userService != nil {
-	// 	decoratedUserService := decorators.NewMultiTenantUserDecorator(userService, p.orgService, p.configService)
-	// 	services.ReplaceUserService(decoratedUserService)
-	// }
+	// Decorate user service with multi-tenancy support
+	if userService := services.UserService(); userService != nil {
+		decoratedUserService := decorators.NewMultiTenantUserService(userService, p.orgService)
+		services.ReplaceUserService(decoratedUserService)
+	}
 
-	// // Decorate session service
-	// if sessionService := services.SessionService(); sessionService != nil {
-	// 	decoratedSessionService := decorators.NewMultiTenantSessionDecorator(sessionService, p.orgService, p.configService)
-	// 	services.ReplaceSessionService(decoratedSessionService)
-	// }
+	// Decorate session service with multi-tenancy support
+	if sessionService := services.SessionService(); sessionService != nil {
+		decoratedSessionService := decorators.NewMultiTenantSessionService(sessionService, p.orgService)
+		services.ReplaceSessionService(decoratedSessionService)
+	}
 
-	// // Decorate auth service
-	// if authService := services.AuthService(); authService != nil {
-	// 	decoratedAuthService := decorators.NewMultiTenantAuthDecorator(authService, p.orgService, p.configService)
-	// 	services.ReplaceAuthService(decoratedAuthService)
-	// }
+	// Decorate auth service with multi-tenancy support
+	if authService := services.AuthService(); authService != nil {
+		decoratedAuthService := decorators.NewMultiTenantAuthService(authService, p.orgService)
+		services.ReplaceAuthService(decoratedAuthService)
+	}
 
-	// // Decorate JWT service
-	// if jwtService := services.JWTService(); jwtService != nil {
-	// 	decoratedJWTService := decorators.NewMultiTenantJWTDecorator(jwtService, p.orgService, p.configService)
-	// 	services.ReplaceJWTService(decoratedJWTService)
-	// }
-
-	// // Decorate API Key service
-	// if apikeyService := services.APIKeyService(); apikeyService != nil {
-	// 	decoratedAPIKeyService := decorators.NewMultiTenantAPIKeyDecorator(apikeyService, p.orgService, p.configService)
-	// 	services.ReplaceAPIKeyService(decoratedAPIKeyService)
-	// }
-
-	// // Decorate Forms service
-	// if formsService := services.FormsService(); formsService != nil {
-	// 	decoratedFormsService := decorators.NewMultiTenantFormsDecorator(formsService, p.orgService, p.configService)
-	// 	services.ReplaceFormsService(decoratedFormsService)
-	// }
+	// TODO: Implement JWT, API Key, and Forms decorators when needed
+	// These will follow the same pattern as above
 
 	return nil
 }
@@ -313,7 +301,7 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to get default organization: %w", err)
 	}
-	
+
 	// Add user as member of default organization
 	_, err = p.orgService.AddMember(ctx, defaultOrg.ID, u.ID.String(), "member")
 	if err != nil {
