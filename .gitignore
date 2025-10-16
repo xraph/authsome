@@ -33,6 +33,7 @@ test-keys/
 *.jks
 *.keystore
 
+!authsome-cli/
 !authsome-cli/**/*
 # Go specific
 # Binaries for programs and plugins
@@ -41,7 +42,6 @@ test-keys/
 *.dll
 *.so
 *.dylib
-authsome-cli
 authsome
 main
 
