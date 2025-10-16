@@ -71,7 +71,7 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
 	case *http.ServeMux:
 		// Use pure http.ServeMux routing without Forge wrapper
 		// Note: This case is for direct http.ServeMux usage, not for mounted scenarios
-		
+
 		// Serve assets under dashboard scope - use pattern that matches all paths under /dashboard/assets/
 		v.HandleFunc("/dashboard/assets/", func(w http.ResponseWriter, r *http.Request) {
 			p.handler.ServeDashboardAssetsHTTP(w, r)

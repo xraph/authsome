@@ -245,6 +245,9 @@ func seedUsers(db *bun.DB, count int, orgID string) error {
 
 	fmt.Printf("Seeding %d test users...\n", count)
 
+	// Use system ID for created_by/updated_by
+	systemID := xid.New() // System user for CLI operations
+
 	// Parse organization ID
 	var targetOrgID xid.ID
 	if orgID != "" {
@@ -293,6 +296,11 @@ func seedUsers(db *bun.DB, count int, orgID string) error {
 			Role:           "user",
 		}
 
+		// Set audit fields
+		member.AuditableModel.ID = memberID
+		member.AuditableModel.CreatedBy = systemID
+		member.AuditableModel.UpdatedBy = systemID
+
 		_, err = db.NewInsert().Model(member).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create member for user %d: %w", i, err)
@@ -311,6 +319,9 @@ func seedOrganizations(db *bun.DB, count int) error {
 
 	fmt.Printf("Seeding %d test organizations...\n", count)
 
+	// Use system ID for created_by/updated_by
+	systemID := xid.New() // System user for CLI operations
+
 	for i := 1; i <= count; i++ {
 		orgID := xid.New()
 		org := &schema.Organization{
@@ -318,6 +329,11 @@ func seedOrganizations(db *bun.DB, count int) error {
 			Name: fmt.Sprintf("Test Organization %d", i),
 			Slug: fmt.Sprintf("test-org-%d", i),
 		}
+
+		// Set audit fields
+		org.AuditableModel.ID = orgID
+		org.AuditableModel.CreatedBy = systemID
+		org.AuditableModel.UpdatedBy = systemID
 
 		_, err := db.NewInsert().Model(org).Exec(ctx)
 		if err != nil {
@@ -341,7 +357,7 @@ func clearSeedData(db *bun.DB) error {
 	tables := []string{"members", "roles", "users", "organizations"}
 
 	for _, table := range tables {
-		result, err := db.NewDelete().Table(table).Exec(ctx)
+		result, err := db.NewDelete().Table(table).Where("1 = 1").Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to clear table %s: %w", table, err)
 		}

@@ -1,0 +1,37 @@
+# Generated client code
+generated/
+
+# Language-specific build artifacts
+*.so
+*.dylib
+*.dll
+*.exe
+*.test
+
+# Go
+go.sum
+vendor/
+
+# TypeScript/Node
+node_modules/
+dist/
+*.tsbuildinfo
+package-lock.json
+yarn.lock
+
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+

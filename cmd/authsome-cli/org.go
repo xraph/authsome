@@ -99,6 +99,9 @@ var orgShowCmd = &cobra.Command{
 
 		org, err := getOrganization(db, orgID)
 		if err != nil {
+			if err.Error() == "sql: no rows in result set" {
+				return fmt.Errorf("organization not found: %s", orgID)
+			}
 			return fmt.Errorf("failed to get organization: %w", err)
 		}
 
@@ -168,12 +171,71 @@ var orgMembersCmd = &cobra.Command{
 	},
 }
 
+var orgAddMemberCmd = &cobra.Command{
+	Use:   "add-member [org-id] [user-id]",
+	Short: "Add a member to an organization",
+	Long:  `Add a user as a member of an organization with a specified role.`,
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dbURL, _ := cmd.Flags().GetString("database-url")
+		orgID := args[0]
+		userID := args[1]
+		role, _ := cmd.Flags().GetString("role")
+
+		if role == "" {
+			role = "member"
+		}
+
+		db, err := connectOrgDB(dbURL)
+		if err != nil {
+			return fmt.Errorf("failed to connect to database: %w", err)
+		}
+		defer db.Close()
+
+		err = addOrganizationMember(db, orgID, userID, role)
+		if err != nil {
+			return fmt.Errorf("failed to add member: %w", err)
+		}
+
+		fmt.Printf("✓ Successfully added user %s to organization %s with role: %s\n", userID, orgID, role)
+		return nil
+	},
+}
+
+var orgRemoveMemberCmd = &cobra.Command{
+	Use:   "remove-member [org-id] [user-id]",
+	Short: "Remove a member from an organization",
+	Long:  `Remove a user from an organization.`,
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dbURL, _ := cmd.Flags().GetString("database-url")
+		orgID := args[0]
+		userID := args[1]
+
+		db, err := connectOrgDB(dbURL)
+		if err != nil {
+			return fmt.Errorf("failed to connect to database: %w", err)
+		}
+		defer db.Close()
+
+		err = removeOrganizationMember(db, orgID, userID)
+		if err != nil {
+			return fmt.Errorf("failed to remove member: %w", err)
+		}
+
+		fmt.Printf("✓ Successfully removed user %s from organization %s\n", userID, orgID)
+		return nil
+	},
+}
+
 func init() {
 	orgCmd.AddCommand(orgListCmd)
 	orgCmd.AddCommand(orgCreateCmd)
 	orgCmd.AddCommand(orgShowCmd)
 	orgCmd.AddCommand(orgDeleteCmd)
 	orgCmd.AddCommand(orgMembersCmd)
+	orgCmd.AddCommand(orgAddMemberCmd)
+	orgCmd.AddCommand(orgRemoveMemberCmd)
 
 	// Common flags
 	orgCmd.PersistentFlags().String("database-url", "authsome.db", "Database URL")
@@ -185,6 +247,9 @@ func init() {
 
 	// Delete command flags
 	orgDeleteCmd.Flags().Bool("confirm", false, "Confirm deletion")
+
+	// Add member command flags
+	orgAddMemberCmd.Flags().String("role", "member", "Member role (default: member)")
 }
 
 // connectOrgDB connects to the database for organization operations
@@ -252,41 +317,133 @@ func getOrganizationMembers(db *bun.DB, orgID string) ([]*MemberWithUser, error)
 	return members, err
 }
 
-// deleteOrganization deletes an organization and all its data
+// addOrganizationMember adds a user to an organization
+func addOrganizationMember(db *bun.DB, orgID string, userID string, role string) error {
+	ctx := context.Background()
+
+	// Parse IDs
+	parsedOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return fmt.Errorf("invalid organization ID: %w", err)
+	}
+
+	parsedUserID, err := xid.FromString(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	// Check if user exists
+	var user schema.User
+	err = db.NewSelect().Model(&user).Where("id = ?", parsedUserID).Scan(ctx)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	// Check if organization exists
+	var org schema.Organization
+	err = db.NewSelect().Model(&org).Where("id = ?", parsedOrgID).Scan(ctx)
+	if err != nil {
+		return fmt.Errorf("organization not found: %w", err)
+	}
+
+	// Check if member already exists
+	var existingMember schema.Member
+	err = db.NewSelect().Model(&existingMember).
+		Where("user_id = ? AND organization_id = ?", parsedUserID, parsedOrgID).
+		Scan(ctx)
+	if err == nil {
+		return fmt.Errorf("user is already a member of this organization")
+	}
+
+	// Create member
+	memberID := xid.New()
+	systemID := xid.New() // System user for CLI operations
+	member := &schema.Member{
+		ID:             memberID,
+		UserID:         parsedUserID,
+		OrganizationID: parsedOrgID,
+		Role:           role,
+	}
+
+	// Set audit fields
+	member.AuditableModel.ID = memberID
+	member.AuditableModel.CreatedBy = systemID
+	member.AuditableModel.UpdatedBy = systemID
+
+	_, err = db.NewInsert().Model(member).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to add member: %w", err)
+	}
+
+	return nil
+}
+
+// removeOrganizationMember removes a user from an organization
+func removeOrganizationMember(db *bun.DB, orgID string, userID string) error {
+	ctx := context.Background()
+
+	// Parse IDs
+	parsedOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return fmt.Errorf("invalid organization ID: %w", err)
+	}
+
+	parsedUserID, err := xid.FromString(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	// Check if member exists
+	var member schema.Member
+	err = db.NewSelect().Model(&member).
+		Where("user_id = ? AND organization_id = ?", parsedUserID, parsedOrgID).
+		Scan(ctx)
+	if err != nil {
+		return fmt.Errorf("member not found: %w", err)
+	}
+
+	// Delete member
+	_, err = db.NewDelete().Model(&member).Where("id = ?", member.ID).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to remove member: %w", err)
+	}
+
+	return nil
+}
+
+// deleteOrganization deletes an organization and its members
 func deleteOrganization(db *bun.DB, orgID string) error {
 	ctx := context.Background()
 
-	// Delete in order to respect foreign key constraints
-	tables := []struct {
-		model interface{}
-		where string
-	}{
-		{(*schema.AuditEvent)(nil), "organization_id = ?"},
-		{(*schema.UserRole)(nil), "organization_id = ?"},
-		{(*schema.TeamMember)(nil), "team_id IN (SELECT id FROM teams WHERE organization_id = ?)"},
-		{(*schema.Team)(nil), "organization_id = ?"},
-		{(*schema.FormSchema)(nil), "organization_id = ?"},
-		{(*schema.Webhook)(nil), "organization_id = ?"},
-		{(*schema.APIKey)(nil), "organization_id = ?"},
-		{(*schema.Policy)(nil), "organization_id = ?"},
-		{(*schema.Permission)(nil), "organization_id = ?"},
-		{(*schema.Role)(nil), "organization_id = ?"},
-		{(*schema.Device)(nil), "user_id IN (SELECT user_id FROM members WHERE organization_id = ?)"},
-		{(*schema.Verification)(nil), "user_id IN (SELECT user_id FROM members WHERE organization_id = ?)"},
-		{(*schema.Account)(nil), "user_id IN (SELECT user_id FROM members WHERE organization_id = ?)"},
-		{(*schema.Session)(nil), "user_id IN (SELECT user_id FROM members WHERE organization_id = ?)"},
-		{(*schema.Member)(nil), "organization_id = ?"},
-		{(*schema.Organization)(nil), "id = ?"},
+	// Parse organization ID
+	parsedOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return fmt.Errorf("invalid organization ID: %w", err)
 	}
 
-	for _, table := range tables {
-		_, err := db.NewDelete().
-			Model(table.model).
-			Where(table.where, orgID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete from table: %w", err)
-		}
+	// Check if organization exists
+	var org schema.Organization
+	err = db.NewSelect().Model(&org).Where("id = ?", parsedOrgID).Scan(ctx)
+	if err != nil {
+		return fmt.Errorf("organization not found: %w", err)
+	}
+
+	// Delete members first (respecting foreign keys)
+	_, err = db.NewDelete().
+		Model((*schema.Member)(nil)).
+		Where("organization_id = ?", parsedOrgID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete members: %w", err)
+	}
+
+	// Delete organization
+	_, err = db.NewDelete().
+		Model((*schema.Organization)(nil)).
+		Where("id = ?", parsedOrgID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete organization: %w", err)
 	}
 
 	return nil

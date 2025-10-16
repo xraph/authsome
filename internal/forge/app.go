@@ -24,8 +24,14 @@ func NewApp(mux *http.ServeMux) *App {
 	a := &App{mux: mux}
 	// catch-all dispatcher; we rely on internal route matching
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Try to find a matching route (longest base first)
-		for _, rt := range a.routes {
+		// Try to find a matching route
+		// Routes are checked in registration order, so more specific routes should be registered first
+		// Within the dashboard plugin, "/assets/*" is registered before "/*" which is correct
+		var matchedRoute *route
+		var matchedParams map[string]string
+
+		for i := range a.routes {
+			rt := &a.routes[i]
 			if r.Method != rt.method {
 				continue
 			}
@@ -33,8 +39,15 @@ func NewApp(mux *http.ServeMux) *App {
 			if !ok {
 				continue
 			}
-			ctx := &Context{w: w, r: r, params: params}
-			if err := rt.handler(ctx); err != nil {
+			// Take the first match (allows plugin to control priority by registration order)
+			matchedRoute = rt
+			matchedParams = params
+			break
+		}
+
+		if matchedRoute != nil {
+			ctx := &Context{w: w, r: r, params: matchedParams}
+			if err := matchedRoute.handler(ctx); err != nil {
 				if !errors.Is(err, http.ErrAbortHandler) {
 					w.WriteHeader(http.StatusInternalServerError)
 					_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -42,6 +55,7 @@ func NewApp(mux *http.ServeMux) *App {
 			}
 			return
 		}
+
 		// No route matched
 		w.WriteHeader(http.StatusNotFound)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
@@ -96,7 +110,13 @@ type Group struct {
 	base string
 }
 
-func (a *App) Group(basePath string) *Group { return &Group{app: a, base: basePath} }
+func (a *App) Group(basePath string) *Group {
+	// Ensure base path starts with /
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	return &Group{app: a, base: basePath}
+}
 
 // Router interface for route registration
 type Router interface {
@@ -123,7 +143,7 @@ func (g *Group) handle(method, path string, h func(*Context) error) {
 	g.app.routes = append(g.app.routes, route{method: method, base: g.base, pattern: path, handler: h})
 }
 
-// matchPath matches a pattern with optional {param} segments to an actual path
+// matchPath matches a pattern with optional {param} segments or wildcards to an actual path
 func matchPath(pattern, path string) (map[string]string, bool) {
 	// Ensure both start with '/'
 	if !strings.HasPrefix(pattern, "/") || !strings.HasPrefix(path, "/") {
@@ -131,6 +151,35 @@ func matchPath(pattern, path string) (map[string]string, bool) {
 	}
 	pSegs := splitPath(pattern)
 	aSegs := splitPath(path)
+
+	// Check for wildcard pattern (ends with *)
+	if len(pSegs) > 0 && pSegs[len(pSegs)-1] == "*" {
+		// Wildcard must match at least the prefix segments
+		if len(aSegs) < len(pSegs)-1 {
+			return nil, false
+		}
+		// Match the prefix segments (all except the *)
+		params := make(map[string]string)
+		for i := 0; i < len(pSegs)-1; i++ {
+			ps := pSegs[i]
+			as := aSegs[i]
+			if isParam(ps) {
+				name := strings.Trim(ps, "{}")
+				if name == "" || as == "" {
+					return nil, false
+				}
+				params[name] = as
+				continue
+			}
+			if ps != as {
+				return nil, false
+			}
+		}
+		// Wildcard matches the rest
+		return params, true
+	}
+
+	// Exact length matching for non-wildcard patterns
 	if len(pSegs) != len(aSegs) {
 		return nil, false
 	}

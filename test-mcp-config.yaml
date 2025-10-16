@@ -1,0 +1,19 @@
+# Test configuration for MCP plugin
+mode: standalone
+
+database:
+  url: "test_mcp.db"
+
+plugins:
+  mcp:
+    enabled: true
+    mode: development
+    transport: stdio
+    authorization:
+      require_api_key: false
+      allowed_operations:
+        - query_user
+        - check_permission
+    rate_limit:
+      requests_per_minute: 60
+

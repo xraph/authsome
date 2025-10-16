@@ -279,15 +279,17 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
 		routes.RegisterJWTRoutes(v.Group(basePath), jwtH)
 		routes.RegisterAPIKeyRoutes(v.Group(basePath), apikeyH)
 
-		// Register plugin routes
+		// Register plugin routes (scoped to basePath)
 		if a.pluginRegistry != nil {
+			// Pass a group with the basePath so plugins are scoped under the auth mount point
+			pluginGroup := v.Group(basePath)
 			for _, p := range a.pluginRegistry.List() {
-				_ = p.RegisterRoutes(v)
+				_ = p.RegisterRoutes(pluginGroup)
 			}
 		}
 		return nil
 	case *http.ServeMux:
-		// Wrap ServeMux with local forge shim for identical behavior
+		// Wrap ServeMux with local forge shim - create ONE instance shared by all routes
 		f := forge.NewApp(v)
 		routes.Register(f, basePath, h)
 		routes.RegisterAudit(f, basePath, audH)
@@ -299,9 +301,15 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
 		routes.RegisterJWTRoutes(f.Group(basePath), jwtH)
 		routes.RegisterAPIKeyRoutes(f.Group(basePath), apikeyH)
 
+		// Register plugin routes - use the SAME forge.App instance (f) for consistency
+		// Note: Plugins can't import internal/forge, so they receive the underlying
+		// *http.ServeMux. If we need basePath support, consider making forge public.
+		// For now, plugins that need basePath should use the real Forge framework.
 		if a.pluginRegistry != nil {
 			for _, p := range a.pluginRegistry.List() {
-				_ = p.RegisterRoutes(f)
+				// Pass raw ServeMux - the forge.App wrapper (f) already registered
+				// its catch-all handler on v, so all routes go through the same dispatcher
+				_ = p.RegisterRoutes(v)
 			}
 		}
 		return nil

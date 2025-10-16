@@ -22,6 +22,9 @@ test_*.db
 # Trae AI specific
 .trae/
 
+# Generated client code
+clients/generated/
+
 # Private keys and certificates - never commit these!
 keys/
 test-keys/
