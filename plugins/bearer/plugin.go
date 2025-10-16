@@ -69,7 +69,7 @@ func (p *Plugin) AuthenticateHandler(next func(*forge.Context) error) func(*forg
 		ctx := context.WithValue(c.Request().Context(), "user", user)
 		ctx = context.WithValue(ctx, "session", sess)
 		ctx = context.WithValue(ctx, "authenticated", true)
-		
+
 		// Update request with new context
 		*c.Request() = *c.Request().WithContext(ctx)
 

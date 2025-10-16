@@ -3,7 +3,6 @@ package social
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
@@ -102,18 +101,6 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
 		v.DELETE("/account/unlink/:provider", handler.UnlinkAccount)
 		v.GET("/providers", handler.ListProviders)
 		return nil
-
-	case *http.ServeMux:
-		// Wrap ServeMux with forge.App
-		app := forge.NewApp(v)
-		authGroup := app.Group("/api/auth")
-		authGroup.POST("/signin/social", handler.SignIn)
-		authGroup.GET("/callback/:provider", handler.Callback)
-		authGroup.POST("/account/link", handler.LinkAccount)
-		authGroup.DELETE("/account/unlink/:provider", handler.UnlinkAccount)
-		authGroup.GET("/providers", handler.ListProviders)
-		return nil
-
 	default:
 		return fmt.Errorf("unsupported router type: %T", router)
 	}

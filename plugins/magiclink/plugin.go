@@ -2,7 +2,6 @@ package magiclink
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -46,34 +45,28 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 func (p *Plugin) RegisterRoutes(router interface{}) error {
-    if p.service == nil { return nil }
-    switch v := router.(type) {
-    case *forge.App:
-        // For direct forge.App usage (not from Mount method)
-        grp := v.Group("/api/auth")
-        rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/api/auth/magic-link/send": {Window: time.Minute, Max: 5}}})
-        h := NewHandler(p.service, rls)
-        grp.POST("/magic-link/send", h.Send)
-        grp.GET("/magic-link/verify", h.Verify)
-        return nil
-    case *forge.Group:
-        // Use relative paths - the router is already a group with the correct basePath
-        rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/magic-link/send": {Window: time.Minute, Max: 5}}})
-        h := NewHandler(p.service, rls)
-        v.POST("/magic-link/send", h.Send)
-        v.GET("/magic-link/verify", h.Verify)
-        return nil
-    case *http.ServeMux:
-        app := forge.NewApp(v)
-        grp := app.Group("/api/auth")
-        rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/api/auth/magic-link/send": {Window: time.Minute, Max: 5}}})
-        h := NewHandler(p.service, rls)
-        grp.POST("/magic-link/send", h.Send)
-        grp.GET("/magic-link/verify", h.Verify)
-        return nil
-    default:
-        return nil
-    }
+	if p.service == nil {
+		return nil
+	}
+	switch v := router.(type) {
+	case *forge.App:
+		// For direct forge.App usage (not from Mount method)
+		grp := v.Group("/api/auth")
+		rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/api/auth/magic-link/send": {Window: time.Minute, Max: 5}}})
+		h := NewHandler(p.service, rls)
+		grp.POST("/magic-link/send", h.Send)
+		grp.GET("/magic-link/verify", h.Verify)
+		return nil
+	case *forge.Group:
+		// Use relative paths - the router is already a group with the correct basePath
+		rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/magic-link/send": {Window: time.Minute, Max: 5}}})
+		h := NewHandler(p.service, rls)
+		v.POST("/magic-link/send", h.Send)
+		v.GET("/magic-link/verify", h.Verify)
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

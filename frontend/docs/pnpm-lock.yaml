@@ -131,6 +131,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.1.14)
+      ts-morph:
+        specifier: ^27.0.2
+        version: 27.0.2
       unist-util-visit:
         specifier: ^5.0.0
         version: 5.0.0

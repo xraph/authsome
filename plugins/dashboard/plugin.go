@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"net/http"
 
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
@@ -66,25 +65,6 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
 		grp.GET("/", p.handler.ServeIndex)
 		// Serve static assets (JS, CSS, images, etc.)
 		grp.GET("/*", p.handler.ServeAssets)
-
-		return nil
-	case *http.ServeMux:
-		// Use pure http.ServeMux routing without Forge wrapper
-		// Note: This case is for direct http.ServeMux usage, not for mounted scenarios
-
-		// Serve assets under dashboard scope - use pattern that matches all paths under /dashboard/assets/
-		v.HandleFunc("/dashboard/assets/", func(w http.ResponseWriter, r *http.Request) {
-			p.handler.ServeDashboardAssetsHTTP(w, r)
-		})
-
-		// Serve the main dashboard page and other assets
-		v.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/dashboard/" {
-				p.handler.ServeIndexHTTP(w, r)
-			} else {
-				p.handler.ServeAssetsHTTP(w, r)
-			}
-		})
 
 		return nil
 	default:

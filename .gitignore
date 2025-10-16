@@ -267,3 +267,6 @@ authsome_dev.db
 authsome_test.db
 examples/local/
 examples/dev/
+
+summary/*
+summary/**/*

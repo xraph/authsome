@@ -40,7 +40,7 @@ type ComprehensiveApp struct {
 // setupViper configures Viper with default settings for AuthSome
 func setupViper() *viper.Viper {
 	v := viper.New()
-	
+
 	// Set default configuration values for multitenancy plugin
 	v.SetDefault("auth.multitenancy.platformOrganizationId", "platform")
 	v.SetDefault("auth.multitenancy.defaultOrganizationName", "Default Organization")
@@ -49,7 +49,7 @@ func setupViper() *viper.Viper {
 	v.SetDefault("auth.multitenancy.maxTeamsPerOrganization", 10)
 	v.SetDefault("auth.multitenancy.requireInvitation", false)
 	v.SetDefault("auth.multitenancy.invitationExpiryHours", 72)
-	
+
 	return v
 }
 
