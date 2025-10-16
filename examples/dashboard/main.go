@@ -1,0 +1,107 @@
+// Package main demonstrates how to integrate the dashboard plugin with AuthSome
+//
+// This example shows the basic integration pattern. In a real application,
+// you would use this with a proper Forge framework setup.
+//
+// Usage:
+//
+//	go run examples/dashboard/main.go
+//
+// The dashboard plugin provides:
+//   - Static asset serving at /dashboard/*
+//   - React-based admin interface
+//   - User management UI
+//   - Session monitoring
+//   - Security settings
+package main
+
+import (
+	"fmt"
+	"io/fs"
+	"log"
+
+	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/plugins/dashboard"
+)
+
+func main() {
+	log.Println("AuthSome Dashboard Plugin Integration Example")
+	log.Println("===========================================")
+
+	// Create AuthSome instance
+	auth := authsome.New(
+		authsome.WithMode(authsome.ModeStandalone),
+	)
+
+	// Create and register the dashboard plugin
+	dashboardPlugin := dashboard.NewPlugin()
+
+	log.Printf("Registering dashboard plugin: %s", dashboardPlugin.ID())
+	if err := auth.RegisterPlugin(dashboardPlugin); err != nil {
+		log.Fatal("Failed to register dashboard plugin:", err)
+	}
+
+	// Initialize the plugin (this would normally be done by AuthSome.Initialize)
+	log.Println("Initializing dashboard plugin...")
+	if err := dashboardPlugin.Init(auth); err != nil {
+		log.Fatal("Failed to initialize dashboard plugin:", err)
+	}
+
+	// Test asset access
+	log.Println("Testing dashboard assets...")
+	assets := dashboard.GetAssets()
+	if assets == nil {
+		log.Fatal("Dashboard assets not available")
+	}
+
+	// List available assets
+	log.Println("Available dashboard assets:")
+	entries, err := fs.ReadDir(assets, ".")
+	if err != nil {
+		log.Fatal("Failed to read asset directory:", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			log.Printf("  📁 %s/", entry.Name())
+		} else {
+			log.Printf("  📄 %s", entry.Name())
+		}
+	}
+
+	// Test index.html access
+	indexContent, err := fs.ReadFile(assets, "index.html")
+	if err != nil {
+		log.Fatal("Failed to read index.html:", err)
+	}
+
+	log.Printf("Dashboard index.html size: %d bytes", len(indexContent))
+	log.Println("✅ Dashboard plugin integration successful!")
+
+	fmt.Println(`
+Integration Complete!
+====================
+
+To use the dashboard plugin in your Forge application:
+
+1. Register the plugin:
+   auth.RegisterPlugin(dashboard.NewPlugin())
+
+2. Initialize AuthSome:
+   auth.Initialize(context.Background())
+
+3. Mount to your Forge app:
+   auth.Mount(app, "/api/auth")
+
+4. The dashboard will be available at:
+   http://localhost:PORT/dashboard
+
+Features included:
+- 📊 User management interface
+
+- 🔐 Session monitoring
+- ⚙️  Security settings
+- 🔌 Plugin management
+- 📈 Analytics dashboard
+`)
+}
