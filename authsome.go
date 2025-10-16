@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/registry"
 	jwtplugin "github.com/xraph/authsome/plugins/jwt"
     "github.com/xraph/authsome/handlers"
     "github.com/xraph/authsome/internal/validator"
@@ -63,6 +64,9 @@ type Auth struct {
 
 	// Plugin registry
 	pluginRegistry *plugins.Registry
+	
+	// Service registry
+	serviceRegistry *registry.ServiceRegistry
 }
 
 // New creates a new Auth instance with the given options
@@ -72,7 +76,8 @@ func New(opts ...Option) *Auth {
 			Mode:     ModeStandalone,
 			BasePath: "/api/auth",
 		},
-		pluginRegistry: plugins.NewRegistry(),
+		pluginRegistry:  plugins.NewRegistry(),
+		serviceRegistry: registry.NewServiceRegistry(),
 	}
 
 	// Apply options
@@ -187,8 +192,8 @@ func (a *Auth) Initialize(ctx context.Context) error {
     // Initialize plugins with database and run migrations
     if a.pluginRegistry != nil {
         for _, p := range a.pluginRegistry.List() {
-            // Pass *bun.DB directly to plugin Init so it can capture dependencies
-            if err := p.Init(db); err != nil {
+            // Pass the Auth instance to plugin Init so it can access all dependencies
+            if err := p.Init(a); err != nil {
                 return fmt.Errorf("plugin %s init failed: %w", p.ID(), err)
             }
             if err := p.Migrate(); err != nil {
@@ -231,10 +236,12 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
         routes.RegisterJWTRoutes(v.Group(basePath), jwtH)
         routes.RegisterAPIKeyRoutes(v.Group(basePath), apikeyH)
         
-        // Register plugin routes
+        // Register plugin routes with basePath group
         if a.pluginRegistry != nil {
+            // Create a group with the basePath so plugins can use relative paths
+            pluginGroup := v.Group(basePath)
             for _, p := range a.pluginRegistry.List() {
-                _ = p.RegisterRoutes(v)
+                _ = p.RegisterRoutes(pluginGroup)
             }
         }
         return nil
@@ -244,9 +251,18 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
         routes.Register(f, basePath, h)
         routes.RegisterAudit(f, basePath, audH)
         routes.RegisterOrganization(f, "/api/orgs", orgH)
+        
+        // Phase 10 routes
+        routes.RegisterWebhookRoutes(f.Group(basePath), webhookH)
+        routes.RegisterNotificationRoutes(f.Group(basePath), notificationH)
+        routes.RegisterJWTRoutes(f.Group(basePath), jwtH)
+        routes.RegisterAPIKeyRoutes(f.Group(basePath), apikeyH)
+        
         if a.pluginRegistry != nil {
+            // Create a group with the basePath so plugins can use relative paths
+            pluginGroup := f.Group(basePath)
             for _, p := range a.pluginRegistry.List() {
-                _ = p.RegisterRoutes(f)
+                _ = p.RegisterRoutes(pluginGroup)
             }
         }
         return nil
@@ -281,4 +297,8 @@ func (a *Auth) GetDB() *bun.DB {
 // GetConfigManager returns the forge config manager
 func (a *Auth) GetConfigManager() interface{} {
 	return a.forgeConfig
+}
+
+func (a *Auth) GetServiceRegistry() *registry.ServiceRegistry {
+	return a.serviceRegistry
 }

@@ -36,6 +36,7 @@ func (p *Plugin) Init(dep interface{}) error {
 func (p *Plugin) RegisterRoutes(router interface{}) error {
     switch v := router.(type) {
     case *forge.App:
+        // For direct forge.App usage (not from Mount method)
         grp := v.Group("/api/auth")
         h := NewHandler(p.service)
         grp.POST("/2fa/enable", h.Enable)
@@ -45,7 +46,18 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
         grp.POST("/2fa/send-otp", h.SendOTP)
         grp.POST("/2fa/status", h.Status)
         return nil
+    case *forge.Group:
+        // Use relative paths - the router is already a group with the correct basePath
+        h := NewHandler(p.service)
+        v.POST("/2fa/enable", h.Enable)
+        v.POST("/2fa/verify", h.Verify)
+        v.POST("/2fa/disable", h.Disable)
+        v.POST("/2fa/generate-backup-codes", h.GenerateBackupCodes)
+        v.POST("/2fa/send-otp", h.SendOTP)
+        v.POST("/2fa/status", h.Status)
+        return nil
     case *http.ServeMux:
+        // For direct http.ServeMux usage (not from Mount method)
         app := forge.NewApp(v)
         grp := app.Group("/api/auth")
         h := NewHandler(p.service)

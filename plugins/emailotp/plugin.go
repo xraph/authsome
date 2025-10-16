@@ -44,14 +44,23 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 func (p *Plugin) RegisterRoutes(router interface{}) error {
+    if p.service == nil { return nil }
     switch v := router.(type) {
     case *forge.App:
+        // For direct forge.App usage (not from Mount method)
         grp := v.Group("/api/auth")
         // Set up a simple in-memory rate limit: 5 sends per minute per email
         rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/api/auth/email-otp/send": {Window: time.Minute, Max: 5}}})
         h := NewHandler(p.service, rls)
         grp.POST("/email-otp/send", h.Send)
         grp.POST("/email-otp/verify", h.Verify)
+        return nil
+    case *forge.Group:
+        // Use relative paths - the router is already a group with the correct basePath
+        rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/email-otp/send": {Window: time.Minute, Max: 5}}})
+        h := NewHandler(p.service, rls)
+        v.POST("/email-otp/send", h.Send)
+        v.POST("/email-otp/verify", h.Verify)
         return nil
     case *http.ServeMux:
         app := forge.NewApp(v)

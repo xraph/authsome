@@ -9,6 +9,8 @@ import (
     "context"
     "github.com/xraph/authsome/schema"
     "github.com/xraph/forge"
+    "github.com/xraph/authsome/core/hooks"
+    "github.com/xraph/authsome/core/registry"
 )
 
 // Plugin wires the OIDC Provider service and registers routes
@@ -88,7 +90,9 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     }
 }
 
-func (p *Plugin) RegisterHooks(_ interface{}) error { return nil }
+func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
+
+func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
 // Migrate creates required tables for OIDC Provider
 // Note: kept simple; production should handle migrations centrally

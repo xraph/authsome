@@ -44,12 +44,21 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     if p.service == nil { return nil }
     switch v := router.(type) {
     case *forge.App:
+        // For direct forge.App usage (not from Mount method)
         grp := v.Group("/api/auth")
         rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/api/auth/phone/send-code": {Window: time.Minute, Max: 5}}})
         h := NewHandler(p.service, rls)
         grp.POST("/phone/send-code", h.SendCode)
         grp.POST("/phone/verify", h.Verify)
         grp.POST("/phone/signin", h.SignIn)
+        return nil
+    case *forge.Group:
+        // Use relative paths - the router is already a group with the correct basePath
+        rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/phone/send-code": {Window: time.Minute, Max: 5}}})
+        h := NewHandler(p.service, rls)
+        v.POST("/phone/send-code", h.SendCode)
+        v.POST("/phone/verify", h.Verify)
+        v.POST("/phone/signin", h.SignIn)
         return nil
     case *http.ServeMux:
         app := forge.NewApp(v)

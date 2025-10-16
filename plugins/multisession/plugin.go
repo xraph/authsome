@@ -11,6 +11,8 @@ import (
     "github.com/xraph/authsome/core/audit"
     "github.com/xraph/authsome/core/webhook"
     dev "github.com/xraph/authsome/core/device"
+    "github.com/xraph/authsome/core/hooks"
+    "github.com/xraph/authsome/core/registry"
 )
 
 // Plugin wires the multi-session service and registers routes
@@ -44,7 +46,16 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     if p.service == nil { return nil }
     switch v := router.(type) {
     case *forge.App:
+        // For direct forge.App usage (not from Mount method)
         grp := v.Group("/api/auth/multi-session")
+        h := NewHandler(p.service)
+        grp.GET("/list", h.List)
+        grp.POST("/set-active", h.SetActive)
+        grp.POST("/delete/{id}", h.Delete)
+        return nil
+    case *forge.Group:
+        // Use relative paths - the router is already a group with the correct basePath
+        grp := v.Group("/multi-session")
         h := NewHandler(p.service)
         grp.GET("/list", h.List)
         grp.POST("/set-active", h.SetActive)
@@ -63,7 +74,9 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     }
 }
 
-func (p *Plugin) RegisterHooks(_ interface{}) error { return nil }
+func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
+
+func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 func (p *Plugin) Migrate() error { return nil }
 
 // GetAuthService returns the auth service for testing

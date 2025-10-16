@@ -1,54 +1,46 @@
-import * as React from "react"
-import { Outlet } from "react-router-dom"
-
-import { cn } from "@/lib/utils"
-import { Sidebar } from "./sidebar"
-import { Header } from "./header"
+import { Outlet } from "react-router-dom";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "./app-sidebar";
+import { Header } from "./header";
 
 interface DashboardLayoutProps {
-  className?: string
+  children?: React.ReactNode;
 }
 
 /**
- * Main dashboard layout component with sidebar and header
- * @param className - Additional CSS classes
+ * Main dashboard layout component that provides the overall structure
+ * for the dashboard pages including sidebar, header, and main content area.
+ * 
+ * Features:
+ * - Responsive sidebar with collapsible functionality
+ * - Header with navigation and user controls
+ * - Main content area for page content
+ * - Consistent spacing and layout across all dashboard pages
  */
-export function DashboardLayout({ className }: DashboardLayoutProps) {
-  const [sidebarCollapsed] = React.useState(false)
-  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false)
-
+export function DashboardLayout({}: DashboardLayoutProps) {
   return (
-    <div className={cn("flex h-screen bg-background", className)}>
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:block">
-        <Sidebar collapsed={sidebarCollapsed} />
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {mobileSidebarOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
-            onClick={() => setMobileSidebarOpen(false)}
-          />
-          <div className="fixed inset-y-0 left-0 z-50 lg:hidden">
-            <Sidebar />
+    <SidebarProvider>
+      <AppSidebar />
+      {/* <div className={cn("flex min-h-screen w-full", className)}>
+        
+      </div> */}
+      <SidebarInset>
+        {/* Header with sidebar trigger */}
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <div className="flex-1">
+            <Header />
           </div>
-        </>
-      )}
+        </header>
 
-      {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <Header
-          onMenuClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-        />
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto p-4 lg:p-6">
-          <Outlet />
+        <main className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <Outlet />
+            </div>
+          </div>
         </main>
-      </div>
-    </div>
-  )
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }

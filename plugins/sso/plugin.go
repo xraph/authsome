@@ -7,6 +7,8 @@ import (
     "context"
     "github.com/xraph/authsome/schema"
     "github.com/xraph/forge"
+    "github.com/xraph/authsome/core/hooks"
+    "github.com/xraph/authsome/core/registry"
 )
 
 // Plugin wires the SSO service and registers routes
@@ -33,7 +35,18 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     if p.service == nil { return nil }
     switch v := router.(type) {
     case *forge.App:
+        // For direct forge.App usage (not from Mount method)
         grp := v.Group("/api/auth/sso")
+        h := NewHandler(p.service)
+        grp.POST("/provider/register", h.RegisterProvider)
+        grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata)
+        grp.GET("/saml2/login/{providerId}", h.SAMLLogin)
+        grp.POST("/saml2/callback/{providerId}", h.SAMLCallback)
+        grp.GET("/oidc/callback/{providerId}", h.OIDCCallback)
+        return nil
+    case *forge.Group:
+        // Use relative paths - the router is already a group with the correct basePath
+        grp := v.Group("/sso")
         h := NewHandler(p.service)
         grp.POST("/provider/register", h.RegisterProvider)
         grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata)
@@ -56,7 +69,9 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     }
 }
 
-func (p *Plugin) RegisterHooks(_ interface{}) error { return nil }
+func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
+
+func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
 // Migrate creates required tables for SSO providers
 func (p *Plugin) Migrate() error {

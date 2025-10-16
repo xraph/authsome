@@ -40,6 +40,7 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
     if p.service == nil { return nil }
     switch v := router.(type) {
     case *forge.App:
+        // For direct forge.App usage (not from Mount method)
         grp := v.Group("/api/auth/passkey")
         h := NewHandler(p.service)
         grp.POST("/register/begin", h.BeginRegister)
@@ -47,7 +48,18 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
         grp.POST("/login/begin", h.BeginLogin)
         grp.POST("/login/finish", h.FinishLogin)
         grp.GET("/list", h.List)
-        grp.POST("/delete/{id}", h.Delete)
+        grp.DELETE("/:id", h.Delete)
+        return nil
+    case *forge.Group:
+        // Use relative paths - the router is already a group with the correct basePath
+        grp := v.Group("/passkey")
+        h := NewHandler(p.service)
+        grp.POST("/register/begin", h.BeginRegister)
+        grp.POST("/register/finish", h.FinishRegister)
+        grp.POST("/login/begin", h.BeginLogin)
+        grp.POST("/login/finish", h.FinishLogin)
+        grp.GET("/list", h.List)
+        grp.DELETE("/:id", h.Delete)
         return nil
     case *http.ServeMux:
         app := forge.NewApp(v)
@@ -58,7 +70,7 @@ func (p *Plugin) RegisterRoutes(router interface{}) error {
         grp.POST("/login/begin", h.BeginLogin)
         grp.POST("/login/finish", h.FinishLogin)
         grp.GET("/list", h.List)
-        grp.POST("/delete/{id}", h.Delete)
+        grp.DELETE("/:id", h.Delete)
         return nil
     default:
         return nil

@@ -243,6 +243,9 @@ notes.md
 TODO.local.md
 NOTES.md
 MIGRATION_STRATEGY.md
+project-docs/*
+project-docs/**/*
+.cursor/**/*
 
 
 

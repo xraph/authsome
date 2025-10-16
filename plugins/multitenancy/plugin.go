@@ -72,7 +72,7 @@ func (p *Plugin) ID() string {
 
 // Init initializes the plugin with dependencies
 func (p *Plugin) Init(auth interface{}) error {
-	// Get the auth instance and extract dependencies
+	// Type assert to get the auth instance
 	authInstance, ok := auth.(interface {
 		GetDB() *bun.DB
 		GetConfigManager() interface{}
@@ -85,6 +85,16 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.db = authInstance.GetDB()
 	configManager := authInstance.GetConfigManager()
 	serviceRegistry := authInstance.GetServiceRegistry()
+	
+	// Register models with Bun for relationships to work
+	// Register TeamMember first as it's the join table for m2m relationships
+	p.db.RegisterModel((*organization.TeamMember)(nil))
+	p.db.RegisterModel(
+		(*organization.Organization)(nil),
+		(*organization.Member)(nil),
+		(*organization.Team)(nil),
+		(*organization.Invitation)(nil),
+	)
 	
 	// Type assert to viper.Viper
 	viperConfig, ok := configManager.(*viper.Viper)

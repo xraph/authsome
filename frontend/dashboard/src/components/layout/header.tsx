@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Bell, Search, Menu, User, LogOut, Settings } from "lucide-react"
+import { Bell, Search, User, LogOut, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -8,17 +8,15 @@ import { Badge } from "@/components/ui/badge"
 
 interface HeaderProps {
   className?: string
-  onMenuClick?: () => void
   title?: string
 }
 
 /**
  * Header component with search, notifications, and user menu
  * @param className - Additional CSS classes
- * @param onMenuClick - Menu button click handler
  * @param title - Page title
  */
-export function Header({ className, onMenuClick, title }: HeaderProps) {
+export function Header({ className, title }: HeaderProps) {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [showUserMenu, setShowUserMenu] = React.useState(false)
   const [showNotifications, setShowNotifications] = React.useState(false)
@@ -30,18 +28,8 @@ export function Header({ className, onMenuClick, title }: HeaderProps) {
         className
       )}
     >
-      {/* Left side - Menu button and title */}
+      {/* Left side - Title */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          onClick={onMenuClick}
-        >
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Toggle menu</span>
-        </Button>
-        
         {title && (
           <div>
             <h1 className="text-lg font-semibold">{title}</h1>
