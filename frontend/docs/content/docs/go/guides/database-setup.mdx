@@ -26,7 +26,7 @@ PostgreSQL is the recommended database for production deployments due to its rob
 ### Installation
 
 <Tabs>
-<Tab title="Docker">
+<Tab value="postgres-docker" title="Docker">
 ```bash
 # Run PostgreSQL with Docker
 docker run --name authsome-postgres \
@@ -59,7 +59,7 @@ EOF
 docker-compose up -d
 ```
 </Tab>
-<Tab title="macOS">
+<Tab value="postgres-macos" title="macOS">
 ```bash
 # Install PostgreSQL using Homebrew
 brew install postgresql@15
@@ -73,7 +73,7 @@ createuser -s authsome
 psql -c "ALTER USER authsome PASSWORD 'your_secure_password';"
 ```
 </Tab>
-<Tab title="Ubuntu/Debian">
+<Tab value="postgres-ubuntu" title="Ubuntu/Debian">
 ```bash
 # Install PostgreSQL
 sudo apt update
@@ -198,7 +198,7 @@ func configureConnectionPool(sqldb *sql.DB, config *PostgreSQLConfig) {
 ### Configuration File
 
 <Tabs>
-<Tab title="config.yaml">
+<Tab value="config-yaml" title="config.yaml">
 ```yaml
 database:
   driver: "postgres"
@@ -217,7 +217,7 @@ database:
     connMaxIdleTime: "1m"
 ```
 </Tab>
-<Tab title="Environment Variables">
+<Tab value="config-env" title="Environment Variables">
 ```bash
 # Database connection
 DB_HOST=localhost
@@ -243,7 +243,7 @@ MySQL and MariaDB are also well-supported options for AuthSome.
 ### Installation
 
 <Tabs>
-<Tab title="Docker">
+<Tab value="mysql-docker" title="Docker">
 ```bash
 # MySQL
 docker run --name authsome-mysql \
@@ -264,7 +264,7 @@ docker run --name authsome-mariadb \
   -d mariadb:10.9
 ```
 </Tab>
-<Tab title="macOS">
+<Tab value="mysql-macos" title="macOS">
 ```bash
 # Install MySQL using Homebrew
 brew install mysql
@@ -791,7 +791,7 @@ func GetDatabaseMetrics(db *bun.DB) *DatabaseMetrics {
 ### Backup Strategies
 
 <Tabs>
-<Tab title="PostgreSQL">
+<Tab value="perf-postgres" title="PostgreSQL">
 ```bash
 #!/bin/bash
 # backup_postgres.sh - PostgreSQL backup script
@@ -822,7 +822,7 @@ find $BACKUP_DIR -name "authsome_schema_*.sql" -mtime +7 -delete
 echo "Backup completed: authsome_$DATE.backup"
 ```
 </Tab>
-<Tab title="MySQL">
+<Tab value="perf-mysql" title="MySQL">
 ```bash
 #!/bin/bash
 # backup_mysql.sh - MySQL backup script

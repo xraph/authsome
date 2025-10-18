@@ -5,6 +5,7 @@
     "index",
     "custom-providers",
     "database-setup",
+    "multi-orm",
     "deployment",
     "testing",
     "migration"

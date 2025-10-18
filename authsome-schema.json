@@ -1,0 +1,3416 @@
+{
+  "version": "1.0",
+  "description": "AuthSome Database Schema",
+  "models": {
+    "APIKey": {
+      "name": "APIKey",
+      "table": "api_keys",
+      "description": "APIKey represents an API key for programmatic access",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "description": "Primary key",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "OrgID",
+          "column": "org_id",
+          "type": "string",
+          "description": "Organization and user context",
+          "required": true
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "description": "Key identification",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "column": "description",
+          "type": "string"
+        },
+        {
+          "name": "Prefix",
+          "column": "prefix",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "KeyHash",
+          "column": "key_hash",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Scopes",
+          "column": "scopes",
+          "type": "string",
+          "description": "Permissions and scopes"
+        },
+        {
+          "name": "Permissions",
+          "column": "permissions",
+          "type": "string"
+        },
+        {
+          "name": "RateLimit",
+          "column": "rate_limit",
+          "type": "integer",
+          "default": "1000"
+        },
+        {
+          "name": "Active",
+          "column": "active",
+          "type": "boolean",
+          "description": "Status and expiration",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "UsageCount",
+          "column": "usage_count",
+          "type": "integer",
+          "description": "Usage tracking",
+          "required": true,
+          "default": "0"
+        },
+        {
+          "name": "LastUsedAt",
+          "column": "last_used_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "LastUsedIP",
+          "column": "last_used_ip",
+          "type": "string"
+        },
+        {
+          "name": "LastUsedUA",
+          "column": "last_used_ua",
+          "type": "string"
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "description": "Audit fields",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "DeletedAt",
+          "column": "deleted_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string",
+          "description": "Metadata"
+        },
+        {
+          "name": "Key",
+          "column": "key",
+          "type": "string",
+          "description": "Transient field - only populated during creation"
+        }
+      ]
+    },
+    "Account": {
+      "name": "Account",
+      "table": "accounts",
+      "description": "Account represents OAuth accounts",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Provider",
+          "column": "provider",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ProviderID",
+          "column": "provider_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "AccessToken",
+          "column": "access_token",
+          "type": "string"
+        },
+        {
+          "name": "RefreshToken",
+          "column": "refresh_token",
+          "type": "string"
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "AuditEvent": {
+      "name": "AuditEvent",
+      "table": "audit_events",
+      "description": "AuditEvent represents the audit_events table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "Action",
+          "column": "action",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Resource",
+          "column": "resource",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "IPAddress",
+          "column": "ip_address",
+          "type": "string"
+        },
+        {
+          "name": "UserAgent",
+          "column": "user_agent",
+          "type": "string"
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string"
+        }
+      ]
+    },
+    "AuthorizationCode": {
+      "name": "AuthorizationCode",
+      "table": "authorization_codes",
+      "description": "AuthorizationCode represents an OAuth2/OIDC authorization code",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "i_d",
+          "type": "string",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "Code",
+          "column": "code",
+          "type": "string",
+          "description": "OAuth2/OIDC fields",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "ClientID",
+          "column": "client_i_d",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "UserID",
+          "column": "user_i_d",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "RedirectURI",
+          "column": "redirect_u_r_i",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Scope",
+          "column": "scope",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "State",
+          "column": "state",
+          "type": "string"
+        },
+        {
+          "name": "Nonce",
+          "column": "nonce",
+          "type": "string"
+        },
+        {
+          "name": "CodeChallenge",
+          "column": "code_challenge",
+          "type": "string"
+        },
+        {
+          "name": "CodeChallengeMethod",
+          "column": "code_challenge_method",
+          "type": "string"
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "Used",
+          "column": "used",
+          "type": "boolean",
+          "required": true,
+          "default": "false"
+        },
+        {
+          "name": "UsedAt",
+          "column": "used_at",
+          "type": "timestamp",
+          "nullable": true
+        }
+      ]
+    },
+    "BackupCode": {
+      "name": "BackupCode",
+      "table": "twofa_backup_codes",
+      "description": "BackupCode stores recovery codes for 2FA",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "CodeHash",
+          "column": "code_hash",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "UsedAt",
+          "column": "used_at",
+          "type": "timestamp",
+          "nullable": true
+        }
+      ]
+    },
+    "Delivery": {
+      "name": "Delivery",
+      "table": "webhook_deliveries",
+      "description": "Delivery represents a webhook delivery attempt",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "WebhookID",
+          "column": "webhook_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "EventID",
+          "column": "event_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "URL",
+          "column": "url",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "HTTPMethod",
+          "column": "http_method",
+          "type": "string",
+          "required": true,
+          "default": "'POST'"
+        },
+        {
+          "name": "Headers",
+          "column": "headers",
+          "type": "string"
+        },
+        {
+          "name": "Body",
+          "column": "body",
+          "type": "string"
+        },
+        {
+          "name": "Status",
+          "column": "status",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "StatusCode",
+          "column": "status_code",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "ResponseHeaders",
+          "column": "response_headers",
+          "type": "string"
+        },
+        {
+          "name": "ResponseBody",
+          "column": "response_body",
+          "type": "string"
+        },
+        {
+          "name": "Error",
+          "column": "error",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "AttemptNumber",
+          "column": "attempt_number",
+          "type": "integer",
+          "required": true,
+          "default": "1"
+        },
+        {
+          "name": "NextRetryAt",
+          "column": "next_retry_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "DeliveredAt",
+          "column": "delivered_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "Webhook",
+          "column": "webhook",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        },
+        {
+          "name": "Event",
+          "column": "event",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    "Device": {
+      "name": "Device",
+      "table": "devices",
+      "description": "Device represents the devices table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Fingerprint",
+          "column": "fingerprint",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "UserAgent",
+          "column": "user_agent",
+          "type": "string"
+        },
+        {
+          "name": "IPAddress",
+          "column": "ip_address",
+          "type": "string"
+        },
+        {
+          "name": "LastActive",
+          "column": "last_active",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "EmailOTP": {
+      "name": "EmailOTP",
+      "table": "email_otps",
+      "description": "EmailOTP stores OTP codes for email-based authentication",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Email",
+          "column": "email",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "OTP",
+          "column": "otp",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "Attempts",
+          "column": "attempts",
+          "type": "integer",
+          "required": true,
+          "default": "0"
+        }
+      ]
+    },
+    "Event": {
+      "name": "Event",
+      "table": "webhook_events",
+      "description": "Event represents a webhook event",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Data",
+          "column": "data",
+          "type": "string"
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "SessionID",
+          "column": "session_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "IPAddress",
+          "column": "ip_address",
+          "type": "string"
+        },
+        {
+          "name": "UserAgent",
+          "column": "user_agent",
+          "type": "string"
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        }
+      ]
+    },
+    "FormSchema": {
+      "name": "FormSchema",
+      "table": "form_schemas",
+      "description": "FormSchema represents organization-specific form configurations",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "column": "description",
+          "type": "string"
+        },
+        {
+          "name": "Schema",
+          "column": "schema",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "IsActive",
+          "column": "is_active",
+          "type": "boolean",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": "1"
+        },
+        {
+          "name": "Organization",
+          "column": "organization",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "FormSubmission": {
+      "name": "FormSubmission",
+      "table": "form_submissions",
+      "description": "FormSubmission represents a form submission",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "FormSchemaID",
+          "column": "form_schema_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "SessionID",
+          "column": "session_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "Data",
+          "column": "data",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "IPAddress",
+          "column": "ip_address",
+          "type": "string"
+        },
+        {
+          "name": "UserAgent",
+          "column": "user_agent",
+          "type": "string"
+        },
+        {
+          "name": "Status",
+          "column": "status",
+          "type": "string",
+          "required": true,
+          "default": "'submitted'"
+        },
+        {
+          "name": "FormSchema",
+          "column": "form_schema",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "Session",
+          "column": "session",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    "Invitation": {
+      "name": "Invitation",
+      "table": "invitations",
+      "description": "Invitation represents the organization invitation table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Email",
+          "column": "email",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Role",
+          "column": "role",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "InviterID",
+          "column": "inviter_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Token",
+          "column": "token",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "AcceptedAt",
+          "column": "accepted_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "Status",
+          "column": "status",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Organization",
+          "column": "organization",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "JWTKey": {
+      "name": "JWTKey",
+      "table": "jwt_keys",
+      "description": "JWTKey represents a JWT signing key",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "description": "Primary key",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "OrgID",
+          "column": "org_id",
+          "type": "string",
+          "description": "Organization context",
+          "required": true
+        },
+        {
+          "name": "KeyID",
+          "column": "key_id",
+          "type": "string",
+          "description": "Key identification",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "Algorithm",
+          "column": "algorithm",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "KeyType",
+          "column": "key_type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Curve",
+          "column": "curve",
+          "type": "string"
+        },
+        {
+          "name": "PrivateKey",
+          "column": "private_key",
+          "type": "string",
+          "description": "Key material (encrypted)",
+          "required": true
+        },
+        {
+          "name": "PublicKey",
+          "column": "public_key",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Active",
+          "column": "active",
+          "type": "boolean",
+          "description": "Key status",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "UsageCount",
+          "column": "usage_count",
+          "type": "integer",
+          "description": "Usage tracking",
+          "required": true,
+          "default": "0"
+        },
+        {
+          "name": "LastUsedAt",
+          "column": "last_used_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "description": "Audit fields",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "DeletedAt",
+          "column": "deleted_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "description": "Metadata"
+        },
+        {
+          "name": "Description",
+          "column": "description",
+          "type": "string"
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string"
+        }
+      ]
+    },
+    "MagicLink": {
+      "name": "MagicLink",
+      "table": "magic_links",
+      "description": "MagicLink stores passwordless email tokens",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Email",
+          "column": "email",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Token",
+          "column": "token",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        }
+      ]
+    },
+    "Member": {
+      "name": "Member",
+      "table": "members",
+      "description": "Member represents the organization member table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Role",
+          "column": "role",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Organization",
+          "column": "organization",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    "Notification": {
+      "name": "Notification",
+      "table": "notifications",
+      "description": "Notification represents a notification instance in the database",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "TemplateID",
+          "column": "template_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Recipient",
+          "column": "recipient",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Subject",
+          "column": "subject",
+          "type": "string"
+        },
+        {
+          "name": "Body",
+          "column": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Status",
+          "column": "status",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Error",
+          "column": "error",
+          "type": "string"
+        },
+        {
+          "name": "ProviderID",
+          "column": "provider_id",
+          "type": "string"
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string"
+        },
+        {
+          "name": "SentAt",
+          "column": "sent_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "DeliveredAt",
+          "column": "delivered_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "Template",
+          "column": "template",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "NotificationTemplate": {
+      "name": "NotificationTemplate",
+      "table": "notification_templates",
+      "description": "NotificationTemplate represents a notification template in the database",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Subject",
+          "column": "subject",
+          "type": "string"
+        },
+        {
+          "name": "Body",
+          "column": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Variables",
+          "column": "variables",
+          "type": "string"
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string"
+        },
+        {
+          "name": "Active",
+          "column": "active",
+          "type": "boolean",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "DeletedAt",
+          "column": "deleted_at",
+          "type": "timestamp",
+          "nullable": true
+        }
+      ]
+    },
+    "OAuthClient": {
+      "name": "OAuthClient",
+      "table": "oauth_clients",
+      "description": "OAuthClient stores registered OAuth/OIDC clients",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "i_d",
+          "type": "string",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp"
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string"
+        },
+        {
+          "name": "ClientID",
+          "column": "client_i_d",
+          "type": "string"
+        },
+        {
+          "name": "ClientSecret",
+          "column": "client_secret",
+          "type": "string"
+        },
+        {
+          "name": "RedirectURI",
+          "column": "redirect_u_r_i",
+          "type": "string"
+        }
+      ]
+    },
+    "OAuthToken": {
+      "name": "OAuthToken",
+      "table": "oauth_tokens",
+      "description": "OAuthToken represents an OAuth2/OIDC access token",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "i_d",
+          "type": "string",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "AccessToken",
+          "column": "access_token",
+          "type": "string",
+          "description": "Token fields",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "RefreshToken",
+          "column": "refresh_token",
+          "type": "string",
+          "unique": true
+        },
+        {
+          "name": "TokenType",
+          "column": "token_type",
+          "type": "string",
+          "required": true,
+          "default": "'Bearer'"
+        },
+        {
+          "name": "ClientID",
+          "column": "client_i_d",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "UserID",
+          "column": "user_i_d",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Scope",
+          "column": "scope",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "RefreshExpiresAt",
+          "column": "refresh_expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "Revoked",
+          "column": "revoked",
+          "type": "boolean",
+          "required": true,
+          "default": "false"
+        },
+        {
+          "name": "RevokedAt",
+          "column": "revoked_at",
+          "type": "timestamp",
+          "nullable": true
+        }
+      ]
+    },
+    "OTPCode": {
+      "name": "OTPCode",
+      "table": "twofa_otpcodes",
+      "description": "OTPCode stores one-time codes for OTP-based 2FA",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "CodeHash",
+          "column": "code_hash",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "Attempts",
+          "column": "attempts",
+          "type": "integer",
+          "required": true,
+          "default": "0"
+        }
+      ]
+    },
+    "Organization": {
+      "name": "Organization",
+      "table": "organizations",
+      "description": "Organization represents the organization table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Slug",
+          "column": "slug",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "Logo",
+          "column": "logo",
+          "type": "string"
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string"
+        }
+      ]
+    },
+    "Passkey": {
+      "name": "Passkey",
+      "table": "passkeys",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "CredentialID",
+          "column": "credential_id",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ]
+    },
+    "Permission": {
+      "name": "Permission",
+      "table": "permissions",
+      "description": "Permission table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "column": "description",
+          "type": "string"
+        }
+      ]
+    },
+    "PhoneVerification": {
+      "name": "PhoneVerification",
+      "table": "phone_verifications",
+      "description": "PhoneVerification stores SMS verification codes",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Phone",
+          "column": "phone",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Code",
+          "column": "code",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "Attempts",
+          "column": "attempts",
+          "type": "integer",
+          "required": true,
+          "default": "0"
+        }
+      ]
+    },
+    "Policy": {
+      "name": "Policy",
+      "table": "policies",
+      "description": "Policy stores RBAC policy expressions",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Expression",
+          "column": "expression",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    "Role": {
+      "name": "Role",
+      "table": "roles",
+      "description": "Role table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "column": "description",
+          "type": "string"
+        }
+      ]
+    },
+    "SSOProvider": {
+      "name": "SSOProvider",
+      "table": "sso_providers",
+      "description": "SSOProvider stores per-organization SSO provider configuration",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "i_d",
+          "type": "string",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp"
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_i_d",
+          "type": "string"
+        },
+        {
+          "name": "ProviderID",
+          "column": "provider_i_d",
+          "type": "string"
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string"
+        },
+        {
+          "name": "Domain",
+          "column": "domain",
+          "type": "string"
+        },
+        {
+          "name": "SAMLEntryPoint",
+          "column": "s_a_m_l_entry_point",
+          "type": "string",
+          "description": "SAML config (basic fields; extend as needed)"
+        },
+        {
+          "name": "SAMLIssuer",
+          "column": "s_a_m_l_issuer",
+          "type": "string"
+        },
+        {
+          "name": "SAMLCert",
+          "column": "s_a_m_l_cert",
+          "type": "string"
+        },
+        {
+          "name": "OIDCClientID",
+          "column": "o_i_d_c_client_i_d",
+          "type": "string",
+          "description": "OIDC config (basic fields; extend as needed)"
+        },
+        {
+          "name": "OIDCClientSecret",
+          "column": "o_i_d_c_client_secret",
+          "type": "string"
+        },
+        {
+          "name": "OIDCIssuer",
+          "column": "o_i_d_c_issuer",
+          "type": "string"
+        },
+        {
+          "name": "OIDCRedirectURI",
+          "column": "o_i_d_c_redirect_u_r_i",
+          "type": "string"
+        }
+      ]
+    },
+    "SecurityEvent": {
+      "name": "SecurityEvent",
+      "table": "security_events",
+      "description": "SecurityEvent represents the security_events table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "nullable": true,
+          "length": 20
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "IPAddress",
+          "column": "ip_address",
+          "type": "string"
+        },
+        {
+          "name": "UserAgent",
+          "column": "user_agent",
+          "type": "string"
+        },
+        {
+          "name": "Geo",
+          "column": "geo",
+          "type": "string"
+        }
+      ]
+    },
+    "Session": {
+      "name": "Session",
+      "table": "sessions",
+      "description": "Session represents the session table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Token",
+          "column": "token",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "IPAddress",
+          "column": "ip_address",
+          "type": "string"
+        },
+        {
+          "name": "UserAgent",
+          "column": "user_agent",
+          "type": "string"
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "SocialAccount": {
+      "name": "SocialAccount",
+      "table": "social_accounts",
+      "description": "SocialAccount links a user to an OAuth provider account",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "i_d",
+          "type": "string",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UserID",
+          "column": "user_i_d",
+          "type": "string",
+          "description": "User relationship",
+          "required": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_i_d",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Provider",
+          "column": "provider",
+          "type": "string",
+          "description": "Provider information",
+          "required": true
+        },
+        {
+          "name": "ProviderID",
+          "column": "provider_i_d",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Email",
+          "column": "email",
+          "type": "string"
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string"
+        },
+        {
+          "name": "Avatar",
+          "column": "avatar",
+          "type": "string"
+        },
+        {
+          "name": "AccessToken",
+          "column": "access_token",
+          "type": "string",
+          "description": "OAuth tokens",
+          "required": true
+        },
+        {
+          "name": "RefreshToken",
+          "column": "refresh_token",
+          "type": "string"
+        },
+        {
+          "name": "TokenType",
+          "column": "token_type",
+          "type": "string",
+          "required": true,
+          "default": "'Bearer'"
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "RefreshExpiresAt",
+          "column": "refresh_expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "Scope",
+          "column": "scope",
+          "type": "string"
+        },
+        {
+          "name": "IDToken",
+          "column": "i_d_token",
+          "type": "string",
+          "description": "ID Token (for OIDC providers)"
+        },
+        {
+          "name": "RawUserInfo",
+          "column": "raw_user_info",
+          "type": "string",
+          "description": "Provider-specific data (JSON)"
+        },
+        {
+          "name": "Revoked",
+          "column": "revoked",
+          "type": "boolean",
+          "description": "Account status",
+          "required": true,
+          "default": "false"
+        },
+        {
+          "name": "RevokedAt",
+          "column": "revoked_at",
+          "type": "timestamp",
+          "nullable": true
+        }
+      ]
+    },
+    "Team": {
+      "name": "Team",
+      "table": "teams",
+      "description": "Team represents the team table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "column": "description",
+          "type": "string"
+        },
+        {
+          "name": "Organization",
+          "column": "organization",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "TeamMember": {
+      "name": "TeamMember",
+      "table": "team_members",
+      "description": "TeamMember represents the team_members table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "TeamID",
+          "column": "team_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "MemberID",
+          "column": "member_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Team",
+          "column": "team",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        },
+        {
+          "name": "Member",
+          "column": "member",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    "TrustedDevice": {
+      "name": "TrustedDevice",
+      "table": "trusted_devices",
+      "description": "TrustedDevice allows skipping 2FA for a period",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "DeviceID",
+          "column": "device_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        }
+      ]
+    },
+    "TwoFASecret": {
+      "name": "TwoFASecret",
+      "table": "twofa_secrets",
+      "description": "TwoFASecret stores per-user 2FA secret data",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Method",
+          "column": "method",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Secret",
+          "column": "secret",
+          "type": "string"
+        },
+        {
+          "name": "Enabled",
+          "column": "enabled",
+          "type": "boolean",
+          "required": true,
+          "default": "false"
+        }
+      ]
+    },
+    "User": {
+      "name": "User",
+      "table": "users",
+      "description": "User represents the user table",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Email",
+          "column": "email",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "EmailVerified",
+          "column": "email_verified",
+          "type": "boolean",
+          "required": true,
+          "default": "false"
+        },
+        {
+          "name": "EmailVerifiedAt",
+          "column": "email_verified_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "Name",
+          "column": "name",
+          "type": "string"
+        },
+        {
+          "name": "Image",
+          "column": "image",
+          "type": "string"
+        },
+        {
+          "name": "PasswordHash",
+          "column": "password_hash",
+          "type": "string"
+        },
+        {
+          "name": "Username",
+          "column": "username",
+          "type": "string",
+          "description": "Username support (Phase 6)",
+          "unique": true
+        },
+        {
+          "name": "DisplayUsername",
+          "column": "display_username",
+          "type": "string"
+        },
+        {
+          "name": "DeletedAt",
+          "column": "deleted_at",
+          "type": "timestamp",
+          "description": "Soft delete",
+          "nullable": true
+        }
+      ]
+    },
+    "UserBan": {
+      "name": "UserBan",
+      "table": "user_bans",
+      "description": "UserBan represents a user ban record in the database",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "description": "Primary key",
+          "primary": true,
+          "required": true
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "description": "Foreign keys",
+          "required": true
+        },
+        {
+          "name": "BannedByID",
+          "column": "banned_by_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "UnbannedByID",
+          "column": "unbanned_by_id",
+          "type": "string"
+        },
+        {
+          "name": "Reason",
+          "column": "reason",
+          "type": "string",
+          "description": "Ban details",
+          "required": true
+        },
+        {
+          "name": "IsActive",
+          "column": "is_active",
+          "type": "boolean",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "description": "Timestamps",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UnbannedAt",
+          "column": "unbanned_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        },
+        {
+          "name": "BannedBy",
+          "column": "banned_by",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "UnbannedBy",
+          "column": "unbanned_by",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    "UserRole": {
+      "name": "UserRole",
+      "table": "user_roles",
+      "description": "UserRole maps users to roles within an organization",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "RoleID",
+          "column": "role_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        },
+        {
+          "name": "Role",
+          "column": "role",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    "Verification": {
+      "name": "Verification",
+      "table": "verifications",
+      "description": "Verification represents email/phone verification tokens",
+      "fields": [
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "CreatedBy",
+          "column": "created_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp",
+          "autoGen": true
+        },
+        {
+          "name": "UpdatedBy",
+          "column": "updated_by",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Version",
+          "column": "version",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "UserID",
+          "column": "user_id",
+          "type": "string",
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "Token",
+          "column": "token",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "Type",
+          "column": "type",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "ExpiresAt",
+          "column": "expires_at",
+          "type": "timestamp",
+          "required": true
+        },
+        {
+          "name": "Used",
+          "column": "used",
+          "type": "boolean",
+          "required": true,
+          "default": "false"
+        },
+        {
+          "name": "UsedAt",
+          "column": "used_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "name": "User",
+          "column": "user",
+          "type": "string",
+          "description": "Relations",
+          "nullable": true
+        }
+      ]
+    },
+    "Webhook": {
+      "name": "Webhook",
+      "table": "webhooks",
+      "description": "Webhook represents a webhook subscription",
+      "fields": [
+        {
+          "name": "ID",
+          "column": "id",
+          "type": "string",
+          "primary": true,
+          "required": true,
+          "length": 20
+        },
+        {
+          "name": "OrganizationID",
+          "column": "organization_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "URL",
+          "column": "url",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Events",
+          "column": "events",
+          "type": "string"
+        },
+        {
+          "name": "Secret",
+          "column": "secret",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "Active",
+          "column": "active",
+          "type": "boolean",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "Headers",
+          "column": "headers",
+          "type": "string"
+        },
+        {
+          "name": "Metadata",
+          "column": "metadata",
+          "type": "string"
+        },
+        {
+          "name": "CreatedAt",
+          "column": "created_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "UpdatedAt",
+          "column": "updated_at",
+          "type": "timestamp",
+          "required": true,
+          "default": "current_timestamp"
+        },
+        {
+          "name": "DeletedAt",
+          "column": "deleted_at",
+          "type": "timestamp",
+          "nullable": true
+        }
+      ]
+    }
+  }
+}

@@ -6,6 +6,7 @@
     "passkey",
     "magic-link",
     "phone",
-    "jwt"
+    "jwt",
+    "mcp"
   ]
 }
