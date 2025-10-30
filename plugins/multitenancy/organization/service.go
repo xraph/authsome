@@ -21,13 +21,13 @@ type Service struct {
 
 // Config holds the organization service configuration
 type Config struct {
-	PlatformOrganizationID    string `json:"platformOrganizationId"`
-	DefaultOrganizationName   string `json:"defaultOrganizationName"`
+	PlatformOrganizationID     string `json:"platformOrganizationId"`
+	DefaultOrganizationName    string `json:"defaultOrganizationName"`
 	EnableOrganizationCreation bool   `json:"enableOrganizationCreation"`
-	MaxMembersPerOrganization int    `json:"maxMembersPerOrganization"`
-	MaxTeamsPerOrganization   int    `json:"maxTeamsPerOrganization"`
-	RequireInvitation         bool   `json:"requireInvitation"`
-	InvitationExpiryHours     int    `json:"invitationExpiryHours"`
+	MaxMembersPerOrganization  int    `json:"maxMembersPerOrganization"`
+	MaxTeamsPerOrganization    int    `json:"maxTeamsPerOrganization"`
+	RequireInvitation          bool   `json:"requireInvitation"`
+	InvitationExpiryHours      int    `json:"invitationExpiryHours"`
 }
 
 // Repository interfaces
@@ -89,10 +89,10 @@ func NewService(
 	inviteRepo InvitationRepository,
 ) *Service {
 	return &Service{
-		config:        config,
-		orgRepo:       orgRepo,
-		memberRepo:    memberRepo,
-		teamRepo:      teamRepo,
+		config:         config,
+		orgRepo:        orgRepo,
+		memberRepo:     memberRepo,
+		teamRepo:       teamRepo,
 		invitationRepo: inviteRepo,
 	}
 }

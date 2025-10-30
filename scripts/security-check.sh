@@ -33,7 +33,7 @@ echo ""
 
 # Check 2: Go formatting
 echo "→ Checking Go code formatting..."
-UNFORMATTED=$(gofmt -l . 2>/dev/null | grep -v "vendor/" | grep -v "clients/generated/" || true)
+UNFORMATTED=$(gofmt -l . 2>/dev/null | grep -v "vendor/" | grep -v "clients/go/" | grep -v "clients/typescript/" | grep -v "clients/rust/" || true)
 if [ -z "$UNFORMATTED" ]; then
     echo -e "${GREEN}✓ Code is formatted${NC}"
 else
@@ -46,9 +46,9 @@ echo ""
 
 # Check 3: Go vet
 echo "→ Running go vet..."
-if go vet ./... 2>&1 | grep -v "vendor/" | grep -v "clients/generated/" >/dev/null; then
+if go vet ./... 2>&1 | grep -v "vendor/" | grep -v "clients/go/" | grep -v "clients/typescript/" | grep -v "clients/rust/" >/dev/null; then
     echo -e "${RED}✗ go vet found issues${NC}"
-    go vet ./... 2>&1 | grep -v "vendor/" | grep -v "clients/generated/"
+    go vet ./... 2>&1 | grep -v "vendor/" | grep -v "clients/go/" | grep -v "clients/typescript/" | grep -v "clients/rust/"
     ERRORS=$((ERRORS + 1))
 else
     echo -e "${GREEN}✓ No issues found${NC}"
@@ -59,14 +59,14 @@ echo ""
 echo "→ Checking for common security anti-patterns..."
 
 # Check for math/rand in security-critical code
-WEAK_RANDOM=$(grep -r "math/rand" --include="*.go" --exclude-dir={vendor,clients/generated} . || true)
+WEAK_RANDOM=$(grep -r "math/rand" --include="*.go" --exclude-dir={vendor,clients} . || true)
 if [ -n "$WEAK_RANDOM" ]; then
     echo -e "${YELLOW}⚠ Found math/rand usage (use crypto/rand for security):${NC}"
     echo "$WEAK_RANDOM"
 fi
 
 # Check for hardcoded passwords/secrets patterns
-HARDCODED=$(grep -ri "password\s*=\s*\"" --include="*.go" --exclude-dir={vendor,clients/generated,examples} . || true)
+HARDCODED=$(grep -ri "password\s*=\s*\"" --include="*.go" --exclude-dir={vendor,clients,examples} . || true)
 if [ -n "$HARDCODED" ]; then
     echo -e "${RED}✗ Potential hardcoded credentials:${NC}"
     echo "$HARDCODED"
@@ -74,7 +74,7 @@ if [ -n "$HARDCODED" ]; then
 fi
 
 # Check for SQL string concatenation
-SQL_CONCAT=$(grep -r "SELECT.*+.*" --include="*.go" --exclude-dir={vendor,clients/generated} . || true)
+SQL_CONCAT=$(grep -r "SELECT.*+.*" --include="*.go" --exclude-dir={vendor,clients} . || true)
 if [ -n "$SQL_CONCAT" ]; then
     echo -e "${RED}✗ Potential SQL injection (string concatenation):${NC}"
     echo "$SQL_CONCAT"

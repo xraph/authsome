@@ -77,7 +77,7 @@ func (r *MemberRepository) Delete(ctx context.Context, id string) error {
 // ListByOrganization lists members by organization with pagination
 func (r *MemberRepository) ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*organization.Member, error) {
 	var members []*organization.Member
-	
+
 	// Get paginated results
 	err := r.db.NewSelect().
 		Model(&members).
@@ -89,7 +89,7 @@ func (r *MemberRepository) ListByOrganization(ctx context.Context, orgID string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to list members: %w", err)
 	}
-	
+
 	return members, nil
 }
 
@@ -133,7 +133,7 @@ func (r *MemberRepository) CountByOrganization(ctx context.Context, orgID string
 // ListByUser lists organizations a user is a member of
 func (r *MemberRepository) ListByUser(ctx context.Context, userID string) ([]*organization.Member, error) {
 	var members []*organization.Member
-	
+
 	// Get all memberships for the user
 	err := r.db.NewSelect().
 		Model(&members).
@@ -143,6 +143,6 @@ func (r *MemberRepository) ListByUser(ctx context.Context, userID string) ([]*or
 	if err != nil {
 		return nil, fmt.Errorf("failed to list user memberships: %w", err)
 	}
-	
+
 	return members, nil
 }

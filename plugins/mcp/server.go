@@ -34,8 +34,8 @@ func NewServer(config Config, plugin *Plugin) (*Server, error) {
 		tools:     NewToolRegistry(),
 	}
 
-	// Initialize security layer
-	s.security = NewSecurityLayer(config)
+	// Initialize security layer with database access
+	s.security = NewSecurityLayer(config, plugin.db)
 
 	// Register built-in resources
 	s.registerResources()

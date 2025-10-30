@@ -1,0 +1,98 @@
+plugin_id: social
+version: 1.0.0
+description: Social OAuth authentication
+base_path: /api/auth
+
+routes:
+  - name: SignIn
+    description: Initiate OAuth flow for sign-in
+    method: POST
+    path: /signin/social
+    request:
+      provider: string!
+      scopes: string[]
+      redirectUrl: string
+    response:
+      url: string!
+    errors:
+      - code: 400
+        description: Invalid provider
+      - code: 403
+        description: Provider not enabled
+
+  - name: Callback
+    description: Handle OAuth provider callback
+    method: GET
+    path: /callback/{provider}
+    params:
+      provider: string!
+    query:
+      code: string!
+      state: string!
+      error: string
+    response:
+      user: User!
+      session: Session!
+    errors:
+      - code: 400
+        description: OAuth error or invalid code
+      - code: 500
+        description: Failed to exchange token
+
+  - name: LinkAccount
+    description: Link a social account to current user
+    method: POST
+    path: /social/link
+    auth: true
+    request:
+      provider: string!
+      scopes: string[]
+    response:
+      url: string!
+    errors:
+      - code: 400
+        description: Invalid provider
+      - code: 401
+        description: Not authenticated
+
+  - name: UnlinkAccount
+    description: Unlink a social account
+    method: POST
+    path: /social/unlink
+    auth: true
+    request:
+      provider: string!
+    response:
+      success: boolean!
+    errors:
+      - code: 400
+        description: Invalid provider
+      - code: 401
+        description: Not authenticated
+      - code: 404
+        description: Account not linked
+
+  - name: ListAccounts
+    description: List linked social accounts
+    method: GET
+    path: /social/accounts
+    auth: true
+    response:
+      accounts: SocialAccount[]!
+    errors:
+      - code: 401
+        description: Not authenticated
+
+types:
+  - name: SocialAccount
+    description: Linked social account
+    fields:
+      id: string!
+      userId: string!
+      provider: string!
+      providerAccountId: string!
+      email: string
+      name: string
+      picture: string
+      createdAt: string!
+

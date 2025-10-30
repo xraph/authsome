@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.js
+*.d.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Package locks (may want to keep these in real projects)
+package-lock.json
+yarn.lock
+
+# OS
+.DS_Store
+

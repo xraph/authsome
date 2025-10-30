@@ -76,7 +76,7 @@ func (r *InvitationRepository) Delete(ctx context.Context, id string) error {
 // ListByOrganization lists invitations by organization with pagination
 func (r *InvitationRepository) ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*organization.Invitation, error) {
 	var invitations []*organization.Invitation
-	
+
 	// Get paginated results
 	err := r.db.NewSelect().
 		Model(&invitations).
@@ -88,14 +88,14 @@ func (r *InvitationRepository) ListByOrganization(ctx context.Context, orgID str
 	if err != nil {
 		return nil, fmt.Errorf("failed to list invitations: %w", err)
 	}
-	
+
 	return invitations, nil
 }
 
 // ListByEmail lists invitations by email with pagination
 func (r *InvitationRepository) ListByEmail(ctx context.Context, email string, limit, offset int) ([]*organization.Invitation, int, error) {
 	var invitations []*organization.Invitation
-	
+
 	// Get total count
 	count, err := r.db.NewSelect().
 		Model((*organization.Invitation)(nil)).
@@ -104,7 +104,7 @@ func (r *InvitationRepository) ListByEmail(ctx context.Context, email string, li
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count invitations by email: %w", err)
 	}
-	
+
 	// Get paginated results
 	err = r.db.NewSelect().
 		Model(&invitations).
@@ -116,7 +116,7 @@ func (r *InvitationRepository) ListByEmail(ctx context.Context, email string, li
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list invitations by email: %w", err)
 	}
-	
+
 	return invitations, count, nil
 }
 

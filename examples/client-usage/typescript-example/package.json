@@ -8,7 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@authsome/client": "file:../../../clients/generated/typescript"
+    "@authsome/client": "file:../../../clients/typescript"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",

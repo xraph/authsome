@@ -17,6 +17,9 @@ type TwoFARepository struct {
 
 func NewTwoFARepository(db *bun.DB) *TwoFARepository { return &TwoFARepository{db: db} }
 
+// DB returns the underlying database connection for advanced operations
+func (r *TwoFARepository) DB() *bun.DB { return r.db }
+
 // UpsertSecret sets or updates a user's 2FA secret
 func (r *TwoFARepository) UpsertSecret(ctx context.Context, userID xid.ID, method, secret string, enabled bool) error {
     // Try fetch existing

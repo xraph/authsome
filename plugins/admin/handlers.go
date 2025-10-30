@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/xraph/forge"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/types"
+	"github.com/xraph/forge"
 )
 
 // Handler handles admin HTTP requests

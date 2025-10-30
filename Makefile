@@ -10,29 +10,32 @@ help: ## Display this help message
 
 build: ## Build all binaries
 	@echo "Building all binaries..."
-	@go build -o authsome-cli ./cmd/authsome-cli
-	@go build -o authsome ./cmd/dev
-	@echo "✓ Built: authsome-cli, authsome"
+	@go build -o authsome ./cmd/authsome-cli
+	@go build -o authsome-dev ./cmd/dev
+	@echo "✓ Built: authsome, authsome-dev"
 
-build-cli: ## Build authsome-cli tool
-	@echo "Building authsome-cli..."
-	@go build -o authsome-cli ./cmd/authsome-cli
-	@echo "✓ Built: authsome-cli"
+build-cli: ## Build authsome CLI tool
+	@echo "Building authsome..."
+	@go build -o authsome ./cmd/authsome-cli
+	@echo "✓ Built: authsome"
 
 build-examples: ## Build all example binaries
 	@echo "Building examples..."
 	@cd examples/comprehensive && go build -o comprehensive-server .
 	@echo "✓ Built example binaries"
 
-install: build-cli ## Install authsome-cli to GOPATH/bin
-	@echo "Installing authsome-cli..."
-	@go install ./cmd/authsome-cli
-	@echo "✓ Installed authsome-cli"
+install: build-cli ## Install authsome CLI to GOPATH/bin
+	@echo "Installing authsome..."
+	@go build -o "$(shell go env GOPATH)/bin/authsome" ./cmd/authsome-cli
+	@echo "✓ Installed authsome to $(shell go env GOPATH)/bin/authsome"
+	@echo ""
+	@echo "Make sure $(shell go env GOPATH)/bin is in your PATH:"
+	@echo "  export PATH=\$$PATH:$(shell go env GOPATH)/bin"
 
 clean: ## Remove build artifacts and generated files
 	@echo "Cleaning build artifacts..."
-	@rm -f authsome-cli authsome
-	@rm -rf clients/generated/*
+	@rm -f authsome authsome-dev
+	@rm -rf clients/go clients/typescript clients/rust
 	@rm -f examples/comprehensive/comprehensive-server
 	@rm -f *.db *.db-journal *.db-wal *.db-shm
 	@echo "✓ Cleaned"
@@ -55,10 +58,172 @@ test-coverage: ## Run tests with coverage report
 	@go test -race -coverprofile=coverage.out -covermode=atomic ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report: coverage.html"
+	@echo ""
+	@echo "Coverage Summary:"
+	@go tool cover -func=coverage.out | tail -1
+
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	@go test -v -race -short ./core/... ./internal/...
+	@echo "✓ Unit tests completed"
+
+test-core: ## Run core service tests
+	@echo "Running core service tests..."
+	@go test -v -race ./core/user ./core/session ./core/auth ./core/organization
+	@echo "✓ Core service tests completed"
+
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	@go test -v -race -tags=integration ./tests/integration/...
+	@echo "✓ Integration tests completed"
+
+test-watch: ## Watch for changes and run tests
+	@echo "Watching for file changes..."
+	@while true; do \
+		find . -name '*.go' | entr -d -c make test-short; \
+	done
+
+test-verbose: ## Run tests with verbose output
+	@echo "Running tests with verbose output..."
+	@go test -v -race -cover -coverprofile=coverage.out ./...
+	@echo "✓ Tests completed"
 
 test-cli: ## Test CLI tool
 	@echo "Testing CLI tool..."
 	@bash test_cli_comprehensive.sh
+
+##@ Benchmarking
+
+bench: ## Run all benchmarks
+	@echo "Running benchmarks..."
+	@go test -bench=. -benchmem -run=^$$ ./...
+	@echo "✓ Benchmarks completed"
+
+bench-core: ## Run core service benchmarks
+	@echo "Running core service benchmarks..."
+	@go test -bench=. -benchmem -run=^$$ ./core/user ./core/session ./core/auth
+	@echo "✓ Core benchmarks completed"
+
+bench-user: ## Run user service benchmarks
+	@echo "Running user service benchmarks..."
+	@go test -bench=BenchmarkService -benchmem -run=^$$ ./core/user
+	@echo "✓ User service benchmarks completed"
+
+bench-compare: ## Run benchmarks and save for comparison (BENCH_NAME=name)
+	@if [ -z "$(BENCH_NAME)" ]; then \
+		BENCH_NAME=baseline; \
+	fi
+	@echo "Running benchmarks and saving to bench-$(BENCH_NAME).txt..."
+	@go test -bench=. -benchmem -run=^$$ ./... > bench-$(BENCH_NAME).txt
+	@echo "✓ Benchmarks saved to bench-$(BENCH_NAME).txt"
+	@echo ""
+	@echo "To compare with another run:"
+	@echo "  1. Run: make bench-compare BENCH_NAME=optimized"
+	@echo "  2. Compare: benchstat bench-baseline.txt bench-optimized.txt"
+
+bench-profile: ## Run benchmarks with CPU profiling
+	@echo "Running benchmarks with CPU profiling..."
+	@mkdir -p profiles
+	@go test -bench=. -benchmem -cpuprofile=profiles/cpu.prof -run=^$$ ./core/...
+	@echo "✓ CPU profile saved to profiles/cpu.prof"
+	@echo ""
+	@echo "Analyze with: go tool pprof profiles/cpu.prof"
+
+bench-mem: ## Run benchmarks with memory profiling
+	@echo "Running benchmarks with memory profiling..."
+	@mkdir -p profiles
+	@go test -bench=. -benchmem -memprofile=profiles/mem.prof -run=^$$ ./core/...
+	@echo "✓ Memory profile saved to profiles/mem.prof"
+	@echo ""
+	@echo "Analyze with: go tool pprof profiles/mem.prof"
+
+##@ Load Testing
+
+load-test: ## Run load tests with k6 (requires k6)
+	@if ! command -v k6 >/dev/null 2>&1; then \
+		echo "ERROR: k6 is required. Install from: https://k6.io/docs/getting-started/installation/"; \
+		exit 1; \
+	fi
+	@echo "Running load tests..."
+	@mkdir -p tests/load/results
+	@k6 run tests/load/auth-flow.js
+	@echo "✓ Load tests completed"
+
+load-test-heavy: ## Run heavy load test (200 VUs)
+	@if ! command -v k6 >/dev/null 2>&1; then \
+		echo "ERROR: k6 is required"; \
+		exit 1; \
+	fi
+	@echo "Running heavy load test (200 VUs for 10 minutes)..."
+	@mkdir -p tests/load/results
+	@k6 run --vus 200 --duration 10m tests/load/load-test.js
+	@echo "✓ Heavy load test completed"
+
+load-test-stress: ## Run stress test (find breaking point)
+	@if ! command -v k6 >/dev/null 2>&1; then \
+		echo "ERROR: k6 is required"; \
+		exit 1; \
+	fi
+	@echo "Running stress test..."
+	@mkdir -p tests/load/results
+	@k6 run tests/load/stress-test.js || true
+	@echo "✓ Stress test completed"
+
+load-test-custom: ## Run custom load test (VUS=n DURATION=time)
+	@if ! command -v k6 >/dev/null 2>&1; then \
+		echo "ERROR: k6 is required"; \
+		exit 1; \
+	fi
+	@if [ -z "$(VUS)" ]; then \
+		echo "ERROR: VUS is required" >&2; \
+		echo "Usage: make load-test-custom VUS=50 DURATION=5m" >&2; \
+		exit 1; \
+	fi
+	@if [ -z "$(DURATION)" ]; then \
+		echo "ERROR: DURATION is required" >&2; \
+		echo "Usage: make load-test-custom VUS=50 DURATION=5m" >&2; \
+		exit 1; \
+	fi
+	@echo "Running custom load test ($(VUS) VUs for $(DURATION))..."
+	@mkdir -p tests/load/results
+	@k6 run --vus $(VUS) --duration $(DURATION) tests/load/load-test.js
+	@echo "✓ Custom load test completed"
+
+##@ Performance Analysis
+
+perf-profile: ## Profile application with pprof (requires running server)
+	@echo "Profiling application (30 seconds)..."
+	@echo "Make sure the server is running on localhost:8080"
+	@mkdir -p profiles
+	@curl -s http://localhost:8080/debug/pprof/profile?seconds=30 > profiles/cpu-$(shell date +%Y%m%d-%H%M%S).prof
+	@echo "✓ CPU profile saved"
+
+perf-heap: ## Capture heap profile
+	@echo "Capturing heap profile..."
+	@mkdir -p profiles
+	@curl -s http://localhost:8080/debug/pprof/heap > profiles/heap-$(shell date +%Y%m%d-%H%M%S).prof
+	@echo "✓ Heap profile saved"
+
+perf-goroutine: ## Capture goroutine profile
+	@echo "Capturing goroutine profile..."
+	@mkdir -p profiles
+	@curl -s http://localhost:8080/debug/pprof/goroutine > profiles/goroutine-$(shell date +%Y%m%d-%H%M%S).prof
+	@echo "✓ Goroutine profile saved"
+
+perf-analyze: ## Analyze latest CPU profile with pprof web UI
+	@echo "Starting pprof web interface..."
+	@go tool pprof -http=:6060 $(shell ls -t profiles/cpu-*.prof | head -1)
+
+perf-report: bench load-test ## Generate comprehensive performance report
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "📊 Performance Report Generated"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Benchmark Results: bench-baseline.txt"
+	@echo "Load Test Results: tests/load/results/"
+	@echo "Profiles: profiles/"
+	@echo ""
+	@echo "✓ Performance report complete"
 
 e2e: e2e-phase7 ## Run all e2e tests
 
@@ -79,32 +244,32 @@ e2e-phase7: ## Run Phase 7 e2e tests
 
 generate-clients: ## Generate all client libraries (Go, TypeScript, Rust)
 	@echo "Generating all client libraries..."
-	@go run ./cmd/authsome-cli generate client --lang all --manifest-dir ./clients/manifest/data
-	@echo "✓ Generated clients in clients/generated/"
+	@go run ./cmd/authsome-cli generate client --lang all
+	@echo "✓ Generated clients in clients/"
 
 generate-go: ## Generate Go client only
 	@echo "Generating Go client..."
-	@go run ./cmd/authsome-cli generate client --lang go --manifest-dir ./clients/manifest/data
-	@echo "✓ Generated: clients/generated/go/"
+	@go run ./cmd/authsome-cli generate client --lang go
+	@echo "✓ Generated: clients/go/"
 
 generate-typescript: ## Generate TypeScript client only
 	@echo "Generating TypeScript client..."
-	@go run ./cmd/authsome-cli generate client --lang typescript --manifest-dir ./clients/manifest/data
-	@echo "✓ Generated: clients/generated/typescript/"
+	@go run ./cmd/authsome-cli generate client --lang typescript
+	@echo "✓ Generated: clients/typescript/"
 
 generate-rust: ## Generate Rust client only
 	@echo "Generating Rust client..."
-	@go run ./cmd/authsome-cli generate client --lang rust --manifest-dir ./clients/manifest/data
-	@echo "✓ Generated: clients/generated/rust/"
+	@go run ./cmd/authsome-cli generate client --lang rust
+	@echo "✓ Generated: clients/rust/"
 
 validate-manifests: ## Validate all manifest files
 	@echo "Validating manifests..."
-	@go run ./cmd/authsome-cli generate client --validate --manifest-dir ./clients/manifest/data
+	@go run ./cmd/authsome-cli generate client --validate
 	@echo "✓ All manifests valid"
 
 list-plugins: ## List available plugins from manifests
 	@echo "Available plugins:"
-	@go run ./cmd/authsome-cli generate client --list --manifest-dir ./clients/manifest/data
+	@go run ./cmd/authsome-cli generate client --list
 
 ##@ Code Introspection
 
@@ -113,7 +278,7 @@ introspect: introspect-all ## Auto-generate manifests from code
 introspect-all: ## Introspect all plugins
 	@echo "Introspecting all plugins..."
 	@go run ./cmd/authsome-cli generate introspect --plugin all
-	@echo "✓ Generated manifests in clients/manifest/data/"
+	@echo "✓ Generated manifests in internal/clients/manifest/data/"
 
 introspect-plugin: ## Introspect specific plugin (PLUGIN=name)
 	@if [ -z "$(PLUGIN)" ]; then \
@@ -479,7 +644,7 @@ release-prep: clean build test generate-clients validate-manifests security-audi
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Review security audit reports in .security-reports/"
-	@echo "  2. Review generated clients in clients/generated/"
+	@echo "  2. Review generated clients in clients/"
 	@echo "  3. Update version numbers"
 	@echo "  4. Update CHANGELOG.md"
 	@echo "  5. Update SECURITY.md with any new vulnerabilities"

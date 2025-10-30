@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"log"
 
-	authsome "github.com/xraph/authsome-client"
-	"github.com/xraph/authsome-client/plugins/social"
-	"github.com/xraph/authsome-client/plugins/twofa"
+	authsome "github.com/xraph/authsome/clients/go"
+	"github.com/xraph/authsome/clients/go/plugins/social"
+	"github.com/xraph/authsome/clients/go/plugins/twofa"
 )
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 		log.Fatalf("Failed to sign up: %v", err)
 	}
 	fmt.Printf("✓ User registered: %s\n", signUpResp.User.Email)
-	fmt.Printf("✓ Session created: %s\n", signUpResp.Session.ID)
+	fmt.Printf("✓ Session created: %s\n", signUpResp.Session.Id)
 
 	// Store token for authenticated requests
 	client.SetToken(signUpResp.Session.Token)
@@ -70,9 +70,9 @@ func main() {
 
 	// Example 4: Social OAuth Plugin
 	fmt.Println("\n4. Using social OAuth plugin...")
-	socialPlugin, ok := client.GetPlugin("social").(*social.Plugin)
-	if ok {
-		// Note: This would need proper implementation in the plugin
+	if socialPlugin, ok := client.GetPlugin("social"); ok {
+		// Cast to the specific plugin type if needed
+		_ = socialPlugin // Use the plugin
 		fmt.Println("✓ Social OAuth plugin available")
 	}
 
@@ -86,10 +86,13 @@ func main() {
 
 	// Example 6: Sign Out
 	fmt.Println("\n6. Signing out...")
-	if err := client.SignOut(ctx); err != nil {
+	signOutResp, err := client.SignOut(ctx)
+	if err != nil {
 		log.Fatalf("Failed to sign out: %v", err)
 	}
-	fmt.Println("✓ Signed out successfully")
+	if signOutResp.Success {
+		fmt.Println("✓ Signed out successfully")
+	}
 
 	fmt.Println("\n✓ Example completed successfully!")
 }

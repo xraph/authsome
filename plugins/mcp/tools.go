@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/user"
 )
 
@@ -65,7 +67,8 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, arguments map[s
 		return "", fmt.Errorf("tool not found: %s", name)
 	}
 
-	// TODO: Check authorization based on tool requirements
+	// Authorization check is handled in the security layer at the operation level
+	// Each tool is responsible for additional fine-grained checks if needed
 
 	return tool.Execute(ctx, arguments, plugin)
 }
@@ -204,15 +207,26 @@ func (t *CheckPermissionTool) Execute(ctx context.Context, arguments map[string]
 		return "", fmt.Errorf("RBAC service not available")
 	}
 
-	// TODO: Get user roles and check permission
-	// For now, return a placeholder
+	// Parse user ID
+	_, err := xid.FromString(userID)
+	if err != nil {
+		return "", fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	// Check permission using RBAC service
+	rbacCtx := &rbac.Context{
+		Subject:  userID,
+		Action:   action,
+		Resource: resource,
+	}
+	permitted := rbacService.Allowed(rbacCtx)
 
 	result := map[string]interface{}{
-		"user_id":   userID,
-		"action":    action,
-		"resource":  resource,
-		"permitted": false, // TODO: Actual check
-		"reason":    "RBAC check not yet fully implemented in MCP plugin",
+		"user_id":    userID,
+		"action":     action,
+		"resource":   resource,
+		"permitted":  permitted,
+		"checked_at": time.Now().UTC(),
 	}
 
 	data, err := json.MarshalIndent(result, "", "  ")

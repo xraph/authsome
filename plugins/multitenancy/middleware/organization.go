@@ -70,4 +70,3 @@ func ForgeMiddleware() func(http.Handler) http.Handler {
 		return OrganizationContext(next)
 	}
 }
-

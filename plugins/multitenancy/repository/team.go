@@ -62,7 +62,7 @@ func (r *TeamRepository) Delete(ctx context.Context, id string) error {
 // ListByOrganization lists teams by organization with pagination
 func (r *TeamRepository) ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*organization.Team, error) {
 	var teams []*organization.Team
-	
+
 	// Get paginated results
 	err := r.db.NewSelect().
 		Model(&teams).
@@ -74,7 +74,7 @@ func (r *TeamRepository) ListByOrganization(ctx context.Context, orgID string, l
 	if err != nil {
 		return nil, fmt.Errorf("failed to list teams: %w", err)
 	}
-	
+
 	return teams, nil
 }
 
@@ -107,7 +107,7 @@ func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, memberID stri
 // ListMembers lists members of a team
 func (r *TeamRepository) ListMembers(ctx context.Context, teamID string) ([]*organization.Member, error) {
 	var members []*organization.Member
-	
+
 	// Join team_members with members to get full member details
 	err := r.db.NewSelect().
 		Model(&members).
@@ -118,7 +118,7 @@ func (r *TeamRepository) ListMembers(ctx context.Context, teamID string) ([]*org
 	if err != nil {
 		return nil, fmt.Errorf("failed to list team members: %w", err)
 	}
-	
+
 	return members, nil
 }
 

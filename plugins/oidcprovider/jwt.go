@@ -25,15 +25,15 @@ func NewJWTService(issuer string, jwksService *JWKSService) (*JWTService, error)
 // IDTokenClaims represents the claims for an OIDC ID token
 type IDTokenClaims struct {
 	jwt.RegisteredClaims
-	Nonce           string `json:"nonce,omitempty"`
-	AuthTime        int64  `json:"auth_time"`
-	SessionState    string `json:"session_state,omitempty"`
+	Nonce             string `json:"nonce,omitempty"`
+	AuthTime          int64  `json:"auth_time"`
+	SessionState      string `json:"session_state,omitempty"`
 	PreferredUsername string `json:"preferred_username,omitempty"`
-	Email           string `json:"email,omitempty"`
-	EmailVerified   bool   `json:"email_verified,omitempty"`
-	Name            string `json:"name,omitempty"`
-	GivenName       string `json:"given_name,omitempty"`
-	FamilyName      string `json:"family_name,omitempty"`
+	Email             string `json:"email,omitempty"`
+	EmailVerified     bool   `json:"email_verified,omitempty"`
+	Name              string `json:"name,omitempty"`
+	GivenName         string `json:"given_name,omitempty"`
+	FamilyName        string `json:"family_name,omitempty"`
 }
 
 // AccessTokenClaims represents the claims for an access token
@@ -47,7 +47,7 @@ type AccessTokenClaims struct {
 // GenerateIDToken creates a signed OIDC ID token
 func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime time.Time, userInfo map[string]interface{}) (string, error) {
 	now := time.Now()
-	
+
 	claims := IDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    j.issuer,
@@ -83,7 +83,7 @@ func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime ti
 // GenerateAccessToken creates a signed access token
 func (j *JWTService) GenerateAccessToken(userID, clientID, scope string) (string, error) {
 	now := time.Now()
-	
+
 	claims := AccessTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    j.issuer,
@@ -112,19 +112,19 @@ func (j *JWTService) VerifyToken(tokenString string) (*jwt.Token, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		
+
 		// Get key ID from token header
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
 			return nil, fmt.Errorf("missing or invalid kid in token header")
 		}
-		
+
 		// Get public key for this key ID
 		publicKey, err := j.jwksService.GetPublicKey(kid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get public key for kid %s: %w", kid, err)
 		}
-		
+
 		return publicKey, nil
 	})
 }

@@ -43,7 +43,7 @@ type JWKS struct {
 
 // JWK represents a JSON Web Key
 type JWK struct {
-	Kty string `json:"kty"` // Key Type
+	Kty string `json:"kty"`           // Key Type
 	Use string `json:"use,omitempty"` // Public Key Use
 	Kid string `json:"kid,omitempty"` // Key ID
 	Alg string `json:"alg,omitempty"` // Algorithm
@@ -97,11 +97,11 @@ func (s *Service) GeneratePKCEChallenge() (*PKCEChallenge, error) {
 		return nil, fmt.Errorf("failed to generate code verifier: %w", err)
 	}
 	codeVerifier := base64.RawURLEncoding.EncodeToString(verifierBytes)
-	
+
 	// Generate code challenge using SHA256
 	hash := sha256.Sum256([]byte(codeVerifier))
 	codeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
-	
+
 	return &PKCEChallenge{
 		CodeVerifier:  codeVerifier,
 		CodeChallenge: codeChallenge,
@@ -127,7 +127,7 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, tokenEndpoint, clie
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
@@ -199,7 +199,7 @@ func (s *Service) GetPublicKeyFromJWK(jwk *JWK) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode RSA modulus: %w", err)
 		}
-		
+
 		eBytes, err := base64.RawURLEncoding.DecodeString(jwk.E)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode RSA exponent: %w", err)
@@ -316,26 +316,26 @@ func (s *Service) GetUserInfo(ctx context.Context, userinfoEndpoint, accessToken
 	if err != nil {
 		return nil, fmt.Errorf("failed to create userinfo request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
-	
+
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("userinfo request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("userinfo request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	var userInfo OIDCUserInfo
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return nil, fmt.Errorf("failed to decode userinfo response: %w", err)
 	}
-	
+
 	return &userInfo, nil
 }
 
@@ -350,34 +350,34 @@ func (s *Service) RefreshTokens(ctx context.Context, tokenEndpoint, clientID, cl
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", refreshToken)
 	data.Set("client_id", clientID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "POST", tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	
+
 	if clientSecret != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
-	
+
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("refresh failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	var tokenResp OIDCTokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return nil, fmt.Errorf("failed to decode refresh response: %w", err)
 	}
-	
+
 	return &tokenResp, nil
 }

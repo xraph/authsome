@@ -75,7 +75,7 @@ func (r *OrganizationRepository) Delete(ctx context.Context, id string) error {
 // List lists organizations with pagination
 func (r *OrganizationRepository) List(ctx context.Context, limit, offset int) ([]*organization.Organization, error) {
 	var orgs []*organization.Organization
-	
+
 	// Get paginated results
 	err := r.db.NewSelect().
 		Model(&orgs).
@@ -86,7 +86,7 @@ func (r *OrganizationRepository) List(ctx context.Context, limit, offset int) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to list organizations: %w", err)
 	}
-	
+
 	return orgs, nil
 }
 

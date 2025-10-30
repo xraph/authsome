@@ -4,6 +4,6 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-authsome-client = { path = "../../../clients/generated/rust" }
+authsome-client = { path = "../../../clients/rust" }
 tokio = { version = "1.0", features = ["full"] }
 

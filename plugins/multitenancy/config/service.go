@@ -26,7 +26,7 @@ func NewService(globalViper *viper.Viper) *Service {
 // If orgID is empty, uses global configuration
 func (s *Service) Bind(orgID, key string, target interface{}) error {
 	var v *viper.Viper
-	
+
 	if orgID == "" {
 		// Use global configuration
 		v = s.globalViper
@@ -40,11 +40,11 @@ func (s *Service) Bind(orgID, key string, target interface{}) error {
 			v = s.globalViper
 		}
 	}
-	
+
 	if !v.IsSet(key) {
 		return fmt.Errorf("configuration key '%s' not found", key)
 	}
-	
+
 	return v.UnmarshalKey(key, target)
 }
 
@@ -53,10 +53,10 @@ func (s *Service) Set(orgID, key string, value interface{}) error {
 	if orgID == "" {
 		return fmt.Errorf("organization ID is required for setting org-specific config")
 	}
-	
+
 	orgViper := s.getOrCreateOrganizationViper(orgID)
 	orgViper.Set(key, value)
-	
+
 	return nil
 }
 
@@ -65,12 +65,12 @@ func (s *Service) Get(orgID, key string) interface{} {
 	if orgID == "" {
 		return s.globalViper.Get(key)
 	}
-	
+
 	orgViper := s.getOrganizationViper(orgID)
 	if orgViper != nil && orgViper.IsSet(key) {
 		return orgViper.Get(key)
 	}
-	
+
 	// Fall back to global configuration
 	return s.globalViper.Get(key)
 }
@@ -80,12 +80,12 @@ func (s *Service) IsSet(orgID, key string) bool {
 	if orgID == "" {
 		return s.globalViper.IsSet(key)
 	}
-	
+
 	orgViper := s.getOrganizationViper(orgID)
 	if orgViper != nil && orgViper.IsSet(key) {
 		return true
 	}
-	
+
 	// Check global configuration
 	return s.globalViper.IsSet(key)
 }
@@ -96,11 +96,11 @@ func (s *Service) GetString(orgID, key string) string {
 	if value == nil {
 		return ""
 	}
-	
+
 	if str, ok := value.(string); ok {
 		return str
 	}
-	
+
 	return fmt.Sprintf("%v", value)
 }
 
@@ -109,12 +109,12 @@ func (s *Service) GetInt(orgID, key string) int {
 	if orgID == "" {
 		return s.globalViper.GetInt(key)
 	}
-	
+
 	orgViper := s.getOrganizationViper(orgID)
 	if orgViper != nil && orgViper.IsSet(key) {
 		return orgViper.GetInt(key)
 	}
-	
+
 	return s.globalViper.GetInt(key)
 }
 
@@ -123,12 +123,12 @@ func (s *Service) GetBool(orgID, key string) bool {
 	if orgID == "" {
 		return s.globalViper.GetBool(key)
 	}
-	
+
 	orgViper := s.getOrganizationViper(orgID)
 	if orgViper != nil && orgViper.IsSet(key) {
 		return orgViper.GetBool(key)
 	}
-	
+
 	return s.globalViper.GetBool(key)
 }
 
@@ -137,14 +137,14 @@ func (s *Service) LoadOrganizationConfig(orgID string, config map[string]interfa
 	if orgID == "" {
 		return fmt.Errorf("organization ID is required")
 	}
-	
+
 	orgViper := s.getOrCreateOrganizationViper(orgID)
-	
+
 	// Set all configuration values
 	for key, value := range config {
 		orgViper.Set(key, value)
 	}
-	
+
 	return nil
 }
 
@@ -159,7 +159,7 @@ func (s *Service) GetOrganizationConfig(orgID string) map[string]interface{} {
 	if orgViper == nil {
 		return make(map[string]interface{})
 	}
-	
+
 	return orgViper.AllSettings()
 }
 
@@ -169,7 +169,7 @@ func (s *Service) MergeConfig(orgID string, target interface{}) error {
 	if err := s.globalViper.Unmarshal(target); err != nil {
 		return fmt.Errorf("failed to unmarshal global config: %w", err)
 	}
-	
+
 	// Then overlay organization-specific config if it exists
 	if orgID != "" {
 		orgViper := s.getOrganizationViper(orgID)
@@ -179,7 +179,7 @@ func (s *Service) MergeConfig(orgID string, target interface{}) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -193,7 +193,7 @@ func (s *Service) getOrCreateOrganizationViper(orgID string) *viper.Viper {
 	if v, exists := s.orgVipers[orgID]; exists {
 		return v
 	}
-	
+
 	v := viper.New()
 	s.orgVipers[orgID] = v
 	return v
@@ -203,7 +203,7 @@ func (s *Service) getOrCreateOrganizationViper(orgID string) *viper.Viper {
 func (s *Service) mergeViperConfig(v *viper.Viper, target interface{}) error {
 	// Get all settings from viper
 	settings := v.AllSettings()
-	
+
 	// Use reflection to merge settings into target
 	return s.mergeMap(settings, target)
 }
@@ -214,22 +214,22 @@ func (s *Service) mergeMap(source map[string]interface{}, target interface{}) er
 	if targetValue.Kind() != reflect.Ptr {
 		return fmt.Errorf("target must be a pointer")
 	}
-	
+
 	targetValue = targetValue.Elem()
 	if targetValue.Kind() != reflect.Struct {
 		return fmt.Errorf("target must be a pointer to struct")
 	}
-	
+
 	targetType := targetValue.Type()
-	
+
 	for i := 0; i < targetValue.NumField(); i++ {
 		field := targetValue.Field(i)
 		fieldType := targetType.Field(i)
-		
+
 		if !field.CanSet() {
 			continue
 		}
-		
+
 		// Get the field name (use json tag if available)
 		fieldName := fieldType.Name
 		if jsonTag := fieldType.Tag.Get("json"); jsonTag != "" {
@@ -237,10 +237,10 @@ func (s *Service) mergeMap(source map[string]interface{}, target interface{}) er
 				fieldName = parts[0]
 			}
 		}
-		
+
 		// Convert to lowercase for case-insensitive matching
 		fieldName = strings.ToLower(fieldName)
-		
+
 		// Look for the value in source map
 		if value, exists := source[fieldName]; exists {
 			if err := s.setFieldValue(field, value); err != nil {
@@ -248,30 +248,30 @@ func (s *Service) mergeMap(source map[string]interface{}, target interface{}) er
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // setFieldValue sets a field value using reflection
 func (s *Service) setFieldValue(field reflect.Value, value interface{}) error {
 	valueReflect := reflect.ValueOf(value)
-	
+
 	if !valueReflect.IsValid() {
 		return nil
 	}
-	
+
 	// Handle type conversion
 	if valueReflect.Type().ConvertibleTo(field.Type()) {
 		field.Set(valueReflect.Convert(field.Type()))
 		return nil
 	}
-	
+
 	// Handle nested structs
 	if field.Kind() == reflect.Struct && valueReflect.Kind() == reflect.Map {
 		if mapValue, ok := value.(map[string]interface{}); ok {
 			return s.mergeMap(mapValue, field.Addr().Interface())
 		}
 	}
-	
+
 	return fmt.Errorf("cannot convert %T to %s", value, field.Type())
 }

@@ -3,7 +3,7 @@
   "icon": "Puzzle", 
   "defaultOpen": true,
   "pages": [
-    "index",
+    "plugin-overview",
     "core",
     "advanced",
     "enterprise"

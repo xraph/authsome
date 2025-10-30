@@ -1,0 +1,13 @@
+# Binary
+go-example
+
+# Go build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go sum file (optional, since we use replace)
+go.sum
+

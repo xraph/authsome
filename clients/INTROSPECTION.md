@@ -17,13 +17,13 @@ The introspector analyzes:
 ### Introspect a Single Plugin
 
 ```bash
-authsome-cli generate introspect --plugin social
+authsome generate introspect --plugin social
 ```
 
 **Output:**
 ```
 Introspecting plugin: social
-✓ Generated manifest: ./clients/manifest/data/social.yaml
+✓ Generated manifest: ./internal/clients/manifest/data/social.yaml
   - 5 routes
   - 1 types
 ```
@@ -31,7 +31,7 @@ Introspecting plugin: social
 ### Introspect All Plugins
 
 ```bash
-authsome-cli generate introspect --plugin all
+authsome generate introspect --plugin all
 ```
 
 This discovers all plugins in `plugins/` and generates manifests for each.
@@ -39,7 +39,7 @@ This discovers all plugins in `plugins/` and generates manifests for each.
 ### Introspect Core Handlers
 
 ```bash
-authsome-cli generate introspect --core
+authsome generate introspect --core
 ```
 
 Analyzes `handlers/` directory for core authentication routes.
@@ -47,7 +47,7 @@ Analyzes `handlers/` directory for core authentication routes.
 ### Dry Run (Preview Only)
 
 ```bash
-authsome-cli generate introspect --plugin social --dry-run
+authsome generate introspect --plugin social --dry-run
 ```
 
 Prints the generated manifest without writing files.
@@ -55,7 +55,7 @@ Prints the generated manifest without writing files.
 ### Custom Output Directory
 
 ```bash
-authsome-cli generate introspect --plugin social --output ./my-manifests
+authsome generate introspect --plugin social --output ./my-manifests
 ```
 
 ## How It Works
@@ -184,10 +184,10 @@ vim plugins/social/handlers.go
 vim plugins/social/plugin.go
 
 # 3. Auto-generate manifest
-authsome-cli generate introspect --plugin social
+authsome generate introspect --plugin social
 
 # 4. Generate clients from manifest
-authsome-cli generate client --lang all
+authsome generate client --lang all
 
 # Done! Clients are now in sync with code
 ```
@@ -199,13 +199,13 @@ authsome-cli generate client --lang all
 # scripts/generate-clients.sh
 
 # Introspect all plugins
-authsome-cli generate introspect --plugin all
+authsome generate introspect --plugin all
 
 # Validate generated manifests
-authsome-cli generate client --validate
+authsome generate client --validate
 
 # Generate all clients
-authsome-cli generate client --lang all
+authsome generate client --lang all
 
 # Clients are ready for distribution
 ```
@@ -244,13 +244,13 @@ Generate base manifest, then manually add:
 
 ```bash
 # Generate base
-authsome-cli generate introspect --plugin social
+authsome generate introspect --plugin social
 
 # Edit to add details
 vim clients/manifest/data/social.yaml
 
 # Then generate clients
-authsome-cli generate client --lang all
+authsome generate client --lang all
 ```
 
 #### 3. Partial Introspection
@@ -345,7 +345,7 @@ routes:
 ### Example 2: Plugin with Multiple Routes
 
 ```bash
-$ authsome-cli generate introspect --plugin social --dry-run
+$ authsome generate introspect --plugin social --dry-run
 
 --- social.yaml ---
 plugin_id: social
@@ -456,13 +456,13 @@ request:
 
 ```bash
 # After code changes
-authsome-cli generate introspect --plugin all
+authsome generate introspect --plugin all
 
 # Check diff
 git diff clients/manifest/data/
 
 # Regenerate clients
-authsome-cli generate client --lang all
+authsome generate client --lang all
 ```
 
 ## Future Enhancements
@@ -509,10 +509,10 @@ func (h *Handler) Method(...) {}
 Generated manifest may need manual fixes:
 ```bash
 # Generate
-authsome-cli generate introspect --plugin social
+authsome generate introspect --plugin social
 
 # Validate
-authsome-cli generate client --validate
+authsome generate client --validate
 
 # Fix any errors in the YAML
 vim clients/manifest/data/social.yaml
@@ -535,10 +535,10 @@ vim clients/manifest/data/social.yaml
 vim plugins/myfeature/
 
 # Generate manifest
-authsome-cli generate introspect --plugin myfeature
+authsome generate introspect --plugin myfeature
 
 # Generate clients
-authsome-cli generate client --lang all
+authsome generate client --lang all
 
 # Done!
 ```

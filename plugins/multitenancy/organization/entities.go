@@ -44,7 +44,7 @@ type Member struct {
 	ID             string    `bun:"id,pk" json:"id"`
 	OrganizationID string    `bun:"organization_id,notnull" json:"organizationId"`
 	UserID         string    `bun:"user_id,notnull" json:"userId"`
-	Role           string    `bun:"role,notnull" json:"role"` // owner, admin, member
+	Role           string    `bun:"role,notnull" json:"role"`                      // owner, admin, member
 	Status         string    `bun:"status,notnull,default:'active'" json:"status"` // active, suspended, pending
 	JoinedAt       time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joinedAt"`
 	UpdatedAt      time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updatedAt"`

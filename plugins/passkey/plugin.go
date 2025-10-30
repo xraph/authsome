@@ -1,3 +1,14 @@
+// Package passkey provides WebAuthn/FIDO2 passkey authentication.
+//
+// ⚠️ EXPERIMENTAL / BETA STATUS ⚠️
+//
+// This plugin is currently in experimental/beta status. The WebAuthn implementation
+// is a basic stub and NOT production-ready. Critical cryptographic operations including
+// challenge generation, attestation verification, and signature validation are not
+// properly implemented.
+//
+// DO NOT USE IN PRODUCTION without completing the WebAuthn implementation.
+// See plugins/passkey/README.md for details and roadmap.
 package passkey
 
 import (

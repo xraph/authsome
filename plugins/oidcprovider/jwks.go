@@ -42,9 +42,9 @@ type KeyPair struct {
 
 // KeyStore manages multiple key pairs for rotation
 type KeyStore struct {
-	keys       map[string]*KeyPair
-	activeKey  string
-	mu         sync.RWMutex
+	keys             map[string]*KeyPair
+	activeKey        string
+	mu               sync.RWMutex
 	rotationInterval time.Duration
 	keyLifetime      time.Duration
 }
@@ -58,7 +58,7 @@ type JWKSService struct {
 func NewKeyStore() (*KeyStore, error) {
 	ks := &KeyStore{
 		keys:             make(map[string]*KeyPair),
-		rotationInterval: 24 * time.Hour,  // Rotate keys daily
+		rotationInterval: 24 * time.Hour,     // Rotate keys daily
 		keyLifetime:      7 * 24 * time.Hour, // Keep keys for 7 days
 	}
 
@@ -77,7 +77,7 @@ func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLi
 	if err != nil {
 		return nil, fmt.Errorf("invalid rotation interval: %w", err)
 	}
-	
+
 	lifetimeDur, err := time.ParseDuration(keyLifetime)
 	if err != nil {
 		return nil, fmt.Errorf("invalid key lifetime: %w", err)
@@ -117,7 +117,7 @@ func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLi
 	default:
 		return nil, fmt.Errorf("unsupported private key type: %s", block.Type)
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
@@ -275,7 +275,7 @@ func NewJWKSServiceFromFiles(privateKeyPath, publicKeyPath, rotationInterval, ke
 // GetJWKS returns the current JSON Web Key Set
 func (j *JWKSService) GetJWKS() (*JWKS, error) {
 	validKeys := j.keyStore.GetAllValidKeys()
-	
+
 	var jwks []JWK
 	for _, keyPair := range validKeys {
 		jwk, err := j.rsaPublicKeyToJWK(keyPair.PublicKey, keyPair.ID)

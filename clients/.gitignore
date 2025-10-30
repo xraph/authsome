@@ -1,5 +1,7 @@
-# Generated client code
-generated/
+# Generated client code (now at clients/go, clients/typescript, clients/rust)
+go/
+typescript/
+rust/
 
 # Language-specific build artifacts
 *.so

@@ -27,11 +27,11 @@ plugins:
 
 ```bash
 # Start MCP server
-go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 
 # In another terminal, test MCP protocol
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
-  go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+  go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 ```
 
 Expected output:
@@ -54,15 +54,15 @@ Expected output:
 ```bash
 # List available resources
 echo '{"jsonrpc":"2.0","id":2,"method":"resources/list","params":{}}' | \
-  go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+  go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 
 # Read config resource
 echo '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"authsome://config"}}' | \
-  go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+  go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 
 # Read schema resource
 echo '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"authsome://schema"}}' | \
-  go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+  go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 ```
 
 ## Step 4: Test Tools
@@ -70,11 +70,11 @@ echo '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"authsom
 ```bash
 # List available tools
 echo '{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{}}' | \
-  go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+  go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 
 # Query user by email (after creating a user)
 echo '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"query_user","arguments":{"email":"test@example.com"}}}' | \
-  go run cmd/authsome-cli/main.go mcp serve --config=authsome-standalone.yaml
+  go run cmd/authsome/main.go mcp serve --config=authsome-standalone.yaml
 ```
 
 ## Step 5: Run Tests
@@ -92,14 +92,14 @@ go tool cover -html=mcp-coverage.out
 
 ```bash
 # Build CLI binary
-go build -o authsome-cli ./cmd/authsome-cli/
+go build -o authsome ./cmd/authsome/
 
 # Run MCP server
-./authsome-cli mcp serve --config=authsome-standalone.yaml
+./authsome mcp serve --config=authsome-standalone.yaml
 
 # Show help
-./authsome-cli mcp --help
-./authsome-cli mcp serve --help
+./authsome mcp --help
+./authsome mcp serve --help
 ```
 
 ## Integration with AI Assistants
@@ -113,7 +113,7 @@ go build -o authsome-cli ./cmd/authsome-cli/
 {
   "mcpServers": {
     "authsome": {
-      "command": "/path/to/authsome-cli",
+      "command": "/path/to/authsome",
       "args": ["mcp", "serve", "--config=/path/to/config.yaml"],
       "env": {}
     }
@@ -165,7 +165,7 @@ func main() {
 - Check database is running and accessible
 
 ### "user not found"
-- Create test user first: `authsome-cli user create ...`
+- Create test user first: `authsome user create ...`
 - Or use `--mode=development` to create test data via MCP
 
 ### "operation not allowed"

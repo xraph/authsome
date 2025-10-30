@@ -40,13 +40,13 @@ Operation modes:
 
 Examples:
   # Start stdio server (for local AI assistant)
-  authsome-cli mcp serve --config=config.yaml
+  authsome mcp serve --config=config.yaml
 
   # Start HTTP server with admin access
-  authsome-cli mcp serve --config=config.yaml --http --port=9090 --mode=admin
+  authsome mcp serve --config=config.yaml --http --port=9090 --mode=admin
 
   # Development mode with test data creation
-  authsome-cli mcp serve --config=config.yaml --mode=development`,
+  authsome mcp serve --config=config.yaml --mode=development`,
 	RunE: runMCPServe,
 }
 

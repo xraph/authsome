@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/xraph/forge"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/forge"
 )
 
 // OrganizationHandler handles organization-related HTTP requests

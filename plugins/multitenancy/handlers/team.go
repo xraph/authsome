@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/xraph/forge"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/forge"
 )
 
 // TeamHandler handles team-related HTTP requests
@@ -154,7 +154,7 @@ func (h *TeamHandler) AddTeamMember(c *forge.Context) error {
 func (h *TeamHandler) RemoveTeamMember(c *forge.Context) error {
 	teamID := c.Param("teamId")
 	memberID := c.Param("memberId")
-	
+
 	if teamID == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
 	}

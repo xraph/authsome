@@ -4,17 +4,23 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/schema"
 )
 
 // SecurityLayer handles authorization and data sanitization for MCP
 type SecurityLayer struct {
 	config Config
+	db     *bun.DB
 }
 
 // NewSecurityLayer creates a new security layer
-func NewSecurityLayer(config Config) *SecurityLayer {
+func NewSecurityLayer(config Config, db *bun.DB) *SecurityLayer {
 	return &SecurityLayer{
 		config: config,
+		db:     db,
 	}
 }
 
@@ -30,13 +36,81 @@ func (s *SecurityLayer) AuthorizeRequest(ctx context.Context, operation string, 
 		return fmt.Errorf("API key required but not provided")
 	}
 
-	// TODO: Validate API key against database
-	// For now, accept any non-empty key in development mode
+	// Development mode: accept any non-empty key
 	if s.config.Mode == ModeDevelopment {
 		return nil
 	}
 
-	return fmt.Errorf("API key validation not yet implemented")
+	// Validate API key against database
+	if s.db != nil {
+		var key schema.APIKey
+		err := s.db.NewSelect().
+			Model(&key).
+			Where("key = ?", apiKey).
+			Scan(ctx)
+
+		if err != nil {
+			return fmt.Errorf("invalid API key")
+		}
+
+		// Check if key is active
+		if !key.Active {
+			return fmt.Errorf("API key is inactive")
+		}
+
+		// Check if key is expired
+		if key.ExpiresAt != nil && key.ExpiresAt.Before(time.Now()) {
+			return fmt.Errorf("API key has expired")
+		}
+
+		// Check if key has MCP scope/permission
+		// API keys should have "mcp:read" or "mcp:admin" permission
+		if !s.hasPermission(&key, operation) {
+			return fmt.Errorf("API key does not have required permission for operation: %s", operation)
+		}
+
+		// Update last used timestamp
+		now := time.Now()
+		key.LastUsedAt = &now
+		_, _ = s.db.NewUpdate().Model(&key).Column("last_used_at").Where("id = ?", key.ID).Exec(ctx)
+
+		return nil
+	}
+
+	return fmt.Errorf("API key validation requires database connection")
+}
+
+// hasPermission checks if API key has permission for operation
+func (s *SecurityLayer) hasPermission(key *schema.APIKey, operation string) bool {
+	// API keys have a Permissions map[string]string field
+	// Check for admin permissions
+	if _, hasAdmin := key.Permissions["mcp:admin"]; hasAdmin {
+		return true
+	}
+	if _, hasAdmin := key.Permissions["admin"]; hasAdmin {
+		return true
+	}
+
+	// Check if operation requires admin
+	for _, adminOp := range s.config.Authorization.AdminOperations {
+		if adminOp == operation {
+			// Operation requires admin but key doesn't have it
+			_, hasAdmin := key.Permissions["mcp:admin"]
+			return hasAdmin
+		}
+	}
+
+	// For read operations, mcp:read is sufficient
+	if strings.HasPrefix(operation, "query_") || strings.HasPrefix(operation, "get_") || strings.HasPrefix(operation, "list_") {
+		_, hasRead := key.Permissions["mcp:read"]
+		_, hasAdmin := key.Permissions["mcp:admin"]
+		return hasRead || hasAdmin
+	}
+
+	// For write operations, need mcp:write or mcp:admin
+	_, hasWrite := key.Permissions["mcp:write"]
+	_, hasAdmin := key.Permissions["mcp:admin"]
+	return hasWrite || hasAdmin
 }
 
 // CheckOperationAllowed checks if operation is allowed in current mode

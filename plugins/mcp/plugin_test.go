@@ -121,7 +121,7 @@ func TestPluginHooksAndDecorators(t *testing.T) {
 
 func TestSecurityLayer(t *testing.T) {
 	config := DefaultConfig()
-	security := NewSecurityLayer(config)
+	security := NewSecurityLayer(config, nil)
 
 	require.NotNil(t, security)
 
@@ -141,7 +141,7 @@ func TestSecurityLayerAdminOperations(t *testing.T) {
 			AdminOperations: []string{"revoke_session"},
 		},
 	}
-	security := NewSecurityLayer(config)
+	security := NewSecurityLayer(config, nil)
 
 	err := security.CheckOperationAllowed("revoke_session")
 	assert.Error(t, err)
@@ -149,7 +149,7 @@ func TestSecurityLayerAdminOperations(t *testing.T) {
 
 	// Test admin mode - admin operations allowed
 	config.Mode = ModeAdmin
-	security = NewSecurityLayer(config)
+	security = NewSecurityLayer(config, nil)
 
 	err = security.CheckOperationAllowed("revoke_session")
 	assert.NoError(t, err)
@@ -157,7 +157,7 @@ func TestSecurityLayerAdminOperations(t *testing.T) {
 
 func TestSanitizeUser(t *testing.T) {
 	config := DefaultConfig()
-	security := NewSecurityLayer(config)
+	security := NewSecurityLayer(config, nil)
 
 	userData := map[string]interface{}{
 		"id":            "user-123",
@@ -182,7 +182,7 @@ func TestSanitizeUser(t *testing.T) {
 
 func TestSanitizeConfig(t *testing.T) {
 	config := DefaultConfig()
-	security := NewSecurityLayer(config)
+	security := NewSecurityLayer(config, nil)
 
 	configData := map[string]interface{}{
 		"database_url": "postgres://localhost/db",
@@ -246,9 +246,9 @@ func TestMaskString(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"test@example.com", "te***********om"},
-		{"short", "sh**t"},
-		{"ab", "***"},
+		{"test@example.com", "te************om"}, // 16 chars: first 2 + last 2 + (16-4) asterisks
+		{"short", "sh*rt"},                        // 5 chars: first 2 + last 2 + (5-4) asterisks
+		{"ab", "***"},                             // ≤4 chars: all asterisks
 	}
 
 	for _, tt := range tests {

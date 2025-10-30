@@ -10,7 +10,7 @@ import {
   socialClient, 
   twofaClient,
   AuthsomeError 
-} from '../../../clients/generated/typescript/src';
+} from '../../../clients/typescript/src';
 
 async function main() {
   // Initialize client with plugins

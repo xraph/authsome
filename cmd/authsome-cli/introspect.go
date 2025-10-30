@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/xraph/authsome/clients/introspector"
+	"github.com/xraph/authsome/internal/clients/introspector"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,7 +14,7 @@ func init() {
 	generateCmd.AddCommand(introspectCmd)
 
 	introspectCmd.Flags().StringP("plugin", "p", "", "Plugin ID to introspect (or 'all' for all plugins)")
-	introspectCmd.Flags().StringP("output", "o", "./clients/manifest/data", "Output directory for manifests")
+	introspectCmd.Flags().StringP("output", "o", "./internal/clients/manifest/data", "Output directory for manifests")
 	introspectCmd.Flags().Bool("dry-run", false, "Print manifests without writing files")
 	introspectCmd.Flags().Bool("core", false, "Introspect core handlers")
 }
@@ -32,16 +32,16 @@ This command analyzes:
 
 Examples:
   # Introspect a specific plugin
-  authsome-cli generate introspect --plugin social
+  authsome generate introspect --plugin social
 
   # Introspect all plugins
-  authsome-cli generate introspect --plugin all
+  authsome generate introspect --plugin all
 
   # Introspect core handlers
-  authsome-cli generate introspect --core
+  authsome generate introspect --core
 
   # Dry run (print without writing)
-  authsome-cli generate introspect --plugin social --dry-run`,
+  authsome generate introspect --plugin social --dry-run`,
 	RunE: runIntrospect,
 }
 

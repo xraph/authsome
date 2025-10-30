@@ -55,7 +55,7 @@ func (h *Handler) CreateJWTKey(c *forge.Context) error {
 // ListJWTKeys lists JWT signing keys
 func (h *Handler) ListJWTKeys(c *forge.Context) error {
 	var req jwt.ListJWTKeysRequest
-	
+
 	// Get organization ID from header
 	orgID := c.Request().Header.Get("X-Organization-ID")
 	if orgID == "" {

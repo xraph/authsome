@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xraph/authsome/clients/generator"
+	"github.com/xraph/authsome/internal/clients/generator"
 )
 
 func init() {
@@ -14,9 +14,10 @@ func init() {
 
 	// Flags for generate client command
 	generateClientCmd.Flags().StringP("lang", "l", "", "Target language: go, typescript, rust, or all")
-	generateClientCmd.Flags().StringP("output", "o", "./clients/generated", "Output directory")
+	generateClientCmd.Flags().StringP("output", "o", "./clients", "Output directory")
 	generateClientCmd.Flags().StringSliceP("plugins", "p", []string{}, "Plugin IDs to include (empty = all)")
-	generateClientCmd.Flags().StringP("manifest-dir", "m", "./clients/manifest/data", "Manifest directory")
+	generateClientCmd.Flags().StringP("manifest-dir", "m", "./internal/clients/manifest/data", "Manifest directory")
+	generateClientCmd.Flags().StringP("module-name", "", "github.com/xraph/authsome/clients/go", "Go module name (Go only)")
 	generateClientCmd.Flags().Bool("validate", false, "Only validate manifests without generating")
 	generateClientCmd.Flags().Bool("list", false, "List available plugins")
 }
@@ -28,22 +29,25 @@ var generateClientCmd = &cobra.Command{
 
 Examples:
   # Generate all clients
-  authsome-cli generate client --lang all
+  authsome generate client --lang all
 
   # Generate TypeScript client only
-  authsome-cli generate client --lang typescript
+  authsome generate client --lang typescript
+
+  # Generate Go client with custom module name
+  authsome generate client --lang go --module-name github.com/myorg/myproject/authclient
 
   # Generate with specific plugins
-  authsome-cli generate client --lang go --plugins core,social,twofa
+  authsome generate client --lang go --plugins core,social,twofa
 
   # Validate manifests without generating
-  authsome-cli generate client --validate
+  authsome generate client --validate
 
   # List available plugins
-  authsome-cli generate client --list
+  authsome generate client --list
 
   # Custom output directory
-  authsome-cli generate client --lang typescript --output ./frontend/lib/authsome`,
+  authsome generate client --lang typescript --output ./frontend/lib/authsome`,
 	RunE: runGenerateClient,
 }
 
@@ -52,6 +56,7 @@ func runGenerateClient(cmd *cobra.Command, args []string) error {
 	outputDir, _ := cmd.Flags().GetString("output")
 	plugins, _ := cmd.Flags().GetStringSlice("plugins")
 	manifestDir, _ := cmd.Flags().GetString("manifest-dir")
+	moduleName, _ := cmd.Flags().GetString("module-name")
 	validate, _ := cmd.Flags().GetBool("validate")
 	list, _ := cmd.Flags().GetBool("list")
 
@@ -64,7 +69,7 @@ func runGenerateClient(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create generator
-	gen, err := generator.NewGenerator(manifestDir, outputDir)
+	gen, err := generator.NewGenerator(manifestDir, outputDir, moduleName)
 	if err != nil {
 		return fmt.Errorf("failed to create generator: %w", err)
 	}

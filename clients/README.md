@@ -10,20 +10,23 @@ The generator reads API manifests (YAML files) and produces complete, production
 
 ```
 clients/
-├── manifest/
-│   ├── data/              # API route manifests (YAML)
-│   ├── schema.go          # Manifest data structures
-│   └── parser.go          # Manifest parser
-├── generator/
-│   ├── generator.go       # Main generator coordinator
-│   ├── go.go             # Go client generator
-│   ├── typescript.go      # TypeScript client generator
-│   └── rust.go            # Rust client generator
-├── generated/             # Generated output (gitignored)
-│   ├── go/
-│   ├── typescript/
-│   └── rust/
+├── go/                   # Generated Go client (importable)
+├── typescript/           # Generated TypeScript client (importable)
+├── rust/                 # Generated Rust client (importable)
 └── README.md             # This file
+
+internal/clients/         # Internal client generation tools (not importable)
+├── manifest/
+│   ├── data/            # API route manifests (YAML)
+│   ├── schema.go        # Manifest data structures
+│   └── parser.go        # Manifest parser
+├── generator/
+│   ├── generator.go     # Main generator coordinator
+│   ├── go.go            # Go client generator
+│   ├── typescript.go    # TypeScript client generator
+│   └── rust.go          # Rust client generator
+└── introspector/
+    └── introspector.go  # Code introspection tool
 ```
 
 ## Manifests
@@ -86,44 +89,60 @@ routes:
 ### Generate All Clients
 
 ```bash
-authsome-cli generate client --lang all
+authsome generate client --lang all
 ```
 
 ### Generate Specific Language
 
 ```bash
 # TypeScript
-authsome-cli generate client --lang typescript
+authsome generate client --lang typescript
 
-# Go
-authsome-cli generate client --lang go
+# Go (default module name)
+authsome generate client --lang go
+
+# Go (custom module name)
+authsome generate client --lang go --module-name github.com/myorg/myproject/authclient
 
 # Rust
-authsome-cli generate client --lang rust
+authsome generate client --lang rust
 ```
 
 ### Generate with Specific Plugins
 
 ```bash
-authsome-cli generate client --lang typescript --plugins core,social,twofa
+authsome generate client --lang typescript --plugins core,social,twofa
 ```
 
 ### Custom Output Directory
 
 ```bash
-authsome-cli generate client --lang typescript --output ./my-app/src/lib/authsome
+authsome generate client --lang typescript --output ./my-app/src/lib/authsome
 ```
+
+### Custom Go Module Name
+
+By default, the Go client is generated with module name `github.com/xraph/authsome/clients/go`. You can specify a custom module name:
+
+```bash
+authsome generate client --lang go --module-name github.com/myorg/myproject/authclient
+```
+
+This is useful when:
+- Generating clients for your own projects
+- Publishing the client to your own repository
+- Maintaining multiple client variants
 
 ### Validate Manifests
 
 ```bash
-authsome-cli generate client --validate
+authsome generate client --validate
 ```
 
 ### List Available Plugins
 
 ```bash
-authsome-cli generate client --list
+authsome generate client --list
 ```
 
 ## Generated Clients
@@ -190,9 +209,9 @@ go/
 **Usage:**
 ```go
 import (
-    "github.com/xraph/authsome-client"
-    "github.com/xraph/authsome-client/plugins/social"
-    "github.com/xraph/authsome-client/plugins/twofa"
+    "github.com/xraph/authsome/clients/go"
+    "github.com/xraph/authsome/clients/go/plugins/social"
+    "github.com/xraph/authsome/clients/go/plugins/twofa"
 )
 
 client := authsome.NewClient("https://api.example.com",
@@ -294,7 +313,7 @@ async fn main() -> Result<()> {
 
 1. **Create/update manifest:**
 ```yaml
-# clients/manifest/data/myfeature.yaml
+# internal/clients/manifest/data/myfeature.yaml
 plugin_id: myfeature
 version: 1.0.0
 routes:
@@ -309,7 +328,7 @@ routes:
 
 2. **Regenerate clients:**
 ```bash
-authsome-cli generate client --lang all
+authsome generate client --lang all
 ```
 
 3. **Use in your app:**
@@ -321,15 +340,15 @@ const result = await client.myfeature.doSomething({ data: "test" });
 
 ### Adding a New Language
 
-1. Create `clients/generator/{language}.go`
+1. Create `internal/clients/generator/{language}.go`
 2. Implement generator following existing patterns
 3. Update `generator.go` to register new language
 4. Add tests and documentation
 
 ### Extending Manifest Schema
 
-1. Update `clients/manifest/schema.go`
-2. Update parser in `clients/manifest/parser.go`
+1. Update `internal/clients/manifest/schema.go`
+2. Update parser in `internal/clients/manifest/parser.go`
 3. Update all generators to handle new fields
 4. Regenerate and test all clients
 
@@ -337,13 +356,13 @@ const result = await client.myfeature.doSomething({ data: "test" });
 
 ```bash
 # Run generator tests
-go test ./clients/...
+go test ./internal/clients/...
 
 # Generate test clients
-authsome-cli generate client --lang all --output ./test-output
+authsome generate client --lang all --output ./test-output
 
 # Validate all manifests
-authsome-cli generate client --validate
+authsome generate client --validate
 ```
 
 ## Best Practices

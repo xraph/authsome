@@ -1,0 +1,119 @@
+package manifest
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Parser handles loading and parsing manifest files
+type Parser struct {
+	manifests map[string]*Manifest
+}
+
+// NewParser creates a new manifest parser
+func NewParser() *Parser {
+	return &Parser{
+		manifests: make(map[string]*Manifest),
+	}
+}
+
+// LoadFile loads a single manifest file
+func (p *Parser) LoadFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read manifest file %s: %w", path, err)
+	}
+
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		return fmt.Errorf("failed to parse manifest file %s: %w", path, err)
+	}
+
+	if err := manifest.Validate(); err != nil {
+		return fmt.Errorf("invalid manifest %s: %w", path, err)
+	}
+
+	p.manifests[manifest.PluginID] = &manifest
+	return nil
+}
+
+// LoadDirectory loads all manifest files from a directory
+func (p *Parser) LoadDirectory(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("failed to read directory %s: %w", dir, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		// Only process .yaml and .yml files
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+
+		path := filepath.Join(dir, name)
+		if err := p.LoadFile(path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Get returns a manifest by plugin ID
+func (p *Parser) Get(pluginID string) (*Manifest, bool) {
+	m, ok := p.manifests[pluginID]
+	return m, ok
+}
+
+// List returns all loaded manifests
+func (p *Parser) List() []*Manifest {
+	manifests := make([]*Manifest, 0, len(p.manifests))
+	for _, m := range p.manifests {
+		manifests = append(manifests, m)
+	}
+	return manifests
+}
+
+// Filter returns manifests matching the given plugin IDs
+func (p *Parser) Filter(pluginIDs []string) []*Manifest {
+	if len(pluginIDs) == 0 {
+		return p.List()
+	}
+
+	manifests := make([]*Manifest, 0, len(pluginIDs))
+	for _, id := range pluginIDs {
+		if m, ok := p.Get(id); ok {
+			manifests = append(manifests, m)
+		}
+	}
+	return manifests
+}
+
+// GetCore returns the core manifest (plugin_id: "core")
+func (p *Parser) GetCore() (*Manifest, error) {
+	m, ok := p.Get("core")
+	if !ok {
+		return nil, fmt.Errorf("core manifest not found")
+	}
+	return m, nil
+}
+
+// GetPluginManifests returns all non-core manifests
+func (p *Parser) GetPluginManifests() []*Manifest {
+	var manifests []*Manifest
+	for _, m := range p.manifests {
+		if m.PluginID != "core" {
+			manifests = append(manifests, m)
+		}
+	}
+	return manifests
+}

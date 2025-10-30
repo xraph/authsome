@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/xraph/forge"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/forge"
 )
 
 // MemberHandler handles organization member-related HTTP requests
@@ -46,7 +46,7 @@ func (h *MemberHandler) AddMember(c *forge.Context) error {
 // RemoveMember handles removing a member from an organization
 func (h *MemberHandler) RemoveMember(c *forge.Context) error {
 	memberID := c.Param("memberId")
-	
+
 	if memberID == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
 	}
@@ -100,7 +100,7 @@ func (h *MemberHandler) ListMembers(c *forge.Context) error {
 // UpdateMemberRole handles updating a member's role in an organization
 func (h *MemberHandler) UpdateMemberRole(c *forge.Context) error {
 	memberID := c.Param("memberId")
-	
+
 	if memberID == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
 	}

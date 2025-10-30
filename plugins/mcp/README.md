@@ -146,10 +146,10 @@ plugins:
 
 ```bash
 # Start MCP server with stdio
-authsome-cli mcp serve --config=config.yaml
+authsome mcp serve --config=config.yaml
 
 # AI assistant connects via stdio
-claude-desktop mcp://authsome-cli-mcp-serve
+claude-desktop mcp://authsome-mcp-serve
 ```
 
 ### HTTP
@@ -160,7 +160,7 @@ claude-desktop mcp://authsome-cli-mcp-serve
 
 ```bash
 # Start HTTP MCP server
-authsome-cli mcp serve --config=config.yaml --transport=http --port=9090
+authsome mcp serve --config=config.yaml --transport=http --port=9090
 
 # AI assistant connects via HTTP
 curl -X POST http://localhost:9090/api/mcp \
@@ -174,16 +174,16 @@ curl -X POST http://localhost:9090/api/mcp \
 
 ```bash
 # Read-only mode (default)
-authsome-cli mcp serve --config=config.yaml
+authsome mcp serve --config=config.yaml
 
 # Admin mode
-authsome-cli mcp serve --config=config.yaml --mode=admin
+authsome mcp serve --config=config.yaml --mode=admin
 
 # Development mode (INSECURE)
-authsome-cli mcp serve --config=config.yaml --mode=development --no-auth
+authsome mcp serve --config=config.yaml --mode=development --no-auth
 
 # HTTP transport
-authsome-cli mcp serve --config=config.yaml --transport=http --port=9090
+authsome mcp serve --config=config.yaml --transport=http --port=9090
 ```
 
 ### Flags
@@ -429,11 +429,11 @@ AI: "How do I create a user with 2FA enabled?"
 
 ```bash
 # Start MCP server
-authsome-cli mcp serve --config=test-config.yaml --mode=development
+authsome mcp serve --config=test-config.yaml --mode=development
 
 # In another terminal, send MCP requests
 echo '{"jsonrpc":"2.0","id":1,"method":"resources/list","params":{}}' | \
-  authsome-cli mcp serve --config=test-config.yaml
+  authsome mcp serve --config=test-config.yaml
 ```
 
 ### Integration Testing
