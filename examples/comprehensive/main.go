@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -28,12 +27,13 @@ import (
 	"github.com/xraph/authsome/plugins/sso"
 	"github.com/xraph/authsome/plugins/twofa"
 	"github.com/xraph/authsome/plugins/username"
+	"github.com/xraph/forge"
 )
 
 // ComprehensiveApp demonstrates all AuthSome features
 type ComprehensiveApp struct {
 	db   *bun.DB
-	mux  *http.ServeMux
+	app  forge.App
 	auth *authsome.Auth
 }
 
@@ -98,7 +98,7 @@ func main() {
 	log.Printf("🔐 Auth API: http://localhost:%s/api/auth", config.Port)
 	log.Printf("📊 Status: http://localhost:%s/status", config.Port)
 
-	if err := http.ListenAndServe(":"+config.Port, app.mux); err != nil {
+	if err := app.app.Run(); err != nil {
 		log.Fatalf("❌ Server failed: %v", err)
 	}
 }
@@ -121,7 +121,12 @@ func (app *ComprehensiveApp) initDatabase(config *Config) error {
 // initHTTP initializes the HTTP server
 func (app *ComprehensiveApp) initHTTP() error {
 	log.Println("🌐 Initializing HTTP server...")
-	app.mux = http.NewServeMux()
+	app.app = forge.NewApp(forge.AppConfig{
+		Name:        "authsome-comprehensive",
+		Version:     "1.0.0",
+		Environment: "development",
+		HTTPAddress: ":8081",
+	})
 	log.Println("✅ HTTP server initialized")
 	return nil
 }
@@ -130,12 +135,10 @@ func (app *ComprehensiveApp) initHTTP() error {
 func (app *ComprehensiveApp) initAuthSome(config *Config) error {
 	log.Println("🔐 Initializing AuthSome...")
 
-	configManager := setupViper()
-
 	app.auth = authsome.New(
 		authsome.WithMode(config.Mode),
 		authsome.WithDatabase(app.db),
-		authsome.WithForgeConfig(configManager),
+		authsome.WithForgeApp(app.app),
 	)
 
 	// Register plugins before initialization
@@ -198,7 +201,7 @@ func (app *ComprehensiveApp) setupRoutes() error {
 	app.setupAppRoutes()
 
 	// Mount AuthSome routes
-	if err := app.auth.Mount(app.mux, "/api/auth"); err != nil {
+	if err := app.auth.Mount(app.app.Router(), "/api/auth"); err != nil {
 		return fmt.Errorf("failed to mount AuthSome: %w", err)
 	}
 
@@ -208,32 +211,28 @@ func (app *ComprehensiveApp) setupRoutes() error {
 
 // setupAppRoutes adds application-specific routes
 func (app *ComprehensiveApp) setupAppRoutes() {
+	router := app.app.Router()
+	
 	// Health check
-	app.mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{
-			"status": "healthy",
-			"timestamp": "%s",
-			"version": "1.0.0"
-		}`, time.Now().UTC().Format(time.RFC3339))
+	router.GET("/health", func(c forge.Context) error {
+		return c.JSON(200, map[string]string{
+			"status":    "healthy",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"version":   "1.0.0",
+		})
 	})
 
 	// Status endpoint
-	app.mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{
-			"authsome": "initialized",
-			"database": "connected",
-			"plugins": ["dashboard", "multitenancy", "username", "twofa", "emailotp", "magiclink", "phone", "passkey", "anonymous", "sso"]
-		}`)
+	router.GET("/status", func(c forge.Context) error {
+		return c.JSON(200, map[string]interface{}{
+			"authsome":  "initialized",
+			"database":  "connected",
+			"plugins":   []string{"dashboard", "multitenancy", "username", "twofa", "emailotp", "magiclink", "phone", "passkey", "anonymous", "sso"},
+		})
 	})
 
 	// Home page
-	app.mux.HandleFunc("/home", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		w.WriteHeader(http.StatusOK)
+	router.GET("/home", func(c forge.Context) error {
 		html := `
 <!DOCTYPE html>
 <html>
@@ -292,28 +291,25 @@ func (app *ComprehensiveApp) setupAppRoutes() {
     </div>
 </body>
 </html>`
-		fmt.Fprint(w, html)
+		c.Response().Header().Set("Content-Type", "text/html")
+		return c.String(200, html)
 	})
 
 	// Test endpoints
-	app.mux.HandleFunc("/test/auth/signup", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{
-			"endpoint": "POST /api/auth/signup",
+	router.GET("/test/auth/signup", func(c forge.Context) error {
+		return c.JSON(200, map[string]string{
+			"endpoint":    "POST /api/auth/signup",
 			"description": "User registration endpoint",
-			"example": "{\"email\": \"user@example.com\", \"password\": \"password123\"}"
-		}`)
+			"example":     `{"email": "user@example.com", "password": "password123"}`,
+		})
 	})
 
-	app.mux.HandleFunc("/test/auth/signin", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{
-			"endpoint": "POST /api/auth/signin",
+	router.GET("/test/auth/signin", func(c forge.Context) error {
+		return c.JSON(200, map[string]string{
+			"endpoint":    "POST /api/auth/signin",
 			"description": "User login endpoint",
-			"example": "{\"email\": \"user@example.com\", \"password\": \"password123\"}"
-		}`)
+			"example":     `{"email": "user@example.com", "password": "password123"}`,
+		})
 	})
 }
 

@@ -33,7 +33,7 @@ type LinkAccountRequest struct {
 
 // SignIn initiates OAuth flow for sign-in
 // POST /api/auth/signin/social
-func (h *Handler) SignIn(c *forge.Context) error {
+func (h *Handler) SignIn(c forge.Context) error {
 	var req SignInRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -65,7 +65,7 @@ func (h *Handler) SignIn(c *forge.Context) error {
 
 // Callback handles OAuth provider callback
 // GET /api/auth/callback/:provider
-func (h *Handler) Callback(c *forge.Context) error {
+func (h *Handler) Callback(c forge.Context) error {
 	provider := c.Param("provider")
 	query := c.Request().URL.Query()
 	state := query.Get("state")
@@ -111,7 +111,7 @@ func (h *Handler) Callback(c *forge.Context) error {
 
 // LinkAccount links a social provider to the current user
 // POST /api/auth/account/link
-func (h *Handler) LinkAccount(c *forge.Context) error {
+func (h *Handler) LinkAccount(c forge.Context) error {
 	// Get current user from session - in production, extract from JWT/session
 	// For now, require user_id to be passed (or get from session cookie)
 	userIDStr := c.Request().Header.Get("X-User-ID")
@@ -157,7 +157,7 @@ func (h *Handler) LinkAccount(c *forge.Context) error {
 
 // UnlinkAccount unlinks a social provider from the current user
 // DELETE /api/auth/account/unlink/:provider
-func (h *Handler) UnlinkAccount(c *forge.Context) error {
+func (h *Handler) UnlinkAccount(c forge.Context) error {
 	userIDStr := c.Request().Header.Get("X-User-ID")
 	if userIDStr == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -192,7 +192,7 @@ func (h *Handler) UnlinkAccount(c *forge.Context) error {
 
 // ListProviders returns available OAuth providers
 // GET /api/auth/providers
-func (h *Handler) ListProviders(c *forge.Context) error {
+func (h *Handler) ListProviders(c forge.Context) error {
 	providers := h.service.ListProviders()
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"providers": providers,

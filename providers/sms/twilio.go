@@ -48,17 +48,17 @@ func (p *TwilioProvider) Type() notification.NotificationType {
 }
 
 // Send sends an SMS notification
-func (p *TwilioProvider) Send(ctx context.Context, req *notification.SendRequest) error {
+func (p *TwilioProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Validate phone number format
-	if !p.isValidPhoneNumber(req.Recipient) {
-		return fmt.Errorf("invalid phone number format: %s", req.Recipient)
+	if !p.isValidPhoneNumber(notif.Recipient) {
+		return fmt.Errorf("invalid phone number format: %s", notif.Recipient)
 	}
 
 	// Prepare request data
 	data := url.Values{}
 	data.Set("From", p.config.FromNumber)
-	data.Set("To", req.Recipient)
-	data.Set("Body", req.Body)
+	data.Set("To", notif.Recipient)
+	data.Set("Body", notif.Body)
 
 	// Create HTTP request
 	apiURL := fmt.Sprintf("%s/2010-04-01/Accounts/%s/Messages.json", 
@@ -81,16 +81,79 @@ func (p *TwilioProvider) Send(ctx context.Context, req *notification.SendRequest
 	}
 	defer resp.Body.Close()
 
-	// Check response status
-	if resp.StatusCode >= 400 {
-		var errorResp TwilioErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+	// Parse response to get message SID
+	var twilioResp TwilioMessageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&twilioResp); err != nil {
+		if resp.StatusCode >= 400 {
 			return fmt.Errorf("SMS failed with status %d", resp.StatusCode)
 		}
-		return fmt.Errorf("SMS failed: %s (code: %d)", errorResp.Message, errorResp.Code)
+		// Success but couldn't parse response
+		return nil
 	}
 
+	// Check response status
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("SMS failed: %s (code: %d)", twilioResp.ErrorMessage, twilioResp.ErrorCode)
+	}
+
+	// Store the Twilio message SID in notification metadata
+	if notif.Metadata == nil {
+		notif.Metadata = make(map[string]interface{})
+	}
+	notif.Metadata["twilio_sid"] = twilioResp.Sid
+	notif.ProviderID = twilioResp.Sid
+
 	return nil
+}
+
+// GetStatus gets the delivery status of a notification from Twilio
+func (p *TwilioProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
+	// Query Twilio API for message status
+	apiURL := fmt.Sprintf("%s/2010-04-01/Accounts/%s/Messages/%s.json",
+		p.config.BaseURL, p.config.AccountSID, providerID)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return notification.NotificationStatusFailed, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.SetBasicAuth(p.config.AccountSID, p.config.AuthToken)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return notification.NotificationStatusFailed, fmt.Errorf("failed to query status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var twilioResp TwilioMessageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&twilioResp); err != nil {
+		return notification.NotificationStatusFailed, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Map Twilio status to notification status
+	switch twilioResp.Status {
+	case "queued", "sending":
+		return notification.NotificationStatusSent, nil
+	case "sent", "delivered":
+		return notification.NotificationStatusDelivered, nil
+	case "failed", "undelivered":
+		return notification.NotificationStatusFailed, nil
+	default:
+		return notification.NotificationStatusSent, nil
+	}
+}
+
+// ValidateConfig validates the provider configuration
+func (p *TwilioProvider) ValidateConfig() error {
+	return p.Validate()
+}
+
+// TwilioMessageResponse represents a Twilio message response
+type TwilioMessageResponse struct {
+	Sid          string `json:"sid"`
+	Status       string `json:"status"`
+	ErrorCode    int    `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
 }
 
 // TwilioErrorResponse represents a Twilio error response
@@ -176,12 +239,22 @@ func (p *MockSMSProvider) Type() notification.NotificationType {
 }
 
 // Send sends a mock SMS notification
-func (p *MockSMSProvider) Send(ctx context.Context, req *notification.SendRequest) error {
+func (p *MockSMSProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	p.SentMessages = append(p.SentMessages, MockSMSMessage{
-		Recipient: req.Recipient,
-		Subject:   req.Subject,
-		Body:      req.Body,
+		Recipient: notif.Recipient,
+		Subject:   notif.Subject,
+		Body:      notif.Body,
 	})
+	return nil
+}
+
+// GetStatus returns the status (always delivered for mock)
+func (p *MockSMSProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
+	return notification.NotificationStatusDelivered, nil
+}
+
+// ValidateConfig validates the mock provider (always valid)
+func (p *MockSMSProvider) ValidateConfig() error {
 	return nil
 }
 

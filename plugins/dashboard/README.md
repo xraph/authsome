@@ -1,20 +1,8 @@
 # Dashboard Plugin
 
-The Dashboard Plugin provides a modern React-based administrative interface for AuthSome. It offers a comprehensive web UI for managing users, sessions, security settings, and monitoring authentication activities.
+A lightweight, server-rendered admin interface for AuthSome built with Alpine.js and Tailwind CSS 4 CDN.
 
-## Features
-
-- 📊 **User Management**: View, create, edit, and manage user accounts
-- 🔐 **Session Monitoring**: Real-time session tracking and management
-- ⚙️ **Security Settings**: Configure authentication policies and security rules
-- 🔌 **Plugin Management**: Enable/disable and configure authentication plugins
-- 📈 **Analytics Dashboard**: Authentication metrics and usage statistics
-- 🎨 **Modern UI**: Built with React, TypeScript, and Tailwind CSS
-- 📱 **Responsive Design**: Works on desktop, tablet, and mobile devices
-
-## Installation
-
-The dashboard plugin is included with AuthSome. To use it, simply register it with your AuthSome instance:
+## Quick Start
 
 ```go
 import (
@@ -22,228 +10,119 @@ import (
     "github.com/xraph/authsome/plugins/dashboard"
 )
 
-// Create AuthSome instance
-auth := authsome.New(
-    authsome.WithMode(authsome.ModeStandalone),
+auth, err := authsome.New(
+    authsome.WithPlugins(
+        dashboard.NewPlugin(),
+    ),
 )
-
-// Register the dashboard plugin
-err := auth.RegisterPlugin(dashboard.NewPlugin())
-if err != nil {
-    log.Fatal("Failed to register dashboard plugin:", err)
-}
-
-// Initialize and mount
-err = auth.Initialize(context.Background())
-if err != nil {
-    log.Fatal("Failed to initialize AuthSome:", err)
-}
-
-err = auth.Mount(app, "/api/auth")
-if err != nil {
-    log.Fatal("Failed to mount AuthSome:", err)
-}
 ```
 
-## Usage
+Then access the dashboard at `http://localhost:8080/dashboard/` (requires admin role).
 
-Once registered and mounted, the dashboard will be available at:
+## Features
 
+✅ Server-side rendering with Go templates  
+✅ ~40KB total bundle size (Alpine.js + Tailwind CSS CDN)  
+✅ Built-in auth, RBAC, CSRF, rate limiting, and audit logging  
+✅ Responsive, mobile-first design  
+✅ Real-time statistics and user management  
+✅ **Dark mode support** with system preference detection and localStorage persistence  
+
+## Access Control
+
+The dashboard implements **production-grade security** with:
+
+- **Fast Permission Checking**: Role-based access control with 5-minute cache (< 100µs per check)
+- **CSRF Protection**: Session-bound tokens with HMAC signatures
+- **First-User Admin**: First user automatically gets admin role
+
+### Assigning Admin Role
+
+```bash
+# Using the CLI
+authsome-cli user assign-role --user-id=<id> --role=admin
+
+# Or programmatically
+rbacSvc.AssignRole(ctx, userID, roleID, orgID)
 ```
-http://localhost:PORT/dashboard
-```
 
-### Routes
-
-The plugin registers the following routes:
-
-- `GET /dashboard/` - Main dashboard SPA entry point
-- `GET /dashboard/*` - Static assets (JS, CSS, images, etc.)
-
-### Assets
-
-The dashboard includes embedded static assets built from the React application:
+### Permission System
 
 ```go
-// Access embedded assets programmatically
-assets := dashboard.GetAssets()
-indexContent, err := fs.ReadFile(assets, "index.html")
+// Check permissions with expressive fluent API
+checker := dashboard.NewPermissionChecker(rbacSvc, userRoleRepo)
+
+// Simple check
+canView := checker.Can(ctx, userID, "view", "users")
+
+// Fluent API
+user := checker.For(ctx, userID)
+if user.Dashboard().CanAccess() {
+    // Grant access
+}
 ```
+
+See [SECURITY_IMPROVEMENTS.md](./SECURITY_IMPROVEMENTS.md) for detailed documentation.
+
+## Documentation
+
+See [DASHBOARD_PLUGIN.md](./DASHBOARD_PLUGIN.md) for complete documentation including:
+- Configuration
+- Security features
+- Customization
+- Templates
+- API reference
+- Troubleshooting
+
+## Pages
+
+- `/dashboard/` - Statistics and quick actions
+- `/dashboard/users` - User management
+- `/dashboard/users/:id` - User details
+- `/dashboard/sessions` - Active sessions
+
+## Dark Mode
+
+The dashboard includes a built-in dark mode switcher located in the top-right header.
+
+### Features
+
+- **System Preference Detection**: Automatically detects and respects OS-level dark mode preferences
+- **localStorage Persistence**: User preference is saved locally and persists across sessions
+- **Smooth Transitions**: All theme changes are animated with smooth CSS transitions
+- **Complete Coverage**: All components, forms, tables, and UI elements are fully styled for dark mode
+
+### How It Works
+
+1. **Initial Load**: Checks localStorage for saved preference, falls back to system preference
+2. **Toggle Button**: Click the sun/moon icon in the header to switch themes manually
+3. **Automatic Updates**: Listens for system preference changes when no manual preference is set
+4. **CSS Classes**: Uses Tailwind's `dark:` prefix for conditional dark mode styling
+
+### Technical Implementation
+
+- **Alpine.js Component**: `themeData()` component manages state and persistence
+- **Tailwind CSS**: `darkMode: 'class'` configuration for class-based toggling
+- **localStorage Key**: `theme` (values: `'light'` or `'dark'`)
+- **CSS Variables**: Custom scrollbar colors for both light and dark themes
 
 ## Development
 
-### Frontend Development
-
-The dashboard frontend is located in `frontend/dashboard/` and built with:
-
-- **React 18** - Modern React with hooks and concurrent features
-- **TypeScript** - Type-safe JavaScript development
-- **Vite** - Fast build tool and development server
-- **Tailwind CSS** - Utility-first CSS framework
-- **Lucide React** - Beautiful icon library
-
-#### Development Setup
-
 ```bash
-# Navigate to frontend directory
-cd frontend/dashboard
+# Build
+go build ./plugins/dashboard/...
 
-# Install dependencies
-pnpm install
+# Test
+go test ./plugins/dashboard/... -v
 
-# Start development server
-pnpm dev
-
-# Build for production
-pnpm build
+# Lint
+golangci-lint run ./plugins/dashboard/...
 ```
 
-#### Development Server
+## Premium React Dashboard
 
-The development server runs on `http://localhost:5173` with:
-
-- Hot module replacement (HMR)
-- TypeScript checking
-- ESLint integration
-- Automatic browser refresh
-
-### Plugin Development
-
-The plugin follows the standard AuthSome plugin interface:
-
-```go
-type Plugin interface {
-    ID() string
-    Init(dep interface{}) error
-    RegisterRoutes(router interface{}) error
-    RegisterHooks(hooks *hooks.HookRegistry) error
-    RegisterServiceDecorators(services *registry.ServiceRegistry) error
-    Migrate() error
-}
-```
-
-#### Plugin Structure
-
-```
-plugins/dashboard/
-├── plugin.go              # Main plugin implementation
-├── handler.go              # HTTP handlers for serving assets
-├── plugin_test.go          # Plugin tests
-├── README.md               # This documentation
-└── dist/                   # Built frontend assets (embedded)
-    ├── index.html
-    ├── assets/
-    │   ├── index-[hash].js
-    │   └── index-[hash].css
-    └── vite.svg
-```
-
-## Configuration
-
-The dashboard plugin currently doesn't require additional configuration. It uses embedded assets and serves them directly.
-
-Future configuration options may include:
-
-- Custom branding/theming
-- Feature toggles
-- Access control settings
-- Analytics configuration
-
-## Security
-
-The dashboard plugin includes several security considerations:
-
-- **Static Asset Serving**: Only serves pre-built, embedded assets
-- **No Dynamic Content**: All content is static, reducing attack surface
-- **Path Traversal Protection**: Uses Go's `fs.FS` interface for safe file access
-- **Content Security Policy**: Implements CSP headers for XSS protection
-
-### Access Control
-
-Currently, the dashboard is publicly accessible. In production deployments, you should:
-
-1. Implement authentication middleware
-2. Add role-based access control (RBAC)
-3. Use HTTPS in production
-4. Configure proper CORS policies
-
-## Testing
-
-Run the plugin tests:
-
-```bash
-# Test the plugin
-go test ./plugins/dashboard -v
-
-# Test with coverage
-go test ./plugins/dashboard -v -cover
-
-# Run integration example
-go run examples/dashboard/main.go
-```
-
-### Test Coverage
-
-The plugin includes tests for:
-
-- Plugin interface implementation
-- Asset serving functionality
-- Route registration
-- Error handling
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Assets not loading**
-   - Ensure the frontend was built: `cd frontend/dashboard && pnpm build`
-   - Check that `dist/` directory exists and contains built files
-   - Verify the embed directive is correct in `plugin.go`
-
-2. **Routes not working**
-   - Confirm the plugin is registered before `auth.Initialize()`
-   - Check that AuthSome is mounted to your Forge app
-   - Verify the base path configuration
-
-3. **Development server issues**
-   - Ensure Node.js 18+ is installed
-   - Run `pnpm install` to install dependencies
-   - Check for port conflicts (default: 5173)
-
-### Debug Mode
-
-Enable debug logging to troubleshoot issues:
-
-```go
-// Enable debug logging (if available in your setup)
-log.SetLevel(log.DebugLevel)
-```
-
-## Contributing
-
-To contribute to the dashboard plugin:
-
-1. **Frontend Changes**: Make changes in `frontend/dashboard/`
-2. **Backend Changes**: Modify `plugins/dashboard/`
-3. **Build**: Run `pnpm build` to update embedded assets
-4. **Test**: Run tests and the integration example
-5. **Submit**: Create a pull request with your changes
-
-### Code Style
-
-- **Go**: Follow standard Go conventions and gofmt
-- **TypeScript**: Use ESLint and Prettier configurations
-- **React**: Follow React best practices and hooks patterns
-- **CSS**: Use Tailwind utility classes, avoid custom CSS
+A premium React-based dashboard with advanced features is available separately at `frontend/dashboard-premium/`. See its README for details.
 
 ## License
 
-This plugin is part of the AuthSome project and follows the same license terms.
-
-## Support
-
-For issues and questions:
-
-- Check the [main AuthSome documentation](../../README.md)
-- Review the [integration example](../../examples/dashboard/main.go)
-- Open an issue in the AuthSome repository
+Part of AuthSome. See main LICENSE file.

@@ -102,11 +102,19 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 		}
 	}
 
+	// Set default language
+	language := req.Language
+	if language == "" {
+		language = "en"
+	}
+	
 	template := &Template{
 		ID:             xid.New(),
 		OrganizationID: req.OrganizationID,
+		TemplateKey:    req.TemplateKey,
 		Name:           req.Name,
 		Type:           req.Type,
+		Language:       language,
 		Subject:        req.Subject,
 		Body:           req.Body,
 		Variables:      req.Variables,

@@ -1,0 +1,514 @@
+---
+title: Social OAuth
+description: Comprehensive social authentication supporting 17+ OAuth providers including Google, GitHub, Microsoft, Apple, Facebook, and more
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Social OAuth Plugin
+
+Comprehensive social authentication plugin supporting 17+ OAuth providers with production-ready implementations, multi-tenant support, and account linking.
+
+## Supported Providers
+
+<Cards>
+  <Card title="Google" description="OAuth 2.0 with refresh tokens" />
+  <Card title="GitHub" description="OAuth 2.0" />
+  <Card title="Microsoft" description="Azure AD OAuth 2.0" />
+  <Card title="Apple" description="Sign in with Apple" />
+  <Card title="Facebook" description="OAuth 2.0" />
+  <Card title="Discord" description="OAuth 2.0" />
+  <Card title="Twitter/X" description="OAuth 2.0" />
+  <Card title="LinkedIn" description="OAuth 2.0" />
+  <Card title="Spotify" description="OAuth 2.0" />
+  <Card title="Twitch" description="OAuth 2.0" />
+  <Card title="Dropbox" description="OAuth 2.0" />
+  <Card title="GitLab" description="OAuth 2.0" />
+  <Card title="LINE" description="OAuth 2.0 / OpenID Connect" />
+  <Card title="Reddit" description="OAuth 2.0" />
+  <Card title="Slack" description="OAuth 2.0" />
+  <Card title="Bitbucket" description="OAuth 2.0" />
+  <Card title="Notion" description="OAuth 2.0" />
+</Cards>
+
+## Features
+
+- 🔐 **Production-ready** - Complete OAuth 2.0 implementation
+- 🏢 **Multi-tenant** - Organization-scoped provider configurations
+- 🔗 **Account Linking** - Link multiple providers to one user
+- 🔄 **Token Refresh** - Automatic token refresh for supported providers
+- 📊 **Scope Management** - Dynamic scope requests
+- 🎯 **ID Token Support** - Direct sign-in with ID tokens (Google One Tap)
+- 🛡️ **Security** - CSRF protection via state parameter
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/social"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        social.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['Google', 'GitHub', 'Microsoft', 'Apple']}>
+<Tab value="Google">
+```yaml
+plugins:
+  social:
+    providers:
+      google:
+        enabled: true
+        client_id: "your-client-id.apps.googleusercontent.com"
+        client_secret: "your-client-secret"
+        redirect_url: "https://yourapp.com/api/auth/callback/google"
+        scopes:
+          - email
+          - profile
+          - openid
+```
+</Tab>
+
+<Tab value="GitHub">
+```yaml
+plugins:
+  social:
+    providers:
+      github:
+        enabled: true
+        client_id: "your-github-client-id"
+        client_secret: "your-github-client-secret"
+        redirect_url: "https://yourapp.com/api/auth/callback/github"
+        scopes:
+          - user:email
+          - read:user
+```
+</Tab>
+
+<Tab value="Microsoft">
+```yaml
+plugins:
+  social:
+    providers:
+      microsoft:
+        enabled: true
+        client_id: "your-azure-app-id"
+        client_secret: "your-azure-secret"
+        redirect_url: "https://yourapp.com/api/auth/callback/microsoft"
+        tenant: "common"  # or specific tenant ID
+        scopes:
+          - openid
+          - profile
+          - email
+```
+</Tab>
+
+<Tab value="Apple">
+```yaml
+plugins:
+  social:
+    providers:
+      apple:
+        enabled: true
+        client_id: "com.yourapp.service"
+        team_id: "YOUR_TEAM_ID"
+        key_id: "YOUR_KEY_ID"
+        private_key_path: "/path/to/AuthKey_KEYID.p8"
+        redirect_url: "https://yourapp.com/api/auth/callback/apple"
+        scopes:
+          - name
+          - email
+```
+</Tab>
+</Tabs>
+
+## Usage
+
+### Basic Authentication Flow
+
+<Tabs items={['Frontend', 'Backend']}>
+<Tab value="Frontend">
+```html
+<!-- Simple button-based OAuth -->
+<a href="/api/auth/signin/google" class="btn-google">
+  Sign in with Google
+</a>
+
+<a href="/api/auth/signin/github" class="btn-github">
+  Sign in with GitHub
+</a>
+
+<!-- With custom scopes -->
+<a href="/api/auth/signin/google?scopes=email,profile,https://www.googleapis.com/auth/calendar">
+  Sign in with Google (with Calendar access)
+</a>
+```
+</Tab>
+
+<Tab value="Backend">
+```go
+// The plugin automatically handles these routes:
+// GET  /api/auth/signin/:provider
+// GET  /api/auth/callback/:provider
+// POST /api/auth/link/:provider
+// POST /api/auth/unlink/:provider
+
+// Custom handler after successful OAuth
+router.GET("/dashboard", func(c *forge.Context) error {
+    session := getSession(c)
+    
+    // Access social account info
+    accounts, err := socialService.GetLinkedAccounts(c.Context(), session.UserID)
+    
+    return c.Render("dashboard", map[string]interface{}{
+        "user":     session.User,
+        "accounts": accounts,
+    })
+})
+```
+</Tab>
+</Tabs>
+
+### Account Linking
+
+Allow users to link multiple social accounts:
+
+```go
+// Link additional provider
+router.POST("/api/auth/link/:provider", func(c *forge.Context) error {
+    session := getSession(c)
+    provider := c.Param("provider")
+    
+    // Start OAuth flow for linking
+    authURL, state, err := socialService.GenerateAuthURL(
+        provider,
+        session.UserID, // Link to this user
+        map[string]string{
+            "action": "link",
+        },
+    )
+    
+    return c.Redirect(302, authURL)
+})
+
+// Unlink provider
+router.POST("/api/auth/unlink/:provider", func(c *forge.Context) error {
+    session := getSession(c)
+    provider := c.Param("provider")
+    
+    err := socialService.UnlinkAccount(c.Context(), session.UserID, provider)
+    if err != nil {
+        return c.JSON(400, map[string]string{"error": err.Error()})
+    }
+    
+    return c.JSON(200, map[string]string{"status": "unlinked"})
+})
+```
+
+### Google One Tap
+
+Direct sign-in with Google ID tokens:
+
+```html
+<!-- Include Google One Tap -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<div id="g_id_onload"
+     data-client_id="YOUR_CLIENT_ID"
+     data-callback="handleCredentialResponse">
+</div>
+
+<script>
+async function handleCredentialResponse(response) {
+    // Send ID token to backend
+    const res = await fetch('/api/auth/signin/google/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: response.credential })
+    });
+    
+    if (res.ok) {
+        window.location.href = '/dashboard';
+    }
+}
+</script>
+```
+
+## Multi-Tenant Configuration
+
+Configure different OAuth apps per organization:
+
+```yaml
+# Default configuration
+plugins:
+  social:
+    providers:
+      google:
+        client_id: "default-client-id"
+        client_secret: "default-secret"
+
+# Organization-specific overrides
+organizations:
+  org_acme:
+    plugins:
+      social:
+        providers:
+          google:
+            client_id: "acme-client-id"
+            client_secret: "acme-secret"
+            
+  org_techcorp:
+    plugins:
+      social:
+        providers:
+          microsoft:
+            enabled: true
+            client_id: "techcorp-azure-id"
+            tenant: "techcorp-tenant-id"
+```
+
+## Advanced Features
+
+### Custom Scopes
+
+Request additional scopes dynamically:
+
+```go
+// Request specific scopes
+authURL := fmt.Sprintf(
+    "/api/auth/signin/google?scopes=%s",
+    url.QueryEscape("email,profile,https://www.googleapis.com/auth/calendar"),
+)
+```
+
+### Access Token Refresh
+
+Automatically refresh access tokens:
+
+```go
+// Get fresh access token
+token, err := socialService.RefreshToken(ctx, accountID)
+if err != nil {
+    return err
+}
+
+// Use token for API calls
+client := google.NewCalendarClient(token.AccessToken)
+events, err := client.ListEvents()
+```
+
+### Profile Data
+
+Access user profile from providers:
+
+```go
+account, err := socialService.GetAccount(ctx, accountID)
+
+// Standard fields
+fmt.Println(account.Email)
+fmt.Println(account.Name)
+fmt.Println(account.Picture)
+
+// Provider-specific data
+if account.Provider == "github" {
+    fmt.Println(account.RawData["login"])      // GitHub username
+    fmt.Println(account.RawData["bio"])        // GitHub bio
+    fmt.Println(account.RawData["public_repos"]) // Repo count
+}
+```
+
+## Security
+
+### State Parameter
+
+CSRF protection via state parameter:
+
+```go
+// State is automatically generated and verified
+// Includes:
+// - Random token
+// - User ID (for linking)
+// - Expiration timestamp
+// - Custom data
+```
+
+### Token Storage
+
+Tokens are securely stored:
+
+- Access tokens: Encrypted at rest
+- Refresh tokens: Encrypted and rotated
+- ID tokens: Verified and discarded after use
+
+<Callout type="warning">
+Never expose access tokens or refresh tokens to the frontend. Always proxy API calls through your backend.
+</Callout>
+
+## Provider-Specific Notes
+
+### Google
+
+- Supports refresh tokens
+- ID token verification
+- Google One Tap integration
+- Calendar, Drive, Gmail scopes available
+
+### GitHub
+
+- No refresh tokens (tokens don't expire)
+- Access to repositories, gists, user data
+- Organization access requires additional permissions
+
+### Microsoft
+
+- Azure AD integration
+- Tenant-specific or multi-tenant
+- Supports refresh tokens
+- Office 365, OneDrive, Outlook scopes
+
+### Apple
+
+- Requires private key (.p8 file)
+- Email relay service
+- Name provided only on first sign-in
+- No refresh tokens
+
+### Facebook
+
+- Long-lived access tokens (60 days)
+- Token refresh available
+- Limited profile data due to privacy changes
+
+## Error Handling
+
+```go
+// Handle OAuth errors
+router.GET("/api/auth/callback/:provider", func(c *forge.Context) error {
+    errorCode := c.Query("error")
+    
+    if errorCode != "" {
+        switch errorCode {
+        case "access_denied":
+            return c.Redirect(302, "/login?error=User denied access")
+        case "server_error":
+            return c.Redirect(302, "/login?error=Provider error")
+        default:
+            return c.Redirect(302, "/login?error=OAuth failed")
+        }
+    }
+    
+    // Process successful callback
+    // ...
+})
+```
+
+## Testing
+
+### Mock Provider
+
+```go
+// Use mock provider for testing
+config := social.Config{
+    Providers: map[string]social.ProviderConfig{
+        "mock": {
+            Enabled:      true,
+            ClientID:     "test-client-id",
+            ClientSecret: "test-secret",
+        },
+    },
+}
+
+// Mock provider returns configurable user data
+mockUser := &social.UserProfile{
+    ID:      "mock_123",
+    Email:   "test@example.com",
+    Name:    "Test User",
+    Picture: "https://example.com/avatar.jpg",
+}
+```
+
+## Migration
+
+### From Auth0
+
+```go
+// Import users with linked social accounts
+for _, user := range auth0Users {
+    // Create user
+    authUser, err := userService.Create(ctx, &CreateUserRequest{
+        Email: user.Email,
+        Name:  user.Name,
+    })
+    
+    // Link social accounts
+    for _, identity := range user.Identities {
+        err := socialService.LinkAccount(ctx, &social.LinkAccountRequest{
+            UserID:       authUser.ID,
+            Provider:     identity.Provider,
+            ProviderID:   identity.UserID,
+            AccessToken:  identity.AccessToken,
+            RefreshToken: identity.RefreshToken,
+        })
+    }
+}
+```
+
+## API Reference
+
+### Endpoints
+
+- `GET /api/auth/signin/:provider` - Start OAuth flow
+- `GET /api/auth/callback/:provider` - OAuth callback
+- `POST /api/auth/signin/:provider/token` - Sign in with ID token
+- `POST /api/auth/link/:provider` - Link account
+- `POST /api/auth/unlink/:provider` - Unlink account
+- `GET /api/auth/accounts` - List linked accounts
+- `POST /api/auth/accounts/:id/refresh` - Refresh token
+
+### Configuration
+
+```go
+type Config struct {
+    Providers map[string]ProviderConfig
+}
+
+type ProviderConfig struct {
+    Enabled      bool
+    ClientID     string
+    ClientSecret string
+    RedirectURL  string
+    Scopes       []string
+    
+    // Provider-specific
+    Tenant       string // Microsoft
+    TeamID       string // Apple
+    KeyID        string // Apple
+    PrivateKey   string // Apple
+}
+```
+
+## Resources
+
+- [OAuth 2.0 Spec](https://oauth.net/2/)
+- [Provider Documentation](https://github.com/xraph/authsome/blob/main/plugins/social/README.md)
+- [Examples](https://github.com/xraph/authsome/tree/main/examples/social)
+
+## Support
+
+For issues with specific providers:
+- GitHub Issues: [authsome/issues](https://github.com/xraph/authsome/issues)
+- Provider-specific docs: Check each provider's OAuth documentation
+- Discord: [discord.gg/authsome](https://discord.gg/authsome)
+

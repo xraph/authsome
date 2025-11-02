@@ -11,36 +11,39 @@ import (
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 )
 
-// EmailProvider defines minimal interface to send magic links via email
-type EmailProvider interface {
-	SendMagicLink(to, url string) error
-}
-
 // Config for Magic Link service
 type Config struct {
-	ExpiresIn           time.Duration
+	ExpiryMinutes       int
 	BaseURL             string
 	DevExposeURL        bool
 	AllowImplicitSignup bool
 }
 
 type Service struct {
-	repo     *repo.MagicLinkRepository
-	users    *user.Service
-	auth     *auth.Service
-	audit    *audit.Service
-	provider EmailProvider
-	config   Config
+	repo         *repo.MagicLinkRepository
+	users        *user.Service
+	auth         *auth.Service
+	audit        *audit.Service
+	notifAdapter *notificationPlugin.Adapter
+	config       Config
 }
 
-func NewService(r *repo.MagicLinkRepository, users *user.Service, authSvc *auth.Service, auditSvc *audit.Service, provider EmailProvider, cfg Config) *Service {
-	if cfg.ExpiresIn == 0 {
-		cfg.ExpiresIn = 10 * time.Minute
+func NewService(r *repo.MagicLinkRepository, users *user.Service, authSvc *auth.Service, auditSvc *audit.Service, notifAdapter *notificationPlugin.Adapter, cfg Config) *Service {
+	if cfg.ExpiryMinutes == 0 {
+		cfg.ExpiryMinutes = 15
 	}
-	return &Service{repo: r, users: users, auth: authSvc, audit: auditSvc, provider: provider, config: cfg}
+	return &Service{
+		repo:         r,
+		users:        users,
+		auth:         authSvc,
+		audit:        auditSvc,
+		notifAdapter: notifAdapter,
+		config:       cfg,
+	}
 }
 
 func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error) {
@@ -48,23 +51,45 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 	if e == "" {
 		return "", fmt.Errorf("missing email")
 	}
+	
 	token, err := crypto.GenerateToken(32)
 	if err != nil {
 		return "", err
 	}
-	if err := s.repo.Create(ctx, e, token, time.Now().Add(s.config.ExpiresIn)); err != nil {
+	
+	// Calculate expiry
+	expiryDuration := time.Duration(s.config.ExpiryMinutes) * time.Minute
+	
+	if err := s.repo.Create(ctx, e, token, time.Now().Add(expiryDuration)); err != nil {
 		return "", err
 	}
+	
 	esc := url.QueryEscape(token)
-	url := s.config.BaseURL + "/api/auth/magic-link/verify?token=" + esc
-	if s.provider != nil {
-		_ = s.provider.SendMagicLink(e, url)
+	magicLink := s.config.BaseURL + "/api/auth/magic-link/verify?token=" + esc
+	
+	// Get user name for personalization
+	userName := e
+	if u, _ := s.users.FindByEmail(ctx, e); u != nil && u.Name != "" {
+		userName = u.Name
+	} else if at := strings.Index(e, "@"); at > 0 {
+		userName = e[:at]
 	}
+	
+	// Send via notification plugin if available
+	if s.notifAdapter != nil {
+		err := s.notifAdapter.SendMagicLink(ctx, "default", e, userName, magicLink, s.config.ExpiryMinutes)
+		if err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Failed to send magic link via notification plugin: %v\n", err)
+		}
+	}
+	
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, "magiclink_sent", "email:"+e, ip, ua, "")
 	}
-	if s.config.DevExposeURL || s.provider == nil {
-		return url, nil
+	
+	if s.config.DevExposeURL || s.notifAdapter == nil {
+		return magicLink, nil
 	}
 	return "", nil
 }

@@ -29,7 +29,7 @@ type ErrorResponse struct {
 }
 
 // SendNotification sends a notification
-func (h *NotificationHandler) SendNotification(c *forge.Context) error {
+func (h *NotificationHandler) SendNotification(c forge.Context) error {
 	var req notification.SendRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -55,7 +55,7 @@ func (h *NotificationHandler) SendNotification(c *forge.Context) error {
 }
 
 // GetNotification gets a notification by ID
-func (h *NotificationHandler) GetNotification(c *forge.Context) error {
+func (h *NotificationHandler) GetNotification(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
@@ -81,7 +81,7 @@ func (h *NotificationHandler) GetNotification(c *forge.Context) error {
 }
 
 // ListNotifications lists notifications
-func (h *NotificationHandler) ListNotifications(c *forge.Context) error {
+func (h *NotificationHandler) ListNotifications(c forge.Context) error {
 	// Get organization ID from header
 	orgID := c.Request().Header.Get("X-Organization-ID")
 	if orgID == "" {
@@ -137,7 +137,7 @@ func (h *NotificationHandler) ListNotifications(c *forge.Context) error {
 }
 
 // UpdateDeliveryStatus updates the delivery status of a notification
-func (h *NotificationHandler) UpdateDeliveryStatus(c *forge.Context) error {
+func (h *NotificationHandler) UpdateDeliveryStatus(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
@@ -166,7 +166,7 @@ func (h *NotificationHandler) UpdateDeliveryStatus(c *forge.Context) error {
 }
 
 // CreateTemplate creates a new notification template
-func (h *NotificationHandler) CreateTemplate(c *forge.Context) error {
+func (h *NotificationHandler) CreateTemplate(c forge.Context) error {
 	var req notification.CreateTemplateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -192,7 +192,7 @@ func (h *NotificationHandler) CreateTemplate(c *forge.Context) error {
 }
 
 // GetTemplate gets a template by ID
-func (h *NotificationHandler) GetTemplate(c *forge.Context) error {
+func (h *NotificationHandler) GetTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
@@ -218,7 +218,7 @@ func (h *NotificationHandler) GetTemplate(c *forge.Context) error {
 }
 
 // UpdateTemplate updates a template
-func (h *NotificationHandler) UpdateTemplate(c *forge.Context) error {
+func (h *NotificationHandler) UpdateTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
@@ -244,7 +244,7 @@ func (h *NotificationHandler) UpdateTemplate(c *forge.Context) error {
 }
 
 // DeleteTemplate deletes a template
-func (h *NotificationHandler) DeleteTemplate(c *forge.Context) error {
+func (h *NotificationHandler) DeleteTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
@@ -263,7 +263,7 @@ func (h *NotificationHandler) DeleteTemplate(c *forge.Context) error {
 }
 
 // ListTemplates lists notification templates
-func (h *NotificationHandler) ListTemplates(c *forge.Context) error {
+func (h *NotificationHandler) ListTemplates(c forge.Context) error {
 	// Get organization ID from header
 	orgID := c.Request().Header.Get("X-Organization-ID")
 	if orgID == "" {

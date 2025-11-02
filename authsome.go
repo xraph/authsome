@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
@@ -32,11 +31,31 @@ import (
 	"github.com/xraph/forge"
 )
 
+// Service name constants for DI container
+const (
+	ServiceDatabase       = "authsome.database"
+	ServiceUser           = "authsome.user"
+	ServiceSession        = "authsome.session"
+	ServiceAuth           = "authsome.auth"
+	ServiceOrganization   = "authsome.organization"
+	ServiceRateLimit      = "authsome.ratelimit"
+	ServiceDevice         = "authsome.device"
+	ServiceSecurity       = "authsome.security"
+	ServiceAudit          = "authsome.audit"
+	ServiceRBAC           = "authsome.rbac"
+	ServiceWebhook        = "authsome.webhook"
+	ServiceNotification   = "authsome.notification"
+	ServiceJWT            = "authsome.jwt"
+	ServiceAPIKey         = "authsome.apikey"
+	ServiceHookRegistry   = "authsome.hooks"
+	ServicePluginRegistry = "authsome.plugins"
+)
+
 // Auth is the main authentication instance
 type Auth struct {
-	config      Config
-	forgeConfig interface{}
-	db          interface{} // Will be *bun.DB
+	config   Config
+	forgeApp forge.App
+	db       interface{} // Will be *bun.DB
 
 	// Core services (using interfaces to allow plugin decoration)
 	userService         user.ServiceInterface
@@ -93,8 +112,8 @@ func New(opts ...Option) *Auth {
 
 // Initialize initializes all core services
 func (a *Auth) Initialize(ctx context.Context) error {
-	if a.forgeConfig == nil {
-		return fmt.Errorf("forge config manager not set")
+	if a.forgeApp == nil {
+		return fmt.Errorf("forge app not set")
 	}
 
 	if a.db == nil {
@@ -208,6 +227,11 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	a.serviceRegistry.SetRBACService(a.rbacService)
 	a.serviceRegistry.SetRateLimitService(a.rateLimitService)
 
+	// Register services into Forge DI container
+	if err := a.registerServicesIntoContainer(db); err != nil {
+		return fmt.Errorf("failed to register services into DI container: %w", err)
+	}
+
 	// Initialize plugins with full Auth instance and run complete lifecycle
 	if a.pluginRegistry != nil {
 		for _, p := range a.pluginRegistry.List() {
@@ -248,8 +272,8 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// Mount mounts the auth routes to the Forge app
-func (a *Auth) Mount(app interface{}, basePath string) error {
+// Mount mounts the auth routes to the Forge router
+func (a *Auth) Mount(router forge.Router, basePath string) error {
 	if a.authService == nil {
 		return fmt.Errorf("auth service not initialized; call Initialize first")
 	}
@@ -266,53 +290,33 @@ func (a *Auth) Mount(app interface{}, basePath string) error {
 	jwtH := jwtplugin.NewHandler(a.jwtService)
 	apikeyH := handlers.NewAPIKeyHandler(a.apikeyService)
 
-	switch v := app.(type) {
-	case *forge.App:
-		routes.Register(v, basePath, h)
-		routes.RegisterAudit(v, basePath, audH)
-		// Mount organization routes under a fixed base
-		routes.RegisterOrganization(v, "/api/orgs", orgH)
+	// Register core auth routes
+	routes.Register(router, basePath, h)
+	routes.RegisterAudit(router, basePath, audH)
 
-		// Phase 10 routes
-		routes.RegisterWebhookRoutes(v.Group(basePath), webhookH)
-		routes.RegisterNotificationRoutes(v.Group(basePath), notificationH)
-		routes.RegisterJWTRoutes(v.Group(basePath), jwtH)
-		routes.RegisterAPIKeyRoutes(v.Group(basePath), apikeyH)
+	// Mount organization routes under a fixed base
+	routes.RegisterOrganization(router, "/api/orgs", orgH)
 
-		// Register plugin routes (scoped to basePath)
-		if a.pluginRegistry != nil {
-			// Pass a group with the basePath so plugins are scoped under the auth mount point
-			pluginGroup := v.Group(basePath)
-			for _, p := range a.pluginRegistry.List() {
-				_ = p.RegisterRoutes(pluginGroup)
+	// Phase 10 routes - create a scoped group for these routes
+	authGroup := router.Group(basePath)
+	routes.RegisterWebhookRoutes(authGroup, webhookH)
+	routes.RegisterNotificationRoutes(authGroup, notificationH)
+	routes.RegisterJWTRoutes(authGroup, jwtH)
+	routes.RegisterAPIKeyRoutes(authGroup, apikeyH)
+
+	// Register plugin routes (scoped to basePath)
+	if a.pluginRegistry != nil {
+		// Pass a group with the basePath so plugins are scoped under the auth mount point
+		pluginGroup := router.Group(basePath)
+		for _, p := range a.pluginRegistry.List() {
+			fmt.Printf("[AuthSome] Registering routes for plugin: %s\n", p.ID())
+			if err := p.RegisterRoutes(pluginGroup); err != nil {
+				fmt.Printf("[AuthSome] Error registering routes for plugin %s: %v\n", p.ID(), err)
 			}
 		}
-		return nil
-	case *http.ServeMux:
-		// Wrap ServeMux with local forge shim - create ONE instance shared by all routes
-		f := forge.NewApp(v)
-		routes.Register(f, basePath, h)
-		routes.RegisterAudit(f, basePath, audH)
-		routes.RegisterOrganization(f, "/api/orgs", orgH)
-
-		// Phase 10 routes
-		routes.RegisterWebhookRoutes(f.Group(basePath), webhookH)
-		routes.RegisterNotificationRoutes(f.Group(basePath), notificationH)
-		routes.RegisterJWTRoutes(f.Group(basePath), jwtH)
-		routes.RegisterAPIKeyRoutes(f.Group(basePath), apikeyH)
-
-		// Register plugin routes - pass the forge.App instance to avoid creating multiple apps
-		// This ensures all plugins use the SAME forge.App instance and dispatcher
-		if a.pluginRegistry != nil {
-			for _, p := range a.pluginRegistry.List() {
-				// Pass the forge.App instance instead of raw ServeMux to avoid route conflicts
-				_ = p.RegisterRoutes(f)
-			}
-		}
-		return nil
-	default:
-		return errors.New("unsupported app type for Mount; expected *forge.App or *http.ServeMux")
 	}
+
+	return nil
 }
 
 // RegisterPlugin registers a plugin
@@ -338,9 +342,9 @@ func (a *Auth) GetDB() *bun.DB {
 	return nil
 }
 
-// GetConfigManager returns the forge config manager
-func (a *Auth) GetConfigManager() interface{} {
-	return a.forgeConfig
+// GetForgeApp returns the forge application instance
+func (a *Auth) GetForgeApp() forge.App {
+	return a.forgeApp
 }
 
 // GetServiceRegistry returns the service registry for plugins
@@ -351,4 +355,135 @@ func (a *Auth) GetServiceRegistry() *registry.ServiceRegistry {
 // GetHookRegistry returns the hook registry for plugins
 func (a *Auth) GetHookRegistry() *hooks.HookRegistry {
 	return a.hookRegistry
+}
+
+// GetBasePath returns the base path for AuthSome routes
+func (a *Auth) GetBasePath() string {
+	return a.config.BasePath
+}
+
+// GetPluginRegistry returns the plugin registry
+func (a *Auth) GetPluginRegistry() *plugins.Registry {
+	return a.pluginRegistry
+}
+
+// IsPluginEnabled checks if a plugin is registered and enabled
+func (a *Auth) IsPluginEnabled(pluginID string) bool {
+	if a.pluginRegistry == nil {
+		return false
+	}
+	_, exists := a.pluginRegistry.Get(pluginID)
+	return exists
+}
+
+// registerServicesIntoContainer registers all AuthSome services into the Forge DI container
+// This enables dependency injection for handlers, plugins, and middleware
+func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
+	container := a.forgeApp.Container()
+	if container == nil {
+		// Container is optional - if not available, skip registration
+		return nil
+	}
+
+	// Register database as singleton
+	if err := container.Register(ServiceDatabase, func(c forge.Container) (interface{}, error) {
+		return db, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register database: %w", err)
+	}
+
+	// Register core services as singletons
+	if err := container.Register(ServiceUser, func(c forge.Container) (interface{}, error) {
+		return a.userService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register user service: %w", err)
+	}
+
+	if err := container.Register(ServiceSession, func(c forge.Container) (interface{}, error) {
+		return a.sessionService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register session service: %w", err)
+	}
+
+	if err := container.Register(ServiceAuth, func(c forge.Container) (interface{}, error) {
+		return a.authService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register auth service: %w", err)
+	}
+
+	if err := container.Register(ServiceOrganization, func(c forge.Container) (interface{}, error) {
+		return a.organizationService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register organization service: %w", err)
+	}
+
+	if err := container.Register(ServiceRateLimit, func(c forge.Container) (interface{}, error) {
+		return a.rateLimitService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register rate limit service: %w", err)
+	}
+
+	if err := container.Register(ServiceDevice, func(c forge.Container) (interface{}, error) {
+		return a.deviceService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register device service: %w", err)
+	}
+
+	if err := container.Register(ServiceSecurity, func(c forge.Container) (interface{}, error) {
+		return a.securityService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register security service: %w", err)
+	}
+
+	if err := container.Register(ServiceAudit, func(c forge.Container) (interface{}, error) {
+		return a.auditService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register audit service: %w", err)
+	}
+
+	if err := container.Register(ServiceRBAC, func(c forge.Container) (interface{}, error) {
+		return a.rbacService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register RBAC service: %w", err)
+	}
+
+	if err := container.Register(ServiceWebhook, func(c forge.Container) (interface{}, error) {
+		return a.webhookService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register webhook service: %w", err)
+	}
+
+	if err := container.Register(ServiceNotification, func(c forge.Container) (interface{}, error) {
+		return a.notificationService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register notification service: %w", err)
+	}
+
+	if err := container.Register(ServiceJWT, func(c forge.Container) (interface{}, error) {
+		return a.jwtService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register JWT service: %w", err)
+	}
+
+	if err := container.Register(ServiceAPIKey, func(c forge.Container) (interface{}, error) {
+		return a.apikeyService, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register API key service: %w", err)
+	}
+
+	// Register registries
+	if err := container.Register(ServiceHookRegistry, func(c forge.Container) (interface{}, error) {
+		return a.hookRegistry, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register hook registry: %w", err)
+	}
+
+	if err := container.Register(ServicePluginRegistry, func(c forge.Container) (interface{}, error) {
+		return a.pluginRegistry, nil
+	}); err != nil {
+		return fmt.Errorf("failed to register plugin registry: %w", err)
+	}
+
+	fmt.Println("[AuthSome] Successfully registered all services into Forge DI container")
+	return nil
 }

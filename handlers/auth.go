@@ -31,7 +31,7 @@ func NewAuthHandler(a auth.ServiceInterface, rlsvc *rl.Service, dsvc *dev.Servic
     return &AuthHandler{auth: a, rl: rlsvc, dev: dsvc, sec: ssvc, aud: asvc, twofaRepo: tfrepo}
 }
 
-func (h *AuthHandler) SignUp(c *forge.Context) error {
+func (h *AuthHandler) SignUp(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -75,7 +75,7 @@ func (h *AuthHandler) SignUp(c *forge.Context) error {
     return c.JSON(200, res)
 }
 
-func (h *AuthHandler) SignIn(c *forge.Context) error {
+func (h *AuthHandler) SignIn(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -178,7 +178,7 @@ func (h *AuthHandler) SignIn(c *forge.Context) error {
 }
 
 // UpdateUser updates the authenticated user's profile (name, image, username)
-func (h *AuthHandler) UpdateUser(c *forge.Context) error {
+func (h *AuthHandler) UpdateUser(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -187,10 +187,11 @@ func (h *AuthHandler) UpdateUser(c *forge.Context) error {
         }
     }
     // Require authentication via session cookie
-    token, err := c.Cookie("session_token")
-    if err != nil || token == "" {
+    cookie, err := c.Request().Cookie("session_token")
+    if err != nil || cookie == nil {
         return c.JSON(401, map[string]string{"error": "not authenticated"})
     }
+    token := cookie.Value
     res, err := h.auth.GetSession(c.Request().Context(), token)
     if err != nil || res.User == nil {
         return c.JSON(401, map[string]string{"error": "invalid session"})
@@ -271,7 +272,7 @@ func clientIPFromRequest(r *http.Request, ssvc *sec.Service) string {
     return remote
 }
 
-func (h *AuthHandler) SignOut(c *forge.Context) error {
+func (h *AuthHandler) SignOut(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -293,7 +294,7 @@ func (h *AuthHandler) SignOut(c *forge.Context) error {
     return c.JSON(200, map[string]string{"status": "signed_out"})
 }
 
-func (h *AuthHandler) GetSession(c *forge.Context) error {
+func (h *AuthHandler) GetSession(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -301,10 +302,11 @@ func (h *AuthHandler) GetSession(c *forge.Context) error {
             return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
         }
     }
-    token, err := c.Cookie("session_token")
-    if err != nil || token == "" {
+    cookie, err := c.Request().Cookie("session_token")
+    if err != nil || cookie == nil {
         return c.JSON(401, map[string]string{"error": "not authenticated"})
     }
+    token := cookie.Value
     res, err := h.auth.GetSession(c.Request().Context(), token)
     if err != nil {
         return c.JSON(401, map[string]string{"error": err.Error()})
@@ -321,7 +323,7 @@ func (h *AuthHandler) GetSession(c *forge.Context) error {
 }
 
 // ListDevices lists devices for the authenticated user
-func (h *AuthHandler) ListDevices(c *forge.Context) error {
+func (h *AuthHandler) ListDevices(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -329,10 +331,11 @@ func (h *AuthHandler) ListDevices(c *forge.Context) error {
             return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
         }
     }
-    token, err := c.Cookie("session_token")
-    if err != nil || token == "" {
+    cookie, err := c.Request().Cookie("session_token")
+    if err != nil || cookie == nil {
         return c.JSON(401, map[string]string{"error": "not authenticated"})
     }
+    token := cookie.Value
     res, err := h.auth.GetSession(c.Request().Context(), token)
     if err != nil || res.User == nil {
         return c.JSON(401, map[string]string{"error": "invalid session"})
@@ -350,7 +353,7 @@ func (h *AuthHandler) ListDevices(c *forge.Context) error {
 }
 
 // RevokeDevice deletes a device by fingerprint for the authenticated user
-func (h *AuthHandler) RevokeDevice(c *forge.Context) error {
+func (h *AuthHandler) RevokeDevice(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -358,10 +361,11 @@ func (h *AuthHandler) RevokeDevice(c *forge.Context) error {
             return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
         }
     }
-    token, err := c.Cookie("session_token")
-    if err != nil || token == "" {
+    cookie, err := c.Request().Cookie("session_token")
+    if err != nil || cookie == nil {
         return c.JSON(401, map[string]string{"error": "not authenticated"})
     }
+    token := cookie.Value
     res, err := h.auth.GetSession(c.Request().Context(), token)
     if err != nil || res.User == nil {
         return c.JSON(401, map[string]string{"error": "invalid session"})

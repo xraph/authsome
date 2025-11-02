@@ -10,7 +10,7 @@ type Handler struct{ svc *Service }
 
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
-func (h *Handler) Enable(c *forge.Context) error {
+func (h *Handler) Enable(c forge.Context) error {
 	var body struct {
 		UserID string `json:"user_id"`
 		Method string `json:"method"`
@@ -32,7 +32,7 @@ func (h *Handler) Enable(c *forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-func (h *Handler) Verify(c *forge.Context) error {
+func (h *Handler) Verify(c forge.Context) error {
 	var body struct {
 		UserID         string `json:"user_id"`
 		Code           string `json:"code"`
@@ -56,7 +56,7 @@ func (h *Handler) Verify(c *forge.Context) error {
 	return c.JSON(200, map[string]string{"status": "verified"})
 }
 
-func (h *Handler) Disable(c *forge.Context) error {
+func (h *Handler) Disable(c forge.Context) error {
 	var body struct {
 		UserID string `json:"user_id"`
 	}
@@ -70,7 +70,7 @@ func (h *Handler) Disable(c *forge.Context) error {
 	return c.JSON(200, map[string]string{"status": "2fa_disabled"})
 }
 
-func (h *Handler) GenerateBackupCodes(c *forge.Context) error {
+func (h *Handler) GenerateBackupCodes(c forge.Context) error {
 	var body struct {
 		UserID string `json:"user_id"`
 		Count  int    `json:"count"`
@@ -89,7 +89,7 @@ func (h *Handler) GenerateBackupCodes(c *forge.Context) error {
 }
 
 // SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
-func (h *Handler) SendOTP(c *forge.Context) error {
+func (h *Handler) SendOTP(c forge.Context) error {
 	var body struct {
 		UserID string `json:"user_id"`
 	}
@@ -108,7 +108,7 @@ func (h *Handler) SendOTP(c *forge.Context) error {
 }
 
 // Status returns whether 2FA is enabled and whether the device is trusted
-func (h *Handler) Status(c *forge.Context) error {
+func (h *Handler) Status(c forge.Context) error {
 	var body struct {
 		UserID   string `json:"user_id"`
 		DeviceID string `json:"device_id"`

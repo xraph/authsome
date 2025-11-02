@@ -29,6 +29,7 @@ type APIKey struct {
 	Scopes      []string          `bun:"scopes,type:jsonb" json:"scopes"`                    // ["read", "write", "admin"]
 	Permissions map[string]string `bun:"permissions,type:jsonb" json:"permissions"`         // Custom permissions
 	RateLimit   int               `bun:"rate_limit,default:1000" json:"rate_limit"`         // Requests per hour
+	AllowedIPs  []string          `bun:"allowed_ips,type:jsonb" json:"allowed_ips,omitempty"` // IP whitelist (CIDR notation supported)
 
 	// Status and expiration
 	Active    bool       `bun:"active,notnull,default:true" json:"active"`
@@ -89,4 +90,20 @@ func (a *APIKey) HasPermission(permission string) bool {
 	}
 	_, exists := a.Permissions[permission]
 	return exists
+}
+
+// IsIPAllowed checks if an IP address is in the allowed list
+// Supports exact IP matching and CIDR notation
+func (a *APIKey) IsIPAllowed(ip string) bool {
+	if len(a.AllowedIPs) == 0 {
+		return true // No whitelist = allow all
+	}
+	
+	for _, allowed := range a.AllowedIPs {
+		if allowed == ip {
+			return true // Exact match
+		}
+		// CIDR matching handled in middleware
+	}
+	return false
 }

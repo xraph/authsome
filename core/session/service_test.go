@@ -68,6 +68,14 @@ func (m *MockRepository) RevokeByID(ctx context.Context, id xid.ID) error {
 	return args.Error(0)
 }
 
+func (m *MockRepository) ListAll(ctx context.Context, limit, offset int) ([]*Session, error) {
+	args := m.Called(ctx, limit, offset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*Session), args.Error(1)
+}
+
 // Helper function to create a test service
 func newTestService(repo Repository, cfg ...Config) *Service {
 	config := Config{}

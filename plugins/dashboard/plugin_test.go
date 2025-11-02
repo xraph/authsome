@@ -1,109 +1,111 @@
 package dashboard
 
 import (
-	"net/http"
 	"testing"
 
-	"github.com/xraph/forge"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// TestPlugin_ID tests that the plugin returns the correct ID
 func TestPlugin_ID(t *testing.T) {
-	plugin := NewPlugin()
-	expected := "dashboard"
-	if got := plugin.ID(); got != expected {
-		t.Errorf("Plugin.ID() = %v, want %v", got, expected)
-	}
+	p := NewPlugin()
+	assert.Equal(t, "dashboard", p.ID())
 }
 
-// TestPlugin_Init tests plugin initialization
 func TestPlugin_Init(t *testing.T) {
-	plugin := NewPlugin()
-
-	// Test with nil dependency (should not fail)
-	err := plugin.Init(nil)
-	if err != nil {
-		t.Errorf("Plugin.Init() with nil dependency failed: %v", err)
+	tests := []struct {
+		name    string
+		dep     interface{}
+		wantErr bool
+	}{
+		{
+			name:    "nil dependency",
+			dep:     nil,
+			wantErr: true,
+		},
+		{
+			name:    "invalid dependency type",
+			dep:     "invalid",
+			wantErr: true,
+		},
+		// TODO: Add test with valid auth instance once we have a mock
 	}
 
-	// Verify handler was initialized
-	if plugin.handler == nil {
-		t.Error("Plugin.Init() did not initialize handler")
-	}
-}
-
-// TestPlugin_RegisterRoutes tests route registration
-func TestPlugin_RegisterRoutes(t *testing.T) {
-	plugin := NewPlugin()
-	err := plugin.Init(nil)
-	if err != nil {
-		t.Fatalf("Plugin.Init() failed: %v", err)
-	}
-
-	// Create a test router
-	mux := http.NewServeMux()
-	app := forge.NewApp(mux)
-
-	// Register routes
-	err = plugin.RegisterRoutes(app)
-	if err != nil {
-		t.Errorf("Plugin.RegisterRoutes() failed: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewPlugin()
+			err := p.Init(tt.dep)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 
-// TestDashboardAssets tests that the embedded assets are accessible
-func TestDashboardAssets(t *testing.T) {
-	// Test that we can read from the embedded filesystem
-	files, err := dashboardAssets.ReadDir("dist")
-	if err != nil {
-		t.Fatalf("Failed to read dist directory: %v", err)
-	}
-
-	// Should have at least index.html
-	found := false
-	for _, file := range files {
-		if file.Name() == "index.html" {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Error("index.html not found in embedded assets")
-	}
+func TestPlugin_RegisterHooks(t *testing.T) {
+	p := NewPlugin()
+	err := p.RegisterHooks(nil)
+	assert.NoError(t, err, "RegisterHooks should not return an error for dashboard plugin")
 }
 
-// TestServeIndex tests serving the index.html file
-func TestServeIndex(t *testing.T) {
-	plugin := NewPlugin()
-	err := plugin.Init(nil)
-	if err != nil {
-		t.Fatalf("Plugin.Init() failed: %v", err)
-	}
-
-	// Note: This is a basic test structure. In a real test, you'd need to properly
-	// initialize the forge.Context with the request and response writer.
-	// For now, we're just testing that the handler exists and can be called.
-
-	if plugin.handler == nil {
-		t.Error("Handler not initialized")
-	}
-
-	// Test that the handler has the required methods
-	// Note: In Go, function fields are never nil if they're defined as methods
-	// We just verify the handler is properly initialized
+func TestPlugin_RegisterServiceDecorators(t *testing.T) {
+	p := NewPlugin()
+	err := p.RegisterServiceDecorators(nil)
+	assert.NoError(t, err, "RegisterServiceDecorators should not return an error for dashboard plugin")
 }
 
-// TestGetAssets tests the GetAssets function
-func TestGetAssets(t *testing.T) {
-	assets := GetAssets()
-	if assets == nil {
-		t.Error("GetAssets() returned nil")
-	}
-
-	// Test that we can read files from the returned filesystem
-	_, err := assets.Open("index.html")
-	if err != nil {
-		t.Errorf("Failed to open index.html from assets: %v", err)
-	}
+func TestPlugin_Migrate(t *testing.T) {
+	p := NewPlugin()
+	err := p.Migrate()
+	assert.NoError(t, err, "Migrate should not return an error for dashboard plugin")
 }
+
+func TestTemplateFuncs(t *testing.T) {
+	funcs := templateFuncs()
+	
+	t.Run("inc", func(t *testing.T) {
+		inc := funcs["inc"].(func(int) int)
+		assert.Equal(t, 2, inc(1))
+		assert.Equal(t, 11, inc(10))
+	})
+	
+	t.Run("dec", func(t *testing.T) {
+		dec := funcs["dec"].(func(int) int)
+		assert.Equal(t, 0, dec(1))
+		assert.Equal(t, 9, dec(10))
+	})
+	
+	t.Run("mul", func(t *testing.T) {
+		mul := funcs["mul"].(func(int, int) int)
+		assert.Equal(t, 6, mul(2, 3))
+		assert.Equal(t, 20, mul(4, 5))
+	})
+	
+	t.Run("slice", func(t *testing.T) {
+		slice := funcs["slice"].(func(string, int, int) string)
+		assert.Equal(t, "hel", slice("hello", 0, 3))
+		assert.Equal(t, "lo", slice("hello", 3, 5))
+		assert.Equal(t, "", slice("hello", 10, 15))
+	})
+	
+	t.Run("upper", func(t *testing.T) {
+		upper := funcs["upper"].(func(string) string)
+		assert.Equal(t, "H", upper("hello"))
+		assert.Equal(t, "W", upper("world"))
+		assert.Equal(t, "", upper(""))
+	})
+}
+
+func TestNewPlugin(t *testing.T) {
+	p := NewPlugin()
+	require.NotNil(t, p)
+	assert.Nil(t, p.handler)
+	assert.Nil(t, p.templates)
+	assert.Nil(t, p.userSvc)
+	assert.Nil(t, p.sessionSvc)
+	assert.Nil(t, p.auditSvc)
+	assert.Nil(t, p.rbacSvc)
+}
+

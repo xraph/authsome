@@ -1,0 +1,423 @@
+---
+title: SaaS Quick Start
+description: Get started with AuthSome RBAC for your SaaS application in 5 minutes
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Steps } from 'fumadocs-ui/components/steps'
+
+# SaaS Quick Start
+
+Get AuthSome RBAC integrated with your SaaS application in **5 minutes**.
+
+<Callout type="info">
+This guide assumes you have AuthSome running in SaaS mode. See [Installation](/docs/go/installation) for setup.
+</Callout>
+
+## 5-Minute Integration
+
+<Steps>
+
+### Install Client Library
+
+<Tabs items={['Go', 'TypeScript', 'Rust']}>
+<Tab value="Go">
+```bash
+go get github.com/xraph/authsome/clients/go
+```
+</Tab>
+
+<Tab value="TypeScript">
+```bash
+npm install @authsome/client
+```
+</Tab>
+
+<Tab value="Rust">
+```bash
+cargo add authsome-client
+```
+</Tab>
+</Tabs>
+
+### Initialize Client
+
+```go
+import authsome "github.com/xraph/authsome/clients/go"
+
+client := authsome.NewClient(authsome.ClientConfig{
+    BaseURL: "https://auth.yourdomain.com",
+    APIKey:  "your-api-key",
+})
+```
+
+### Create Organizations
+
+```bash
+# Create organization for each customer
+curl -X POST https://auth.yourdomain.com/api/organizations \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "name": "Acme Corp",
+    "slug": "acme"
+  }'
+```
+
+### Define Roles
+
+```go
+// Define roles for your SaaS
+roles := []authsome.Role{
+    {
+        Name: "admin",
+        Permissions: []string{
+            "projects:*",
+            "members:*",
+            "settings:*",
+        },
+    },
+    {
+        Name: "member",
+        Permissions: []string{
+            "projects:read",
+            "projects:create",
+        },
+    },
+}
+
+for _, role := range roles {
+    client.RBAC.CreateRole(ctx, "org_acme", &role)
+}
+```
+
+### Add Permission Middleware
+
+```go
+func RequirePermission(action, resource string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session := getSession(r)
+            orgID := r.Header.Get("X-Organization-ID")
+            
+            // Check permission using AuthSome
+            allowed, _ := client.RBAC.Can(r.Context(), &authsome.PermissionCheck{
+                UserID:   session.UserID,
+                Action:   action,
+                Resource: resource,
+                OrgID:    orgID,
+            })
+            
+            if !allowed {
+                http.Error(w, "Forbidden", http.StatusForbidden)
+                return
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+
+// Protect your routes
+http.Handle("/api/projects", 
+    RequirePermission("read", "projects")(projectsHandler))
+```
+
+</Steps>
+
+## Real-World Example
+
+```go
+package main
+
+import (
+    "context"
+    "net/http"
+    
+    authsome "github.com/xraph/authsome/clients/go"
+)
+
+func main() {
+    // Initialize AuthSome client
+    auth := authsome.NewClient(authsome.ClientConfig{
+        BaseURL: "https://auth.myapp.com",
+        APIKey:  "sk_live_xxx",
+    })
+    
+    // Your SaaS routes
+    http.HandleFunc("/api/projects", func(w http.ResponseWriter, r *http.Request) {
+        // Get session
+        session, err := auth.Session.FromRequest(r)
+        if err != nil {
+            http.Error(w, "Unauthorized", 401)
+            return
+        }
+        
+        // Get organization
+        orgID := r.Header.Get("X-Organization-ID")
+        
+        // Check permission
+        canRead, err := auth.RBAC.Can(r.Context(), &authsome.PermissionCheck{
+            UserID:   session.UserID,
+            Action:   "read",
+            Resource: "projects",
+            OrgID:    orgID,
+        })
+        
+        if err != nil || !canRead {
+            http.Error(w, "Forbidden", 403)
+            return
+        }
+        
+        // Return projects
+        projects := getProjectsForOrg(orgID)
+        json.NewEncoder(w).Encode(projects)
+    })
+    
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+## Organization Context
+
+### Method 1: Header (Recommended)
+
+```bash
+curl https://api.yoursaas.com/projects \
+  -H "Authorization: Bearer session_token" \
+  -H "X-Organization-ID: org_acme"
+```
+
+### Method 2: Subdomain
+
+```bash
+# AuthSome automatically extracts org from subdomain
+curl https://acme.yoursaas.com/api/projects \
+  -H "Authorization: Bearer session_token"
+```
+
+<Callout>
+Configure your AuthSome instance to extract organization from subdomains for seamless multi-tenancy.
+</Callout>
+
+## Permission Patterns
+
+### Basic Permissions
+
+```go
+// Simple resource check
+canView := client.RBAC.Can(ctx, &authsome.PermissionCheck{
+    UserID:   "user_123",
+    Action:   "view",
+    Resource: "dashboards",
+    OrgID:    "org_acme",
+})
+```
+
+### Hierarchical Permissions
+
+```go
+// Check access to specific resource
+canEdit := client.RBAC.Can(ctx, &authsome.PermissionCheck{
+    UserID:   "user_123",
+    Action:   "edit",
+    Resource: "projects:proj_456",  // Specific project
+    OrgID:    "org_acme",
+})
+
+// Check wildcard permission
+canManageAll := client.RBAC.Can(ctx, &authsome.PermissionCheck{
+    UserID:   "user_123",
+    Action:   "manage",
+    Resource: "projects:*",  // All projects
+    OrgID:    "org_acme",
+})
+```
+
+## Performance Tips
+
+### 1. Cache User Permissions
+
+```go
+// On user login, fetch and cache all permissions
+userPerms, err := client.RBAC.GetUserPermissions(ctx, userID, orgID)
+
+// Store in cache (Redis, Memcached, or in-memory)
+cache.Set(fmt.Sprintf("perms:%s:%s", userID, orgID), userPerms, 5*time.Minute)
+
+// Check locally
+if hasPermission(userPerms, "projects:read") {
+    // Allow access
+}
+```
+
+### 2. Use Built-in Cache
+
+```go
+// AuthSome caches role lookups automatically
+// Cache hit: ~10ns
+// Cache miss: ~240µs
+// Default TTL: 5 minutes
+
+// No additional code needed - it just works!
+```
+
+### 3. Batch Permission Checks
+
+```go
+// Check multiple permissions at once
+checks := []authsome.PermissionCheck{
+    {UserID: "user_123", Action: "read", Resource: "projects"},
+    {UserID: "user_123", Action: "write", Resource: "projects"},
+}
+
+results, err := client.RBAC.CheckBatch(ctx, checks)
+```
+
+## Frontend Integration
+
+<Tabs items={['React', 'Vue', 'Svelte']}>
+<Tab value="React">
+```typescript
+import { useAuthSome } from '@authsome/react';
+
+function ProjectList() {
+    const { user, checkPermission } = useAuthSome();
+    
+    const canCreate = checkPermission('create', 'projects');
+    const canDelete = checkPermission('delete', 'projects');
+    
+    return (
+        <div>
+            <h1>Projects</h1>
+            {canCreate && <button onClick={handleCreate}>New Project</button>}
+            
+            <ul>
+                {projects.map(project => (
+                    <li key={project.id}>
+                        {project.name}
+                        {canDelete && (
+                            <button onClick={() => handleDelete(project.id)}>
+                                Delete
+                            </button>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+```
+</Tab>
+
+<Tab value="Vue">
+```vue
+<template>
+    <div>
+        <h1>Projects</h1>
+        <button v-if="canCreate" @click="createProject">New Project</button>
+        
+        <ul>
+            <li v-for="project in projects" :key="project.id">
+                {{ project.name }}
+                <button v-if="canDelete" @click="deleteProject(project.id)">
+                    Delete
+                </button>
+            </li>
+        </ul>
+    </div>
+</template>
+
+<script>
+import { useAuthSome } from '@authsome/vue';
+
+export default {
+    setup() {
+        const { checkPermission } = useAuthSome();
+        
+        const canCreate = checkPermission('create', 'projects');
+        const canDelete = checkPermission('delete', 'projects');
+        
+        return { canCreate, canDelete };
+    }
+}
+</script>
+```
+</Tab>
+
+<Tab value="Svelte">
+```svelte
+<script>
+  import { authSome } from '@authsome/svelte';
+  
+  $: canCreate = $authSome.checkPermission('create', 'projects');
+  $: canDelete = $authSome.checkPermission('delete', 'projects');
+</script>
+
+<div>
+  <h1>Projects</h1>
+  {#if canCreate}
+    <button on:click={createProject}>New Project</button>
+  {/if}
+  
+  <ul>
+    {#each projects as project}
+      <li>
+        {project.name}
+        {#if canDelete}
+          <button on:click={() => deleteProject(project.id)}>
+            Delete
+          </button>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+</div>
+```
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+### "Forbidden" even with correct role
+
+**Check:**
+1. Organization ID is correct
+2. Role is assigned in the right organization
+3. Permission is spelled correctly
+4. Cache is not stale
+
+```bash
+# Verify user roles
+authsome-cli user get-roles --user-id=user_123 --org=org_acme
+
+# Clear cache
+authsome-cli cache clear --user=user_123 --org=org_acme
+```
+
+### Slow permission checks
+
+**Solutions:**
+1. Enable caching (enabled by default)
+2. Use batch checks for multiple permissions
+3. Cache user permissions in your app
+4. Use Redis for distributed caching
+
+<Callout type="warning">
+Always use HTTPS in production and set appropriate cache TTLs based on your security requirements.
+</Callout>
+
+## Next Steps
+
+- [Full Integration Guide](/docs/go/guides/saas-integration)
+- [Multi-Tenant Organizations](/docs/go/examples/multi-tenant)
+- [RBAC Concepts](/docs/go/concepts/rbac)
+- [Client Libraries](https://github.com/xraph/authsome/tree/main/clients)
+
+## Support
+
+- **Documentation**: https://docs.authsome.dev
+- **Discord**: https://discord.gg/authsome
+- **Email**: support@authsome.dev
+

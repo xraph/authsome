@@ -11,7 +11,7 @@ type Handler struct{ svc *Service }
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
 // SignIn creates a guest user and session
-func (h *Handler) SignIn(c *forge.Context) error {
+func (h *Handler) SignIn(c forge.Context) error {
 	// Optional body to allow passing remember later; currently unused
 	var body struct{}
 	_ = json.NewDecoder(c.Request().Body).Decode(&body)
@@ -23,7 +23,7 @@ func (h *Handler) SignIn(c *forge.Context) error {
 }
 
 // Link upgrades an anonymous session to a real account
-func (h *Handler) Link(c *forge.Context) error {
+func (h *Handler) Link(c forge.Context) error {
 	var body struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`

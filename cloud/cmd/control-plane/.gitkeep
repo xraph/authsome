@@ -1,0 +1,23 @@
+# Control Plane API Server
+
+This directory will contain the main control plane API server implementation.
+
+## Structure
+
+```
+control-plane/
+├── main.go              # Entry point
+├── server.go            # HTTP server setup
+├── routes.go            # Route registration
+├── middleware.go        # Common middleware
+└── Dockerfile           # Container image
+```
+
+## Responsibilities
+
+- Workspace CRUD operations
+- Application provisioning orchestration
+- Team member management
+- Billing and usage APIs
+- Authentication and authorization
+

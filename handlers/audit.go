@@ -18,7 +18,7 @@ type AuditHandler struct{
 func NewAuditHandler(a *audit.Service) *AuditHandler { return &AuditHandler{aud: a} }
 
 // ListEvents returns recent audit events with pagination via query params: limit, offset
-func (h *AuditHandler) ListEvents(c *forge.Context) error {
+func (h *AuditHandler) ListEvents(c forge.Context) error {
     if h.aud == nil { return c.JSON(http.StatusNotImplemented, map[string]string{"error": "audit service not available"}) }
     q := c.Request().URL.Query()
     limit, _ := strconv.Atoi(q.Get("limit"))
@@ -52,7 +52,7 @@ func (h *AuditHandler) ListEvents(c *forge.Context) error {
         events, total, err = h.aud.ListWithTotal(c.Request().Context(), limit, offset)
     }
     if err != nil { return c.JSON(500, map[string]string{"error": err.Error()}) }
-    c.Header().Set("X-Total-Count", strconv.Itoa(total))
+    c.SetHeader("X-Total-Count", strconv.Itoa(total))
     // Build RFC 5988 Link headers for pagination
     // prev: offset - limit (>=0), next: offset + limit (< total)
     links := ""
@@ -72,7 +72,7 @@ func (h *AuditHandler) ListEvents(c *forge.Context) error {
         q.Set("offset", strconv.Itoa(next))
         links = links + "<" + c.Request().URL.Path + "?" + q.Encode() + ">; rel=\"next\""
     }
-    if links != "" { c.Header().Set("Link", links) }
+    if links != "" { c.SetHeader("Link", links) }
     // JSON body pagination envelope
     page := 1
     if params.Limit > 0 {

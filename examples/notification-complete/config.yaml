@@ -1,0 +1,85 @@
+# Complete AuthSome Configuration with Notification System
+
+auth:
+  notification:
+    # Automatically add default templates
+    add_default_templates: true
+    
+    # Default language for templates
+    default_language: "en"
+    
+    # Allow organization-specific template overrides (SaaS mode)
+    allow_org_overrides: false
+    
+    # Automatically send welcome email when users sign up
+    auto_send_welcome: true
+    
+    # Retry configuration
+    retry_attempts: 3
+    retry_delay: "5m"
+    
+    # Cleanup old notifications after 30 days
+    cleanup_after: "720h"
+    
+    # Rate limits
+    rate_limits:
+      email:
+        max_requests: 100
+        window: "1h"
+      sms:
+        max_requests: 50
+        window: "1h"
+    
+    # Provider configuration
+    providers:
+      email:
+        # Options: smtp, sendgrid, mock
+        provider: "mock"  # Use mock for development
+        from: "noreply@example.com"
+        from_name: "AuthSome"
+        
+        # SMTP configuration (when provider: smtp)
+        # config:
+        #   host: "smtp.example.com"
+        #   port: 587
+        #   username: "smtp-user"
+        #   password: "smtp-password"
+        #   use_tls: true
+        
+        # SendGrid configuration (when provider: sendgrid)
+        # config:
+        #   api_key: "SG.your-api-key-here"
+      
+      sms:
+        # Options: twilio, mock
+        provider: "mock"  # Use mock for development
+        from: "+1234567890"
+        
+        # Twilio configuration (when provider: twilio)
+        # config:
+        #   account_sid: "AC..."
+        #   auth_token: "your-auth-token"
+
+  # Email OTP configuration
+  emailotp:
+    otp_length: 6
+    expiry_minutes: 10
+    max_attempts: 5
+    dev_expose_otp: true
+    allow_implicit_signup: true
+
+  # Magic Link configuration
+  magiclink:
+    expiry_minutes: 15
+    base_url: "http://localhost:8080"
+    dev_expose_url: true
+    allow_implicit_signup: true
+
+  # Phone OTP configuration
+  phone:
+    code_length: 6
+    expiry_minutes: 10
+    max_attempts: 5
+    dev_expose_code: true
+    allow_implicit_signup: true
+

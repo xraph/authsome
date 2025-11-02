@@ -2,6 +2,7 @@ package repository
 
 import (
     "context"
+    "time"
 
     "github.com/uptrace/bun"
     "github.com/rs/xid"
@@ -126,5 +127,44 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*core.U
 // Count returns total users
 func (r *UserRepository) Count(ctx context.Context) (int, error) {
     count, err := r.db.NewSelect().Model((*schema.User)(nil)).Count(ctx)
+    return count, err
+}
+
+// Search searches users by name or email
+func (r *UserRepository) Search(ctx context.Context, query string, limit, offset int) ([]*core.User, error) {
+    var sus []schema.User
+    q := r.db.NewSelect().Model(&sus).
+        Where("LOWER(email) LIKE LOWER(?)", "%"+query+"%").
+        WhereOr("LOWER(name) LIKE LOWER(?)", "%"+query+"%").
+        OrderExpr("created_at DESC").
+        Limit(limit).
+        Offset(offset)
+    
+    if err := q.Scan(ctx); err != nil {
+        return nil, err
+    }
+    res := make([]*core.User, 0, len(sus))
+    for i := range sus {
+        res = append(res, r.fromSchema(&sus[i]))
+    }
+    return res, nil
+}
+
+// CountSearch returns count of users matching the search query
+func (r *UserRepository) CountSearch(ctx context.Context, query string) (int, error) {
+    count, err := r.db.NewSelect().
+        Model((*schema.User)(nil)).
+        Where("LOWER(email) LIKE LOWER(?)", "%"+query+"%").
+        WhereOr("LOWER(name) LIKE LOWER(?)", "%"+query+"%").
+        Count(ctx)
+    return count, err
+}
+
+// CountCreatedSince returns count of users created since the given time
+func (r *UserRepository) CountCreatedSince(ctx context.Context, since time.Time) (int, error) {
+    count, err := r.db.NewSelect().
+        Model((*schema.User)(nil)).
+        Where("created_at >= ?", since).
+        Count(ctx)
     return count, err
 }

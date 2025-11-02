@@ -18,6 +18,7 @@ type APIKey struct {
 	Scopes      []string          `json:"scopes"`
 	Permissions map[string]string `json:"permissions"`
 	RateLimit   int               `json:"rate_limit"`
+	AllowedIPs  []string          `json:"allowed_ips,omitempty"`
 	Active      bool              `json:"active"`
 	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
 	UsageCount  int64             `json:"usage_count"`
@@ -41,6 +42,7 @@ type CreateAPIKeyRequest struct {
 	Scopes      []string          `json:"scopes" validate:"required,min=1"`
 	Permissions map[string]string `json:"permissions,omitempty"`
 	RateLimit   int               `json:"rate_limit,omitempty" validate:"min=0,max=10000"`
+	AllowedIPs  []string          `json:"allowed_ips,omitempty"` // IP whitelist (CIDR notation supported)
 	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
@@ -135,4 +137,22 @@ func (a *APIKey) HasPermission(permission string) bool {
 	}
 	_, exists := a.Permissions[permission]
 	return exists
+}
+
+// HasScopeWildcard checks if the API key has a scope, supporting wildcards
+// Examples: "admin:*" matches "admin:users", "admin:settings", etc.
+func (a *APIKey) HasScopeWildcard(scope string) bool {
+	for _, s := range a.Scopes {
+		if s == scope {
+			return true // Exact match
+		}
+		// Wildcard matching: "admin:*" matches "admin:anything"
+		if len(s) > 2 && s[len(s)-2:] == ":*" {
+			prefix := s[:len(s)-2]
+			if len(scope) > len(prefix) && scope[:len(prefix)] == prefix && scope[len(prefix)] == ':' {
+				return true
+			}
+		}
+	}
+	return false
 }

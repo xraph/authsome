@@ -1,0 +1,433 @@
+---
+title: Multi-Factor Authentication (MFA)
+description: Advanced MFA orchestration with risk-based adaptive authentication, step-up auth, and comprehensive policy management
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Multi-Factor Authentication (MFA)
+
+Advanced multi-factor authentication plugin that provides orchestration of multiple authentication factors with risk-based adaptive authentication, step-up auth, and comprehensive policy management.
+
+<Callout type="info">
+The MFA plugin is different from the Two-Factor (2FA) plugin. MFA supports **3+ factors** and **adaptive risk-based authentication**, while 2FA provides simple two-factor authentication (TOTP + Backup Codes).
+</Callout>
+
+## Features
+
+### Core Capabilities
+
+- ✅ **Multiple Factors Per User** - Support 2, 3, or more authentication factors
+- ✅ **Factor Types** - TOTP, SMS, Email, WebAuthn, Backup Codes
+- ✅ **Policy Engine** - Require N of M factors, organization-specific policies
+- ✅ **Risk-Based Authentication** - Adaptive MFA based on location, device, velocity
+- ✅ **Step-Up Authentication** - Require recent verification for sensitive operations
+- ✅ **Trusted Devices** - Skip MFA on recognized devices
+- ✅ **Rate Limiting** - Brute force protection with lockout
+- ✅ **Comprehensive Audit Trail** - All MFA operations logged
+
+### Integration
+
+- ✅ **Adapter Pattern** - Reuses existing plugins (twofa, emailotp, phone, passkey)
+- ✅ **No Code Duplication** - Delegates to specialized plugins
+- ✅ **Backward Compatible** - Legacy 2FA routes supported
+- ✅ **Middleware Support** - RequireMFA, StepUpAuth, AdaptiveMFA
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/mfa"
+    "github.com/xraph/authsome/plugins/twofa"
+    "github.com/xraph/authsome/plugins/emailotp"
+    "github.com/xraph/authsome/plugins/phone"
+)
+
+func main() {
+    auth := authsome.New(
+        authsome.WithDatabase(db),
+        authsome.WithPlugins(
+            twofa.NewPlugin(),    // Provides TOTP and backup codes
+            emailotp.NewPlugin(), // Provides email verification
+            phone.NewPlugin(),    // Provides SMS verification
+            mfa.NewPlugin(),      // MFA orchestration
+        ),
+    )
+}
+```
+
+### Configuration
+
+```yaml
+plugins:
+  mfa:
+    enabled: true
+    
+    # Require minimum factors
+    min_factors: 2
+    
+    # Maximum factors per user
+    max_factors: 5
+    
+    # Risk engine
+    risk_engine:
+      enabled: true
+      high_risk_threshold: 75
+      medium_risk_threshold: 50
+    
+    # Trusted devices
+    trusted_devices:
+      enabled: true
+      remember_days: 30
+    
+    # Rate limiting
+    rate_limiting:
+      max_attempts: 5
+      lockout_duration: 15m
+```
+
+## Usage
+
+### Enrolling Multiple Factors
+
+<Tabs items={['TOTP', 'SMS', 'Email']}>
+<Tab value="TOTP">
+```bash
+# 1. Request TOTP enrollment
+curl -X POST https://your-domain.com/api/auth/mfa/enroll \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "factor_type": "totp",
+    "device_name": "My Phone"
+  }'
+
+# Response includes QR code and secret
+
+# 2. Verify TOTP
+curl -X POST https://your-domain.com/api/auth/mfa/verify-enrollment \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "factor_id": "factor_123",
+    "code": "123456"
+  }'
+```
+</Tab>
+
+<Tab value="SMS">
+```bash
+# 1. Request SMS enrollment
+curl -X POST https://your-domain.com/api/auth/mfa/enroll \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "factor_type": "sms",
+    "phone_number": "+1234567890"
+  }'
+
+# SMS code sent
+
+# 2. Verify SMS code
+curl -X POST https://your-domain.com/api/auth/mfa/verify-enrollment \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "factor_id": "factor_456",
+    "code": "789012"
+  }'
+```
+</Tab>
+
+<Tab value="Email">
+```bash
+# 1. Request email enrollment
+curl -X POST https://your-domain.com/api/auth/mfa/enroll \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "factor_type": "email",
+    "email": "user@example.com"
+  }'
+
+# Email code sent
+
+# 2. Verify email code
+curl -X POST https://your-domain.com/api/auth/mfa/verify-enrollment \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "factor_id": "factor_789",
+    "code": "345678"
+  }'
+```
+</Tab>
+</Tabs>
+
+### Authentication Flow
+
+```go
+// 1. User signs in
+session, err := authClient.SignIn(ctx, &authsome.SignInRequest{
+    Email:    "user@example.com",
+    Password: "password",
+})
+
+// 2. Check if MFA required
+if session.RequiresMFA {
+    // Get available factors
+    factors, err := mfaClient.GetUserFactors(ctx, session.UserID)
+    
+    // 3. Challenge user with factor
+    challenge, err := mfaClient.Challenge(ctx, &mfa.ChallengeRequest{
+        UserID:   session.UserID,
+        FactorID: factors[0].ID,
+    })
+    
+    // 4. Verify factor
+    verified, err := mfaClient.Verify(ctx, &mfa.VerifyRequest{
+        ChallengeID: challenge.ID,
+        Code:        userProvidedCode,
+    })
+    
+    if verified {
+        // MFA complete, grant full session
+        session.MFAVerified = true
+    }
+}
+```
+
+## Risk-Based Authentication
+
+The MFA plugin includes a sophisticated risk engine that adapts authentication requirements based on contextual factors:
+
+```go
+// Risk factors considered:
+// - Location (new country/city)
+// - Device (new device fingerprint)
+// - Velocity (impossible travel)
+// - Time (unusual login time)
+// - IP reputation
+// - User behavior patterns
+
+// Configure risk thresholds
+config := mfa.RiskEngineConfig{
+    Enabled: true,
+    
+    Thresholds: map[string]int{
+        "high":   75,  // Always require MFA
+        "medium": 50,  // Sometimes require MFA
+        "low":    25,  // Rarely require MFA
+    },
+    
+    Factors: mfa.RiskFactors{
+        NewLocation: 30,
+        NewDevice:   25,
+        Velocity:    40,
+        TimeOfDay:   10,
+    },
+}
+```
+
+### Risk Scores
+
+- **0-25 (Low)**: Trusted pattern, may skip MFA
+- **26-50 (Medium)**: Some risk, adaptive MFA
+- **51-75 (Elevated)**: Higher risk, likely require MFA
+- **76-100 (High)**: Suspicious, always require MFA
+
+## Step-Up Authentication
+
+Require recent MFA verification for sensitive operations:
+
+```go
+// Middleware to require recent MFA
+func RequireStepUp(maxAge time.Duration) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session := getSession(r)
+            
+            // Check if MFA was verified recently
+            if time.Since(session.MFAVerifiedAt) > maxAge {
+                // Require re-verification
+                http.Error(w, "MFA step-up required", http.StatusForbidden)
+                return
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+
+// Protect sensitive routes
+http.Handle("/api/account/delete", RequireStepUp(5*time.Minute)(deleteAccountHandler))
+http.Handle("/api/settings/password", RequireStepUp(15*time.Minute)(changePasswordHandler))
+```
+
+## Trusted Devices
+
+Allow users to trust devices for a period of time:
+
+```bash
+# Mark device as trusted
+curl -X POST https://your-domain.com/api/auth/mfa/trust-device \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "device_id": "device_fingerprint_123",
+    "remember_days": 30
+  }'
+
+# On subsequent logins from trusted device, MFA is skipped
+```
+
+## Policy Management
+
+### Organization-Level Policies
+
+```go
+// Set organization MFA policy
+policy := &mfa.Policy{
+    OrganizationID: "org_123",
+    RequireMFA:     true,
+    MinFactors:     2,
+    AllowedFactors: []string{"totp", "sms", "email"},
+    TrustDevices:   true,
+    StepUpTimeout:  15 * time.Minute,
+}
+
+err := mfaService.SetPolicy(ctx, policy)
+```
+
+### User-Level Overrides
+
+```go
+// Require specific user to always use MFA
+err := mfaService.RequireMFAForUser(ctx, userID, true)
+
+// Disable MFA for specific user (admin override)
+err := mfaService.RequireMFAForUser(ctx, userID, false)
+```
+
+## Middleware
+
+### RequireMFA
+
+Ensure MFA is verified before accessing routes:
+
+```go
+func (p *MFAPlugin) RequireMFA() func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session := getSession(r)
+            
+            if !session.MFAVerified {
+                http.Error(w, "MFA required", http.StatusForbidden)
+                return
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+
+// Usage
+http.Handle("/api/admin/*", RequireMFA()(adminHandler))
+```
+
+### AdaptiveMFA
+
+Dynamically require MFA based on risk:
+
+```go
+func (p *MFAPlugin) AdaptiveMFA() func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session := getSession(r)
+            
+            // Calculate risk score
+            risk := p.riskEngine.Calculate(r.Context(), session.UserID, r)
+            
+            // Require MFA for high/medium risk
+            if risk >= 50 && !session.MFAVerified {
+                http.Error(w, "MFA required due to risk", http.StatusForbidden)
+                return
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+## API Reference
+
+### Enrollment Endpoints
+
+- `POST /api/auth/mfa/enroll` - Start factor enrollment
+- `POST /api/auth/mfa/verify-enrollment` - Complete enrollment
+- `GET /api/auth/mfa/factors` - List user's factors
+- `DELETE /api/auth/mfa/factors/:id` - Remove factor
+
+### Authentication Endpoints
+
+- `POST /api/auth/mfa/challenge` - Request MFA challenge
+- `POST /api/auth/mfa/verify` - Verify MFA code
+- `POST /api/auth/mfa/trust-device` - Mark device as trusted
+- `GET /api/auth/mfa/status` - Get MFA status
+
+### Admin Endpoints
+
+- `POST /api/auth/mfa/policy` - Set organization policy
+- `GET /api/auth/mfa/policy/:orgId` - Get organization policy
+- `POST /api/auth/mfa/require/:userId` - Require MFA for user
+- `GET /api/auth/mfa/users` - List users with MFA
+
+## Security Considerations
+
+### Best Practices
+
+1. **Require Multiple Factors** for sensitive accounts
+2. **Enable Risk Engine** for adaptive authentication
+3. **Implement Rate Limiting** to prevent brute force
+4. **Use Step-Up Auth** for sensitive operations
+5. **Audit All MFA Events** for compliance
+6. **Educate Users** on factor security
+7. **Provide Backup Options** (recovery codes)
+
+### Recovery
+
+- **Backup Codes**: Always generate backup codes during enrollment
+- **Admin Override**: Allow admins to disable MFA for locked-out users
+- **Account Recovery**: Implement secure account recovery flow
+- **Factor Reset**: Allow users to reset factors with identity verification
+
+<Callout type="warning">
+Always generate and store backup codes for users. Without them, users can be permanently locked out if they lose their primary factor.
+</Callout>
+
+## Comparison: MFA vs 2FA
+
+| Feature | MFA Plugin | 2FA Plugin |
+|---------|-----------|-----------|
+| Number of Factors | 3+ | 2 (TOTP + Backup) |
+| Risk-Based Auth | ✅ Yes | ❌ No |
+| Step-Up Auth | ✅ Yes | ❌ No |
+| Trusted Devices | ✅ Yes | ✅ Yes |
+| Policy Engine | ✅ Yes | ❌ No |
+| Factor Types | TOTP, SMS, Email, WebAuthn | TOTP, Backup Codes |
+| Adaptive | ✅ Yes | ❌ No |
+| Use Case | Enterprise, High Security | Standard Applications |
+
+## Resources
+
+- [MFA Architecture](https://github.com/xraph/authsome/blob/main/plugins/mfa/ARCHITECTURE.md)
+- [Testing Guide](https://github.com/xraph/authsome/blob/main/plugins/mfa/TESTING_GUIDE.md)
+- [Migration Guide](https://github.com/xraph/authsome/blob/main/plugins/mfa/MIGRATION_GUIDE.md)
+- [Implementation Details](https://github.com/xraph/authsome/blob/main/plugins/mfa/README.md)
+
+## Support
+
+For issues or questions about the MFA plugin:
+- GitHub Issues: [authsome/issues](https://github.com/xraph/authsome/issues)
+- Documentation: [docs.authsome.dev](https://docs.authsome.dev)
+- Discord: [discord.gg/authsome](https://discord.gg/authsome)
+

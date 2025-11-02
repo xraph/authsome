@@ -3,6 +3,9 @@
   "icon": "Building2",
   "pages": [
     "index",
-    "multitenancy"
+    "multitenancy",
+    "sso",
+    "oidc-provider",
+    "admin"
   ]
 }

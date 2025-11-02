@@ -24,7 +24,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 // CreateUser handles POST /admin/users
-func (h *Handler) CreateUser(c *forge.Context) error {
+func (h *Handler) CreateUser(c forge.Context) error {
 	var req CreateUserRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -56,7 +56,7 @@ func (h *Handler) CreateUser(c *forge.Context) error {
 }
 
 // ListUsers handles GET /admin/users
-func (h *Handler) ListUsers(c *forge.Context) error {
+func (h *Handler) ListUsers(c forge.Context) error {
 	// Parse query parameters
 	q := c.Request().URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -107,7 +107,7 @@ func (h *Handler) ListUsers(c *forge.Context) error {
 }
 
 // DeleteUser handles DELETE /admin/users/:id
-func (h *Handler) DeleteUser(c *forge.Context) error {
+func (h *Handler) DeleteUser(c forge.Context) error {
 	userID := c.Param("id")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -141,7 +141,7 @@ func (h *Handler) DeleteUser(c *forge.Context) error {
 }
 
 // BanUser handles POST /admin/users/:id/ban
-func (h *Handler) BanUser(c *forge.Context) error {
+func (h *Handler) BanUser(c forge.Context) error {
 	userID := c.Param("id")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -184,7 +184,7 @@ func (h *Handler) BanUser(c *forge.Context) error {
 }
 
 // UnbanUser handles POST /admin/users/:id/unban
-func (h *Handler) UnbanUser(c *forge.Context) error {
+func (h *Handler) UnbanUser(c forge.Context) error {
 	userID := c.Param("id")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -227,7 +227,7 @@ func (h *Handler) UnbanUser(c *forge.Context) error {
 }
 
 // ImpersonateUser handles POST /admin/users/:id/impersonate
-func (h *Handler) ImpersonateUser(c *forge.Context) error {
+func (h *Handler) ImpersonateUser(c forge.Context) error {
 	userID := c.Param("id")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -270,7 +270,7 @@ func (h *Handler) ImpersonateUser(c *forge.Context) error {
 }
 
 // SetUserRole handles POST /admin/users/:id/role
-func (h *Handler) SetUserRole(c *forge.Context) error {
+func (h *Handler) SetUserRole(c forge.Context) error {
 	userID := c.Param("id")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -313,7 +313,7 @@ func (h *Handler) SetUserRole(c *forge.Context) error {
 }
 
 // ListSessions handles GET /admin/sessions
-func (h *Handler) ListSessions(c *forge.Context) error {
+func (h *Handler) ListSessions(c forge.Context) error {
 	// Parse query parameters
 	q := c.Request().URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -360,7 +360,7 @@ func (h *Handler) ListSessions(c *forge.Context) error {
 }
 
 // RevokeSession handles DELETE /admin/sessions/:id
-func (h *Handler) RevokeSession(c *forge.Context) error {
+func (h *Handler) RevokeSession(c forge.Context) error {
 	sessionID := c.Param("id")
 	if sessionID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -394,7 +394,7 @@ func (h *Handler) RevokeSession(c *forge.Context) error {
 }
 
 // GetStats handles GET /admin/stats
-func (h *Handler) GetStats(c *forge.Context) error {
+func (h *Handler) GetStats(c forge.Context) error {
 	// Get admin user from context
 	adminUserValue := c.Request().Context().Value("user")
 	if adminUserValue == nil {
@@ -418,7 +418,7 @@ func (h *Handler) GetStats(c *forge.Context) error {
 }
 
 // GetAuditLogs handles GET /admin/audit
-func (h *Handler) GetAuditLogs(c *forge.Context) error {
+func (h *Handler) GetAuditLogs(c forge.Context) error {
 	// Parse query parameters
 	q := c.Request().URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))

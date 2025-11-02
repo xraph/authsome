@@ -270,3 +270,10 @@ examples/dev/
 
 summary/*
 summary/**/*
+
+
+!docs/**/*.md
+!README.md
+**/*.md
+!**/README.md
+/**/*.disabled

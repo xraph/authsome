@@ -184,7 +184,7 @@ echo ""
     rm -rf "$KEYS_DIR"
     rm -f "$CONFIG_FILE"
     rm -f /tmp/test_output.log
-    rm -f ./authsome-cli
+    rm -f ./authsome
 }
 
 # Set cleanup trap
@@ -212,19 +212,19 @@ print_header "PHASE 1: Build and Setup"
 
 # Test 1: Build CLI
 run_test "BUILD" "Build CLI tool" \
-    "go build -o authsome-cli ./cmd/authsome-cli"
+    "go build -o authsome ./cmd/authsome"
 
 # Test 2: Verify CLI binary
 run_test "BUILD" "Verify CLI binary exists" \
-    "[ -f ./authsome-cli ] && [ -x ./authsome-cli ]"
+    "[ -f ./authsome ] && [ -x ./authsome ]"
 
 # Test 3: Check version
 run_test "BUILD" "Check CLI version" \
-    "./authsome-cli --version"
+    "./authsome --version"
 
 # Test 4: Check help
 run_test "BUILD" "Check CLI help" \
-    "./authsome-cli --help"
+    "./authsome --help"
 
 # Set database URL
 export DATABASE_URL="$TEST_DB"
@@ -236,15 +236,15 @@ print_header "PHASE 2: Database Migrations"
 
 # Test 5: Migrate status (before migration)
 run_test_with_output "MIGRATE" "Check migration status (before)" \
-    "./authsome-cli migrate status"
+    "./authsome migrate status"
 
 # Test 6: Migrate up
 run_test "MIGRATE" "Run migrations" \
-    "./authsome-cli migrate up"
+    "./authsome migrate up"
 
 # Test 7: Migrate status (after migration)
 run_test_with_output "MIGRATE" "Check migration status (after)" \
-    "./authsome-cli migrate status"
+    "./authsome migrate status"
 
 # Test 8: Verify database file created
 run_test "MIGRATE" "Verify database file created" \
@@ -257,7 +257,7 @@ print_header "PHASE 3: Code Generation"
 
 # Test 9: Generate keys
 run_test "GENERATE" "Generate RSA key pair" \
-    "./authsome-cli generate keys --output $KEYS_DIR"
+    "./authsome generate keys --output $KEYS_DIR"
 
 # Test 10: Verify private key
 run_test "GENERATE" "Verify private key exists" \
@@ -269,11 +269,11 @@ run_test "GENERATE" "Verify public key exists" \
 
 # Test 12: Generate secret
 run_test_with_output "GENERATE" "Generate secret" \
-    "./authsome-cli generate secret"
+    "./authsome generate secret"
 
 # Test 13: Generate secret with custom length
 run_test_with_output "GENERATE" "Generate secret (length 64)" \
-    "./authsome-cli generate secret --length 64"
+    "./authsome generate secret --length 64"
 
 # ============================================================================
 # PHASE 4: CONFIGURATION MANAGEMENT
@@ -282,7 +282,7 @@ print_header "PHASE 4: Configuration Management"
 
 # Test 14: Initialize standalone config
 run_test "CONFIG" "Initialize standalone configuration" \
-    "./authsome-cli config init --mode standalone --output $CONFIG_FILE --force"
+    "./authsome config init --mode standalone --output $CONFIG_FILE --force"
 
 # Test 15: Verify config file created
 run_test "CONFIG" "Verify config file exists" \
@@ -290,11 +290,11 @@ run_test "CONFIG" "Verify config file exists" \
 
 # Test 16: Validate config
 run_test "CONFIG" "Validate configuration" \
-    "./authsome-cli config validate $CONFIG_FILE"
+    "./authsome config validate $CONFIG_FILE"
 
 # Test 17: Show config
 run_test_with_output "CONFIG" "Show configuration" \
-    "./authsome-cli config show $CONFIG_FILE"
+    "./authsome config show $CONFIG_FILE"
 
 # ============================================================================
 # PHASE 5: ORGANIZATION MANAGEMENT
@@ -303,12 +303,12 @@ print_header "PHASE 5: Organization Management"
 
 # Test 18: List organizations (empty)
 run_test_with_output "ORG" "List organizations (empty)" \
-    "./authsome-cli org list"
+    "./authsome org list"
 
 # Test 19: Create organization
 TESTS_RUN=$((TESTS_RUN + 1))
 print_test "Create organization"
-if ORG_OUTPUT=$(./authsome-cli org create --name "Test Corporation" --slug "testcorp" 2>&1); then
+if ORG_OUTPUT=$(./authsome org create --name "Test Corporation" --slug "testcorp" 2>&1); then
     echo "$ORG_OUTPUT"
     ORG_ID=$(echo "$ORG_OUTPUT" | extract_id)
     if [ -n "$ORG_ID" ]; then
@@ -329,12 +329,12 @@ fi
 
 # Test 20: List organizations (should have 1)
 run_test_with_output "ORG" "List organizations (with data)" \
-    "./authsome-cli org list"
+    "./authsome org list"
 
 # Test 21: Show organization details
 if [ "$ORG_ID" != "dummy-org-id" ]; then
     run_test_with_output "ORG" "Show organization details" \
-        "./authsome-cli org show $ORG_ID"
+        "./authsome org show $ORG_ID"
 else
     echo "Skipping org show test (no valid org ID)"
 fi
@@ -342,7 +342,7 @@ fi
 # Test 22: Create second organization
 TESTS_RUN=$((TESTS_RUN + 1))
 print_test "Create second organization"
-if ORG2_OUTPUT=$(./authsome-cli org create --name "Acme Inc" --slug "acme" 2>&1); then
+if ORG2_OUTPUT=$(./authsome org create --name "Acme Inc" --slug "acme" 2>&1); then
     echo "$ORG2_OUTPUT"
     ORG2_ID=$(echo "$ORG2_OUTPUT" | extract_id)
     if [ -n "$ORG2_ID" ]; then
@@ -368,13 +368,13 @@ print_header "PHASE 6: User Management"
 
 # Test 23: List users (empty)
 run_test_with_output "USER" "List users (empty)" \
-    "./authsome-cli user list"
+    "./authsome user list"
 
 # Test 24: Create user
 TESTS_RUN=$((TESTS_RUN + 1))
 print_test "Create user"
 if [ "$ORG_ID" != "dummy-org-id" ]; then
-    if USER_OUTPUT=$(./authsome-cli user create \
+    if USER_OUTPUT=$(./authsome user create \
         --email "admin@testcorp.com" \
         --password "SecurePass123!" \
         --first-name "Admin" \
@@ -407,12 +407,12 @@ fi
 
 # Test 25: List users (should have 1)
 run_test_with_output "USER" "List users (with data)" \
-    "./authsome-cli user list"
+    "./authsome user list"
 
 # Test 26: Show user details
 if [ "$USER_ID" != "dummy-user-id" ]; then
     run_test_with_output "USER" "Show user details" \
-        "./authsome-cli user show $USER_ID"
+        "./authsome user show $USER_ID"
 else
     echo "Skipping user show test (no valid user ID)"
 fi
@@ -420,7 +420,7 @@ fi
 # Test 27: List users by organization
 if [ "$ORG_ID" != "dummy-org-id" ]; then
     run_test_with_output "USER" "List users by organization" \
-        "./authsome-cli user list --org $ORG_ID"
+        "./authsome user list --org $ORG_ID"
 else
     echo "Skipping user list by org test (no valid org ID)"
 fi
@@ -429,7 +429,7 @@ fi
 TESTS_RUN=$((TESTS_RUN + 1))
 print_test "Create second user"
 if [ "$ORG_ID" != "dummy-org-id" ]; then
-    if USER2_OUTPUT=$(./authsome-cli user create \
+    if USER2_OUTPUT=$(./authsome user create \
         --email "john@testcorp.com" \
         --password "Password456!" \
         --first-name "John" \
@@ -462,7 +462,7 @@ fi
 # Test 29: Verify user email
 if [ "$USER2_ID" != "dummy-user2-id" ]; then
     run_test "USER" "Verify user email" \
-        "./authsome-cli user verify $USER2_ID"
+        "./authsome user verify $USER2_ID"
 else
     echo "Skipping user verify test (no valid user ID)"
 fi
@@ -470,7 +470,7 @@ fi
 # Test 30: Update user password
 if [ "$USER_ID" != "dummy-user-id" ]; then
     run_test "USER" "Update user password" \
-        "./authsome-cli user password $USER_ID --password 'NewSecurePass789!'"
+        "./authsome user password $USER_ID --password 'NewSecurePass789!'"
 else
     echo "Skipping password update test (no valid user ID)"
 fi
@@ -483,7 +483,7 @@ print_header "PHASE 7: Organization Member Management"
 # Test 31: List organization members
 if [ "$ORG_ID" != "dummy-org-id" ]; then
     run_test_with_output "ORG_MEMBERS" "List organization members" \
-        "./authsome-cli org members $ORG_ID"
+        "./authsome org members $ORG_ID"
 else
     echo "Skipping members list test (no valid org ID)"
 fi
@@ -491,7 +491,7 @@ fi
 # Test 32: Add member to organization
 if [ "$ORG2_ID" != "dummy-org2-id" ] && [ "$USER_ID" != "dummy-user-id" ]; then
     run_test "ORG_MEMBERS" "Add member to organization" \
-        "./authsome-cli org add-member $ORG2_ID $USER_ID --role member"
+        "./authsome org add-member $ORG2_ID $USER_ID --role member"
 else
     echo "Skipping add member test (no valid IDs)"
 fi
@@ -499,7 +499,7 @@ fi
 # Test 33: List members of second organization
 if [ "$ORG2_ID" != "dummy-org2-id" ]; then
     run_test_with_output "ORG_MEMBERS" "List members of second org" \
-        "./authsome-cli org members $ORG2_ID"
+        "./authsome org members $ORG2_ID"
 else
     echo "Skipping second org members list test (no valid org ID)"
 fi
@@ -511,39 +511,39 @@ print_header "PHASE 8: Data Seeding"
 
 # Test 34: Seed basic data
 run_test_with_output "SEED" "Seed basic data" \
-    "./authsome-cli seed basic"
+    "./authsome seed basic"
 
 # Test 35: List users after seeding
 run_test_with_output "SEED" "List users after basic seed" \
-    "./authsome-cli user list"
+    "./authsome user list"
 
 # Test 36: List organizations after seeding
 run_test_with_output "SEED" "List organizations after basic seed" \
-    "./authsome-cli org list"
+    "./authsome org list"
 
 # Get an org ID for user seeding
-SEED_ORG_OUTPUT=$(./authsome-cli org list 2>&1)
+SEED_ORG_OUTPUT=$(./authsome org list 2>&1)
 SEED_ORG_ID=$(echo "$SEED_ORG_OUTPUT" | sed -n 's/.*ID: *\([a-z0-9-]*\).*/\1/p' | head -1)
 
 # Test 37: Seed users
 if [ -n "$SEED_ORG_ID" ]; then
     run_test_with_output "SEED" "Seed additional users" \
-        "./authsome-cli seed users --count 5 --org $SEED_ORG_ID"
+        "./authsome seed users --count 5 --org $SEED_ORG_ID"
 else
     echo "Skipping user seeding (no org ID found)"
 fi
 
 # Test 38: List users after user seeding
 run_test_with_output "SEED" "List users after user seed" \
-    "./authsome-cli user list"
+    "./authsome user list"
 
 # Test 39: Seed organizations
 run_test_with_output "SEED" "Seed additional organizations" \
-    "./authsome-cli seed orgs --count 3"
+    "./authsome seed orgs --count 3"
 
 # Test 40: List organizations after org seeding
 run_test_with_output "SEED" "List organizations after org seed" \
-    "./authsome-cli org list"
+    "./authsome org list"
 
 # ============================================================================
 # PHASE 9: ADVANCED OPERATIONS
@@ -552,22 +552,22 @@ print_header "PHASE 9: Advanced Operations"
 
 # Test 41: Generate another config (SaaS mode)
 run_test "ADVANCED" "Generate SaaS configuration" \
-    "./authsome-cli config init --mode saas --output ./test_saas_config.yaml --force"
+    "./authsome config init --mode saas --output ./test_saas_config.yaml --force"
 
 # Test 42: Validate SaaS config
 run_test "ADVANCED" "Validate SaaS configuration" \
-    "./authsome-cli config validate ./test_saas_config.yaml"
+    "./authsome config validate ./test_saas_config.yaml"
 
 # Test 43: Show SaaS config
 run_test_with_output "ADVANCED" "Show SaaS configuration" \
-    "./authsome-cli config show ./test_saas_config.yaml"
+    "./authsome config show ./test_saas_config.yaml"
 
 # Cleanup SaaS config
 rm -f ./test_saas_config.yaml
 
 # Test 44: Test verbose flag
 run_test "ADVANCED" "Test verbose flag" \
-    "./authsome-cli --verbose org list"
+    "./authsome --verbose org list"
 
 # ============================================================================
 # PHASE 10: CLEANUP AND DELETION TESTS
@@ -577,7 +577,7 @@ print_header "PHASE 10: Cleanup and Deletion Tests"
 # Test 45: Remove member from organization
 if [ "$ORG2_ID" != "dummy-org2-id" ] && [ "$USER_ID" != "dummy-user-id" ]; then
     run_test "CLEANUP" "Remove member from organization" \
-        "./authsome-cli org remove-member $ORG2_ID $USER_ID"
+        "./authsome org remove-member $ORG2_ID $USER_ID"
 else
     echo "Skipping remove member test (no valid IDs)"
 fi
@@ -585,7 +585,7 @@ fi
 # Test 46: Delete user
 if [ "$USER2_ID" != "dummy-user2-id" ]; then
     run_test "CLEANUP" "Delete user" \
-        "./authsome-cli user delete $USER2_ID --force"
+        "./authsome user delete $USER2_ID --force"
 else
     echo "Skipping user deletion test (no valid user ID)"
 fi
@@ -594,7 +594,7 @@ fi
 if [ "$USER2_ID" != "dummy-user2-id" ]; then
     TESTS_RUN=$((TESTS_RUN + 1))
     print_test "Verify user deleted"
-    if ./authsome-cli user show "$USER2_ID" 2>&1 | grep -q "not found"; then
+    if ./authsome user show "$USER2_ID" 2>&1 | grep -q "not found"; then
         test_passed
         update_category_counters "CLEANUP" "true"
     else
@@ -608,7 +608,7 @@ fi
 # Test 48: Delete organization
 if [ "$ORG2_ID" != "dummy-org2-id" ]; then
     run_test "CLEANUP" "Delete organization" \
-        "./authsome-cli org delete $ORG2_ID --confirm"
+        "./authsome org delete $ORG2_ID --confirm"
 else
     echo "Skipping org deletion test (no valid org ID)"
 fi
@@ -617,7 +617,7 @@ fi
 if [ "$ORG2_ID" != "dummy-org2-id" ]; then
     TESTS_RUN=$((TESTS_RUN + 1))
     print_test "Verify organization deleted"
-    if ./authsome-cli org show "$ORG2_ID" 2>&1 | grep -q "not found"; then
+    if ./authsome org show "$ORG2_ID" 2>&1 | grep -q "not found"; then
         test_passed
         update_category_counters "CLEANUP" "true"
     else
@@ -630,7 +630,7 @@ fi
 
 # Test 50: Clear seeded data
 run_test "CLEANUP" "Clear seeded data" \
-    "./authsome-cli seed clear --confirm"
+    "./authsome seed clear --confirm"
 
 # ============================================================================
 # PHASE 11: DATABASE MIGRATION ROLLBACK
@@ -639,19 +639,19 @@ print_header "PHASE 11: Database Migration Rollback"
 
 # Test 51: Migration down
 run_test "MIGRATE" "Rollback migration" \
-    "./authsome-cli migrate down"
+    "./authsome migrate down"
 
 # Test 52: Check migration status after rollback
 run_test_with_output "MIGRATE" "Check migration status after rollback" \
-    "./authsome-cli migrate status"
+    "./authsome migrate status"
 
 # Test 53: Migration up again
 run_test "MIGRATE" "Re-run migrations" \
-    "./authsome-cli migrate up"
+    "./authsome migrate up"
 
 # Test 54: Final migration status
 run_test_with_output "MIGRATE" "Final migration status" \
-    "./authsome-cli migrate status"
+    "./authsome migrate status"
 
 # ============================================================================
 # FINAL SUMMARY

@@ -12,18 +12,14 @@ import (
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 )
-
-// EmailProvider defines minimal interface to send OTPs via email
-type EmailProvider interface {
-	SendOTP(to, otp string) error
-}
 
 // Config for Email OTP service
 type Config struct {
 	OTPLength           int
-	ExpiresIn           time.Duration
+	ExpiryMinutes       int
 	MaxAttempts         int
 	DevExposeOTP        bool // if true, return OTP in response for dev testing
 	AllowImplicitSignup bool // if true, create user when verifying if missing
@@ -31,26 +27,33 @@ type Config struct {
 
 // Service implements email OTP flow
 type Service struct {
-	repo     *repo.EmailOTPRepository
-	users    *user.Service
-	auth     *auth.Service
-	audit    *audit.Service
-	provider EmailProvider
-	config   Config
+	repo         *repo.EmailOTPRepository
+	users        *user.Service
+	auth         *auth.Service
+	audit        *audit.Service
+	notifAdapter *notificationPlugin.Adapter
+	config       Config
 }
 
-func NewService(r *repo.EmailOTPRepository, users *user.Service, authSvc *auth.Service, auditSvc *audit.Service, provider EmailProvider, cfg Config) *Service {
+func NewService(r *repo.EmailOTPRepository, users *user.Service, authSvc *auth.Service, auditSvc *audit.Service, notifAdapter *notificationPlugin.Adapter, cfg Config) *Service {
 	// defaults
 	if cfg.OTPLength == 0 {
 		cfg.OTPLength = 6
 	}
-	if cfg.ExpiresIn == 0 {
-		cfg.ExpiresIn = 5 * time.Minute
+	if cfg.ExpiryMinutes == 0 {
+		cfg.ExpiryMinutes = 10
 	}
 	if cfg.MaxAttempts == 0 {
 		cfg.MaxAttempts = 5
 	}
-	return &Service{repo: r, users: users, auth: authSvc, audit: auditSvc, provider: provider, config: cfg}
+	return &Service{
+		repo:         r,
+		users:        users,
+		auth:         authSvc,
+		audit:        auditSvc,
+		notifAdapter: notifAdapter,
+		config:       cfg,
+	}
 }
 
 func (s *Service) SendOTP(ctx context.Context, email, ip, ua string) (string, error) {
@@ -58,6 +61,7 @@ func (s *Service) SendOTP(ctx context.Context, email, ip, ua string) (string, er
 	if e == "" {
 		return "", fmt.Errorf("missing email")
 	}
+	
 	// Generate numeric OTP
 	rand.Seed(time.Now().UnixNano())
 	max := int64(1)
@@ -66,18 +70,29 @@ func (s *Service) SendOTP(ctx context.Context, email, ip, ua string) (string, er
 	}
 	code := int64(rand.Intn(int(max)))
 	otp := fmt.Sprintf("%0*d", s.config.OTPLength, code)
+	
+	// Calculate expiry
+	expiryDuration := time.Duration(s.config.ExpiryMinutes) * time.Minute
+	
 	// Persist OTP
-	if err := s.repo.Create(ctx, e, otp, time.Now().Add(s.config.ExpiresIn)); err != nil {
+	if err := s.repo.Create(ctx, e, otp, time.Now().Add(expiryDuration)); err != nil {
 		return "", err
 	}
-	// Send via provider if available
-	if s.provider != nil {
-		_ = s.provider.SendOTP(e, otp)
+	
+	// Send via notification plugin if available
+	if s.notifAdapter != nil {
+		err := s.notifAdapter.SendEmailOTP(ctx, "default", e, otp, s.config.ExpiryMinutes)
+		if err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Failed to send email OTP via notification plugin: %v\n", err)
+		}
 	}
+	
 	// Audit: email OTP sent
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, "emailotp_sent", "email:"+e, ip, ua, "")
 	}
+	
 	// Return OTP only if dev mode
 	if s.config.DevExposeOTP {
 		return otp, nil

@@ -1,0 +1,98 @@
+auth:
+  mode: saas  # or "standalone"
+  basePath: "/api/auth"
+  
+  consent:
+    enabled: true
+    gdprEnabled: true
+    ccpaEnabled: false
+    
+    cookieConsent:
+      enabled: true
+      defaultStyle: "banner"
+      requireExplicit: true
+      validityPeriod: "8760h" # 1 year
+      allowAnonymous: true
+      bannerVersion: "1.0"
+      categories:
+        - essential
+        - functional
+        - analytics
+        - marketing
+        - personalization
+        - third_party
+    
+    dataExport:
+      enabled: true
+      allowedFormats:
+        - json
+        - csv
+      defaultFormat: json
+      maxRequests: 5
+      requestPeriod: "720h" # 30 days
+      expiryHours: 72
+      storagePath: "./data/exports"
+      includeSections:
+        - profile
+        - sessions
+        - consents
+        - audit
+      autoCleanup: true
+      cleanupInterval: "24h"
+      maxExportSize: 104857600 # 100MB
+    
+    dataDeletion:
+      enabled: true
+      requireAdminApproval: true
+      gracePeriodDays: 30
+      archiveBeforeDeletion: true
+      archivePath: "./data/archives"
+      retentionExemptions:
+        - legal_hold
+        - active_investigation
+      notifyBeforeDeletion: true
+      allowPartialDeletion: true
+      preserveLegalData: true
+      autoProcessAfterGrace: false
+    
+    audit:
+      enabled: true
+      retentionDays: 2555 # 7 years
+      immutable: true
+      logAllChanges: true
+      logIpAddress: true
+      logUserAgent: true
+      signLogs: true
+      exportFormat: json
+    
+    expiry:
+      enabled: true
+      defaultValidityDays: 365
+      renewalReminderDays: 30
+      autoExpireCheck: true
+      expireCheckInterval: "24h"
+      allowRenewal: true
+      requireReConsent: false
+    
+    dashboard:
+      enabled: true
+      path: "/auth/consent"
+      showConsentHistory: true
+      showCookiePreferences: true
+      showDataExport: true
+      showDataDeletion: true
+      showAuditLog: true
+      showPolicies: true
+    
+    notifications:
+      enabled: true
+      notifyOnGrant: false
+      notifyOnRevoke: true
+      notifyOnExpiry: true
+      notifyExportReady: true
+      notifyDeletionApproved: true
+      notifyDeletionComplete: true
+      notifyDpoEmail: "dpo@example.com"
+      channels:
+        - email
+

@@ -399,7 +399,7 @@ Want to add support for a new ORM?
 
 1. Implement `generator.Generator` interface
 2. Add generator package under `pkg/schema/generator/`
-3. Register in `cmd/authsome-cli/generate_migrations.go`
+3. Register in `cmd/authsome/generate_migrations.go`
 4. Add tests and documentation
 5. Submit PR
 

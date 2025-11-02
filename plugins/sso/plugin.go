@@ -31,34 +31,19 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 // RegisterRoutes mounts SSO endpoints under /api/auth/sso
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	switch v := router.(type) {
-	case *forge.App:
-		// For direct forge.App usage (not from Mount method)
-		grp := v.Group("/api/auth/sso")
-		h := NewHandler(p.service)
-		grp.POST("/provider/register", h.RegisterProvider)
-		grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata)
-		grp.GET("/saml2/login/{providerId}", h.SAMLLogin)
-		grp.POST("/saml2/callback/{providerId}", h.SAMLCallback)
-		grp.GET("/oidc/callback/{providerId}", h.OIDCCallback)
-		return nil
-	case *forge.Group:
-		// Use relative paths - the router is already a group with the correct basePath
-		grp := v.Group("/sso")
-		h := NewHandler(p.service)
-		grp.POST("/provider/register", h.RegisterProvider)
-		grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata)
-		grp.GET("/saml2/login/{providerId}", h.SAMLLogin)
-		grp.POST("/saml2/callback/{providerId}", h.SAMLCallback)
-		grp.GET("/oidc/callback/{providerId}", h.OIDCCallback)
-		return nil
-	default:
-		return nil
-	}
+	// Router is already scoped to the auth basePath, create sso sub-group
+	grp := router.Group("/sso")
+	h := NewHandler(p.service)
+	grp.POST("/provider/register", h.RegisterProvider)
+	grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata)
+	grp.GET("/saml2/login/{providerId}", h.SAMLLogin)
+	grp.POST("/saml2/callback/{providerId}", h.SAMLCallback)
+	grp.GET("/oidc/callback/{providerId}", h.OIDCCallback)
+	return nil
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

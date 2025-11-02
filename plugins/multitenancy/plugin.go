@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
-	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
@@ -76,7 +75,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Type assert to get the auth instance
 	authInstance, ok := auth.(interface {
 		GetDB() *bun.DB
-		GetConfigManager() interface{}
+		GetForgeApp() forge.App
 		GetServiceRegistry() *registry.ServiceRegistry
 	})
 	if !ok {
@@ -84,7 +83,8 @@ func (p *Plugin) Init(auth interface{}) error {
 	}
 
 	p.db = authInstance.GetDB()
-	configManager := authInstance.GetConfigManager()
+	forgeApp := authInstance.GetForgeApp()
+	configManager := forgeApp.Config()
 	serviceRegistry := authInstance.GetServiceRegistry()
 
 	// Register models with Bun for relationships to work
@@ -97,17 +97,11 @@ func (p *Plugin) Init(auth interface{}) error {
 		(*organization.Invitation)(nil),
 	)
 
-	// Try to bind plugin configuration if viper is available
-	var viperConfig *viper.Viper
-	if v, ok := configManager.(*viper.Viper); ok {
-		viperConfig = v
-		// Bind plugin configuration from viper
-		if err := viperConfig.UnmarshalKey("auth.multitenancy", &p.config); err != nil {
-			// Log but don't fail - use defaults
-			fmt.Printf("Warning: failed to bind multitenancy config from viper: %v\n", err)
-		}
+	// Try to bind plugin configuration using Forge ConfigManager
+	if err := configManager.Bind("auth.multitenancy", &p.config); err != nil {
+		// Log but don't fail - use defaults
+		fmt.Printf("Warning: failed to bind multitenancy config: %v\n", err)
 	}
-	// If not viper, that's OK - we'll use default config values
 
 	// Set default values
 	if p.config.DefaultOrganizationName == "" {
@@ -143,10 +137,9 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Create services
 	p.orgService = organization.NewService(orgConfig, orgRepo, memberRepo, teamRepo, invitationRepo)
 
-	// Only create config service if viper is available
-	if viperConfig != nil {
-		p.configService = config.NewService(viperConfig)
-	}
+	// Config service can be created if needed for org-specific config management
+	// For now, use Forge's ConfigManager directly via forgeApp.Config()
+	// p.configService = config.NewService(configManager)
 
 	// Create handlers
 	p.orgHandler = handlers.NewOrganizationHandler(p.orgService)
@@ -161,14 +154,9 @@ func (p *Plugin) Init(auth interface{}) error {
 }
 
 // RegisterRoutes registers the plugin's HTTP routes
-func (p *Plugin) RegisterRoutes(router any) error {
-	forgeRouter, ok := router.(forge.Router)
-	if !ok {
-		return fmt.Errorf("invalid router type")
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Organization management routes
-	orgGroup := forgeRouter.Group("/organizations")
+	orgGroup := router.Group("/organizations")
 	{
 		orgGroup.POST("", p.orgHandler.CreateOrganization)
 		orgGroup.GET("", p.orgHandler.ListOrganizations)
@@ -199,7 +187,7 @@ func (p *Plugin) RegisterRoutes(router any) error {
 	}
 
 	// Invitation routes
-	inviteGroup := forgeRouter.Group("/invitations")
+	inviteGroup := router.Group("/invitations")
 	{
 		inviteGroup.GET("/:token", p.memberHandler.GetInvitation)
 		inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation)

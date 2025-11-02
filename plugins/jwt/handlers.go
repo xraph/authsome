@@ -27,7 +27,7 @@ type ErrorResponse struct {
 }
 
 // CreateJWTKey creates a new JWT signing key
-func (h *Handler) CreateJWTKey(c *forge.Context) error {
+func (h *Handler) CreateJWTKey(c forge.Context) error {
 	var req jwt.CreateJWTKeyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -53,7 +53,7 @@ func (h *Handler) CreateJWTKey(c *forge.Context) error {
 }
 
 // ListJWTKeys lists JWT signing keys
-func (h *Handler) ListJWTKeys(c *forge.Context) error {
+func (h *Handler) ListJWTKeys(c forge.Context) error {
 	var req jwt.ListJWTKeysRequest
 
 	// Get organization ID from header
@@ -82,7 +82,7 @@ func (h *Handler) ListJWTKeys(c *forge.Context) error {
 }
 
 // GetJWKS returns the JSON Web Key Set
-func (h *Handler) GetJWKS(c *forge.Context) error {
+func (h *Handler) GetJWKS(c forge.Context) error {
 	// Get organization ID from header
 	orgID := c.Request().Header.Get("X-Organization-ID")
 	if orgID == "" {
@@ -100,7 +100,7 @@ func (h *Handler) GetJWKS(c *forge.Context) error {
 }
 
 // GenerateToken generates a new JWT token
-func (h *Handler) GenerateToken(c *forge.Context) error {
+func (h *Handler) GenerateToken(c forge.Context) error {
 	var req jwt.GenerateTokenRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -126,7 +126,7 @@ func (h *Handler) GenerateToken(c *forge.Context) error {
 }
 
 // VerifyToken verifies a JWT token
-func (h *Handler) VerifyToken(c *forge.Context) error {
+func (h *Handler) VerifyToken(c forge.Context) error {
 	var req jwt.VerifyTokenRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{

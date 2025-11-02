@@ -21,7 +21,7 @@ func NewAPIKeyHandler(service *apikey.Service) *APIKeyHandler {
 }
 
 // CreateAPIKey handles POST /api/keys
-func (h *APIKeyHandler) CreateAPIKey(c *forge.Context) error {
+func (h *APIKeyHandler) CreateAPIKey(c forge.Context) error {
 	var req apikey.CreateAPIKeyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{
@@ -53,7 +53,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *forge.Context) error {
 }
 
 // ListAPIKeys handles GET /api/keys
-func (h *APIKeyHandler) ListAPIKeys(c *forge.Context) error {
+func (h *APIKeyHandler) ListAPIKeys(c forge.Context) error {
 	orgID := c.Request().URL.Query().Get("org_id")
 	userID := c.Request().URL.Query().Get("user_id")
 
@@ -93,7 +93,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *forge.Context) error {
 }
 
 // GetAPIKey handles GET /api/keys/{id}
-func (h *APIKeyHandler) GetAPIKey(c *forge.Context) error {
+func (h *APIKeyHandler) GetAPIKey(c forge.Context) error {
 	keyID := c.Param("id")
 	if keyID == "" {
 		return c.JSON(400, map[string]string{
@@ -121,7 +121,7 @@ func (h *APIKeyHandler) GetAPIKey(c *forge.Context) error {
 }
 
 // UpdateAPIKey handles PUT /api/keys/{id}
-func (h *APIKeyHandler) UpdateAPIKey(c *forge.Context) error {
+func (h *APIKeyHandler) UpdateAPIKey(c forge.Context) error {
 	keyID := c.Param("id")
 	if keyID == "" {
 		return c.JSON(400, map[string]string{
@@ -156,7 +156,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *forge.Context) error {
 }
 
 // DeleteAPIKey handles DELETE /api/keys/{id}
-func (h *APIKeyHandler) DeleteAPIKey(c *forge.Context) error {
+func (h *APIKeyHandler) DeleteAPIKey(c forge.Context) error {
 	keyID := c.Param("id")
 	if keyID == "" {
 		return c.JSON(400, map[string]string{
@@ -186,7 +186,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *forge.Context) error {
 }
 
 // VerifyAPIKey handles POST /api/keys/verify
-func (h *APIKeyHandler) VerifyAPIKey(c *forge.Context) error {
+func (h *APIKeyHandler) VerifyAPIKey(c forge.Context) error {
 	var req apikey.VerifyAPIKeyRequest
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {

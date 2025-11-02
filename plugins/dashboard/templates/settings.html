@@ -1,0 +1,289 @@
+{{define "settings.html"}}
+{{template "base.html" .}}
+{{end}}
+
+{{define "settings-content"}}
+{{$data := .Data}}
+{{$activeTab := index $data "ActiveTab"}}
+
+<div class="space-y-6" x-data="{ activeTab: '{{if $activeTab}}{{$activeTab}}{{else}}general{{end}}' }">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Settings</h1>
+        <p class="mt-1 text-sm text-slate-600 dark:text-gray-400">
+            Manage your dashboard configuration, API keys, and integrations
+        </p>
+    </div>
+
+    <!-- Tabs Navigation (Pines UI Style) -->
+    <div class="border-b border-slate-200 dark:border-gray-800">
+        <nav class="-mb-px flex space-x-8">
+            <button @click="activeTab = 'general'" 
+                    :class="activeTab === 'general' ? 'border-violet-500 text-violet-600 dark:text-violet-400' : 'border-transparent text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600 hover:text-slate-700 dark:hover:text-gray-300'"
+                    class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    General
+                </div>
+            </button>
+            {{if index .EnabledPlugins "apikey"}}
+            <button @click="activeTab = 'apikeys'" 
+                    :class="activeTab === 'apikeys' ? 'border-violet-500 text-violet-600 dark:text-violet-400' : 'border-transparent text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600 hover:text-slate-700 dark:hover:text-gray-300'"
+                    class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                    </svg>
+                    API Keys
+                </div>
+            </button>
+            {{end}}
+            {{if index .EnabledPlugins "webhook"}}
+            <button @click="activeTab = 'webhooks'" 
+                    :class="activeTab === 'webhooks' ? 'border-violet-500 text-violet-600 dark:text-violet-400' : 'border-transparent text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600 hover:text-slate-700 dark:hover:text-gray-300'"
+                    class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                    </svg>
+                    Webhooks
+                </div>
+            </button>
+            {{end}}
+        </nav>
+    </div>
+
+    <!-- Tab Content: General Settings -->
+    <div x-show="activeTab === 'general'" x-cloak>
+        <div class="flex flex-col rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            <div class="p-6 border-b border-slate-100 dark:border-gray-800">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">General Settings</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-gray-400">Configure basic dashboard settings and preferences</p>
+            </div>
+            <div class="p-6">
+                <form method="POST" action="{{.BasePath}}/dashboard/settings/general" class="space-y-6">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    
+                    <!-- Dashboard Name -->
+                    <div>
+                        <label for="dashboard_name" class="block text-sm font-medium text-slate-700 dark:text-gray-300">Dashboard Name</label>
+                        <input type="text" name="dashboard_name" id="dashboard_name" value="AuthSome Dashboard"
+                               class="mt-1 block w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:border-violet-300 dark:focus:border-violet-700 focus:ring-2 focus:ring-violet-400/20 sm:text-sm">
+                    </div>
+
+                    <!-- Default Session Duration -->
+                    <div>
+                        <label for="session_duration" class="block text-sm font-medium text-slate-700 dark:text-gray-300">Default Session Duration (hours)</label>
+                        <input type="number" name="session_duration" id="session_duration" value="24" min="1" max="720"
+                               class="mt-1 block w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:border-violet-300 dark:focus:border-violet-700 focus:ring-2 focus:ring-violet-400/20 sm:text-sm">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-gray-500">How long users stay logged in</p>
+                    </div>
+
+                    <!-- Max Login Attempts -->
+                    <div>
+                        <label for="max_login_attempts" class="block text-sm font-medium text-slate-700 dark:text-gray-300">Max Login Attempts</label>
+                        <input type="number" name="max_login_attempts" id="max_login_attempts" value="5" min="1" max="20"
+                               class="mt-1 block w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:border-violet-300 dark:focus:border-violet-700 focus:ring-2 focus:ring-violet-400/20 sm:text-sm">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-gray-500">Before account lockout</p>
+                    </div>
+
+                    <!-- Require Email Verification -->
+                    <div class="flex items-center">
+                        <input id="require_email_verification" name="require_email_verification" type="checkbox" checked
+                               class="h-4 w-4 rounded border-slate-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500 dark:bg-gray-700">
+                        <label for="require_email_verification" class="ml-2 block text-sm text-slate-900 dark:text-gray-300">
+                            Require email verification for new accounts
+                        </label>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-gray-800">
+                        <button type="submit" 
+                                class="inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-violet-600 px-4 py-2 text-sm leading-5 font-semibold text-white hover:bg-violet-700 focus:ring-3 focus:ring-violet-400/50 active:bg-violet-700 transition-colors">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: API Keys -->
+    {{if index .EnabledPlugins "apikey"}}
+    <div x-show="activeTab === 'apikeys'" x-cloak>
+        {{template "settings-apikeys" .}}
+    </div>
+    {{end}}
+
+    <!-- Tab Content: Webhooks -->
+    {{if index .EnabledPlugins "webhook"}}
+    <div x-show="activeTab === 'webhooks'" x-cloak>
+        {{template "settings-webhooks" .}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{define "settings-apikeys"}}
+{{$data := .Data}}
+{{$apiKeys := index $data "APIKeys"}}
+
+<div class="space-y-6">
+    <!-- Header with Create Button -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">API Keys</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-gray-400">Manage API keys for programmatic access</p>
+        </div>
+        <button @click="$dispatch('open-modal', { modal: 'create-apikey' })"
+                class="inline-flex items-center gap-2 rounded-lg border border-transparent bg-violet-600 px-4 py-2 text-sm leading-5 font-semibold text-white hover:bg-violet-700 transition-colors">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Create API Key
+        </button>
+    </div>
+
+    <!-- API Keys Table -->
+    <div class="flex flex-col rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        {{if $apiKeys}}
+        <div class="p-5">
+            <div class="min-w-full overflow-x-auto rounded-sm">
+                <table class="min-w-full align-middle text-sm">
+                    <thead>
+                        <tr class="border-b-2 border-slate-100 dark:border-gray-800">
+                            <th class="min-w-[180px] py-3 pe-3 text-start text-sm font-semibold tracking-wider text-slate-700 dark:text-gray-300 uppercase">Name</th>
+                            <th class="min-w-[300px] px-3 py-2 text-start text-sm font-semibold tracking-wider text-slate-700 dark:text-gray-300 uppercase">Key</th>
+                            <th class="min-w-[140px] px-3 py-2 text-start text-sm font-semibold tracking-wider text-slate-700 dark:text-gray-300 uppercase">Created</th>
+                            <th class="min-w-[140px] px-3 py-2 text-start text-sm font-semibold tracking-wider text-slate-700 dark:text-gray-300 uppercase">Last Used</th>
+                            <th class="min-w-[100px] py-2 ps-3 text-end text-sm font-semibold tracking-wider text-slate-700 dark:text-gray-300 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range $apiKeys}}
+                        <tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td class="py-3 pe-3 text-start">
+                                <div class="font-medium text-slate-900 dark:text-white">{{.Name}}</div>
+                            </td>
+                            <td class="p-3">
+                                <code class="font-mono text-xs text-slate-600 dark:text-gray-400">{{.Key}}</code>
+                            </td>
+                            <td class="p-3 text-slate-600 dark:text-gray-400">
+                                {{formatDate .CreatedAt}}
+                            </td>
+                            <td class="p-3 text-slate-600 dark:text-gray-400">
+                                {{if .LastUsedAt}}{{formatDate .LastUsedAt}}{{else}}<span class="text-slate-400 dark:text-gray-500">Never</span>{{end}}
+                            </td>
+                            <td class="py-3 ps-3 text-end font-medium">
+                                <button class="text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 transition-colors">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {{else}}
+        <div class="p-12 text-center">
+            <div class="mx-auto h-16 w-16 rounded-full bg-slate-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                <svg class="h-8 w-8 text-slate-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">No API Keys</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-gray-400">
+                Create your first API key to start using the API
+            </p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{define "settings-webhooks"}}
+{{$data := .Data}}
+{{$webhooks := index $data "Webhooks"}}
+
+<div class="space-y-6">
+    <!-- Header with Create Button -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Webhooks</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-gray-400">Configure webhooks to receive real-time notifications</p>
+        </div>
+        <button @click="window.location.href='{{$.BasePath}}/dashboard/settings/webhooks/new'"
+                class="inline-flex items-center gap-2 rounded-lg border border-transparent bg-violet-600 px-4 py-2 text-sm leading-5 font-semibold text-white hover:bg-violet-700 transition-colors">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Create Webhook
+        </button>
+    </div>
+
+    <!-- Webhooks List -->
+    <div class="flex flex-col rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        {{if $webhooks}}
+        <div class="divide-y divide-slate-100 dark:divide-gray-800">
+            {{range $webhooks}}
+            <div class="p-5 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3">
+                            <h4 class="font-semibold text-slate-900 dark:text-white">{{.URL}}</h4>
+                            {{if .Enabled}}
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-500/20 px-2.5 py-0.5 text-xs leading-4 font-semibold text-emerald-800 dark:text-emerald-400">
+                                Active
+                            </span>
+                            {{else}}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-gray-800 px-2.5 py-0.5 text-xs leading-4 font-semibold text-slate-800 dark:text-gray-400">
+                                Inactive
+                            </span>
+                            {{end}}
+                        </div>
+                        <p class="mt-1 text-sm text-slate-600 dark:text-gray-400">
+                            Events: {{range $i, $event := .Events}}{{if $i}}, {{end}}{{$event}}{{end}}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 ml-4">
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 text-sm font-medium text-slate-800 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
+                            Test
+                        </button>
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 text-sm font-medium text-slate-800 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
+                            Edit
+                        </button>
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-rose-200 dark:border-rose-800 px-2.5 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="p-12 text-center">
+            <div class="mx-auto h-16 w-16 rounded-full bg-slate-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                <svg class="h-8 w-8 text-slate-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">No Webhooks Configured</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-gray-400">
+                Create your first webhook to receive event notifications
+            </p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-gray-500">
+                Available events: user.created, user.login, session.created, and more
+            </p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+

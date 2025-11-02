@@ -33,32 +33,16 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 // RegisterRoutes registers 2FA endpoints under the auth base
-func (p *Plugin) RegisterRoutes(router interface{}) error {
-	switch v := router.(type) {
-	case *forge.App:
-		// For direct forge.App usage (not from Mount method)
-		grp := v.Group("/api/auth")
-		h := NewHandler(p.service)
-		grp.POST("/2fa/enable", h.Enable)
-		grp.POST("/2fa/verify", h.Verify)
-		grp.POST("/2fa/disable", h.Disable)
-		grp.POST("/2fa/generate-backup-codes", h.GenerateBackupCodes)
-		grp.POST("/2fa/send-otp", h.SendOTP)
-		grp.POST("/2fa/status", h.Status)
-		return nil
-	case *forge.Group:
-		// Use relative paths - the router is already a group with the correct basePath
-		h := NewHandler(p.service)
-		v.POST("/2fa/enable", h.Enable)
-		v.POST("/2fa/verify", h.Verify)
-		v.POST("/2fa/disable", h.Disable)
-		v.POST("/2fa/generate-backup-codes", h.GenerateBackupCodes)
-		v.POST("/2fa/send-otp", h.SendOTP)
-		v.POST("/2fa/status", h.Status)
-		return nil
-	default:
-		return nil
-	}
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	// Router is already scoped to the correct basePath by the auth mount
+	h := NewHandler(p.service)
+	router.POST("/2fa/enable", h.Enable)
+	router.POST("/2fa/verify", h.Verify)
+	router.POST("/2fa/disable", h.Disable)
+	router.POST("/2fa/generate-backup-codes", h.GenerateBackupCodes)
+	router.POST("/2fa/send-otp", h.SendOTP)
+	router.POST("/2fa/status", h.Status)
+	return nil
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

@@ -84,7 +84,7 @@ Environment overrides (optional):
 - `PHONE` (default: `+15550001111`)
 - `REMEMBER` (default: `true`)
 
-### What you’ll see
+### What you'll see
 - Health check on `http://localhost:3001/health`
 - Email OTP: dev OTP returned and verified, `user_id` extracted
 - Magic Link: dev URL returned, token extracted, verified
@@ -95,3 +95,54 @@ Environment overrides (optional):
 ### Troubleshooting
 - Ensure the dev server is on port `3001` before running this script.
 - If Passkey insert errors appear, restart the dev server to ensure latest plugin code is loaded.
+
+---
+
+## Test Examples
+
+These examples demonstrate various features and integration scenarios:
+
+### Integration Test (`test-integration/`)
+Full integration test suite covering authentication flows, session management, and plugin integration.
+
+**Usage:**
+```bash
+cd examples/test-integration
+go run main.go
+```
+
+### Multi-tenancy Test (`test-multitenancy/`)
+Demonstrates multi-tenant organization creation, user management, and organization-scoped features.
+
+**Usage:**
+```bash
+cd examples/test-multitenancy
+go run main.go
+```
+
+### Multi-tenancy Integration (`test-multitenancy-integration/`)
+Integration testing for multi-tenant features including teams, members, and cross-organization scenarios.
+
+**Usage:**
+```bash
+cd examples/test-multitenancy-integration
+go run main.go
+```
+
+### Provider Test (`test-providers/`)
+Testing email and SMS provider integrations with configuration examples.
+
+**Usage:**
+```bash
+cd examples/test-providers
+go run main.go
+```
+
+### Webhook Test (`test-webhooks/`)
+Complete webhook system testing including event triggers, delivery, and retry mechanisms.
+
+**Usage:**
+```bash
+cd examples/test-webhooks
+go run main.go
+```

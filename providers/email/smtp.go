@@ -44,10 +44,10 @@ func (p *SMTPProvider) Type() notification.NotificationType {
 }
 
 // Send sends an email notification
-func (p *SMTPProvider) Send(ctx context.Context, req *notification.SendRequest) error {
+func (p *SMTPProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Validate recipient is an email address
-	if !strings.Contains(req.Recipient, "@") {
-		return fmt.Errorf("invalid email address: %s", req.Recipient)
+	if !strings.Contains(notif.Recipient, "@") {
+		return fmt.Errorf("invalid email address: %s", notif.Recipient)
 	}
 
 	// Create SMTP auth
@@ -60,21 +60,32 @@ func (p *SMTPProvider) Send(ctx context.Context, req *notification.SendRequest) 
 	}
 
 	msg := fmt.Sprintf("From: %s\r\n", from)
-	msg += fmt.Sprintf("To: %s\r\n", req.Recipient)
-	msg += fmt.Sprintf("Subject: %s\r\n", req.Subject)
+	msg += fmt.Sprintf("To: %s\r\n", notif.Recipient)
+	msg += fmt.Sprintf("Subject: %s\r\n", notif.Subject)
 	msg += "MIME-Version: 1.0\r\n"
 	msg += "Content-Type: text/html; charset=UTF-8\r\n"
 	msg += "\r\n"
-	msg += req.Body
+	msg += notif.Body
 
 	// Send email
 	addr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
 	
 	if p.config.UseTLS {
-		return p.sendWithTLS(addr, auth, p.config.From, []string{req.Recipient}, []byte(msg))
+		return p.sendWithTLS(addr, auth, p.config.From, []string{notif.Recipient}, []byte(msg))
 	}
 	
-	return smtp.SendMail(addr, auth, p.config.From, []string{req.Recipient}, []byte(msg))
+	return smtp.SendMail(addr, auth, p.config.From, []string{notif.Recipient}, []byte(msg))
+}
+
+// GetStatus gets the delivery status of a notification
+func (p *SMTPProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
+	// SMTP doesn't provide delivery status tracking
+	return notification.NotificationStatusSent, nil
+}
+
+// ValidateConfig validates the provider configuration
+func (p *SMTPProvider) ValidateConfig() error {
+	return p.Validate()
 }
 
 // sendWithTLS sends email with TLS encryption

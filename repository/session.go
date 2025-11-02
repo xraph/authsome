@@ -106,3 +106,19 @@ func (r *SessionRepository) RevokeByID(ctx context.Context, id xid.ID) error {
     _, err := r.db.NewDelete().Model((*schema.Session)(nil)).Where("id = ?", id).Exec(ctx)
     return err
 }
+
+// ListAll lists all sessions in the system, ordered by recency
+func (r *SessionRepository) ListAll(ctx context.Context, limit, offset int) ([]*core.Session, error) {
+    var srows []schema.Session
+    q := r.db.NewSelect().Model(&srows).OrderExpr("created_at DESC")
+    if limit > 0 { q = q.Limit(limit) }
+    if offset > 0 { q = q.Offset(offset) }
+    if err := q.Scan(ctx); err != nil {
+        return nil, err
+    }
+    res := make([]*core.Session, 0, len(srows))
+    for i := range srows {
+        res = append(res, r.fromSchema(&srows[i]))
+    }
+    return res, nil
+}

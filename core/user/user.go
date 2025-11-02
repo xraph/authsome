@@ -29,8 +29,10 @@ type CreateUserRequest struct {
 
 // UpdateUserRequest represents an update user request
 type UpdateUserRequest struct {
-    Name  *string
-    Image *string
-    Username *string
+    Name            *string
+    Email           *string
+    EmailVerified   *bool
+    Image           *string
+    Username        *string
     DisplayUsername *string
 }

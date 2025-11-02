@@ -2,6 +2,7 @@ package user
 
 import (
     "context"
+    "time"
     "github.com/rs/xid"
 )
 
@@ -14,5 +15,8 @@ type Repository interface {
     Update(ctx context.Context, user *User) error
     Delete(ctx context.Context, id xid.ID) error
     List(ctx context.Context, limit, offset int) ([]*User, error)
+    Search(ctx context.Context, query string, limit, offset int) ([]*User, error)
     Count(ctx context.Context) (int, error)
+    CountSearch(ctx context.Context, query string) (int, error)
+    CountCreatedSince(ctx context.Context, since time.Time) (int, error)
 }

@@ -61,24 +61,20 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 // RegisterRoutes mounts OIDC Provider endpoints under /oauth2
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	switch v := router.(type) {
-	case *forge.App:
-		grp := v.Group("/oauth2")
-		h := NewHandler(p.service)
-		grp.GET("/authorize", h.Authorize)
-		grp.POST("/consent", h.HandleConsent)
-		grp.POST("/token", h.Token)
-		grp.GET("/userinfo", h.UserInfo)
-		grp.GET("/jwks", h.JWKS)
-		grp.POST("/register", h.RegisterClient)
-		return nil
-	default:
-		return nil
-	}
+	// Create oauth2 group at root level (not under /api/auth)
+	grp := router.Group("/oauth2")
+	h := NewHandler(p.service)
+	grp.GET("/authorize", h.Authorize)
+	grp.POST("/consent", h.HandleConsent)
+	grp.POST("/token", h.Token)
+	grp.GET("/userinfo", h.UserInfo)
+	grp.GET("/jwks", h.JWKS)
+	grp.POST("/register", h.RegisterClient)
+	return nil
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

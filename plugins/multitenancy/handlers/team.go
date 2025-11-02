@@ -21,7 +21,7 @@ func NewTeamHandler(orgService *organization.Service) *TeamHandler {
 }
 
 // CreateTeam handles team creation requests
-func (h *TeamHandler) CreateTeam(c *forge.Context) error {
+func (h *TeamHandler) CreateTeam(c forge.Context) error {
 	orgID := c.Param("orgId")
 	if orgID == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -41,7 +41,7 @@ func (h *TeamHandler) CreateTeam(c *forge.Context) error {
 }
 
 // GetTeam handles team retrieval requests
-func (h *TeamHandler) GetTeam(c *forge.Context) error {
+func (h *TeamHandler) GetTeam(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
@@ -56,7 +56,7 @@ func (h *TeamHandler) GetTeam(c *forge.Context) error {
 }
 
 // UpdateTeam handles team update requests
-func (h *TeamHandler) UpdateTeam(c *forge.Context) error {
+func (h *TeamHandler) UpdateTeam(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
@@ -76,7 +76,7 @@ func (h *TeamHandler) UpdateTeam(c *forge.Context) error {
 }
 
 // DeleteTeam handles team deletion requests
-func (h *TeamHandler) DeleteTeam(c *forge.Context) error {
+func (h *TeamHandler) DeleteTeam(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
@@ -91,7 +91,7 @@ func (h *TeamHandler) DeleteTeam(c *forge.Context) error {
 }
 
 // ListTeams handles team listing requests
-func (h *TeamHandler) ListTeams(c *forge.Context) error {
+func (h *TeamHandler) ListTeams(c forge.Context) error {
 	orgID := c.Param("orgId")
 	if orgID == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -128,7 +128,7 @@ func (h *TeamHandler) ListTeams(c *forge.Context) error {
 }
 
 // AddTeamMember handles adding a member to a team
-func (h *TeamHandler) AddTeamMember(c *forge.Context) error {
+func (h *TeamHandler) AddTeamMember(c forge.Context) error {
 	teamID := c.Param("teamId")
 	if teamID == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
@@ -151,7 +151,7 @@ func (h *TeamHandler) AddTeamMember(c *forge.Context) error {
 }
 
 // RemoveTeamMember handles removing a member from a team
-func (h *TeamHandler) RemoveTeamMember(c *forge.Context) error {
+func (h *TeamHandler) RemoveTeamMember(c forge.Context) error {
 	teamID := c.Param("teamId")
 	memberID := c.Param("memberId")
 

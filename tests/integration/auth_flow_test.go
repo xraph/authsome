@@ -29,14 +29,14 @@ func TestAuthFlow_Complete(t *testing.T) {
 	app := forge.New()
 	auth := authsome.New(
 		authsome.WithDatabase(db),
-		authsome.WithForgeConfig(app.Config()),
+		authsome.WithForgeApp(app),
 		authsome.WithMode(authsome.ModeStandalone),
 	)
 
 	err := auth.Initialize(context.Background())
 	require.NoError(t, err, "Failed to initialize AuthSome")
 
-	err = auth.Mount(app, "/auth")
+	err = auth.Mount(app.Router(), "/auth")
 	require.NoError(t, err, "Failed to mount AuthSome")
 
 	// Create test server

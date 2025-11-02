@@ -85,6 +85,47 @@ func (s *Service) FindByToken(ctx context.Context, token string) (*Session, erro
     return s.repo.FindByToken(ctx, token)
 }
 
+// FindByID retrieves a session by ID
+func (s *Service) FindByID(ctx context.Context, id xid.ID) (*Session, error) {
+    return s.repo.FindByID(ctx, id)
+}
+
+// ListAll retrieves all sessions (for admin dashboard)
+func (s *Service) ListAll(ctx context.Context, limit, offset int) ([]*Session, error) {
+    return s.repo.ListAll(ctx, limit, offset)
+}
+
+// ListByUser retrieves sessions for a specific user
+func (s *Service) ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*Session, error) {
+    return s.repo.ListByUser(ctx, userID, limit, offset)
+}
+
+// RevokeByID revokes a session by ID
+func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
+    // Get session before revocation for webhook event
+    session, err := s.repo.FindByID(ctx, id)
+    if err != nil {
+        return err
+    }
+
+    if err := s.repo.RevokeByID(ctx, id); err != nil {
+        return err
+    }
+
+    // Emit webhook event for session revocation
+    if s.webhookSvc != nil && session != nil {
+        data := map[string]interface{}{
+            "session_id": session.ID.String(),
+            "user_id":    session.UserID.String(),
+            "ip_address": session.IPAddress,
+            "user_agent": session.UserAgent,
+        }
+        go s.webhookSvc.EmitEvent(ctx, "session.revoked", "default", data) // TODO: Get orgID from context
+    }
+
+    return nil
+}
+
 // Revoke revokes a session by token
 func (s *Service) Revoke(ctx context.Context, token string) error {
     // Get session before revocation for webhook event

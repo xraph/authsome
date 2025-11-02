@@ -21,7 +21,7 @@ func NewMemberHandler(orgService *organization.Service) *MemberHandler {
 }
 
 // AddMember handles adding a member to an organization
-func (h *MemberHandler) AddMember(c *forge.Context) error {
+func (h *MemberHandler) AddMember(c forge.Context) error {
 	orgID := c.Param("orgId")
 	if orgID == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -44,7 +44,7 @@ func (h *MemberHandler) AddMember(c *forge.Context) error {
 }
 
 // RemoveMember handles removing a member from an organization
-func (h *MemberHandler) RemoveMember(c *forge.Context) error {
+func (h *MemberHandler) RemoveMember(c forge.Context) error {
 	memberID := c.Param("memberId")
 
 	if memberID == "" {
@@ -60,7 +60,7 @@ func (h *MemberHandler) RemoveMember(c *forge.Context) error {
 }
 
 // ListMembers handles listing organization members
-func (h *MemberHandler) ListMembers(c *forge.Context) error {
+func (h *MemberHandler) ListMembers(c forge.Context) error {
 	orgID := c.Param("orgId")
 	if orgID == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -98,7 +98,7 @@ func (h *MemberHandler) ListMembers(c *forge.Context) error {
 }
 
 // UpdateMemberRole handles updating a member's role in an organization
-func (h *MemberHandler) UpdateMemberRole(c *forge.Context) error {
+func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 	memberID := c.Param("memberId")
 
 	if memberID == "" {
@@ -119,7 +119,7 @@ func (h *MemberHandler) UpdateMemberRole(c *forge.Context) error {
 }
 
 // InviteMember handles inviting a member to an organization
-func (h *MemberHandler) InviteMember(c *forge.Context) error {
+func (h *MemberHandler) InviteMember(c forge.Context) error {
 	orgID := c.Param("orgId")
 	if orgID == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -145,7 +145,7 @@ func (h *MemberHandler) InviteMember(c *forge.Context) error {
 }
 
 // UpdateMember handles updating a member in an organization
-func (h *MemberHandler) UpdateMember(c *forge.Context) error {
+func (h *MemberHandler) UpdateMember(c forge.Context) error {
 	memberID := c.Param("memberId")
 	if memberID == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
@@ -165,7 +165,7 @@ func (h *MemberHandler) UpdateMember(c *forge.Context) error {
 }
 
 // GetInvitation handles getting an invitation by token
-func (h *MemberHandler) GetInvitation(c *forge.Context) error {
+func (h *MemberHandler) GetInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
 		return c.JSON(400, map[string]string{"error": "invitation token is required"})
@@ -180,7 +180,7 @@ func (h *MemberHandler) GetInvitation(c *forge.Context) error {
 }
 
 // AcceptInvitation handles accepting an invitation
-func (h *MemberHandler) AcceptInvitation(c *forge.Context) error {
+func (h *MemberHandler) AcceptInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
 		return c.JSON(400, map[string]string{"error": "invitation token is required"})
@@ -201,7 +201,7 @@ func (h *MemberHandler) AcceptInvitation(c *forge.Context) error {
 }
 
 // DeclineInvitation handles declining an invitation
-func (h *MemberHandler) DeclineInvitation(c *forge.Context) error {
+func (h *MemberHandler) DeclineInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
 		return c.JSON(400, map[string]string{"error": "invitation token is required"})

@@ -15,7 +15,7 @@ type Handler struct {
 
 func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
 
-func (h *Handler) Send(c *forge.Context) error {
+func (h *Handler) Send(c forge.Context) error {
 	var body struct {
 		Email string `json:"email"`
 	}
@@ -48,7 +48,7 @@ func (h *Handler) Send(c *forge.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *Handler) Verify(c *forge.Context) error {
+func (h *Handler) Verify(c forge.Context) error {
 	q := c.Request().URL.Query()
 	token := q.Get("token")
 	remember := q.Get("remember") == "true"

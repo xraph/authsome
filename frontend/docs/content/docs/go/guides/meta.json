@@ -6,6 +6,8 @@
     "custom-providers",
     "database-setup",
     "multi-orm",
+    "saas-quick-start",
+    "saas-integration",
     "deployment",
     "testing",
     "migration"

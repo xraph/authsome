@@ -33,7 +33,7 @@ func NewOrganizationHandler(s *organization.Service, rlsvc *rl.Service, sess ses
 }
 
 // CreateOrganization creates a new organization
-func (h *OrganizationHandler) CreateOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -52,7 +52,7 @@ func (h *OrganizationHandler) CreateOrganization(c *forge.Context) error {
 }
 
 // GetOrganizations supports fetching a single org by id or slug, or listing
-func (h *OrganizationHandler) GetOrganizations(c *forge.Context) error {
+func (h *OrganizationHandler) GetOrganizations(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -108,7 +108,7 @@ func (h *OrganizationHandler) GetOrganizations(c *forge.Context) error {
 }
 
 // GetOrganizationByID fetches a single organization via path param
-func (h *OrganizationHandler) GetOrganizationByID(c *forge.Context) error {
+func (h *OrganizationHandler) GetOrganizationByID(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -131,7 +131,7 @@ func (h *OrganizationHandler) GetOrganizationByID(c *forge.Context) error {
 }
 
 // UpdateOrganization updates an organization
-func (h *OrganizationHandler) UpdateOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -153,7 +153,7 @@ func (h *OrganizationHandler) UpdateOrganization(c *forge.Context) error {
 }
 
 // UpdateOrganizationByID updates an organization using path param id
-func (h *OrganizationHandler) UpdateOrganizationByID(c *forge.Context) error {
+func (h *OrganizationHandler) UpdateOrganizationByID(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -180,7 +180,7 @@ func (h *OrganizationHandler) UpdateOrganizationByID(c *forge.Context) error {
 }
 
 // DeleteOrganization deletes an organization
-func (h *OrganizationHandler) DeleteOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -198,7 +198,7 @@ func (h *OrganizationHandler) DeleteOrganization(c *forge.Context) error {
 }
 
 // DeleteOrganizationByID deletes an organization using path param id
-func (h *OrganizationHandler) DeleteOrganizationByID(c *forge.Context) error {
+func (h *OrganizationHandler) DeleteOrganizationByID(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -220,14 +220,15 @@ func (h *OrganizationHandler) DeleteOrganizationByID(c *forge.Context) error {
 }
 
 // checkRBAC enforces RBAC when enabled; returns true when allowed
-func (h *OrganizationHandler) checkRBAC(c *forge.Context, action string, resource string, orgID *xid.ID) bool {
+func (h *OrganizationHandler) checkRBAC(c forge.Context, action string, resource string, orgID *xid.ID) bool {
     if !h.enforceRBAC || h.rbac == nil || h.sess == nil || h.roles == nil {
         return true
     }
-    token, err := c.Cookie("session_token")
-    if err != nil || token == "" {
+    cookie, err := c.Request().Cookie("session_token")
+    if err != nil || cookie == nil {
         return false
     }
+    token := cookie.Value
     sess, err := h.sess.FindByToken(c.Request().Context(), token)
     if err != nil || sess == nil {
         return false
@@ -246,7 +247,7 @@ func (h *OrganizationHandler) checkRBAC(c *forge.Context, action string, resourc
 }
 
 // CreateMember adds a new member to an organization
-func (h *OrganizationHandler) CreateMember(c *forge.Context) error {
+func (h *OrganizationHandler) CreateMember(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -264,7 +265,7 @@ func (h *OrganizationHandler) CreateMember(c *forge.Context) error {
 }
 
 // GetMembers lists members or fetches a single member
-func (h *OrganizationHandler) GetMembers(c *forge.Context) error {
+func (h *OrganizationHandler) GetMembers(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -319,7 +320,7 @@ func (h *OrganizationHandler) GetMembers(c *forge.Context) error {
 }
 
 // UpdateMember updates a member
-func (h *OrganizationHandler) UpdateMember(c *forge.Context) error {
+func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -337,7 +338,7 @@ func (h *OrganizationHandler) UpdateMember(c *forge.Context) error {
 }
 
 // DeleteMember deletes a member
-func (h *OrganizationHandler) DeleteMember(c *forge.Context) error {
+func (h *OrganizationHandler) DeleteMember(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -360,7 +361,7 @@ func (h *OrganizationHandler) DeleteMember(c *forge.Context) error {
 }
 
 // CreateTeam creates a new team
-func (h *OrganizationHandler) CreateTeam(c *forge.Context) error {
+func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -378,7 +379,7 @@ func (h *OrganizationHandler) CreateTeam(c *forge.Context) error {
 }
 
 // GetTeams lists teams in an organization
-func (h *OrganizationHandler) GetTeams(c *forge.Context) error {
+func (h *OrganizationHandler) GetTeams(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -420,7 +421,7 @@ func (h *OrganizationHandler) GetTeams(c *forge.Context) error {
 }
 
 // UpdateTeam updates a team
-func (h *OrganizationHandler) UpdateTeam(c *forge.Context) error {
+func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -438,7 +439,7 @@ func (h *OrganizationHandler) UpdateTeam(c *forge.Context) error {
 }
 
 // DeleteTeam deletes a team
-func (h *OrganizationHandler) DeleteTeam(c *forge.Context) error {
+func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -461,7 +462,7 @@ func (h *OrganizationHandler) DeleteTeam(c *forge.Context) error {
 }
 
 // AddTeamMember adds a member to a team
-func (h *OrganizationHandler) AddTeamMember(c *forge.Context) error {
+func (h *OrganizationHandler) AddTeamMember(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -482,7 +483,7 @@ func (h *OrganizationHandler) AddTeamMember(c *forge.Context) error {
 }
 
 // RemoveTeamMember removes a member from a team
-func (h *OrganizationHandler) RemoveTeamMember(c *forge.Context) error {
+func (h *OrganizationHandler) RemoveTeamMember(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -503,7 +504,7 @@ func (h *OrganizationHandler) RemoveTeamMember(c *forge.Context) error {
 }
 
 // GetTeamMembers lists members of a team
-func (h *OrganizationHandler) GetTeamMembers(c *forge.Context) error {
+func (h *OrganizationHandler) GetTeamMembers(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -548,7 +549,7 @@ func (h *OrganizationHandler) GetTeamMembers(c *forge.Context) error {
 }
 
 // CreateInvitation creates an invitation
-func (h *OrganizationHandler) CreateInvitation(c *forge.Context) error {
+func (h *OrganizationHandler) CreateInvitation(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -566,7 +567,7 @@ func (h *OrganizationHandler) CreateInvitation(c *forge.Context) error {
 }
 
 // CreatePolicy creates a new RBAC policy expression
-func (h *OrganizationHandler) CreatePolicy(c *forge.Context) error {
+func (h *OrganizationHandler) CreatePolicy(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -589,7 +590,7 @@ func (h *OrganizationHandler) CreatePolicy(c *forge.Context) error {
 }
 
 // GetPolicies lists stored RBAC policy expressions
-func (h *OrganizationHandler) GetPolicies(c *forge.Context) error {
+func (h *OrganizationHandler) GetPolicies(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -611,7 +612,7 @@ func (h *OrganizationHandler) GetPolicies(c *forge.Context) error {
 }
 
 // DeletePolicy deletes a policy by ID
-func (h *OrganizationHandler) DeletePolicy(c *forge.Context) error {
+func (h *OrganizationHandler) DeletePolicy(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -634,7 +635,7 @@ func (h *OrganizationHandler) DeletePolicy(c *forge.Context) error {
 }
 
 // UpdatePolicy updates an existing RBAC policy expression by ID
-func (h *OrganizationHandler) UpdatePolicy(c *forge.Context) error {
+func (h *OrganizationHandler) UpdatePolicy(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -662,7 +663,7 @@ func (h *OrganizationHandler) UpdatePolicy(c *forge.Context) error {
 }
 
 // CreateRole creates a role, optionally scoped to an organization
-func (h *OrganizationHandler) CreateRole(c *forge.Context) error {
+func (h *OrganizationHandler) CreateRole(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -692,7 +693,7 @@ func (h *OrganizationHandler) CreateRole(c *forge.Context) error {
 }
 
 // GetRoles lists roles, optionally filtered by organization
-func (h *OrganizationHandler) GetRoles(c *forge.Context) error {
+func (h *OrganizationHandler) GetRoles(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -720,7 +721,7 @@ func (h *OrganizationHandler) GetRoles(c *forge.Context) error {
 }
 
 // AssignUserRole assigns a role to a user within an organization
-func (h *OrganizationHandler) AssignUserRole(c *forge.Context) error {
+func (h *OrganizationHandler) AssignUserRole(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -738,7 +739,7 @@ func (h *OrganizationHandler) AssignUserRole(c *forge.Context) error {
 }
 
 // RemoveUserRole removes a role assignment from a user within an organization
-func (h *OrganizationHandler) RemoveUserRole(c *forge.Context) error {
+func (h *OrganizationHandler) RemoveUserRole(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -756,7 +757,7 @@ func (h *OrganizationHandler) RemoveUserRole(c *forge.Context) error {
 }
 
 // GetUserRoles lists roles assigned to a user, optionally filtered by organization
-func (h *OrganizationHandler) GetUserRoles(c *forge.Context) error {
+func (h *OrganizationHandler) GetUserRoles(c forge.Context) error {
     if h.rl != nil {
         key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
         ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)

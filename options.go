@@ -3,6 +3,7 @@ package authsome
 import (
 	rl "github.com/xraph/authsome/core/ratelimit"
 	sec "github.com/xraph/authsome/core/security"
+	"github.com/xraph/forge"
 )
 
 // Option is a function that configures Auth
@@ -15,10 +16,10 @@ func WithMode(mode Mode) Option {
 	}
 }
 
-// WithForgeConfig sets the Forge config manager (type deferred)
-func WithForgeConfig(cfg interface{}) Option {
+// WithForgeApp sets the Forge application instance
+func WithForgeApp(app forge.App) Option {
 	return func(a *Auth) {
-		a.forgeConfig = cfg
+		a.forgeApp = app
 	}
 }
 

@@ -12,11 +12,12 @@ type Handler struct{ svc *Service }
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
 // List returns sessions for the current user based on cookie
-func (h *Handler) List(c *forge.Context) error {
-	token, err := c.Cookie("session_token")
-	if err != nil || token == "" {
+func (h *Handler) List(c forge.Context) error {
+	cookie, err := c.Request().Cookie("session_token")
+	if err != nil || cookie == nil {
 		return c.JSON(401, map[string]string{"error": "not authenticated"})
 	}
+	token := cookie.Value
 	uid, err := h.svc.CurrentUserFromToken(c.Request().Context(), token)
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": err.Error()})
@@ -29,11 +30,12 @@ func (h *Handler) List(c *forge.Context) error {
 }
 
 // SetActive switches the current session cookie to the provided session id
-func (h *Handler) SetActive(c *forge.Context) error {
-	token, err := c.Cookie("session_token")
-	if err != nil || token == "" {
+func (h *Handler) SetActive(c forge.Context) error {
+	cookie, err := c.Request().Cookie("session_token")
+	if err != nil || cookie == nil {
 		return c.JSON(401, map[string]string{"error": "not authenticated"})
 	}
+	token := cookie.Value
 	uid, err := h.svc.CurrentUserFromToken(c.Request().Context(), token)
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": err.Error()})
@@ -56,17 +58,18 @@ func (h *Handler) SetActive(c *forge.Context) error {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
 	// Set cookie header manually (no helper on Context)
-	cookie := fmt.Sprintf("session_token=%s; Path=/; HttpOnly; SameSite=Lax", sess.Token)
-	c.Header().Add("Set-Cookie", cookie)
+	cookieStr := fmt.Sprintf("session_token=%s; Path=/; HttpOnly; SameSite=Lax", sess.Token)
+	c.SetHeader("Set-Cookie", cookieStr)
 	return c.JSON(200, map[string]any{"session": sess, "token": sess.Token})
 }
 
 // Delete revokes a session by id for the current user
-func (h *Handler) Delete(c *forge.Context) error {
-	token, err := c.Cookie("session_token")
-	if err != nil || token == "" {
+func (h *Handler) Delete(c forge.Context) error {
+	cookie, err := c.Request().Cookie("session_token")
+	if err != nil || cookie == nil {
 		return c.JSON(401, map[string]string{"error": "not authenticated"})
 	}
+	token := cookie.Value
 	uid, err := h.svc.CurrentUserFromToken(c.Request().Context(), token)
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": err.Error()})

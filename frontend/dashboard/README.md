@@ -1,4 +1,28 @@
-# React + TypeScript + Vite
+# AuthSome Dashboard Premium - React + TypeScript + Vite
+
+This is the **premium/enhanced version** of the AuthSome dashboard. It provides a rich, interactive SPA experience built with React, TypeScript, and modern tooling.
+
+## About
+
+This dashboard offers advanced features and interactions beyond the standard Alpine.js dashboard included in the core plugin. It's designed for users who need:
+
+- Rich data visualizations and charts
+- Real-time updates and WebSocket support
+- Complex form interactions
+- Advanced filtering and search
+- Drag-and-drop interfaces
+
+## Comparison with Standard Dashboard
+
+| Feature | Standard (Alpine.js) | Premium (React) |
+|---------|---------------------|-----------------|
+| Bundle Size | ~40KB | ~500KB |
+| Initial Load | Fast | Moderate |
+| Interactivity | Good | Excellent |
+| Real-time | Basic | Advanced |
+| Build Process | None | Required |
+
+## Getting Started
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

@@ -18,7 +18,7 @@ type Handler struct {
 
 func NewHandler(s *Service, tf *repo.TwoFARepository) *Handler { return &Handler{svc: s, twofa: tf} }
 
-func (h *Handler) SignUp(c *forge.Context) error {
+func (h *Handler) SignUp(c forge.Context) error {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -35,7 +35,7 @@ func (h *Handler) SignUp(c *forge.Context) error {
 	return c.JSON(201, map[string]string{"status": "created"})
 }
 
-func (h *Handler) SignIn(c *forge.Context) error {
+func (h *Handler) SignIn(c forge.Context) error {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`

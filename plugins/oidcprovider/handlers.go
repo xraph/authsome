@@ -18,7 +18,7 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Authorize handles OAuth2/OIDC authorization requests
-func (h *Handler) Authorize(c *forge.Context) error {
+func (h *Handler) Authorize(c forge.Context) error {
 	q := c.Request().URL.Query()
 
 	// Parse authorization request
@@ -44,7 +44,7 @@ func (h *Handler) Authorize(c *forge.Context) error {
 		// Redirect to login with return URL
 		loginURL := fmt.Sprintf("/auth/signin?return_to=%s",
 			url.QueryEscape(c.Request().URL.String()))
-		c.Header().Set("Location", loginURL)
+		c.SetHeader("Location", loginURL)
 		return c.JSON(302, nil)
 	}
 
@@ -54,7 +54,7 @@ func (h *Handler) Authorize(c *forge.Context) error {
 		// Invalid session, redirect to login
 		loginURL := fmt.Sprintf("/auth/signin?return_to=%s",
 			url.QueryEscape(c.Request().URL.String()))
-		c.Header().Set("Location", loginURL)
+		c.SetHeader("Location", loginURL)
 		return c.JSON(302, nil)
 	}
 
@@ -84,7 +84,7 @@ func (h *Handler) Authorize(c *forge.Context) error {
 		redirectURL += "&state=" + url.QueryEscape(req.State)
 	}
 
-	c.Header().Set("Location", redirectURL)
+	c.SetHeader("Location", redirectURL)
 	return c.JSON(302, nil)
 }
 
@@ -99,7 +99,7 @@ type TokenRequest struct {
 }
 
 // Token handles the token endpoint
-func (h *Handler) Token(c *forge.Context) error {
+func (h *Handler) Token(c forge.Context) error {
 	var req TokenRequest
 
 	// Parse form data or JSON
@@ -153,7 +153,7 @@ func (h *Handler) Token(c *forge.Context) error {
 
 // UserInfo returns user info based on scopes (placeholder user)
 // UserInfo returns user information based on the access token
-func (h *Handler) UserInfo(c *forge.Context) error {
+func (h *Handler) UserInfo(c forge.Context) error {
 	// Extract access token from Authorization header
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
@@ -193,7 +193,7 @@ func (h *Handler) UserInfo(c *forge.Context) error {
 }
 
 // JWKS returns the JSON Web Key Set
-func (h *Handler) JWKS(c *forge.Context) error {
+func (h *Handler) JWKS(c forge.Context) error {
 	jwks, err := h.svc.GetJWKS()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get JWKS"})
@@ -202,7 +202,7 @@ func (h *Handler) JWKS(c *forge.Context) error {
 }
 
 // RegisterClient registers a new OAuth client
-func (h *Handler) RegisterClient(c *forge.Context) error {
+func (h *Handler) RegisterClient(c forge.Context) error {
 	var req struct {
 		Name        string `json:"name"`
 		RedirectURI string `json:"redirect_uri"`
@@ -220,10 +220,10 @@ func (h *Handler) RegisterClient(c *forge.Context) error {
 // Helper methods for authorization flow
 
 // getSessionToken extracts session token from cookie or Authorization header
-func (h *Handler) getSessionToken(c *forge.Context) string {
+func (h *Handler) getSessionToken(c forge.Context) string {
 	// Try cookie first
-	if token, err := c.Cookie("session_token"); err == nil {
-		return token
+	if cookie, err := c.Request().Cookie("session_token"); err == nil && cookie != nil {
+		return cookie.Value
 	}
 
 	// Try Authorization header
@@ -236,7 +236,7 @@ func (h *Handler) getSessionToken(c *forge.Context) string {
 }
 
 // redirectWithError redirects to the client with an OAuth error
-func (h *Handler) redirectWithError(c *forge.Context, redirectURI, errorCode, errorDescription, state string) error {
+func (h *Handler) redirectWithError(c forge.Context, redirectURI, errorCode, errorDescription, state string) error {
 	if redirectURI == "" {
 		return c.JSON(400, map[string]string{
 			"error":             errorCode,
@@ -253,7 +253,7 @@ func (h *Handler) redirectWithError(c *forge.Context, redirectURI, errorCode, er
 		redirectURL += "&state=" + url.QueryEscape(state)
 	}
 
-	c.Header().Set("Location", redirectURL)
+	c.SetHeader("Location", redirectURL)
 	return c.JSON(302, nil)
 }
 
@@ -271,7 +271,7 @@ func (h *Handler) checkExistingConsent(ctx context.Context, userID xid.ID, clien
 }
 
 // showConsentScreen displays the consent screen to the user
-func (h *Handler) showConsentScreen(c *forge.Context, req *AuthorizeRequest, sess *session.Session) error {
+func (h *Handler) showConsentScreen(c forge.Context, req *AuthorizeRequest, sess *session.Session) error {
 	// Get client information for display
 	client, err := h.svc.clientRepo.FindByClientID(c.Request().Context(), req.ClientID)
 	if err != nil {
@@ -284,7 +284,8 @@ func (h *Handler) showConsentScreen(c *forge.Context, req *AuthorizeRequest, ses
 	// Render consent screen HTML
 	html := h.generateConsentHTML(client.Name, client.ClientID, scopes, req, sess)
 
-	return c.HTML(200, html)
+	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+	return c.String(200, html)
 }
 
 // parseScopes converts scope string to user-friendly descriptions
@@ -544,7 +545,7 @@ func (h *Handler) generatePermissionsHTML(scopes []ScopeInfo) string {
 }
 
 // HandleConsent processes the consent form submission
-func (h *Handler) HandleConsent(c *forge.Context) error {
+func (h *Handler) HandleConsent(c forge.Context) error {
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -634,7 +635,7 @@ func (h *Handler) HandleConsent(c *forge.Context) error {
 	redirectURL.RawQuery = query.Encode()
 
 	// Redirect to client with authorization code
-	c.Header().Set("Location", redirectURL.String())
+	c.SetHeader("Location", redirectURL.String())
 	return c.JSON(http.StatusFound, nil)
 }
 

@@ -41,7 +41,7 @@ type UpdateWebhookRequest struct {
 }
 
 // CreateWebhook creates a new webhook
-func (h *WebhookHandler) CreateWebhook(c *forge.Context) error {
+func (h *WebhookHandler) CreateWebhook(c forge.Context) error {
 	var req CreateWebhookRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
@@ -80,7 +80,7 @@ func (h *WebhookHandler) CreateWebhook(c *forge.Context) error {
 }
 
 // GetWebhook retrieves a webhook by ID
-func (h *WebhookHandler) GetWebhook(c *forge.Context) error {
+func (h *WebhookHandler) GetWebhook(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		return c.JSON(400, map[string]string{"error": "webhook ID is required"})
@@ -104,7 +104,7 @@ func (h *WebhookHandler) GetWebhook(c *forge.Context) error {
 }
 
 // ListWebhooks lists webhooks for an organization
-func (h *WebhookHandler) ListWebhooks(c *forge.Context) error {
+func (h *WebhookHandler) ListWebhooks(c forge.Context) error {
 	orgID := c.Request().Header.Get("X-Organization-ID")
 	if orgID == "" {
 		orgID = "default"
@@ -141,7 +141,7 @@ func (h *WebhookHandler) ListWebhooks(c *forge.Context) error {
 }
 
 // UpdateWebhook updates a webhook
-func (h *WebhookHandler) UpdateWebhook(c *forge.Context) error {
+func (h *WebhookHandler) UpdateWebhook(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		return c.JSON(400, map[string]string{"error": "webhook ID is required"})
@@ -175,7 +175,7 @@ func (h *WebhookHandler) UpdateWebhook(c *forge.Context) error {
 }
 
 // DeleteWebhook deletes a webhook
-func (h *WebhookHandler) DeleteWebhook(c *forge.Context) error {
+func (h *WebhookHandler) DeleteWebhook(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		return c.JSON(400, map[string]string{"error": "webhook ID is required"})
@@ -195,7 +195,7 @@ func (h *WebhookHandler) DeleteWebhook(c *forge.Context) error {
 }
 
 // GetWebhookDeliveries retrieves delivery logs for a webhook
-func (h *WebhookHandler) GetWebhookDeliveries(c *forge.Context) error {
+func (h *WebhookHandler) GetWebhookDeliveries(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		return c.JSON(400, map[string]string{"error": "webhook ID is required"})

@@ -21,7 +21,7 @@ func NewOrganizationHandler(orgService *organization.Service) *OrganizationHandl
 }
 
 // CreateOrganization handles organization creation requests
-func (h *OrganizationHandler) CreateOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 	var req organization.CreateOrganizationRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
@@ -39,7 +39,7 @@ func (h *OrganizationHandler) CreateOrganization(c *forge.Context) error {
 }
 
 // GetOrganization handles get organization requests
-func (h *OrganizationHandler) GetOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -54,7 +54,7 @@ func (h *OrganizationHandler) GetOrganization(c *forge.Context) error {
 }
 
 // UpdateOrganization handles organization update requests
-func (h *OrganizationHandler) UpdateOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -74,7 +74,7 @@ func (h *OrganizationHandler) UpdateOrganization(c *forge.Context) error {
 }
 
 // DeleteOrganization handles organization deletion requests
-func (h *OrganizationHandler) DeleteOrganization(c *forge.Context) error {
+func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
@@ -89,7 +89,7 @@ func (h *OrganizationHandler) DeleteOrganization(c *forge.Context) error {
 }
 
 // ListOrganizations handles list organizations requests
-func (h *OrganizationHandler) ListOrganizations(c *forge.Context) error {
+func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 	// Parse pagination parameters
 	limitStr := c.Request().URL.Query().Get("limit")
 	offsetStr := c.Request().URL.Query().Get("offset")

@@ -31,8 +31,10 @@ const (
 type Template struct {
 	ID             xid.ID                 `json:"id"`
 	OrganizationID string                 `json:"organization_id"`
+	TemplateKey    string                 `json:"template_key"`             // e.g., "auth.welcome", "auth.mfa_code"
 	Name           string                 `json:"name"`
 	Type           NotificationType       `json:"type"`
+	Language       string                 `json:"language"`                 // e.g., "en", "es", "fr"
 	Subject        string                 `json:"subject,omitempty"`        // For email
 	Body           string                 `json:"body"`
 	Variables      []string               `json:"variables"`                // Available template variables
@@ -76,8 +78,10 @@ type SendRequest struct {
 // CreateTemplateRequest represents a request to create a template
 type CreateTemplateRequest struct {
 	OrganizationID string                 `json:"organization_id"`
+	TemplateKey    string                 `json:"template_key"`
 	Name           string                 `json:"name"`
 	Type           NotificationType       `json:"type"`
+	Language       string                 `json:"language,omitempty"`
 	Subject        string                 `json:"subject,omitempty"`
 	Body           string                 `json:"body"`
 	Variables      []string               `json:"variables,omitempty"`
@@ -97,6 +101,7 @@ type UpdateTemplateRequest struct {
 type ListTemplatesRequest struct {
 	OrganizationID string           `json:"organization_id"`
 	Type           NotificationType `json:"type,omitempty"`
+	Language       string           `json:"language,omitempty"`
 	Active         *bool            `json:"active,omitempty"`
 	Offset         int              `json:"offset"`
 	Limit          int              `json:"limit"`
@@ -136,6 +141,7 @@ type Repository interface {
 	CreateTemplate(ctx context.Context, template *Template) error
 	FindTemplateByID(ctx context.Context, id xid.ID) (*Template, error)
 	FindTemplateByName(ctx context.Context, orgID, name string) (*Template, error)
+	FindTemplateByKey(ctx context.Context, orgID, templateKey, notifType, language string) (*Template, error)
 	ListTemplates(ctx context.Context, req *ListTemplatesRequest) ([]*Template, int64, error)
 	UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemplateRequest) error
 	DeleteTemplate(ctx context.Context, id xid.ID) error

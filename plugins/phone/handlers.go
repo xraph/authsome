@@ -15,7 +15,7 @@ type Handler struct {
 func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
 
 // SendCode handles sending of verification code via SMS
-func (h *Handler) SendCode(c *forge.Context) error {
+func (h *Handler) SendCode(c forge.Context) error {
 	var body struct {
 		Phone string `json:"phone"`
 	}
@@ -49,7 +49,7 @@ func (h *Handler) SendCode(c *forge.Context) error {
 }
 
 // Verify checks the code and creates a session on success
-func (h *Handler) Verify(c *forge.Context) error {
+func (h *Handler) Verify(c forge.Context) error {
 	var body struct {
 		Phone    string `json:"phone"`
 		Code     string `json:"code"`
@@ -75,7 +75,7 @@ func (h *Handler) Verify(c *forge.Context) error {
 }
 
 // SignIn aliases to Verify for convenience
-func (h *Handler) SignIn(c *forge.Context) error {
+func (h *Handler) SignIn(c forge.Context) error {
 	var body struct {
 		Phone    string `json:"phone"`
 		Code     string `json:"code"`

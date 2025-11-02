@@ -5,22 +5,22 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/sqliteshim"
+	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/plugins/dashboard"
 )
 
-// ServeMuxTestApp demonstrates AuthSome with pure http.ServeMux
+// ServeMuxTestApp demonstrates AuthSome with Forge App
 type ServeMuxTestApp struct {
 	db   *bun.DB
-	mux  *http.ServeMux
+	app  forge.App
 	auth *authsome.Auth
 }
 
@@ -58,12 +58,7 @@ func main() {
 	log.Printf("📊 Dashboard: http://localhost:%s/dashboard/", config.Port)
 	log.Printf("🔐 Auth API: http://localhost:%s/api/auth", config.Port)
 
-	server := &http.Server{
-		Addr:    ":" + config.Port,
-		Handler: app.mux,
-	}
-
-	if err := server.ListenAndServe(); err != nil {
+	if err := app.app.Run(); err != nil {
 		log.Fatalf("❌ Server failed: %v", err)
 	}
 }
@@ -90,7 +85,12 @@ func (app *ServeMuxTestApp) initDatabase(config *Config) error {
 
 func (app *ServeMuxTestApp) initHTTP() error {
 	log.Println("🌐 Initializing HTTP server...")
-	app.mux = http.NewServeMux()
+	app.app = forge.NewApp(forge.AppConfig{
+		Name:        "authsome-servemux-test",
+		Version:     "1.0.0",
+		Environment: "development",
+		HTTPAddress: ":8082",
+	})
 	log.Println("✅ HTTP server initialized")
 	return nil
 }
@@ -98,12 +98,10 @@ func (app *ServeMuxTestApp) initHTTP() error {
 func (app *ServeMuxTestApp) initAuthSome(config *Config) error {
 	log.Println("🔐 Initializing AuthSome...")
 
-	configManager := setupViper()
-
 	app.auth = authsome.New(
 		authsome.WithMode(config.Mode),
 		authsome.WithDatabase(app.db),
-		authsome.WithForgeConfig(configManager),
+		authsome.WithForgeApp(app.app),
 	)
 
 	// Register only dashboard plugin for testing
@@ -125,31 +123,30 @@ func (app *ServeMuxTestApp) setupRoutes() error {
 	log.Println("🛣️  Setting up routes...")
 
 	// Mount AuthSome routes first
-	if err := app.auth.Mount(app.mux, "/api/auth"); err != nil {
+	if err := app.auth.Mount(app.app.Router(), "/api/auth"); err != nil {
 		return fmt.Errorf("failed to mount AuthSome: %w", err)
 	}
 
 	// Add a simple home route at /home to avoid conflict with dashboard
-	app.mux.HandleFunc("/home", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`
-<!DOCTYPE html>
+	router := app.app.Router()
+	router.GET("/home", func(c forge.Context) error {
+		html := `<!DOCTYPE html>
 <html>
 <head>
     <title>ServeMux Test</title>
 </head>
 <body>
     <h1>ServeMux Test App</h1>
-    <p>This is a test app using pure http.ServeMux to test dashboard asset serving.</p>
+    <p>This is a test app using Forge App to test dashboard asset serving.</p>
     <ul>
         <li><a href="/dashboard/">Dashboard</a></li>
         <li><a href="/api/auth/status">Auth Status</a></li>
         <li><a href="/">Root (Dashboard)</a></li>
     </ul>
 </body>
-</html>
-		`))
+</html>`
+		c.SetHeader("Content-Type", "text/html; charset=utf-8")
+		return c.String(200, html)
 	})
 
 	log.Println("✅ Routes configured")

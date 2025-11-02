@@ -15,7 +15,7 @@ type Handler struct {
 func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
 
 // Send handles sending of OTP to email
-func (h *Handler) Send(c *forge.Context) error {
+func (h *Handler) Send(c forge.Context) error {
 	var body struct {
 		Email string `json:"email"`
 	}
@@ -51,7 +51,7 @@ func (h *Handler) Send(c *forge.Context) error {
 }
 
 // Verify checks the OTP and creates a session on success
-func (h *Handler) Verify(c *forge.Context) error {
+func (h *Handler) Verify(c forge.Context) error {
 	var body struct {
 		Email    string `json:"email"`
 		OTP      string `json:"otp"`

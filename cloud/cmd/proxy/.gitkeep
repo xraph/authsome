@@ -1,0 +1,4 @@
+# API Proxy Service
+
+Routes customer API requests to the correct AuthSome instance.
+

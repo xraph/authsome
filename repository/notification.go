@@ -23,11 +23,19 @@ func NewNotificationRepository(db *bun.DB) *notificationRepository {
 
 // CreateTemplate creates a new notification template
 func (r *notificationRepository) CreateTemplate(ctx context.Context, template *notification.Template) error {
+	// Set default language if not provided
+	language := template.Language
+	if language == "" {
+		language = "en"
+	}
+	
 	schemaTemplate := &schema.NotificationTemplate{
 		ID:             template.ID,
 		OrganizationID: template.OrganizationID,
+		TemplateKey:    template.TemplateKey,
 		Name:           template.Name,
 		Type:           string(template.Type),
+		Language:       language,
 		Subject:        template.Subject,
 		Body:           template.Body,
 		Variables:      template.Variables,
@@ -86,8 +94,68 @@ func (r *notificationRepository) FindTemplateByName(ctx context.Context, orgID, 
 	return &notification.Template{
 		ID:             schemaTemplate.ID,
 		OrganizationID: schemaTemplate.OrganizationID,
+		TemplateKey:    schemaTemplate.TemplateKey,
 		Name:           schemaTemplate.Name,
 		Type:           notification.NotificationType(schemaTemplate.Type),
+		Language:       schemaTemplate.Language,
+		Subject:        schemaTemplate.Subject,
+		Body:           schemaTemplate.Body,
+		Variables:      schemaTemplate.Variables,
+		Metadata:       schemaTemplate.Metadata,
+		Active:         schemaTemplate.Active,
+		CreatedAt:      schemaTemplate.CreatedAt,
+		UpdatedAt:      schemaTemplate.UpdatedAt,
+	}, nil
+}
+
+// FindTemplateByKey finds a template by organization, key, type, and language
+func (r *notificationRepository) FindTemplateByKey(ctx context.Context, orgID, templateKey, notifType, language string) (*notification.Template, error) {
+	schemaTemplate := &schema.NotificationTemplate{}
+	
+	query := r.db.NewSelect().
+		Model(schemaTemplate).
+		Where("organization_id = ? AND template_key = ? AND active = true", orgID, templateKey)
+	
+	if notifType != "" {
+		query = query.Where("type = ?", notifType)
+	}
+	
+	// Try to find exact language match first
+	if language != "" {
+		query = query.Where("language = ?", language)
+	}
+	
+	err := query.Limit(1).Scan(ctx)
+	if err == sql.ErrNoRows {
+		// If exact language not found and language was specified, try default "en"
+		if language != "" && language != "en" {
+			query = r.db.NewSelect().
+				Model(schemaTemplate).
+				Where("organization_id = ? AND template_key = ? AND language = ? AND active = true", orgID, templateKey, "en")
+			
+			if notifType != "" {
+				query = query.Where("type = ?", notifType)
+			}
+			
+			err = query.Limit(1).Scan(ctx)
+			if err == sql.ErrNoRows {
+				return nil, nil
+			}
+		} else {
+			return nil, nil
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	
+	return &notification.Template{
+		ID:             schemaTemplate.ID,
+		OrganizationID: schemaTemplate.OrganizationID,
+		TemplateKey:    schemaTemplate.TemplateKey,
+		Name:           schemaTemplate.Name,
+		Type:           notification.NotificationType(schemaTemplate.Type),
+		Language:       schemaTemplate.Language,
 		Subject:        schemaTemplate.Subject,
 		Body:           schemaTemplate.Body,
 		Variables:      schemaTemplate.Variables,
@@ -107,6 +175,9 @@ func (r *notificationRepository) ListTemplates(ctx context.Context, req *notific
 
 	if req.Type != "" {
 		query = query.Where("type = ?", string(req.Type))
+	}
+	if req.Language != "" {
+		query = query.Where("language = ?", req.Language)
 	}
 	if req.Active != nil {
 		query = query.Where("active = ?", *req.Active)
@@ -141,8 +212,10 @@ func (r *notificationRepository) ListTemplates(ctx context.Context, req *notific
 		templates[i] = &notification.Template{
 			ID:             st.ID,
 			OrganizationID: st.OrganizationID,
+			TemplateKey:    st.TemplateKey,
 			Name:           st.Name,
 			Type:           notification.NotificationType(st.Type),
+			Language:       st.Language,
 			Subject:        st.Subject,
 			Body:           st.Body,
 			Variables:      st.Variables,

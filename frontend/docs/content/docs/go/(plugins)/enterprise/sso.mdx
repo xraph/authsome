@@ -1,0 +1,230 @@
+---
+title: Single Sign-On (SSO)
+description: Enterprise SSO supporting SAML 2.0 and OIDC for seamless integration with corporate identity providers
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Single Sign-On (SSO)
+
+Enterprise-grade SSO plugin supporting SAML 2.0 and OpenID Connect (OIDC) protocols for seamless integration with corporate identity providers like Okta, Azure AD, OneLogin, and Auth0.
+
+## Supported Protocols
+
+- ✅ **SAML 2.0** - Industry-standard enterprise SSO
+- ✅ **OpenID Connect** - Modern OAuth 2.0-based SSO
+- ✅ **Just-in-Time Provisioning** - Auto-create users on first login
+- ✅ **Attribute Mapping** - Map IdP attributes to user fields
+- ✅ **Multi-Tenant** - Organization-specific SSO configurations
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/sso"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        sso.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['SAML', 'OIDC']}>
+<Tab value="SAML">
+```yaml
+plugins:
+  sso:
+    saml:
+      enabled: true
+      entity_id: "https://yourapp.com"
+      acs_url: "https://yourapp.com/api/auth/sso/saml/acs"
+      sls_url: "https://yourapp.com/api/auth/sso/saml/sls"
+      
+      # IdP Configuration
+      idp:
+        entity_id: "https://idp.example.com"
+        sso_url: "https://idp.example.com/sso"
+        slo_url: "https://idp.example.com/slo"
+        certificate: |
+          -----BEGIN CERTIFICATE-----
+          ...
+          -----END CERTIFICATE-----
+      
+      # Attribute mapping
+      attributes:
+        email: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+        name: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+        groups: "http://schemas.xmlsoap.org/claims/Group"
+```
+</Tab>
+
+<Tab value="OIDC">
+```yaml
+plugins:
+  sso:
+    oidc:
+      enabled: true
+      issuer: "https://idp.example.com"
+      client_id: "your-client-id"
+      client_secret: "your-client-secret"
+      redirect_url: "https://yourapp.com/api/auth/sso/oidc/callback"
+      
+      # Scopes
+      scopes:
+        - openid
+        - profile
+        - email
+        - groups
+      
+      # Attribute mapping
+      claims:
+        email: "email"
+        name: "name"
+        groups: "groups"
+```
+</Tab>
+</Tabs>
+
+## Usage
+
+### SAML Authentication
+
+```html
+<!-- SP-Initiated SSO -->
+<a href="/api/auth/sso/saml/login?org=acme">
+  Login with Corporate SSO
+</a>
+
+<!-- IdP-Initiated SSO -->
+<!-- Configure ACS URL in your IdP -->
+<!-- Users login at IdP, then redirected to your app -->
+```
+
+### OIDC Authentication
+
+```html
+<!-- Start OIDC flow -->
+<a href="/api/auth/sso/oidc/login?org=techcorp">
+  Login with OIDC
+</a>
+```
+
+## Multi-Tenant Configuration
+
+Configure different SSO providers per organization:
+
+```yaml
+organizations:
+  org_acme:
+    plugins:
+      sso:
+        saml:
+          enabled: true
+          idp:
+            entity_id: "https://acme.okta.com"
+            sso_url: "https://acme.okta.com/app/acme_app/sso/saml"
+            certificate: "..."
+            
+  org_techcorp:
+    plugins:
+      sso:
+        oidc:
+          enabled: true
+          issuer: "https://login.microsoftonline.com/techcorp-tenant/v2.0"
+          client_id: "techcorp-client-id"
+          client_secret: "techcorp-secret"
+```
+
+## Just-in-Time (JIT) Provisioning
+
+Automatically create users on first SSO login:
+
+```yaml
+plugins:
+  sso:
+    jit_provisioning:
+      enabled: true
+      create_users: true
+      update_users: true
+      default_role: "member"
+      
+      # Sync attributes
+      sync_attributes:
+        - email
+        - name
+        - groups
+```
+
+## Attribute Mapping
+
+Map IdP attributes to user fields:
+
+```go
+// SAML attribute mapping
+attributes := map[string]string{
+    "email":      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+    "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+    "last_name":  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+    "department": "http://schemas.xmlsoap.org/claims/Department",
+    "groups":     "http://schemas.xmlsoap.org/claims/Group",
+}
+
+// OIDC claims mapping
+claims := map[string]string{
+    "email":      "email",
+    "name":       "name",
+    "picture":    "picture",
+    "groups":     "groups",
+    "department": "department",
+}
+```
+
+## Group Sync
+
+Automatically sync user groups/roles from IdP:
+
+```yaml
+plugins:
+  sso:
+    group_sync:
+      enabled: true
+      
+      # Map IdP groups to app roles
+      mappings:
+        "IT-Admins": "admin"
+        "Developers": "developer"
+        "Users": "member"
+      
+      # Remove roles not in IdP
+      remove_unmatched: true
+```
+
+## API Endpoints
+
+- `GET /api/auth/sso/saml/login` - Start SAML SSO
+- `POST /api/auth/sso/saml/acs` - SAML Assertion Consumer Service
+- `GET /api/auth/sso/saml/metadata` - SAML SP Metadata
+- `GET /api/auth/sso/saml/sls` - SAML Single Logout Service
+- `GET /api/auth/sso/oidc/login` - Start OIDC flow
+- `GET /api/auth/sso/oidc/callback` - OIDC callback
+- `GET /api/auth/sso/oidc/.well-known/openid-configuration` - OIDC discovery
+
+## Resources
+
+- [SAML 2.0 Specification](https://docs.oasis-open.org/security/saml/v2.0/)
+- [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html)
+- [SSO Plugin README](https://github.com/xraph/authsome/blob/main/plugins/sso/README.md)
+
+<Callout type="info">
+For production deployments, always use HTTPS and verify SSL certificates.
+</Callout>
+

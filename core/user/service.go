@@ -115,6 +115,23 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
     if req.Name != nil {
         u.Name = *req.Name
     }
+    if req.Email != nil {
+        // Check if email is changing and if new email is already taken
+        newEmail := *req.Email
+        if newEmail != u.Email {
+            if existing, err := s.repo.FindByEmail(ctx, newEmail); err == nil && existing != nil && existing.ID != u.ID {
+                return nil, fmt.Errorf("email already taken")
+            }
+            u.Email = newEmail
+        }
+    }
+    if req.EmailVerified != nil {
+        u.EmailVerified = *req.EmailVerified
+        if *req.EmailVerified {
+            now := time.Now().UTC()
+            u.EmailVerifiedAt = &now
+        }
+    }
     if req.Image != nil {
         u.Image = *req.Image
     }
@@ -206,4 +223,32 @@ func (s *Service) List(ctx context.Context, opts types.PaginationOptions) ([]*Us
         return nil, 0, err
     }
     return list, total, nil
+}
+
+// Search searches users by name or email with pagination
+func (s *Service) Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*User, int, error) {
+    if opts.Page <= 0 {
+        opts.Page = 1
+    }
+    if opts.PageSize <= 0 {
+        opts.PageSize = 20
+    }
+    offset := (opts.Page - 1) * opts.PageSize
+    list, err := s.repo.Search(ctx, query, opts.PageSize, offset)
+    if err != nil {
+        return nil, 0, err
+    }
+    total, err := s.repo.CountSearch(ctx, query)
+    if err != nil {
+        return nil, 0, err
+    }
+    return list, total, nil
+}
+
+// CountCreatedToday returns the count of users created today
+func (s *Service) CountCreatedToday(ctx context.Context) (int, error) {
+    // Get start of today in UTC
+    now := time.Now().UTC()
+    startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+    return s.repo.CountCreatedSince(ctx, startOfDay)
 }

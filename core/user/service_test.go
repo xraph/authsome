@@ -70,6 +70,24 @@ func (m *MockRepository) Count(ctx context.Context) (int, error) {
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockRepository) CountCreatedSince(ctx context.Context, since time.Time) (int, error) {
+	args := m.Called(ctx, since)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockRepository) Search(ctx context.Context, query string, limit, offset int) ([]*User, error) {
+	args := m.Called(ctx, query, limit, offset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*User), args.Error(1)
+}
+
+func (m *MockRepository) CountSearch(ctx context.Context, query string) (int, error) {
+	args := m.Called(ctx, query)
+	return args.Int(0), args.Error(1)
+}
+
 // Helper function to create a test service
 func newTestService(repo Repository) *Service {
 	return NewService(repo, Config{

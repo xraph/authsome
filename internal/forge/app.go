@@ -68,6 +68,7 @@ type Context struct {
 	w      http.ResponseWriter
 	r      *http.Request
 	params map[string]string
+	values map[string]interface{} // For storing request-scoped values
 }
 
 func (c *Context) Request() *http.Request { return c.r }
@@ -96,12 +97,56 @@ func (c *Context) Cookie(name string) (string, error) {
 	return ck.Value, nil
 }
 
+func (c *Context) SetHeader(key, value string) {
+	c.w.Header().Set(key, value)
+}
+
+func (c *Context) Response() http.ResponseWriter {
+	return c.w
+}
+
+func (c *Context) String(status int, s string) error {
+	c.w.WriteHeader(status)
+	_, err := c.w.Write([]byte(s))
+	return err
+}
+
+func (c *Context) Redirect(status int, url string) error {
+	http.Redirect(c.w, c.r, url, status)
+	return nil
+}
+
+func (c *Context) Query(key string) string {
+	return c.r.URL.Query().Get(key)
+}
+
 // Param returns a path parameter captured by {name}
 func (c *Context) Param(name string) string {
 	if c.params == nil {
 		return ""
 	}
 	return c.params[name]
+}
+
+// Get retrieves a value from the context by key
+func (c *Context) Get(key string) interface{} {
+	if c.values == nil {
+		return nil
+	}
+	return c.values[key]
+}
+
+// Set stores a value in the context by key
+func (c *Context) Set(key string, value interface{}) {
+	if c.values == nil {
+		c.values = make(map[string]interface{})
+	}
+	c.values[key] = value
+}
+
+// SetRequest allows replacing the underlying HTTP request
+func (c *Context) SetRequest(r *http.Request) {
+	c.r = r
 }
 
 // Group groups routes under a base path

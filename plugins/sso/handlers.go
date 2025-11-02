@@ -14,7 +14,7 @@ type Handler struct {
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // RegisterProvider registers an SSO provider (SAML or OIDC); org scoping TBD
-func (h *Handler) RegisterProvider(c *forge.Context) error {
+func (h *Handler) RegisterProvider(c forge.Context) error {
 	var req struct {
 		ProviderID       string `json:"providerId"`
 		Type             string `json:"type"`
@@ -50,13 +50,13 @@ func (h *Handler) RegisterProvider(c *forge.Context) error {
 }
 
 // SAMLSPMetadata returns Service Provider metadata (placeholder)
-func (h *Handler) SAMLSPMetadata(c *forge.Context) error {
+func (h *Handler) SAMLSPMetadata(c forge.Context) error {
 	md := h.svc.SPMetadata()
 	return c.JSON(http.StatusOK, map[string]string{"metadata": md})
 }
 
 // SAMLCallback handles SAML response callback for given provider
-func (h *Handler) SAMLCallback(c *forge.Context) error {
+func (h *Handler) SAMLCallback(c forge.Context) error {
 	pid := c.Param("providerId")
 	if pid == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing providerId"})
@@ -90,7 +90,7 @@ func (h *Handler) SAMLCallback(c *forge.Context) error {
 }
 
 // SAMLLogin initiates SAML authentication by redirecting to IdP
-func (h *Handler) SAMLLogin(c *forge.Context) error {
+func (h *Handler) SAMLLogin(c forge.Context) error {
 	pid := c.Param("providerId")
 	if pid == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing providerId"})
@@ -127,7 +127,7 @@ func (h *Handler) SAMLLogin(c *forge.Context) error {
 }
 
 // OIDCCallback handles OIDC response callback for given provider
-func (h *Handler) OIDCCallback(c *forge.Context) error {
+func (h *Handler) OIDCCallback(c forge.Context) error {
 	pid := c.Param("providerId")
 	if pid == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing providerId"})

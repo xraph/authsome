@@ -1,0 +1,460 @@
+---
+title: SaaS Integration Guide
+description: Complete guide to integrating AuthSome RBAC with external SaaS applications for multi-tenant authentication and authorization
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# SaaS Integration Guide
+
+## Overview
+
+AuthSome provides **enterprise-grade authentication and RBAC** that can be easily integrated into external SaaS applications. This allows your SaaS to:
+
+- ✅ **Delegate authentication** to AuthSome
+- ✅ **Use organization-scoped permissions** for multi-tenant access control
+- ✅ **Leverage fast permission checking** (10ns cache hits, 240µs cache misses)
+- ✅ **Manage users, roles, and organizations** through AuthSome APIs
+- ✅ **Customize per-organization settings** (OAuth, forms, RBAC policies)
+
+<Callout type="info">
+AuthSome is specifically designed for multi-tenant SaaS applications with organization-scoped configurations and permissions.
+</Callout>
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Your SaaS Application                  │
+│  ┌────────────┐  ┌────────────┐  ┌────────────────┐   │
+│  │  Frontend  │  │  Backend   │  │  API Services  │   │
+│  └────────────┘  └────────────┘  └────────────────┘   │
+│         │              │                  │             │
+│         └──────────────┴──────────────────┘             │
+│                        │                                │
+│                 ┌──────▼──────┐                         │
+│                 │  Auth Client │                        │
+│                 └──────┬──────┘                         │
+└────────────────────────┼────────────────────────────────┘
+                         │
+                         │ HTTP/REST API
+                         │
+┌────────────────────────▼────────────────────────────────┐
+│                  AuthSome Instance                       │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │            Multi-Tenant Organizations            │   │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐         │   │
+│  │  │ Org A   │  │ Org B   │  │ Org C   │   ...   │   │
+│  │  │ Users   │  │ Users   │  │ Users   │         │   │
+│  │  │ Roles   │  │ Roles   │  │ Roles   │         │   │
+│  │  │ Perms   │  │ Perms   │  │ Perms   │         │   │
+│  │  └─────────┘  └─────────┘  └─────────┘         │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │  RBAC Engine │  │  Session Mgmt│  │  Audit Logs  │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+└──────────────────────────────────────────────────────────┘
+```
+
+## Quick Start
+
+### Step 1: Install Client Library
+
+<Tabs items={['Go', 'TypeScript', 'Rust']}>
+<Tab value="Go">
+```bash
+go get github.com/xraph/authsome/clients/go
+```
+</Tab>
+
+<Tab value="TypeScript">
+```bash
+npm install @authsome/client
+```
+</Tab>
+
+<Tab value="Rust">
+```bash
+cargo add authsome-client
+```
+</Tab>
+</Tabs>
+
+### Step 2: Initialize Client
+
+```go
+import authsome "github.com/xraph/authsome/clients/go"
+
+client := authsome.NewClient(authsome.ClientConfig{
+    BaseURL: "https://auth.yourdomain.com",
+    APIKey:  "your-api-key",
+})
+```
+
+### Step 3: Add Permission Middleware
+
+```go
+func RequirePermission(action, resource string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session := getSession(r)
+            orgID := r.Header.Get("X-Organization-ID")
+            
+            // Check permission using AuthSome
+            allowed, _ := client.RBAC.Can(r.Context(), &authsome.PermissionCheck{
+                UserID:   session.UserID,
+                Action:   action,
+                Resource: resource,
+                OrgID:    orgID,
+            })
+            
+            if !allowed {
+                http.Error(w, "Forbidden", http.StatusForbidden)
+                return
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+
+// Protect your routes
+http.Handle("/api/projects", 
+    RequirePermission("read", "projects")(projectsHandler))
+```
+
+## Multi-Tenant Setup
+
+### 1. Configure AuthSome in SaaS Mode
+
+```yaml
+# authsome-config.yaml
+mode: saas
+
+server:
+  host: auth.yourdomain.com
+  port: 8080
+
+database:
+  driver: postgres
+  host: localhost
+  port: 5432
+  database: authsome
+
+auth:
+  session:
+    lifetime: 24h
+    cookie:
+      domain: .yourdomain.com  # Share across subdomains
+      
+  rbac:
+    enabled: true
+    cache_ttl: 5m  # Fast permission checking
+
+organizations:
+  enabled: true
+  default_roles:
+    - name: owner
+      permissions: ["*"]
+    - name: admin
+      permissions: ["org:*", "members:*", "projects:*"]
+    - name: member
+      permissions: ["org:read", "projects:read"]
+```
+
+### 2. Create Organizations
+
+```bash
+# Create organization for each customer
+authsome-cli org create \
+  --name "Acme Corp" \
+  --slug "acme" \
+  --owner-email "admin@acme.com"
+```
+
+### 3. Define Roles and Permissions
+
+```bash
+# Create custom roles for your SaaS
+authsome-cli role create \
+  --org "acme" \
+  --name "project-manager" \
+  --permissions "projects:*,tasks:*"
+
+# Assign roles to users
+authsome-cli user assign-role \
+  --user-id "user_123" \
+  --role "project-manager" \
+  --org "acme"
+```
+
+## Integration Patterns
+
+### Pattern 1: Middleware-Based
+
+```go
+func RequirePermission(action, resource string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session := getSessionFromRequest(r)
+            orgID := r.Header.Get("X-Organization-ID")
+            
+            allowed, err := authClient.RBAC.Can(r.Context(), &authsome.PermissionCheck{
+                UserID:   session.UserID,
+                Action:   action,
+                Resource: resource,
+                OrgID:    orgID,
+            })
+            
+            if err != nil || !allowed {
+                http.Error(w, "Forbidden", http.StatusForbidden)
+                return
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+### Pattern 2: Service-Level
+
+```go
+type ProjectService struct {
+    authClient *authsome.Client
+    db         *sql.DB
+}
+
+func (s *ProjectService) CreateProject(ctx context.Context, userID, orgID, name string) (*Project, error) {
+    // Check permission before action
+    allowed, err := s.authClient.RBAC.Can(ctx, &authsome.PermissionCheck{
+        UserID:   userID,
+        Action:   "create",
+        Resource: "projects",
+        OrgID:    orgID,
+    })
+    
+    if err != nil || !allowed {
+        return nil, fmt.Errorf("permission denied")
+    }
+    
+    // Perform the action
+    return s.db.CreateProject(ctx, name, orgID)
+}
+```
+
+### Pattern 3: Frontend
+
+```typescript
+import { useAuthSome } from '@authsome/react';
+
+function ProjectActions({ project }) {
+    const { checkPermission } = useAuthSome();
+    
+    const canEdit = checkPermission('edit', `projects:${project.id}`);
+    const canDelete = checkPermission('delete', `projects:${project.id}`);
+    
+    return (
+        <div className="actions">
+            {canEdit && <button onClick={handleEdit}>Edit</button>}
+            {canDelete && <button onClick={handleDelete}>Delete</button>}
+        </div>
+    );
+}
+```
+
+## Organization Context
+
+### Method 1: Header (Recommended)
+
+```bash
+curl https://api.yoursaas.com/projects \
+  -H "Authorization: Bearer session_token" \
+  -H "X-Organization-ID: org_acme"
+```
+
+### Method 2: Subdomain
+
+```bash
+# AuthSome automatically extracts org from subdomain
+curl https://acme.yoursaas.com/api/projects \
+  -H "Authorization: Bearer session_token"
+```
+
+### Method 3: JWT Claim
+
+```go
+// Extract from JWT token
+token := extractJWT(r)
+claims := parseJWT(token)
+orgID := claims["org_id"]
+```
+
+## Performance Optimization
+
+### 1. Enable Permission Caching
+
+```go
+// AuthSome automatically caches role lookups (5 min default)
+// Cache hit: ~10ns
+// Cache miss: ~240µs
+
+// For distributed systems, use Redis cache
+client := authsome.NewClient(authsome.ClientConfig{
+    BaseURL: "https://auth.yourdomain.com",
+    Cache: &authsome.RedisCacheConfig{
+        Host: "redis:6379",
+        TTL:  5 * time.Minute,
+    },
+})
+```
+
+### 2. Batch Permission Checks
+
+```go
+// Check multiple permissions in one call
+permissions := []authsome.PermissionCheck{
+    {UserID: "user_123", Action: "read", Resource: "projects"},
+    {UserID: "user_123", Action: "write", Resource: "projects"},
+}
+
+results, err := authClient.RBAC.CheckBatch(ctx, permissions)
+```
+
+### 3. Prefetch User Permissions
+
+```go
+// Load all user permissions on login
+userPerms, err := authClient.RBAC.GetUserPermissions(ctx, "user_123", "org_acme")
+
+// Cache in your application
+cache.Set("permissions:user_123:org_acme", userPerms, 5*time.Minute)
+```
+
+## Example: Complete Integration
+
+```go
+package main
+
+import (
+    "context"
+    "net/http"
+    
+    authsome "github.com/xraph/authsome/clients/go"
+)
+
+type ProjectManagementApp struct {
+    auth *authsome.Client
+}
+
+func main() {
+    app := &ProjectManagementApp{
+        auth: authsome.NewClient(authsome.ClientConfig{
+            BaseURL: "https://auth.projectapp.com",
+            APIKey:  "your-api-key",
+        }),
+    }
+    
+    // Setup routes with permission checks
+    http.HandleFunc("/api/projects", 
+        app.RequireAuth(app.RequirePermission("read", "projects")(app.ListProjects)))
+    http.HandleFunc("/api/projects/create", 
+        app.RequireAuth(app.RequirePermission("create", "projects")(app.CreateProject)))
+    
+    http.ListenAndServe(":8080", nil)
+}
+
+func (app *ProjectManagementApp) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        session, err := app.auth.Session.FromRequest(r)
+        if err != nil {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        
+        ctx := context.WithValue(r.Context(), "session", session)
+        next(w, r.WithContext(ctx))
+    }
+}
+
+func (app *ProjectManagementApp) RequirePermission(action, resource string) func(http.HandlerFunc) http.HandlerFunc {
+    return func(next http.HandlerFunc) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+            session := r.Context().Value("session").(*authsome.Session)
+            orgID := r.Header.Get("X-Organization-ID")
+            
+            allowed, err := app.auth.RBAC.Can(r.Context(), &authsome.PermissionCheck{
+                UserID:   session.UserID,
+                Action:   action,
+                Resource: resource,
+                OrgID:    orgID,
+            })
+            
+            if err != nil || !allowed {
+                http.Error(w, "Forbidden", http.StatusForbidden)
+                return
+            }
+            
+            next(w, r)
+        }
+    }
+}
+```
+
+## Best Practices
+
+### 1. Organization Context
+
+Always include organization ID in requests:
+- Header: `X-Organization-ID`
+- Subdomain: `acme.yourapp.com`
+- JWT claim: `org_id`
+
+### 2. Permission Granularity
+
+Use hierarchical resources:
+```
+projects:*                    # All projects
+projects:proj_123            # Specific project
+projects:proj_123:tasks:*    # All tasks in project
+```
+
+### 3. Role Design
+
+Create roles that match your SaaS's business logic:
+- `owner` - Full access
+- `admin` - Administrative operations
+- `manager` - Team management
+- `member` - Standard access
+- `viewer` - Read-only access
+
+### 4. Caching Strategy
+
+- Cache user permissions on login (5 min)
+- Invalidate on role changes
+- Use Redis for distributed systems
+
+### 5. Error Handling
+
+Return appropriate HTTP status codes:
+- `401 Unauthorized` - No session/invalid token
+- `403 Forbidden` - Authenticated but no permission
+- `404 Not Found` - Resource doesn't exist or no access
+
+## Resources
+
+- [Quick Start Guide](/docs/go/guides/saas-quick-start)
+- [Multi-Tenant Organizations](/docs/go/examples/multi-tenant)
+- [RBAC Documentation](/docs/go/concepts/rbac)
+- [Client Libraries](https://github.com/xraph/authsome/tree/main/clients)
+
+## Support
+
+- **Documentation**: https://docs.authsome.dev
+- **Discord**: https://discord.gg/authsome
+- **Email**: support@authsome.dev
+- **Enterprise**: enterprise@authsome.dev
+

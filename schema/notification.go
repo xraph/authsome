@@ -13,8 +13,10 @@ type NotificationTemplate struct {
 
 	ID             xid.ID                 `bun:"id,pk,type:varchar(20)" json:"id"`
 	OrganizationID string                 `bun:"organization_id,notnull" json:"organization_id"`
+	TemplateKey    string                 `bun:"template_key,notnull" json:"template_key"` // e.g., "auth.welcome", "auth.mfa_code"
 	Name           string                 `bun:"name,notnull" json:"name"`
 	Type           string                 `bun:"type,notnull" json:"type"`
+	Language       string                 `bun:"language,notnull,default:'en'" json:"language"`
 	Subject        string                 `bun:"subject" json:"subject,omitempty"`
 	Body           string                 `bun:"body,notnull" json:"body"`
 	Variables      []string               `bun:"variables,array" json:"variables"`

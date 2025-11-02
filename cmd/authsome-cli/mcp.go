@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/plugins/mcp"
+	"github.com/xraph/forge"
 )
 
 var mcpCmd = &cobra.Command{
@@ -133,13 +134,17 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "⚠️  This is INSECURE and should only be used in development!\n\n")
 	}
 
-	// Create a simple config manager from viper
-	configManager := NewConfigManager()
+	// Create a minimal forge app for config management
+	app := forge.NewApp(forge.AppConfig{
+		Name:        "authsome-mcp",
+		Version:     "1.0.0",
+		Environment: "production",
+	})
 
 	// Create AuthSome instance
 	auth := authsome.New(
 		authsome.WithDatabase(db),
-		authsome.WithForgeConfig(configManager),
+		authsome.WithForgeApp(app),
 	)
 
 	// Create and register MCP plugin

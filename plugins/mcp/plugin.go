@@ -7,6 +7,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/forge"
 )
 
 // Plugin implements the MCP (Model Context Protocol) server
@@ -65,7 +66,7 @@ func (p *Plugin) Init(auth interface{}) error {
 }
 
 // RegisterRoutes registers HTTP endpoints if HTTP transport is enabled
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.config.Transport != TransportHTTP {
 		return nil // No routes needed for stdio transport
 	}

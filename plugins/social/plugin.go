@@ -75,35 +75,20 @@ func (p *Plugin) SetConfig(config Config) {
 }
 
 // RegisterRoutes registers the plugin's HTTP routes
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return fmt.Errorf("social plugin not initialized")
 	}
 
 	handler := NewHandler(p.service)
 
-	switch v := router.(type) {
-	case *forge.App:
-		// Direct forge.App usage
-		authGroup := v.Group("/api/auth")
-		authGroup.POST("/signin/social", handler.SignIn)
-		authGroup.GET("/callback/:provider", handler.Callback)
-		authGroup.POST("/account/link", handler.LinkAccount)
-		authGroup.DELETE("/account/unlink/:provider", handler.UnlinkAccount)
-		authGroup.GET("/providers", handler.ListProviders)
-		return nil
-
-	case *forge.Group:
-		// Already within a group (e.g., /api/auth)
-		v.POST("/signin/social", handler.SignIn)
-		v.GET("/callback/:provider", handler.Callback)
-		v.POST("/account/link", handler.LinkAccount)
-		v.DELETE("/account/unlink/:provider", handler.UnlinkAccount)
-		v.GET("/providers", handler.ListProviders)
-		return nil
-	default:
-		return fmt.Errorf("unsupported router type: %T", router)
-	}
+	// Router is already scoped to the correct basePath
+	router.POST("/signin/social", handler.SignIn)
+	router.GET("/callback/:provider", handler.Callback)
+	router.POST("/account/link", handler.LinkAccount)
+	router.DELETE("/account/unlink/:provider", handler.UnlinkAccount)
+	router.GET("/providers", handler.ListProviders)
+	return nil
 }
 
 // RegisterHooks registers plugin hooks

@@ -1,0 +1,506 @@
+---
+title: Admin API
+description: Comprehensive administrative API for managing users, organizations, roles, and system configuration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Admin Plugin
+
+Comprehensive administrative API providing full control over users, organizations, roles, permissions, and system configuration. Designed for building custom admin dashboards and automation tools.
+
+<Callout type="info">
+The Admin Plugin provides API-only functionality. For a ready-to-use web interface, see the [Dashboard Plugin](/docs/go/plugins/core/dashboard).
+</Callout>
+
+## Features
+
+- ✅ **User Management** - Create, update, delete, ban/unban users
+- ✅ **Organization Management** - CRUD operations for organizations
+- ✅ **Role & Permission Management** - RBAC configuration
+- ✅ **Session Management** - View and revoke user sessions
+- ✅ **Audit Logs** - Query and filter audit events
+- ✅ **System Stats** - User counts, active sessions, security events
+- ✅ **Bulk Operations** - Import/export users, batch updates
+- ✅ **API Key Management** - Generate and manage API keys
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/admin"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        admin.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+plugins:
+  admin:
+    enabled: true
+    base_path: "/api/admin"
+    
+    # Authentication
+    require_auth: true
+    required_roles:
+      - admin
+      - superadmin
+    
+    # Rate limiting
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 100
+```
+
+## User Management
+
+### List Users
+
+```bash
+curl https://auth.yourdomain.com/api/admin/users \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -G \
+  -d "page=1" \
+  -d "page_size=50" \
+  -d "filter=email:contains:@example.com" \
+  -d "sort=created_at:desc"
+```
+
+### Get User Details
+
+```bash
+curl https://auth.yourdomain.com/api/admin/users/{user_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Create User
+
+```bash
+curl -X POST https://auth.yourdomain.com/api/admin/users \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newuser@example.com",
+    "name": "New User",
+    "password": "secure-password",
+    "email_verified": true,
+    "organization_id": "org_123"
+  }'
+```
+
+### Update User
+
+```bash
+curl -X PATCH https://auth.yourdomain.com/api/admin/users/{user_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Name",
+    "email_verified": true
+  }'
+```
+
+### Ban/Unban User
+
+```bash
+# Ban user
+curl -X POST https://auth.yourdomain.com/api/admin/users/{user_id}/ban \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Terms of service violation",
+    "expires_at": "2024-12-31T23:59:59Z"
+  }'
+
+# Unban user
+curl -X POST https://auth.yourdomain.com/api/admin/users/{user_id}/unban \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Delete User
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api/admin/users/{user_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+## Organization Management
+
+### List Organizations
+
+```bash
+curl https://auth.yourdomain.com/api/admin/organizations \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Create Organization
+
+```bash
+curl -X POST https://auth.yourdomain.com/api/admin/organizations \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corp",
+    "slug": "acme",
+    "metadata": {
+      "industry": "technology",
+      "size": "50-100"
+    }
+  }'
+```
+
+### Update Organization
+
+```bash
+curl -X PATCH https://auth.yourdomain.com/api/admin/organizations/{org_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation",
+    "metadata": {
+      "size": "100-200"
+    }
+  }'
+```
+
+### Delete Organization
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api/admin/organizations/{org_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+## Role & Permission Management
+
+### List Roles
+
+```bash
+curl https://auth.yourdomain.com/api/admin/roles?org_id=org_123 \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Create Role
+
+```bash
+curl -X POST https://auth.yourdomain.com/api/admin/roles \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "project-manager",
+    "description": "Can manage projects",
+    "organization_id": "org_123",
+    "permissions": [
+      {
+        "action": "create",
+        "resource": "projects"
+      },
+      {
+        "action": "edit",
+        "resource": "projects"
+      }
+    ]
+  }'
+```
+
+### Assign Role to User
+
+```bash
+curl -X POST https://auth.yourdomain.com/api/admin/users/{user_id}/roles \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role_id": "role_123",
+    "organization_id": "org_123"
+  }'
+```
+
+### Remove Role from User
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api/admin/users/{user_id}/roles/{role_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+## Session Management
+
+### List Active Sessions
+
+```bash
+curl https://auth.yourdomain.com/api/admin/sessions \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -G \
+  -d "user_id=user_123" \
+  -d "active=true"
+```
+
+### Revoke Session
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api/admin/sessions/{session_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Revoke All User Sessions
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api/admin/users/{user_id}/sessions \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+## Audit Logs
+
+### Query Audit Logs
+
+```bash
+curl https://auth.yourdomain.com/api/admin/audit-logs \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -G \
+  -d "user_id=user_123" \
+  -d "action=user.login" \
+  -d "start_date=2024-01-01" \
+  -d "end_date=2024-12-31" \
+  -d "page=1" \
+  -d "page_size=100"
+```
+
+### Export Audit Logs
+
+```bash
+curl https://auth.yourdomain.com/api/admin/audit-logs/export \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -G \
+  -d "format=csv" \
+  -d "start_date=2024-01-01" \
+  -d "end_date=2024-12-31" \
+  > audit-logs.csv
+```
+
+## System Statistics
+
+### Get Dashboard Stats
+
+```bash
+curl https://auth.yourdomain.com/api/admin/stats \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+Response:
+```json
+{
+  "users": {
+    "total": 1250,
+    "active_today": 342,
+    "new_this_month": 87
+  },
+  "sessions": {
+    "active": 456,
+    "total_today": 1823
+  },
+  "organizations": {
+    "total": 45
+  },
+  "security": {
+    "failed_logins_today": 12,
+    "banned_users": 3,
+    "suspicious_activities": 5
+  }
+}
+```
+
+## Bulk Operations
+
+### Import Users
+
+```bash
+curl -X POST https://auth.yourdomain.com/api/admin/users/import \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@users.csv" \
+  -F "organization_id=org_123" \
+  -F "send_invites=true"
+```
+
+CSV format:
+```csv
+email,name,role
+user1@example.com,User One,member
+user2@example.com,User Two,admin
+```
+
+### Export Users
+
+```bash
+curl https://auth.yourdomain.com/api/admin/users/export \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -G \
+  -d "format=csv" \
+  -d "organization_id=org_123" \
+  > users.csv
+```
+
+### Batch Update
+
+```bash
+curl -X PATCH https://auth.yourdomain.com/api/admin/users/batch \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_ids": ["user_1", "user_2", "user_3"],
+    "updates": {
+      "email_verified": true,
+      "role": "member"
+    }
+  }'
+```
+
+## API Key Management
+
+### Generate API Key
+
+```bash
+curl -X POST https://auth.yourdomain.com/api/admin/api-keys \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Automation Script",
+    "scopes": ["users:read", "users:write"],
+    "expires_at": "2025-12-31T23:59:59Z"
+  }'
+```
+
+### List API Keys
+
+```bash
+curl https://auth.yourdomain.com/api/admin/api-keys \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Revoke API Key
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api/admin/api-keys/{key_id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+## Go Client
+
+```go
+import "github.com/xraph/authsome/clients/go"
+
+adminClient := authsome.NewAdminClient(authsome.ClientConfig{
+    BaseURL: "https://auth.yourdomain.com",
+    APIKey:  "admin-api-key",
+})
+
+// List users
+users, err := adminClient.ListUsers(ctx, &authsome.ListUsersRequest{
+    Page:     1,
+    PageSize: 50,
+    Filter:   "email:contains:@example.com",
+})
+
+// Create user
+user, err := adminClient.CreateUser(ctx, &authsome.CreateUserRequest{
+    Email:        "new@example.com",
+    Name:         "New User",
+    Password:     "secure-password",
+    EmailVerified: true,
+    OrganizationID: "org_123",
+})
+
+// Ban user
+err = adminClient.BanUser(ctx, userID, &authsome.BanUserRequest{
+    Reason:    "Terms violation",
+    ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
+})
+
+// Get stats
+stats, err := adminClient.GetStats(ctx)
+fmt.Printf("Total Users: %d\n", stats.Users.Total)
+fmt.Printf("Active Sessions: %d\n", stats.Sessions.Active)
+```
+
+## Security
+
+### Authentication
+
+The Admin API requires authentication with elevated permissions:
+
+- Bearer tokens with admin role
+- API keys with admin scope
+- IP whitelisting (optional)
+
+### Authorization
+
+```yaml
+plugins:
+  admin:
+    authorization:
+      # Require specific roles
+      required_roles:
+        - admin
+        - superadmin
+      
+      # Or specific permissions
+      required_permissions:
+        - admin:users:write
+        - admin:organizations:write
+```
+
+### Audit Logging
+
+All admin actions are automatically logged:
+
+```go
+// Example audit log entry
+{
+    "timestamp": "2024-01-15T10:30:00Z",
+    "actor_id": "admin_user_123",
+    "action": "user.update",
+    "resource_type": "user",
+    "resource_id": "user_456",
+    "changes": {
+        "email_verified": {"old": false, "new": true}
+    },
+    "ip_address": "192.168.1.1",
+    "user_agent": "AdminClient/1.0"
+}
+```
+
+<Callout type="warning">
+Admin API keys should be stored securely and rotated regularly. Consider using IP whitelisting for additional security.
+</Callout>
+
+## Rate Limiting
+
+```yaml
+plugins:
+  admin:
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 100
+      burst: 20
+      
+      # Per-endpoint limits
+      endpoints:
+        "/api/admin/users": 50
+        "/api/admin/users/import": 5
+```
+
+## Resources
+
+- [Admin Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/admin)
+- [API Reference](/docs/go/api/admin)
+- [Go Client](https://github.com/xraph/authsome/tree/main/clients/go)
+

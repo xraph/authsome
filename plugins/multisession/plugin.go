@@ -41,30 +41,17 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 // RegisterRoutes mounts endpoints under /api/auth/multi-session
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	switch v := router.(type) {
-	case *forge.App:
-		// For direct forge.App usage (not from Mount method)
-		grp := v.Group("/api/auth/multi-session")
-		h := NewHandler(p.service)
-		grp.GET("/list", h.List)
-		grp.POST("/set-active", h.SetActive)
-		grp.POST("/delete/{id}", h.Delete)
-		return nil
-	case *forge.Group:
-		// Use relative paths - the router is already a group with the correct basePath
-		grp := v.Group("/multi-session")
-		h := NewHandler(p.service)
-		grp.GET("/list", h.List)
-		grp.POST("/set-active", h.SetActive)
-		grp.POST("/delete/{id}", h.Delete)
-		return nil
-	default:
-		return nil
-	}
+	// Router is already scoped to the auth basePath, create multi-session sub-group
+	grp := router.Group("/multi-session")
+	h := NewHandler(p.service)
+	grp.GET("/list", h.List)
+	grp.POST("/set-active", h.SetActive)
+	grp.POST("/delete/{id}", h.Delete)
+	return nil
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

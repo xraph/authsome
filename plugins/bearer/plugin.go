@@ -30,8 +30,8 @@ func (p *Plugin) ID() string {
 }
 
 // AuthenticateHandler returns a handler function that can be used as middleware
-func (p *Plugin) AuthenticateHandler(next func(*forge.Context) error) func(*forge.Context) error {
-	return func(c *forge.Context) error {
+func (p *Plugin) AuthenticateHandler(next func(forge.Context) error) func(forge.Context) error {
+	return func(c forge.Context) error {
 		// Extract bearer token from Authorization header
 		authHeader := c.Request().Header.Get("Authorization")
 		if authHeader == "" {
@@ -78,8 +78,8 @@ func (p *Plugin) AuthenticateHandler(next func(*forge.Context) error) func(*forg
 }
 
 // RequireAuthHandler returns a handler that requires authentication
-func (p *Plugin) RequireAuthHandler(next func(*forge.Context) error) func(*forge.Context) error {
-	return func(c *forge.Context) error {
+func (p *Plugin) RequireAuthHandler(next func(forge.Context) error) func(forge.Context) error {
+	return func(c forge.Context) error {
 		// Check if user is authenticated
 		if c.Request().Context().Value("authenticated") != true {
 			return c.JSON(401, map[string]string{
@@ -91,7 +91,7 @@ func (p *Plugin) RequireAuthHandler(next func(*forge.Context) error) func(*forge
 }
 
 // GetUser extracts the authenticated user from context
-func GetUser(c *forge.Context) *user.User {
+func GetUser(c forge.Context) *user.User {
 	if u := c.Request().Context().Value("user"); u != nil {
 		if user, ok := u.(*user.User); ok {
 			return user
@@ -101,7 +101,7 @@ func GetUser(c *forge.Context) *user.User {
 }
 
 // GetSession extracts the session from context
-func GetSession(c *forge.Context) *session.Session {
+func GetSession(c forge.Context) *session.Session {
 	if s := c.Request().Context().Value("session"); s != nil {
 		if sess, ok := s.(*session.Session); ok {
 			return sess
@@ -111,6 +111,6 @@ func GetSession(c *forge.Context) *session.Session {
 }
 
 // IsAuthenticated checks if the request is authenticated
-func IsAuthenticated(c *forge.Context) bool {
+func IsAuthenticated(c forge.Context) bool {
 	return c.Request().Context().Value("authenticated") == true
 }

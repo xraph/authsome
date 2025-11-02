@@ -6,7 +6,9 @@
     "passkey",
     "magic-link",
     "phone",
-    "jwt",
+    "email-otp",
+    "social",
+    "mfa",
     "mcp"
   ]
 }

@@ -1,0 +1,691 @@
+---
+title: Dashboard
+description: Server-rendered admin dashboard with production-grade security, RBAC, and CSRF protection
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Dashboard Plugin
+
+A lightweight, server-rendered admin interface for AuthSome built with Alpine.js and Tailwind CSS 4 CDN. Features production-grade security with fast permission checking and HMAC-based CSRF protection.
+
+## Features
+
+- ✅ **Server-side rendering** with Go templates
+- ✅ **~40KB total bundle size** (Alpine.js + Tailwind CSS CDN)
+- ✅ **Production-grade security**:
+  - Fast permission checking (< 100µs with caching)
+  - Session-bound CSRF tokens with HMAC
+  - Role-based access control (RBAC)
+- ✅ **Responsive, mobile-first design**
+- ✅ **Real-time statistics** and user management
+- ✅ **Built-in rate limiting** and audit logging
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/dashboard"
+)
+
+func main() {
+    auth, err := authsome.New(
+        authsome.WithPlugins(
+            dashboard.NewPlugin(),
+        ),
+    )
+    if err != nil {
+        panic(err)
+    }
+    
+    // Mount to your Forge app
+    app := forge.NewApp()
+    auth.Mount(app, "/api/auth")
+    
+    // Dashboard available at: http://localhost:8080/api/auth/dashboard/
+    app.Listen(":8080")
+}
+```
+
+<Callout type="info">
+The dashboard is automatically mounted at `/dashboard/` under your auth base path.
+</Callout>
+
+## Security Architecture
+
+### Fast Permission Checker
+
+The dashboard uses a high-performance permission checking system with role caching:
+
+```go
+// Permission checker with 5-minute cache
+checker := dashboard.NewPermissionChecker(rbacSvc, userRoleRepo)
+
+// Cache hit: ~10ns
+// Cache miss: ~240µs
+// 99%+ cache hit rate in typical usage
+
+// Expressive fluent API
+user := checker.For(ctx, userID)
+if user.Dashboard().CanAccess() {
+    // Grant dashboard access
+}
+
+if user.Dashboard().CanManageUsers() {
+    // Show user management UI
+}
+```
+
+**Performance Characteristics:**
+- Cache hit: O(1) map lookup, ~10ns
+- Cache miss: O(1) database query with index, ~100-500µs
+- Memory usage: ~100 bytes per cached user
+- Cache TTL: 5 minutes (configurable)
+- Automatic cache cleanup
+
+### CSRF Protection
+
+Production-grade CSRF protection with session-bound tokens:
+
+```
+Token Format: base64(randomBytes) + "." + base64(hmac(randomBytes + sessionID))
+```
+
+**Security Properties:**
+- 2^256 possible tokens (cryptographically unpredictable)
+- Session binding prevents cross-session attacks
+- Automatic expiration (1 hour)
+- Constant-time validation prevents timing attacks
+- Background cleanup of expired tokens
+
+**Performance:**
+- Token generation: ~12µs
+- Token validation: ~8.7µs
+
+## Access Control
+
+### First User Setup
+
+The first user to sign up is automatically assigned the admin role:
+
+```go
+// Automatic on first signup
+// No manual configuration needed
+```
+
+### Assigning Admin Roles
+
+For subsequent users:
+
+<Tabs items={['CLI', 'API', 'Programmatic']}>
+<Tab value="CLI">
+```bash
+# Assign admin role to user
+authsome-cli user assign-role \
+  --user-id=user_123 \
+  --role=admin \
+  --org=default
+
+# Verify role assignment
+authsome-cli user get-roles \
+  --user-id=user_123 \
+  --org=default
+```
+</Tab>
+
+<Tab value="API">
+```bash
+curl -X POST https://your-domain.com/api/auth/organizations/roles/assign \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "user_id": "user_123",
+    "role_id": "admin_role_id",
+    "organization_id": "default"
+  }'
+```
+</Tab>
+
+<Tab value="Programmatic">
+```go
+// In your application code
+err := rbacSvc.AssignRole(ctx, userID, roleID, orgID)
+if err != nil {
+    return fmt.Errorf("failed to assign role: %w", err)
+}
+
+// Or use the permission checker's helper
+err = dashboard.EnsureFirstUserIsAdmin(
+    ctx,
+    userID,
+    orgID,
+    userRoleRepo,
+    roleRepo,
+)
+```
+</Tab>
+</Tabs>
+
+### Permission System
+
+The dashboard uses an expressive fluent API for permission checks:
+
+```go
+// Initialize permission checker
+checker := dashboard.NewPermissionChecker(rbacSvc, userRoleRepo)
+
+// Basic permission check
+canView := checker.Can(ctx, userID, "view", "users")
+
+// Fluent API
+user := checker.For(ctx, userID)
+
+if user.CanView("users") {
+    // Show users list
+}
+
+if user.CanEdit("users") {
+    // Allow editing
+}
+
+if user.IsAdmin() {
+    // Show admin-only features
+}
+
+// Dashboard-specific permissions
+dashboard := user.Dashboard()
+
+if dashboard.CanAccess() {
+    // Allow dashboard access
+}
+
+if dashboard.CanManageUsers() {
+    // Show user management UI
+}
+
+if dashboard.CanViewAuditLogs() {
+    // Show audit logs
+}
+```
+
+### Default RBAC Policies
+
+The dashboard sets up these default policies:
+
+```
+role:admin can dashboard.view on dashboard
+role:admin can view,edit,delete,create on users
+role:admin can view,delete on sessions
+role:admin can view on audit_logs
+
+role:owner can dashboard.view on dashboard
+role:owner can view,edit,delete,create on users
+role:owner can view,delete on sessions
+role:owner can view on audit_logs
+role:owner can manage on system
+
+role:superadmin can * on *
+```
+
+## Pages
+
+### Dashboard Home
+
+Statistics and quick actions:
+- Total users count
+- Active sessions count
+- Recent signups
+- Security alerts
+
+**Route:** `/dashboard/`
+
+### User Management
+
+View and manage users:
+- List all users with pagination
+- View user details
+- Ban/unban users
+- Reset passwords
+- Assign roles
+
+**Routes:**
+- `/dashboard/users` - User list
+- `/dashboard/users/:id` - User details
+
+### Session Management
+
+Monitor and manage active sessions:
+- List active sessions
+- View session details
+- Revoke sessions
+
+**Route:** `/dashboard/sessions`
+
+## Configuration
+
+```yaml
+# config.yaml
+plugins:
+  dashboard:
+    enabled: true
+    
+    # Security settings
+    security:
+      # Permission caching
+      permission_cache_ttl: 5m
+      cache_cleanup_interval: 2m
+      
+      # CSRF protection
+      csrf:
+        token_lifetime: 1h
+        secret_rotation_interval: 7d
+      
+      # Rate limiting
+      rate_limiting:
+        requests_per_minute: 100
+        burst: 20
+      
+      # TLS settings
+      tls:
+        enabled: true
+        min_version: TLS1.3
+    
+    # UI settings
+    ui:
+      items_per_page: 20
+      theme: "light"  # or "dark"
+      logo_url: "/assets/logo.png"
+```
+
+## Middleware Chain
+
+The dashboard uses a comprehensive middleware chain:
+
+```go
+// Automatic middleware chain
+chain := func(h func(forge.Context) error) func(forge.Context) error {
+    return p.RequireAuth()(      // 1. Validate session
+        p.RequireAdmin()(         // 2. Check admin permission
+            p.CSRF()(             // 3. CSRF protection
+                p.AuditLog()(     // 4. Audit logging
+                    p.RateLimit()(// 5. Rate limiting
+                        h
+                    )
+                )
+            )
+        )
+    )
+}
+```
+
+### Custom Middleware
+
+Add custom middleware to the dashboard:
+
+```go
+plugin := dashboard.NewPlugin()
+
+// Add custom middleware
+plugin.Use(func(next forge.HandlerFunc) forge.HandlerFunc {
+    return func(c forge.Context) error {
+        // Custom logic
+        fmt.Println("Custom middleware executed")
+        return next(c)
+    }
+})
+```
+
+## Customization
+
+### Custom Templates
+
+Override default templates:
+
+```go
+plugin := dashboard.NewPlugin()
+
+// Set custom template directory
+plugin.SetTemplateDir("./templates/dashboard")
+
+// Custom template functions
+plugin.AddTemplateFunc("myFunc", func(s string) string {
+    return strings.ToUpper(s)
+})
+```
+
+### Custom Styles
+
+Add custom CSS:
+
+```go
+plugin := dashboard.NewPlugin()
+
+// Add custom stylesheet
+plugin.AddStylesheet("/assets/custom.css")
+
+// Or inline styles
+plugin.AddInlineStyles(`
+    .dashboard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+`)
+```
+
+### Custom Pages
+
+Add custom pages to the dashboard:
+
+```go
+plugin := dashboard.NewPlugin()
+
+// Register custom route
+plugin.RegisterCustomRoute("/dashboard/reports", func(c forge.Context) error {
+    // Your custom page logic
+    return c.Render("custom-reports.html", data)
+})
+```
+
+## Performance
+
+### Benchmarks
+
+```
+BenchmarkDashboardHome-8           5000   320.5 µs/op
+BenchmarkUsersList-8              10000   156.2 µs/op
+BenchmarkPermissionCheck-8    100000000    10.2 ns/op (cached)
+BenchmarkPermissionCheck-8         5000   240.5 µs/op (uncached)
+BenchmarkCSRFGenerate-8          100000    12.4 µs/op
+BenchmarkCSRFValidate-8          200000     8.7 µs/op
+```
+
+### Optimization Tips
+
+1. **Enable Permission Caching** (enabled by default):
+   ```go
+   checker.SetCacheTTL(5 * time.Minute)
+   ```
+
+2. **Use Redis for Distributed Systems**:
+   ```go
+   plugin := dashboard.NewPlugin()
+   plugin.SetCache(redisCache)
+   ```
+
+3. **Prefetch User Permissions**:
+   ```go
+   // On login, fetch all permissions
+   perms := checker.GetAllPermissions(ctx, userID)
+   // Cache in your application
+   ```
+
+## Security Best Practices
+
+### Development
+
+- ✅ CSRF tokens work over HTTP
+- ✅ Automatic first-user admin assignment
+- ✅ Verbose error messages for debugging
+
+### Production
+
+- ✅ **Enable HTTPS**: Set `Secure: true` on all cookies
+- ✅ **Secret Management**: Store CSRF secret in environment variable
+- ✅ **Secret Rotation**: Rotate CSRF secret weekly
+- ✅ **Rate Limiting**: Enable rate limiting on all endpoints
+- ✅ **Audit Logging**: Log all permission checks and failures
+- ✅ **Cache Monitoring**: Monitor cache hit rates
+- ✅ **Token Monitoring**: Alert on excessive token generation
+
+<Callout type="warning">
+Always use HTTPS in production and set `secure: true` for all cookies.
+</Callout>
+
+## Error Handling
+
+The dashboard provides user-friendly error pages:
+
+### Access Denied
+
+When a user lacks required permissions:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Access Denied</title>
+</head>
+<body>
+    <h1>Access Denied</h1>
+    <p>You don't have permission to access the dashboard.</p>
+    <p>Please contact your administrator to request access.</p>
+    <a href="/dashboard/login">← Back to Login</a>
+</body>
+</html>
+```
+
+### CSRF Validation Failed
+
+When CSRF token validation fails:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Security Validation Failed</title>
+</head>
+<body>
+    <h1>Security Validation Failed</h1>
+    <p>The form submission failed security validation.</p>
+    <p>This usually happens when:</p>
+    <ul>
+        <li>Your session has expired</li>
+        <li>You opened the form in multiple tabs</li>
+        <li>You took too long to submit the form</li>
+    </ul>
+    <a href="javascript:history.back()">← Go Back</a>
+</body>
+</html>
+```
+
+## Testing
+
+### Unit Tests
+
+```bash
+cd plugins/dashboard
+go test -v
+```
+
+### Integration Tests
+
+```bash
+go test -v -tags=integration
+```
+
+### Benchmarks
+
+```bash
+go test -bench=. -benchmem
+```
+
+### Manual Testing
+
+1. **First User Flow**:
+   - Sign up as first user
+   - Verify auto-assigned admin role
+   - Access dashboard successfully
+
+2. **Permission Checks**:
+   - Create user without admin role
+   - Attempt to access dashboard
+   - Verify access denied page
+
+3. **CSRF Protection**:
+   - Submit form with valid token → Success
+   - Submit form with invalid token → Error page
+   - Submit form with expired token → Error page
+
+## Troubleshooting
+
+### "Access Denied" on Dashboard
+
+**Cause:** User doesn't have admin role
+
+**Solution:** Assign admin role
+
+```bash
+authsome-cli user assign-role --user-id=xxx --role=admin
+```
+
+### "CSRF Validation Failed"
+
+**Causes:**
+- Token expired (>1 hour old)
+- Session changed
+- Multiple tabs with same session
+
+**Solutions:**
+- Refresh page to get new token
+- Re-login if session expired
+- Use single tab for admin operations
+
+### Permission Checker Not Working
+
+**Cause:** UserRoleRepository not initialized
+
+**Check logs for:**
+```
+[Dashboard] Warning: UserRoleRepository not available
+```
+
+**Solution:** Ensure database connection is passed to plugin Init
+
+### Slow Performance
+
+**Solutions:**
+1. Verify caching is enabled (default)
+2. Check cache hit rate
+3. Use Redis for distributed systems
+4. Monitor database query performance
+
+## Migration
+
+### From Basic Authentication
+
+If upgrading from a version without RBAC:
+
+```go
+// Run migration to assign admin role to existing users
+users, _ := userSvc.List(ctx, types.PaginationOptions{PageSize: 1000})
+
+for _, user := range users {
+    // Assign admin role to all existing users
+    // Or use business logic to determine roles
+    rbacSvc.AssignRole(ctx, user.ID, adminRoleID, defaultOrgID)
+}
+```
+
+### From External Dashboard
+
+If replacing an external dashboard:
+
+1. **Export existing data** from old dashboard
+2. **Map permissions** to AuthSome RBAC policies
+3. **Migrate users** with appropriate roles
+4. **Test thoroughly** before switching
+5. **Run both in parallel** during transition
+
+## Premium React Dashboard
+
+A premium React-based dashboard with advanced features is available separately at `frontend/dashboard-premium/`.
+
+Features:
+- Modern React 18 with TypeScript
+- Real-time updates with WebSockets
+- Advanced analytics and charts
+- Drag-and-drop interface
+- Dark mode support
+- Mobile app (iOS/Android)
+
+See `frontend/dashboard-premium/README.md` for details.
+
+## API Reference
+
+### PermissionChecker
+
+```go
+type PermissionChecker struct {
+    // ...
+}
+
+// Create new permission checker
+func NewPermissionChecker(rbacSvc *rbac.Service, userRoleRepo *repository.UserRoleRepository) *PermissionChecker
+
+// Check single permission
+func (p *PermissionChecker) Can(ctx context.Context, userID xid.ID, action, resource string) bool
+
+// Check any of multiple permissions
+func (p *PermissionChecker) CanAny(ctx context.Context, userID xid.ID, permissions ...Permission) bool
+
+// Check all permissions
+func (p *PermissionChecker) CanAll(ctx context.Context, userID xid.ID, permissions ...Permission) bool
+
+// Check if user has role
+func (p *PermissionChecker) HasRole(ctx context.Context, userID xid.ID, roleName string) bool
+
+// Check if user has any role
+func (p *PermissionChecker) HasAnyRole(ctx context.Context, userID xid.ID, roleNames ...string) bool
+
+// Invalidate cache for user
+func (p *PermissionChecker) InvalidateUserCache(userID xid.ID)
+
+// Fluent API builder
+func (p *PermissionChecker) For(ctx context.Context, userID xid.ID) *PermissionBuilder
+```
+
+### CSRFProtector
+
+```go
+type CSRFProtector struct {
+    // ...
+}
+
+// Create new CSRF protector
+func NewCSRFProtector() (*CSRFProtector, error)
+
+// Generate token for session
+func (c *CSRFProtector) GenerateToken(sessionID string) (string, error)
+
+// Validate token against session
+func (c *CSRFProtector) ValidateToken(token, sessionID string) bool
+
+// Invalidate token
+func (c *CSRFProtector) InvalidateToken(token string)
+
+// Rotate secret
+func (c *CSRFProtector) RotateSecret() error
+
+// Get statistics
+func (c *CSRFProtector) Stats() map[string]interface{}
+```
+
+## Resources
+
+- [Security Improvements Guide](https://github.com/xraph/authsome/blob/main/plugins/dashboard/SECURITY_IMPROVEMENTS.md)
+- [Implementation Summary](https://github.com/xraph/authsome/blob/main/plugins/dashboard/IMPROVEMENTS_SUMMARY.md)
+- [Dashboard Plugin README](https://github.com/xraph/authsome/blob/main/plugins/dashboard/README.md)
+- [SaaS Integration Guide](/docs/go/guides/saas-integration)
+
+## Support
+
+- **GitHub Issues**: [authsome/issues](https://github.com/xraph/authsome/issues)
+- **Documentation**: [docs.authsome.dev](https://docs.authsome.dev)
+- **Discord**: [discord.gg/authsome](https://discord.gg/authsome)
+- **Email**: support@authsome.dev
+- **Security**: security@authsome.dev
+

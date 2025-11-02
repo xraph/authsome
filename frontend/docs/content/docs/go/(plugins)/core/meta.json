@@ -6,6 +6,7 @@
     "email-password",
     "two-factor",
     "username",
-    "anonymous"
+    "anonymous",
+    "dashboard"
   ]
 }

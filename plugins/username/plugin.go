@@ -35,24 +35,12 @@ func (p *Plugin) Init(dep interface{}) error {
 }
 
 // RegisterRoutes registers Username plugin routes
-func (p *Plugin) RegisterRoutes(router interface{}) error {
-	switch v := router.(type) {
-	case *forge.App:
-		// For forge.App - create group with /api/auth basePath
-		grp := v.Group("/api/auth")
-		h := NewHandler(p.service, repo.NewTwoFARepository(p.db))
-		grp.POST("/username/signup", h.SignUp)
-		grp.POST("/username/signin", h.SignIn)
-		return nil
-	case *forge.Group:
-		// Use relative paths - the router is already a group with the correct basePath
-		h := NewHandler(p.service, repo.NewTwoFARepository(p.db))
-		v.POST("/username/signup", h.SignUp)
-		v.POST("/username/signin", h.SignIn)
-		return nil
-	default:
-		return nil
-	}
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	// Router is already scoped to the correct basePath
+	h := NewHandler(p.service, repo.NewTwoFARepository(p.db))
+	router.POST("/username/signup", h.SignUp)
+	router.POST("/username/signin", h.SignIn)
+	return nil
 }
 
 // RegisterHooks placeholder

@@ -49,36 +49,20 @@ func (p *Plugin) Init(dep interface{}) error {
 	return nil
 }
 
-func (p *Plugin) RegisterRoutes(router interface{}) error {
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	switch v := router.(type) {
-	case *forge.App:
-		// For direct forge.App usage (not from Mount method)
-		grp := v.Group("/api/auth/passkey")
-		h := NewHandler(p.service)
-		grp.POST("/register/begin", h.BeginRegister)
-		grp.POST("/register/finish", h.FinishRegister)
-		grp.POST("/login/begin", h.BeginLogin)
-		grp.POST("/login/finish", h.FinishLogin)
-		grp.GET("/list", h.List)
-		grp.DELETE("/:id", h.Delete)
-		return nil
-	case *forge.Group:
-		// Use relative paths - the router is already a group with the correct basePath
-		grp := v.Group("/passkey")
-		h := NewHandler(p.service)
-		grp.POST("/register/begin", h.BeginRegister)
-		grp.POST("/register/finish", h.FinishRegister)
-		grp.POST("/login/begin", h.BeginLogin)
-		grp.POST("/login/finish", h.FinishLogin)
-		grp.GET("/list", h.List)
-		grp.DELETE("/:id", h.Delete)
-		return nil
-	default:
-		return nil
-	}
+	// Router is already scoped to the auth basePath, create passkey sub-group
+	grp := router.Group("/passkey")
+	h := NewHandler(p.service)
+	grp.POST("/register/begin", h.BeginRegister)
+	grp.POST("/register/finish", h.FinishRegister)
+	grp.POST("/login/begin", h.BeginLogin)
+	grp.POST("/login/finish", h.FinishLogin)
+	grp.GET("/list", h.List)
+	grp.DELETE("/:id", h.Delete)
+	return nil
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
