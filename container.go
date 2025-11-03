@@ -20,22 +20,51 @@ import (
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/authsome/plugins"
 	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/database"
+	forgedb "github.com/xraph/forge/extensions/database"
 )
 
 // ContainerHelpers provides type-safe service resolution from the Forge DI container
 // These helper functions are provided for plugins and handlers to easily access services
 
 // ResolveDatabase resolves the database from the container
+// First tries AuthSome's registered database, then falls back to Forge's database extension
 func ResolveDatabase(container forge.Container) (*bun.DB, error) {
+	// Try AuthSome's registered database first (backwards compatibility)
 	svc, err := container.Resolve(ServiceDatabase)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve database: %w", err)
+	if err == nil {
+		db, ok := svc.(*bun.DB)
+		if ok {
+			return db, nil
+		}
 	}
+
+	// Fall back to Forge's database extension
+	svc, err = container.Resolve(database.DatabaseKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve database from container: %w", err)
+	}
+
 	db, ok := svc.(*bun.DB)
 	if !ok {
 		return nil, fmt.Errorf("database service has invalid type")
 	}
 	return db, nil
+}
+
+// ResolveDatabaseManager resolves Forge's DatabaseManager from the container
+// This is useful for plugins that need access to multiple databases
+func ResolveDatabaseManager(container forge.Container) (*forgedb.DatabaseManager, error) {
+	svc, err := container.Resolve(forgedb.ManagerKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve database manager: %w", err)
+	}
+
+	manager, ok := svc.(*forgedb.DatabaseManager)
+	if !ok {
+		return nil, fmt.Errorf("database manager has invalid type")
+	}
+	return manager, nil
 }
 
 // ResolveUserService resolves the user service from the container
@@ -293,4 +322,3 @@ func ResolvePluginDependencies(container forge.Container) (*PluginDependencies, 
 		HookRegistry:   hookRegistry,
 	}, nil
 }
-

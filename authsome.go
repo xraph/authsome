@@ -29,6 +29,7 @@ import (
 	"github.com/xraph/authsome/routes"
 	memstore "github.com/xraph/authsome/storage"
 	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/database"
 )
 
 // Service name constants for DI container
@@ -116,8 +117,9 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		return fmt.Errorf("forge app not set")
 	}
 
-	if a.db == nil {
-		return fmt.Errorf("database not set")
+	// Resolve database from various sources
+	if err := a.resolveDatabase(); err != nil {
+		return fmt.Errorf("failed to resolve database: %w", err)
 	}
 
 	// Cast database
@@ -486,4 +488,55 @@ func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
 
 	fmt.Println("[AuthSome] Successfully registered all services into Forge DI container")
 	return nil
+}
+
+// resolveDatabase resolves the database from various sources
+// Priority: Direct db > DatabaseManager > Forge DI
+func (a *Auth) resolveDatabase() error {
+	// If database already set directly, use it (backwards compatibility)
+	if a.db != nil {
+		return nil
+	}
+
+	// Try DatabaseManager if configured
+	if a.config.DatabaseManager != nil {
+		dbName := a.config.DatabaseManagerName
+		if dbName == "" {
+			dbName = "default"
+		}
+
+		db, err := a.config.DatabaseManager.SQL(dbName)
+		if err != nil {
+			return fmt.Errorf("failed to get database %s from DatabaseManager: %w", dbName, err)
+		}
+
+		a.db = db
+		fmt.Printf("[AuthSome] Resolved database from Forge DatabaseManager: %s\n", dbName)
+		return nil
+	}
+
+	// Try Forge DI container if configured
+	if a.config.UseForgeDI && a.forgeApp != nil {
+		container := a.forgeApp.Container()
+		if container == nil {
+			return fmt.Errorf("forge DI container not available")
+		}
+
+		// Try to resolve from Forge database extension
+		dbInterface, err := container.Resolve(database.DatabaseKey)
+		if err != nil {
+			return fmt.Errorf("failed to resolve database from Forge DI: %w", err)
+		}
+
+		db, ok := dbInterface.(*bun.DB)
+		if !ok {
+			return fmt.Errorf("resolved database is not *bun.DB")
+		}
+
+		a.db = db
+		fmt.Println("[AuthSome] Resolved database from Forge DI container")
+		return nil
+	}
+
+	return fmt.Errorf("database not configured: use WithDatabase(), WithDatabaseManager(), or WithDatabaseFromForge()")
 }

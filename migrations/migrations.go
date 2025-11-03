@@ -1,8 +1,9 @@
 package migrations
 
 import (
-	"github.com/uptrace/bun/migrate"
+	forgemigrate "github.com/xraph/forge/extensions/database/migrate"
 )
 
 // Migrations is the global migration registry
-var Migrations = migrate.NewMigrations()
+// Now using Forge's database extension migration registry for better integration
+var Migrations = forgemigrate.Migrations

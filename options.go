@@ -4,6 +4,7 @@ import (
 	rl "github.com/xraph/authsome/core/ratelimit"
 	sec "github.com/xraph/authsome/core/security"
 	"github.com/xraph/forge"
+	forgedb "github.com/xraph/forge/extensions/database"
 )
 
 // Option is a function that configures Auth
@@ -23,10 +24,37 @@ func WithForgeApp(app forge.App) Option {
 	}
 }
 
-// WithDatabase sets the database connection
+// WithDatabase sets the database connection directly (backwards compatible)
+// For new applications, consider using WithDatabaseManager with Forge's database extension
 func WithDatabase(db interface{}) Option {
 	return func(a *Auth) {
 		a.db = db
+	}
+}
+
+// WithDatabaseManager uses Forge's database extension DatabaseManager
+// This is the recommended approach when using Forge's database extension
+// The database will be resolved from the manager using the default or specified name
+func WithDatabaseManager(manager *forgedb.DatabaseManager, dbName ...string) Option {
+	return func(a *Auth) {
+		// Resolve database name (default if not specified)
+		name := "default"
+		if len(dbName) > 0 && dbName[0] != "" {
+			name = dbName[0]
+		}
+		
+		// Get BunDB from manager
+		// This will be done lazily in Initialize() to ensure manager is ready
+		a.config.DatabaseManagerName = name
+		a.config.DatabaseManager = manager
+	}
+}
+
+// WithDatabaseFromForge resolves the database from Forge's DI container
+// This automatically uses the database extension if registered
+func WithDatabaseFromForge() Option {
+	return func(a *Auth) {
+		a.config.UseForgeDI = true
 	}
 }
 
