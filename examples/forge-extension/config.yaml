@@ -1,0 +1,53 @@
+# Forge Application Configuration
+app:
+  name: authsome-extension-demo
+  version: 1.0.0
+  environment: development
+  httpAddress: :8080
+
+# Database Configuration (Forge Database Extension)
+database:
+  default: main
+  databases:
+    - name: main
+      type: sqlite
+      dsn: "file:authsome_extension.db?cache=shared&_fk=1"
+
+# AuthSome Configuration
+authsome:
+  mode: standalone  # or "saas" for multi-tenant
+  basePath: /api/auth
+  secret: ${SECRET_KEY:demo-secret-key-change-in-production}
+  rbacEnforce: false
+  
+  # Optional: Use specific database from DatabaseManager
+  # databaseName: main
+  
+  # Optional: CORS configuration
+  trustedOrigins:
+    - http://localhost:3000
+    - http://localhost:8080
+  
+  # Optional: Security configuration
+  security:
+    enabled: true
+    # ipWhitelist:
+    #   - 192.168.1.0/24
+    # allowedCountries:
+    #   - US
+    #   - CA
+  
+  # Optional: Rate limiting
+  rateLimit:
+    enabled: true
+    default:
+      limit: 100
+      window: 60
+    paths:
+      /api/auth/login:
+        limit: 5
+        window: 60
+      /api/auth/register:
+        limit: 3
+        window: 300
+

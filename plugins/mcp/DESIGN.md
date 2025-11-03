@@ -155,7 +155,7 @@ Tools allow AI to perform controlled actions:
 ### 1. Stdio Transport (Default)
 - **Use Case**: Local development, CLI tools
 - **Security**: Inherits process permissions
-- **Example**: `authsome-cli mcp serve --stdio`
+- **Example**: `authsome mcp serve --stdio`
 
 ### 2. HTTP Transport
 - **Use Case**: Remote AI assistants, team tools
@@ -228,7 +228,7 @@ plugins:
 ### Phase 6: Testing & Documentation (2 hours)
 - [ ] Unit tests
 - [ ] Integration tests with actual AI assistant
-- [ ] CLI command: `authsome-cli mcp serve`
+- [ ] CLI command: `authsome mcp serve`
 - [ ] Usage examples
 
 **Total Estimate: 12-15 hours**
@@ -280,7 +280,7 @@ AI: "How do I create a user with 2FA enabled?"
 
 3. **Real-time Updates**: Should resources support streaming/subscriptions?
 
-4. **CLI Integration**: Should `authsome-cli` include an MCP REPL?
+4. **CLI Integration**: Should `authsome` include an MCP REPL?
 
 ## References
 

@@ -122,6 +122,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve database: %w", err)
 	}
 
+	fmt.Println("[AuthSome] Resolved database", a.db)
 	// Cast database
 	db, ok := a.db.(*bun.DB)
 	if !ok || db == nil {
@@ -290,7 +291,8 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	webhookH := handlers.NewWebhookHandler(a.webhookService)
 	notificationH := handlers.NewNotificationHandler(a.notificationService)
 	jwtH := jwtplugin.NewHandler(a.jwtService)
-	apikeyH := handlers.NewAPIKeyHandler(a.apikeyService)
+	// Note: API key routes are now handled by the apikey plugin
+	// The core apikey.Service is still available for internal use
 
 	// Register core auth routes
 	routes.Register(router, basePath, h)
@@ -304,7 +306,7 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	routes.RegisterWebhookRoutes(authGroup, webhookH)
 	routes.RegisterNotificationRoutes(authGroup, notificationH)
 	routes.RegisterJWTRoutes(authGroup, jwtH)
-	routes.RegisterAPIKeyRoutes(authGroup, apikeyH)
+	// API key routes removed - handled by apikey plugin with middleware support
 
 	// Register plugin routes (scoped to basePath)
 	if a.pluginRegistry != nil {
@@ -528,11 +530,13 @@ func (a *Auth) resolveDatabase() error {
 			return fmt.Errorf("failed to resolve database from Forge DI: %w", err)
 		}
 
-		db, ok := dbInterface.(*bun.DB)
+		sdb, ok := dbInterface.(*database.SQLDatabase)
 		if !ok {
-			return fmt.Errorf("resolved database is not *bun.DB")
+			return fmt.Errorf("resolved database is not *database.SQLDatabase")
 		}
 
+		db := sdb.Bun()
+		fmt.Println("[AuthSome] Resolved database from Forge DI container", db)
 		a.db = db
 		fmt.Println("[AuthSome] Resolved database from Forge DI container")
 		return nil
