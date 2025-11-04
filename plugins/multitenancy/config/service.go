@@ -4,48 +4,57 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
-	"github.com/spf13/viper"
+	"github.com/xraph/forge"
 )
 
 // Service provides organization-scoped configuration management
+// It wraps Forge's ConfigManager to provide multi-tenant configuration support
 type Service struct {
-	globalViper *viper.Viper
-	orgVipers   map[string]*viper.Viper
+	globalConfig forge.ConfigManager
+	orgConfigs   map[string]map[string]interface{}
+	mu           sync.RWMutex
 }
 
 // NewService creates a new configuration service
-func NewService(globalViper *viper.Viper) *Service {
+func NewService(forgeConfig forge.ConfigManager) *Service {
 	return &Service{
-		globalViper: globalViper,
-		orgVipers:   make(map[string]*viper.Viper),
+		globalConfig: forgeConfig,
+		orgConfigs:   make(map[string]map[string]interface{}),
 	}
 }
 
 // Bind binds configuration for a specific organization
-// If orgID is empty, uses global configuration
+// If orgID is empty, uses global configuration from Forge ConfigManager
+// If orgID is provided, merges organization-specific overrides with global config
 func (s *Service) Bind(orgID, key string, target interface{}) error {
-	var v *viper.Viper
+	// First, bind global configuration using Forge ConfigManager
+	if err := s.globalConfig.Bind(key, target); err != nil {
+		return fmt.Errorf("failed to bind global config for key '%s': %w", key, err)
+	}
 
+	// If no organization ID, just use global config
 	if orgID == "" {
-		// Use global configuration
-		v = s.globalViper
-	} else {
-		// Try organization-specific configuration first
-		orgViper := s.getOrganizationViper(orgID)
-		if orgViper != nil && orgViper.IsSet(key) {
-			v = orgViper
-		} else {
-			// Fall back to global configuration
-			v = s.globalViper
-		}
+		return nil
 	}
 
-	if !v.IsSet(key) {
-		return fmt.Errorf("configuration key '%s' not found", key)
+	// Apply organization-specific overrides if they exist
+	s.mu.RLock()
+	orgConfig, exists := s.orgConfigs[orgID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil // No org-specific overrides, use global config
 	}
 
-	return v.UnmarshalKey(key, target)
+	// Check if there's an override for this key in the org config
+	if orgValue, hasOverride := s.getNestedValue(orgConfig, key); hasOverride {
+		// Merge the override into the target
+		return s.mergeValue(target, orgValue)
+	}
+
+	return nil
 }
 
 // Set sets a configuration value for a specific organization
@@ -54,40 +63,56 @@ func (s *Service) Set(orgID, key string, value interface{}) error {
 		return fmt.Errorf("organization ID is required for setting org-specific config")
 	}
 
-	orgViper := s.getOrCreateOrganizationViper(orgID)
-	orgViper.Set(key, value)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get or create org config
+	if _, exists := s.orgConfigs[orgID]; !exists {
+		s.orgConfigs[orgID] = make(map[string]interface{})
+	}
+
+	// Set the nested key value
+	s.setNestedValue(s.orgConfigs[orgID], key, value)
 
 	return nil
 }
 
 // Get gets a configuration value for a specific organization
 func (s *Service) Get(orgID, key string) interface{} {
-	if orgID == "" {
-		return s.globalViper.Get(key)
-	}
+	// Check for org-specific override first
+	if orgID != "" {
+		s.mu.RLock()
+		orgConfig, exists := s.orgConfigs[orgID]
+		s.mu.RUnlock()
 
-	orgViper := s.getOrganizationViper(orgID)
-	if orgViper != nil && orgViper.IsSet(key) {
-		return orgViper.Get(key)
+		if exists {
+			if value, found := s.getNestedValue(orgConfig, key); found {
+				return value
+			}
+		}
 	}
 
 	// Fall back to global configuration
-	return s.globalViper.Get(key)
+	return s.globalConfig.Get(key)
 }
 
 // IsSet checks if a configuration key is set for a specific organization
 func (s *Service) IsSet(orgID, key string) bool {
-	if orgID == "" {
-		return s.globalViper.IsSet(key)
-	}
+	// Check org-specific config first
+	if orgID != "" {
+		s.mu.RLock()
+		orgConfig, exists := s.orgConfigs[orgID]
+		s.mu.RUnlock()
 
-	orgViper := s.getOrganizationViper(orgID)
-	if orgViper != nil && orgViper.IsSet(key) {
-		return true
+		if exists {
+			if _, found := s.getNestedValue(orgConfig, key); found {
+				return true
+			}
+		}
 	}
 
 	// Check global configuration
-	return s.globalViper.IsSet(key)
+	return s.globalConfig.IsSet(key)
 }
 
 // GetString gets a string configuration value
@@ -106,30 +131,35 @@ func (s *Service) GetString(orgID, key string) string {
 
 // GetInt gets an integer configuration value
 func (s *Service) GetInt(orgID, key string) int {
-	if orgID == "" {
-		return s.globalViper.GetInt(key)
+	value := s.Get(orgID, key)
+	if value == nil {
+		return 0
 	}
 
-	orgViper := s.getOrganizationViper(orgID)
-	if orgViper != nil && orgViper.IsSet(key) {
-		return orgViper.GetInt(key)
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
 	}
-
-	return s.globalViper.GetInt(key)
 }
 
 // GetBool gets a boolean configuration value
 func (s *Service) GetBool(orgID, key string) bool {
-	if orgID == "" {
-		return s.globalViper.GetBool(key)
+	value := s.Get(orgID, key)
+	if value == nil {
+		return false
 	}
 
-	orgViper := s.getOrganizationViper(orgID)
-	if orgViper != nil && orgViper.IsSet(key) {
-		return orgViper.GetBool(key)
+	if b, ok := value.(bool); ok {
+		return b
 	}
 
-	return s.globalViper.GetBool(key)
+	return false
 }
 
 // LoadOrganizationConfig loads configuration for a specific organization
@@ -138,74 +168,143 @@ func (s *Service) LoadOrganizationConfig(orgID string, config map[string]interfa
 		return fmt.Errorf("organization ID is required")
 	}
 
-	orgViper := s.getOrCreateOrganizationViper(orgID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	// Set all configuration values
-	for key, value := range config {
-		orgViper.Set(key, value)
-	}
+	// Store the entire config for this organization
+	s.orgConfigs[orgID] = config
 
 	return nil
 }
 
 // RemoveOrganizationConfig removes all configuration for a specific organization
 func (s *Service) RemoveOrganizationConfig(orgID string) {
-	delete(s.orgVipers, orgID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.orgConfigs, orgID)
 }
 
 // GetOrganizationConfig gets all configuration for a specific organization
 func (s *Service) GetOrganizationConfig(orgID string) map[string]interface{} {
-	orgViper := s.getOrganizationViper(orgID)
-	if orgViper == nil {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	orgConfig, exists := s.orgConfigs[orgID]
+	if !exists {
 		return make(map[string]interface{})
 	}
 
-	return orgViper.AllSettings()
+	// Return a copy to prevent external modifications
+	result := make(map[string]interface{})
+	for k, v := range orgConfig {
+		result[k] = v
+	}
+
+	return result
 }
 
 // MergeConfig merges organization-specific config with global config
+// This is similar to Bind but unmarshals the entire config instead of a specific key
 func (s *Service) MergeConfig(orgID string, target interface{}) error {
-	// First bind global config
-	if err := s.globalViper.Unmarshal(target); err != nil {
-		return fmt.Errorf("failed to unmarshal global config: %w", err)
+	// Get all global config (we'll need to unmarshal from Forge's ConfigManager)
+	// Note: Forge's ConfigManager doesn't have an Unmarshal method, so we'll work with Bind
+	// For now, this method assumes the target has already been bound with global config
+
+	// If no org ID, nothing to merge
+	if orgID == "" {
+		return nil
 	}
 
-	// Then overlay organization-specific config if it exists
-	if orgID != "" {
-		orgViper := s.getOrganizationViper(orgID)
-		if orgViper != nil {
-			if err := s.mergeViperConfig(orgViper, target); err != nil {
-				return fmt.Errorf("failed to merge organization config: %w", err)
-			}
+	// Apply organization-specific overrides
+	s.mu.RLock()
+	orgConfig, exists := s.orgConfigs[orgID]
+	s.mu.RUnlock()
+
+	if !exists || len(orgConfig) == 0 {
+		return nil // No org-specific overrides
+	}
+
+	// Merge the org config into the target
+	return s.mergeMap(orgConfig, target)
+}
+
+// getNestedValue retrieves a value from a nested map using dot notation
+// e.g., "auth.oauth.google.clientId" -> map[auth][oauth][google][clientId]
+func (s *Service) getNestedValue(config map[string]interface{}, key string) (interface{}, bool) {
+	parts := strings.Split(key, ".")
+	current := config
+
+	for i, part := range parts {
+		value, exists := current[part]
+		if !exists {
+			return nil, false
+		}
+
+		// If this is the last part, return the value
+		if i == len(parts)-1 {
+			return value, true
+		}
+
+		// Otherwise, navigate deeper
+		nextMap, ok := value.(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		current = nextMap
+	}
+
+	return nil, false
+}
+
+// setNestedValue sets a value in a nested map using dot notation
+// e.g., "auth.oauth.google.clientId" -> map[auth][oauth][google][clientId] = value
+func (s *Service) setNestedValue(config map[string]interface{}, key string, value interface{}) {
+	parts := strings.Split(key, ".")
+	current := config
+
+	for i, part := range parts {
+		// If this is the last part, set the value
+		if i == len(parts)-1 {
+			current[part] = value
+			return
+		}
+
+		// Otherwise, navigate or create nested map
+		if nextMap, ok := current[part].(map[string]interface{}); ok {
+			current = nextMap
+		} else {
+			// Create new nested map
+			newMap := make(map[string]interface{})
+			current[part] = newMap
+			current = newMap
 		}
 	}
-
-	return nil
 }
 
-// getOrganizationViper gets the viper instance for an organization
-func (s *Service) getOrganizationViper(orgID string) *viper.Viper {
-	return s.orgVipers[orgID]
-}
-
-// getOrCreateOrganizationViper gets or creates the viper instance for an organization
-func (s *Service) getOrCreateOrganizationViper(orgID string) *viper.Viper {
-	if v, exists := s.orgVipers[orgID]; exists {
-		return v
+// mergeValue merges a single configuration value into the target struct
+func (s *Service) mergeValue(target interface{}, value interface{}) error {
+	targetValue := reflect.ValueOf(target)
+	if targetValue.Kind() != reflect.Ptr {
+		return fmt.Errorf("target must be a pointer")
 	}
 
-	v := viper.New()
-	s.orgVipers[orgID] = v
-	return v
-}
+	targetValue = targetValue.Elem()
 
-// mergeViperConfig merges viper configuration into a target struct
-func (s *Service) mergeViperConfig(v *viper.Viper, target interface{}) error {
-	// Get all settings from viper
-	settings := v.AllSettings()
-
-	// Use reflection to merge settings into target
-	return s.mergeMap(settings, target)
+	// Handle different value types
+	switch v := value.(type) {
+	case map[string]interface{}:
+		// If the value is a map, merge it into the struct
+		return s.mergeMap(v, target)
+	default:
+		// If the value is a simple type, set it directly
+		valueReflect := reflect.ValueOf(value)
+		if valueReflect.Type().ConvertibleTo(targetValue.Type()) {
+			targetValue.Set(valueReflect.Convert(targetValue.Type()))
+			return nil
+		}
+		return fmt.Errorf("cannot convert %T to %s", value, targetValue.Type())
+	}
 }
 
 // mergeMap merges a map into a target struct using reflection

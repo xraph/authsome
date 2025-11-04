@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uptrace/bun"
 	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/plugins"
 	"github.com/xraph/forge"
 )
@@ -188,4 +190,40 @@ func (e *Extension) RegisterPlugin(plugin plugins.Plugin) error {
 	// Not initialized yet, add to pending plugins
 	e.config.Plugins = append(e.config.Plugins, plugin)
 	return nil
+}
+
+// GetPluginRegistry returns the plugin registry for plugin detection
+// This is used by the dashboard plugin to detect which plugins are enabled
+func (e *Extension) GetPluginRegistry() *plugins.Registry {
+	if e.auth == nil {
+		return nil
+	}
+	return e.auth.GetPluginRegistry()
+}
+
+// GetServiceRegistry returns the service registry
+// This is used by plugins that need access to core services
+func (e *Extension) GetServiceRegistry() *registry.ServiceRegistry {
+	if e.auth == nil {
+		return nil
+	}
+	return e.auth.GetServiceRegistry()
+}
+
+// GetBasePath returns the configured base path
+// This is used by plugins to construct URLs
+func (e *Extension) GetBasePath() string {
+	if e.auth == nil {
+		return e.config.BasePath
+	}
+	return e.auth.GetBasePath()
+}
+
+// GetDB returns the database instance
+// This is used by plugins that need direct database access
+func (e *Extension) GetDB() *bun.DB {
+	if e.auth == nil {
+		return nil
+	}
+	return e.auth.GetDB()
 }

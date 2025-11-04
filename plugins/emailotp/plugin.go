@@ -2,6 +2,7 @@ package emailotp
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -31,26 +32,38 @@ func NewPlugin() *Plugin { return &Plugin{} }
 func (p *Plugin) ID() string { return "emailotp" }
 
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		
-		// TODO: Get notification adapter from service registry when available
-		// For now, plugins will work without notification adapter (graceful degradation)
-		// The notification plugin should be registered first and will set up its services
-		
-		// wire repo and services
-		eotpr := repo.NewEmailOTPRepository(db)
-		userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
-		sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
-		authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
-		auditSvc := audit.NewService(repo.NewAuditRepository(db))
-		p.service = NewService(eotpr, userSvc, authSvc, auditSvc, p.notifAdapter, Config{
-			OTPLength:           6,
-			ExpiryMinutes:       10,
-			DevExposeOTP:        true,
-			AllowImplicitSignup: true,
-		})
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("emailotp plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for emailotp plugin")
+	}
+	
+	p.db = db
+	
+	// TODO: Get notification adapter from service registry when available
+	// For now, plugins will work without notification adapter (graceful degradation)
+	// The notification plugin should be registered first and will set up its services
+	
+	// wire repo and services
+	eotpr := repo.NewEmailOTPRepository(db)
+	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
+	auditSvc := audit.NewService(repo.NewAuditRepository(db))
+	p.service = NewService(eotpr, userSvc, authSvc, auditSvc, p.notifAdapter, Config{
+		OTPLength:           6,
+		ExpiryMinutes:       10,
+		DevExposeOTP:        true,
+		AllowImplicitSignup: true,
+	})
 	return nil
 }
 

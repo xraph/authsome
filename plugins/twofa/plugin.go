@@ -2,6 +2,7 @@ package twofa
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
@@ -22,13 +23,23 @@ func NewPlugin() *Plugin { return &Plugin{} }
 func (p *Plugin) ID() string { return "twofa" }
 
 func (p *Plugin) Init(dep interface{}) error {
-	// Expect *bun.DB from the auth initializer
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		// Wire repository-backed service
-		p.service = NewService(repo.NewTwoFARepository(db))
-		return nil
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("twofa plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for twofa plugin")
+	}
+	
+	p.db = db
+	// Wire repository-backed service
+	p.service = NewService(repo.NewTwoFARepository(db))
 	return nil
 }
 

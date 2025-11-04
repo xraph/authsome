@@ -6,6 +6,8 @@ require (
 	github.com/beevik/etree v1.5.0
 	github.com/coreos/go-oidc/v3 v3.16.0
 	github.com/crewjam/saml v0.4.11
+	github.com/delaneyj/gomponents-iconify v0.0.20241016
+	github.com/eduardolat/gomponents-lucide v1.4.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/cel-go v0.18.2
@@ -28,6 +30,7 @@ require (
 	golang.org/x/oauth2 v0.32.0
 	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
+	maragu.dev/gomponents v1.2.0
 )
 
 require (

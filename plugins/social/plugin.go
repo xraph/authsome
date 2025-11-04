@@ -34,30 +34,31 @@ func (p *Plugin) ID() string {
 
 // Init initializes the plugin with dependencies
 func (p *Plugin) Init(dep interface{}) error {
-	switch v := dep.(type) {
-	case *bun.DB:
-		if v != nil {
-			p.db = v
-
-			// Create repositories
-			socialRepo := repository.NewSocialAccountRepository(v)
-			userRepo := repository.NewUserRepository(v)
-
-			// Create user service (simplified - in production, get from registry)
-			userSvc := user.NewService(userRepo, user.Config{}, nil)
-
-			// Create social service
-			p.service = NewService(p.config, socialRepo, userSvc)
-		}
-	case map[string]interface{}:
-		// Accept configuration map
-		if db, ok := v["db"].(*bun.DB); ok {
-			p.db = db
-		}
-		if config, ok := v["config"].(Config); ok {
-			p.config = config
-		}
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("social plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for social plugin")
+	}
+	
+	p.db = db
+
+	// Create repositories
+	socialRepo := repository.NewSocialAccountRepository(db)
+	userRepo := repository.NewUserRepository(db)
+
+	// Create user service (simplified - in production, get from registry)
+	userSvc := user.NewService(userRepo, user.Config{}, nil)
+
+	// Create social service
+	p.service = NewService(p.config, socialRepo, userSvc)
 
 	return nil
 }

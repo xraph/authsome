@@ -17,6 +17,8 @@ type ServiceInterface interface {
 	Update(ctx context.Context, u *User, req *UpdateUserRequest) (*User, error)
 	Delete(ctx context.Context, id xid.ID) error
 	List(ctx context.Context, opts types.PaginationOptions) ([]*User, int, error)
+	Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*User, int, error)
+	CountCreatedToday(ctx context.Context) (int, error)
 }
 
 // Ensure Service implements ServiceInterface

@@ -1,6 +1,8 @@
 package multisession
 
 import (
+	"fmt"
+
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
@@ -24,19 +26,31 @@ func NewPlugin() *Plugin { return &Plugin{} }
 
 func (p *Plugin) ID() string { return "multisession" }
 
-// Init expects a *bun.DB and constructs local services
+// Init accepts auth instance with GetDB method
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		// Core services used for auth context
-		auditSvc := audit.NewService(repo.NewAuditRepository(db))
-		webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(db), auditSvc)
-		userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, webhookSvc)
-		sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{AllowMultiple: true}, webhookSvc)
-		authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
-		devSvc := dev.NewService(repo.NewDeviceRepository(db))
-		p.service = NewService(repo.NewSessionRepository(db), repo.NewDeviceRepository(db), authSvc, devSvc)
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("multisession plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for multisession plugin")
+	}
+	
+	p.db = db
+	// Core services used for auth context
+	auditSvc := audit.NewService(repo.NewAuditRepository(db))
+	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(db), auditSvc)
+	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, webhookSvc)
+	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{AllowMultiple: true}, webhookSvc)
+	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
+	devSvc := dev.NewService(repo.NewDeviceRepository(db))
+	p.service = NewService(repo.NewSessionRepository(db), repo.NewDeviceRepository(db), authSvc, devSvc)
 	return nil
 }
 

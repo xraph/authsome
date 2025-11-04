@@ -1,57 +1,71 @@
 package dashboard
 
 import (
+	"context"
 	"embed"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"context"
-
 	"github.com/rs/xid"
+	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/interfaces"
+	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/plugins/dashboard/components/pages"
 	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
+	g "maragu.dev/gomponents"
 )
 
 // Handler handles dashboard HTTP requests
 type Handler struct {
-	templates      *template.Template
 	assets         embed.FS
-	userSvc        *user.Service
-	sessionSvc     *session.Service
+	userSvc        user.ServiceInterface
+	sessionSvc     session.ServiceInterface
 	auditSvc       *audit.Service
 	rbacSvc        *rbac.Service
+	apikeyService  *apikey.Service
+	orgService     *organization.Service
+	db             *bun.DB
+	isSaaSMode     bool
 	basePath       string
 	enabledPlugins map[string]bool
 }
 
 // NewHandler creates a new dashboard handler
 func NewHandler(
-	templates *template.Template,
 	assets embed.FS,
-	userSvc *user.Service,
-	sessionSvc *session.Service,
+	userSvc user.ServiceInterface,
+	sessionSvc session.ServiceInterface,
 	auditSvc *audit.Service,
 	rbacSvc *rbac.Service,
+	apikeyService *apikey.Service,
+	orgService *organization.Service,
+	db *bun.DB,
+	isSaaSMode bool,
 	basePath string,
 	enabledPlugins map[string]bool,
 ) *Handler {
 	return &Handler{
-		templates:      templates,
 		assets:         assets,
 		userSvc:        userSvc,
 		sessionSvc:     sessionSvc,
 		auditSvc:       auditSvc,
 		rbacSvc:        rbacSvc,
+		apikeyService:  apikeyService,
+		orgService:     orgService,
+		db:             db,
+		isSaaSMode:     isSaaSMode,
 		basePath:       basePath,
 		enabledPlugins: enabledPlugins,
 	}
@@ -84,16 +98,56 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		return h.renderError(c, "Failed to load dashboard statistics", err)
 	}
 
-	data := PageData{
+	pageData := components.PageData{
 		Title:      "Dashboard",
 		ActivePage: "dashboard",
 		User:       user,
 		CSRFToken:  h.getCSRFToken(c),
 		BasePath:   h.basePath,
-		Data:       stats,
 	}
 
-	return h.render(c, "dashboard.html", data)
+	// Convert to pages.DashboardStats
+	pageStats := &pages.DashboardStats{
+		TotalUsers:     stats.TotalUsers,
+		ActiveUsers:    stats.ActiveUsers,
+		NewUsersToday:  stats.NewUsersToday,
+		TotalSessions:  stats.TotalSessions,
+		ActiveSessions: stats.ActiveSessions,
+		FailedLogins:   stats.FailedLogins,
+		UserGrowth:     stats.UserGrowth,
+		SessionGrowth:  stats.SessionGrowth,
+		RecentActivity: convertActivityItems(stats.RecentActivity),
+		SystemStatus:   convertStatusItems(stats.SystemStatus),
+	}
+
+	content := pages.DashboardPage(pageStats, h.basePath)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// Helper converters for stats
+func convertActivityItems(items []ActivityItem) []pages.ActivityItem {
+	result := make([]pages.ActivityItem, len(items))
+	for i, item := range items {
+		result[i] = pages.ActivityItem{
+			Title:       item.Title,
+			Description: item.Description,
+			Time:        item.Time,
+			Type:        item.Type,
+		}
+	}
+	return result
+}
+
+func convertStatusItems(items []StatusItem) []pages.StatusItem {
+	result := make([]pages.StatusItem, len(items))
+	for i, item := range items {
+		result[i] = pages.StatusItem{
+			Name:   item.Name,
+			Status: item.Status,
+			Color:  item.Color,
+		}
+	}
+	return result
 }
 
 // ServeUsers serves the users list page
@@ -143,23 +197,24 @@ func (h *Handler) ServeUsers(c forge.Context) error {
 	// Calculate pagination info
 	totalPages := (total + pageSize - 1) / pageSize
 
-	data := PageData{
+	pageData := components.PageData{
 		Title:      "Users",
 		User:       currentUser,
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "users",
 		BasePath:   h.basePath,
-		Data: map[string]interface{}{
-			"Users":      users,
-			"Total":      total,
-			"Page":       page,
-			"PageSize":   pageSize,
-			"TotalPages": totalPages,
-			"Query":      query,
-		},
 	}
 
-	return h.render(c, "users.html", data)
+	usersData := pages.UsersData{
+		Users:      users,
+		Query:      query,
+		Page:       page,
+		TotalPages: totalPages,
+		Total:      total,
+	}
+
+	content := pages.UsersPage(usersData, h.basePath)
+	return h.renderWithLayout(c, pageData, content)
 }
 
 // ServeUserDetail serves a single user detail page
@@ -186,16 +241,52 @@ func (h *Handler) ServeUserDetail(c forge.Context) error {
 		return h.renderError(c, "User not found", err)
 	}
 
-	data := PageData{
+	// Get active sessions for this user (limit to 10 for detail view)
+	allSessions, err := h.sessionSvc.ListByUser(c.Request().Context(), userID, 10, 0)
+	if err != nil {
+		// Log error but don't fail the page
+		// Just show empty sessions
+		allSessions = []*session.Session{}
+	}
+
+	// Convert sessions to page data format
+	sessionData := make([]pages.SessionData, 0, len(allSessions))
+	for _, s := range allSessions {
+		sessionData = append(sessionData, pages.SessionData{
+			ID:        s.ID.String(),
+			UserID:    s.UserID.String(),
+			IPAddress: s.IPAddress,
+			UserAgent: s.UserAgent,
+			CreatedAt: s.CreatedAt,
+			ExpiresAt: s.ExpiresAt,
+		})
+	}
+
+	pageData := components.PageData{
 		Title:      fmt.Sprintf("User: %s", targetUser.Email),
 		User:       user,
 		CSRFToken:  h.getCSRFToken(c),
-		ActivePage: "user_detail",
+		ActivePage: "users",
 		BasePath:   h.basePath,
-		Data:       targetUser,
 	}
 
-	return h.render(c, "user_detail.html", data)
+	detailData := pages.UserDetailPageData{
+		User: pages.UserDetailData{
+			ID:            targetUser.ID.String(),
+			Email:         targetUser.Email,
+			Name:          targetUser.Name,
+			Username:      targetUser.Username,
+			EmailVerified: targetUser.EmailVerified,
+			CreatedAt:     targetUser.CreatedAt,
+			UpdatedAt:     targetUser.UpdatedAt,
+		},
+		Sessions:  sessionData,
+		BasePath:  h.basePath,
+		CSRFToken: h.getCSRFToken(c),
+	}
+
+	content := pages.UserDetailPage(detailData)
+	return h.renderWithLayout(c, pageData, content)
 }
 
 // ServeUserEdit serves the user edit page
@@ -218,24 +309,28 @@ func (h *Handler) ServeUserEdit(c forge.Context) error {
 		return c.String(http.StatusNotFound, "User not found")
 	}
 
-	editData := map[string]interface{}{
-		"UserID":        targetUser.ID.String(),
-		"Name":          targetUser.Name,
-		"Email":         targetUser.Email,
-		"Username":      targetUser.Username,
-		"EmailVerified": targetUser.EmailVerified,
-	}
-
-	data := PageData{
+	pageData := components.PageData{
 		Title:      fmt.Sprintf("Edit User: %s", targetUser.Email),
 		User:       user,
 		CSRFToken:  h.getCSRFToken(c),
-		ActivePage: "user_edit",
+		ActivePage: "users",
 		BasePath:   h.basePath,
-		Data:       editData,
 	}
 
-	return h.render(c, "user_edit.html", data)
+	editData := pages.UserEditPageData{
+		User: pages.UserEditData{
+			UserID:        targetUser.ID.String(),
+			Name:          targetUser.Name,
+			Email:         targetUser.Email,
+			Username:      targetUser.Username,
+			EmailVerified: targetUser.EmailVerified,
+		},
+		BasePath:  h.basePath,
+		CSRFToken: h.getCSRFToken(c),
+	}
+
+	content := pages.UserEditPage(editData)
+	return h.renderWithLayout(c, pageData, content)
 }
 
 // HandleUserEdit processes the user edit form
@@ -359,19 +454,36 @@ func (h *Handler) ServeSessions(c forge.Context) error {
 		sessions = allSessions
 	}
 
-	data := PageData{
+	pageData := components.PageData{
 		Title:      "Sessions",
 		User:       currentUser,
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "sessions",
 		BasePath:   h.basePath,
-		Data: map[string]interface{}{
-			"Sessions": sessions,
-			"Query":    query,
-		},
 	}
 
-	return h.render(c, "sessions.html", data)
+	// Convert sessions to page data format
+	sessionData := make([]pages.SessionData, len(sessions))
+	for i, s := range sessions {
+		sessionData[i] = pages.SessionData{
+			ID:        s.ID.String(),
+			UserID:    s.UserID.String(),
+			IPAddress: s.IPAddress,
+			UserAgent: s.UserAgent,
+			CreatedAt: s.CreatedAt,
+			ExpiresAt: s.ExpiresAt,
+		}
+	}
+
+	sessionsPageData := pages.SessionsPageData{
+		Sessions:  sessionData,
+		Query:     query,
+		BasePath:  h.basePath,
+		CSRFToken: h.getCSRFToken(c),
+	}
+
+	content := pages.SessionsPage(sessionsPageData)
+	return h.renderWithLayout(c, pageData, content)
 }
 
 // HandleRevokeSession revokes a single session
@@ -402,15 +514,10 @@ func (h *Handler) HandleRevokeSession(c forge.Context) error {
 
 // Serve404 serves the 404 page
 func (h *Handler) Serve404(c forge.Context) error {
-	data := PageData{
-		Title:      "Page Not Found",
-		BasePath:   h.basePath,
-		ActivePage: "",
-	}
-
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
 	c.Response().WriteHeader(http.StatusNotFound)
-	return h.templates.ExecuteTemplate(c.Response(), "404.html", data)
+	page := pages.NotFound(h.basePath)
+	return h.render(c, page)
 }
 
 // ServeSettings serves the settings page
@@ -426,25 +533,57 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 		activeTab = "general"
 	}
 
-	// Mock data for API keys and webhooks
-	// TODO: Replace with actual data from services
-	apiKeys := []map[string]interface{}{}
-	webhooks := []map[string]interface{}{}
-
-	data := PageData{
+	pageData := components.PageData{
 		Title:      "Settings",
 		User:       currentUser,
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "settings",
 		BasePath:   h.basePath,
-		Data: map[string]interface{}{
-			"ActiveTab": activeTab,
-			"APIKeys":   apiKeys,
-			"Webhooks":  webhooks,
-		},
 	}
 
-	return h.render(c, "settings.html", data)
+	// Populate settings data
+	// TODO: Load these from actual configuration
+
+	// Debug: Log enabled plugins
+	fmt.Printf("[Dashboard] Settings page - Enabled plugins: %v\n", h.enabledPlugins)
+	fmt.Printf("[Dashboard] Settings page - API Key plugin enabled: %v\n", h.enabledPlugins["apikey"])
+
+	// Prepare API Keys data
+	apiKeysData := pages.APIKeysTabPageData{
+		APIKeys:       []pages.APIKeyData{}, // TODO: Fetch from h.apikeyService
+		Organizations: []pages.OrganizationOption{},
+		IsSaaSMode:    h.isSaaSMode,
+		CanCreateKeys: true,
+		CSRFToken:     h.getCSRFToken(c),
+	}
+
+	// If SaaS mode, fetch user's organizations
+	if h.isSaaSMode && h.orgService != nil {
+		// TODO: Fetch user's organizations and populate apiKeysData.Organizations
+	}
+
+	settingsData := pages.SettingsPageData{
+		ActiveTab: activeTab,
+		General: pages.GeneralSettings{
+			DashboardName:            "AuthSome Dashboard",
+			SessionDuration:          24,
+			MaxLoginAttempts:         5,
+			RequireEmailVerification: true,
+		},
+		APIKeys:               apiKeysData,
+		Webhooks:              []pages.Webhook{},              // TODO: Load from webhook service
+		NotificationTemplates: []pages.NotificationTemplate{}, // TODO: Load from notification service
+		SocialProviders:       []pages.SocialProvider{},       // TODO: Load from social auth service
+		ImpersonationLogs:     []pages.ImpersonationLog{},     // TODO: Load from impersonation service
+		MFAMethods:            []pages.MFAMethod{},            // TODO: Load from MFA service
+		IsSaaSMode:            h.isSaaSMode,
+		BasePath:              h.basePath,
+		CSRFToken:             h.getCSRFToken(c),
+		EnabledPlugins:        h.enabledPlugins,
+	}
+
+	content := pages.SettingsPage(settingsData)
+	return h.renderWithLayout(c, pageData, content)
 }
 
 // HandleRevokeUserSessions revokes all sessions for a specific user
@@ -490,9 +629,11 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 
 // ServeLogin serves the login page
 func (h *Handler) ServeLogin(c forge.Context) error {
-	// Check if already authenticated
-	user := h.getUserFromContext(c)
-	if user != nil {
+	fmt.Printf("[Dashboard] ServeLogin called for path: %s\n", c.Request().URL.Path)
+
+	// Check if already authenticated (check session cookie directly since no auth middleware)
+	if user := h.checkExistingSession(c); user != nil {
+		fmt.Printf("[Dashboard] User already authenticated: %s, redirecting to dashboard\n", user.Email)
 		// Already logged in, redirect to dashboard
 		redirect := c.Query("redirect")
 		if redirect == "" {
@@ -500,6 +641,8 @@ func (h *Handler) ServeLogin(c forge.Context) error {
 		}
 		return c.Redirect(http.StatusFound, redirect)
 	}
+
+	fmt.Printf("[Dashboard] No valid session, showing login page\n")
 
 	redirect := c.Query("redirect")
 	errorParam := c.Query("error")
@@ -520,23 +663,34 @@ func (h *Handler) ServeLogin(c forge.Context) error {
 		errorMessage = "Your session has expired. Please log in again"
 	}
 
-	data := PageData{
+	loginData := pages.LoginPageData{
 		Title:     "Login",
 		CSRFToken: h.generateCSRFToken(),
 		BasePath:  h.basePath,
 		Error:     errorMessage,
-		Data: map[string]interface{}{
-			"Redirect":    redirect,
-			"ShowSignup":  true,
-			"IsFirstUser": isFirstUser,
+		Data: pages.LoginData{
+			Redirect:    redirect,
+			ShowSignup:  true,
+			IsFirstUser: isFirstUser,
 		},
 	}
 
-	return h.render(c, "login.html", data)
+	page := pages.Login(loginData)
+	return h.render(c, page)
 }
 
 // HandleLogin processes the login form
 func (h *Handler) HandleLogin(c forge.Context) error {
+	// Check if already authenticated
+	if user := h.checkExistingSession(c); user != nil {
+		fmt.Printf("[Dashboard] User already authenticated during login attempt: %s, redirecting\n", user.Email)
+		redirect := c.Request().FormValue("redirect")
+		if redirect == "" {
+			redirect = h.basePath + "/dashboard/"
+		}
+		return c.Redirect(http.StatusFound, redirect)
+	}
+
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		return h.renderLoginError(c, "Invalid form data", c.Query("redirect"))
@@ -558,9 +712,36 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 		return h.renderLoginError(c, "Email and password are required", redirect)
 	}
 
-	// Find user by email
-	user, err := h.userSvc.FindByEmail(c.Request().Context(), email)
+	// In multi-tenant mode, we need to set organization context for user lookup
+	// Try to find user without organization context first
+	ctx := c.Request().Context()
+	user, err := h.userSvc.FindByEmail(ctx, email)
+
+	// If we get "organization context required" error, we're in multi-tenant mode
+	// Try with the first organization from database
+	if err != nil && err.Error() == "organization context required" && h.isSaaSMode {
+		fmt.Printf("[Dashboard] Multi-tenant mode detected, querying for user's organization\n")
+
+		// Query organizations table directly to get the first/platform organization
+		// This bypasses the need for the List method
+		var orgID string
+		err = h.db.NewSelect().
+			Table("organizations").
+			Column("id").
+			Order("created_at ASC").
+			Limit(1).
+			Scan(ctx, &orgID)
+
+		if err == nil && orgID != "" {
+			// Set organization context and retry
+			ctx = context.WithValue(ctx, interfaces.OrganizationContextKey, orgID)
+			fmt.Printf("[Dashboard] Retrying login with organization context: %s\n", orgID)
+			user, err = h.userSvc.FindByEmail(ctx, email)
+		}
+	}
+
 	if err != nil || user == nil {
+		fmt.Printf("[Dashboard] Login error: Failed to find user: %v\n", err)
 		return h.renderLoginError(c, "Invalid email or password", redirect)
 	}
 
@@ -605,25 +786,27 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 
 // renderLoginError renders the login page with an error message
 func (h *Handler) renderLoginError(c forge.Context, message string, redirect string) error {
-	data := PageData{
+	loginData := pages.LoginPageData{
 		Title:     "Login",
 		CSRFToken: h.generateCSRFToken(),
 		BasePath:  h.basePath,
 		Error:     message,
-		Data: map[string]interface{}{
-			"Redirect": redirect,
+		Data: pages.LoginData{
+			Redirect:   redirect,
+			ShowSignup: true,
 		},
 	}
 
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
-	return h.templates.ExecuteTemplate(c.Response(), "login.html", data)
+	page := pages.Login(loginData)
+	return h.render(c, page)
 }
 
 // ServeSignup serves the signup page
 func (h *Handler) ServeSignup(c forge.Context) error {
-	// Check if already authenticated
-	user := h.getUserFromContext(c)
-	if user != nil {
+	// Check if already authenticated (check session cookie directly since no auth middleware)
+	if user := h.checkExistingSession(c); user != nil {
+		fmt.Printf("[Dashboard] User already authenticated: %s, redirecting to dashboard\n", user.Email)
 		// Already logged in, redirect to dashboard
 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/")
 	}
@@ -636,21 +819,32 @@ func (h *Handler) ServeSignup(c forge.Context) error {
 		return h.renderError(c, "Failed to check system status", err)
 	}
 
-	data := PageData{
+	signupData := pages.SignupPageData{
 		Title:     "Sign Up",
 		CSRFToken: h.generateCSRFToken(),
 		BasePath:  h.basePath,
-		Data: map[string]interface{}{
-			"Redirect":    redirect,
-			"IsFirstUser": isFirstUser,
+		Data: pages.SignupData{
+			Redirect:    redirect,
+			IsFirstUser: isFirstUser,
 		},
 	}
 
-	return h.render(c, "signup.html", data)
+	page := pages.Signup(signupData)
+	return h.render(c, page)
 }
 
 // HandleSignup processes the signup form
 func (h *Handler) HandleSignup(c forge.Context) error {
+	// Check if already authenticated
+	if user := h.checkExistingSession(c); user != nil {
+		fmt.Printf("[Dashboard] User already authenticated during signup attempt: %s, redirecting\n", user.Email)
+		redirect := c.Request().FormValue("redirect")
+		if redirect == "" {
+			redirect = h.basePath + "/dashboard/"
+		}
+		return c.Redirect(http.StatusFound, redirect)
+	}
+
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		fmt.Printf("[Dashboard] Signup form parse error: %v\n", err)
@@ -660,7 +854,7 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 	name := c.Request().FormValue("name")
 	email := c.Request().FormValue("email")
 	password := c.Request().FormValue("password")
-	confirmPassword := c.Request().FormValue("confirm_password")
+	confirmPassword := c.Request().FormValue("password_confirm")
 	redirect := c.Request().FormValue("redirect")
 	csrfToken := c.Request().FormValue("csrf_token")
 
@@ -710,8 +904,20 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 
 	fmt.Printf("[Dashboard] User created successfully: %s (%s)\n", newUser.Email, newUser.ID.String())
 
-	// If this is the first user, assign admin/owner role
+	// If this is the first user, auto-verify email and assign admin/owner role
 	if isFirstUser {
+		// Auto-verify the first user's email
+		emailVerified := true
+		updatedUser, err := h.userSvc.Update(c.Request().Context(), newUser, &user.UpdateUserRequest{
+			EmailVerified: &emailVerified,
+		})
+		if err != nil {
+			fmt.Printf("[Dashboard] Warning: Failed to auto-verify first user email: %v\n", err)
+		} else {
+			newUser = updatedUser // Update the user object with verified status
+			fmt.Printf("[Dashboard] ✅ First user email auto-verified: %s\n", newUser.Email)
+		}
+
 		// Assign admin role to first user using RBAC service
 		// Create a policy that grants full dashboard access to this user
 		adminPolicy := &rbac.Policy{
@@ -729,7 +935,7 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		}
 		h.rbacSvc.AddPolicy(ownerPolicy)
 
-		fmt.Printf("[Dashboard] ✨ First user created (system owner): %s (%s) - Admin roles assigned\n", newUser.Email, newUser.ID.String())
+		fmt.Printf("[Dashboard] ✨ First user created (system owner): %s (%s) - Email verified ✅ & Admin roles assigned ✅\n", newUser.Email, newUser.ID.String())
 	}
 
 	// Create session for the new user
@@ -773,29 +979,83 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 func (h *Handler) renderSignupError(c forge.Context, message string, redirect string) error {
 	isFirstUser, _ := h.isFirstUser(c.Request().Context())
 
-	data := PageData{
+	signupData := pages.SignupPageData{
 		Title:     "Sign Up",
 		CSRFToken: h.generateCSRFToken(),
 		BasePath:  h.basePath,
 		Error:     message,
-		Data: map[string]interface{}{
-			"Redirect":    redirect,
-			"IsFirstUser": isFirstUser,
+		Data: pages.SignupData{
+			Redirect:    redirect,
+			IsFirstUser: isFirstUser,
 		},
 	}
 
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
-	return h.templates.ExecuteTemplate(c.Response(), "signup.html", data)
+	page := pages.Signup(signupData)
+	return h.render(c, page)
+}
+
+// HandleLogout processes the logout request
+func (h *Handler) HandleLogout(c forge.Context) error {
+	fmt.Printf("[Dashboard] Logout requested\n")
+
+	// Get session token from cookie
+	cookie, err := c.Request().Cookie(sessionCookieName)
+	if err == nil && cookie != nil && cookie.Value != "" {
+		// Revoke the session
+		sess, err := h.sessionSvc.FindByToken(c.Request().Context(), cookie.Value)
+		if err == nil && sess != nil {
+			if err := h.sessionSvc.RevokeByID(c.Request().Context(), sess.ID); err != nil {
+				fmt.Printf("[Dashboard] Failed to revoke session: %v\n", err)
+			} else {
+				fmt.Printf("[Dashboard] Session revoked: %s\n", sess.ID)
+			}
+		}
+	}
+
+	// Clear session cookie
+	http.SetCookie(c.Response(), &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   c.Request().TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // Delete cookie
+	})
+
+	fmt.Printf("[Dashboard] Session cookie cleared, redirecting to login\n")
+
+	// Redirect to login page
+	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
 }
 
 // isFirstUser checks if there are any users in the system
+// This is a global check that bypasses organization context for the first system user
 func (h *Handler) isFirstUser(ctx context.Context) (bool, error) {
-	// List users with limit 1 to check if any exist
+	// In SaaS mode, the user service is decorated with multi-tenant logic
+	// which requires organization context. However, for the first user check,
+	// we need to check globally if ANY users exist in the system at all.
+	//
+	// We can detect this by attempting the List call. If it fails with
+	// "organization context required", we know we're in multi-tenant mode
+	// and no organization exists yet (hence it's the first user).
+
 	users, total, err := h.userSvc.List(ctx, types.PaginationOptions{
 		Page:     1,
 		PageSize: 1,
 	})
+
+	// If we get "organization context required" error, it means:
+	// 1. We're in SaaS mode (multi-tenant decorator is active)
+	// 2. There's no organization in context (because this is signup)
+	// 3. This must be the first user attempting to sign up
 	if err != nil {
+		if err.Error() == "organization context required" {
+			// This is the first user - no organizations exist yet
+			return true, nil
+		}
+		// Some other error
 		return false, err
 	}
 
@@ -839,25 +1099,18 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 // Helper methods
 
 // render renders a template with the given data
-func (h *Handler) render(c forge.Context, templateName string, data PageData) error {
+// render renders a gomponent node
+func (h *Handler) render(c forge.Context, node g.Node) error {
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+	return node.Render(c.Response())
+}
 
-	// Always set the current year
-	if data.Year == 0 {
-		data.Year = time.Now().Year()
-	}
-
-	// Always pass enabled plugins to templates
-	if data.EnabledPlugins == nil {
-		data.EnabledPlugins = h.enabledPlugins
-	}
-
-	err := h.templates.ExecuteTemplate(c.Response(), templateName, data)
-	if err != nil {
-		return fmt.Errorf("failed to render template %s: %w", templateName, err)
-	}
-
-	return nil
+// renderWithLayout renders content within the base layout
+func (h *Handler) renderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	pageData.Year = time.Now().Year()
+	pageData.EnabledPlugins = h.enabledPlugins
+	page := components.BaseLayout(pageData, content)
+	return h.render(c, page)
 }
 
 // renderError renders an error page
@@ -869,17 +1122,21 @@ func (h *Handler) renderError(c forge.Context, message string, err error) error 
 		errorMsg = fmt.Sprintf("%s: %v", message, err)
 	}
 
-	data := PageData{
-		Title:      "Error",
-		User:       user,
-		CSRFToken:  h.getCSRFToken(c),
-		ActivePage: "",
-		BasePath:   h.basePath,
-		Error:      errorMsg,
+	pageData := components.PageData{
+		Title:          "Error",
+		User:           user,
+		CSRFToken:      h.getCSRFToken(c),
+		ActivePage:     "",
+		BasePath:       h.basePath,
+		Error:          errorMsg,
+		Year:           time.Now().Year(),
+		EnabledPlugins: h.enabledPlugins,
 	}
 
+	content := pages.ErrorPage(errorMsg, h.basePath)
+	page := components.BaseLayout(pageData, content)
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
-	return h.templates.ExecuteTemplate(c.Response(), "error.html", data)
+	return h.render(c, page)
 }
 
 // getUserFromContext retrieves the user from the request context
@@ -910,6 +1167,37 @@ func (h *Handler) getCSRFToken(c forge.Context) string {
 	}
 
 	return token
+}
+
+// checkExistingSession checks if there's a valid session without middleware
+// Returns user if authenticated, nil otherwise
+func (h *Handler) checkExistingSession(c forge.Context) *user.User {
+	// Extract session token from cookie
+	cookie, err := c.Request().Cookie(sessionCookieName)
+	if err != nil || cookie == nil || cookie.Value == "" {
+		return nil
+	}
+
+	sessionToken := cookie.Value
+
+	// Validate session
+	sess, err := h.sessionSvc.FindByToken(c.Request().Context(), sessionToken)
+	if err != nil || sess == nil {
+		return nil
+	}
+
+	// Check if session is expired
+	if time.Now().After(sess.ExpiresAt) {
+		return nil
+	}
+
+	// Get user information
+	user, err := h.userSvc.FindByID(c.Request().Context(), sess.UserID)
+	if err != nil || user == nil {
+		return nil
+	}
+
+	return user
 }
 
 // getContentType returns the appropriate content type for file extensions

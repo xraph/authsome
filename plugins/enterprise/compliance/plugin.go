@@ -84,11 +84,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	hookRegistry := serviceRegistry.HookRegistry()
 
 	// Get user service (interface type)
-	userSvcInterface := serviceRegistry.UserService()
-	var userSvc *user.Service
-	if userSvcInterface != nil {
-		userSvc, _ = userSvcInterface.(*user.Service)
-	}
+	userSvc := serviceRegistry.UserService()
 
 	// Get organization service (interface type, may be nil if multi-tenancy plugin not loaded)
 	orgSvc := serviceRegistry.OrganizationService()
@@ -131,7 +127,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
 	}
-	
+
 	// Compliance profile management
 	complianceGroup := router.Group(p.config.Dashboard.Path)
 	{
@@ -142,51 +138,51 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/organizations/:orgId/profile", p.handler.GetOrganizationProfile)
 		complianceGroup.PUT("/profiles/:id", p.handler.UpdateProfile)
 		complianceGroup.DELETE("/profiles/:id", p.handler.DeleteProfile)
-		
+
 		// Status and Dashboard
 		complianceGroup.GET("/organizations/:orgId/status", p.handler.GetComplianceStatus)
 		complianceGroup.GET("/organizations/:orgId/dashboard", p.handler.GetDashboard)
-		
+
 		// Checks
 		complianceGroup.POST("/profiles/:profileId/checks", p.handler.RunCheck)
 		complianceGroup.GET("/profiles/:profileId/checks", p.handler.ListChecks)
 		complianceGroup.GET("/checks/:id", p.handler.GetCheck)
-		
+
 		// Violations
 		complianceGroup.GET("/organizations/:orgId/violations", p.handler.ListViolations)
 		complianceGroup.GET("/violations/:id", p.handler.GetViolation)
 		complianceGroup.PUT("/violations/:id/resolve", p.handler.ResolveViolation)
-		
+
 		// Reports
 		complianceGroup.POST("/organizations/:orgId/reports", p.handler.GenerateReport)
 		complianceGroup.GET("/organizations/:orgId/reports", p.handler.ListReports)
 		complianceGroup.GET("/reports/:id", p.handler.GetReport)
 		complianceGroup.GET("/reports/:id/download", p.handler.DownloadReport)
-		
+
 		// Evidence
 		complianceGroup.POST("/organizations/:orgId/evidence", p.handler.CreateEvidence)
 		complianceGroup.GET("/organizations/:orgId/evidence", p.handler.ListEvidence)
 		complianceGroup.GET("/evidence/:id", p.handler.GetEvidence)
 		complianceGroup.DELETE("/evidence/:id", p.handler.DeleteEvidence)
-		
+
 		// Policies
 		complianceGroup.POST("/organizations/:orgId/policies", p.handler.CreatePolicy)
 		complianceGroup.GET("/organizations/:orgId/policies", p.handler.ListPolicies)
 		complianceGroup.GET("/policies/:id", p.handler.GetPolicy)
 		complianceGroup.PUT("/policies/:id", p.handler.UpdatePolicy)
 		complianceGroup.DELETE("/policies/:id", p.handler.DeletePolicy)
-		
+
 		// Training
 		complianceGroup.POST("/organizations/:orgId/training", p.handler.CreateTraining)
 		complianceGroup.GET("/organizations/:orgId/training", p.handler.ListTraining)
 		complianceGroup.GET("/users/:userId/training", p.handler.GetUserTraining)
 		complianceGroup.PUT("/training/:id/complete", p.handler.CompleteTraining)
-		
+
 		// Templates
 		complianceGroup.GET("/templates", p.handler.ListTemplates)
 		complianceGroup.GET("/templates/:standard", p.handler.GetTemplate)
 	}
-	
+
 	return nil
 }
 
@@ -195,18 +191,18 @@ func (p *Plugin) registerHooks(hookRegistry *hooks.HookRegistry) error {
 	// Register user lifecycle hooks
 	hookRegistry.RegisterAfterUserCreate(p.onUserCreated)
 	hookRegistry.RegisterAfterUserUpdate(p.onUserUpdated)
-	
+
 	// Register auth hooks
 	hookRegistry.RegisterBeforeSignIn(p.onBeforeSignIn)
 	hookRegistry.RegisterAfterSignIn(p.onAfterSignIn)
-	
+
 	// Register session hooks
 	hookRegistry.RegisterAfterSessionCreate(p.onSessionCreated)
-	
+
 	// Organization hooks (when multi-tenancy plugin is available)
 	hookRegistry.RegisterAfterOrganizationCreate(p.onOrganizationCreated)
 	hookRegistry.RegisterAfterMemberAdd(p.onMemberAdded)
-	
+
 	return nil
 }
 
@@ -216,15 +212,15 @@ func (p *Plugin) onUserCreated(ctx context.Context, u *user.User) error {
 	if p.service == nil {
 		return nil
 	}
-	
+
 	// Check if MFA is required for this user's organization
 	// TODO: This will work properly when multi-tenancy plugin is available
 	// For now, we'll check against a default organization
-	
+
 	// Check for required training
 	// Create training records if compliance profile exists
 	// This is a best-effort check - don't block user creation
-	
+
 	return nil
 }
 
@@ -232,10 +228,10 @@ func (p *Plugin) onUserUpdated(ctx context.Context, u *user.User) error {
 	if p.service == nil {
 		return nil
 	}
-	
+
 	// Check if any compliance-related fields changed
 	// Log audit event for tracking
-	
+
 	return nil
 }
 
@@ -243,11 +239,11 @@ func (p *Plugin) onBeforeSignIn(ctx context.Context, req *auth.SignInRequest) er
 	if p.service == nil || p.policyEngine == nil {
 		return nil
 	}
-	
+
 	// Enforce password policy (if password is being validated)
 	// Check if MFA is required
 	// This hook can block sign-in if policies aren't met
-	
+
 	return nil
 }
 
@@ -255,10 +251,10 @@ func (p *Plugin) onAfterSignIn(ctx context.Context, response *auth.AuthResponse)
 	if p.service == nil {
 		return nil
 	}
-	
+
 	// Log successful sign-in for compliance audit trail
 	// Check session policies
-	
+
 	return nil
 }
 
@@ -266,10 +262,10 @@ func (p *Plugin) onSessionCreated(ctx context.Context, sess *session.Session) er
 	if p.service == nil || p.policyEngine == nil {
 		return nil
 	}
-	
+
 	// Enforce session policies (timeout, IP validation, etc.)
 	// Log session creation for audit trail
-	
+
 	return nil
 }
 
@@ -277,13 +273,13 @@ func (p *Plugin) onOrganizationCreated(ctx context.Context, org interface{}) err
 	if p.service == nil {
 		return nil
 	}
-	
+
 	// Extract organization ID from interface
 	// Create default compliance profile if configured
 	if p.config.DefaultStandard != "" {
 		// TODO: Create default profile when multi-tenancy is available
 	}
-	
+
 	return nil
 }
 
@@ -291,11 +287,11 @@ func (p *Plugin) onMemberAdded(ctx context.Context, member interface{}) error {
 	if p.service == nil {
 		return nil
 	}
-	
+
 	// When a user is added to an organization
 	// Check if they need compliance training
 	// Create required training records
-	
+
 	return nil
 }
 
@@ -327,4 +323,3 @@ func (p *Plugin) Service() *Service {
 func (p *Plugin) PolicyEngine() *PolicyEngine {
 	return p.policyEngine
 }
-

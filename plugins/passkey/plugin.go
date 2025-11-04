@@ -13,10 +13,11 @@ package passkey
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uptrace/bun"
-	"github.com/xraph/authsome/core/audit"
-	"github.com/xraph/authsome/core/auth"
+	audit2 "github.com/xraph/authsome/core/audit"
+	auth2 "github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
@@ -36,15 +37,26 @@ func NewPlugin() *Plugin { return &Plugin{} }
 func (p *Plugin) ID() string { return "passkey" }
 
 func (p *Plugin) Init(dep interface{}) error {
-	db, ok := dep.(*bun.DB)
-	if !ok {
-		return nil
+	// Type assert to auth instance with GetDB method
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	auth, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("passkey plugin requires auth instance with GetDB method")
+	}
+	
+	db := auth.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for passkey plugin")
+	}
+	
 	p.db = db
 	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
 	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
-	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
+	authSvc := auth2.NewService(userSvc, sessSvc, auth2.Config{})
+	auditSvc := audit2.NewService(repo.NewAuditRepository(db))
 	p.service = NewService(db, userSvc, authSvc, auditSvc, Config{RPID: "localhost", RPName: "Authsome"})
 	return nil
 }

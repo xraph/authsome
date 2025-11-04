@@ -25,6 +25,7 @@ func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandle
 }
 
 // RegisterOrganization registers organization routes under a base path
+// This is used when multitenancy plugin is NOT enabled
 func RegisterOrganization(router forge.Router, basePath string, h *handlers.OrganizationHandler) {
     org := router.Group(basePath)
     // Organizations
@@ -53,25 +54,32 @@ func RegisterOrganization(router forge.Router, basePath string, h *handlers.Orga
     // Invitations
     org.POST("/invitations", h.CreateInvitation)
 
-    // Policies
-    org.POST("/policies", h.CreatePolicy)
-    org.GET("/policies", h.GetPolicies)
-    org.POST("/policies/delete", h.DeletePolicy)
-    org.POST("/policies/update", h.UpdatePolicy)
-
     // Organization by ID endpoints (registered after specific paths to avoid conflicts)
     org.GET("/{id}", h.GetOrganizationByID)
     org.POST("/{id}/update", h.UpdateOrganizationByID)
     org.POST("/{id}/delete", h.DeleteOrganizationByID)
 
+    // RBAC routes
+    RegisterOrganizationRBAC(org, h)
+}
+
+// RegisterOrganizationRBAC registers RBAC-related routes (policies, roles, user roles)
+// This is used when multitenancy plugin IS enabled to supplement its routes
+func RegisterOrganizationRBAC(router forge.Router, h *handlers.OrganizationHandler) {
+    // Policies
+    router.POST("/policies", h.CreatePolicy)
+    router.GET("/policies", h.GetPolicies)
+    router.POST("/policies/delete", h.DeletePolicy)
+    router.POST("/policies/update", h.UpdatePolicy)
+
     // Roles
-    org.POST("/roles", h.CreateRole)
-    org.GET("/roles", h.GetRoles)
+    router.POST("/roles", h.CreateRole)
+    router.GET("/roles", h.GetRoles)
 
     // User role assignments
-    org.POST("/user_roles/assign", h.AssignUserRole)
-    org.POST("/user_roles/remove", h.RemoveUserRole)
-    org.GET("/user_roles", h.GetUserRoles)
+    router.POST("/user_roles/assign", h.AssignUserRole)
+    router.POST("/user_roles/remove", h.RemoveUserRole)
+    router.GET("/user_roles", h.GetUserRoles)
 }
 
 // RegisterAPIKey registers API key routes under a base path

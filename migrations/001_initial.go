@@ -144,6 +144,24 @@ func init() {
 			return err
 		}
 
+		// Create webhook events table
+		_, err = db.NewCreateTable().
+			Model((*schema.Event)(nil)).
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Create webhook deliveries table
+		_, err = db.NewCreateTable().
+			Model((*schema.Delivery)(nil)).
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
 		// Create form schemas table
 		_, err = db.NewCreateTable().
 			Model((*schema.FormSchema)(nil)).
@@ -202,6 +220,47 @@ func init() {
 			return err
 		}
 
+		// Create webhook indexes
+		_, err = db.NewCreateIndex().
+			Model((*schema.Event)(nil)).
+			Index("idx_webhook_events_org").
+			Column("organization_id").
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.NewCreateIndex().
+			Model((*schema.Delivery)(nil)).
+			Index("idx_webhook_deliveries_webhook_id").
+			Column("webhook_id").
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.NewCreateIndex().
+			Model((*schema.Delivery)(nil)).
+			Index("idx_webhook_deliveries_event_id").
+			Column("event_id").
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.NewCreateIndex().
+			Model((*schema.Delivery)(nil)).
+			Index("idx_webhook_deliveries_status").
+			Column("status", "next_retry_at").
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Rollback - drop all tables
@@ -209,6 +268,8 @@ func init() {
 			"team_members",
 			"teams",
 			"form_schemas",
+			"webhook_deliveries",
+			"webhook_events",
 			"webhooks",
 			"api_keys",
 			"policies",

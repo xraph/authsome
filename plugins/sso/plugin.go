@@ -2,6 +2,7 @@ package sso
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
@@ -21,12 +22,24 @@ func NewPlugin() *Plugin { return &Plugin{} }
 
 func (p *Plugin) ID() string { return "sso" }
 
-// Init accepts *bun.DB; current service uses in-memory provider registry
+// Init accepts auth instance with GetDB method
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		p.service = NewService(repo.NewSSOProviderRepository(db))
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	auth, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("sso plugin requires auth instance with GetDB method")
+	}
+	
+	db := auth.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for sso plugin")
+	}
+	
+	p.db = db
+	p.service = NewService(repo.NewSSOProviderRepository(db))
 	return nil
 }
 

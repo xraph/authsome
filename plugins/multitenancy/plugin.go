@@ -137,9 +137,9 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Create services
 	p.orgService = organization.NewService(orgConfig, orgRepo, memberRepo, teamRepo, invitationRepo)
 
-	// Config service can be created if needed for org-specific config management
-	// For now, use Forge's ConfigManager directly via forgeApp.Config()
-	// p.configService = config.NewService(configManager)
+	// Create config service for org-specific config management
+	// This wraps Forge's ConfigManager to provide multi-tenant configuration
+	p.configService = config.NewService(configManager)
 
 	// Create handlers
 	p.orgHandler = handlers.NewOrganizationHandler(p.orgService)
@@ -284,7 +284,31 @@ func (p *Plugin) Migrate() error {
 
 // handleUserCreated is called when a user is created
 func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
-	// Add user to default organization
+	// Check if this is the first user (no organizations exist yet)
+	orgs, err := p.orgService.ListOrganizations(ctx, 1, 0)
+	if err != nil || len(orgs) == 0 {
+		// This is the first user - create the platform organization
+		fmt.Printf("[MultiTenancy] Creating platform organization for first user: %s\n", u.Email)
+		
+		platformSlug := p.config.PlatformOrganizationID
+		if platformSlug == "" {
+			platformSlug = "platform"
+		}
+		
+		platformOrg, err := p.orgService.CreateOrganization(ctx, &organization.CreateOrganizationRequest{
+			Name: "Platform Organization",
+			Slug: platformSlug,
+		}, u.ID.String())
+		if err != nil {
+			return fmt.Errorf("failed to create platform organization: %w", err)
+		}
+		
+		fmt.Printf("[MultiTenancy] ✅ Platform organization created: %s (ID: %s)\n", platformOrg.Name, platformOrg.ID)
+		fmt.Printf("[MultiTenancy] ✅ First user %s is now platform owner\n", u.Email)
+		return nil
+	}
+	
+	// Not the first user - add to default organization
 	defaultOrg, err := p.orgService.GetDefaultOrganization(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get default organization: %w", err)

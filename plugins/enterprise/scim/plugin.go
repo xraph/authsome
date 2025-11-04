@@ -8,7 +8,6 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
-	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
@@ -29,8 +28,8 @@ type Plugin struct {
 	
 	// Dependencies
 	db             *bun.DB
-	userService    *user.Service
-	orgService     *organization.Service
+	userService    user.ServiceInterface  // Use interface to support decorated services
+	orgService     interface{}            // Use interface{} to support both core and multitenancy org services
 	auditService   *audit.Service
 	webhookService *webhook.Service
 }
@@ -80,28 +79,20 @@ func (p *Plugin) Init(auth interface{}) error {
 	
 	p.db = srGetter.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available")
+		return fmt.Errorf("database not available for SCIM plugin - ensure database is properly initialized before authsome")
 	}
 	
 	// Get required services from registry
-	userSvcInterface := serviceRegistry.UserService()
-	if userSvcInterface == nil {
+	p.userService = serviceRegistry.UserService()
+	if p.userService == nil {
 		return fmt.Errorf("user service not found in registry")
-	}
-	var convOk bool
-	p.userService, convOk = userSvcInterface.(*user.Service)
-	if !convOk {
-		return fmt.Errorf("invalid user service type")
 	}
 	
 	// Get organization service (required for multi-tenancy)
-	orgSvcInterface := serviceRegistry.OrganizationService()
-	if orgSvcInterface == nil {
+	// Note: Can be either core/organization.Service or multitenancy/organization.Service
+	p.orgService = serviceRegistry.OrganizationService()
+	if p.orgService == nil {
 		return fmt.Errorf("organization service not found in registry")
-	}
-	p.orgService, convOk = orgSvcInterface.(*organization.Service)
-	if !convOk {
-		return fmt.Errorf("invalid organization service type")
 	}
 	
 	// Get audit service

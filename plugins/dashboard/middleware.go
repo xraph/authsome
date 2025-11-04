@@ -88,37 +88,100 @@ var globalRateLimiter = newRateLimiter(100, time.Minute)
 func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
+			fmt.Printf("[Dashboard] RequireAuth: Checking authentication for path: %s\n", c.Request().URL.Path)
+			
 			// Extract session token from cookie
 			cookie, err := c.Request().Cookie(sessionCookieName)
 			if err != nil || cookie == nil || cookie.Value == "" {
+				fmt.Printf("[Dashboard] RequireAuth: No session cookie found\n")
 				// No session cookie, redirect to dashboard login
 				loginURL := p.basePath + "/dashboard/login?redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
 			sessionToken := cookie.Value
+			fmt.Printf("[Dashboard] RequireAuth: Found session token: %s...\n", sessionToken[:min(10, len(sessionToken))])
+			
 			// Validate session
 			sess, err := p.sessionSvc.FindByToken(c.Request().Context(), sessionToken)
-			if err != nil || sess == nil {
-				// Invalid session, redirect to dashboard login
-				loginURL := p.basePath + "/dashboard/login?redirect=" + c.Request().URL.Path
+			if err != nil {
+				fmt.Printf("[Dashboard] RequireAuth: Error finding session: %v\n", err)
+				// Invalid session, clear cookie and redirect
+				http.SetCookie(c.Response(), &http.Cookie{
+					Name:     sessionCookieName,
+					Value:    "",
+					Path:     "/",
+					MaxAge:   -1,
+					HttpOnly: true,
+				})
+				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
+				return c.Redirect(http.StatusFound, loginURL)
+			}
+			
+			if sess == nil {
+				fmt.Printf("[Dashboard] RequireAuth: Session not found\n")
+				// Session not found, clear cookie and redirect
+				http.SetCookie(c.Response(), &http.Cookie{
+					Name:     sessionCookieName,
+					Value:    "",
+					Path:     "/",
+					MaxAge:   -1,
+					HttpOnly: true,
+				})
+				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
 			// Check if session is expired
 			if time.Now().After(sess.ExpiresAt) {
-				loginURL := p.basePath + "/dashboard/login?redirect=" + c.Request().URL.Path
+				fmt.Printf("[Dashboard] RequireAuth: Session expired at %v\n", sess.ExpiresAt)
+				// Expired session, clear cookie and redirect
+				http.SetCookie(c.Response(), &http.Cookie{
+					Name:     sessionCookieName,
+					Value:    "",
+					Path:     "/",
+					MaxAge:   -1,
+					HttpOnly: true,
+				})
+				loginURL := p.basePath + "/dashboard/login?error=session_expired&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
+
+			fmt.Printf("[Dashboard] RequireAuth: Session valid, fetching user: %s\n", sess.UserID)
 
 			// Get user information
 			user, err := p.userSvc.FindByID(c.Request().Context(), sess.UserID)
-			if err != nil || user == nil {
-				loginURL := p.basePath + "/dashboard/login?redirect=" + c.Request().URL.Path
+			if err != nil {
+				fmt.Printf("[Dashboard] RequireAuth: Error finding user: %v\n", err)
+				// User not found, clear session and redirect
+				http.SetCookie(c.Response(), &http.Cookie{
+					Name:     sessionCookieName,
+					Value:    "",
+					Path:     "/",
+					MaxAge:   -1,
+					HttpOnly: true,
+				})
+				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
-			// Store user and session in context
+			if user == nil {
+				fmt.Printf("[Dashboard] RequireAuth: User is nil\n")
+				// User is nil, clear session and redirect
+				http.SetCookie(c.Response(), &http.Cookie{
+					Name:     sessionCookieName,
+					Value:    "",
+					Path:     "/",
+					MaxAge:   -1,
+					HttpOnly: true,
+				})
+				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
+				return c.Redirect(http.StatusFound, loginURL)
+			}
+
+			fmt.Printf("[Dashboard] RequireAuth: User authenticated: %s (%s)\n", user.Email, user.ID)
+
+			// Store user and session in context ONLY if all checks passed
 			ctx := context.WithValue(c.Request().Context(), "user", user)
 			ctx = context.WithValue(ctx, "session", sess)
 			ctx = context.WithValue(ctx, "authenticated", true)
@@ -131,13 +194,24 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 	}
 }
 
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // RequireAdmin middleware ensures the user has admin role
 func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
+			fmt.Printf("[Dashboard] RequireAdmin middleware called for path: %s\n", c.Request().URL.Path)
+			
 			// Get user from context (set by RequireAuth)
 			userVal := c.Request().Context().Value("user")
 			if userVal == nil {
+				fmt.Printf("[Dashboard] No user in context, redirecting to login\n")
 				return c.Redirect(http.StatusFound, p.basePath+"/dashboard/login?error=auth_required")
 			}
 

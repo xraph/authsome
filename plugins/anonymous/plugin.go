@@ -1,6 +1,8 @@
 package anonymous
 
 import (
+	"fmt"
+
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
@@ -18,14 +20,26 @@ func NewPlugin() *Plugin { return &Plugin{} }
 
 func (p *Plugin) ID() string { return "anonymous" }
 
-// Init wires up repository and services for anonymous signin
+// Init accepts auth instance with GetDB method
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		users := repo.NewUserRepository(db)
-		sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
-		p.service = NewService(users, sessionSvc)
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("anonymous plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for anonymous plugin")
+	}
+	
+	p.db = db
+	users := repo.NewUserRepository(db)
+	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	p.service = NewService(users, sessionSvc)
 	return nil
 }
 

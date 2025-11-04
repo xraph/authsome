@@ -3,28 +3,34 @@ package dashboard
 import (
 	"embed"
 	"fmt"
-	"html/template"
 
+	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/plugins"
+	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
 
-//go:embed templates/* static/css/* static/js/*.js
+//go:embed static/css/* static/js/*.js
 var assets embed.FS
 
 // Plugin implements the dashboard plugin for AuthSome
 type Plugin struct {
 	handler        *Handler
-	templates      *template.Template
-	userSvc        *user.Service
-	sessionSvc     *session.Service
+	userSvc        user.ServiceInterface
+	sessionSvc     session.ServiceInterface
 	auditSvc       *audit.Service
 	rbacSvc        *rbac.Service
+	apikeyService  *apikey.Service
+	orgService     *organization.Service
+	isSaaSMode     bool
 	permChecker    *PermissionChecker
 	csrfProtector  *CSRFProtector
 	basePath       string
@@ -43,81 +49,66 @@ func (p *Plugin) ID() string {
 
 // Init initializes the plugin with dependencies
 func (p *Plugin) Init(dep interface{}) error {
-	// Try to extract service registry using reflection-like approach
-	type serviceRegistryGetter interface {
+	// Try to extract required interfaces from auth instance
+	type authInstanceInterface interface {
+		GetDB() *bun.DB
 		GetServiceRegistry() *registry.ServiceRegistry
-	}
-	type basePathGetter interface {
 		GetBasePath() string
-	}
-	type pluginRegistryGetter interface {
-		GetPluginRegistry() interface{}
+		GetPluginRegistry() *plugins.Registry
 	}
 
-	// Get service registry
-	srGetter, ok := dep.(serviceRegistryGetter)
+	authInstance, ok := dep.(authInstanceInterface)
 	if !ok {
-		return fmt.Errorf("dashboard plugin requires auth instance with GetServiceRegistry")
+		return fmt.Errorf("dashboard plugin requires auth instance with GetDB, GetServiceRegistry, GetBasePath, and GetPluginRegistry methods")
 	}
 
-	serviceRegistry := srGetter.GetServiceRegistry()
+	serviceRegistry := authInstance.GetServiceRegistry()
 	if serviceRegistry == nil {
 		return fmt.Errorf("service registry not available")
 	}
 
+	// Get database for repository initialization
+	db := authInstance.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available")
+	}
+
 	// Get base path (e.g., "/api/auth")
-	if bpGetter, ok := dep.(basePathGetter); ok {
-		p.basePath = bpGetter.GetBasePath()
-		if p.basePath == "" {
-			p.basePath = ""
-		}
+	p.basePath = authInstance.GetBasePath()
+	if p.basePath == "" {
+		p.basePath = ""
 	}
 
 	// Get plugin registry to check which plugins are enabled
+	fmt.Printf("[Dashboard] ========== PLUGIN DETECTION START ==========\n")
 	p.enabledPlugins = make(map[string]bool)
-	if prGetter, ok := dep.(pluginRegistryGetter); ok {
-		pluginRegistry := prGetter.GetPluginRegistry()
 
-		// Build map of enabled plugins for easy template access
-		if pluginRegistry != nil {
-			// Use type assertion to access List() method
-			type pluginRegistryInterface interface {
-				List() []interface{}
-			}
-			if reg, ok := pluginRegistry.(pluginRegistryInterface); ok {
-				plugins := reg.List()
-				for _, plugin := range plugins {
-					// Use type assertion to get ID
-					type pluginIDInterface interface {
-						ID() string
-					}
-					if plg, ok := plugin.(pluginIDInterface); ok {
-						p.enabledPlugins[plg.ID()] = true
-					}
-				}
-			}
+	pluginRegistry := authInstance.GetPluginRegistry()
+	if pluginRegistry != nil {
+		pluginList := pluginRegistry.List()
+		fmt.Printf("[Dashboard] ✅ Plugin registry found, detected %d plugins\n", len(pluginList))
+		for _, plugin := range pluginList {
+			pluginID := plugin.ID()
+			p.enabledPlugins[pluginID] = true
+			fmt.Printf("[Dashboard]    ✓ Enabled plugin: %s\n", pluginID)
 		}
+	} else {
+		fmt.Printf("[Dashboard] ⚠️  Plugin registry is nil\n")
 	}
 
-	fmt.Printf("[Dashboard] Detected %d enabled plugins\n", len(p.enabledPlugins))
+	fmt.Printf("[Dashboard] Final enabled plugins count: %d\n", len(p.enabledPlugins))
+	fmt.Printf("[Dashboard] Final enabled plugins map: %v\n", p.enabledPlugins)
+	fmt.Printf("[Dashboard] ========== PLUGIN DETECTION END ==========\n")
 
 	// Get required services from registry using specific getters
-	userSvcInterface := serviceRegistry.UserService()
-	if userSvcInterface == nil {
+	p.userSvc = serviceRegistry.UserService()
+	if p.userSvc == nil {
 		return fmt.Errorf("user service not found in registry")
 	}
-	p.userSvc, ok = userSvcInterface.(*user.Service)
-	if !ok {
-		return fmt.Errorf("invalid user service type")
-	}
 
-	sessionSvcInterface := serviceRegistry.SessionService()
-	if sessionSvcInterface == nil {
+	p.sessionSvc = serviceRegistry.SessionService()
+	if p.sessionSvc == nil {
 		return fmt.Errorf("session service not found in registry")
-	}
-	p.sessionSvc, ok = sessionSvcInterface.(*session.Service)
-	if !ok {
-		return fmt.Errorf("invalid session service type")
 	}
 
 	p.auditSvc = serviceRegistry.AuditService()
@@ -130,17 +121,47 @@ func (p *Plugin) Init(dep interface{}) error {
 		return fmt.Errorf("rbac service not found in registry")
 	}
 
-	// Parse templates from embedded filesystem
-	tmpl, err := template.New("").Funcs(templateFuncs()).ParseFS(assets, "templates/*.html")
-	if err != nil {
-		return fmt.Errorf("failed to parse templates: %w", err)
+	// Get API Key service if plugin is enabled
+	p.apikeyService = serviceRegistry.APIKeyService()
+
+	// Get Organization service and check if we're in SaaS mode
+	if orgSvcInterface := serviceRegistry.OrganizationService(); orgSvcInterface != nil {
+		if orgSvc, ok := orgSvcInterface.(*organization.Service); ok {
+			p.orgService = orgSvc
+			p.isSaaSMode = serviceRegistry.IsMultiTenant()
+		}
 	}
-	p.templates = tmpl
 
-	// Initialize handler with services, templates, base path, and enabled plugins
-	p.handler = NewHandler(p.templates, assets, p.userSvc, p.sessionSvc, p.auditSvc, p.rbacSvc, p.basePath, p.enabledPlugins)
+	// Initialize Permission Checker
+	userRoleRepo := repository.NewUserRoleRepository(db)
+	p.permChecker = NewPermissionChecker(p.rbacSvc, userRoleRepo)
+	fmt.Println("[Dashboard] ✅ Permission checker initialized")
 
-	fmt.Println("[Dashboard] Initialized with RBAC and CSRF protection")
+	// Initialize CSRF Protector
+	csrfProtector, err := NewCSRFProtector()
+	if err != nil {
+		return fmt.Errorf("failed to initialize CSRF protector: %w", err)
+	}
+	p.csrfProtector = csrfProtector
+	fmt.Println("[Dashboard] ✅ CSRF protector initialized")
+
+	// Templates no longer needed - using gomponents
+	// Initialize handler with services, base path, and enabled plugins
+	p.handler = NewHandler(
+		assets,
+		p.userSvc,
+		p.sessionSvc,
+		p.auditSvc,
+		p.rbacSvc,
+		p.apikeyService,
+		p.orgService,
+		db,
+		p.isSaaSMode,
+		p.basePath,
+		p.enabledPlugins,
+	)
+
+	fmt.Println("[Dashboard] ✅ Handler initialized with RBAC and CSRF protection")
 
 	return nil
 }
@@ -173,6 +194,8 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		{"POST", "/dashboard/login", p.handler.HandleLogin},
 		{"GET", "/dashboard/signup", p.handler.ServeSignup},
 		{"POST", "/dashboard/signup", p.handler.HandleSignup},
+		{"POST", "/dashboard/logout", p.handler.HandleLogout},
+		{"GET", "/dashboard/logout", p.handler.HandleLogout}, // Support GET for convenience
 	}
 
 	for _, route := range publicRoutes {
@@ -235,48 +258,4 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 func (p *Plugin) Migrate() error {
 	// Dashboard plugin doesn't need database migrations
 	return nil
-}
-
-// templateFuncs returns template helper functions
-func templateFuncs() template.FuncMap {
-	return template.FuncMap{
-		"inc": func(i int) int {
-			return i + 1
-		},
-		"dec": func(i int) int {
-			return i - 1
-		},
-		"mul": func(a, b int) int {
-			return a * b
-		},
-		"len": func(s interface{}) int {
-			switch v := s.(type) {
-			case []interface{}:
-				return len(v)
-			case []string:
-				return len(v)
-			default:
-				return 0
-			}
-		},
-		"slice": func(s string, start, end int) string {
-			if start < 0 || start >= len(s) {
-				return ""
-			}
-			if end > len(s) {
-				end = len(s)
-			}
-			return s[start:end]
-		},
-		"upper": func(s string) string {
-			if len(s) == 0 {
-				return ""
-			}
-			return string(s[0] - 32)
-		},
-		"formatDate": func(t interface{}) string {
-			// TODO: Implement proper date formatting
-			return fmt.Sprintf("%v", t)
-		},
-	}
 }

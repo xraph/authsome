@@ -298,8 +298,32 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	routes.Register(router, basePath, h)
 	routes.RegisterAudit(router, basePath, audH)
 
-	// Mount organization routes under a fixed base
-	routes.RegisterOrganization(router, "/api/orgs", orgH)
+	// Check if multitenancy plugin is enabled
+	hasMultitenancyPlugin := false
+	if a.pluginRegistry != nil {
+		for _, p := range a.pluginRegistry.List() {
+			if p.ID() == "multitenancy" {
+				hasMultitenancyPlugin = true
+				break
+			}
+		}
+	}
+
+	// Only register built-in organization routes if multitenancy plugin is NOT enabled
+	// This prevents route duplication and allows the plugin to fully control org routes
+	if !hasMultitenancyPlugin {
+		// Mount organization routes under basePath (not hardcoded)
+		routes.RegisterOrganization(router, basePath+"/organizations", orgH)
+		fmt.Println("[AuthSome] Registered built-in organization routes (multitenancy plugin not detected)")
+	} else {
+		fmt.Println("[AuthSome] Skipping built-in organization routes (multitenancy plugin detected)")
+
+		// Register RBAC-related routes that the multitenancy plugin doesn't handle
+		// These are still needed even with the multitenancy plugin
+		rbacGroup := router.Group(basePath + "/organizations")
+		routes.RegisterOrganizationRBAC(rbacGroup, orgH)
+		fmt.Println("[AuthSome] Registered organization RBAC routes")
+	}
 
 	// Phase 10 routes - create a scoped group for these routes
 	authGroup := router.Group(basePath)
@@ -532,13 +556,16 @@ func (a *Auth) resolveDatabase() error {
 
 		sdb, ok := dbInterface.(*database.SQLDatabase)
 		if !ok {
-			return fmt.Errorf("resolved database is not *database.SQLDatabase")
+			return fmt.Errorf("resolved database is not *database.SQLDatabase, got %T", dbInterface)
 		}
 
 		db := sdb.Bun()
-		fmt.Println("[AuthSome] Resolved database from Forge DI container", db)
+		if db == nil {
+			return fmt.Errorf("forge database extension returned nil *bun.DB - ensure database extension is properly initialized before authsome")
+		}
+
 		a.db = db
-		fmt.Println("[AuthSome] Resolved database from Forge DI container")
+		fmt.Println("[AuthSome] ✅ Successfully resolved database from Forge DI container")
 		return nil
 	}
 

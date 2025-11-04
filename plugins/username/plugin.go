@@ -1,6 +1,8 @@
 package username
 
 import (
+	"fmt"
+
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
@@ -21,16 +23,28 @@ func NewPlugin() *Plugin { return &Plugin{} }
 
 func (p *Plugin) ID() string { return "username" }
 
-// Init allows wiring dependencies later; noop for initial scaffold
+// Init accepts auth instance with GetDB method
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		// Construct local core services
-		userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
-		sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
-		authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
-		p.service = NewService(userSvc, authSvc)
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("username plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for username plugin")
+	}
+	
+	p.db = db
+	// Construct local core services
+	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
+	p.service = NewService(userSvc, authSvc)
 	return nil
 }
 

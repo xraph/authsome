@@ -2,6 +2,7 @@ package oidcprovider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
@@ -23,40 +24,52 @@ func NewPlugin() *Plugin { return &Plugin{} }
 
 func (p *Plugin) ID() string { return "oidcprovider" }
 
-// Init accepts *bun.DB and wires up all required repositories and services
+// Init accepts auth instance with GetDB method
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-
-		// Create repositories
-		clientRepo := repo.NewOAuthClientRepository(db)
-		codeRepo := repo.NewAuthorizationCodeRepository(db)
-		tokenRepo := repo.NewOAuthTokenRepository(db)
-		userRepo := repo.NewUserRepository(db)
-
-		// Create core services
-		sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
-		userSvc := user.NewService(userRepo, user.Config{}, nil)
-
-		// Create default config (TODO: integrate with ConfigManager)
-		config := Config{
-			Issuer: "http://localhost:3001", // Default issuer
-		}
-		config.Keys.RotationInterval = "24h"
-		config.Keys.KeyLifetime = "168h" // 7 days
-		config.Tokens.AccessTokenExpiry = "1h"
-		config.Tokens.IDTokenExpiry = "1h"
-		config.Tokens.RefreshTokenExpiry = "720h" // 30 days
-
-		// Create OIDC Provider service with all dependencies
-		p.service = NewServiceWithRepo(clientRepo, config)
-		p.service.SetRepositories(clientRepo, codeRepo, tokenRepo)
-		p.service.SetSessionService(sessionSvc)
-		p.service.SetUserService(userSvc)
-
-		// Start automatic key rotation
-		p.service.StartKeyRotation()
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("oidcprovider plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for oidcprovider plugin")
+	}
+	
+	p.db = db
+
+	// Create repositories
+	clientRepo := repo.NewOAuthClientRepository(db)
+	codeRepo := repo.NewAuthorizationCodeRepository(db)
+	tokenRepo := repo.NewOAuthTokenRepository(db)
+	userRepo := repo.NewUserRepository(db)
+
+	// Create core services
+	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	userSvc := user.NewService(userRepo, user.Config{}, nil)
+
+	// Create default config (TODO: integrate with ConfigManager)
+	config := Config{
+		Issuer: "http://localhost:3001", // Default issuer
+	}
+	config.Keys.RotationInterval = "24h"
+	config.Keys.KeyLifetime = "168h" // 7 days
+	config.Tokens.AccessTokenExpiry = "1h"
+	config.Tokens.IDTokenExpiry = "1h"
+	config.Tokens.RefreshTokenExpiry = "720h" // 30 days
+
+	// Create OIDC Provider service with all dependencies
+	p.service = NewServiceWithRepo(clientRepo, config)
+	p.service.SetRepositories(clientRepo, codeRepo, tokenRepo)
+	p.service.SetSessionService(sessionSvc)
+	p.service.SetUserService(userSvc)
+
+	// Start automatic key rotation
+	p.service.StartKeyRotation()
 	return nil
 }
 

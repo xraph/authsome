@@ -29,7 +29,27 @@ func NewMultiTenantUserService(userService user.ServiceInterface, orgService *or
 func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
+	
+	// Special case: First user creation (system owner)
+	// If no organization context is provided, check if this is the very first user
+	// The first user will create the platform organization via hooks
 	if orgID == "" {
+		// Check if there are any organizations yet
+		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
+		if err != nil || len(orgs) == 0 {
+			// No organizations exist yet - this is the first user (system owner)
+			// Create user without organization membership
+			// The post-creation hook will set up their organization
+			newUser, err := s.userService.Create(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+			
+			fmt.Printf("[MultiTenancy] First user created (system owner): %s\n", newUser.Email)
+			return newUser, nil
+		}
+		
+		// Organizations exist but no context provided - error
 		return nil, fmt.Errorf("organization context required")
 	}
 
@@ -137,7 +157,20 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *user.UpdateUserRequest) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
+	
+	// Special case: First user update (e.g., email verification during signup)
+	// If no organization context and no organizations exist yet, allow the update
 	if orgID == "" {
+		// Check if there are any organizations yet
+		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
+		if err != nil || len(orgs) == 0 {
+			// No organizations exist yet - this is the first user
+			// Allow update without organization check (e.g., for email verification)
+			fmt.Printf("[MultiTenancy] First user update allowed without org context: %s\n", u.Email)
+			return s.userService.Update(ctx, u, req)
+		}
+		
+		// Organizations exist but no context provided - error
 		return nil, fmt.Errorf("organization context required")
 	}
 
@@ -226,6 +259,48 @@ func (s *MultiTenantUserService) GetOrganizationContext(ctx context.Context) str
 // SetOrganizationContext sets the organization ID in context
 func (s *MultiTenantUserService) SetOrganizationContext(ctx context.Context, orgID string) context.Context {
 	return context.WithValue(ctx, interfaces.OrganizationContextKey, orgID)
+}
+
+// Search searches for users within organization context
+func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*user.User, int, error) {
+	// Get organization context
+	orgID := s.getOrganizationFromContext(ctx)
+	if orgID == "" {
+		return nil, 0, fmt.Errorf("organization context required")
+	}
+
+	// Search users using original service
+	users, _, err := s.userService.Search(ctx, query, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Filter users by organization membership
+	filteredUsers := make([]*user.User, 0)
+	for _, u := range users {
+		isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID.String())
+		if err != nil {
+			continue // Skip on error
+		}
+		if isMember {
+			filteredUsers = append(filteredUsers, u)
+		}
+	}
+
+	return filteredUsers, len(filteredUsers), nil
+}
+
+// CountCreatedToday counts users created today within organization context
+func (s *MultiTenantUserService) CountCreatedToday(ctx context.Context) (int, error) {
+	// Get organization context
+	orgID := s.getOrganizationFromContext(ctx)
+	if orgID == "" {
+		return 0, fmt.Errorf("organization context required")
+	}
+
+	// For now, delegate to the original service
+	// In a full implementation, this should filter by organization
+	return s.userService.CountCreatedToday(ctx)
 }
 
 // getOrganizationFromContext extracts organization ID from context

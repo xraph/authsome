@@ -38,50 +38,54 @@ func (p *Plugin) ID() string {
 
 // Init initializes the plugin with dependencies
 func (p *Plugin) Init(dep interface{}) error {
-	if db, ok := dep.(*bun.DB); ok && db != nil {
-		p.db = db
-		
-		// Get forge config if available
-		if cfg, ok := dep.(forge.ConfigManager); ok {
-			p.forgeConfig = cfg
-			if err := cfg.Bind("auth.notification", &p.config); err != nil {
-				// Use defaults if config binding fails
-				p.config = DefaultConfig()
-			}
-		} else {
-			p.config = DefaultConfig()
-		}
-		
-		// Initialize repositories
-		notificationRepo := repo.NewNotificationRepository(db)
-		auditSvc := audit.NewService(repo.NewAuditRepository(db))
-		
-		// Create template engine
-		templateEngine := NewTemplateEngine()
-		
-		// Initialize core notification service
-		notificationConfig := notification.Config{
-			DefaultProvider: make(map[notification.NotificationType]string),
-			RetryAttempts:   p.config.RetryAttempts,
-			RetryDelay:      p.config.RetryDelay,
-			CleanupAfter:    p.config.CleanupAfter,
-		}
-		
-		p.service = notification.NewService(
-			notificationRepo,
-			templateEngine,
-			auditSvc,
-			notificationConfig,
-		)
-		
-		// Register providers based on configuration
-		if err := p.registerProviders(); err != nil {
-			return fmt.Errorf("failed to register providers: %w", err)
-		}
-		
-		// Initialize template service
-		p.templateSvc = NewTemplateService(p.service, notificationRepo, p.config)
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("notification plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for notification plugin")
+	}
+	
+	p.db = db
+	
+	// Use default config
+	p.config = DefaultConfig()
+	
+	// Initialize repositories
+	notificationRepo := repo.NewNotificationRepository(db)
+	auditSvc := audit.NewService(repo.NewAuditRepository(db))
+	
+	// Create template engine
+	templateEngine := NewTemplateEngine()
+	
+	// Initialize core notification service
+	notificationConfig := notification.Config{
+		DefaultProvider: make(map[notification.NotificationType]string),
+		RetryAttempts:   p.config.RetryAttempts,
+		RetryDelay:      p.config.RetryDelay,
+		CleanupAfter:    p.config.CleanupAfter,
+	}
+	
+	p.service = notification.NewService(
+		notificationRepo,
+		templateEngine,
+		auditSvc,
+		notificationConfig,
+	)
+	
+	// Register providers based on configuration
+	if err := p.registerProviders(); err != nil {
+		return fmt.Errorf("failed to register providers: %w", err)
+	}
+	
+	// Initialize template service
+	p.templateSvc = NewTemplateService(p.service, notificationRepo, p.config)
 	
 	return nil
 }

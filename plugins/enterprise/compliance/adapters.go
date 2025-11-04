@@ -73,11 +73,11 @@ func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, orgID string) (*
 
 // UserServiceAdapter adapts AuthSome's user service to compliance service expectations
 type UserServiceAdapter struct {
-	svc *user.Service
+	svc user.ServiceInterface  // Use interface to support decorated services
 }
 
 // NewUserServiceAdapter creates a new user service adapter
-func NewUserServiceAdapter(svc *user.Service) *UserServiceAdapter {
+func NewUserServiceAdapter(svc user.ServiceInterface) *UserServiceAdapter {
 	return &UserServiceAdapter{svc: svc}
 }
 

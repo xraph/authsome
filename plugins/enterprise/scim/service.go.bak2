@@ -495,35 +495,37 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID string) (*SCIMGroup, e
 	}
 	
 	// Get team details
-	team, err := s.getOrgService().GetTeam(ctx, id)
+	team, err := s.getOrgService().FindTeamByID(ctx, teamXID)
 	if err != nil {
 		return nil, fmt.Errorf("team not found: %w", err)
 	}
 	
 	// Get team members
-	members, _ := s.getOrgService().ListTeamMembers(ctx, id)
+	members, _ := s.getOrgService().ListTeamMembers(ctx, teamXID, 1000, 0)
 	
 	// Build SCIM group
 	scimGroup := &SCIMGroup{
 		Schemas:     []string{SchemaGroup},
-		ID:          team.ID,
+		ID:          team.ID.String(),
 		ExternalID:  mapping.SCIMGroupID,
 		DisplayName: team.Name,
 		Meta: &Meta{
 			ResourceType: "Group",
 			Created:      team.CreatedAt,
 			LastModified: team.UpdatedAt,
-			Location:     fmt.Sprintf("/scim/v2/Groups/%s", team.ID),
+			Location:     fmt.Sprintf("/scim/v2/Groups/%s", team.ID.String()),
 		},
 	}
 	
 	// Add members
-	for _, member := range members {
-		// Members in team are already Member objects with UserID
-		scimGroup.Members = append(scimGroup.Members, MemberReference{
-			Value:   member.UserID,
-			Display: "", // Would need to fetch user details
-		})
+	for _, tm := range members {
+		member, _ := s.getOrgService().GetMember(ctx, tm.MemberID)
+		if member != nil {
+			scimGroup.Members = append(scimGroup.Members, MemberReference{
+				Value:   member.UserID,
+				Display: "", // Would need to fetch user details
+			})
+		}
 	}
 	
 	return scimGroup, nil
@@ -535,7 +537,12 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID string, patch *Patc
 		return nil, fmt.Errorf("group synchronization is disabled")
 	}
 	
-	team, err := s.getOrgService().GetTeam(ctx, id)
+	teamXID, err := xid.FromString(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid group ID: %w", err)
+	}
+	
+	team, err := s.getOrgService().FindTeamByID(ctx, teamXID)
 	if err != nil {
 		return nil, fmt.Errorf("team not found: %w", err)
 	}
@@ -548,12 +555,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID string, patch *Patc
 	}
 	
 	// Update team
-	updateReq := &organization.UpdateTeamRequest{
-		Name:        &team.Name,
-		Description: team.Description,
-		Metadata:    team.Metadata,
-	}
-	if _, err := s.getOrgService().UpdateTeam(ctx, id, updateReq); err != nil {
+	if err := s.getOrgService().UpdateTeam(ctx, team); err != nil {
 		return nil, fmt.Errorf("failed to update team: %w", err)
 	}
 	
@@ -566,12 +568,21 @@ func (s *Service) ReplaceGroup(ctx context.Context, id, orgID string, scimGroup 
 		return nil, fmt.Errorf("group synchronization is disabled")
 	}
 	
-	// Update team properties
-	updateReq := &organization.UpdateTeamRequest{
-		Name: &scimGroup.DisplayName,
+	teamXID, err := xid.FromString(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid group ID: %w", err)
 	}
 	
-	if _, err := s.getOrgService().UpdateTeam(ctx, id, updateReq); err != nil {
+	team, err := s.getOrgService().FindTeamByID(ctx, teamXID)
+	if err != nil {
+		return nil, fmt.Errorf("team not found: %w", err)
+	}
+	
+	// Update team properties
+	team.Name = scimGroup.DisplayName
+	team.UpdatedAt = time.Now()
+	
+	if err := s.getOrgService().UpdateTeam(ctx, team); err != nil {
 		return nil, fmt.Errorf("failed to update team: %w", err)
 	}
 	
@@ -603,7 +614,7 @@ func (s *Service) DeleteGroup(ctx context.Context, id, orgID string) error {
 	}
 	
 	// Delete team
-	if err := s.getOrgService().DeleteTeam(ctx, id); err != nil {
+	if err := s.getOrgService().DeleteTeam(ctx, teamXID); err != nil {
 		return fmt.Errorf("failed to delete team: %w", err)
 	}
 	
@@ -622,13 +633,21 @@ func (s *Service) ListGroups(ctx context.Context, orgID string, filter string, s
 		}, nil
 	}
 	
+	orgXID, _ := xid.FromString(orgID)
+	
+	// Get total count
+	total, err := s.getOrgService().CountTeams(ctx, orgXID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count teams: %w", err)
+	}
+	
 	// Get paginated teams
 	offset := startIndex - 1
 	if offset < 0 {
 		offset = 0
 	}
 	
-	teams, err := s.getOrgService().ListTeams(ctx, orgID, count, offset)
+	teams, err := s.getOrgService().ListTeams(ctx, orgXID, count, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list teams: %w", err)
 	}
@@ -637,18 +656,17 @@ func (s *Service) ListGroups(ctx context.Context, orgID string, filter string, s
 	resources := make([]interface{}, 0, len(teams))
 	for _, team := range teams {
 		// Get group mapping for external ID
-		teamXID, _ := xid.FromString(team.ID)
-		mapping, _ := s.repo.FindGroupMappingByTargetID(ctx, teamXID)
+		mapping, _ := s.repo.FindGroupMappingByTargetID(ctx, team.ID)
 		
 		scimGroup := &SCIMGroup{
 			Schemas:     []string{SchemaGroup},
-			ID:          team.ID,
+			ID:          team.ID.String(),
 			DisplayName: team.Name,
 			Meta: &Meta{
 				ResourceType: "Group",
 				Created:      team.CreatedAt,
 				LastModified: team.UpdatedAt,
-				Location:     fmt.Sprintf("/scim/v2/Groups/%s", team.ID),
+				Location:     fmt.Sprintf("/scim/v2/Groups/%s", team.ID.String()),
 			},
 		}
 		
@@ -658,9 +676,6 @@ func (s *Service) ListGroups(ctx context.Context, orgID string, filter string, s
 		
 		resources = append(resources, scimGroup)
 	}
-	
-	// Get total count (approximation using len(teams))
-	total := len(resources)
 	
 	return &ListResponse{
 		Schemas:      []string{SchemaListResponse},
@@ -903,70 +918,71 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organizati
 		} else if op.Path == "members" {
 			// Handle member replacement
 			if members, ok := op.Value.([]interface{}); ok {
-			// Remove all existing members
-			existingMembers, _ := s.getOrgService().ListTeamMembers(ctx, team.ID)
-			for _, member := range existingMembers {
-				_ = s.getOrgService().RemoveTeamMember(ctx, team.ID, member.ID)
-			}
-			
-			// Add new members
-			for _, m := range members {
-				if memberMap, ok := m.(map[string]interface{}); ok {
-					if userIDStr, ok := memberMap["value"].(string); ok {
-						// Find member by userID - check if user is member of organization
-						isMember, _ := s.getOrgService().IsUserMember(ctx, orgID, userIDStr)
-						if isMember {
-							// Get all members and find the one with this userID
-							orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-							for _, orgMember := range orgMembers {
-								if orgMember.UserID == userIDStr {
-									_ = s.getOrgService().AddTeamMember(ctx, team.ID, orgMember.ID, "member")
-									break
+				teamXID := team.ID
+				// Remove all existing members
+				existingMembers, _ := s.getOrgService().ListTeamMembers(ctx, teamXID, 1000, 0)
+				for _, tm := range existingMembers {
+					_ = s.getOrgService().RemoveTeamMember(ctx, teamXID, tm.MemberID)
+				}
+				
+				// Add new members
+				for _, m := range members {
+					if memberMap, ok := m.(map[string]interface{}); ok {
+						if userIDStr, ok := memberMap["value"].(string); ok {
+							userID, _ := xid.FromString(userIDStr)
+							orgXID, _ := xid.FromString(orgID)
+							member, _ := s.getOrgService().FindMember(ctx, orgXID, userID)
+							if member != nil {
+								tm := &organization.TeamMember{
+									ID:        xid.New(),
+									TeamID:    teamXID,
+									MemberID:  member.ID,
+									CreatedAt: time.Now(),
 								}
+								_ = s.getOrgService().AddTeamMember(ctx, tm)
 							}
 						}
 					}
 				}
-			}
 			}
 		}
 	case "add":
 		if op.Path == "members" {
 			// Add members to group
+			teamXID := team.ID
 			if members, ok := op.Value.([]interface{}); ok {
 				for _, m := range members {
 					if memberMap, ok := m.(map[string]interface{}); ok {
 						if userIDStr, ok := memberMap["value"].(string); ok {
-							// Find member by userID
-							isMember, _ := s.getOrgService().IsUserMember(ctx, orgID, userIDStr)
-							if isMember {
-							// Get all members and find the one with this userID
-							orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-							for _, orgMember := range orgMembers {
-								if orgMember.UserID == userIDStr {
-									_ = s.getOrgService().AddTeamMember(ctx, team.ID, orgMember.ID, "member")
-									break
+							userID, _ := xid.FromString(userIDStr)
+							orgXID, _ := xid.FromString(orgID)
+							member, _ := s.getOrgService().FindMember(ctx, orgXID, userID)
+							if member != nil {
+								tm := &organization.TeamMember{
+									ID:        xid.New(),
+									TeamID:    teamXID,
+									MemberID:  member.ID,
+									CreatedAt: time.Now(),
 								}
+								_ = s.getOrgService().AddTeamMember(ctx, tm)
 							}
 						}
 					}
 				}
 			}
 		}
-		}
 	case "remove":
 		if strings.HasPrefix(op.Path, "members[") {
 			// Remove specific member
 			// Parse member ID from path like "members[value eq \"123\"]"
+			teamXID := team.ID
 			// For simplicity, if value is provided, use that
-			if userIDStr, ok := op.Value.(string); ok {
-				// Find member by userID
-				orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-				for _, orgMember := range orgMembers {
-					if orgMember.UserID == userIDStr {
-						_ = s.getOrgService().RemoveTeamMember(ctx, team.ID, orgMember.ID)
-						break
-					}
+			if memberIDStr, ok := op.Value.(string); ok {
+				userID, _ := xid.FromString(memberIDStr)
+				orgXID, _ := xid.FromString(orgID)
+				member, _ := s.getOrgService().FindMember(ctx, orgXID, userID)
+				if member != nil {
+					_ = s.getOrgService().RemoveTeamMember(ctx, teamXID, member.ID)
 				}
 			}
 		}
@@ -981,19 +997,10 @@ func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []Gr
 	
 	orgXID, _ := xid.FromString(orgID)
 	
-	// Find user's organization member record by userID
-	userIDStr := userID.String()
-	orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-	var memberID string
-	for _, orgMember := range orgMembers {
-		if orgMember.UserID == userIDStr {
-			memberID = orgMember.ID
-			break
-		}
-	}
-	
-	if memberID == "" {
-		return fmt.Errorf("user not found in organization")
+	// Get user's organization member record
+	member, err := s.getOrgService().FindMember(ctx, orgXID, userID)
+	if err != nil {
+		return fmt.Errorf("user not found in organization: %w", err)
 	}
 	
 	// Get user's current teams
@@ -1007,8 +1014,14 @@ func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []Gr
 		}
 		
 		// Add user to team
-		teamID := mapping.TargetID.String()
-		if err := s.getOrgService().AddTeamMember(ctx, teamID, memberID, "member"); err != nil {
+		tm := &organization.TeamMember{
+			ID:        xid.New(),
+			TeamID:    mapping.TargetID,
+			MemberID:  member.ID,
+			CreatedAt: time.Now(),
+		}
+		
+		if err := s.getOrgService().AddTeamMember(ctx, tm); err != nil {
 			fmt.Printf("[SCIM] Failed to add user to team: %v\n", err)
 		}
 	}
@@ -1021,34 +1034,42 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID string, members 
 		return nil
 	}
 	
+	teamXID, err := xid.FromString(groupID)
+	if err != nil {
+		return fmt.Errorf("invalid group ID: %w", err)
+	}
+	
+	orgXID, _ := xid.FromString(orgID)
+	
 	// Clear existing members (for full sync)
-	existingMembers, _ := s.getOrgService().ListTeamMembers(ctx, groupID)
-	for _, member := range existingMembers {
-		_ = s.getOrgService().RemoveTeamMember(ctx, groupID, member.ID)
+	existingMembers, _ := s.getOrgService().ListTeamMembers(ctx, teamXID, 1000, 0)
+	for _, tm := range existingMembers {
+		_ = s.getOrgService().RemoveTeamMember(ctx, teamXID, tm.MemberID)
 	}
 	
 	// Add new members
 	for _, memberRef := range members {
-		// memberRef.Value is the userID
-		userIDStr := memberRef.Value
-		
-		// Find the organization member by userID
-		orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-		var memberID string
-		for _, orgMember := range orgMembers {
-			if orgMember.UserID == userIDStr {
-				memberID = orgMember.ID
-				break
-			}
+		userID, err := xid.FromString(memberRef.Value)
+		if err != nil {
+			continue
 		}
 		
-		if memberID == "" {
+		// Get organization member
+		member, err := s.getOrgService().FindMember(ctx, orgXID, userID)
+		if err != nil {
 			fmt.Printf("[SCIM] User %s not found in organization\n", memberRef.Value)
 			continue
 		}
 		
 		// Add to team
-		if err := s.getOrgService().AddTeamMember(ctx, groupID, memberID, "member"); err != nil {
+		tm := &organization.TeamMember{
+			ID:        xid.New(),
+			TeamID:    teamXID,
+			MemberID:  member.ID,
+			CreatedAt: time.Now(),
+		}
+		
+		if err := s.getOrgService().AddTeamMember(ctx, tm); err != nil {
 			fmt.Printf("[SCIM] Failed to add member to team: %v\n", err)
 		}
 	}

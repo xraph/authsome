@@ -2,6 +2,7 @@ package phone
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -30,10 +31,20 @@ func NewPlugin() *Plugin { return &Plugin{} }
 func (p *Plugin) ID() string { return "phone" }
 
 func (p *Plugin) Init(dep interface{}) error {
-	db, ok := dep.(*bun.DB)
-	if !ok {
-		return nil
+	type authInstance interface {
+		GetDB() *bun.DB
 	}
+	
+	authInst, ok := dep.(authInstance)
+	if !ok {
+		return fmt.Errorf("phone plugin requires auth instance with GetDB method")
+	}
+	
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available for phone plugin")
+	}
+	
 	p.db = db
 	
 	// TODO: Get notification adapter from service registry when available
