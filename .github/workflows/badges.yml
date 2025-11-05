@@ -1,0 +1,31 @@
+name: Badges
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly
+
+jobs:
+  update-badges:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+
+      - name: Generate coverage badge
+        run: |
+          go test -coverprofile=coverage.out ./...
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
+          echo "Coverage: $COVERAGE"
+
+      - name: Get test count
+        run: |
+          TESTS=$(go test -json ./... | jq -s '[.[] | select(.Action == "pass" and .Test)] | length')
+          echo "Tests: $TESTS"
+

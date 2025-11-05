@@ -1,0 +1,209 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+jobs:
+  # Go CI
+  go-test:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.23', '1.24', '1.25']
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        if: matrix.go-version == '1.23'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          flags: go
+          name: go-coverage
+
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.6.1
+          args: --timeout=5m
+
+  go-security:
+    name: Go Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt sarif -out results.sarif ./...'
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
+
+  # Rust CI
+  rust-test:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Check if Cargo.toml exists
+        id: check_cargo
+        run: |
+          if [ -f "farp-rust/Cargo.toml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Rust
+        if: steps.check_cargo.outputs.exists == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        if: steps.check_cargo.outputs.exists == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: farp-rust
+
+      - name: Run cargo fmt check
+        if: steps.check_cargo.outputs.exists == 'true'
+        working-directory: farp-rust
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        if: steps.check_cargo.outputs.exists == 'true'
+        working-directory: farp-rust
+        run: cargo clippy --all-targets --all-features -- -W clippy::all
+
+      - name: Run tests
+        if: steps.check_cargo.outputs.exists == 'true'
+        working-directory: farp-rust
+        run: cargo test --all-features --verbose
+      
+      - name: Generate coverage
+        if: steps.check_cargo.outputs.exists == 'true'
+        working-directory: farp-rust
+        run: |
+          cargo install cargo-tarpaulin || true
+          cargo tarpaulin --all-features --workspace --timeout 300 --out Xml --output-dir coverage
+        continue-on-error: true
+      
+      - name: Upload coverage to Codecov
+        if: steps.check_cargo.outputs.exists == 'true'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./farp-rust/coverage/cobertura.xml
+          flags: rust
+          name: rust-coverage
+        continue-on-error: true
+
+      - name: Run cargo doc
+        if: steps.check_cargo.outputs.exists == 'true'
+        working-directory: farp-rust
+        run: cargo doc --no-deps --all-features
+
+  # Example verification
+  examples:
+    name: Verify Examples
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build basic example
+        run: |
+          cd examples/basic
+          go build -v .
+
+  # Verify no forbidden patterns
+  quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Check for TODOs in main branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if grep -r "TODO\|FIXME\|XXX" --include="*.go" --exclude-dir=vendor  --exclude-dir=examples .; then
+            echo "Found TODO/FIXME/XXX in main branch"
+            exit 1
+          fi
+
+      - name: Check for debug statements
+        run: |
+          if grep -r "fmt.Print\|log.Print" --include="*.go" --exclude-dir=vendor --exclude="*_test.go" --exclude-dir=examples .; then
+            echo "Found debug print statements in production code"
+            exit 1
+          fi
+

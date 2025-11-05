@@ -1,0 +1,107 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '🚀 Features'
+    labels:
+      - 'feat'
+      - 'feature'
+      - 'enhancement'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'fix'
+      - 'bugfix'
+      - 'bug'
+  - title: '🔒 Security'
+    labels:
+      - 'security'
+  - title: '⚡ Performance'
+    labels:
+      - 'perf'
+      - 'performance'
+  - title: '📚 Documentation'
+    labels:
+      - 'docs'
+      - 'documentation'
+  - title: '🔨 Refactoring'
+    labels:
+      - 'refactor'
+  - title: '🧪 Tests'
+    labels:
+      - 'test'
+      - 'tests'
+  - title: '🔧 Maintenance'
+    labels:
+      - 'chore'
+      - 'ci'
+      - 'build'
+  - title: '📦 Dependencies'
+    labels:
+      - 'dependencies'
+      - 'deps'
+
+version-resolver:
+  major:
+    labels:
+      - 'breaking-change'
+      - 'major'
+  minor:
+    labels:
+      - 'feat'
+      - 'feature'
+      - 'enhancement'
+      - 'minor'
+  patch:
+    labels:
+      - 'fix'
+      - 'bugfix'
+      - 'bug'
+      - 'patch'
+      - 'perf'
+      - 'performance'
+      - 'docs'
+      - 'documentation'
+  default: patch
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  ## Contributors
+
+  $CONTRIBUTORS
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+autolabeler:
+  - label: 'documentation'
+    files:
+      - '*.md'
+      - 'docs/**/*'
+  - label: 'bug'
+    branch:
+      - '/fix\/.+/'
+    title:
+      - '/fix/i'
+  - label: 'enhancement'
+    branch:
+      - '/feat(ure)?\/.+/'
+    title:
+      - '/feat/i'
+  - label: 'dependencies'
+    files:
+      - 'go.mod'
+      - 'go.sum'
+      - 'farp-rust/Cargo.toml'
+      - 'farp-rust/Cargo.lock'
+  - label: 'ci'
+    files:
+      - '.github/**/*'
+
+exclude-labels:
+  - 'skip-changelog'
+  - 'wontfix'
+  - 'duplicate'
+  - 'invalid'
+

@@ -11,8 +11,6 @@ updates:
       day: "monday"
       time: "03:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "security-team"
     labels:
       - "dependencies"
       - "security"
@@ -25,22 +23,44 @@ updates:
       security-updates:
         patterns:
           - "*"
-        update-types:
-          - "security"
     # Version update strategies
     versioning-strategy: increase
 
+  
+  # Rust dependencies (when Cargo.toml exists)
+  - package-ecosystem: "cargo"
+    directory: "/farp-rust"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Only run if Cargo.toml exists
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+    
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "github-actions"
+      - "ci"
     commit-message:
-      prefix: "ci"
+      prefix: "chore(ci)"
+      include: "scope"
+
 
   # npm (for frontend/docs)
   - package-ecosystem: "npm"

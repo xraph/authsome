@@ -8,7 +8,7 @@
 [![Documentation](https://img.shields.io/badge/docs-available-blue.svg)](https://authsome.xraph.dev)
 [![Release](https://img.shields.io/github/v/release/xraph/authsome)](https://github.com/xraph/authsome/releases)
 
-**Authors**: [Rex Raphael](githib.com/juicycleff)
+**Authors**: [Rex Raphael](https://githib.com/juicycleff)
 **Last Updated**: 2025-11-01
 
 > A comprehensive, pluggable authentication framework for Go, inspired by better-auth. Enterprise-grade authentication with multi-tenancy support, designed to integrate seamlessly with the Forge framework.
