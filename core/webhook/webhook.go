@@ -9,19 +9,19 @@ import (
 
 // Webhook represents a webhook subscription
 type Webhook struct {
-	ID             xid.ID    `json:"id"`
-	OrganizationID string    `json:"organization_id"`
-	URL            string    `json:"url"`
-	Events         []string  `json:"events"`
-	Secret         string    `json:"-"` // Never expose in JSON
-	Enabled        bool      `json:"enabled"`
-	MaxRetries     int       `json:"max_retries"`
-	RetryBackoff   string    `json:"retry_backoff"` // "exponential" or "linear"
+	ID             xid.ID            `json:"id"`
+	OrganizationID string            `json:"organization_id"`
+	URL            string            `json:"url"`
+	Events         []string          `json:"events"`
+	Secret         string            `json:"-"` // Never expose in JSON
+	Enabled        bool              `json:"enabled"`
+	MaxRetries     int               `json:"max_retries"`
+	RetryBackoff   string            `json:"retry_backoff"` // "exponential" or "linear"
 	Headers        map[string]string `json:"headers,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	LastDelivery   *time.Time `json:"last_delivery,omitempty"`
-	FailureCount   int       `json:"failure_count"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
+	LastDelivery   *time.Time        `json:"last_delivery,omitempty"`
+	FailureCount   int               `json:"failure_count"`
 }
 
 // Event represents a webhook event
@@ -36,17 +36,17 @@ type Event struct {
 
 // Delivery represents a webhook delivery attempt
 type Delivery struct {
-	ID           xid.ID     `json:"id"`
-	WebhookID    xid.ID     `json:"webhook_id"`
-	EventID      xid.ID     `json:"event_id"`
-	Attempt      int        `json:"attempt"`
-	Status       string     `json:"status"` // "pending", "delivered", "failed", "retrying"
-	StatusCode   int        `json:"status_code,omitempty"`
-	Response     string     `json:"response,omitempty"`
-	Error        string     `json:"error,omitempty"`
-	DeliveredAt  *time.Time `json:"delivered_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID          xid.ID     `json:"id"`
+	WebhookID   xid.ID     `json:"webhook_id"`
+	EventID     xid.ID     `json:"event_id"`
+	Attempt     int        `json:"attempt"`
+	Status      string     `json:"status"` // "pending", "delivered", "failed", "retrying"
+	StatusCode  int        `json:"status_code,omitempty"`
+	Response    string     `json:"response,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	DeliveredAt *time.Time `json:"delivered_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // CreateWebhookRequest represents a request to create a webhook
@@ -130,17 +130,17 @@ type Repository interface {
 
 // EventType constants for webhook events
 const (
-	EventUserCreated      = "user.created"
-	EventUserUpdated      = "user.updated"
-	EventUserDeleted      = "user.deleted"
-	EventUserLogin        = "user.login"
-	EventUserLogout       = "user.logout"
-	EventSessionCreated   = "session.created"
-	EventSessionRevoked   = "session.revoked"
-	EventOrgCreated       = "organization.created"
-	EventOrgUpdated       = "organization.updated"
-	EventMemberAdded      = "member.added"
-	EventMemberRemoved    = "member.removed"
+	EventUserCreated       = "user.created"
+	EventUserUpdated       = "user.updated"
+	EventUserDeleted       = "user.deleted"
+	EventUserLogin         = "user.login"
+	EventUserLogout        = "user.logout"
+	EventSessionCreated    = "session.created"
+	EventSessionRevoked    = "session.revoked"
+	EventOrgCreated        = "organization.created"
+	EventOrgUpdated        = "organization.updated"
+	EventMemberAdded       = "member.added"
+	EventMemberRemoved     = "member.removed"
 	EventMemberRoleChanged = "member.role_changed"
 )
 

@@ -17,18 +17,18 @@ import (
 type contextKey string
 
 const (
-	APIKeyContextKey         contextKey = "api_key"
-	APIKeyUserContextKey     contextKey = "api_key_user"
-	APIKeyAuthenticatedKey   contextKey = "api_key_authenticated"
-	APIKeyPermissionsKey     contextKey = "api_key_permissions"
+	APIKeyContextKey       contextKey = "api_key"
+	APIKeyUserContextKey   contextKey = "api_key_user"
+	APIKeyAuthenticatedKey contextKey = "api_key_authenticated"
+	APIKeyPermissionsKey   contextKey = "api_key_permissions"
 )
 
 // Middleware handles API key authentication
 type Middleware struct {
-	service      *apikey.Service
-	userSvc      *user.Service
-	rateLimiter  *ratelimit.Service
-	config       Config
+	service     *apikey.Service
+	userSvc     *user.Service
+	rateLimiter *ratelimit.Service
+	config      Config
 }
 
 // NewMiddleware creates a new API key middleware
@@ -103,7 +103,7 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 			}
 			if !allowed {
 				return c.JSON(429, map[string]string{
-					"error": "rate limit exceeded",
+					"error":   "rate limit exceeded",
 					"message": fmt.Sprintf("API key rate limit of %d requests per window exceeded", apiKey.RateLimit),
 				})
 			}
@@ -128,10 +128,10 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 		ctx = context.WithValue(ctx, APIKeyContextKey, apiKey)
 		ctx = context.WithValue(ctx, APIKeyAuthenticatedKey, true)
 		ctx = context.WithValue(ctx, APIKeyPermissionsKey, apiKey.Scopes)
-		
+
 		// Inject organization context for multi-tenancy
 		ctx = context.WithValue(ctx, interfaces.OrganizationContextKey, apiKey.OrgID)
-		
+
 		if usr != nil {
 			ctx = context.WithValue(ctx, APIKeyUserContextKey, usr)
 			ctx = context.WithValue(ctx, "user", usr) // Standard user context key
@@ -234,7 +234,7 @@ func (m *Middleware) extractAPIKey(c forge.Context) string {
 		if strings.HasPrefix(authHeader, "ApiKey ") {
 			return strings.TrimPrefix(authHeader, "ApiKey ")
 		}
-		
+
 		// Check for "Bearer <key>" format where key starts with "ak_"
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
@@ -303,4 +303,3 @@ func GetScopes(c forge.Context) []string {
 	}
 	return []string{}
 }
-

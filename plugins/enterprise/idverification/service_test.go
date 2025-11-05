@@ -15,7 +15,7 @@ type mockRepository struct {
 	sessions      map[string]*schema.IdentityVerificationSession
 	statuses      map[string]*schema.UserVerificationStatus
 	documents     map[string]*schema.IdentityVerificationDocument
-	
+
 	createVerificationError error
 	getVerificationError    error
 	updateVerificationError error
@@ -268,10 +268,10 @@ func (m *mockRepository) GetBlockedUsers(ctx context.Context, limit, offset int)
 
 func (m *mockRepository) GetVerificationStats(ctx context.Context, orgID string, from, to time.Time) (map[string]interface{}, error) {
 	return map[string]interface{}{
-		"total_verifications":       len(m.verifications),
-		"successful_verifications":  0,
-		"failed_verifications":      0,
-		"pending_verifications":     0,
+		"total_verifications":      len(m.verifications),
+		"successful_verifications": 0,
+		"failed_verifications":     0,
+		"pending_verifications":    0,
 	}, nil
 }
 
@@ -333,14 +333,14 @@ func TestService_CreateVerification(t *testing.T) {
 	config.MaxVerificationAttempts = 3
 	config.Onfido.Enabled = true
 	config.Onfido.APIToken = "test_token"
-	
+
 	service, err := NewService(repo, config, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
 	}
-	
+
 	ctx := context.Background()
-	
+
 	t.Run("successful creation", func(t *testing.T) {
 		req := &CreateVerificationRequest{
 			UserID:           "user_123",
@@ -350,48 +350,48 @@ func TestService_CreateVerification(t *testing.T) {
 			VerificationType: "document",
 			DocumentType:     "passport",
 		}
-		
+
 		verification, err := service.CreateVerification(ctx, req)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		if verification == nil {
 			t.Error("Expected verification, got nil")
 		}
-		
+
 		if verification.UserID != req.UserID {
 			t.Errorf("Expected UserID %s, got %s", req.UserID, verification.UserID)
 		}
-		
+
 		if verification.Status != "pending" {
 			t.Errorf("Expected status 'pending', got %s", verification.Status)
 		}
 	})
-	
+
 	t.Run("blocked user", func(t *testing.T) {
 		// Block the user
 		repo.statuses["user_blocked"] = &schema.UserVerificationStatus{
 			UserID:    "user_blocked",
 			IsBlocked: true,
 		}
-		
+
 		req := &CreateVerificationRequest{
 			UserID:           "user_blocked",
 			OrganizationID:   "org_456",
 			Provider:         "onfido",
 			VerificationType: "document",
 		}
-		
+
 		_, err := service.CreateVerification(ctx, req)
 		if err != ErrVerificationBlocked {
 			t.Errorf("Expected ErrVerificationBlocked, got %v", err)
 		}
 	})
-	
+
 	t.Run("max attempts reached", func(t *testing.T) {
 		userID := "user_maxed"
-		
+
 		// Create 3 verifications in last 24 hours
 		for i := 0; i < 3; i++ {
 			v := &schema.IdentityVerification{
@@ -401,14 +401,14 @@ func TestService_CreateVerification(t *testing.T) {
 			}
 			repo.verifications[v.ID] = v
 		}
-		
+
 		req := &CreateVerificationRequest{
 			UserID:           userID,
 			OrganizationID:   "org_456",
 			Provider:         "onfido",
 			VerificationType: "document",
 		}
-		
+
 		_, err := service.CreateVerification(ctx, req)
 		if err != ErrMaxAttemptsReached {
 			t.Errorf("Expected ErrMaxAttemptsReached, got %v", err)
@@ -423,14 +423,14 @@ func TestService_ProcessVerificationResult(t *testing.T) {
 	config.MinConfidenceScore = 80
 	config.Onfido.Enabled = true
 	config.Onfido.APIToken = "test_token"
-	
+
 	service, err := NewService(repo, config, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
 	}
-	
+
 	ctx := context.Background()
-	
+
 	t.Run("successful verification", func(t *testing.T) {
 		// Create a verification
 		verification := &schema.IdentityVerification{
@@ -442,7 +442,7 @@ func TestService_ProcessVerificationResult(t *testing.T) {
 			CreatedAt:        time.Now(),
 		}
 		repo.verifications[verification.ID] = verification
-		
+
 		// Process result
 		result := &VerificationResult{
 			Status:          "completed",
@@ -451,23 +451,23 @@ func TestService_ProcessVerificationResult(t *testing.T) {
 			RiskLevel:       "low",
 			ConfidenceScore: 95,
 		}
-		
+
 		err := service.ProcessVerificationResult(ctx, verification.ID, result)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		// Check updated verification
 		updated := repo.verifications[verification.ID]
 		if !updated.IsVerified {
 			t.Error("Expected IsVerified to be true")
 		}
-		
+
 		if updated.RiskScore != 30 {
 			t.Errorf("Expected RiskScore 30, got %d", updated.RiskScore)
 		}
 	})
-	
+
 	t.Run("high risk rejection", func(t *testing.T) {
 		verification := &schema.IdentityVerification{
 			ID:               "ver_456",
@@ -478,25 +478,25 @@ func TestService_ProcessVerificationResult(t *testing.T) {
 			CreatedAt:        time.Now(),
 		}
 		repo.verifications[verification.ID] = verification
-		
+
 		result := &VerificationResult{
 			Status:          "completed",
 			IsVerified:      true,
 			RiskScore:       85, // Above threshold
 			ConfidenceScore: 90,
 		}
-		
+
 		err := service.ProcessVerificationResult(ctx, verification.ID, result)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		updated := repo.verifications[verification.ID]
 		if updated.Status != "failed" {
 			t.Errorf("Expected status 'failed', got %s", updated.Status)
 		}
 	})
-	
+
 	t.Run("low confidence rejection", func(t *testing.T) {
 		verification := &schema.IdentityVerification{
 			ID:               "ver_789",
@@ -507,19 +507,19 @@ func TestService_ProcessVerificationResult(t *testing.T) {
 			CreatedAt:        time.Now(),
 		}
 		repo.verifications[verification.ID] = verification
-		
+
 		result := &VerificationResult{
 			Status:          "completed",
 			IsVerified:      true,
 			RiskScore:       50,
 			ConfidenceScore: 70, // Below threshold
 		}
-		
+
 		err := service.ProcessVerificationResult(ctx, verification.ID, result)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		updated := repo.verifications[verification.ID]
 		if updated.Status != "failed" {
 			t.Errorf("Expected status 'failed', got %s", updated.Status)
@@ -532,14 +532,14 @@ func TestService_GetUserVerificationStatus(t *testing.T) {
 	config := DefaultConfig()
 	config.Onfido.Enabled = true
 	config.Onfido.APIToken = "test_token"
-	
+
 	service, err := NewService(repo, config, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
 	}
-	
+
 	ctx := context.Background()
-	
+
 	t.Run("existing status", func(t *testing.T) {
 		repo.statuses["user_123"] = &schema.UserVerificationStatus{
 			ID:                "status_123",
@@ -547,23 +547,23 @@ func TestService_GetUserVerificationStatus(t *testing.T) {
 			IsVerified:        true,
 			VerificationLevel: "full",
 		}
-		
+
 		status, err := service.GetUserVerificationStatus(ctx, "user_123")
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		if status.VerificationLevel != "full" {
 			t.Errorf("Expected level 'full', got %s", status.VerificationLevel)
 		}
 	})
-	
+
 	t.Run("non-existing status", func(t *testing.T) {
 		status, err := service.GetUserVerificationStatus(ctx, "user_new")
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		if status.VerificationLevel != "none" {
 			t.Errorf("Expected level 'none', got %s", status.VerificationLevel)
 		}
@@ -575,29 +575,29 @@ func TestService_BlockUser(t *testing.T) {
 	config := DefaultConfig()
 	config.Onfido.Enabled = true
 	config.Onfido.APIToken = "test_token"
-	
+
 	service, err := NewService(repo, config, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
 	}
-	
+
 	ctx := context.Background()
-	
+
 	t.Run("block user", func(t *testing.T) {
 		err := service.BlockUser(ctx, "user_123", "org_456", "Suspicious activity")
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		status := repo.statuses["user_123"]
 		if status == nil {
 			t.Fatal("Expected status to be created")
 		}
-		
+
 		if !status.IsBlocked {
 			t.Error("Expected IsBlocked to be true")
 		}
-		
+
 		if status.BlockReason != "Suspicious activity" {
 			t.Errorf("Expected BlockReason 'Suspicious activity', got %s", status.BlockReason)
 		}
@@ -609,14 +609,14 @@ func TestService_UnblockUser(t *testing.T) {
 	config := DefaultConfig()
 	config.Onfido.Enabled = true
 	config.Onfido.APIToken = "test_token"
-	
+
 	service, err := NewService(repo, config, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
 	}
-	
+
 	ctx := context.Background()
-	
+
 	t.Run("unblock user", func(t *testing.T) {
 		// Create blocked status
 		repo.statuses["user_123"] = &schema.UserVerificationStatus{
@@ -625,17 +625,17 @@ func TestService_UnblockUser(t *testing.T) {
 			IsBlocked:   true,
 			BlockReason: "Test",
 		}
-		
+
 		err := service.UnblockUser(ctx, "user_123", "org_456")
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		
+
 		status := repo.statuses["user_123"]
 		if status.IsBlocked {
 			t.Error("Expected IsBlocked to be false")
 		}
-		
+
 		if status.BlockReason != "" {
 			t.Error("Expected BlockReason to be empty")
 		}
@@ -664,7 +664,7 @@ func TestCalculateAge(t *testing.T) {
 			expected: 17,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			age := calculateAge(tt.dob)
@@ -674,4 +674,3 @@ func TestCalculateAge(t *testing.T) {
 		})
 	}
 }
-

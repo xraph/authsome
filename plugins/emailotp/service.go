@@ -61,7 +61,7 @@ func (s *Service) SendOTP(ctx context.Context, email, ip, ua string) (string, er
 	if e == "" {
 		return "", fmt.Errorf("missing email")
 	}
-	
+
 	// Generate numeric OTP
 	rand.Seed(time.Now().UnixNano())
 	max := int64(1)
@@ -70,15 +70,15 @@ func (s *Service) SendOTP(ctx context.Context, email, ip, ua string) (string, er
 	}
 	code := int64(rand.Intn(int(max)))
 	otp := fmt.Sprintf("%0*d", s.config.OTPLength, code)
-	
+
 	// Calculate expiry
 	expiryDuration := time.Duration(s.config.ExpiryMinutes) * time.Minute
-	
+
 	// Persist OTP
 	if err := s.repo.Create(ctx, e, otp, time.Now().Add(expiryDuration)); err != nil {
 		return "", err
 	}
-	
+
 	// Send via notification plugin if available
 	if s.notifAdapter != nil {
 		err := s.notifAdapter.SendEmailOTP(ctx, "default", e, otp, s.config.ExpiryMinutes)
@@ -87,12 +87,12 @@ func (s *Service) SendOTP(ctx context.Context, email, ip, ua string) (string, er
 			fmt.Printf("Failed to send email OTP via notification plugin: %v\n", err)
 		}
 	}
-	
+
 	// Audit: email OTP sent
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, "emailotp_sent", "email:"+e, ip, ua, "")
 	}
-	
+
 	// Return OTP only if dev mode
 	if s.config.DevExposeOTP {
 		return otp, nil

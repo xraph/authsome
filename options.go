@@ -42,7 +42,7 @@ func WithDatabaseManager(manager *forgedb.DatabaseManager, dbName ...string) Opt
 		if len(dbName) > 0 && dbName[0] != "" {
 			name = dbName[0]
 		}
-		
+
 		// Get BunDB from manager
 		// This will be done lazily in Initialize() to ensure manager is ready
 		a.config.DatabaseManagerName = name

@@ -86,13 +86,13 @@ type VerifyRequest struct {
 
 // VerifyResponse contains the response from verification
 type VerifyResponse struct {
-	Success         bool                   `json:"success"`
-	VerificationID  string                 `json:"verification_id,omitempty"`
-	SecurityLevel   SecurityLevel          `json:"security_level,omitempty"`
-	ExpiresAt       time.Time              `json:"expires_at,omitempty"`
-	Error           string                 `json:"error,omitempty"`
-	DeviceRemembered bool                  `json:"device_remembered,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Success          bool                   `json:"success"`
+	VerificationID   string                 `json:"verification_id,omitempty"`
+	SecurityLevel    SecurityLevel          `json:"security_level,omitempty"`
+	ExpiresAt        time.Time              `json:"expires_at,omitempty"`
+	Error            string                 `json:"error,omitempty"`
+	DeviceRemembered bool                   `json:"device_remembered,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // EvaluateRequirement evaluates whether step-up authentication is required
@@ -248,13 +248,13 @@ func (s *Service) EvaluateRequirement(ctx context.Context, evalCtx *EvaluationCo
 
 	// Audit log
 	s.auditLog(ctx, evalCtx.UserID, evalCtx.OrgID, "stepup.required", map[string]interface{}{
-		"requirement_id":  requirementID,
-		"required_level":  requiredLevel,
-		"current_level":   currentLevel,
-		"matched_rules":   matchedRules,
-		"reason":          reason,
-		"ip":              evalCtx.IP,
-		"user_agent":      evalCtx.UserAgent,
+		"requirement_id": requirementID,
+		"required_level": requiredLevel,
+		"current_level":  currentLevel,
+		"matched_rules":  matchedRules,
+		"reason":         reason,
+		"ip":             evalCtx.IP,
+		"user_agent":     evalCtx.UserAgent,
 	}, "info")
 
 	return &EvaluationResult{
@@ -316,7 +316,7 @@ func (s *Service) VerifyStepUp(ctx context.Context, req *VerifyRequest) (*Verify
 
 	// Verify the credential based on method
 	verified, err := s.verifyCredential(ctx, requirement, req.Method, req.Credential)
-	
+
 	// Record attempt
 	attempt := &StepUpAttempt{
 		ID:            uuid.New().String(),
@@ -416,10 +416,10 @@ func (s *Service) VerifyStepUp(ctx context.Context, req *VerifyRequest) (*Verify
 	}, "info")
 
 	return &VerifyResponse{
-		Success:         true,
-		VerificationID:  verificationID,
-		SecurityLevel:   requirement.RequiredLevel,
-		ExpiresAt:       expiresAt,
+		Success:          true,
+		VerificationID:   verificationID,
+		SecurityLevel:    requirement.RequiredLevel,
+		ExpiresAt:        expiresAt,
 		DeviceRemembered: deviceRemembered,
 	}, nil
 }
@@ -558,7 +558,7 @@ func (s *Service) verifyCredential(ctx context.Context, requirement *StepUpRequi
 	// - TOTP verification via TwoFAService
 	// - SMS/Email verification via respective services
 	// - WebAuthn verification via PasskeyService
-	
+
 	// Placeholder: In production, integrate with actual verification services
 	return len(credential) > 0, nil
 }
@@ -618,4 +618,3 @@ func (s *Service) CleanupExpired(ctx context.Context) error {
 
 	return nil
 }
-

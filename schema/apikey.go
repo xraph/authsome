@@ -22,13 +22,13 @@ type APIKey struct {
 	// Key identification
 	Name        string `bun:"name,notnull" json:"name"`
 	Description string `bun:"description" json:"description,omitempty"`
-	Prefix      string `bun:"prefix,notnull,unique" json:"prefix"`      // ak_prod_abc123
-	KeyHash     string `bun:"key_hash,notnull" json:"-"`                // Hashed key for verification
+	Prefix      string `bun:"prefix,notnull,unique" json:"prefix"` // ak_prod_abc123
+	KeyHash     string `bun:"key_hash,notnull" json:"-"`           // Hashed key for verification
 
 	// Permissions and scopes
-	Scopes      []string          `bun:"scopes,type:jsonb" json:"scopes"`                    // ["read", "write", "admin"]
-	Permissions map[string]string `bun:"permissions,type:jsonb" json:"permissions"`         // Custom permissions
-	RateLimit   int               `bun:"rate_limit,default:1000" json:"rate_limit"`         // Requests per hour
+	Scopes      []string          `bun:"scopes,type:jsonb" json:"scopes"`                     // ["read", "write", "admin"]
+	Permissions map[string]string `bun:"permissions,type:jsonb" json:"permissions"`           // Custom permissions
+	RateLimit   int               `bun:"rate_limit,default:1000" json:"rate_limit"`           // Requests per hour
 	AllowedIPs  []string          `bun:"allowed_ips,type:jsonb" json:"allowed_ips,omitempty"` // IP whitelist (CIDR notation supported)
 
 	// Status and expiration
@@ -36,10 +36,10 @@ type APIKey struct {
 	ExpiresAt *time.Time `bun:"expires_at" json:"expires_at,omitempty"`
 
 	// Usage tracking
-	UsageCount   int64      `bun:"usage_count,notnull,default:0" json:"usage_count"`
-	LastUsedAt   *time.Time `bun:"last_used_at" json:"last_used_at,omitempty"`
-	LastUsedIP   string     `bun:"last_used_ip" json:"last_used_ip,omitempty"`
-	LastUsedUA   string     `bun:"last_used_ua" json:"last_used_ua,omitempty"`
+	UsageCount int64      `bun:"usage_count,notnull,default:0" json:"usage_count"`
+	LastUsedAt *time.Time `bun:"last_used_at" json:"last_used_at,omitempty"`
+	LastUsedIP string     `bun:"last_used_ip" json:"last_used_ip,omitempty"`
+	LastUsedUA string     `bun:"last_used_ua" json:"last_used_ua,omitempty"`
 
 	// Audit fields
 	CreatedAt time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
@@ -98,7 +98,7 @@ func (a *APIKey) IsIPAllowed(ip string) bool {
 	if len(a.AllowedIPs) == 0 {
 		return true // No whitelist = allow all
 	}
-	
+
 	for _, allowed := range a.AllowedIPs {
 		if allowed == ip {
 			return true // Exact match

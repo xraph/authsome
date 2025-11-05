@@ -570,4 +570,3 @@ func TestGetGeolocation_CacheMiss(t *testing.T) {
 	geoProvider.AssertCalled(t, "Lookup", mock.Anything, "8.8.8.8")
 	repo.AssertCalled(t, "SetCachedGeoData", mock.Anything, mock.Anything)
 }
-

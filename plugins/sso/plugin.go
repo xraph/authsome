@@ -27,17 +27,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	auth, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("sso plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := auth.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for sso plugin")
 	}
-	
+
 	p.db = db
 	p.service = NewService(repo.NewSSOProviderRepository(db))
 	return nil

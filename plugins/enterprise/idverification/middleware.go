@@ -135,10 +135,10 @@ func (m *Middleware) RequireVerificationLevel(level string) func(next func(forge
 			// Check if user's level meets the requirement
 			if !meetsVerificationLevel(status.VerificationLevel, level) {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
-					"error":              fmt.Sprintf("verification level '%s' required", level),
-					"code":               "INSUFFICIENT_VERIFICATION_LEVEL",
-					"current_level":      status.VerificationLevel,
-					"required_level":     level,
+					"error":          fmt.Sprintf("verification level '%s' required", level),
+					"code":           "INSUFFICIENT_VERIFICATION_LEVEL",
+					"current_level":  status.VerificationLevel,
+					"required_level": level,
 				})
 			}
 
@@ -327,7 +327,7 @@ func (m *Middleware) RequireNotBlocked() func(next func(forge.Context) error) fu
 func getUserIDFromContext(c forge.Context) string {
 	// Try multiple context keys that might contain user ID
 	keys := []interface{}{"user_id", "userId", "user"}
-	
+
 	for _, key := range keys {
 		if val := c.Request().Context().Value(key); val != nil {
 			switch v := val.(type) {
@@ -338,7 +338,7 @@ func getUserIDFromContext(c forge.Context) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -389,4 +389,3 @@ func IsVerified(c forge.Context) bool {
 	}
 	return status.IsVerified
 }
-

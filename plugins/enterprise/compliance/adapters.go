@@ -73,7 +73,7 @@ func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, orgID string) (*
 
 // UserServiceAdapter adapts AuthSome's user service to compliance service expectations
 type UserServiceAdapter struct {
-	svc user.ServiceInterface  // Use interface to support decorated services
+	svc user.ServiceInterface // Use interface to support decorated services
 }
 
 // NewUserServiceAdapter creates a new user service adapter
@@ -189,7 +189,7 @@ func (a *EmailServiceAdapter) SendCompliance(ctx context.Context, to []string, s
 			toStr += ", " + to[i]
 		}
 	}
-	
+
 	return a.SendEmail(ctx, &Email{
 		To:      toStr,
 		Subject: subject,
@@ -240,4 +240,3 @@ Please investigate and remediate.
 
 // Note: Types like AuditLog, User, Organization, AuditEvent, and Email
 // are defined in service.go as helper types for the service interfaces
-

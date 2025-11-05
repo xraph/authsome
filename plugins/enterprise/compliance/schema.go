@@ -3,7 +3,7 @@ package compliance
 import (
 	"context"
 	"database/sql"
-	
+
 	"github.com/uptrace/bun"
 )
 
@@ -31,7 +31,7 @@ func CreateTables(ctx context.Context, db *bun.DB) error {
 		(*CompliancePolicy)(nil),
 		(*ComplianceTraining)(nil),
 	}
-	
+
 	for _, model := range models {
 		_, err := db.NewCreateTable().
 			Model(model).
@@ -41,7 +41,7 @@ func CreateTables(ctx context.Context, db *bun.DB) error {
 			return err
 		}
 	}
-	
+
 	// Create indexes
 	return createIndexes(ctx, db)
 }
@@ -52,14 +52,14 @@ func createIndexes(ctx context.Context, db *bun.DB) error {
 		// Compliance Profiles
 		`CREATE INDEX IF NOT EXISTS idx_compliance_profiles_organization_id ON compliance_profiles(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_profiles_status ON compliance_profiles(status)`,
-		
+
 		// Compliance Checks
 		`CREATE INDEX IF NOT EXISTS idx_compliance_checks_profile_id ON compliance_checks(profile_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_checks_organization_id ON compliance_checks(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_checks_status ON compliance_checks(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_checks_check_type ON compliance_checks(check_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_checks_next_check_at ON compliance_checks(next_check_at)`,
-		
+
 		// Compliance Violations
 		`CREATE INDEX IF NOT EXISTS idx_compliance_violations_profile_id ON compliance_violations(profile_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_violations_organization_id ON compliance_violations(organization_id)`,
@@ -67,28 +67,28 @@ func createIndexes(ctx context.Context, db *bun.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_compliance_violations_status ON compliance_violations(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_violations_severity ON compliance_violations(severity)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_violations_violation_type ON compliance_violations(violation_type)`,
-		
+
 		// Compliance Reports
 		`CREATE INDEX IF NOT EXISTS idx_compliance_reports_profile_id ON compliance_reports(profile_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_reports_organization_id ON compliance_reports(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_reports_status ON compliance_reports(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_reports_report_type ON compliance_reports(report_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_reports_period ON compliance_reports(period)`,
-		
+
 		// Compliance Evidence
 		`CREATE INDEX IF NOT EXISTS idx_compliance_evidence_profile_id ON compliance_evidence(profile_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_evidence_organization_id ON compliance_evidence(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_evidence_evidence_type ON compliance_evidence(evidence_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_evidence_standard ON compliance_evidence(standard)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_evidence_control_id ON compliance_evidence(control_id)`,
-		
+
 		// Compliance Policies
 		`CREATE INDEX IF NOT EXISTS idx_compliance_policies_profile_id ON compliance_policies(profile_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_policies_organization_id ON compliance_policies(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_policies_policy_type ON compliance_policies(policy_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_policies_status ON compliance_policies(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_policies_standard ON compliance_policies(standard)`,
-		
+
 		// Compliance Training
 		`CREATE INDEX IF NOT EXISTS idx_compliance_training_profile_id ON compliance_training(profile_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_training_organization_id ON compliance_training(organization_id)`,
@@ -97,14 +97,14 @@ func createIndexes(ctx context.Context, db *bun.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_compliance_training_training_type ON compliance_training(training_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_compliance_training_expires_at ON compliance_training(expires_at)`,
 	}
-	
+
 	for _, query := range indexes {
 		_, err := db.ExecContext(ctx, query)
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -119,7 +119,7 @@ func DropTables(ctx context.Context, db *bun.DB) error {
 		"compliance_checks",
 		"compliance_profiles",
 	}
-	
+
 	for _, table := range tables {
 		_, err := db.NewDropTable().
 			Table(table).
@@ -130,7 +130,7 @@ func DropTables(ctx context.Context, db *bun.DB) error {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -185,7 +185,7 @@ func (r *BunRepository) DeleteProfile(ctx context.Context, id string) error {
 func (r *BunRepository) ListProfiles(ctx context.Context, filters ProfileFilters) ([]*ComplianceProfile, error) {
 	var profiles []*ComplianceProfile
 	query := r.db.NewSelect().Model(&profiles)
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
@@ -195,7 +195,7 @@ func (r *BunRepository) ListProfiles(ctx context.Context, filters ProfileFilters
 	if filters.Standard != "" {
 		query = query.Where("? = ANY(standards)", filters.Standard)
 	}
-	
+
 	query = query.Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return profiles, err
@@ -218,14 +218,14 @@ func (r *BunRepository) GetCheck(ctx context.Context, id string) (*ComplianceChe
 func (r *BunRepository) ListChecks(ctx context.Context, profileID string, filters CheckFilters) ([]*ComplianceCheck, error) {
 	var checks []*ComplianceCheck
 	query := r.db.NewSelect().Model(&checks).Where("profile_id = ?", profileID)
-	
+
 	if filters.CheckType != "" {
 		query = query.Where("check_type = ?", filters.CheckType)
 	}
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
-	
+
 	query = query.Order("last_checked_at DESC").Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return checks, err
@@ -261,7 +261,7 @@ func (r *BunRepository) GetViolation(ctx context.Context, id string) (*Complianc
 func (r *BunRepository) ListViolations(ctx context.Context, filters ViolationFilters) ([]*ComplianceViolation, error) {
 	var violations []*ComplianceViolation
 	query := r.db.NewSelect().Model(&violations)
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
@@ -277,7 +277,7 @@ func (r *BunRepository) ListViolations(ctx context.Context, filters ViolationFil
 	if filters.ViolationType != "" {
 		query = query.Where("violation_type = ?", filters.ViolationType)
 	}
-	
+
 	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return violations, err
@@ -328,14 +328,14 @@ func (r *BunRepository) GetReport(ctx context.Context, id string) (*ComplianceRe
 func (r *BunRepository) ListReports(ctx context.Context, filters ReportFilters) ([]*ComplianceReport, error) {
 	var reports []*ComplianceReport
 	query := r.db.NewSelect().Model(&reports)
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
-	
+
 	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return reports, err
@@ -368,11 +368,11 @@ func (r *BunRepository) GetEvidence(ctx context.Context, id string) (*Compliance
 func (r *BunRepository) ListEvidence(ctx context.Context, filters EvidenceFilters) ([]*ComplianceEvidence, error) {
 	var evidence []*ComplianceEvidence
 	query := r.db.NewSelect().Model(&evidence)
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
-	
+
 	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return evidence, err
@@ -409,14 +409,14 @@ func (r *BunRepository) GetActivePolicies(ctx context.Context, orgID string) ([]
 func (r *BunRepository) ListPolicies(ctx context.Context, filters PolicyFilters) ([]*CompliancePolicy, error) {
 	var policies []*CompliancePolicy
 	query := r.db.NewSelect().Model(&policies)
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
-	
+
 	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return policies, err
@@ -449,7 +449,7 @@ func (r *BunRepository) GetTraining(ctx context.Context, id string) (*Compliance
 func (r *BunRepository) ListTraining(ctx context.Context, filters TrainingFilters) ([]*ComplianceTraining, error) {
 	var training []*ComplianceTraining
 	query := r.db.NewSelect().Model(&training)
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
@@ -459,7 +459,7 @@ func (r *BunRepository) ListTraining(ctx context.Context, filters TrainingFilter
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
-	
+
 	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
 	err := query.Scan(ctx)
 	return training, err
@@ -488,4 +488,3 @@ func (r *BunRepository) GetOverdueTraining(ctx context.Context, orgID string) ([
 		Scan(ctx)
 	return training, err
 }
-

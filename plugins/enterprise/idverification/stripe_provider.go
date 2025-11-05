@@ -53,7 +53,7 @@ func (p *StripeIdentityProvider) CreateSession(ctx context.Context, req *Provide
 	// Configure document verification options
 	params.Options = &stripe.IdentityVerificationSessionOptionsParams{
 		Document: &stripe.IdentityVerificationSessionOptionsDocumentParams{
-			RequireLiveCapture:   stripe.Bool(p.config.RequireLiveCapture),
+			RequireLiveCapture:    stripe.Bool(p.config.RequireLiveCapture),
 			RequireMatchingSelfie: stripe.Bool(p.config.RequireMatchingSelfie),
 		},
 	}
@@ -94,7 +94,7 @@ func (p *StripeIdentityProvider) CreateSession(ctx context.Context, req *Provide
 	// Convert Stripe session to our ProviderSession format
 	// Note: Stripe sessions don't have explicit expiry, they expire after 24 hours
 	expiresAt := time.Unix(session.Created, 0).Add(24 * time.Hour)
-	
+
 	return &ProviderSession{
 		ID:        session.ID,
 		URL:       session.URL,
@@ -119,7 +119,7 @@ func (p *StripeIdentityProvider) GetSession(ctx context.Context, sessionID strin
 	}
 
 	expiresAt := time.Unix(session.Created, 0).Add(24 * time.Hour)
-	
+
 	return &ProviderSession{
 		ID:        session.ID,
 		URL:       session.URL,
@@ -206,7 +206,7 @@ func (p *StripeIdentityProvider) GetCheck(ctx context.Context, sessionID string)
 
 	// Set risk/confidence scores (Stripe doesn't provide these, use defaults)
 	if session.Status == "verified" {
-		result.RiskScore = 10 // Low risk
+		result.RiskScore = 10       // Low risk
 		result.ConfidenceScore = 95 // High confidence
 	}
 
@@ -345,20 +345,19 @@ func (p *StripeIdentityProvider) getMockCheck(sessionID string) (*ProviderCheckR
 	dob := time.Now().AddDate(-25, 0, 0)
 
 	return &ProviderCheckResult{
-		ID:               sessionID,
-		Type:             "document",
-		Status:           "verified",
-		Result:           "clear",
-		IsDocumentValid:  true,
-		IsLive:           true,
-		DocumentType:     "passport",
-		DocumentNumber:   "MOCK123456",
-		DocumentCountry:  "US",
-		FirstName:        "John",
-		LastName:         "Doe",
-		DateOfBirth:      &dob,
-		RiskScore:        10,
-		ConfidenceScore:  95,
+		ID:              sessionID,
+		Type:            "document",
+		Status:          "verified",
+		Result:          "clear",
+		IsDocumentValid: true,
+		IsLive:          true,
+		DocumentType:    "passport",
+		DocumentNumber:  "MOCK123456",
+		DocumentCountry: "US",
+		FirstName:       "John",
+		LastName:        "Doe",
+		DateOfBirth:     &dob,
+		RiskScore:       10,
+		ConfidenceScore: 95,
 	}, nil
 }
-

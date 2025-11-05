@@ -19,11 +19,11 @@ const (
 
 // ImpersonationContext holds impersonation data in the request context
 type ImpersonationContext struct {
-	IsImpersonating bool       `json:"is_impersonating"`
-	ImpersonationID *xid.ID    `json:"impersonation_id,omitempty"`
-	ImpersonatorID  *xid.ID    `json:"impersonator_id,omitempty"`
-	TargetUserID    *xid.ID    `json:"target_user_id,omitempty"`
-	IndicatorMsg    string     `json:"indicator_message,omitempty"`
+	IsImpersonating bool    `json:"is_impersonating"`
+	ImpersonationID *xid.ID `json:"impersonation_id,omitempty"`
+	ImpersonatorID  *xid.ID `json:"impersonator_id,omitempty"`
+	TargetUserID    *xid.ID `json:"target_user_id,omitempty"`
+	IndicatorMsg    string  `json:"indicator_message,omitempty"`
 }
 
 // ImpersonationMiddleware adds impersonation context to requests
@@ -132,7 +132,7 @@ func (m *ImpersonationMiddleware) AuditImpersonationAction() func(forge.Context)
 		// This would typically be done after the handler completes
 		// For now, we'll just add it to the context for the handler to use
 		action := fmt.Sprintf("%s %s", c.Request().Method, c.Request().URL.Path)
-		
+
 		// Store action for later auditing
 		ctx := context.WithValue(c.Request().Context(), "impersonation_action", action)
 		c.Request().WithContext(ctx)
@@ -209,4 +209,3 @@ func GetTargetUserID(c forge.Context) *xid.ID {
 	}
 	return impCtx.TargetUserID
 }
-

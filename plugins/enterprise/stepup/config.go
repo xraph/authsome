@@ -17,13 +17,13 @@ const (
 type VerificationMethod string
 
 const (
-	MethodPassword    VerificationMethod = "password"     // Password verification
-	MethodTOTP        VerificationMethod = "totp"         // Time-based OTP
-	MethodSMS         VerificationMethod = "sms"          // SMS code
-	MethodEmail       VerificationMethod = "email"        // Email code
-	MethodBiometric   VerificationMethod = "biometric"    // Biometric verification
-	MethodWebAuthn    VerificationMethod = "webauthn"     // WebAuthn/FIDO2
-	MethodBackupCode  VerificationMethod = "backup_code"  // Backup codes
+	MethodPassword   VerificationMethod = "password"    // Password verification
+	MethodTOTP       VerificationMethod = "totp"        // Time-based OTP
+	MethodSMS        VerificationMethod = "sms"         // SMS code
+	MethodEmail      VerificationMethod = "email"       // Email code
+	MethodBiometric  VerificationMethod = "biometric"   // Biometric verification
+	MethodWebAuthn   VerificationMethod = "webauthn"    // WebAuthn/FIDO2
+	MethodBackupCode VerificationMethod = "backup_code" // Backup codes
 )
 
 // Config holds the step-up authentication plugin configuration
@@ -43,21 +43,21 @@ type Config struct {
 	CriticalMethods []VerificationMethod `json:"critical_methods" yaml:"critical_methods"`
 
 	// Rule configuration
-	RouteRules      []RouteRule      `json:"route_rules" yaml:"route_rules"`
-	AmountRules     []AmountRule     `json:"amount_rules" yaml:"amount_rules"`
-	ResourceRules   []ResourceRule   `json:"resource_rules" yaml:"resource_rules"`
-	TimeBasedRules  []TimeBasedRule  `json:"time_based_rules" yaml:"time_based_rules"`
-	ContextRules    []ContextRule    `json:"context_rules" yaml:"context_rules"`
+	RouteRules     []RouteRule     `json:"route_rules" yaml:"route_rules"`
+	AmountRules    []AmountRule    `json:"amount_rules" yaml:"amount_rules"`
+	ResourceRules  []ResourceRule  `json:"resource_rules" yaml:"resource_rules"`
+	TimeBasedRules []TimeBasedRule `json:"time_based_rules" yaml:"time_based_rules"`
+	ContextRules   []ContextRule   `json:"context_rules" yaml:"context_rules"`
 
 	// Grace periods and remembering
-	RememberStepUp      bool          `json:"remember_step_up" yaml:"remember_step_up"`           // Remember step-up per device
-	RememberDuration    time.Duration `json:"remember_duration" yaml:"remember_duration"`         // How long to remember
-	GracePeriod         time.Duration `json:"grace_period" yaml:"grace_period"`                   // Grace period after step-up
+	RememberStepUp   bool          `json:"remember_step_up" yaml:"remember_step_up"`   // Remember step-up per device
+	RememberDuration time.Duration `json:"remember_duration" yaml:"remember_duration"` // How long to remember
+	GracePeriod      time.Duration `json:"grace_period" yaml:"grace_period"`           // Grace period after step-up
 
 	// User experience
-	AllowDegradation    bool   `json:"allow_degradation" yaml:"allow_degradation"`       // Allow graceful degradation
-	PromptMessage       string `json:"prompt_message" yaml:"prompt_message"`             // Custom prompt message
-	RedirectURL         string `json:"redirect_url" yaml:"redirect_url"`                 // Where to redirect for step-up
+	AllowDegradation bool   `json:"allow_degradation" yaml:"allow_degradation"` // Allow graceful degradation
+	PromptMessage    string `json:"prompt_message" yaml:"prompt_message"`       // Custom prompt message
+	RedirectURL      string `json:"redirect_url" yaml:"redirect_url"`           // Where to redirect for step-up
 
 	// Risk-based adaptive requirements
 	RiskBasedEnabled    bool    `json:"risk_based_enabled" yaml:"risk_based_enabled"`       // Enable adaptive security
@@ -69,7 +69,7 @@ type Config struct {
 	EnableOrgOverrides bool `json:"enable_org_overrides" yaml:"enable_org_overrides"`
 
 	// Audit and monitoring
-	AuditEnabled bool `json:"audit_enabled" yaml:"audit_enabled"`
+	AuditEnabled bool     `json:"audit_enabled" yaml:"audit_enabled"`
 	AuditEvents  []string `json:"audit_events" yaml:"audit_events"` // Events to audit
 
 	// Webhook notifications
@@ -275,4 +275,3 @@ func (c *Config) Validate() error {
 
 	return nil
 }
-

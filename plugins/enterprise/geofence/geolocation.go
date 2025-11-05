@@ -19,7 +19,7 @@ type GeoProvider interface {
 type GeoData struct {
 	IPAddress    string
 	Country      string
-	CountryCode  string  // ISO 3166-1 alpha-2
+	CountryCode  string // ISO 3166-1 alpha-2
 	Region       string
 	City         string
 	Latitude     *float64
@@ -70,7 +70,7 @@ func (p *MaxMindProvider) lookupAPI(ctx context.Context, ip string) (*GeoData, e
 	}
 
 	req.SetBasicAuth(p.licenseKey, "")
-	
+
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query MaxMind API: %w", err)
@@ -90,9 +90,9 @@ func (p *MaxMindProvider) lookupAPI(ctx context.Context, ip string) (*GeoData, e
 			Names   map[string]string `json:"names"`
 		} `json:"country"`
 		Location struct {
-			Latitude     float64 `json:"latitude"`
-			Longitude    float64 `json:"longitude"`
-			AccuracyRadius int   `json:"accuracy_radius"`
+			Latitude       float64 `json:"latitude"`
+			Longitude      float64 `json:"longitude"`
+			AccuracyRadius int     `json:"accuracy_radius"`
 		} `json:"location"`
 		Subdivisions []struct {
 			Names map[string]string `json:"names"`
@@ -162,7 +162,7 @@ func (p *IPAPIProvider) Name() string {
 
 func (p *IPAPIProvider) Lookup(ctx context.Context, ip string) (*GeoData, error) {
 	url := fmt.Sprintf("https://api.ipapi.com/%s?access_key=%s", ip, p.apiKey)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -236,7 +236,7 @@ func (p *IPInfoProvider) Name() string {
 
 func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error) {
 	url := fmt.Sprintf("https://ipinfo.io/%s?token=%s", ip, p.token)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -311,7 +311,7 @@ func (p *IPGeolocationProvider) Name() string {
 
 func (p *IPGeolocationProvider) Lookup(ctx context.Context, ip string) (*GeoData, error) {
 	url := fmt.Sprintf("https://api.ipgeolocation.io/ipgeo?apiKey=%s&ip=%s", p.apiKey, ip)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -329,13 +329,13 @@ func (p *IPGeolocationProvider) Lookup(ctx context.Context, ip string) (*GeoData
 	}
 
 	var result struct {
-		CountryName string  `json:"country_name"`
-		CountryCode string  `json:"country_code2"`
-		State       string  `json:"state_prov"`
-		City        string  `json:"city"`
-		Latitude    string  `json:"latitude"`
-		Longitude   string  `json:"longitude"`
-		ISP         string  `json:"isp"`
+		CountryName  string `json:"country_name"`
+		CountryCode  string `json:"country_code2"`
+		State        string `json:"state_prov"`
+		City         string `json:"city"`
+		Latitude     string `json:"latitude"`
+		Longitude    string `json:"longitude"`
+		ISP          string `json:"isp"`
 		Organization string `json:"organization"`
 	}
 
@@ -360,4 +360,3 @@ func (p *IPGeolocationProvider) Lookup(ctx context.Context, ip string) (*GeoData
 		Provider:     "ipgeolocation",
 	}, nil
 }
-

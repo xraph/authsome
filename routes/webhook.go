@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/forge"
 )
 
@@ -21,7 +21,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithTags("Webhooks"),
 			forge.WithValidation(true),
 		)
-		
+
 		webhooks.GET("", handler.ListWebhooks,
 			forge.WithName("webhooks.list"),
 			forge.WithSummary("List webhooks"),
@@ -30,7 +30,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithResponseSchema(500, "Internal server error", WebhookErrorResponse{}),
 			forge.WithTags("Webhooks"),
 		)
-		
+
 		webhooks.GET("/:id", handler.GetWebhook,
 			forge.WithName("webhooks.get"),
 			forge.WithSummary("Get webhook"),
@@ -41,7 +41,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithResponseSchema(500, "Internal server error", WebhookErrorResponse{}),
 			forge.WithTags("Webhooks"),
 		)
-		
+
 		webhooks.PUT("/:id", handler.UpdateWebhook,
 			forge.WithName("webhooks.update"),
 			forge.WithSummary("Update webhook"),
@@ -52,7 +52,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithTags("Webhooks"),
 			forge.WithValidation(true),
 		)
-		
+
 		webhooks.DELETE("/:id", handler.DeleteWebhook,
 			forge.WithName("webhooks.delete"),
 			forge.WithSummary("Delete webhook"),
@@ -61,7 +61,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithResponseSchema(400, "Invalid webhook ID or deletion failed", WebhookErrorResponse{}),
 			forge.WithTags("Webhooks"),
 		)
-		
+
 		webhooks.GET("/:id/deliveries", handler.GetWebhookDeliveries,
 			forge.WithName("webhooks.deliveries.list"),
 			forge.WithSummary("List webhook deliveries"),

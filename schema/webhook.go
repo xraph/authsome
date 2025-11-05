@@ -43,23 +43,23 @@ type Event struct {
 type Delivery struct {
 	bun.BaseModel `bun:"table:webhook_deliveries,alias:wd"`
 
-	ID               xid.ID     `bun:"id,pk,type:varchar(20)" json:"id"`
-	WebhookID        xid.ID     `bun:"webhook_id,notnull,type:varchar(20)" json:"webhook_id"`
-	EventID          xid.ID     `bun:"event_id,notnull,type:varchar(20)" json:"event_id"`
-	URL              string     `bun:"url,notnull" json:"url"`
-	HTTPMethod       string     `bun:"http_method,notnull,default:'POST'" json:"http_method"`
-	Headers          []byte     `bun:"headers,type:jsonb" json:"headers,omitempty"`
-	Body             []byte     `bun:"body" json:"body,omitempty"`
-	Status           string     `bun:"status,notnull" json:"status"`
-	StatusCode       *int       `bun:"status_code" json:"status_code,omitempty"`
-	ResponseHeaders  []byte     `bun:"response_headers,type:jsonb" json:"response_headers,omitempty"`
-	ResponseBody     []byte     `bun:"response_body" json:"response_body,omitempty"`
-	Error            *string    `bun:"error" json:"error,omitempty"`
-	AttemptNumber    int        `bun:"attempt_number,notnull,default:1" json:"attempt_number"`
-	NextRetryAt      *time.Time `bun:"next_retry_at" json:"next_retry_at,omitempty"`
-	DeliveredAt      *time.Time `bun:"delivered_at" json:"delivered_at,omitempty"`
-	CreatedAt        time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt        time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	ID              xid.ID     `bun:"id,pk,type:varchar(20)" json:"id"`
+	WebhookID       xid.ID     `bun:"webhook_id,notnull,type:varchar(20)" json:"webhook_id"`
+	EventID         xid.ID     `bun:"event_id,notnull,type:varchar(20)" json:"event_id"`
+	URL             string     `bun:"url,notnull" json:"url"`
+	HTTPMethod      string     `bun:"http_method,notnull,default:'POST'" json:"http_method"`
+	Headers         []byte     `bun:"headers,type:jsonb" json:"headers,omitempty"`
+	Body            []byte     `bun:"body" json:"body,omitempty"`
+	Status          string     `bun:"status,notnull" json:"status"`
+	StatusCode      *int       `bun:"status_code" json:"status_code,omitempty"`
+	ResponseHeaders []byte     `bun:"response_headers,type:jsonb" json:"response_headers,omitempty"`
+	ResponseBody    []byte     `bun:"response_body" json:"response_body,omitempty"`
+	Error           *string    `bun:"error" json:"error,omitempty"`
+	AttemptNumber   int        `bun:"attempt_number,notnull,default:1" json:"attempt_number"`
+	NextRetryAt     *time.Time `bun:"next_retry_at" json:"next_retry_at,omitempty"`
+	DeliveredAt     *time.Time `bun:"delivered_at" json:"delivered_at,omitempty"`
+	CreatedAt       time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt       time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 
 	// Relations
 	Webhook *Webhook `bun:"rel:belongs-to,join:webhook_id=id" json:"webhook,omitempty"`

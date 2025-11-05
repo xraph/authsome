@@ -32,7 +32,7 @@ func NewCompiler(config CompilerConfig) (*Compiler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create parser: %w", err)
 	}
-	
+
 	return &Compiler{
 		parser:        parser,
 		maxComplexity: config.MaxComplexity,
@@ -44,29 +44,29 @@ func (c *Compiler) Compile(policy *core.Policy) (*CompiledPolicy, error) {
 	if policy == nil {
 		return nil, fmt.Errorf("policy cannot be nil")
 	}
-	
+
 	if policy.Expression == "" {
 		return nil, fmt.Errorf("policy expression cannot be empty")
 	}
-	
+
 	// Parse the CEL expression
 	ast, err := c.parser.Parse(policy.Expression)
 	if err != nil {
 		return nil, fmt.Errorf("parse failed: %w", err)
 	}
-	
+
 	// Check expression complexity
 	complexity := c.parser.ExpressionComplexity(ast)
 	if complexity > c.maxComplexity {
 		return nil, fmt.Errorf("expression complexity %d exceeds maximum %d", complexity, c.maxComplexity)
 	}
-	
+
 	// Create executable program
 	prg, err := c.parser.Program(ast)
 	if err != nil {
 		return nil, fmt.Errorf("program creation failed: %w", err)
 	}
-	
+
 	// Build compiled policy
 	compiled := &CompiledPolicy{
 		PolicyID:     policy.ID,
@@ -82,7 +82,7 @@ func (c *Compiler) Compile(policy *core.Policy) (*CompiledPolicy, error) {
 		Version:      policy.Version,
 		CompiledAt:   time.Now(),
 	}
-	
+
 	return compiled, nil
 }
 
@@ -91,15 +91,15 @@ func (c *Compiler) CompileBatch(policies []*core.Policy) (map[string]*CompiledPo
 	if len(policies) == 0 {
 		return make(map[string]*CompiledPolicy), nil
 	}
-	
+
 	type result struct {
 		id       string
 		compiled *CompiledPolicy
 		err      error
 	}
-	
+
 	results := make(chan result, len(policies))
-	
+
 	// Compile policies concurrently
 	for _, policy := range policies {
 		go func(p *core.Policy) {
@@ -111,11 +111,11 @@ func (c *Compiler) CompileBatch(policies []*core.Policy) (map[string]*CompiledPo
 			}
 		}(policy)
 	}
-	
+
 	// Collect results
 	compiled := make(map[string]*CompiledPolicy)
 	var errors []error
-	
+
 	for i := 0; i < len(policies); i++ {
 		res := <-results
 		if res.err != nil {
@@ -124,12 +124,12 @@ func (c *Compiler) CompileBatch(policies []*core.Policy) (map[string]*CompiledPo
 			compiled[res.id] = res.compiled
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		// Return partial results with first error
 		return compiled, errors[0]
 	}
-	
+
 	return compiled, nil
 }
 
@@ -151,4 +151,3 @@ func (c *Compiler) EstimateComplexity(expression string) (int, error) {
 func (c *Compiler) GetMaxComplexity() int {
 	return c.maxComplexity
 }
-

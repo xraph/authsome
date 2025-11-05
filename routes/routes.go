@@ -1,132 +1,132 @@
 package routes
 
 import (
-    "github.com/xraph/authsome/handlers"
-    "github.com/xraph/authsome/plugins/jwt"
-    "github.com/xraph/authsome/core/auth"
-    "github.com/xraph/authsome/core/user"
-    "github.com/xraph/authsome/core/device"
-    "github.com/xraph/forge"
+	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/device"
+	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/handlers"
+	"github.com/xraph/authsome/plugins/jwt"
+	"github.com/xraph/forge"
 )
 
 // Register registers auth routes using forge.Router
 func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
-    authGroup := router.Group(basePath)
-    
-    // User registration
-    authGroup.POST("/signup", h.SignUp,
-        forge.WithName("auth.signup"),
-        forge.WithSummary("User registration"),
-        forge.WithDescription("Register a new user account with email and password"),
-        forge.WithRequestSchema(auth.SignUpRequest{}),
-        forge.WithResponseSchema(200, "Registration successful", auth.AuthResponse{}),
-        forge.WithResponseSchema(400, "Invalid request or registration failed", ErrorResponse{}),
-        forge.WithResponseSchema(403, "IP or geo-restriction", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication"),
-        forge.WithValidation(true),
-    )
-    
-    // User authentication
-    authGroup.POST("/signin", h.SignIn,
-        forge.WithName("auth.signin"),
-        forge.WithSummary("User sign in"),
-        forge.WithDescription("Authenticate a user with email and password. May require 2FA verification if enabled."),
-        forge.WithRequestSchema(auth.SignInRequest{}),
-        forge.WithResponseSchema(200, "Sign in successful", auth.AuthResponse{}),
-        forge.WithResponseSchema(401, "Invalid credentials", ErrorResponse{}),
-        forge.WithResponseSchema(403, "IP or geo-restriction", ErrorResponse{}),
-        forge.WithResponseSchema(423, "Account temporarily locked", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication"),
-        forge.WithValidation(true),
-    )
-    
-    // User sign out
-    authGroup.POST("/signout", h.SignOut,
-        forge.WithName("auth.signout"),
-        forge.WithSummary("User sign out"),
-        forge.WithDescription("Sign out a user by invalidating their session token"),
-        forge.WithRequestSchema(SignOutRequest{}),
-        forge.WithResponseSchema(200, "Sign out successful", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid token or sign out failed", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication"),
-        forge.WithValidation(true),
-    )
-    
-    // Get current session
-    authGroup.GET("/session", h.GetSession,
-        forge.WithName("auth.session"),
-        forge.WithSummary("Get current session"),
-        forge.WithDescription("Retrieve the current user session and profile information"),
-        forge.WithResponseSchema(200, "Session retrieved", SessionResponse{}),
-        forge.WithResponseSchema(401, "Not authenticated or invalid session", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication", "Session"),
-    )
-    
-    // List user devices
-    authGroup.GET("/devices", h.ListDevices,
-        forge.WithName("auth.devices.list"),
-        forge.WithSummary("List user devices"),
-        forge.WithDescription("List all devices associated with the authenticated user"),
-        forge.WithResponseSchema(200, "Devices retrieved", DevicesResponse{}),
-        forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication", "Devices"),
-    )
-    
-    // Revoke device
-    authGroup.POST("/devices/revoke", h.RevokeDevice,
-        forge.WithName("auth.devices.revoke"),
-        forge.WithSummary("Revoke a device"),
-        forge.WithDescription("Remove a device from the authenticated user's trusted devices"),
-        forge.WithRequestSchema(RevokeDeviceRequest{}),
-        forge.WithResponseSchema(200, "Device revoked", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication", "Devices"),
-        forge.WithValidation(true),
-    )
-    
-    // Update user profile
-    authGroup.POST("/user/update", h.UpdateUser,
-        forge.WithName("auth.user.update"),
-        forge.WithSummary("Update user profile"),
-        forge.WithDescription("Update the authenticated user's profile information (name, image, username)"),
-        forge.WithRequestSchema(UpdateUserRequest{}),
-        forge.WithResponseSchema(200, "User updated", user.User{}),
-        forge.WithResponseSchema(400, "Invalid request or update failed", ErrorResponse{}),
-        forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
-        forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
-        forge.WithTags("Authentication", "User"),
-        forge.WithValidation(true),
-    )
+	authGroup := router.Group(basePath)
+
+	// User registration
+	authGroup.POST("/signup", h.SignUp,
+		forge.WithName("auth.signup"),
+		forge.WithSummary("User registration"),
+		forge.WithDescription("Register a new user account with email and password"),
+		forge.WithRequestSchema(auth.SignUpRequest{}),
+		forge.WithResponseSchema(200, "Registration successful", auth.AuthResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or registration failed", ErrorResponse{}),
+		forge.WithResponseSchema(403, "IP or geo-restriction", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication"),
+		forge.WithValidation(true),
+	)
+
+	// User authentication
+	authGroup.POST("/signin", h.SignIn,
+		forge.WithName("auth.signin"),
+		forge.WithSummary("User sign in"),
+		forge.WithDescription("Authenticate a user with email and password. May require 2FA verification if enabled."),
+		forge.WithRequestSchema(auth.SignInRequest{}),
+		forge.WithResponseSchema(200, "Sign in successful", auth.AuthResponse{}),
+		forge.WithResponseSchema(401, "Invalid credentials", ErrorResponse{}),
+		forge.WithResponseSchema(403, "IP or geo-restriction", ErrorResponse{}),
+		forge.WithResponseSchema(423, "Account temporarily locked", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication"),
+		forge.WithValidation(true),
+	)
+
+	// User sign out
+	authGroup.POST("/signout", h.SignOut,
+		forge.WithName("auth.signout"),
+		forge.WithSummary("User sign out"),
+		forge.WithDescription("Sign out a user by invalidating their session token"),
+		forge.WithRequestSchema(SignOutRequest{}),
+		forge.WithResponseSchema(200, "Sign out successful", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid token or sign out failed", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication"),
+		forge.WithValidation(true),
+	)
+
+	// Get current session
+	authGroup.GET("/session", h.GetSession,
+		forge.WithName("auth.session"),
+		forge.WithSummary("Get current session"),
+		forge.WithDescription("Retrieve the current user session and profile information"),
+		forge.WithResponseSchema(200, "Session retrieved", SessionResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated or invalid session", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Session"),
+	)
+
+	// List user devices
+	authGroup.GET("/devices", h.ListDevices,
+		forge.WithName("auth.devices.list"),
+		forge.WithSummary("List user devices"),
+		forge.WithDescription("List all devices associated with the authenticated user"),
+		forge.WithResponseSchema(200, "Devices retrieved", DevicesResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Devices"),
+	)
+
+	// Revoke device
+	authGroup.POST("/devices/revoke", h.RevokeDevice,
+		forge.WithName("auth.devices.revoke"),
+		forge.WithSummary("Revoke a device"),
+		forge.WithDescription("Remove a device from the authenticated user's trusted devices"),
+		forge.WithRequestSchema(RevokeDeviceRequest{}),
+		forge.WithResponseSchema(200, "Device revoked", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Devices"),
+		forge.WithValidation(true),
+	)
+
+	// Update user profile
+	authGroup.POST("/user/update", h.UpdateUser,
+		forge.WithName("auth.user.update"),
+		forge.WithSummary("Update user profile"),
+		forge.WithDescription("Update the authenticated user's profile information (name, image, username)"),
+		forge.WithRequestSchema(UpdateUserRequest{}),
+		forge.WithResponseSchema(200, "User updated", user.User{}),
+		forge.WithResponseSchema(400, "Invalid request or update failed", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "User"),
+		forge.WithValidation(true),
+	)
 }
 
 // DTOs for auth routes
 
 // ErrorResponse represents an error response
 type ErrorResponse struct {
-    Error string `json:"error" example:"Error message"`
+	Error string `json:"error" example:"Error message"`
 }
 
 // StatusResponse represents a status response
 type StatusResponse struct {
-    Status string `json:"status" example:"success"`
+	Status string `json:"status" example:"success"`
 }
 
 // SignOutRequest represents a sign out request
 type SignOutRequest struct {
-    Token string `json:"token" validate:"required" example:"session_token_here"`
+	Token string `json:"token" validate:"required" example:"session_token_here"`
 }
 
 // SessionResponse represents session information
 type SessionResponse struct {
-    User    *user.User            `json:"user"`
-    Session map[string]interface{} `json:"session"`
+	User    *user.User             `json:"user"`
+	Session map[string]interface{} `json:"session"`
 }
 
 // DevicesResponse represents a list of devices
@@ -134,236 +134,236 @@ type DevicesResponse []device.Device
 
 // RevokeDeviceRequest represents a device revocation request
 type RevokeDeviceRequest struct {
-    Fingerprint string `json:"fingerprint" validate:"required" example:"device_fingerprint_here"`
+	Fingerprint string `json:"fingerprint" validate:"required" example:"device_fingerprint_here"`
 }
 
 // UpdateUserRequest represents a user update request
 type UpdateUserRequest struct {
-    Name            *string `json:"name,omitempty" example:"John Doe"`
-    Image           *string `json:"image,omitempty" example:"https://example.com/avatar.jpg"`
-    Username        *string `json:"username,omitempty" example:"johndoe"`
-    DisplayUsername *string `json:"display_username,omitempty" example:"John D."`
+	Name            *string `json:"name,omitempty" example:"John Doe"`
+	Image           *string `json:"image,omitempty" example:"https://example.com/avatar.jpg"`
+	Username        *string `json:"username,omitempty" example:"johndoe"`
+	DisplayUsername *string `json:"display_username,omitempty" example:"John D."`
 }
 
 // RegisterAudit registers audit routes under a base path
 func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandler) {
-    grp := router.Group(basePath)
-    
-    grp.GET("/audit/events", h.ListEvents,
-        forge.WithName("audit.events.list"),
-        forge.WithSummary("List audit events"),
-        forge.WithDescription("Retrieve paginated audit events with optional filters (userId, action, since, until)"),
-        forge.WithResponseSchema(200, "Audit events retrieved", AuditEventsResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
-        forge.WithTags("Audit"),
-    )
+	grp := router.Group(basePath)
+
+	grp.GET("/audit/events", h.ListEvents,
+		forge.WithName("audit.events.list"),
+		forge.WithSummary("List audit events"),
+		forge.WithDescription("Retrieve paginated audit events with optional filters (userId, action, since, until)"),
+		forge.WithResponseSchema(200, "Audit events retrieved", AuditEventsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit"),
+	)
 }
 
 // AuditEventsResponse represents a paginated list of audit events
 type AuditEventsResponse struct {
-    Data       interface{} `json:"data"`
-    Total      int         `json:"total"`
-    Page       int         `json:"page"`
-    PageSize   int         `json:"page_size"`
-    TotalPages int         `json:"total_pages"`
+	Data       interface{} `json:"data"`
+	Total      int         `json:"total"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
+	TotalPages int         `json:"total_pages"`
 }
 
 // RegisterOrganization registers organization routes under a base path
 // This is used when multitenancy plugin is NOT enabled
 func RegisterOrganization(router forge.Router, basePath string, h *handlers.OrganizationHandler) {
-    org := router.Group(basePath)
-    
-    // Organizations
-    org.POST("/", h.CreateOrganization,
-        forge.WithName("organizations.create"),
-        forge.WithSummary("Create organization"),
-        forge.WithDescription("Create a new organization"),
-        forge.WithResponseSchema(200, "Organization created", OrganizationResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-        forge.WithValidation(true),
-    )
-    
-    org.GET("/", h.GetOrganizations,
-        forge.WithName("organizations.list"),
-        forge.WithSummary("List organizations"),
-        forge.WithDescription("List all organizations accessible to the user"),
-        forge.WithResponseSchema(200, "Organizations retrieved", OrganizationsResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-    )
-    
-    org.POST("/update", h.UpdateOrganization,
-        forge.WithName("organizations.update"),
-        forge.WithSummary("Update organization"),
-        forge.WithDescription("Update organization details"),
-        forge.WithResponseSchema(200, "Organization updated", OrganizationResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-        forge.WithValidation(true),
-    )
-    
-    org.POST("/delete", h.DeleteOrganization,
-        forge.WithName("organizations.delete"),
-        forge.WithSummary("Delete organization"),
-        forge.WithDescription("Delete an organization"),
-        forge.WithResponseSchema(200, "Organization deleted", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-    )
+	org := router.Group(basePath)
 
-    // Members
-    org.POST("/members", h.CreateMember,
-        forge.WithName("organizations.members.create"),
-        forge.WithSummary("Add organization member"),
-        forge.WithDescription("Add a new member to the organization"),
-        forge.WithResponseSchema(200, "Member added", MemberResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Members"),
-        forge.WithValidation(true),
-    )
-    
-    org.GET("/members", h.GetMembers,
-        forge.WithName("organizations.members.list"),
-        forge.WithSummary("List organization members"),
-        forge.WithDescription("List all members of the organization"),
-        forge.WithResponseSchema(200, "Members retrieved", MembersResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations", "Members"),
-    )
-    
-    org.POST("/members/update", h.UpdateMember,
-        forge.WithName("organizations.members.update"),
-        forge.WithSummary("Update member"),
-        forge.WithDescription("Update organization member details"),
-        forge.WithResponseSchema(200, "Member updated", MemberResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Members"),
-        forge.WithValidation(true),
-    )
-    
-    org.POST("/members/delete", h.DeleteMember,
-        forge.WithName("organizations.members.delete"),
-        forge.WithSummary("Remove member"),
-        forge.WithDescription("Remove a member from the organization"),
-        forge.WithResponseSchema(200, "Member removed", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Members"),
-    )
+	// Organizations
+	org.POST("/", h.CreateOrganization,
+		forge.WithName("organizations.create"),
+		forge.WithSummary("Create organization"),
+		forge.WithDescription("Create a new organization"),
+		forge.WithResponseSchema(200, "Organization created", OrganizationResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+		forge.WithValidation(true),
+	)
 
-    // Teams
-    org.POST("/teams", h.CreateTeam,
-        forge.WithName("organizations.teams.create"),
-        forge.WithSummary("Create team"),
-        forge.WithDescription("Create a new team within the organization"),
-        forge.WithResponseSchema(200, "Team created", TeamResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-        forge.WithValidation(true),
-    )
-    
-    org.GET("/teams", h.GetTeams,
-        forge.WithName("organizations.teams.list"),
-        forge.WithSummary("List teams"),
-        forge.WithDescription("List all teams in the organization"),
-        forge.WithResponseSchema(200, "Teams retrieved", TeamsResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-    )
-    
-    org.POST("/teams/update", h.UpdateTeam,
-        forge.WithName("organizations.teams.update"),
-        forge.WithSummary("Update team"),
-        forge.WithDescription("Update team details"),
-        forge.WithResponseSchema(200, "Team updated", TeamResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-        forge.WithValidation(true),
-    )
-    
-    org.POST("/teams/delete", h.DeleteTeam,
-        forge.WithName("organizations.teams.delete"),
-        forge.WithSummary("Delete team"),
-        forge.WithDescription("Delete a team from the organization"),
-        forge.WithResponseSchema(200, "Team deleted", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-    )
+	org.GET("/", h.GetOrganizations,
+		forge.WithName("organizations.list"),
+		forge.WithSummary("List organizations"),
+		forge.WithDescription("List all organizations accessible to the user"),
+		forge.WithResponseSchema(200, "Organizations retrieved", OrganizationsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+	)
 
-    // Team members
-    org.POST("/team_members", h.AddTeamMember,
-        forge.WithName("organizations.teams.members.add"),
-        forge.WithSummary("Add team member"),
-        forge.WithDescription("Add a member to a team"),
-        forge.WithResponseSchema(200, "Team member added", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-        forge.WithValidation(true),
-    )
-    
-    org.GET("/team_members", h.GetTeamMembers,
-        forge.WithName("organizations.teams.members.list"),
-        forge.WithSummary("List team members"),
-        forge.WithDescription("List all members of a team"),
-        forge.WithResponseSchema(200, "Team members retrieved", TeamMembersResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-    )
-    
-    org.POST("/team_members/remove", h.RemoveTeamMember,
-        forge.WithName("organizations.teams.members.remove"),
-        forge.WithSummary("Remove team member"),
-        forge.WithDescription("Remove a member from a team"),
-        forge.WithResponseSchema(200, "Team member removed", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Teams"),
-    )
+	org.POST("/update", h.UpdateOrganization,
+		forge.WithName("organizations.update"),
+		forge.WithSummary("Update organization"),
+		forge.WithDescription("Update organization details"),
+		forge.WithResponseSchema(200, "Organization updated", OrganizationResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+		forge.WithValidation(true),
+	)
 
-    // Invitations
-    org.POST("/invitations", h.CreateInvitation,
-        forge.WithName("organizations.invitations.create"),
-        forge.WithSummary("Create invitation"),
-        forge.WithDescription("Invite a user to join the organization"),
-        forge.WithResponseSchema(200, "Invitation created", InvitationResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "Invitations"),
-        forge.WithValidation(true),
-    )
+	org.POST("/delete", h.DeleteOrganization,
+		forge.WithName("organizations.delete"),
+		forge.WithSummary("Delete organization"),
+		forge.WithDescription("Delete an organization"),
+		forge.WithResponseSchema(200, "Organization deleted", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+	)
 
-    // Organization by ID endpoints (registered after specific paths to avoid conflicts)
-    org.GET("/{id}", h.GetOrganizationByID,
-        forge.WithName("organizations.get"),
-        forge.WithSummary("Get organization by ID"),
-        forge.WithDescription("Retrieve a specific organization by ID"),
-        forge.WithResponseSchema(200, "Organization retrieved", OrganizationResponse{}),
-        forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-    )
-    
-    org.POST("/{id}/update", h.UpdateOrganizationByID,
-        forge.WithName("organizations.update.byid"),
-        forge.WithSummary("Update organization by ID"),
-        forge.WithDescription("Update a specific organization by ID"),
-        forge.WithResponseSchema(200, "Organization updated", OrganizationResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-        forge.WithValidation(true),
-    )
-    
-    org.POST("/{id}/delete", h.DeleteOrganizationByID,
-        forge.WithName("organizations.delete.byid"),
-        forge.WithSummary("Delete organization by ID"),
-        forge.WithDescription("Delete a specific organization by ID"),
-        forge.WithResponseSchema(200, "Organization deleted", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
-        forge.WithTags("Organizations"),
-    )
+	// Members
+	org.POST("/members", h.CreateMember,
+		forge.WithName("organizations.members.create"),
+		forge.WithSummary("Add organization member"),
+		forge.WithDescription("Add a new member to the organization"),
+		forge.WithResponseSchema(200, "Member added", MemberResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Members"),
+		forge.WithValidation(true),
+	)
 
-    // RBAC routes
-    RegisterOrganizationRBAC(org, h)
+	org.GET("/members", h.GetMembers,
+		forge.WithName("organizations.members.list"),
+		forge.WithSummary("List organization members"),
+		forge.WithDescription("List all members of the organization"),
+		forge.WithResponseSchema(200, "Members retrieved", MembersResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations", "Members"),
+	)
+
+	org.POST("/members/update", h.UpdateMember,
+		forge.WithName("organizations.members.update"),
+		forge.WithSummary("Update member"),
+		forge.WithDescription("Update organization member details"),
+		forge.WithResponseSchema(200, "Member updated", MemberResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Members"),
+		forge.WithValidation(true),
+	)
+
+	org.POST("/members/delete", h.DeleteMember,
+		forge.WithName("organizations.members.delete"),
+		forge.WithSummary("Remove member"),
+		forge.WithDescription("Remove a member from the organization"),
+		forge.WithResponseSchema(200, "Member removed", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Members"),
+	)
+
+	// Teams
+	org.POST("/teams", h.CreateTeam,
+		forge.WithName("organizations.teams.create"),
+		forge.WithSummary("Create team"),
+		forge.WithDescription("Create a new team within the organization"),
+		forge.WithResponseSchema(200, "Team created", TeamResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+		forge.WithValidation(true),
+	)
+
+	org.GET("/teams", h.GetTeams,
+		forge.WithName("organizations.teams.list"),
+		forge.WithSummary("List teams"),
+		forge.WithDescription("List all teams in the organization"),
+		forge.WithResponseSchema(200, "Teams retrieved", TeamsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+	)
+
+	org.POST("/teams/update", h.UpdateTeam,
+		forge.WithName("organizations.teams.update"),
+		forge.WithSummary("Update team"),
+		forge.WithDescription("Update team details"),
+		forge.WithResponseSchema(200, "Team updated", TeamResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+		forge.WithValidation(true),
+	)
+
+	org.POST("/teams/delete", h.DeleteTeam,
+		forge.WithName("organizations.teams.delete"),
+		forge.WithSummary("Delete team"),
+		forge.WithDescription("Delete a team from the organization"),
+		forge.WithResponseSchema(200, "Team deleted", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+	)
+
+	// Team members
+	org.POST("/team_members", h.AddTeamMember,
+		forge.WithName("organizations.teams.members.add"),
+		forge.WithSummary("Add team member"),
+		forge.WithDescription("Add a member to a team"),
+		forge.WithResponseSchema(200, "Team member added", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+		forge.WithValidation(true),
+	)
+
+	org.GET("/team_members", h.GetTeamMembers,
+		forge.WithName("organizations.teams.members.list"),
+		forge.WithSummary("List team members"),
+		forge.WithDescription("List all members of a team"),
+		forge.WithResponseSchema(200, "Team members retrieved", TeamMembersResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+	)
+
+	org.POST("/team_members/remove", h.RemoveTeamMember,
+		forge.WithName("organizations.teams.members.remove"),
+		forge.WithSummary("Remove team member"),
+		forge.WithDescription("Remove a member from a team"),
+		forge.WithResponseSchema(200, "Team member removed", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Teams"),
+	)
+
+	// Invitations
+	org.POST("/invitations", h.CreateInvitation,
+		forge.WithName("organizations.invitations.create"),
+		forge.WithSummary("Create invitation"),
+		forge.WithDescription("Invite a user to join the organization"),
+		forge.WithResponseSchema(200, "Invitation created", InvitationResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "Invitations"),
+		forge.WithValidation(true),
+	)
+
+	// Organization by ID endpoints (registered after specific paths to avoid conflicts)
+	org.GET("/{id}", h.GetOrganizationByID,
+		forge.WithName("organizations.get"),
+		forge.WithSummary("Get organization by ID"),
+		forge.WithDescription("Retrieve a specific organization by ID"),
+		forge.WithResponseSchema(200, "Organization retrieved", OrganizationResponse{}),
+		forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+	)
+
+	org.POST("/{id}/update", h.UpdateOrganizationByID,
+		forge.WithName("organizations.update.byid"),
+		forge.WithSummary("Update organization by ID"),
+		forge.WithDescription("Update a specific organization by ID"),
+		forge.WithResponseSchema(200, "Organization updated", OrganizationResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+		forge.WithValidation(true),
+	)
+
+	org.POST("/{id}/delete", h.DeleteOrganizationByID,
+		forge.WithName("organizations.delete.byid"),
+		forge.WithSummary("Delete organization by ID"),
+		forge.WithDescription("Delete a specific organization by ID"),
+		forge.WithResponseSchema(200, "Organization deleted", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
+		forge.WithTags("Organizations"),
+	)
+
+	// RBAC routes
+	RegisterOrganizationRBAC(org, h)
 }
 
 // Organization DTOs (placeholder types - actual implementations should be in handlers or core)
@@ -379,93 +379,93 @@ type InvitationResponse struct{}
 // RegisterOrganizationRBAC registers RBAC-related routes (policies, roles, user roles)
 // This is used when multitenancy plugin IS enabled to supplement its routes
 func RegisterOrganizationRBAC(router forge.Router, h *handlers.OrganizationHandler) {
-    // Policies
-    router.POST("/policies", h.CreatePolicy,
-        forge.WithName("organizations.policies.create"),
-        forge.WithSummary("Create policy"),
-        forge.WithDescription("Create a new RBAC policy for the organization"),
-        forge.WithResponseSchema(200, "Policy created", PolicyResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Policies"),
-        forge.WithValidation(true),
-    )
-    
-    router.GET("/policies", h.GetPolicies,
-        forge.WithName("organizations.policies.list"),
-        forge.WithSummary("List policies"),
-        forge.WithDescription("List all RBAC policies for the organization"),
-        forge.WithResponseSchema(200, "Policies retrieved", PoliciesResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Policies"),
-    )
-    
-    router.POST("/policies/delete", h.DeletePolicy,
-        forge.WithName("organizations.policies.delete"),
-        forge.WithSummary("Delete policy"),
-        forge.WithDescription("Delete an RBAC policy"),
-        forge.WithResponseSchema(200, "Policy deleted", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Policies"),
-    )
-    
-    router.POST("/policies/update", h.UpdatePolicy,
-        forge.WithName("organizations.policies.update"),
-        forge.WithSummary("Update policy"),
-        forge.WithDescription("Update an existing RBAC policy"),
-        forge.WithResponseSchema(200, "Policy updated", PolicyResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Policies"),
-        forge.WithValidation(true),
-    )
+	// Policies
+	router.POST("/policies", h.CreatePolicy,
+		forge.WithName("organizations.policies.create"),
+		forge.WithSummary("Create policy"),
+		forge.WithDescription("Create a new RBAC policy for the organization"),
+		forge.WithResponseSchema(200, "Policy created", PolicyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Policies"),
+		forge.WithValidation(true),
+	)
 
-    // Roles
-    router.POST("/roles", h.CreateRole,
-        forge.WithName("organizations.roles.create"),
-        forge.WithSummary("Create role"),
-        forge.WithDescription("Create a new RBAC role for the organization"),
-        forge.WithResponseSchema(200, "Role created", RoleResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Roles"),
-        forge.WithValidation(true),
-    )
-    
-    router.GET("/roles", h.GetRoles,
-        forge.WithName("organizations.roles.list"),
-        forge.WithSummary("List roles"),
-        forge.WithDescription("List all RBAC roles for the organization"),
-        forge.WithResponseSchema(200, "Roles retrieved", RolesResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Roles"),
-    )
+	router.GET("/policies", h.GetPolicies,
+		forge.WithName("organizations.policies.list"),
+		forge.WithSummary("List policies"),
+		forge.WithDescription("List all RBAC policies for the organization"),
+		forge.WithResponseSchema(200, "Policies retrieved", PoliciesResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Policies"),
+	)
 
-    // User role assignments
-    router.POST("/user_roles/assign", h.AssignUserRole,
-        forge.WithName("organizations.user_roles.assign"),
-        forge.WithSummary("Assign user role"),
-        forge.WithDescription("Assign an RBAC role to a user"),
-        forge.WithResponseSchema(200, "Role assigned", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Roles"),
-        forge.WithValidation(true),
-    )
-    
-    router.POST("/user_roles/remove", h.RemoveUserRole,
-        forge.WithName("organizations.user_roles.remove"),
-        forge.WithSummary("Remove user role"),
-        forge.WithDescription("Remove an RBAC role from a user"),
-        forge.WithResponseSchema(200, "Role removed", StatusResponse{}),
-        forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Roles"),
-    )
-    
-    router.GET("/user_roles", h.GetUserRoles,
-        forge.WithName("organizations.user_roles.list"),
-        forge.WithSummary("List user roles"),
-        forge.WithDescription("List all roles assigned to users in the organization"),
-        forge.WithResponseSchema(200, "User roles retrieved", UserRolesResponse{}),
-        forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
-        forge.WithTags("Organizations", "RBAC", "Roles"),
-    )
+	router.POST("/policies/delete", h.DeletePolicy,
+		forge.WithName("organizations.policies.delete"),
+		forge.WithSummary("Delete policy"),
+		forge.WithDescription("Delete an RBAC policy"),
+		forge.WithResponseSchema(200, "Policy deleted", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Policies"),
+	)
+
+	router.POST("/policies/update", h.UpdatePolicy,
+		forge.WithName("organizations.policies.update"),
+		forge.WithSummary("Update policy"),
+		forge.WithDescription("Update an existing RBAC policy"),
+		forge.WithResponseSchema(200, "Policy updated", PolicyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Policies"),
+		forge.WithValidation(true),
+	)
+
+	// Roles
+	router.POST("/roles", h.CreateRole,
+		forge.WithName("organizations.roles.create"),
+		forge.WithSummary("Create role"),
+		forge.WithDescription("Create a new RBAC role for the organization"),
+		forge.WithResponseSchema(200, "Role created", RoleResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Roles"),
+		forge.WithValidation(true),
+	)
+
+	router.GET("/roles", h.GetRoles,
+		forge.WithName("organizations.roles.list"),
+		forge.WithSummary("List roles"),
+		forge.WithDescription("List all RBAC roles for the organization"),
+		forge.WithResponseSchema(200, "Roles retrieved", RolesResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Roles"),
+	)
+
+	// User role assignments
+	router.POST("/user_roles/assign", h.AssignUserRole,
+		forge.WithName("organizations.user_roles.assign"),
+		forge.WithSummary("Assign user role"),
+		forge.WithDescription("Assign an RBAC role to a user"),
+		forge.WithResponseSchema(200, "Role assigned", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Roles"),
+		forge.WithValidation(true),
+	)
+
+	router.POST("/user_roles/remove", h.RemoveUserRole,
+		forge.WithName("organizations.user_roles.remove"),
+		forge.WithSummary("Remove user role"),
+		forge.WithDescription("Remove an RBAC role from a user"),
+		forge.WithResponseSchema(200, "Role removed", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Roles"),
+	)
+
+	router.GET("/user_roles", h.GetUserRoles,
+		forge.WithName("organizations.user_roles.list"),
+		forge.WithSummary("List user roles"),
+		forge.WithDescription("List all roles assigned to users in the organization"),
+		forge.WithResponseSchema(200, "User roles retrieved", UserRolesResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithTags("Organizations", "RBAC", "Roles"),
+	)
 }
 
 // RBAC DTOs
@@ -477,24 +477,24 @@ type UserRolesResponse []interface{}
 
 // RegisterAPIKey registers API key routes under a base path
 func RegisterAPIKey(router forge.Router, basePath string, h *handlers.APIKeyHandler) {
-    grp := router.Group(basePath)
-    RegisterAPIKeyRoutes(grp, h)
+	grp := router.Group(basePath)
+	RegisterAPIKeyRoutes(grp, h)
 }
 
 // RegisterJWT registers JWT routes under a base path
 func RegisterJWT(router forge.Router, basePath string, h *jwt.Handler) {
-    grp := router.Group(basePath)
-    RegisterJWTRoutes(grp, h)
+	grp := router.Group(basePath)
+	RegisterJWTRoutes(grp, h)
 }
 
 // RegisterWebhook registers webhook routes under a base path
 func RegisterWebhook(router forge.Router, basePath string, h *handlers.WebhookHandler) {
-    grp := router.Group(basePath)
-    RegisterWebhookRoutes(grp, h)
+	grp := router.Group(basePath)
+	RegisterWebhookRoutes(grp, h)
 }
 
 // RegisterNotification registers notification routes under a base path
 func RegisterNotification(router forge.Router, basePath string, h *handlers.NotificationHandler) {
-    grp := router.Group(basePath)
-    RegisterNotificationRoutes(grp, h)
+	grp := router.Group(basePath)
+	RegisterNotificationRoutes(grp, h)
 }

@@ -12,41 +12,41 @@ import (
 type Metrics struct {
 	// Operations counter by type and status
 	operations *expvar.Map // scim_operations_total{operation,status,org_id}
-	
+
 	// Request duration histogram
 	requestDuration *expvar.Map // scim_request_duration_seconds{endpoint,quantile}
-	
+
 	// Rate limit hits
 	rateLimitHits *expvar.Int // scim_rate_limit_hits_total
-	
+
 	// Token operations
 	tokenValidations *expvar.Int // scim_token_validations_total
 	tokenFailures    *expvar.Int // scim_token_validation_failures_total
 	tokenCreations   *expvar.Int // scim_token_creations_total
 	tokenRevocations *expvar.Int // scim_token_revocations_total
-	
+
 	// Provisioning operations
 	userCreations *expvar.Int // scim_user_creations_total
 	userUpdates   *expvar.Int // scim_user_updates_total
 	userDeletions *expvar.Int // scim_user_deletions_total
 	userReads     *expvar.Int // scim_user_reads_total
-	
+
 	groupCreations *expvar.Int // scim_group_creations_total
 	groupUpdates   *expvar.Int // scim_group_updates_total
 	groupDeletions *expvar.Int // scim_group_deletions_total
-	
+
 	bulkOperations *expvar.Int // scim_bulk_operations_total
-	
+
 	// Errors by type
 	errors *expvar.Map // scim_errors_total{type}
-	
+
 	// Latency tracking (for percentile calculation)
 	latencyMu sync.RWMutex
 	latencies map[string][]float64 // endpoint -> duration in milliseconds
-	
+
 	// Active requests gauge
 	activeRequests *expvar.Int // scim_active_requests
-	
+
 	// Webhook metrics
 	webhooksSent    *expvar.Int // scim_webhooks_sent_total
 	webhooksFailed  *expvar.Int // scim_webhooks_failed_total
@@ -84,7 +84,7 @@ func GetMetrics() *Metrics {
 			webhooksFailed:   expvar.NewInt("scim_webhooks_failed_total"),
 			webhooksRetried:  expvar.NewInt("scim_webhooks_retried_total"),
 		}
-		
+
 		// Register custom functions for percentile calculations
 		expvar.Publish("scim_request_duration_p50", expvar.Func(func() interface{} {
 			return metrics.getPercentile(50)
@@ -108,16 +108,16 @@ func (m *Metrics) RecordOperation(operation, status, orgID string) {
 // RecordRequestDuration records the duration of a SCIM request
 func (m *Metrics) RecordRequestDuration(endpoint string, duration time.Duration) {
 	durationMs := float64(duration.Milliseconds())
-	
+
 	m.latencyMu.Lock()
 	defer m.latencyMu.Unlock()
-	
+
 	if m.latencies[endpoint] == nil {
 		m.latencies[endpoint] = make([]float64, 0, 1000)
 	}
-	
+
 	m.latencies[endpoint] = append(m.latencies[endpoint], durationMs)
-	
+
 	// Keep only last 1000 requests per endpoint
 	if len(m.latencies[endpoint]) > 1000 {
 		m.latencies[endpoint] = m.latencies[endpoint][1:]
@@ -211,18 +211,18 @@ func (m *Metrics) RecordWebhook(success bool, retried bool) {
 func (m *Metrics) getPercentile(percentile int) map[string]float64 {
 	m.latencyMu.RLock()
 	defer m.latencyMu.RUnlock()
-	
+
 	result := make(map[string]float64)
-	
+
 	for endpoint, latencies := range m.latencies {
 		if len(latencies) == 0 {
 			continue
 		}
-		
+
 		// Simple percentile calculation (sorted copy)
 		sorted := make([]float64, len(latencies))
 		copy(sorted, latencies)
-		
+
 		// Bubble sort (good enough for 1000 elements)
 		for i := 0; i < len(sorted); i++ {
 			for j := i + 1; j < len(sorted); j++ {
@@ -231,15 +231,15 @@ func (m *Metrics) getPercentile(percentile int) map[string]float64 {
 				}
 			}
 		}
-		
+
 		index := (len(sorted) * percentile) / 100
 		if index >= len(sorted) {
 			index = len(sorted) - 1
 		}
-		
+
 		result[endpoint] = sorted[index]
 	}
-	
+
 	return result
 }
 
@@ -247,34 +247,34 @@ func (m *Metrics) getPercentile(percentile int) map[string]float64 {
 func (m *Metrics) GetStats() map[string]interface{} {
 	m.latencyMu.RLock()
 	defer m.latencyMu.RUnlock()
-	
+
 	totalLatencies := 0
 	for _, latencies := range m.latencies {
 		totalLatencies += len(latencies)
 	}
-	
+
 	return map[string]interface{}{
-		"token_validations":   m.tokenValidations.Value(),
-		"token_failures":      m.tokenFailures.Value(),
-		"token_creations":     m.tokenCreations.Value(),
-		"token_revocations":   m.tokenRevocations.Value(),
-		"user_creations":      m.userCreations.Value(),
-		"user_updates":        m.userUpdates.Value(),
-		"user_deletions":      m.userDeletions.Value(),
-		"user_reads":          m.userReads.Value(),
-		"group_creations":     m.groupCreations.Value(),
-		"group_updates":       m.groupUpdates.Value(),
-		"group_deletions":     m.groupDeletions.Value(),
-		"bulk_operations":     m.bulkOperations.Value(),
-		"rate_limit_hits":     m.rateLimitHits.Value(),
-		"active_requests":     m.activeRequests.Value(),
-		"webhooks_sent":       m.webhooksSent.Value(),
-		"webhooks_failed":     m.webhooksFailed.Value(),
-		"webhooks_retried":    m.webhooksRetried.Value(),
+		"token_validations":     m.tokenValidations.Value(),
+		"token_failures":        m.tokenFailures.Value(),
+		"token_creations":       m.tokenCreations.Value(),
+		"token_revocations":     m.tokenRevocations.Value(),
+		"user_creations":        m.userCreations.Value(),
+		"user_updates":          m.userUpdates.Value(),
+		"user_deletions":        m.userDeletions.Value(),
+		"user_reads":            m.userReads.Value(),
+		"group_creations":       m.groupCreations.Value(),
+		"group_updates":         m.groupUpdates.Value(),
+		"group_deletions":       m.groupDeletions.Value(),
+		"bulk_operations":       m.bulkOperations.Value(),
+		"rate_limit_hits":       m.rateLimitHits.Value(),
+		"active_requests":       m.activeRequests.Value(),
+		"webhooks_sent":         m.webhooksSent.Value(),
+		"webhooks_failed":       m.webhooksFailed.Value(),
+		"webhooks_retried":      m.webhooksRetried.Value(),
 		"total_latency_samples": totalLatencies,
-		"p50_latencies":       m.getPercentile(50),
-		"p95_latencies":       m.getPercentile(95),
-		"p99_latencies":       m.getPercentile(99),
+		"p50_latencies":         m.getPercentile(50),
+		"p95_latencies":         m.getPercentile(95),
+		"p99_latencies":         m.getPercentile(99),
 	}
 }
 
@@ -299,9 +299,8 @@ func (m *Metrics) Reset() {
 	m.webhooksSent.Set(0)
 	m.webhooksFailed.Set(0)
 	m.webhooksRetried.Set(0)
-	
+
 	m.latencyMu.Lock()
 	m.latencies = make(map[string][]float64)
 	m.latencyMu.Unlock()
 }
-

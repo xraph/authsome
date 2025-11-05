@@ -16,13 +16,13 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 			if err != nil {
 				return c.JSON(401, map[string]string{"error": "unauthorized"})
 			}
-			
+
 			// Check if user has enrolled factors
 			factors, err := service.ListFactors(c.Request().Context(), userID, true)
 			if err != nil {
 				return c.JSON(500, map[string]string{"error": "failed to check MFA status"})
 			}
-			
+
 			if len(factors) == 0 {
 				// No factors enrolled - require enrollment
 				return c.JSON(403, map[string]interface{}{
@@ -31,7 +31,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 					"action":  "enroll",
 				})
 			}
-			
+
 			// Check for valid MFA session token
 			mfaToken := c.Request().Header.Get("X-MFA-Token")
 			if mfaToken == "" {
@@ -41,7 +41,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 					mfaToken = cookie.Value
 				}
 			}
-			
+
 			if mfaToken == "" {
 				// No MFA token - require verification
 				return c.JSON(403, map[string]interface{}{
@@ -50,7 +50,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 					"action":  "verify",
 				})
 			}
-			
+
 			// Validate MFA token
 			session, err := service.repo.GetSessionByToken(c.Request().Context(), mfaToken)
 			if err != nil || session == nil {
@@ -60,7 +60,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 					"action":  "verify",
 				})
 			}
-			
+
 			// Check if session is completed
 			if session.CompletedAt == nil {
 				return c.JSON(403, map[string]interface{}{
@@ -69,7 +69,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 					"action":  "verify",
 				})
 			}
-			
+
 			// Check if session expired
 			if time.Now().After(session.ExpiresAt) {
 				return c.JSON(403, map[string]interface{}{
@@ -78,10 +78,10 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 					"action":  "verify",
 				})
 			}
-			
+
 			// Store MFA session in context for use by handlers
 			c.Set("mfa_session", session)
-			
+
 			return next(c)
 		}
 	}
@@ -95,12 +95,12 @@ func RequireFactorType(service *Service, factorType FactorType) func(func(forge.
 			if err != nil {
 				return c.JSON(401, map[string]string{"error": "unauthorized"})
 			}
-			
+
 			factors, err := service.ListFactors(c.Request().Context(), userID, true)
 			if err != nil {
 				return c.JSON(500, map[string]string{"error": "failed to check factors"})
 			}
-			
+
 			// Check if user has the required factor type
 			hasFactorType := false
 			for _, factor := range factors {
@@ -109,7 +109,7 @@ func RequireFactorType(service *Service, factorType FactorType) func(func(forge.
 					break
 				}
 			}
-			
+
 			if !hasFactorType {
 				return c.JSON(403, map[string]interface{}{
 					"error":         "factor_required",
@@ -118,7 +118,7 @@ func RequireFactorType(service *Service, factorType FactorType) func(func(forge.
 					"action":        "enroll",
 				})
 			}
-			
+
 			return next(c)
 		}
 	}
@@ -132,7 +132,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 			if err != nil {
 				return c.JSON(401, map[string]string{"error": "unauthorized"})
 			}
-			
+
 			// Get MFA token
 			mfaToken := c.Request().Header.Get("X-MFA-Token")
 			if mfaToken == "" {
@@ -141,7 +141,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 					mfaToken = cookie.Value
 				}
 			}
-			
+
 			if mfaToken == "" {
 				return c.JSON(403, map[string]interface{}{
 					"error":   "step_up_required",
@@ -149,7 +149,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 					"action":  "step_up",
 				})
 			}
-			
+
 			// Get session
 			session, err := service.repo.GetSessionByToken(c.Request().Context(), mfaToken)
 			if err != nil || session == nil || session.CompletedAt == nil {
@@ -159,7 +159,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 					"action":  "step_up",
 				})
 			}
-			
+
 			// Check if verification is recent enough
 			age := time.Since(*session.CompletedAt)
 			if age > maxAge {
@@ -171,15 +171,15 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 					"max_age": maxAge.String(),
 				})
 			}
-			
+
 			// Verify session belongs to user
 			if session.UserID != userID {
 				return c.JSON(403, map[string]string{"error": "forbidden"})
 			}
-			
+
 			c.Set("mfa_session", session)
 			c.Set("step_up_verified", true)
-			
+
 			return next(c)
 		}
 	}
@@ -192,12 +192,12 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 			if !service.config.AdaptiveMFA.Enabled {
 				return next(c)
 			}
-			
+
 			userID, err := getUserIDFromContext(c)
 			if err != nil {
 				return c.JSON(401, map[string]string{"error": "unauthorized"})
 			}
-			
+
 			// Perform risk assessment
 			riskCtx := &RiskContext{
 				UserID:    userID,
@@ -206,17 +206,17 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 				DeviceID:  c.Request().Header.Get("X-Device-ID"),
 				Timestamp: time.Now(),
 			}
-			
+
 			assessment, err := service.riskEngine.AssessRisk(c.Request().Context(), riskCtx)
 			if err != nil {
 				// Log error but don't block request
 				// In production, you might want to block on assessment failure
 				return next(c)
 			}
-			
+
 			// Store assessment in context
 			c.Set("risk_assessment", assessment)
-			
+
 			// If risk is high, require MFA
 			if assessment.Level == RiskLevelHigh || assessment.Level == RiskLevelCritical {
 				// Check for valid MFA session
@@ -227,18 +227,18 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 						mfaToken = cookie.Value
 					}
 				}
-				
+
 				if mfaToken == "" {
 					return c.JSON(403, map[string]interface{}{
-						"error":       "high_risk_mfa_required",
-						"message":     "Multi-factor authentication required due to high risk",
-						"risk_level":  assessment.Level,
-						"risk_score":  assessment.Score,
+						"error":        "high_risk_mfa_required",
+						"message":      "Multi-factor authentication required due to high risk",
+						"risk_level":   assessment.Level,
+						"risk_score":   assessment.Score,
 						"risk_factors": assessment.Factors,
-						"action":      "verify",
+						"action":       "verify",
 					})
 				}
-				
+
 				// Validate session
 				session, err := service.repo.GetSessionByToken(c.Request().Context(), mfaToken)
 				if err != nil || session == nil || session.CompletedAt == nil {
@@ -249,7 +249,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 						"action":     "verify",
 					})
 				}
-				
+
 				// For critical risk, require step-up even if session exists
 				if assessment.Level == RiskLevelCritical {
 					// Check if session is recent (within last 5 minutes)
@@ -263,7 +263,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 					}
 				}
 			}
-			
+
 			return next(c)
 		}
 	}
@@ -277,16 +277,15 @@ func OptionalMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 			if err != nil {
 				return next(c)
 			}
-			
+
 			// Check if user has MFA enrolled
 			factors, err := service.ListFactors(c.Request().Context(), userID, true)
 			if err == nil && len(factors) > 0 {
 				// User has MFA, store flag in context
 				c.Set("mfa_available", true)
 			}
-			
+
 			return next(c)
 		}
 	}
 }
-

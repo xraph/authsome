@@ -330,24 +330,24 @@ func (m *Mock) WithOrg(ctx context.Context, orgID string) context.Context {
 func (m *Mock) NewTestContext() context.Context {
 	user := m.CreateUser("test@example.com", "Test User")
 	session := m.CreateSession(user.ID.String(), m.defaultOrg.ID.String())
-	
+
 	ctx := context.Background()
 	ctx = m.WithSession(ctx, session.ID.String())
 	ctx = m.WithUser(ctx, user.ID.String())
 	ctx = m.WithOrg(ctx, m.defaultOrg.ID.String())
-	
+
 	return ctx
 }
 
 // NewTestContextWithUser creates an authenticated context for a specific user.
 func (m *Mock) NewTestContextWithUser(user *schema.User) context.Context {
 	session := m.CreateSession(user.ID.String(), m.defaultOrg.ID.String())
-	
+
 	ctx := context.Background()
 	ctx = m.WithSession(ctx, session.ID.String())
 	ctx = m.WithUser(ctx, user.ID.String())
 	ctx = m.WithOrg(ctx, m.defaultOrg.ID.String())
-	
+
 	return ctx
 }
 

@@ -83,4 +83,3 @@ func (c *RedisCache) SetMulti(ctx context.Context, policies map[string]*engine.C
 func (c *RedisCache) Stats() CacheStats {
 	return CacheStats{}
 }
-

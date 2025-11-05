@@ -41,17 +41,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	auth, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("passkey plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := auth.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for passkey plugin")
 	}
-	
+
 	p.db = db
 	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
 	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)

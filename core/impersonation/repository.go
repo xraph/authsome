@@ -31,4 +31,3 @@ type AuditRepository interface {
 	List(ctx context.Context, params AuditListRequest) ([]*schema.ImpersonationAuditEvent, error)
 	Count(ctx context.Context, params AuditListRequest) (int, error)
 }
-

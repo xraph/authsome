@@ -118,7 +118,7 @@ func (p *SendGridProvider) Send(ctx context.Context, notif *notification.Notific
 func (p *SendGridProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// SendGrid Activity Feed API
 	apiURL := fmt.Sprintf("%s/v3/messages/%s", p.config.BaseURL, providerID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to create request: %w", err)
@@ -199,4 +199,3 @@ type SendGridActivity struct {
 		Timestamp int64  `json:"timestamp"`
 	} `json:"events"`
 }
-

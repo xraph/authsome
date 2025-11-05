@@ -443,4 +443,3 @@ func (m *MockEmailService) GetSentEmails() []*Email {
 	defer m.mu.Unlock()
 	return m.sent
 }
-

@@ -32,10 +32,10 @@ func SessionsPage(data SessionsPageData) g.Node {
 	return Div(Class("space-y-6"),
 		// Search Bar
 		searchBar(data),
-		
+
 		// Sessions Table
 		sessionsTable(data),
-		
+
 		// Statistics Cards
 		statisticsCards(),
 	)
@@ -46,7 +46,7 @@ func searchBar(data SessionsPageData) g.Node {
 		Method("GET"),
 		Action(data.BasePath+"/dashboard/sessions"),
 		Class("flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"),
-		
+
 		// Search Input
 		Div(Class("flex-1 w-full max-w-lg"),
 			Label(For("search"), Class("sr-only"), g.Text("Search sessions")),
@@ -64,7 +64,7 @@ func searchBar(data SessionsPageData) g.Node {
 				),
 			),
 		),
-		
+
 		// Action Buttons
 		Div(Class("flex items-center gap-2"),
 			g.If(data.Query != "",
@@ -94,7 +94,7 @@ func sessionsTable(data SessionsPageData) g.Node {
 				),
 			),
 		),
-		
+
 		g.If(len(data.Sessions) > 0,
 			Div(Class("p-5"),
 				Div(Class("min-w-full overflow-x-auto rounded-sm"),
@@ -122,7 +122,7 @@ func sessionsTable(data SessionsPageData) g.Node {
 								),
 							),
 						),
-						
+
 						// Table Body
 						TBody(
 							g.Group(sessionRows(data)),
@@ -131,7 +131,7 @@ func sessionsTable(data SessionsPageData) g.Node {
 				),
 			),
 		),
-		
+
 		// Empty State
 		g.If(len(data.Sessions) == 0,
 			Div(Class("p-12 text-center"),
@@ -165,7 +165,7 @@ func sessionRow(session SessionData, basePath, csrfToken string) g.Node {
 	if len(session.UserID) >= 2 {
 		userInitials = session.UserID[0:2]
 	}
-	
+
 	return Tr(Class("border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors"),
 		// User
 		Td(Class("py-3 pe-3 text-start"),
@@ -185,7 +185,7 @@ func sessionRow(session SessionData, basePath, csrfToken string) g.Node {
 				),
 			),
 		),
-		
+
 		// IP Address
 		Td(Class("p-3"),
 			Span(Class("font-mono text-slate-600 dark:text-gray-400"),
@@ -197,7 +197,7 @@ func sessionRow(session SessionData, basePath, csrfToken string) g.Node {
 				),
 			),
 		),
-		
+
 		// Device
 		Td(Class("p-3 max-w-xs"),
 			Span(
@@ -211,17 +211,17 @@ func sessionRow(session SessionData, basePath, csrfToken string) g.Node {
 				),
 			),
 		),
-		
+
 		// Created
 		Td(Class("p-3 text-slate-600 dark:text-gray-400"),
 			g.Text(session.CreatedAt.Format("Jan 2, 2006 15:04")),
 		),
-		
+
 		// Expires
 		Td(Class("p-3 text-slate-600 dark:text-gray-400"),
 			g.Text(session.ExpiresAt.Format("Jan 2, 2006 15:04")),
 		),
-		
+
 		// Actions
 		Td(Class("py-3 ps-3 text-end font-medium"),
 			FormEl(
@@ -254,10 +254,10 @@ func statCard(value, label, description string, icon g.Node, color string) g.Nod
 		"emerald": {"border-emerald-100", "dark:border-emerald-900/30", "bg-emerald-50", "dark:bg-emerald-900/20", "text-emerald-500", "dark:text-emerald-400"},
 		"blue":    {"border-blue-100", "dark:border-blue-900/30", "bg-blue-50", "dark:bg-blue-900/20", "text-blue-500", "dark:text-blue-400"},
 	}
-	
+
 	classes := colorClasses[color]
 	iconClass := fmt.Sprintf("flex size-12 items-center justify-center rounded-xl border %s %s %s %s %s", classes[0], classes[1], classes[2], classes[3], classes[4])
-	
+
 	return Div(Class("flex flex-col rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900"),
 		Div(Class("flex grow items-center justify-between p-5"),
 			Dl(

@@ -247,8 +247,8 @@ func TestMaskString(t *testing.T) {
 		expected string
 	}{
 		{"test@example.com", "te************om"}, // 16 chars: first 2 + last 2 + (16-4) asterisks
-		{"short", "sh*rt"},                        // 5 chars: first 2 + last 2 + (5-4) asterisks
-		{"ab", "***"},                             // ≤4 chars: all asterisks
+		{"short", "sh*rt"},                       // 5 chars: first 2 + last 2 + (5-4) asterisks
+		{"ab", "***"},                            // ≤4 chars: all asterisks
 	}
 
 	for _, tt := range tests {

@@ -74,21 +74,21 @@ type DocumentProvider interface {
 
 // DocumentVerificationRequest contains document verification request
 type DocumentVerificationRequest struct {
-	UserID         xid.ID
-	DocumentType   string
-	FrontImage     []byte
-	BackImage      []byte
-	Selfie         []byte
+	UserID       xid.ID
+	DocumentType string
+	FrontImage   []byte
+	BackImage    []byte
+	Selfie       []byte
 }
 
 // DocumentVerificationResult contains verification result
 type DocumentVerificationResult struct {
-	VerificationID  string
-	Status          string // pending, verified, rejected
-	ConfidenceScore float64
-	ExtractedData   map[string]interface{}
+	VerificationID   string
+	Status           string // pending, verified, rejected
+	ConfidenceScore  float64
+	ExtractedData    map[string]interface{}
 	ProviderResponse map[string]interface{}
-	RejectionReason string
+	RejectionReason  string
 }
 
 // NotificationProvider handles notifications
@@ -207,9 +207,9 @@ func (p *NoOpVideoProvider) GetSession(ctx context.Context, sessionID string) (*
 func (p *NoOpVideoProvider) StartSession(ctx context.Context, sessionID string) (*VideoSessionInfo, error) {
 	now := time.Now()
 	return &VideoSessionInfo{
-		SessionID:   sessionID,
-		Status:      "in_progress",
-		StartedAt:   &now,
+		SessionID: sessionID,
+		Status:    "in_progress",
+		StartedAt: &now,
 	}, nil
 }
 
@@ -261,4 +261,3 @@ func (p *NoOpNotificationProvider) NotifyAdminReviewRequired(ctx context.Context
 func (p *NoOpNotificationProvider) NotifyHighRiskAttempt(ctx context.Context, userID xid.ID, riskScore float64) error {
 	return nil
 }
-

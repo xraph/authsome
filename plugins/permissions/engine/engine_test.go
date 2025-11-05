@@ -15,16 +15,16 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 	// Create compiler
 	compiler, err := NewCompiler(DefaultCompilerConfig())
 	require.NoError(t, err)
-	
+
 	// Create evaluator
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
-	
+
 	// Test cases
 	tests := []struct {
-		name         string
-		policy       *core.Policy
-		evalCtx      *EvaluationContext
-		expectAllow  bool
+		name        string
+		policy      *core.Policy
+		evalCtx     *EvaluationContext
+		expectAllow bool
 	}{
 		{
 			name: "owner can access",
@@ -65,10 +65,10 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 		{
 			name: "admin or owner can access",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Admin or owner",
+				ID:          xid.New(),
+				OrgID:       xid.New(),
+				NamespaceID: xid.New(),
+				Name:        "Admin or owner",
 				// Use CEL's native .exists() instead of has_role() for now
 				Expression:   `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
 				ResourceType: "document",
@@ -130,25 +130,25 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 			expectAllow: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Compile policy
 			compiled, err := compiler.Compile(tt.policy)
 			require.NoError(t, err)
 			assert.NotNil(t, compiled)
-			
+
 			// Evaluate
 			ctx := context.Background()
 			decision, err := evaluator.Evaluate(ctx, []*CompiledPolicy{compiled}, tt.evalCtx)
 			require.NoError(t, err)
 			assert.NotNil(t, decision)
 			assert.Equal(t, tt.expectAllow, decision.Allowed)
-			
+
 			if tt.expectAllow {
 				assert.NotEmpty(t, decision.MatchedPolicies)
 			}
-			
+
 			// Check performance
 			assert.Less(t, decision.EvaluationTime, 10*time.Millisecond, "Evaluation should be fast")
 		})
@@ -158,7 +158,7 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 func TestCompiler_Validate(t *testing.T) {
 	compiler, err := NewCompiler(DefaultCompilerConfig())
 	require.NoError(t, err)
-	
+
 	tests := []struct {
 		name       string
 		expression string
@@ -180,7 +180,7 @@ func TestCompiler_Validate(t *testing.T) {
 			wantErr:    true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := compiler.Validate(tt.expression)
@@ -196,7 +196,7 @@ func TestCompiler_Validate(t *testing.T) {
 func TestCompiler_CompileBatch(t *testing.T) {
 	compiler, err := NewCompiler(DefaultCompilerConfig())
 	require.NoError(t, err)
-	
+
 	policies := []*core.Policy{
 		{
 			ID:           xid.New(),
@@ -215,7 +215,7 @@ func TestCompiler_CompileBatch(t *testing.T) {
 			Actions:      []string{"write"},
 		},
 	}
-	
+
 	compiled, err := compiler.CompileBatch(policies)
 	require.NoError(t, err)
 	assert.Len(t, compiled, 2)
@@ -224,9 +224,9 @@ func TestCompiler_CompileBatch(t *testing.T) {
 func TestEvaluator_MultiplePolicies(t *testing.T) {
 	compiler, err := NewCompiler(DefaultCompilerConfig())
 	require.NoError(t, err)
-	
+
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
-	
+
 	// Create multiple policies
 	policies := []*core.Policy{
 		{
@@ -239,9 +239,9 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 			Priority:     100,
 		},
 		{
-			ID:           xid.New(),
-			OrgID:        xid.New(),
-			NamespaceID:  xid.New(),
+			ID:          xid.New(),
+			OrgID:       xid.New(),
+			NamespaceID: xid.New(),
 			// Use CEL's native .exists() instead of has_role() for now
 			Expression:   `principal.roles.exists(r, r == "admin")`,
 			ResourceType: "document",
@@ -249,7 +249,7 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 			Priority:     200, // Higher priority
 		},
 	}
-	
+
 	// Compile policies
 	compiled := make([]*CompiledPolicy, 0, len(policies))
 	for _, p := range policies {
@@ -257,7 +257,7 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 		require.NoError(t, err)
 		compiled = append(compiled, c)
 	}
-	
+
 	// Test: admin role matches (higher priority policy)
 	evalCtx := &EvaluationContext{
 		Principal: map[string]interface{}{
@@ -267,7 +267,7 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 		Resource: map[string]interface{}{"owner": "user_456"},
 		Action:   "read",
 	}
-	
+
 	decision, err := evaluator.Evaluate(context.Background(), compiled, evalCtx)
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
@@ -277,7 +277,7 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 func BenchmarkEvaluator_SimplePolicy(b *testing.B) {
 	compiler, _ := NewCompiler(DefaultCompilerConfig())
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
-	
+
 	policy := &core.Policy{
 		ID:           xid.New(),
 		OrgID:        xid.New(),
@@ -286,17 +286,17 @@ func BenchmarkEvaluator_SimplePolicy(b *testing.B) {
 		ResourceType: "document",
 		Actions:      []string{"read"},
 	}
-	
+
 	compiled, _ := compiler.Compile(policy)
-	
+
 	evalCtx := &EvaluationContext{
 		Principal: map[string]interface{}{"id": "user_123"},
 		Resource:  map[string]interface{}{"owner": "user_123"},
 		Action:    "read",
 	}
-	
+
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = evaluator.Evaluate(ctx, []*CompiledPolicy{compiled}, evalCtx)
@@ -306,7 +306,7 @@ func BenchmarkEvaluator_SimplePolicy(b *testing.B) {
 func BenchmarkEvaluator_ComplexPolicy(b *testing.B) {
 	compiler, _ := NewCompiler(DefaultCompilerConfig())
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
-	
+
 	policy := &core.Policy{
 		ID:           xid.New(),
 		OrgID:        xid.New(),
@@ -315,9 +315,9 @@ func BenchmarkEvaluator_ComplexPolicy(b *testing.B) {
 		ResourceType: "document",
 		Actions:      []string{"read"},
 	}
-	
+
 	compiled, _ := compiler.Compile(policy)
-	
+
 	evalCtx := &EvaluationContext{
 		Principal: map[string]interface{}{
 			"id":         "user_123",
@@ -330,9 +330,9 @@ func BenchmarkEvaluator_ComplexPolicy(b *testing.B) {
 		},
 		Action: "read",
 	}
-	
+
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = evaluator.Evaluate(ctx, []*CompiledPolicy{compiled}, evalCtx)
@@ -342,7 +342,7 @@ func BenchmarkEvaluator_ComplexPolicy(b *testing.B) {
 func BenchmarkEvaluator_1000Policies(b *testing.B) {
 	compiler, _ := NewCompiler(DefaultCompilerConfig())
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
-	
+
 	// Create 1000 policies
 	policies := make([]*CompiledPolicy, 1000)
 	for i := 0; i < 1000; i++ {
@@ -357,18 +357,17 @@ func BenchmarkEvaluator_1000Policies(b *testing.B) {
 		compiled, _ := compiler.Compile(policy)
 		policies[i] = compiled
 	}
-	
+
 	evalCtx := &EvaluationContext{
 		Principal: map[string]interface{}{"id": "user_123"},
 		Resource:  map[string]interface{}{"owner": "user_456"}, // No match
 		Action:    "read",
 	}
-	
+
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = evaluator.Evaluate(ctx, policies, evalCtx)
 	}
 }
-

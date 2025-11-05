@@ -583,4 +583,3 @@ func TestConfigValidation(t *testing.T) {
 	assert.NotZero(t, config2.HighAuthWindow)
 	assert.NotZero(t, config2.RememberDuration)
 }
-

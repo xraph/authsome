@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/core/registry"
@@ -13,7 +14,6 @@ import (
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
-	"github.com/uptrace/bun"
 )
 
 const (
@@ -24,10 +24,10 @@ const (
 
 // Plugin implements the AuthSome plugin interface for impersonation
 type Plugin struct {
-	config     Config
-	service    *impersonation.Service
-	handler    *Handler
-	middleware *ImpersonationMiddleware
+	config      Config
+	service     *impersonation.Service
+	handler     *Handler
+	middleware  *ImpersonationMiddleware
 	stopCleanup chan struct{}
 }
 
@@ -119,17 +119,17 @@ func (p *Plugin) Init(dep interface{}) error {
 
 	// Convert plugin config to service config
 	serviceConfig := impersonation.Config{
-		DefaultDurationMinutes:  p.config.DefaultDurationMinutes,
-		MaxDurationMinutes:      p.config.MaxDurationMinutes,
-		MinDurationMinutes:      p.config.MinDurationMinutes,
-		RequireReason:           p.config.RequireReason,
-		RequireTicket:           p.config.RequireTicket,
-		MinReasonLength:         p.config.MinReasonLength,
-		RequirePermission:       p.config.RequirePermission,
-		ImpersonatePermission:   p.config.ImpersonatePermission,
-		AuditAllActions:         p.config.AuditAllActions,
-		AutoCleanupEnabled:      p.config.AutoCleanupEnabled,
-		CleanupIntervalMinutes:  int(p.config.CleanupInterval.Minutes()),
+		DefaultDurationMinutes: p.config.DefaultDurationMinutes,
+		MaxDurationMinutes:     p.config.MaxDurationMinutes,
+		MinDurationMinutes:     p.config.MinDurationMinutes,
+		RequireReason:          p.config.RequireReason,
+		RequireTicket:          p.config.RequireTicket,
+		MinReasonLength:        p.config.MinReasonLength,
+		RequirePermission:      p.config.RequirePermission,
+		ImpersonatePermission:  p.config.ImpersonatePermission,
+		AuditAllActions:        p.config.AuditAllActions,
+		AutoCleanupEnabled:     p.config.AutoCleanupEnabled,
+		CleanupIntervalMinutes: int(p.config.CleanupInterval.Minutes()),
 	}
 
 	// Initialize service
@@ -182,7 +182,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Impersonation"),
 		forge.WithValidation(true),
 	)
-	
+
 	api.POST("/end", p.handler.EndImpersonation,
 		forge.WithName("impersonation.end"),
 		forge.WithSummary("End impersonation"),
@@ -191,7 +191,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request or no active impersonation", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
 	)
-	
+
 	api.GET("/:id", p.handler.GetImpersonation,
 		forge.WithName("impersonation.get"),
 		forge.WithSummary("Get impersonation details"),
@@ -200,7 +200,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Impersonation not found", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
 	)
-	
+
 	api.GET("/", p.handler.ListImpersonations,
 		forge.WithName("impersonation.list"),
 		forge.WithSummary("List impersonations"),
@@ -209,7 +209,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
 	)
-	
+
 	api.POST("/verify", p.handler.VerifyImpersonation,
 		forge.WithName("impersonation.verify"),
 		forge.WithSummary("Verify impersonation"),
@@ -246,23 +246,23 @@ type ImpersonationErrorResponse struct {
 }
 
 type ImpersonationStartResponse struct {
-	SessionID  string `json:"session_id"`
+	SessionID      string `json:"session_id"`
 	ImpersonatorID string `json:"impersonator_id"`
-	TargetUserID string `json:"target_user_id"`
-	StartedAt string `json:"started_at"`
+	TargetUserID   string `json:"target_user_id"`
+	StartedAt      string `json:"started_at"`
 }
 
 type ImpersonationEndResponse struct {
-	Status string `json:"status" example:"success"`
+	Status  string `json:"status" example:"success"`
 	EndedAt string `json:"ended_at"`
 }
 
 type ImpersonationSession struct{}
 type ImpersonationListResponse []interface{}
 type ImpersonationVerifyResponse struct {
-	IsImpersonating bool `json:"is_impersonating"`
-	ImpersonatorID string `json:"impersonator_id,omitempty"`
-	TargetUserID string `json:"target_user_id,omitempty"`
+	IsImpersonating bool   `json:"is_impersonating"`
+	ImpersonatorID  string `json:"impersonator_id,omitempty"`
+	TargetUserID    string `json:"target_user_id,omitempty"`
 }
 type ImpersonationAuditResponse []interface{}
 
@@ -366,4 +366,3 @@ func (p *Plugin) cleanupExpiredSessions() {
 		fmt.Printf("[Impersonation Plugin] Expired %d impersonation sessions\n", count)
 	}
 }
-

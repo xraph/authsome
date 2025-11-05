@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/user"
 )
 
 // SignupFlow implements the user registration flow
@@ -25,7 +25,7 @@ func NewSignupFlow(userService *user.Service, sessionService *session.Service) *
 
 	// Add default steps
 	flow.addDefaultSteps()
-	
+
 	return flow
 }
 
@@ -121,7 +121,7 @@ func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data 
 // checkUserExistsHandler checks if a user with the given email already exists
 func (f *SignupFlow) checkUserExistsHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
 	email, _ := data["validated_email"].(string)
-	
+
 	existingUser, err := f.userService.FindByEmail(ctx, email)
 	if err != nil && err.Error() != "user not found" {
 		return &StepResult{
@@ -227,7 +227,7 @@ func (f *SignupFlow) createSessionHandler(ctx context.Context, step *Step, data 
 func (f *SignupFlow) sendWelcomeEmailHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
 	// This is a placeholder implementation
 	// In a real implementation, you would integrate with an email service
-	
+
 	email, _ := data["validated_email"].(string)
 	name, _ := data["validated_name"].(string)
 
@@ -248,7 +248,7 @@ func (f *SignupFlow) sendWelcomeEmailHandler(ctx context.Context, step *Step, da
 // CreateSignupFlow creates a customizable signup flow with hooks
 func CreateSignupFlow(userService *user.Service, sessionService *session.Service) Flow {
 	flow := NewSignupFlow(userService, sessionService)
-	
+
 	// Add before hooks
 	flow.AddBeforeHook("validate_input", func(ctx context.Context, step *Step, data map[string]interface{}) error {
 		// Log signup attempt

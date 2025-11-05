@@ -6,25 +6,25 @@ import "time"
 type Config struct {
 	// Enable compliance plugin
 	Enabled bool `json:"enabled" yaml:"enabled"`
-	
+
 	// Default compliance standard for new organizations
 	DefaultStandard ComplianceStandard `json:"defaultStandard" yaml:"defaultStandard"`
-	
+
 	// Automated checks configuration
 	AutomatedChecks AutomatedChecksConfig `json:"automatedChecks" yaml:"automatedChecks"`
-	
+
 	// Audit configuration
 	Audit AuditConfig `json:"audit" yaml:"audit"`
-	
+
 	// Report configuration
 	Reports ReportsConfig `json:"reports" yaml:"reports"`
-	
+
 	// Retention configuration
 	Retention RetentionConfig `json:"retention" yaml:"retention"`
-	
+
 	// Notifications
 	Notifications NotificationsConfig `json:"notifications" yaml:"notifications"`
-	
+
 	// Dashboard configuration
 	Dashboard DashboardConfig `json:"dashboard" yaml:"dashboard"`
 }
@@ -33,34 +33,34 @@ type Config struct {
 type AutomatedChecksConfig struct {
 	Enabled       bool          `json:"enabled" yaml:"enabled"`
 	CheckInterval time.Duration `json:"checkInterval" yaml:"checkInterval"` // e.g., 24h
-	
+
 	// Specific checks
-	MFACoverage          bool `json:"mfaCoverage" yaml:"mfaCoverage"`
-	PasswordPolicy       bool `json:"passwordPolicy" yaml:"passwordPolicy"`
-	SessionPolicy        bool `json:"sessionPolicy" yaml:"sessionPolicy"`
-	AccessReview         bool `json:"accessReview" yaml:"accessReview"`
-	InactiveUsers        bool `json:"inactiveUsers" yaml:"inactiveUsers"`
-	SuspiciousActivity   bool `json:"suspiciousActivity" yaml:"suspiciousActivity"`
-	DataRetention        bool `json:"dataRetention" yaml:"dataRetention"`
+	MFACoverage        bool `json:"mfaCoverage" yaml:"mfaCoverage"`
+	PasswordPolicy     bool `json:"passwordPolicy" yaml:"passwordPolicy"`
+	SessionPolicy      bool `json:"sessionPolicy" yaml:"sessionPolicy"`
+	AccessReview       bool `json:"accessReview" yaml:"accessReview"`
+	InactiveUsers      bool `json:"inactiveUsers" yaml:"inactiveUsers"`
+	SuspiciousActivity bool `json:"suspiciousActivity" yaml:"suspiciousActivity"`
+	DataRetention      bool `json:"dataRetention" yaml:"dataRetention"`
 }
 
 // AuditConfig configures audit trail settings
 type AuditConfig struct {
 	// Minimum retention days (enforced for all orgs)
 	MinRetentionDays int `json:"minRetentionDays" yaml:"minRetentionDays"`
-	
+
 	// Maximum retention days
 	MaxRetentionDays int `json:"maxRetentionDays" yaml:"maxRetentionDays"`
-	
+
 	// Detailed audit trail (log all field changes)
 	DetailedTrail bool `json:"detailedTrail" yaml:"detailedTrail"`
-	
+
 	// Immutable audit logs (cannot be deleted/modified)
 	Immutable bool `json:"immutable" yaml:"immutable"`
-	
+
 	// Audit log export format
 	ExportFormat string `json:"exportFormat" yaml:"exportFormat"` // json, csv, pdf
-	
+
 	// Enable audit log signing (for tamper detection)
 	SignLogs bool `json:"signLogs" yaml:"signLogs"`
 }
@@ -69,19 +69,19 @@ type AuditConfig struct {
 type ReportsConfig struct {
 	// Enable automated report generation
 	Enabled bool `json:"enabled" yaml:"enabled"`
-	
+
 	// Report generation schedule
 	Schedule string `json:"schedule" yaml:"schedule"` // cron format
-	
+
 	// Report formats
 	Formats []string `json:"formats" yaml:"formats"` // pdf, json, csv
-	
+
 	// Report storage location
 	StoragePath string `json:"storagePath" yaml:"storagePath"`
-	
+
 	// Report retention days
 	RetentionDays int `json:"retentionDays" yaml:"retentionDays"`
-	
+
 	// Include evidence in reports
 	IncludeEvidence bool `json:"includeEvidence" yaml:"includeEvidence"`
 }
@@ -90,16 +90,16 @@ type ReportsConfig struct {
 type RetentionConfig struct {
 	// Enable automated data retention
 	Enabled bool `json:"enabled" yaml:"enabled"`
-	
+
 	// Purge schedule (cron format)
 	PurgeSchedule string `json:"purgeSchedule" yaml:"purgeSchedule"`
-	
+
 	// Grace period before purging (days)
 	GracePeriodDays int `json:"gracePeriodDays" yaml:"gracePeriodDays"`
-	
+
 	// Archive before purging
 	ArchiveBeforePurge bool `json:"archiveBeforePurge" yaml:"archiveBeforePurge"`
-	
+
 	// Archive location
 	ArchivePath string `json:"archivePath" yaml:"archivePath"`
 }
@@ -108,22 +108,22 @@ type RetentionConfig struct {
 type NotificationsConfig struct {
 	// Enable notifications
 	Enabled bool `json:"enabled" yaml:"enabled"`
-	
+
 	// Notify on violations
 	Violations bool `json:"violations" yaml:"violations"`
-	
+
 	// Notify on failed checks
 	FailedChecks bool `json:"failedChecks" yaml:"failedChecks"`
-	
+
 	// Notify before audit
 	AuditReminders bool `json:"auditReminders" yaml:"auditReminders"`
-	
+
 	// Notify compliance contact
 	NotifyComplianceContact bool `json:"notifyComplianceContact" yaml:"notifyComplianceContact"`
-	
+
 	// Notify organization owners
 	NotifyOwners bool `json:"notifyOwners" yaml:"notifyOwners"`
-	
+
 	// Notification channels
 	Channels NotificationChannels `json:"channels" yaml:"channels"`
 }
@@ -139,19 +139,19 @@ type NotificationChannels struct {
 type DashboardConfig struct {
 	// Enable compliance dashboard
 	Enabled bool `json:"enabled" yaml:"enabled"`
-	
+
 	// Dashboard path
 	Path string `json:"path" yaml:"path"` // e.g., /auth/compliance
-	
+
 	// Show overall compliance score
 	ShowScore bool `json:"showScore" yaml:"showScore"`
-	
+
 	// Show violations
 	ShowViolations bool `json:"showViolations" yaml:"showViolations"`
-	
+
 	// Show recent checks
 	ShowRecentChecks bool `json:"showRecentChecks" yaml:"showRecentChecks"`
-	
+
 	// Show reports
 	ShowReports bool `json:"showReports" yaml:"showReports"`
 }
@@ -162,18 +162,18 @@ func DefaultConfig() *Config {
 		Enabled:         true,
 		DefaultStandard: StandardSOC2,
 		AutomatedChecks: AutomatedChecksConfig{
-			Enabled:       true,
-			CheckInterval: 24 * time.Hour,
-			MFACoverage:          true,
-			PasswordPolicy:       true,
-			SessionPolicy:        true,
-			AccessReview:         true,
-			InactiveUsers:        true,
-			SuspiciousActivity:   true,
-			DataRetention:        true,
+			Enabled:            true,
+			CheckInterval:      24 * time.Hour,
+			MFACoverage:        true,
+			PasswordPolicy:     true,
+			SessionPolicy:      true,
+			AccessReview:       true,
+			InactiveUsers:      true,
+			SuspiciousActivity: true,
+			DataRetention:      true,
 		},
 		Audit: AuditConfig{
-			MinRetentionDays: 90,  // SOC 2 minimum
+			MinRetentionDays: 90,   // SOC 2 minimum
 			MaxRetentionDays: 2555, // HIPAA 7 years
 			DetailedTrail:    true,
 			Immutable:        true,

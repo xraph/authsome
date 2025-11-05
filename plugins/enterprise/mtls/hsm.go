@@ -12,49 +12,49 @@ import (
 type HSMProvider interface {
 	// Connect establishes connection to HSM
 	Connect(ctx context.Context) error
-	
+
 	// Disconnect closes HSM connection
 	Disconnect() error
-	
+
 	// GetKey retrieves a key from HSM
 	GetKey(ctx context.Context, keyID string) (crypto.PrivateKey, error)
-	
+
 	// Sign performs a signing operation using HSM key
 	Sign(ctx context.Context, keyID string, digest []byte) ([]byte, error)
-	
+
 	// GetCertificate retrieves a certificate from HSM
 	GetCertificate(ctx context.Context, keyID string) (*x509.Certificate, error)
-	
+
 	// ListKeys lists available keys in HSM
 	ListKeys(ctx context.Context) ([]HSMKeyInfo, error)
-	
+
 	// ValidateKey validates that a key exists and is accessible
 	ValidateKey(ctx context.Context, keyID string) error
-	
+
 	// GetProviderInfo returns HSM provider information
 	GetProviderInfo() *HSMProviderInfo
 }
 
 // HSMKeyInfo contains information about an HSM key
 type HSMKeyInfo struct {
-	KeyID       string    `json:"keyId"`
-	Label       string    `json:"label"`
-	Algorithm   string    `json:"algorithm"`
-	KeySize     int       `json:"keySize"`
-	Certificate *x509.Certificate `json:"-"`
-	CreatedAt   time.Time `json:"createdAt"`
+	KeyID       string                 `json:"keyId"`
+	Label       string                 `json:"label"`
+	Algorithm   string                 `json:"algorithm"`
+	KeySize     int                    `json:"keySize"`
+	Certificate *x509.Certificate      `json:"-"`
+	CreatedAt   time.Time              `json:"createdAt"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // HSMProviderInfo contains HSM provider information
 type HSMProviderInfo struct {
-	Provider    string            `json:"provider"`
-	Version     string            `json:"version"`
-	Model       string            `json:"model,omitempty"`
-	SerialNumber string           `json:"serialNumber,omitempty"`
-	Capabilities []string         `json:"capabilities"`
-	Connected   bool              `json:"connected"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	Provider     string            `json:"provider"`
+	Version      string            `json:"version"`
+	Model        string            `json:"model,omitempty"`
+	SerialNumber string            `json:"serialNumber,omitempty"`
+	Capabilities []string          `json:"capabilities"`
+	Connected    bool              `json:"connected"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
 // HSMManager manages HSM connections and operations
@@ -78,7 +78,7 @@ func (m *HSMManager) Init(ctx context.Context) error {
 	if !m.config.HSM.Enabled {
 		return nil
 	}
-	
+
 	// Initialize provider based on configuration
 	switch m.config.HSM.Provider {
 	case "pkcs11":
@@ -87,32 +87,32 @@ func (m *HSMManager) Init(ctx context.Context) error {
 			return fmt.Errorf("failed to connect to PKCS#11 HSM: %w", err)
 		}
 		m.providers["pkcs11"] = provider
-		
+
 	case "cloudhsm":
 		provider := NewCloudHSMProvider(m.config)
 		if err := provider.Connect(ctx); err != nil {
 			return fmt.Errorf("failed to connect to AWS CloudHSM: %w", err)
 		}
 		m.providers["cloudhsm"] = provider
-		
+
 	case "azure":
 		provider := NewAzureKeyVaultProvider(m.config)
 		if err := provider.Connect(ctx); err != nil {
 			return fmt.Errorf("failed to connect to Azure Key Vault: %w", err)
 		}
 		m.providers["azure"] = provider
-		
+
 	case "gcp":
 		provider := NewGCPCloudHSMProvider(m.config)
 		if err := provider.Connect(ctx); err != nil {
 			return fmt.Errorf("failed to connect to GCP Cloud HSM: %w", err)
 		}
 		m.providers["gcp"] = provider
-		
+
 	default:
 		return fmt.Errorf("%w: %s", ErrHSMProviderUnsupported, m.config.HSM.Provider)
 	}
-	
+
 	return nil
 }
 
@@ -130,21 +130,21 @@ func (m *HSMManager) ValidateCertificateHSMBinding(ctx context.Context, cert *Ce
 	if cert.HSMKeyID == "" {
 		return fmt.Errorf("certificate does not have HSM key binding")
 	}
-	
+
 	if cert.HSMProvider == "" {
 		return fmt.Errorf("certificate does not specify HSM provider")
 	}
-	
+
 	provider, err := m.GetProvider(cert.HSMProvider)
 	if err != nil {
 		return err
 	}
-	
+
 	// Validate that the key exists and is accessible
 	if err := provider.ValidateKey(ctx, cert.HSMKeyID); err != nil {
 		return fmt.Errorf("HSM key validation failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (p *PKCS11Provider) Connect(ctx context.Context) error {
 	//     TokenLabel: "token-label",
 	//     Pin:        p.config.HSM.PKCS11PIN,
 	// })
-	
+
 	p.connected = true
 	return nil
 }
@@ -232,9 +232,9 @@ func (p *PKCS11Provider) ValidateKey(ctx context.Context, keyID string) error {
 
 func (p *PKCS11Provider) GetProviderInfo() *HSMProviderInfo {
 	return &HSMProviderInfo{
-		Provider:   "PKCS#11",
-		Version:    "2.40",
-		Connected:  p.connected,
+		Provider:     "PKCS#11",
+		Version:      "2.40",
+		Connected:    p.connected,
 		Capabilities: []string{"signing", "key_storage", "certificate_storage"},
 	}
 }
@@ -259,7 +259,7 @@ func (p *CloudHSMProvider) Connect(ctx context.Context) error {
 	//     Region: aws.String(p.config.HSM.CloudHSMRegion),
 	// })
 	// p.client = cloudhsmv2.New(session)
-	
+
 	p.connected = true
 	return nil
 }
@@ -306,9 +306,9 @@ func (p *CloudHSMProvider) ValidateKey(ctx context.Context, keyID string) error 
 
 func (p *CloudHSMProvider) GetProviderInfo() *HSMProviderInfo {
 	return &HSMProviderInfo{
-		Provider:   "AWS CloudHSM",
-		Version:    "2.0",
-		Connected:  p.connected,
+		Provider:     "AWS CloudHSM",
+		Version:      "2.0",
+		Connected:    p.connected,
 		Capabilities: []string{"signing", "encryption", "key_generation"},
 		Metadata: map[string]string{
 			"region":    p.config.HSM.CloudHSMRegion,
@@ -335,7 +335,7 @@ func (p *AzureKeyVaultProvider) Connect(ctx context.Context) error {
 	// In production, initialize Azure SDK
 	// Example: cred, err := azidentity.NewDefaultAzureCredential(nil)
 	// p.client, err = azkeys.NewClient(p.config.HSM.AzureVaultURL, cred, nil)
-	
+
 	p.connected = true
 	return nil
 }
@@ -382,13 +382,13 @@ func (p *AzureKeyVaultProvider) ValidateKey(ctx context.Context, keyID string) e
 
 func (p *AzureKeyVaultProvider) GetProviderInfo() *HSMProviderInfo {
 	return &HSMProviderInfo{
-		Provider:   "Azure Key Vault",
-		Version:    "1.0",
-		Connected:  p.connected,
+		Provider:     "Azure Key Vault",
+		Version:      "1.0",
+		Connected:    p.connected,
 		Capabilities: []string{"signing", "encryption", "certificate_management"},
 		Metadata: map[string]string{
-			"vaultUrl":  p.config.HSM.AzureVaultURL,
-			"tenantId":  p.config.HSM.AzureTenantID,
+			"vaultUrl": p.config.HSM.AzureVaultURL,
+			"tenantId": p.config.HSM.AzureTenantID,
 		},
 	}
 }
@@ -411,7 +411,7 @@ func (p *GCPCloudHSMProvider) Connect(ctx context.Context) error {
 	// In production, initialize GCP KMS client
 	// Example: client, err := kms.NewKeyManagementClient(ctx)
 	// p.client = client
-	
+
 	p.connected = true
 	return nil
 }
@@ -458,9 +458,9 @@ func (p *GCPCloudHSMProvider) ValidateKey(ctx context.Context, keyID string) err
 
 func (p *GCPCloudHSMProvider) GetProviderInfo() *HSMProviderInfo {
 	return &HSMProviderInfo{
-		Provider:   "GCP Cloud HSM",
-		Version:    "1.0",
-		Connected:  p.connected,
+		Provider:     "GCP Cloud HSM",
+		Version:      "1.0",
+		Connected:    p.connected,
 		Capabilities: []string{"signing", "encryption", "key_management"},
 		Metadata: map[string]string{
 			"projectId": p.config.HSM.GCPProjectID,
@@ -469,4 +469,3 @@ func (p *GCPCloudHSMProvider) GetProviderInfo() *HSMProviderInfo {
 		},
 	}
 }
-

@@ -10,10 +10,10 @@ import (
 
 // Evaluator evaluates compiled policies to make authorization decisions
 type Evaluator struct {
-	timeout              time.Duration
-	parallelEvaluations  int
-	enableParallel       bool
-	resolver             *AttributeResolver // Optional: for automatic attribute resolution
+	timeout             time.Duration
+	parallelEvaluations int
+	enableParallel      bool
+	resolver            *AttributeResolver // Optional: for automatic attribute resolution
 }
 
 // EvaluatorConfig configures the evaluator
@@ -56,7 +56,7 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 		// No resolver configured, skip enrichment
 		return nil
 	}
-	
+
 	// Enrich principal attributes if principal.id is set but principal data is minimal
 	if evalCtx.Principal != nil {
 		if principalID, ok := evalCtx.Principal["id"].(string); ok && principalID != "" {
@@ -76,12 +76,12 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 			}
 		}
 	}
-	
+
 	// Enrich resource attributes if resource.type and resource.id are set
 	if evalCtx.Resource != nil {
 		resourceType, hasType := evalCtx.Resource["type"].(string)
 		resourceID, hasID := evalCtx.Resource["id"].(string)
-		
+
 		if hasType && hasID && resourceType != "" && resourceID != "" {
 			// Check if we need to fetch more attributes
 			if _, hasOwner := evalCtx.Resource["owner"]; !hasOwner {
@@ -99,12 +99,12 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 			}
 		}
 	}
-	
+
 	// Add request context attributes if not present
 	if evalCtx.Request == nil {
 		evalCtx.Request = make(map[string]interface{})
 	}
-	
+
 	// Only enrich request context if timestamp is missing
 	if _, hasTimestamp := evalCtx.Request["timestamp"]; !hasTimestamp {
 		// Fetch current request context attributes
@@ -118,23 +118,23 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // Evaluate makes an authorization decision based on compiled policies
 func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, evalCtx *EvaluationContext) (*Decision, error) {
 	startTime := time.Now()
-	
+
 	// Enrich evaluation context with attributes if resolver is configured
 	if err := e.EnrichEvaluationContext(ctx, evalCtx); err != nil {
 		return nil, fmt.Errorf("failed to enrich evaluation context: %w", err)
 	}
-	
+
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
-	
+
 	// Build CEL evaluation context
 	celCtx := map[string]interface{}{
 		"principal": evalCtx.Principal,
@@ -142,19 +142,19 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 		"request":   evalCtx.Request,
 		"action":    evalCtx.Action,
 	}
-	
+
 	// Add function bindings for custom functions
 	functions := language.CreateFunctionBindings(celCtx)
 	for name, fn := range functions {
 		celCtx[name] = fn
 	}
-	
+
 	// Sort policies by priority (higher priority first)
 	sortedPolicies := sortPoliciesByPriority(policies)
-	
+
 	var matchedPolicies []string
 	evaluatedCount := 0
-	
+
 	// Evaluate policies with early exit
 	if e.enableParallel && len(sortedPolicies) > e.parallelEvaluations {
 		// Parallel evaluation for large policy sets
@@ -177,20 +177,20 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 				}, nil
 			default:
 			}
-			
+
 			evaluatedCount++
-			
+
 			// Execute policy program
 			result, _, err := policy.Program.Eval(celCtx)
 			if err != nil {
 				// Skip invalid policies (don't fail entire evaluation)
 				continue
 			}
-			
+
 			// Check result
 			if boolResult, ok := result.Value().(bool); ok && boolResult {
 				matchedPolicies = append(matchedPolicies, policy.PolicyID.String())
-				
+
 				// Early exit on first allow
 				return &Decision{
 					Allowed:           true,
@@ -201,7 +201,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 			}
 		}
 	}
-	
+
 	// No policy allowed access
 	return &Decision{
 		Allowed:           false,
@@ -217,10 +217,10 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 		allowed  bool
 		err      error
 	}
-	
+
 	results := make(chan result, len(policies))
 	done := make(chan bool, 1)
-	
+
 	// Start concurrent evaluations
 	for _, policy := range policies {
 		go func(p *CompiledPolicy) {
@@ -233,14 +233,14 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 				return
 			default:
 			}
-			
+
 			// Execute policy
 			res, _, err := p.Program.Eval(celCtx)
 			if err != nil {
 				results <- result{policyID: p.PolicyID.String(), err: err}
 				return
 			}
-			
+
 			if boolResult, ok := res.Value().(bool); ok {
 				results <- result{policyID: p.PolicyID.String(), allowed: boolResult}
 			} else {
@@ -248,11 +248,11 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 			}
 		}(policy)
 	}
-	
+
 	// Collect results with early exit
 	var matchedPolicies []string
 	evaluatedCount := 0
-	
+
 	for i := 0; i < len(policies); i++ {
 		select {
 		case <-ctx.Done():
@@ -263,18 +263,18 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 			}, nil
 		case res := <-results:
 			evaluatedCount++
-			
+
 			if res.err != nil {
 				// Skip failed evaluations
 				continue
 			}
-			
+
 			if res.allowed {
 				matchedPolicies = append(matchedPolicies, res.policyID)
-				
+
 				// Signal early exit to other goroutines
 				close(done)
-				
+
 				return &Decision{
 					Allowed:           true,
 					MatchedPolicies:   matchedPolicies,
@@ -283,7 +283,7 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 			}
 		}
 	}
-	
+
 	return &Decision{
 		Allowed:           false,
 		EvaluatedPolicies: evaluatedCount,
@@ -293,7 +293,7 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 // EvaluateBatch evaluates multiple authorization requests in batch
 func (e *Evaluator) EvaluateBatch(ctx context.Context, policies []*CompiledPolicy, requests []*EvaluationContext) ([]*Decision, error) {
 	decisions := make([]*Decision, len(requests))
-	
+
 	for i, req := range requests {
 		decision, err := e.Evaluate(ctx, policies, req)
 		if err != nil {
@@ -301,7 +301,7 @@ func (e *Evaluator) EvaluateBatch(ctx context.Context, policies []*CompiledPolic
 		}
 		decisions[i] = decision
 	}
-	
+
 	return decisions, nil
 }
 
@@ -309,12 +309,12 @@ func (e *Evaluator) EvaluateBatch(ctx context.Context, policies []*CompiledPolic
 func sortPoliciesByPriority(policies []*CompiledPolicy) []*CompiledPolicy {
 	sorted := make([]*CompiledPolicy, len(policies))
 	copy(sorted, policies)
-	
+
 	// Simple insertion sort (efficient for small arrays)
 	for i := 1; i < len(sorted); i++ {
 		key := sorted[i]
 		j := i - 1
-		
+
 		// Higher priority comes first
 		for j >= 0 && sorted[j].Priority < key.Priority {
 			sorted[j+1] = sorted[j]
@@ -322,7 +322,7 @@ func sortPoliciesByPriority(policies []*CompiledPolicy) []*CompiledPolicy {
 		}
 		sorted[j+1] = key
 	}
-	
+
 	return sorted
 }
 
@@ -335,4 +335,3 @@ func (e *Evaluator) GetTimeout() time.Duration {
 func (e *Evaluator) SetTimeout(timeout time.Duration) {
 	e.timeout = timeout
 }
-

@@ -29,7 +29,7 @@ func NewService(
 ) *Service {
 	// Validate config
 	_ = config.Validate()
-	
+
 	return &Service{
 		repo:            repo,
 		adapterRegistry: adapterRegistry,
@@ -47,24 +47,24 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 	if !s.config.IsFactorAllowed(req.Type) {
 		return nil, fmt.Errorf("factor type %s not allowed", req.Type)
 	}
-	
+
 	// Get adapter for this factor type
 	adapter, err := s.adapterRegistry.Get(req.Type)
 	if err != nil {
 		return nil, fmt.Errorf("factor type not supported: %w", err)
 	}
-	
+
 	// Check if adapter is available
 	if !adapter.IsAvailable() {
 		return nil, fmt.Errorf("factor type %s not available", req.Type)
 	}
-	
+
 	// Use adapter to initiate enrollment
 	resp, err := adapter.Enroll(ctx, userID, req.Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll factor: %w", err)
 	}
-	
+
 	// Set defaults
 	if req.Priority == "" {
 		req.Priority = FactorPriorityPrimary
@@ -72,7 +72,7 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 	if req.Name == "" {
 		req.Name = fmt.Sprintf("%s Factor", req.Type)
 	}
-	
+
 	// Create factor record
 	factor := &schema.MFAFactor{
 		ID:       resp.FactorID,
@@ -83,7 +83,7 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 		Name:     req.Name,
 		Metadata: req.Metadata,
 	}
-	
+
 	// Store secret if provided (encrypted)
 	if secret, ok := resp.ProvisioningData["secret"].(string); ok {
 		// Encrypt secret before storing
@@ -93,16 +93,16 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 		}
 		factor.Secret = encrypted
 	}
-	
+
 	// Set audit fields
 	factor.AuditableModel.CreatedBy = userID
 	factor.AuditableModel.UpdatedBy = userID
-	
+
 	// Save to database
 	if err := s.repo.CreateFactor(ctx, factor); err != nil {
 		return nil, fmt.Errorf("failed to save factor: %w", err)
 	}
-	
+
 	return resp, nil
 }
 
@@ -116,29 +116,29 @@ func (s *Service) VerifyEnrollment(ctx context.Context, factorID xid.ID, proof s
 	if factor == nil {
 		return fmt.Errorf("factor not found")
 	}
-	
+
 	// Check if already verified
 	if factor.Status == string(FactorStatusActive) {
 		return fmt.Errorf("factor already verified")
 	}
-	
+
 	// Get adapter
 	adapter, err := s.adapterRegistry.Get(FactorType(factor.Type))
 	if err != nil {
 		return err
 	}
-	
+
 	// Verify enrollment
 	if err := adapter.VerifyEnrollment(ctx, factorID, proof); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
-	
+
 	// Update factor status
 	now := time.Now()
 	factor.Status = string(FactorStatusActive)
 	factor.VerifiedAt = &now
 	factor.AuditableModel.UpdatedBy = factor.UserID
-	
+
 	return s.repo.UpdateFactor(ctx, factor)
 }
 
@@ -148,18 +148,18 @@ func (s *Service) ListFactors(ctx context.Context, userID xid.ID, activeOnly boo
 	if activeOnly {
 		statusFilter = []string{string(FactorStatusActive)}
 	}
-	
+
 	schemaFactors, err := s.repo.ListUserFactors(ctx, userID, statusFilter...)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert to response format
 	factors := make([]*Factor, len(schemaFactors))
 	for i, sf := range schemaFactors {
 		factors[i] = s.convertSchemaFactor(sf)
 	}
-	
+
 	return factors, nil
 }
 
@@ -172,7 +172,7 @@ func (s *Service) GetFactor(ctx context.Context, factorID xid.ID) (*Factor, erro
 	if schemaFactor == nil {
 		return nil, fmt.Errorf("factor not found")
 	}
-	
+
 	return s.convertSchemaFactor(schemaFactor), nil
 }
 
@@ -185,7 +185,7 @@ func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map
 	if factor == nil {
 		return fmt.Errorf("factor not found")
 	}
-	
+
 	// Apply updates
 	if name, ok := updates["name"].(string); ok {
 		factor.Name = name
@@ -196,7 +196,7 @@ func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map
 	if metadata, ok := updates["metadata"].(map[string]any); ok {
 		factor.Metadata = metadata
 	}
-	
+
 	factor.AuditableModel.UpdatedBy = factor.UserID
 	return s.repo.UpdateFactor(ctx, factor)
 }
@@ -211,17 +211,17 @@ func (s *Service) DeleteFactor(ctx context.Context, factorID xid.ID) error {
 	if factor == nil {
 		return fmt.Errorf("factor not found")
 	}
-	
+
 	// Check if this is the last active factor
 	activeFactors, err := s.repo.ListUserFactors(ctx, factor.UserID, string(FactorStatusActive))
 	if err != nil {
 		return err
 	}
-	
+
 	if len(activeFactors) <= 1 {
 		return fmt.Errorf("cannot delete last active factor")
 	}
-	
+
 	return s.repo.DeleteFactor(ctx, factorID)
 }
 
@@ -237,7 +237,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	if !limitResult.Allowed {
 		return nil, fmt.Errorf("rate limit exceeded, try again in %v", limitResult.RetryAfter)
 	}
-	
+
 	// Perform risk assessment
 	riskCtx := &RiskContext{
 		UserID:    req.UserID,
@@ -246,12 +246,12 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 		DeviceID:  getString(req.Metadata, "device_id"),
 		Timestamp: time.Now(),
 	}
-	
+
 	riskAssessment, err := s.riskEngine.AssessRisk(ctx, riskCtx)
 	if err != nil {
 		return nil, fmt.Errorf("risk assessment failed: %w", err)
 	}
-	
+
 	// Save risk assessment
 	riskRecord := &schema.MFARiskAssessment{
 		ID:          xid.New(),
@@ -267,7 +267,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	riskRecord.AuditableModel.CreatedBy = req.UserID
 	riskRecord.AuditableModel.UpdatedBy = req.UserID
 	_ = s.repo.CreateRiskAssessment(ctx, riskRecord)
-	
+
 	// Determine required factor count based on risk
 	factorsRequired := s.config.RequiredFactorCount
 	if s.config.AdaptiveMFA.Enabled {
@@ -276,17 +276,17 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 			factorsRequired = riskBasedCount
 		}
 	}
-	
+
 	// Get user's active factors
 	factors, err := s.ListFactors(ctx, req.UserID, true)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(factors) == 0 {
 		return nil, fmt.Errorf("no factors enrolled")
 	}
-	
+
 	// Filter by requested factor types if specified
 	var availableFactors []FactorInfo
 	for _, f := range factors {
@@ -303,7 +303,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 				continue
 			}
 		}
-		
+
 		availableFactors = append(availableFactors, FactorInfo{
 			FactorID: f.ID,
 			Type:     f.Type,
@@ -311,17 +311,17 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 			Metadata: s.maskSensitiveData(f.Metadata),
 		})
 	}
-	
+
 	if len(availableFactors) == 0 {
 		return nil, fmt.Errorf("no suitable factors available")
 	}
-	
+
 	// Create MFA session
 	sessionToken, err := s.generateSessionToken()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	session := &schema.MFASession{
 		ID:              xid.New(),
 		UserID:          req.UserID,
@@ -338,11 +338,11 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	}
 	session.AuditableModel.CreatedBy = req.UserID
 	session.AuditableModel.UpdatedBy = req.UserID
-	
+
 	if err := s.repo.CreateSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
-	
+
 	return &ChallengeResponse{
 		ChallengeID:      xid.New(), // This will be created when user selects a factor
 		SessionID:        session.ID,
@@ -362,12 +362,12 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	if session == nil {
 		return nil, fmt.Errorf("invalid session")
 	}
-	
+
 	// Check if session expired
 	if time.Now().After(session.ExpiresAt) {
 		return nil, fmt.Errorf("session expired")
 	}
-	
+
 	// Check rate limits
 	limitResult, err := s.rateLimiter.CheckFactorLimit(ctx, session.UserID, FactorType(session.Context))
 	if err != nil {
@@ -376,7 +376,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	if !limitResult.Allowed {
 		return nil, fmt.Errorf("rate limit exceeded")
 	}
-	
+
 	// Get the factor
 	factor, err := s.repo.GetFactor(ctx, req.FactorID)
 	if err != nil {
@@ -385,18 +385,18 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	if factor == nil {
 		return nil, fmt.Errorf("factor not found")
 	}
-	
+
 	// Verify factor belongs to user
 	if factor.UserID != session.UserID {
 		return nil, fmt.Errorf("factor does not belong to user")
 	}
-	
+
 	// Get adapter
 	adapter, err := s.adapterRegistry.Get(FactorType(factor.Type))
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create challenge for this factor
 	challenge := &Challenge{
 		ID:       xid.New(),
@@ -405,7 +405,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		Type:     FactorType(factor.Type),
 		Status:   ChallengeStatusPending,
 	}
-	
+
 	// Verify using adapter
 	valid, err := adapter.Verify(ctx, challenge, req.Code, req.Data)
 	if err != nil {
@@ -415,7 +415,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		})
 		return nil, fmt.Errorf("verification failed: %w", err)
 	}
-	
+
 	if !valid {
 		// Record failed attempt
 		_ = s.rateLimiter.RecordAttempt(ctx, session.UserID, &req.FactorID, FactorType(factor.Type), false, map[string]string{
@@ -427,44 +427,44 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 			FactorsRemaining: session.FactorsRequired - session.FactorsVerified,
 		}, nil
 	}
-	
+
 	// Record successful attempt
 	_ = s.rateLimiter.RecordAttempt(ctx, session.UserID, &req.FactorID, FactorType(factor.Type), true, nil)
-	
+
 	// Update factor last used
 	_ = s.repo.UpdateFactorLastUsed(ctx, req.FactorID)
-	
+
 	// Update session
 	session.FactorsVerified++
 	session.VerifiedFactors = append(session.VerifiedFactors, req.FactorID.String())
-	
+
 	sessionComplete := session.FactorsVerified >= session.FactorsRequired
 	if sessionComplete {
 		now := time.Now()
 		session.CompletedAt = &now
 	}
-	
+
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
 		return nil, err
 	}
-	
+
 	// Handle trusted device if requested
 	if req.RememberDevice && req.DeviceInfo != nil && sessionComplete {
 		_ = s.TrustDevice(ctx, session.UserID, req.DeviceInfo)
 	}
-	
+
 	resp := &VerificationResponse{
 		Success:          true,
 		SessionComplete:  sessionComplete,
 		FactorsRemaining: session.FactorsRequired - session.FactorsVerified,
 	}
-	
+
 	if sessionComplete {
 		resp.Token = session.SessionToken
 		expiresAt := session.ExpiresAt
 		resp.ExpiresAt = &expiresAt
 	}
-	
+
 	return resp, nil
 }
 
@@ -475,19 +475,19 @@ func (s *Service) TrustDevice(ctx context.Context, userID xid.ID, deviceInfo *De
 	if !s.config.TrustedDevices.Enabled {
 		return fmt.Errorf("trusted devices not enabled")
 	}
-	
+
 	// Check if device already trusted
 	existing, err := s.repo.GetTrustedDevice(ctx, userID, deviceInfo.DeviceID)
 	if err != nil {
 		return err
 	}
-	
+
 	if existing != nil {
 		// Update existing
 		existing.LastUsedAt = ptrTime(time.Now())
 		return s.repo.UpdateTrustedDevice(ctx, existing)
 	}
-	
+
 	// Create new trusted device
 	device := &schema.MFATrustedDevice{
 		ID:        xid.New(),
@@ -499,7 +499,7 @@ func (s *Service) TrustDevice(ctx context.Context, userID xid.ID, deviceInfo *De
 	}
 	device.AuditableModel.CreatedBy = userID
 	device.AuditableModel.UpdatedBy = userID
-	
+
 	return s.repo.CreateTrustedDevice(ctx, device)
 }
 
@@ -508,18 +508,18 @@ func (s *Service) IsTrustedDevice(ctx context.Context, userID xid.ID, deviceID s
 	if !s.config.TrustedDevices.Enabled {
 		return false, nil
 	}
-	
+
 	device, err := s.repo.GetTrustedDevice(ctx, userID, deviceID)
 	if err != nil {
 		return false, err
 	}
-	
+
 	if device != nil {
 		// Update last used
 		_ = s.repo.UpdateDeviceLastUsed(ctx, device.ID)
 		return true, nil
 	}
-	
+
 	return false, nil
 }
 
@@ -529,7 +529,7 @@ func (s *Service) ListTrustedDevices(ctx context.Context, userID xid.ID) ([]*Tru
 	if err != nil {
 		return nil, err
 	}
-	
+
 	devices := make([]*TrustedDevice, len(schemaDevices))
 	for i, sd := range schemaDevices {
 		devices[i] = &TrustedDevice{
@@ -543,7 +543,7 @@ func (s *Service) ListTrustedDevices(ctx context.Context, userID xid.ID) ([]*Tru
 			ExpiresAt:  sd.ExpiresAt,
 		}
 	}
-	
+
 	return devices, nil
 }
 
@@ -560,7 +560,7 @@ func (s *Service) GetMFAStatus(ctx context.Context, userID xid.ID, deviceID stri
 	if err != nil {
 		return nil, err
 	}
-	
+
 	factorInfos := make([]FactorInfo, len(factors))
 	for i, f := range factors {
 		factorInfos[i] = FactorInfo{
@@ -570,12 +570,12 @@ func (s *Service) GetMFAStatus(ctx context.Context, userID xid.ID, deviceID stri
 			Metadata: s.maskSensitiveData(f.Metadata),
 		}
 	}
-	
+
 	trustedDevice := false
 	if deviceID != "" {
 		trustedDevice, _ = s.IsTrustedDevice(ctx, userID, deviceID)
 	}
-	
+
 	return &MFAStatus{
 		Enabled:         len(factors) > 0,
 		EnrolledFactors: factorInfos,
@@ -655,4 +655,3 @@ func convertFactorTypes(types []FactorType) []string {
 func ptrTime(t time.Time) *time.Time {
 	return &t
 }
-

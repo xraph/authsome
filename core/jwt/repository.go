@@ -42,12 +42,12 @@ func (w *repositoryWrapper) FindByKeyID(ctx context.Context, keyID, orgID string
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check if the key belongs to the correct organization
 	if schemaKey.OrgID != orgID {
 		return nil, fmt.Errorf("key not found for organization")
 	}
-	
+
 	return w.schemaToCore(schemaKey), nil
 }
 
@@ -57,7 +57,7 @@ func (w *repositoryWrapper) FindByOrgID(ctx context.Context, orgID string, activ
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Filter by active status if specified
 	var filteredKeys []*schema.JWTKey
 	for _, key := range schemaKeys {
@@ -65,19 +65,19 @@ func (w *repositoryWrapper) FindByOrgID(ctx context.Context, orgID string, activ
 			filteredKeys = append(filteredKeys, key)
 		}
 	}
-	
+
 	// Convert to core types
 	coreKeys := make([]*JWTKey, len(filteredKeys))
 	for i, key := range filteredKeys {
 		coreKeys[i] = w.schemaToCore(key)
 	}
-	
+
 	// Get total count
 	total, err := w.repo.CountByOrgID(ctx, orgID)
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	return coreKeys, int64(total), nil
 }
 
@@ -111,7 +111,7 @@ func (w *repositoryWrapper) CleanupExpired(ctx context.Context) (int64, error) {
 // coreToSchema converts a core JWTKey to a schema JWTKey
 func (w *repositoryWrapper) coreToSchema(core *JWTKey) *schema.JWTKey {
 	id, _ := xid.FromString(core.ID.String())
-	
+
 	// Convert metadata
 	metadata := make(map[string]string)
 	for k, v := range core.Metadata {
@@ -119,23 +119,23 @@ func (w *repositoryWrapper) coreToSchema(core *JWTKey) *schema.JWTKey {
 			metadata[k] = str
 		}
 	}
-	
+
 	return &schema.JWTKey{
-		ID:          id,
-		OrgID:       core.OrgID,
-		KeyID:       core.KeyID,
-		Algorithm:   core.Algorithm,
-		KeyType:     core.KeyType,
-		Curve:       core.Curve,
-		PrivateKey:  []byte(core.PrivateKey),
-		PublicKey:   []byte(core.PublicKey),
-		Active:      core.IsActive,
-		UsageCount:  core.UsageCount,
-		LastUsedAt:  core.LastUsedAt,
-		CreatedAt:   core.CreatedAt,
-		UpdatedAt:   core.UpdatedAt,
-		ExpiresAt:   core.ExpiresAt,
-		Metadata:    metadata,
+		ID:         id,
+		OrgID:      core.OrgID,
+		KeyID:      core.KeyID,
+		Algorithm:  core.Algorithm,
+		KeyType:    core.KeyType,
+		Curve:      core.Curve,
+		PrivateKey: []byte(core.PrivateKey),
+		PublicKey:  []byte(core.PublicKey),
+		Active:     core.IsActive,
+		UsageCount: core.UsageCount,
+		LastUsedAt: core.LastUsedAt,
+		CreatedAt:  core.CreatedAt,
+		UpdatedAt:  core.UpdatedAt,
+		ExpiresAt:  core.ExpiresAt,
+		Metadata:   metadata,
 	}
 }
 
@@ -146,22 +146,22 @@ func (w *repositoryWrapper) schemaToCore(schema *schema.JWTKey) *JWTKey {
 	for k, v := range schema.Metadata {
 		metadata[k] = v
 	}
-	
+
 	return &JWTKey{
-		ID:          schema.ID,
-		OrgID:       schema.OrgID,
-		KeyID:       schema.KeyID,
-		Algorithm:   schema.Algorithm,
-		KeyType:     schema.KeyType,
-		Curve:       schema.Curve,
-		PrivateKey:  string(schema.PrivateKey),
-		PublicKey:   string(schema.PublicKey),
-		IsActive:    schema.Active,
-		UsageCount:  schema.UsageCount,
-		LastUsedAt:  schema.LastUsedAt,
-		CreatedAt:   schema.CreatedAt,
-		UpdatedAt:   schema.UpdatedAt,
-		ExpiresAt:   schema.ExpiresAt,
-		Metadata:    metadata,
+		ID:         schema.ID,
+		OrgID:      schema.OrgID,
+		KeyID:      schema.KeyID,
+		Algorithm:  schema.Algorithm,
+		KeyType:    schema.KeyType,
+		Curve:      schema.Curve,
+		PrivateKey: string(schema.PrivateKey),
+		PublicKey:  string(schema.PublicKey),
+		IsActive:   schema.Active,
+		UsageCount: schema.UsageCount,
+		LastUsedAt: schema.LastUsedAt,
+		CreatedAt:  schema.CreatedAt,
+		UpdatedAt:  schema.UpdatedAt,
+		ExpiresAt:  schema.ExpiresAt,
+		Metadata:   metadata,
 	}
 }

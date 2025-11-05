@@ -15,7 +15,7 @@ func BenchmarkService_Create(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("FindByEmail", MatchAny(), MatchAny()).Return(nil, errors.New("not found"))
 	mockRepo.On("Create", MatchAny(), MatchAny()).Return(nil)
-	
+
 	svc := NewService(mockRepo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
 	}, nil)
@@ -28,7 +28,7 @@ func BenchmarkService_Create(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, _ = svc.Create(context.Background(), req)
 	}
@@ -45,12 +45,12 @@ func BenchmarkService_FindByID(b *testing.B) {
 
 	mockRepo := new(MockRepository)
 	mockRepo.On("FindByID", MatchAny(), userID).Return(existingUser, nil)
-	
+
 	svc := NewService(mockRepo, Config{}, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, _ = svc.FindByID(context.Background(), userID)
 	}
@@ -66,12 +66,12 @@ func BenchmarkService_FindByEmail(b *testing.B) {
 
 	mockRepo := new(MockRepository)
 	mockRepo.On("FindByEmail", MatchAny(), "test@example.com").Return(existingUser, nil)
-	
+
 	svc := NewService(mockRepo, Config{}, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, _ = svc.FindByEmail(context.Background(), "test@example.com")
 	}
@@ -94,12 +94,12 @@ func BenchmarkService_Update(b *testing.B) {
 
 	mockRepo := new(MockRepository)
 	mockRepo.On("Update", MatchAny(), MatchAny()).Return(nil)
-	
+
 	svc := NewService(mockRepo, Config{}, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		userCopy := *user
 		_, _ = svc.Update(context.Background(), &userCopy, req)
@@ -120,12 +120,12 @@ func BenchmarkService_List(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("List", MatchAny(), 20, 0).Return(users, nil)
 	mockRepo.On("Count", MatchAny()).Return(100, nil)
-	
+
 	svc := NewService(mockRepo, Config{}, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, _, _ = svc.List(context.Background(), types.PaginationOptions{Page: 1, PageSize: 20})
 	}
@@ -136,21 +136,21 @@ func BenchmarkService_Create_Parallel(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("FindByEmail", MatchAny(), MatchAny()).Return(nil, errors.New("not found"))
 	mockRepo.On("Create", MatchAny(), MatchAny()).Return(nil)
-	
+
 	svc := NewService(mockRepo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
 	}, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		req := &CreateUserRequest{
 			Email:    "benchmark@example.com",
 			Password: "SecurePass123!",
 			Name:     "Benchmark User",
 		}
-		
+
 		for pb.Next() {
 			_, _ = svc.Create(context.Background(), req)
 		}
@@ -167,4 +167,3 @@ type PaginationOptions struct {
 func MatchAny() interface{} {
 	return interface{}(nil)
 }
-

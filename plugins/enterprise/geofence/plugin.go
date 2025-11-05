@@ -557,4 +557,3 @@ type GeofenceLocationAnalyticsResponse struct {
 type GeofenceViolationAnalyticsResponse struct {
 	Analytics interface{} `json:"analytics"`
 }
-

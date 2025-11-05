@@ -31,17 +31,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("multisession plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for multisession plugin")
 	}
-	
+
 	p.db = db
 	// Core services used for auth context
 	auditSvc := audit.NewService(repo.NewAuditRepository(db))

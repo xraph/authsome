@@ -8,28 +8,28 @@ import (
 type Config struct {
 	// AddDefaultTemplates automatically adds default templates on startup
 	AddDefaultTemplates bool `json:"add_default_templates" yaml:"add_default_templates"`
-	
+
 	// DefaultLanguage is the default language for templates
 	DefaultLanguage string `json:"default_language" yaml:"default_language"`
-	
+
 	// AllowOrgOverrides allows organizations to override default templates in SaaS mode
 	AllowOrgOverrides bool `json:"allow_org_overrides" yaml:"allow_org_overrides"`
-	
+
 	// AutoSendWelcome automatically sends welcome email on user signup
 	AutoSendWelcome bool `json:"auto_send_welcome" yaml:"auto_send_welcome"`
-	
+
 	// RetryAttempts is the number of retry attempts for failed notifications
 	RetryAttempts int `json:"retry_attempts" yaml:"retry_attempts"`
-	
+
 	// RetryDelay is the delay between retry attempts
 	RetryDelay time.Duration `json:"retry_delay" yaml:"retry_delay"`
-	
+
 	// CleanupAfter is the duration after which old notifications are deleted
 	CleanupAfter time.Duration `json:"cleanup_after" yaml:"cleanup_after"`
-	
+
 	// RateLimits defines rate limits for notification sending
 	RateLimits map[string]RateLimit `json:"rate_limits" yaml:"rate_limits"`
-	
+
 	// Providers configuration for email and SMS
 	Providers ProvidersConfig `json:"providers" yaml:"providers"`
 }
@@ -111,4 +111,3 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-

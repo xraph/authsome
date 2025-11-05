@@ -47,7 +47,7 @@ func main() {
 	// Initialize AuthSome using Forge's database extension (Method 1: Direct DatabaseManager)
 	// Get the manager from DI after extension registration
 	ctx := context.Background()
-	
+
 	// Start the app to initialize extensions
 	go func() {
 		if err := app.Start(ctx); err != nil {
@@ -57,7 +57,7 @@ func main() {
 
 	// Wait for extensions to initialize
 	// In production, use proper lifecycle management
-	
+
 	// Method 1: Using WithDatabaseFromForge() - Recommended
 	auth1 := authsome.New(
 		authsome.WithForgeApp(app),
@@ -146,7 +146,6 @@ func main() {
 	// if err := app.Run(); err != nil {
 	// 	log.Fatalf("Server failed: %v", err)
 	// }
-	
+
 	fmt.Println("✅ All integration methods verified successfully!")
 }
-

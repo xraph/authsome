@@ -155,10 +155,10 @@ func (app *ServeMuxTestApp) setupRoutes() error {
 
 func setupViper() *viper.Viper {
 	v := viper.New()
-	
+
 	// Set minimal configuration for testing
 	v.SetDefault("auth.dashboard.enabled", true)
-	
+
 	return v
 }
 

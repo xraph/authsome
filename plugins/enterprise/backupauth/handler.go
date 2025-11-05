@@ -625,4 +625,3 @@ func (h *Handler) handleError(c forge.Context, err error) error {
 		Code:    fmt.Sprintf("BACKUP_AUTH_%s", errorCode),
 	})
 }
-

@@ -163,13 +163,13 @@ func TestHandler_StartImpersonation_AlreadyImpersonating(t *testing.T) {
 
 	// Create existing active impersonation
 	existingSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[existingSession.ID.String()] = existingSession
 
@@ -198,14 +198,14 @@ func TestHandler_EndImpersonation_Success(t *testing.T) {
 
 	// Create active impersonation
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		Reason:          "Test impersonation",
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		Reason:         "Test impersonation",
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -235,16 +235,16 @@ func TestHandler_GetImpersonation_Success(t *testing.T) {
 
 	// Create impersonation
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		Reason:          "Test impersonation",
-		TicketNumber:    "TICKET-123",
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		Reason:         "Test impersonation",
+		TicketNumber:   "TICKET-123",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -305,15 +305,15 @@ func TestHandler_ListImpersonations_Success(t *testing.T) {
 	// Create multiple impersonations
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
-			ID:              xid.New(),
-			OrganizationID:  orgID,
-			ImpersonatorID:  admin.ID,
-			TargetUserID:    target.ID,
-			Active:          true,
-			ExpiresAt:       time.Now().Add(1 * time.Hour),
-			Reason:          "Test session",
-			CreatedAt:       time.Now(),
-			UpdatedAt:       time.Now(),
+			ID:             xid.New(),
+			OrganizationID: orgID,
+			ImpersonatorID: admin.ID,
+			TargetUserID:   target.ID,
+			Active:         true,
+			ExpiresAt:      time.Now().Add(1 * time.Hour),
+			Reason:         "Test session",
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		repo.sessions[session.ID.String()] = session
 	}
@@ -352,15 +352,15 @@ func TestHandler_ListImpersonations_WithFilters(t *testing.T) {
 		}
 
 		session := &schema.ImpersonationSession{
-			ID:              xid.New(),
-			OrganizationID:  orgID,
-			ImpersonatorID:  admin.ID,
-			TargetUserID:    targetID,
-			Active:          true,
-			ExpiresAt:       time.Now().Add(1 * time.Hour),
-			Reason:          "Test session",
-			CreatedAt:       time.Now(),
-			UpdatedAt:       time.Now(),
+			ID:             xid.New(),
+			OrganizationID: orgID,
+			ImpersonatorID: admin.ID,
+			TargetUserID:   targetID,
+			Active:         true,
+			ExpiresAt:      time.Now().Add(1 * time.Hour),
+			Reason:         "Test session",
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		repo.sessions[session.ID.String()] = session
 	}
@@ -388,14 +388,14 @@ func TestHandler_VerifyImpersonation_Active(t *testing.T) {
 
 	sessionID := xid.New()
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		NewSessionID:    &sessionID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		NewSessionID:   &sessionID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -452,8 +452,8 @@ func TestHandler_ListAuditEvents_Success(t *testing.T) {
 			IPAddress:       "192.168.1.1",
 			UserAgent:       "Test Agent",
 			Details: map[string]string{
-				"target_user_id":     target.ID.String(),
-				"impersonator_id":    admin.ID.String(),
+				"target_user_id":  target.ID.String(),
+				"impersonator_id": admin.ID.String(),
 			},
 			CreatedAt: time.Now(),
 		}
@@ -526,7 +526,6 @@ func TestHandler_PaginationDefaults(t *testing.T) {
 	assert.Equal(t, 200, ctx.GetStatus())
 
 	body := ctx.GetBody().(*impersonation.ListResponse)
-	assert.Equal(t, 20, body.Limit)  // Default limit
-	assert.Equal(t, 0, body.Offset)  // Default offset
+	assert.Equal(t, 20, body.Limit) // Default limit
+	assert.Equal(t, 0, body.Offset) // Default offset
 }
-

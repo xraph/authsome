@@ -9,22 +9,22 @@ import (
 type Flow interface {
 	// ID returns the unique identifier for this flow
 	ID() string
-	
+
 	// Name returns the human-readable name for this flow
 	Name() string
-	
+
 	// Execute runs the flow with the given context and data
 	Execute(ctx context.Context, data map[string]interface{}) (*FlowResult, error)
-	
+
 	// Steps returns all steps in this flow
 	Steps() []*Step
-	
+
 	// AddStep adds a step to the flow
 	AddStep(step *Step) Flow
-	
+
 	// AddBeforeHook adds a hook to run before a specific step
 	AddBeforeHook(stepID string, hook HookFunc) Flow
-	
+
 	// AddAfterHook adds a hook to run after a specific step
 	AddAfterHook(stepID string, hook HookFunc) Flow
 }
@@ -58,11 +58,11 @@ type FlowResult struct {
 
 // StepResult represents the result of executing a single step
 type StepResult struct {
-	Success   bool                   `json:"success"`
-	Data      map[string]interface{} `json:"data"`
-	Error     string                 `json:"error,omitempty"`
-	Skip      bool                   `json:"skip"`
-	Stop      bool                   `json:"stop"`
+	Success bool                   `json:"success"`
+	Data    map[string]interface{} `json:"data"`
+	Error   string                 `json:"error,omitempty"`
+	Skip    bool                   `json:"skip"`
+	Stop    bool                   `json:"stop"`
 }
 
 // BaseFlow provides a basic implementation of the Flow interface

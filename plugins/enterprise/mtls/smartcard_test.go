@@ -34,12 +34,12 @@ func generateTestPIVCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 			CommonName:   "John Doe",
 			SerialNumber: "1234567890",
 		},
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		NotBefore:         time.Now(),
+		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:          x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		PolicyIdentifiers: []asn1.ObjectIdentifier{pivAuthOID},
-		URIs:            []*url.URL{uri},
+		URIs:              []*url.URL{uri},
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, &privateKey.PublicKey, caKey)
@@ -71,10 +71,10 @@ func generateTestCACCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 			CommonName:   "Jane Smith",
 			SerialNumber: "9876543210", // EDIPI
 		},
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().Add(3 * 365 * 24 * time.Hour),
-		KeyUsage:    x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		NotBefore:         time.Now(),
+		NotAfter:          time.Now().Add(3 * 365 * 24 * time.Hour),
+		KeyUsage:          x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		PolicyIdentifiers: []asn1.ObjectIdentifier{cacAuthOID},
 	}
 
@@ -290,7 +290,7 @@ func TestDeterminePIVSlot(t *testing.T) {
 
 func TestGetPIVSlotNames(t *testing.T) {
 	slotNames := GetPIVSlotNames()
-	
+
 	if len(slotNames) == 0 {
 		t.Error("expected slot names, got empty map")
 	}
@@ -306,7 +306,7 @@ func TestGetPIVSlotNames(t *testing.T) {
 
 func TestGetCACCertificateTypes(t *testing.T) {
 	certTypes := GetCACCertificateTypes()
-	
+
 	if len(certTypes) == 0 {
 		t.Error("expected certificate types, got empty slice")
 	}
@@ -337,4 +337,3 @@ func BenchmarkValidatePIVCard(b *testing.B) {
 		_, _ = provider.ValidatePIVCard(context.Background(), pivCert)
 	}
 }
-

@@ -289,4 +289,3 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 		"offset": offset,
 	})
 }
-

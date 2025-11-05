@@ -160,4 +160,3 @@ func WithConfig(config Config) ConfigOption {
 		*c = config
 	}
 }
-

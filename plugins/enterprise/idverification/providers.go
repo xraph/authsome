@@ -21,7 +21,7 @@ func NewOnfidoProvider(config OnfidoConfig) (*OnfidoProvider, error) {
 	if config.APIToken == "" {
 		return nil, fmt.Errorf("Onfido API token is required")
 	}
-	
+
 	return &OnfidoProvider{
 		config: config,
 	}, nil
@@ -31,7 +31,7 @@ func NewOnfidoProvider(config OnfidoConfig) (*OnfidoProvider, error) {
 func (p *OnfidoProvider) CreateSession(ctx context.Context, req *ProviderSessionRequest) (*ProviderSession, error) {
 	// Implementation for Onfido SDK Check creation
 	// This would call the Onfido API to create a workflow run or SDK token
-	
+
 	// Placeholder implementation
 	return &ProviderSession{
 		ID:        fmt.Sprintf("onfido_%d", time.Now().Unix()),
@@ -60,11 +60,11 @@ func (p *OnfidoProvider) VerifyWebhook(signature, payload string) (bool, error) 
 	if p.config.WebhookToken == "" {
 		return false, fmt.Errorf("webhook token not configured")
 	}
-	
+
 	mac := hmac.New(sha256.New, []byte(p.config.WebhookToken))
 	mac.Write([]byte(payload))
 	expectedMAC := hex.EncodeToString(mac.Sum(nil))
-	
+
 	return hmac.Equal([]byte(signature), []byte(expectedMAC)), nil
 }
 
@@ -74,20 +74,20 @@ func (p *OnfidoProvider) ParseWebhook(payload []byte) (*WebhookPayload, error) {
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return nil, fmt.Errorf("failed to parse webhook: %w", err)
 	}
-	
+
 	// Parse Onfido webhook structure
 	webhook := &WebhookPayload{
 		RawPayload: data,
 		Timestamp:  time.Now(),
 	}
-	
+
 	// Extract common fields based on Onfido webhook structure
 	if eventType, ok := data["event_type"].(string); ok {
 		webhook.EventType = eventType
 	}
-	
+
 	// Additional parsing logic here
-	
+
 	return webhook, nil
 }
 
@@ -106,7 +106,7 @@ func NewJumioProvider(config JumioConfig) (*JumioProvider, error) {
 	if config.APIToken == "" || config.APISecret == "" {
 		return nil, fmt.Errorf("Jumio API credentials are required")
 	}
-	
+
 	return &JumioProvider{
 		config: config,
 	}, nil
@@ -116,7 +116,7 @@ func NewJumioProvider(config JumioConfig) (*JumioProvider, error) {
 func (p *JumioProvider) CreateSession(ctx context.Context, req *ProviderSessionRequest) (*ProviderSession, error) {
 	// Implementation for Jumio initiate call
 	// This would call the Jumio API to create a verification transaction
-	
+
 	// Placeholder implementation
 	return &ProviderSession{
 		ID:        fmt.Sprintf("jumio_%d", time.Now().Unix()),
@@ -153,15 +153,15 @@ func (p *JumioProvider) ParseWebhook(payload []byte) (*WebhookPayload, error) {
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return nil, fmt.Errorf("failed to parse webhook: %w", err)
 	}
-	
+
 	webhook := &WebhookPayload{
 		RawPayload: data,
 		Timestamp:  time.Now(),
 	}
-	
+
 	// Parse Jumio webhook structure
 	// Additional parsing logic here
-	
+
 	return webhook, nil
 }
 
@@ -172,4 +172,3 @@ func (p *JumioProvider) GetProviderName() string {
 
 // Note: Stripe Identity real implementation is in stripe_provider.go
 // This keeps placeholders for Onfido and Jumio for now
-

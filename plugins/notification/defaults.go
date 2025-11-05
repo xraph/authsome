@@ -42,7 +42,7 @@ The {{.app_name}} Team`,
 			Variables:   []string{"user_name", "user_email", "app_name", "login_url"},
 			Description: "Welcome email sent to new users",
 		},
-		
+
 		// Email Verification
 		{
 			TemplateKey: "auth.verify_email",
@@ -77,7 +77,7 @@ The {{.app_name}} Team`,
 			Variables:   []string{"user_name", "verification_url", "verification_code", "expiry_minutes", "app_name"},
 			Description: "Email verification message",
 		},
-		
+
 		// Password Reset
 		{
 			TemplateKey: "auth.password_reset",
@@ -112,7 +112,7 @@ The {{.app_name}} Team`,
 			Variables:   []string{"user_name", "reset_url", "reset_code", "expiry_minutes", "app_name"},
 			Description: "Password reset email",
 		},
-		
+
 		// MFA Code
 		{
 			TemplateKey: "auth.mfa_code",
@@ -142,7 +142,7 @@ The {{.app_name}} Team`,
 			Variables:   []string{"user_name", "code", "expiry_minutes", "app_name"},
 			Description: "MFA verification code email",
 		},
-		
+
 		// MFA SMS Code
 		{
 			TemplateKey: "auth.mfa_code",
@@ -152,7 +152,7 @@ The {{.app_name}} Team`,
 			Variables:   []string{"code", "expiry_minutes", "app_name"},
 			Description: "MFA verification code SMS",
 		},
-		
+
 		// Magic Link
 		{
 			TemplateKey: "auth.magic_link",
@@ -184,7 +184,7 @@ The {{.app_name}} Team`,
 			Variables:   []string{"user_name", "magic_link", "expiry_minutes", "app_name"},
 			Description: "Magic link sign-in email",
 		},
-		
+
 		// Email OTP
 		{
 			TemplateKey: "auth.email_otp",
@@ -207,7 +207,7 @@ If you didn't request this code, please ignore this email.`,
 			Variables:   []string{"code", "expiry_minutes", "app_name"},
 			Description: "Email OTP code",
 		},
-		
+
 		// Phone OTP
 		{
 			TemplateKey: "auth.phone_otp",
@@ -217,7 +217,7 @@ If you didn't request this code, please ignore this email.`,
 			Variables:   []string{"code", "app_name"},
 			Description: "Phone OTP SMS code",
 		},
-		
+
 		// Account Security Alert
 		{
 			TemplateKey: "auth.security_alert",
@@ -256,4 +256,3 @@ The {{.app_name}} Team`,
 		},
 	}
 }
-

@@ -58,7 +58,7 @@ func (s *Service) RegisterProvider(provider Provider) error {
 	if err := provider.ValidateConfig(); err != nil {
 		return fmt.Errorf("invalid provider config: %w", err)
 	}
-	
+
 	s.providers[provider.ID()] = provider
 	return nil
 }
@@ -69,7 +69,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 	if err := s.engine.ValidateTemplate(req.Body); err != nil {
 		return nil, fmt.Errorf("invalid template body: %w", err)
 	}
-	
+
 	if req.Subject != "" {
 		if err := s.engine.ValidateTemplate(req.Subject); err != nil {
 			return nil, fmt.Errorf("invalid template subject: %w", err)
@@ -83,7 +83,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 			return nil, fmt.Errorf("failed to extract variables: %w", err)
 		}
 		req.Variables = vars
-		
+
 		if req.Subject != "" {
 			subjectVars, err := s.engine.ExtractVariables(req.Subject)
 			if err != nil {
@@ -107,7 +107,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 	if language == "" {
 		language = "en"
 	}
-	
+
 	template := &Template{
 		ID:             xid.New(),
 		OrganizationID: req.OrganizationID,
@@ -150,7 +150,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemp
 			return fmt.Errorf("invalid template body: %w", err)
 		}
 	}
-	
+
 	if req.Subject != nil && *req.Subject != "" {
 		if err := s.engine.ValidateTemplate(*req.Subject); err != nil {
 			return fmt.Errorf("invalid template subject: %w", err)
@@ -275,14 +275,14 @@ func (s *Service) ListNotifications(ctx context.Context, req *ListNotificationsR
 func (s *Service) sendNotification(ctx context.Context, notification *Notification) error {
 	// Find provider
 	var provider Provider
-	
+
 	// Use default provider for type
 	if defaultProviderID, ok := s.config.DefaultProvider[notification.Type]; ok {
 		if p, exists := s.providers[defaultProviderID]; exists {
 			provider = p
 		}
 	}
-	
+
 	// Fallback to first provider of the type
 	if provider == nil {
 		for _, p := range s.providers {
@@ -292,7 +292,7 @@ func (s *Service) sendNotification(ctx context.Context, notification *Notificati
 			}
 		}
 	}
-	
+
 	if provider == nil {
 		return fmt.Errorf("no provider found for notification type: %s", notification.Type)
 	}

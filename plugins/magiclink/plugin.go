@@ -34,23 +34,23 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("magiclink plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for magiclink plugin")
 	}
-	
+
 	p.db = db
-	
+
 	// TODO: Get notification adapter from service registry when available
 	// For now, plugins will work without notification adapter (graceful degradation)
 	// The notification plugin should be registered first and will set up its services
-	
+
 	mr := repo.NewMagicLinkRepository(db)
 	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
 	// Build full auth service with session

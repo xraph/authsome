@@ -46,17 +46,17 @@ type Config struct {
 
 // RecoveryCodesConfig configures recovery codes
 type RecoveryCodesConfig struct {
-	Enabled     bool `json:"enabled" yaml:"enabled"`
-	CodeCount   int  `json:"codeCount" yaml:"codeCount"`
-	CodeLength  int  `json:"codeLength" yaml:"codeLength"`
-	
+	Enabled    bool `json:"enabled" yaml:"enabled"`
+	CodeCount  int  `json:"codeCount" yaml:"codeCount"`
+	CodeLength int  `json:"codeLength" yaml:"codeLength"`
+
 	// Automatically regenerate after use
-	AutoRegenerate    bool `json:"autoRegenerate" yaml:"autoRegenerate"`
-	RegenerateCount   int  `json:"regenerateCount" yaml:"regenerateCount"` // New codes to generate
-	
+	AutoRegenerate  bool `json:"autoRegenerate" yaml:"autoRegenerate"`
+	RegenerateCount int  `json:"regenerateCount" yaml:"regenerateCount"` // New codes to generate
+
 	// Format: alphanumeric, numeric, hex
 	Format string `json:"format" yaml:"format"`
-	
+
 	// Allow printing/downloading
 	AllowPrint    bool `json:"allowPrint" yaml:"allowPrint"`
 	AllowDownload bool `json:"allowDownload" yaml:"allowDownload"`
@@ -67,17 +67,17 @@ type SecurityQuestionsConfig struct {
 	Enabled           bool `json:"enabled" yaml:"enabled"`
 	MinimumQuestions  int  `json:"minimumQuestions" yaml:"minimumQuestions"`
 	RequiredToRecover int  `json:"requiredToRecover" yaml:"requiredToRecover"`
-	
+
 	// Allow custom questions
 	AllowCustomQuestions bool     `json:"allowCustomQuestions" yaml:"allowCustomQuestions"`
 	PredefinedQuestions  []string `json:"predefinedQuestions" yaml:"predefinedQuestions"`
-	
+
 	// Security
-	CaseSensitive       bool `json:"caseSensitive" yaml:"caseSensitive"`
-	MaxAnswerLength     int  `json:"maxAnswerLength" yaml:"maxAnswerLength"`
-	MaxAttempts         int  `json:"maxAttempts" yaml:"maxAttempts"`
-	LockoutDuration     time.Duration `json:"lockoutDuration" yaml:"lockoutDuration"`
-	
+	CaseSensitive   bool          `json:"caseSensitive" yaml:"caseSensitive"`
+	MaxAnswerLength int           `json:"maxAnswerLength" yaml:"maxAnswerLength"`
+	MaxAttempts     int           `json:"maxAttempts" yaml:"maxAttempts"`
+	LockoutDuration time.Duration `json:"lockoutDuration" yaml:"lockoutDuration"`
+
 	// Answer complexity
 	RequireMinLength    int  `json:"requireMinLength" yaml:"requireMinLength"`
 	ForbidCommonAnswers bool `json:"forbidCommonAnswers" yaml:"forbidCommonAnswers"`
@@ -85,34 +85,34 @@ type SecurityQuestionsConfig struct {
 
 // TrustedContactsConfig configures trusted contacts
 type TrustedContactsConfig struct {
-	Enabled          bool `json:"enabled" yaml:"enabled"`
-	MinimumContacts  int  `json:"minimumContacts" yaml:"minimumContacts"`
-	MaximumContacts  int  `json:"maximumContacts" yaml:"maximumContacts"`
-	RequiredToRecover int `json:"requiredToRecover" yaml:"requiredToRecover"`
-	
+	Enabled           bool `json:"enabled" yaml:"enabled"`
+	MinimumContacts   int  `json:"minimumContacts" yaml:"minimumContacts"`
+	MaximumContacts   int  `json:"maximumContacts" yaml:"maximumContacts"`
+	RequiredToRecover int  `json:"requiredToRecover" yaml:"requiredToRecover"`
+
 	// Verification
-	RequireVerification     bool          `json:"requireVerification" yaml:"requireVerification"`
-	VerificationExpiry      time.Duration `json:"verificationExpiry" yaml:"verificationExpiry"`
-	
+	RequireVerification bool          `json:"requireVerification" yaml:"requireVerification"`
+	VerificationExpiry  time.Duration `json:"verificationExpiry" yaml:"verificationExpiry"`
+
 	// Contact methods
 	AllowEmailContacts bool `json:"allowEmailContacts" yaml:"allowEmailContacts"`
 	AllowPhoneContacts bool `json:"allowPhoneContacts" yaml:"allowPhoneContacts"`
-	
+
 	// Notification throttling
-	CooldownPeriod     time.Duration `json:"cooldownPeriod" yaml:"cooldownPeriod"`
-	MaxNotificationsPerDay int       `json:"maxNotificationsPerDay" yaml:"maxNotificationsPerDay"`
+	CooldownPeriod         time.Duration `json:"cooldownPeriod" yaml:"cooldownPeriod"`
+	MaxNotificationsPerDay int           `json:"maxNotificationsPerDay" yaml:"maxNotificationsPerDay"`
 }
 
 // EmailVerificationConfig configures email verification fallback
 type EmailVerificationConfig struct {
-	Enabled         bool          `json:"enabled" yaml:"enabled"`
-	CodeExpiry      time.Duration `json:"codeExpiry" yaml:"codeExpiry"`
-	CodeLength      int           `json:"codeLength" yaml:"codeLength"`
-	MaxAttempts     int           `json:"maxAttempts" yaml:"maxAttempts"`
-	
+	Enabled     bool          `json:"enabled" yaml:"enabled"`
+	CodeExpiry  time.Duration `json:"codeExpiry" yaml:"codeExpiry"`
+	CodeLength  int           `json:"codeLength" yaml:"codeLength"`
+	MaxAttempts int           `json:"maxAttempts" yaml:"maxAttempts"`
+
 	// Require email ownership proof
 	RequireEmailProof bool `json:"requireEmailProof" yaml:"requireEmailProof"`
-	
+
 	// Template configuration
 	EmailTemplate string `json:"emailTemplate" yaml:"emailTemplate"`
 	FromAddress   string `json:"fromAddress" yaml:"fromAddress"`
@@ -121,167 +121,167 @@ type EmailVerificationConfig struct {
 
 // SMSVerificationConfig configures SMS verification fallback
 type SMSVerificationConfig struct {
-	Enabled         bool          `json:"enabled" yaml:"enabled"`
-	CodeExpiry      time.Duration `json:"codeExpiry" yaml:"codeExpiry"`
-	CodeLength      int           `json:"codeLength" yaml:"codeLength"`
-	MaxAttempts     int           `json:"maxAttempts" yaml:"maxAttempts"`
-	
+	Enabled     bool          `json:"enabled" yaml:"enabled"`
+	CodeExpiry  time.Duration `json:"codeExpiry" yaml:"codeExpiry"`
+	CodeLength  int           `json:"codeLength" yaml:"codeLength"`
+	MaxAttempts int           `json:"maxAttempts" yaml:"maxAttempts"`
+
 	// Provider configuration
-	Provider        string `json:"provider" yaml:"provider"` // twilio, vonage, aws_sns
-	
+	Provider string `json:"provider" yaml:"provider"` // twilio, vonage, aws_sns
+
 	// Template configuration
 	MessageTemplate string `json:"messageTemplate" yaml:"messageTemplate"`
-	
+
 	// Rate limiting (SMS costs money)
-	MaxSMSPerDay    int           `json:"maxSmsPerDay" yaml:"maxSmsPerDay"`
-	CooldownPeriod  time.Duration `json:"cooldownPeriod" yaml:"cooldownPeriod"`
+	MaxSMSPerDay   int           `json:"maxSmsPerDay" yaml:"maxSmsPerDay"`
+	CooldownPeriod time.Duration `json:"cooldownPeriod" yaml:"cooldownPeriod"`
 }
 
 // VideoVerificationConfig configures video verification
 type VideoVerificationConfig struct {
-	Enabled              bool          `json:"enabled" yaml:"enabled"`
-	Provider             string        `json:"provider" yaml:"provider"` // zoom, teams, custom
-	
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	Provider string `json:"provider" yaml:"provider"` // zoom, teams, custom
+
 	// Scheduling
-	RequireScheduling    bool          `json:"requireScheduling" yaml:"requireScheduling"`
-	MinScheduleAdvance   time.Duration `json:"minScheduleAdvance" yaml:"minScheduleAdvance"`
-	SessionDuration      time.Duration `json:"sessionDuration" yaml:"sessionDuration"`
-	
+	RequireScheduling  bool          `json:"requireScheduling" yaml:"requireScheduling"`
+	MinScheduleAdvance time.Duration `json:"minScheduleAdvance" yaml:"minScheduleAdvance"`
+	SessionDuration    time.Duration `json:"sessionDuration" yaml:"sessionDuration"`
+
 	// Verification requirements
 	RequireLivenessCheck bool    `json:"requireLivenessCheck" yaml:"requireLivenessCheck"`
 	LivenessThreshold    float64 `json:"livenessThreshold" yaml:"livenessThreshold"`
-	
+
 	// Recording
-	RecordSessions       bool          `json:"recordSessions" yaml:"recordSessions"`
-	RecordingRetention   time.Duration `json:"recordingRetention" yaml:"recordingRetention"`
-	
+	RecordSessions     bool          `json:"recordSessions" yaml:"recordSessions"`
+	RecordingRetention time.Duration `json:"recordingRetention" yaml:"recordingRetention"`
+
 	// Admin review
-	RequireAdminReview   bool `json:"requireAdminReview" yaml:"requireAdminReview"`
+	RequireAdminReview bool `json:"requireAdminReview" yaml:"requireAdminReview"`
 }
 
 // DocumentVerificationConfig configures document verification
 type DocumentVerificationConfig struct {
-	Enabled            bool     `json:"enabled" yaml:"enabled"`
-	Provider           string   `json:"provider" yaml:"provider"` // stripe_identity, onfido, jumio
-	
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	Provider string `json:"provider" yaml:"provider"` // stripe_identity, onfido, jumio
+
 	// Accepted document types
-	AcceptedDocuments  []string `json:"acceptedDocuments" yaml:"acceptedDocuments"`
-	
+	AcceptedDocuments []string `json:"acceptedDocuments" yaml:"acceptedDocuments"`
+
 	// Requirements
-	RequireSelfie      bool     `json:"requireSelfie" yaml:"requireSelfie"`
-	RequireBothSides   bool     `json:"requireBothSides" yaml:"requireBothSides"`
-	
+	RequireSelfie    bool `json:"requireSelfie" yaml:"requireSelfie"`
+	RequireBothSides bool `json:"requireBothSides" yaml:"requireBothSides"`
+
 	// Verification
-	MinConfidenceScore float64  `json:"minConfidenceScore" yaml:"minConfidenceScore"`
+	MinConfidenceScore  float64 `json:"minConfidenceScore" yaml:"minConfidenceScore"`
 	RequireManualReview bool    `json:"requireManualReview" yaml:"requireManualReview"`
-	
+
 	// Storage
-	StorageProvider    string        `json:"storageProvider" yaml:"storageProvider"` // s3, gcs, azure
-	StoragePath        string        `json:"storagePath" yaml:"storagePath"`
-	RetentionPeriod    time.Duration `json:"retentionPeriod" yaml:"retentionPeriod"`
-	
+	StorageProvider string        `json:"storageProvider" yaml:"storageProvider"` // s3, gcs, azure
+	StoragePath     string        `json:"storagePath" yaml:"storagePath"`
+	RetentionPeriod time.Duration `json:"retentionPeriod" yaml:"retentionPeriod"`
+
 	// Encryption
-	EncryptAtRest      bool   `json:"encryptAtRest" yaml:"encryptAtRest"`
-	EncryptionKey      string `json:"encryptionKey" yaml:"encryptionKey"`
+	EncryptAtRest bool   `json:"encryptAtRest" yaml:"encryptAtRest"`
+	EncryptionKey string `json:"encryptionKey" yaml:"encryptionKey"`
 }
 
 // MultiStepRecoveryConfig configures multi-step recovery flows
 type MultiStepRecoveryConfig struct {
-	Enabled              bool `json:"enabled" yaml:"enabled"`
-	MinimumSteps         int  `json:"minimumSteps" yaml:"minimumSteps"`
-	
+	Enabled      bool `json:"enabled" yaml:"enabled"`
+	MinimumSteps int  `json:"minimumSteps" yaml:"minimumSteps"`
+
 	// Step requirements by risk level
-	LowRiskSteps         []RecoveryMethod `json:"lowRiskSteps" yaml:"lowRiskSteps"`
-	MediumRiskSteps      []RecoveryMethod `json:"mediumRiskSteps" yaml:"mediumRiskSteps"`
-	HighRiskSteps        []RecoveryMethod `json:"highRiskSteps" yaml:"highRiskSteps"`
-	
+	LowRiskSteps    []RecoveryMethod `json:"lowRiskSteps" yaml:"lowRiskSteps"`
+	MediumRiskSteps []RecoveryMethod `json:"mediumRiskSteps" yaml:"mediumRiskSteps"`
+	HighRiskSteps   []RecoveryMethod `json:"highRiskSteps" yaml:"highRiskSteps"`
+
 	// Flow configuration
-	AllowUserChoice      bool          `json:"allowUserChoice" yaml:"allowUserChoice"`
-	SessionExpiry        time.Duration `json:"sessionExpiry" yaml:"sessionExpiry"`
-	AllowStepSkip        bool          `json:"allowStepSkip" yaml:"allowStepSkip"`
-	
+	AllowUserChoice bool          `json:"allowUserChoice" yaml:"allowUserChoice"`
+	SessionExpiry   time.Duration `json:"sessionExpiry" yaml:"sessionExpiry"`
+	AllowStepSkip   bool          `json:"allowStepSkip" yaml:"allowStepSkip"`
+
 	// Completion
 	RequireAdminApproval bool `json:"requireAdminApproval" yaml:"requireAdminApproval"`
 }
 
 // RiskAssessmentConfig configures risk scoring
 type RiskAssessmentConfig struct {
-	Enabled               bool    `json:"enabled" yaml:"enabled"`
-	
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
 	// Risk factors and weights
-	NewDeviceWeight       float64 `json:"newDeviceWeight" yaml:"newDeviceWeight"`
-	NewLocationWeight     float64 `json:"newLocationWeight" yaml:"newLocationWeight"`
-	NewIPWeight           float64 `json:"newIpWeight" yaml:"newIpWeight"`
-	VelocityWeight        float64 `json:"velocityWeight" yaml:"velocityWeight"`
-	HistoryWeight         float64 `json:"historyWeight" yaml:"historyWeight"`
-	
+	NewDeviceWeight   float64 `json:"newDeviceWeight" yaml:"newDeviceWeight"`
+	NewLocationWeight float64 `json:"newLocationWeight" yaml:"newLocationWeight"`
+	NewIPWeight       float64 `json:"newIpWeight" yaml:"newIpWeight"`
+	VelocityWeight    float64 `json:"velocityWeight" yaml:"velocityWeight"`
+	HistoryWeight     float64 `json:"historyWeight" yaml:"historyWeight"`
+
 	// Thresholds
-	LowRiskThreshold      float64 `json:"lowRiskThreshold" yaml:"lowRiskThreshold"`
-	MediumRiskThreshold   float64 `json:"mediumRiskThreshold" yaml:"mediumRiskThreshold"`
-	HighRiskThreshold     float64 `json:"highRiskThreshold" yaml:"highRiskThreshold"`
-	
+	LowRiskThreshold    float64 `json:"lowRiskThreshold" yaml:"lowRiskThreshold"`
+	MediumRiskThreshold float64 `json:"mediumRiskThreshold" yaml:"mediumRiskThreshold"`
+	HighRiskThreshold   float64 `json:"highRiskThreshold" yaml:"highRiskThreshold"`
+
 	// Actions
-	BlockHighRisk         bool `json:"blockHighRisk" yaml:"blockHighRisk"`
-	RequireReviewAbove    float64 `json:"requireReviewAbove" yaml:"requireReviewAbove"`
+	BlockHighRisk      bool    `json:"blockHighRisk" yaml:"blockHighRisk"`
+	RequireReviewAbove float64 `json:"requireReviewAbove" yaml:"requireReviewAbove"`
 }
 
 // RateLimitingConfig configures rate limiting
 type RateLimitingConfig struct {
-	Enabled               bool          `json:"enabled" yaml:"enabled"`
-	
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
 	// Per-user limits
-	MaxAttemptsPerHour    int           `json:"maxAttemptsPerHour" yaml:"maxAttemptsPerHour"`
-	MaxAttemptsPerDay     int           `json:"maxAttemptsPerDay" yaml:"maxAttemptsPerDay"`
-	
+	MaxAttemptsPerHour int `json:"maxAttemptsPerHour" yaml:"maxAttemptsPerHour"`
+	MaxAttemptsPerDay  int `json:"maxAttemptsPerDay" yaml:"maxAttemptsPerDay"`
+
 	// Lockout
-	LockoutAfterAttempts  int           `json:"lockoutAfterAttempts" yaml:"lockoutAfterAttempts"`
-	LockoutDuration       time.Duration `json:"lockoutDuration" yaml:"lockoutDuration"`
-	ExponentialBackoff    bool          `json:"exponentialBackoff" yaml:"exponentialBackoff"`
-	
+	LockoutAfterAttempts int           `json:"lockoutAfterAttempts" yaml:"lockoutAfterAttempts"`
+	LockoutDuration      time.Duration `json:"lockoutDuration" yaml:"lockoutDuration"`
+	ExponentialBackoff   bool          `json:"exponentialBackoff" yaml:"exponentialBackoff"`
+
 	// Per-IP limits (prevent abuse)
-	MaxAttemptsPerIP      int           `json:"maxAttemptsPerIp" yaml:"maxAttemptsPerIp"`
-	IPCooldownPeriod      time.Duration `json:"ipCooldownPeriod" yaml:"ipCooldownPeriod"`
+	MaxAttemptsPerIP int           `json:"maxAttemptsPerIp" yaml:"maxAttemptsPerIp"`
+	IPCooldownPeriod time.Duration `json:"ipCooldownPeriod" yaml:"ipCooldownPeriod"`
 }
 
 // AuditConfig configures audit logging
 type AuditConfig struct {
-	Enabled           bool          `json:"enabled" yaml:"enabled"`
-	LogAllAttempts    bool          `json:"logAllAttempts" yaml:"logAllAttempts"`
-	LogSuccessful     bool          `json:"logSuccessful" yaml:"logSuccessful"`
-	LogFailed         bool          `json:"logFailed" yaml:"logFailed"`
-	
+	Enabled        bool `json:"enabled" yaml:"enabled"`
+	LogAllAttempts bool `json:"logAllAttempts" yaml:"logAllAttempts"`
+	LogSuccessful  bool `json:"logSuccessful" yaml:"logSuccessful"`
+	LogFailed      bool `json:"logFailed" yaml:"logFailed"`
+
 	// Immutability
-	ImmutableLogs     bool          `json:"immutableLogs" yaml:"immutableLogs"`
-	
+	ImmutableLogs bool `json:"immutableLogs" yaml:"immutableLogs"`
+
 	// Retention
-	RetentionDays     int           `json:"retentionDays" yaml:"retentionDays"`
-	ArchiveOldLogs    bool          `json:"archiveOldLogs" yaml:"archiveOldLogs"`
-	ArchiveInterval   time.Duration `json:"archiveInterval" yaml:"archiveInterval"`
-	
+	RetentionDays   int           `json:"retentionDays" yaml:"retentionDays"`
+	ArchiveOldLogs  bool          `json:"archiveOldLogs" yaml:"archiveOldLogs"`
+	ArchiveInterval time.Duration `json:"archiveInterval" yaml:"archiveInterval"`
+
 	// Detailed logging
-	LogIPAddress      bool `json:"logIpAddress" yaml:"logIpAddress"`
-	LogUserAgent      bool `json:"logUserAgent" yaml:"logUserAgent"`
-	LogDeviceInfo     bool `json:"logDeviceInfo" yaml:"logDeviceInfo"`
+	LogIPAddress  bool `json:"logIpAddress" yaml:"logIpAddress"`
+	LogUserAgent  bool `json:"logUserAgent" yaml:"logUserAgent"`
+	LogDeviceInfo bool `json:"logDeviceInfo" yaml:"logDeviceInfo"`
 }
 
 // NotificationsConfig configures notifications
 type NotificationsConfig struct {
-	Enabled                    bool     `json:"enabled" yaml:"enabled"`
-	
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
 	// When to notify user
-	NotifyOnRecoveryStart      bool     `json:"notifyOnRecoveryStart" yaml:"notifyOnRecoveryStart"`
-	NotifyOnRecoveryComplete   bool     `json:"notifyOnRecoveryComplete" yaml:"notifyOnRecoveryComplete"`
-	NotifyOnRecoveryFailed     bool     `json:"notifyOnRecoveryFailed" yaml:"notifyOnRecoveryFailed"`
-	
+	NotifyOnRecoveryStart    bool `json:"notifyOnRecoveryStart" yaml:"notifyOnRecoveryStart"`
+	NotifyOnRecoveryComplete bool `json:"notifyOnRecoveryComplete" yaml:"notifyOnRecoveryComplete"`
+	NotifyOnRecoveryFailed   bool `json:"notifyOnRecoveryFailed" yaml:"notifyOnRecoveryFailed"`
+
 	// Admin notifications
-	NotifyAdminOnHighRisk      bool     `json:"notifyAdminOnHighRisk" yaml:"notifyAdminOnHighRisk"`
-	NotifyAdminOnReviewNeeded  bool     `json:"notifyAdminOnReviewNeeded" yaml:"notifyAdminOnReviewNeeded"`
-	
+	NotifyAdminOnHighRisk     bool `json:"notifyAdminOnHighRisk" yaml:"notifyAdminOnHighRisk"`
+	NotifyAdminOnReviewNeeded bool `json:"notifyAdminOnReviewNeeded" yaml:"notifyAdminOnReviewNeeded"`
+
 	// Channels
-	Channels                   []string `json:"channels" yaml:"channels"` // email, sms, webhook
-	
+	Channels []string `json:"channels" yaml:"channels"` // email, sms, webhook
+
 	// Security officer notifications
-	SecurityOfficerEmail       string   `json:"securityOfficerEmail" yaml:"securityOfficerEmail"`
+	SecurityOfficerEmail string `json:"securityOfficerEmail" yaml:"securityOfficerEmail"`
 }
 
 // DefaultConfig returns the default backup authentication configuration
@@ -299,9 +299,9 @@ func DefaultConfig() *Config {
 			AllowDownload:   true,
 		},
 		SecurityQuestions: SecurityQuestionsConfig{
-			Enabled:             true,
-			MinimumQuestions:    3,
-			RequiredToRecover:   2,
+			Enabled:              true,
+			MinimumQuestions:     3,
+			RequiredToRecover:    2,
 			AllowCustomQuestions: true,
 			PredefinedQuestions: []string{
 				"What was the name of your first pet?",
@@ -321,16 +321,16 @@ func DefaultConfig() *Config {
 			ForbidCommonAnswers: true,
 		},
 		TrustedContacts: TrustedContactsConfig{
-			Enabled:                 true,
-			MinimumContacts:         1,
-			MaximumContacts:         5,
-			RequiredToRecover:       1,
-			RequireVerification:     true,
-			VerificationExpiry:      7 * 24 * time.Hour,
-			AllowEmailContacts:      true,
-			AllowPhoneContacts:      true,
-			CooldownPeriod:          1 * time.Hour,
-			MaxNotificationsPerDay:  3,
+			Enabled:                true,
+			MinimumContacts:        1,
+			MaximumContacts:        5,
+			RequiredToRecover:      1,
+			RequireVerification:    true,
+			VerificationExpiry:     7 * 24 * time.Hour,
+			AllowEmailContacts:     true,
+			AllowPhoneContacts:     true,
+			CooldownPeriod:         1 * time.Hour,
+			MaxNotificationsPerDay: 3,
 		},
 		EmailVerification: EmailVerificationConfig{
 			Enabled:           true,
@@ -518,4 +518,3 @@ func (c *Config) Validate() {
 		c.Audit.RetentionDays = 2555 // 7 years
 	}
 }
-

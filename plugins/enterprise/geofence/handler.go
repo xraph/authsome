@@ -138,10 +138,10 @@ func (h *Handler) DeleteRule(c forge.Context) error {
 // CheckLocation performs a geofence check
 func (h *Handler) CheckLocation(c forge.Context) error {
 	var req struct {
-		IPAddress  string   `json:"ipAddress"`
-		UserID     string   `json:"userId,omitempty"`
-		EventType  string   `json:"eventType"`
-		GPS        *GPSData `json:"gps,omitempty"`
+		IPAddress string   `json:"ipAddress"`
+		UserID    string   `json:"userId,omitempty"`
+		EventType string   `json:"eventType"`
+		GPS       *GPSData `json:"gps,omitempty"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
@@ -151,7 +151,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	}
 
 	orgID := c.Get("organization_id").(xid.ID)
-	
+
 	var userID xid.ID
 	if req.UserID != "" {
 		id, err := xid.FromString(req.UserID)
@@ -205,7 +205,7 @@ func (h *Handler) LookupIP(c forge.Context) error {
 // ListLocationEvents lists location events for the authenticated user
 func (h *Handler) ListLocationEvents(c forge.Context) error {
 	userID := c.Get("user_id").(xid.ID)
-	
+
 	limitStr := c.Query("limit")
 	limit := 50
 	if limitStr != "" {
@@ -435,7 +435,7 @@ func (h *Handler) DeleteTrustedLocation(c forge.Context) error {
 // ListViolations lists geofence violations
 func (h *Handler) ListViolations(c forge.Context) error {
 	userID := c.Get("user_id").(xid.ID)
-	
+
 	limitStr := c.Query("limit")
 	limit := 50
 	if limitStr != "" {
@@ -529,4 +529,3 @@ func (h *Handler) GetViolationAnalytics(c forge.Context) error {
 		"message": "violation analytics endpoint - to be implemented",
 	})
 }
-

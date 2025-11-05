@@ -247,4 +247,3 @@ func (r *ImpersonationRepository) CountAuditEvents(ctx context.Context, req *imp
 
 	return query.Count(ctx)
 }
-

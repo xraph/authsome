@@ -22,7 +22,7 @@ func main() {
 	dsn := "postgres://postgres:postgres@localhost:5432/authsome?sslmode=disable"
 	sqldb := pgdriver.NewConnector(pgdriver.WithDSN(dsn))
 	db := bun.NewDB(sqldb, pgdialect.New())
-	
+
 	defer db.Close()
 
 	// Create Forge app
@@ -37,7 +37,7 @@ func main() {
 		authsome.WithPlugins(
 			// IMPORTANT: Notification plugin MUST be first!
 			notificationPlugin.NewPlugin(),
-			
+
 			// Then other plugins that use notifications
 			emailotp.NewPlugin(),
 			magiclink.NewPlugin(),
@@ -67,7 +67,7 @@ func main() {
 	log.Println("  GET  /api/auth/templates")
 	log.Println("  POST /api/auth/notifications/send")
 	log.Println("")
-	
+
 	// Example: Send OTP email
 	go func() {
 		time.Sleep(2 * time.Second)
@@ -83,10 +83,10 @@ func main() {
 
 func demonstrateNotifications() {
 	log.Println("\n=== Demonstrating Notification System ===")
-	
+
 	// This would normally be done via HTTP requests
 	// Here we're just showing the flow
-	
+
 	log.Println("1. Email OTP sent (using auth.email_otp template)")
 	log.Println("2. Magic Link sent (using auth.magic_link template)")
 	log.Println("3. Phone OTP sent (using auth.phone_otp template)")
@@ -94,4 +94,3 @@ func demonstrateNotifications() {
 	log.Println("5. Templates can be customized via API")
 	log.Println("\n✨ Notification system is fully operational!")
 }
-

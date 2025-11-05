@@ -126,7 +126,7 @@ func (s *Service) CheckLocation(ctx context.Context, req *LocationCheckRequest) 
 		violation := s.evaluateRule(ctx, rule, geoData, detection, req)
 		if violation != nil {
 			result.Violations = append(result.Violations, violation.ViolationType)
-			
+
 			// Store violation
 			_ = s.repo.CreateViolation(ctx, violation)
 
@@ -162,7 +162,7 @@ func (s *Service) CheckLocation(ctx context.Context, req *LocationCheckRequest) 
 		if alert != nil {
 			result.TravelAlert = true
 			result.TravelAlertID = &alert.ID
-			
+
 			if alert.RequiresApproval {
 				result.Allowed = false
 				result.Reason = "travel_approval_required"
@@ -273,7 +273,7 @@ func pointInPolygon(lat, lon float64, polygon [][2]float64) bool {
 
 		intersect := ((yi > lon) != (yj > lon)) &&
 			(lat < (xj-xi)*(lon-yi)/(yj-yi)+xi)
-		
+
 		if intersect {
 			inside = !inside
 		}
@@ -400,7 +400,7 @@ func (s *Service) checkTravelAnomaly(ctx context.Context, userID xid.ID, current
 	// Calculate distance and speed
 	distance := haversineDistance(*current.Latitude, *current.Longitude, *lastEvent.Latitude, *lastEvent.Longitude)
 	timeDiff := current.Timestamp.Sub(lastEvent.Timestamp)
-	
+
 	if timeDiff <= 0 {
 		return nil
 	}
@@ -433,26 +433,26 @@ func (s *Service) checkTravelAnomaly(ctx context.Context, userID xid.ID, current
 
 	// Create alert
 	alert := &TravelAlert{
-		UserID:          userID,
-		OrganizationID:  current.OrganizationID,
-		AlertType:       alertType,
-		Severity:        severity,
-		FromCountry:     lastEvent.Country,
-		FromCity:        lastEvent.City,
-		FromLat:         lastEvent.Latitude,
-		FromLon:         lastEvent.Longitude,
-		ToCountry:       current.Country,
-		ToCity:          current.City,
-		ToLat:           current.Latitude,
-		ToLon:           current.Longitude,
-		DistanceKm:      distance,
-		TimeDifference:  timeDiff,
-		CalculatedSpeed: speedKmh,
-		Status:          "pending",
+		UserID:           userID,
+		OrganizationID:   current.OrganizationID,
+		AlertType:        alertType,
+		Severity:         severity,
+		FromCountry:      lastEvent.Country,
+		FromCity:         lastEvent.City,
+		FromLat:          lastEvent.Latitude,
+		FromLon:          lastEvent.Longitude,
+		ToCountry:        current.Country,
+		ToCity:           current.City,
+		ToLat:            current.Latitude,
+		ToLon:            current.Longitude,
+		DistanceKm:       distance,
+		TimeDifference:   timeDiff,
+		CalculatedSpeed:  speedKmh,
+		Status:           "pending",
 		RequiresApproval: s.config.Travel.RequireApproval && severity == "critical",
-		UserNotified:    false,
-		AdminNotified:   false,
-		LocationEventID: current.ID,
+		UserNotified:     false,
+		AdminNotified:    false,
+		LocationEventID:  current.ID,
 	}
 
 	if err := s.repo.CreateTravelAlert(ctx, alert); err != nil {
@@ -636,13 +636,12 @@ type GPSData struct {
 
 // LocationCheckResult represents the result of a geofence check
 type LocationCheckResult struct {
-	Allowed        bool
-	Reason         string
-	RuleName       string
-	RequireMFA     bool
-	Notify         bool
-	Violations     []string
-	TravelAlert    bool
-	TravelAlertID  *xid.ID
+	Allowed       bool
+	Reason        string
+	RuleName      string
+	RequireMFA    bool
+	Notify        bool
+	Violations    []string
+	TravelAlert   bool
+	TravelAlertID *xid.ID
 }
-

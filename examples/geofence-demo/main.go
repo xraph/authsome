@@ -35,7 +35,7 @@ func main() {
 
 	// Test haversine distance calculation
 	fmt.Println("=== Distance Calculations ===")
-	
+
 	// San Francisco to New York
 	sfLat, sfLon := 37.7749, -122.4194
 	nyLat, nyLon := 40.7128, -74.0060
@@ -53,7 +53,7 @@ func main() {
 
 	// Test geofence rule creation
 	fmt.Println("=== Geofence Rules ===")
-	
+
 	// Country blocking rule
 	rule1 := &geofence.GeofenceRule{
 		ID:               xid.New(),
@@ -120,7 +120,7 @@ func main() {
 		{37.7, -122.3},
 		{37.7, -122.5},
 	}
-	
+
 	testPoint1 := [2]float64{37.75, -122.4}
 	inside1 := pointInPolygon(testPoint1[0], testPoint1[1], polygon)
 	fmt.Printf("Point (%.2f, %.2f) inside polygon: %v\n", testPoint1[0], testPoint1[1], inside1)
@@ -154,28 +154,28 @@ func main() {
 
 	// Test travel alert
 	fmt.Println("=== Travel Detection ===")
-	
+
 	// Simulate travel from SF to NY in 2 hours (impossible)
 	travelTime := 2 * time.Hour
 	speed := distance / travelTime.Hours()
-	
+
 	alert := &geofence.TravelAlert{
-		ID:              xid.New(),
-		UserID:          xid.New(),
-		OrganizationID:  xid.New(),
-		AlertType:       "impossible_travel",
-		Severity:        "critical",
-		FromCountry:     "United States",
-		FromCity:        "San Francisco",
-		ToCountry:       "United States",
-		ToCity:          "New York",
-		DistanceKm:      4130.5, // Approximate SF to NY distance
-		TimeDifference:  travelTime,
-		CalculatedSpeed: speed,
-		Status:          "pending",
+		ID:               xid.New(),
+		UserID:           xid.New(),
+		OrganizationID:   xid.New(),
+		AlertType:        "impossible_travel",
+		Severity:         "critical",
+		FromCountry:      "United States",
+		FromCity:         "San Francisco",
+		ToCountry:        "United States",
+		ToCity:           "New York",
+		DistanceKm:       4130.5, // Approximate SF to NY distance
+		TimeDifference:   travelTime,
+		CalculatedSpeed:  speed,
+		Status:           "pending",
 		RequiresApproval: true,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	fmt.Printf("✓ Travel Alert: %s\n", alert.AlertType)
@@ -286,4 +286,3 @@ func pointInPolygon(lat, lon float64, polygon [][2]float64) bool {
 
 	return inside
 }
-

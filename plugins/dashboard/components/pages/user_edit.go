@@ -27,7 +27,7 @@ func UserEditPage(data UserEditPageData) g.Node {
 	return Div(Class("max-w-4xl"),
 		// Header
 		editHeader(data),
-		
+
 		// Edit Form
 		editForm(data),
 	)
@@ -58,15 +58,15 @@ func editForm(data UserEditPageData) g.Node {
 		Method("POST"),
 		Action(data.BasePath+"/dashboard/users/"+data.User.UserID+"/edit"),
 		Class("space-y-6"),
-		
+
 		Input(Type("hidden"), Name("csrf_token"), Value(data.CSRFToken)),
-		
+
 		// Basic Information Card
 		basicInfoCard(data.User),
-		
+
 		// Email Verification Card
 		emailVerificationCard(data.User.EmailVerified),
-		
+
 		// Action Buttons
 		formActions(data),
 	)
@@ -92,7 +92,7 @@ func basicInfoCard(user UserEditData) g.Node {
 					Class("w-full px-3 py-2 font-mono text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-500 cursor-not-allowed"),
 				),
 			),
-			
+
 			// Name
 			Div(
 				Label(
@@ -110,7 +110,7 @@ func basicInfoCard(user UserEditData) g.Node {
 					Class("w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"),
 				),
 			),
-			
+
 			// Email
 			Div(
 				Label(
@@ -128,7 +128,7 @@ func basicInfoCard(user UserEditData) g.Node {
 					Class("w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"),
 				),
 			),
-			
+
 			// Username
 			Div(
 				Label(

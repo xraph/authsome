@@ -24,67 +24,67 @@ func NewSmartCardProvider(config *Config, repo Repository) *SmartCardProvider {
 
 // PIVCardInfo contains PIV card information
 type PIVCardInfo struct {
-	CardID           string            `json:"cardId"`
-	CardholderUUID   string            `json:"cardholderUuid,omitempty"`
-	ExpirationDate   *time.Time        `json:"expirationDate,omitempty"`
-	Certificates     []PIVCertificate  `json:"certificates"`
-	PINPolicy        PIVPINPolicy      `json:"pinPolicy"`
-	ReaderName       string            `json:"readerName,omitempty"`
+	CardID         string           `json:"cardId"`
+	CardholderUUID string           `json:"cardholderUuid,omitempty"`
+	ExpirationDate *time.Time       `json:"expirationDate,omitempty"`
+	Certificates   []PIVCertificate `json:"certificates"`
+	PINPolicy      PIVPINPolicy     `json:"pinPolicy"`
+	ReaderName     string           `json:"readerName,omitempty"`
 }
 
 // PIVCertificate represents a certificate slot on a PIV card
 type PIVCertificate struct {
-	SlotID      string `json:"slotId"` // 9A, 9C, 9D, 9E
-	SlotName    string `json:"slotName"` // Authentication, Digital Signature, Key Management, Card Authentication
+	SlotID      string            `json:"slotId"`   // 9A, 9C, 9D, 9E
+	SlotName    string            `json:"slotName"` // Authentication, Digital Signature, Key Management, Card Authentication
 	Certificate *x509.Certificate `json:"-"`
-	Fingerprint string `json:"fingerprint"`
+	Fingerprint string            `json:"fingerprint"`
 }
 
 // PIVPINPolicy defines PIN requirements
 type PIVPINPolicy struct {
-	PINRequired    bool `json:"pinRequired"`
-	PINMinLength   int  `json:"pinMinLength"`
-	PINMaxLength   int  `json:"pinMaxLength"`
-	Retries        int  `json:"retries"`
-	PINVerified    bool `json:"pinVerified"`
+	PINRequired  bool `json:"pinRequired"`
+	PINMinLength int  `json:"pinMinLength"`
+	PINMaxLength int  `json:"pinMaxLength"`
+	Retries      int  `json:"retries"`
+	PINVerified  bool `json:"pinVerified"`
 }
 
 // CACCardInfo contains CAC card information
 type CACCardInfo struct {
-	CardID         string            `json:"cardId"`
-	CACNumber      string            `json:"cacNumber"`
-	PersonDN       string            `json:"personDn,omitempty"`
-	Certificates   []CACCertificate  `json:"certificates"`
-	IssueDate      *time.Time        `json:"issueDate,omitempty"`
-	ExpirationDate *time.Time        `json:"expirationDate,omitempty"`
-	ReaderName     string            `json:"readerName,omitempty"`
+	CardID         string           `json:"cardId"`
+	CACNumber      string           `json:"cacNumber"`
+	PersonDN       string           `json:"personDn,omitempty"`
+	Certificates   []CACCertificate `json:"certificates"`
+	IssueDate      *time.Time       `json:"issueDate,omitempty"`
+	ExpirationDate *time.Time       `json:"expirationDate,omitempty"`
+	ReaderName     string           `json:"readerName,omitempty"`
 }
 
 // CACCertificate represents a certificate on a CAC
 type CACCertificate struct {
-	CertificateType string `json:"certificateType"` // ID, Email, Signature, Encryption
+	CertificateType string            `json:"certificateType"` // ID, Email, Signature, Encryption
 	Certificate     *x509.Certificate `json:"-"`
-	Fingerprint     string `json:"fingerprint"`
+	Fingerprint     string            `json:"fingerprint"`
 }
 
 // SmartCardAuthRequest contains authentication request data
 type SmartCardAuthRequest struct {
-	OrganizationID string                 `json:"organizationId"`
-	CardType       string                 `json:"cardType"` // piv, cac
-	ReaderName     string                 `json:"readerName,omitempty"`
-	PIN            string                 `json:"pin,omitempty"`
-	CertificateSlot string                `json:"certificateSlot,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	OrganizationID  string                 `json:"organizationId"`
+	CardType        string                 `json:"cardType"` // piv, cac
+	ReaderName      string                 `json:"readerName,omitempty"`
+	PIN             string                 `json:"pin,omitempty"`
+	CertificateSlot string                 `json:"certificateSlot,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // SmartCardAuthResponse contains authentication response
 type SmartCardAuthResponse struct {
-	Success        bool                   `json:"success"`
-	UserID         string                 `json:"userId,omitempty"`
-	CertificateID  string                 `json:"certificateId,omitempty"`
-	CardInfo       interface{}            `json:"cardInfo,omitempty"`
-	ValidationResult *ValidationResult    `json:"validationResult,omitempty"`
-	Error          string                 `json:"error,omitempty"`
+	Success          bool              `json:"success"`
+	UserID           string            `json:"userId,omitempty"`
+	CertificateID    string            `json:"certificateId,omitempty"`
+	CardInfo         interface{}       `json:"cardInfo,omitempty"`
+	ValidationResult *ValidationResult `json:"validationResult,omitempty"`
+	Error            string            `json:"error,omitempty"`
 }
 
 // ValidatePIVCard validates a PIV card and extracts certificate
@@ -92,12 +92,12 @@ func (s *SmartCardProvider) ValidatePIVCard(ctx context.Context, cert *x509.Cert
 	if !s.config.SmartCard.EnablePIV {
 		return nil, fmt.Errorf("PIV support is not enabled")
 	}
-	
+
 	// Verify this is a PIV certificate
 	if !isPIVCertificate(cert) {
 		return nil, ErrNotPIVCertificate
 	}
-	
+
 	// Extract PIV-specific information from certificate
 	cardInfo := &PIVCardInfo{
 		Certificates: []PIVCertificate{},
@@ -108,37 +108,37 @@ func (s *SmartCardProvider) ValidatePIVCard(ctx context.Context, cert *x509.Cert
 			Retries:      s.config.SmartCard.MaxPINAttempts,
 		},
 	}
-	
+
 	// Extract card UUID from certificate (if present)
 	cardInfo.CardholderUUID = extractPIVCardUUID(cert)
-	
+
 	// Extract card ID from certificate subject or extensions
 	cardInfo.CardID = extractPIVCardID(cert)
-	
+
 	// Determine certificate slot
 	slotID, slotName := determinePIVSlot(cert)
-	
+
 	pivCert := PIVCertificate{
 		SlotID:      slotID,
 		SlotName:    slotName,
 		Certificate: cert,
 		Fingerprint: calculateFingerprint(cert.Raw),
 	}
-	
+
 	cardInfo.Certificates = append(cardInfo.Certificates, pivCert)
-	
+
 	// Validate PIV-specific requirements
 	if s.config.SmartCard.PIVAuthCertOnly && slotID != "9A" {
 		return nil, fmt.Errorf("only PIV authentication certificate (slot 9A) is allowed")
 	}
-	
+
 	// Check required OIDs if configured
 	if len(s.config.SmartCard.PIVRequiredOIDs) > 0 {
 		if err := validateRequiredOIDs(cert, s.config.SmartCard.PIVRequiredOIDs); err != nil {
 			return nil, err
 		}
 	}
-	
+
 	return cardInfo, nil
 }
 
@@ -147,41 +147,41 @@ func (s *SmartCardProvider) ValidateCACCard(ctx context.Context, cert *x509.Cert
 	if !s.config.SmartCard.EnableCAC {
 		return nil, fmt.Errorf("CAC support is not enabled")
 	}
-	
+
 	// Verify this is a CAC certificate
 	if !isCACCertificate(cert) {
 		return nil, ErrNotCACCertificate
 	}
-	
+
 	cardInfo := &CACCardInfo{
 		Certificates: []CACCertificate{},
 	}
-	
+
 	// Extract CAC number from certificate
 	cardInfo.CACNumber = extractCACNumber(cert)
 	cardInfo.CardID = cardInfo.CACNumber
-	
+
 	// Extract person DN
 	cardInfo.PersonDN = cert.Subject.String()
-	
+
 	// Determine certificate type
 	certType := determineCACCertificateType(cert)
-	
+
 	cacCert := CACCertificate{
 		CertificateType: certType,
 		Certificate:     cert,
 		Fingerprint:     calculateFingerprint(cert.Raw),
 	}
-	
+
 	cardInfo.Certificates = append(cardInfo.Certificates, cacCert)
-	
+
 	// Check required OIDs if configured
 	if len(s.config.SmartCard.CACRequiredOIDs) > 0 {
 		if err := validateRequiredOIDs(cert, s.config.SmartCard.CACRequiredOIDs); err != nil {
 			return nil, err
 		}
 	}
-	
+
 	return cardInfo, nil
 }
 
@@ -195,7 +195,7 @@ func (s *SmartCardProvider) AuthenticateWithPIV(ctx context.Context, cert *x509.
 			Error:   err.Error(),
 		}, err
 	}
-	
+
 	// Find or create user based on certificate
 	userID, certificateID, err := s.findOrCreateUserFromCertificate(ctx, cert, orgID)
 	if err != nil {
@@ -204,7 +204,7 @@ func (s *SmartCardProvider) AuthenticateWithPIV(ctx context.Context, cert *x509.
 			Error:   fmt.Sprintf("failed to get user: %v", err),
 		}, err
 	}
-	
+
 	return &SmartCardAuthResponse{
 		Success:       true,
 		UserID:        userID,
@@ -223,7 +223,7 @@ func (s *SmartCardProvider) AuthenticateWithCAC(ctx context.Context, cert *x509.
 			Error:   err.Error(),
 		}, err
 	}
-	
+
 	// Find or create user based on certificate
 	userID, certificateID, err := s.findOrCreateUserFromCertificate(ctx, cert, orgID)
 	if err != nil {
@@ -232,7 +232,7 @@ func (s *SmartCardProvider) AuthenticateWithCAC(ctx context.Context, cert *x509.
 			Error:   fmt.Sprintf("failed to get user: %v", err),
 		}, err
 	}
-	
+
 	return &SmartCardAuthResponse{
 		Success:       true,
 		UserID:        userID,
@@ -244,13 +244,13 @@ func (s *SmartCardProvider) AuthenticateWithCAC(ctx context.Context, cert *x509.
 // findOrCreateUserFromCertificate finds or creates a user based on certificate
 func (s *SmartCardProvider) findOrCreateUserFromCertificate(ctx context.Context, cert *x509.Certificate, orgID string) (string, string, error) {
 	fingerprint := calculateFingerprint(cert.Raw)
-	
+
 	// Try to find existing certificate
 	storedCert, err := s.repo.GetCertificateByFingerprint(ctx, fingerprint)
 	if err == nil && storedCert != nil {
 		return storedCert.UserID, storedCert.ID, nil
 	}
-	
+
 	// Certificate not found - would need to create user and certificate
 	// This is a placeholder - real implementation would integrate with user service
 	return "", "", fmt.Errorf("certificate not registered")
@@ -276,7 +276,7 @@ func extractPIVCardID(cert *x509.Certificate) string {
 	if cert.Subject.SerialNumber != "" {
 		return cert.Subject.SerialNumber
 	}
-	
+
 	// Try to extract from certificate serial number
 	return cert.SerialNumber.String()
 }
@@ -284,7 +284,7 @@ func extractPIVCardID(cert *x509.Certificate) string {
 // determinePIVSlot determines the PIV slot based on certificate attributes
 func determinePIVSlot(cert *x509.Certificate) (string, string) {
 	// Check certificate policies and key usage to determine slot
-	
+
 	// Slot 9A - PIV Authentication
 	for _, policy := range cert.PolicyIdentifiers {
 		if policy.String() == "2.16.840.1.101.3.2.1.3.7" {
@@ -300,7 +300,7 @@ func determinePIVSlot(cert *x509.Certificate) (string, string) {
 			return "9D", "Key Management"
 		}
 	}
-	
+
 	// Default to authentication slot
 	return "9A", "PIV Authentication"
 }
@@ -309,12 +309,12 @@ func determinePIVSlot(cert *x509.Certificate) (string, string) {
 func extractCACNumber(cert *x509.Certificate) string {
 	// CAC number is typically encoded in the subject
 	// It may be in the serial number field or a custom extension
-	
+
 	// Try subject serial number
 	if cert.Subject.SerialNumber != "" {
 		return cert.Subject.SerialNumber
 	}
-	
+
 	// Try certificate serial number
 	return cert.SerialNumber.String()
 }
@@ -335,41 +335,41 @@ func determineCACCertificateType(cert *x509.Certificate) string {
 			return "Encryption Certificate"
 		}
 	}
-	
+
 	return "Unknown"
 }
 
 // validateRequiredOIDs validates that certificate contains required OIDs
 func validateRequiredOIDs(cert *x509.Certificate, requiredOIDs []string) error {
 	certOIDs := make(map[string]bool)
-	
+
 	// Collect all OIDs from certificate policies
 	for _, policy := range cert.PolicyIdentifiers {
 		certOIDs[policy.String()] = true
 	}
-	
+
 	// Check each required OID
 	for _, required := range requiredOIDs {
 		if !certOIDs[required] {
 			return fmt.Errorf("certificate missing required OID: %s", required)
 		}
 	}
-	
+
 	return nil
 }
 
 // PIV/CAC OID Constants
 var (
 	// PIV OIDs
-	OID_PIV_Authentication    = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 7}
-	OID_PIV_CardAuth          = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 13}
-	OID_PIV_DigitalSignature  = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 2}
-	OID_PIV_KeyManagement     = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 4}
-	
+	OID_PIV_Authentication   = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 7}
+	OID_PIV_CardAuth         = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 13}
+	OID_PIV_DigitalSignature = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 2}
+	OID_PIV_KeyManagement    = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 4}
+
 	// CAC OIDs
-	OID_CAC_PKI               = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 39}
-	OID_CAC_Authentication    = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 42}
-	OID_CAC_Email             = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 17}
+	OID_CAC_PKI            = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 39}
+	OID_CAC_Authentication = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 42}
+	OID_CAC_Email          = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 17}
 )
 
 // GetPIVSlotNames returns human-readable PIV slot names
@@ -396,4 +396,3 @@ func GetCACCertificateTypes() []string {
 		"Email Encryption Certificate",
 	}
 }
-

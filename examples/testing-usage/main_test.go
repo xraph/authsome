@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	authsometesting "github.com/xraph/authsome/testing"
 	"github.com/xraph/authsome/schema"
+	authsometesting "github.com/xraph/authsome/testing"
 )
 
 // Example application code that depends on AuthSome
@@ -112,7 +112,7 @@ func (o *OrganizationService) SwitchOrganization(ctx context.Context, mock *auth
 
 	// Create new session for the organization
 	session := mock.CreateSession(user.ID.String(), orgID)
-	
+
 	// Update context
 	ctx = mock.WithSession(ctx, session.ID.String())
 	ctx = mock.WithOrg(ctx, orgID)
@@ -150,7 +150,7 @@ func TestUserProfileService_GetProfile(t *testing.T) {
 		user := mock.CreateUser("test@example.com", "Test User")
 		org := mock.CreateOrganization("Custom Org", "custom-org")
 		mock.AddUserToOrg(user.ID.String(), org.ID.String(), "member")
-		
+
 		session := mock.CreateSession(user.ID.String(), org.ID.String())
 		ctx := context.Background()
 		ctx = mock.WithSession(ctx, session.ID.String())
@@ -205,7 +205,7 @@ func TestAdminService_DeleteUser(t *testing.T) {
 	t.Run("admin can delete users", func(t *testing.T) {
 		scenarios := mock.NewCommonScenarios()
 		adminScenario := scenarios.AdminUser()
-		
+
 		targetUser := mock.CreateUser("target@example.com", "Target User")
 
 		err := service.DeleteUser(adminScenario.Context, mock, targetUser.ID.String())
@@ -215,7 +215,7 @@ func TestAdminService_DeleteUser(t *testing.T) {
 	t.Run("regular user cannot delete users", func(t *testing.T) {
 		scenarios := mock.NewCommonScenarios()
 		userScenario := scenarios.AuthenticatedUser()
-		
+
 		targetUser := mock.CreateUser("target@example.com", "Target User")
 
 		err := service.DeleteUser(userScenario.Context, mock, targetUser.ID.String())
@@ -278,7 +278,7 @@ func TestOrganizationService_SwitchOrganization(t *testing.T) {
 		mock.AddUserToOrg(user.ID.String(), org2.ID.String(), "member")
 
 		ctx := mock.NewTestContextWithUser(user)
-		
+
 		// Initially in org1
 		currentOrgID, _ := authsometesting.GetCurrentOrgID(ctx)
 		assert.Equal(t, org1.ID.String(), currentOrgID)
@@ -426,4 +426,3 @@ func BenchmarkMock_RequireAuth(b *testing.B) {
 		mock.RequireAuth(ctx)
 	}
 }
-

@@ -26,17 +26,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("twofa plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for twofa plugin")
 	}
-	
+
 	p.db = db
 	// Wire repository-backed service
 	p.service = NewService(repo.NewTwoFARepository(db))

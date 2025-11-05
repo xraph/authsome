@@ -337,4 +337,3 @@ func TestStripeIdentityProvider_MockToggle(t *testing.T) {
 		}
 	})
 }
-

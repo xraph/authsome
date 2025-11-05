@@ -39,66 +39,66 @@ func (r *RevocationChecker) CheckRevocation(ctx context.Context, cert *x509.Cert
 		if err == nil {
 			return status, nil
 		}
-		
+
 		// Fall back to CRL if OCSP fails
 		if r.config.Revocation.EnableCRL {
 			return r.checkCRL(ctx, cert)
 		}
-		
+
 		return "unknown", err
 	}
-	
+
 	// Try CRL first
 	if r.config.Revocation.EnableCRL {
 		status, err := r.checkCRL(ctx, cert)
 		if err == nil {
 			return status, nil
 		}
-		
+
 		// Fall back to OCSP if CRL fails
 		if r.config.Revocation.EnableOCSP {
 			return r.checkOCSP(ctx, cert)
 		}
-		
+
 		return "unknown", err
 	}
-	
+
 	// Only OCSP enabled
 	if r.config.Revocation.EnableOCSP {
 		return r.checkOCSP(ctx, cert)
 	}
-	
+
 	return "unknown", ErrRevocationUnavailable
 }
 
 // checkOCSP performs OCSP revocation checking
 func (r *RevocationChecker) checkOCSP(ctx context.Context, cert *x509.Certificate) (string, error) {
 	fingerprint := calculateFingerprint(cert.Raw)
-	
+
 	// Check cache first
 	if cachedResp, err := r.repo.GetOCSPResponse(ctx, fingerprint); err == nil && cachedResp != nil {
 		if time.Now().Before(cachedResp.ExpiresAt) {
 			return cachedResp.Status, nil
 		}
 	}
-	
+
 	// Get OCSP server URLs
 	if len(cert.OCSPServer) == 0 {
 		return "unknown", fmt.Errorf("no OCSP servers in certificate")
 	}
-	
+
 	// Get issuer certificate (needed for OCSP request)
 	issuerCert, err := r.getIssuerCertificate(ctx, cert)
 	if err != nil {
 		return "unknown", fmt.Errorf("failed to get issuer certificate: %w", err)
 	}
-	
+
 	// Create OCSP request
 	ocspReq, err := ocsp.CreateRequest(cert, issuerCert, nil)
 	if err != nil {
 		return "unknown", fmt.Errorf("failed to create OCSP request: %w", err)
 	}
-	
+
 	// Try each OCSP server
 	var lastErr error
 	for _, server := range cert.OCSPServer {
@@ -110,7 +110,7 @@ func (r *RevocationChecker) checkOCSP(ctx context.Context, cert *x509.Certificat
 		}
 		lastErr = err
 	}
-	
+
 	return "unknown", fmt.Errorf("all OCSP servers failed: %w", lastErr)
 }
 
@@ -120,30 +120,30 @@ func (r *RevocationChecker) performOCSPRequest(ctx context.Context, server strin
 	if err != nil {
 		return "unknown", err
 	}
-	
+
 	httpReq.Header.Set("Content-Type", "application/ocsp-request")
 	httpReq.Header.Set("Accept", "application/ocsp-response")
-	
+
 	httpResp, err := r.httpClient.Do(httpReq)
 	if err != nil {
 		return "unknown", err
 	}
 	defer httpResp.Body.Close()
-	
+
 	if httpResp.StatusCode != http.StatusOK {
 		return "unknown", fmt.Errorf("OCSP server returned status %d", httpResp.StatusCode)
 	}
-	
+
 	respBytes, err := io.ReadAll(io.LimitReader(httpResp.Body, 1024*1024)) // 1MB limit
 	if err != nil {
 		return "unknown", err
 	}
-	
+
 	ocspResp, err := ocsp.ParseResponse(respBytes, issuerCert)
 	if err != nil {
 		return "unknown", fmt.Errorf("%w: %v", ErrOCSPParseFailed, err)
 	}
-	
+
 	// Check response status
 	switch ocspResp.Status {
 	case ocsp.Good:
@@ -160,7 +160,7 @@ func (r *RevocationChecker) performOCSPRequest(ctx context.Context, server strin
 // cacheOCSPResponse caches an OCSP response
 func (r *RevocationChecker) cacheOCSPResponse(ctx context.Context, certID string, status string) {
 	expiresAt := time.Now().Add(r.config.Revocation.OCSPCacheDuration)
-	
+
 	ocspResp := &OCSPResponse{
 		ID:            generateID(),
 		CertificateID: certID,
@@ -169,7 +169,7 @@ func (r *RevocationChecker) cacheOCSPResponse(ctx context.Context, certID string
 		ThisUpdate:    time.Now(),
 		ExpiresAt:     expiresAt,
 	}
-	
+
 	// Best effort caching - don't fail if it doesn't work
 	_ = r.repo.CreateOCSPResponse(ctx, ocspResp)
 }
@@ -180,10 +180,10 @@ func (r *RevocationChecker) checkCRL(ctx context.Context, cert *x509.Certificate
 	if len(cert.CRLDistributionPoints) == 0 {
 		return "unknown", fmt.Errorf("no CRL distribution points in certificate")
 	}
-	
+
 	// Get issuer DN
 	issuer := cert.Issuer.String()
-	
+
 	// Check if we have a cached CRL
 	cachedCRL, err := r.repo.GetCRLByIssuer(ctx, issuer)
 	if err == nil && cachedCRL != nil {
@@ -192,7 +192,7 @@ func (r *RevocationChecker) checkCRL(ctx context.Context, cert *x509.Certificate
 			return r.checkCertificateInCRL(cert, cachedCRL)
 		}
 	}
-	
+
 	// Fetch fresh CRL
 	var lastErr error
 	for _, dp := range cert.CRLDistributionPoints {
@@ -201,14 +201,14 @@ func (r *RevocationChecker) checkCRL(ctx context.Context, cert *x509.Certificate
 			lastErr = err
 			continue
 		}
-		
+
 		// Store CRL in database
 		r.storeCRL(ctx, crl, issuer)
-		
+
 		// Check certificate against CRL
 		return r.checkCertificateAgainstCRL(cert, crl)
 	}
-	
+
 	return "unknown", fmt.Errorf("failed to fetch CRL: %w", lastErr)
 }
 
@@ -218,22 +218,22 @@ func (r *RevocationChecker) fetchCRL(ctx context.Context, url string) (*x509.Rev
 	if err != nil {
 		return nil, err
 	}
-	
+
 	httpResp, err := r.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
 	defer httpResp.Body.Close()
-	
+
 	if httpResp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("CRL server returned status %d", httpResp.StatusCode)
 	}
-	
+
 	crlBytes, err := io.ReadAll(io.LimitReader(httpResp.Body, r.config.Revocation.CRLMaxSize))
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Try parsing as DER first
 	crl, err := x509.ParseRevocationList(crlBytes)
 	if err != nil {
@@ -248,7 +248,7 @@ func (r *RevocationChecker) fetchCRL(ctx context.Context, url string) (*x509.Rev
 			return nil, fmt.Errorf("%w: %v", ErrCRLParseFailed, err)
 		}
 	}
-	
+
 	return crl, nil
 }
 
@@ -260,7 +260,7 @@ func (r *RevocationChecker) checkCertificateAgainstCRL(cert *x509.Certificate, c
 			return "revoked", nil
 		}
 	}
-	
+
 	return "good", nil
 }
 
@@ -271,12 +271,12 @@ func (r *RevocationChecker) checkCertificateInCRL(cert *x509.Certificate, cached
 	if block == nil {
 		return "unknown", fmt.Errorf("failed to decode cached CRL")
 	}
-	
+
 	crl, err := x509.ParseRevocationList(block.Bytes)
 	if err != nil {
 		return "unknown", err
 	}
-	
+
 	return r.checkCertificateAgainstCRL(cert, crl)
 }
 
@@ -287,7 +287,7 @@ func (r *RevocationChecker) storeCRL(ctx context.Context, crl *x509.RevocationLi
 		Type:  "X509 CRL",
 		Bytes: crl.Raw,
 	})
-	
+
 	crlRecord := &CertificateRevocationList{
 		ID:               generateID(),
 		OrganizationID:   "", // Would need to determine from context
@@ -299,7 +299,7 @@ func (r *RevocationChecker) storeCRL(ctx context.Context, crl *x509.RevocationLi
 		RevokedCertCount: len(crl.RevokedCertificateEntries),
 		LastFetchedAt:    time.Now(),
 	}
-	
+
 	// Best effort storage - don't fail if it doesn't work
 	_ = r.repo.CreateCRL(ctx, crlRecord)
 }
@@ -307,7 +307,7 @@ func (r *RevocationChecker) storeCRL(ctx context.Context, crl *x509.RevocationLi
 // getIssuerCertificate gets the issuer certificate for OCSP requests
 func (r *RevocationChecker) getIssuerCertificate(ctx context.Context, cert *x509.Certificate) (*x509.Certificate, error) {
 	issuerFingerprint := calculateFingerprint(cert.RawIssuer)
-	
+
 	// Try to find issuer in trust anchors
 	anchor, err := r.repo.GetTrustAnchorByFingerprint(ctx, issuerFingerprint)
 	if err == nil && anchor != nil {
@@ -319,7 +319,7 @@ func (r *RevocationChecker) getIssuerCertificate(ctx context.Context, cert *x509
 			}
 		}
 	}
-	
+
 	// Try to get from AIA (Authority Information Access) extension
 	if len(cert.IssuingCertificateURL) > 0 {
 		for _, url := range cert.IssuingCertificateURL {
@@ -329,7 +329,7 @@ func (r *RevocationChecker) getIssuerCertificate(ctx context.Context, cert *x509
 			}
 		}
 	}
-	
+
 	return nil, fmt.Errorf("issuer certificate not found")
 }
 
@@ -339,22 +339,22 @@ func (r *RevocationChecker) fetchIssuerCertificate(ctx context.Context, url stri
 	if err != nil {
 		return nil, err
 	}
-	
+
 	httpResp, err := r.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
 	defer httpResp.Body.Close()
-	
+
 	if httpResp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch issuer certificate: status %d", httpResp.StatusCode)
 	}
-	
+
 	certBytes, err := io.ReadAll(io.LimitReader(httpResp.Body, 1024*1024)) // 1MB limit
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Try parsing as DER
 	cert, err := x509.ParseCertificate(certBytes)
 	if err != nil {
@@ -369,7 +369,7 @@ func (r *RevocationChecker) fetchIssuerCertificate(ctx context.Context, url stri
 			return nil, err
 		}
 	}
-	
+
 	return cert, nil
 }
 
@@ -377,4 +377,3 @@ func (r *RevocationChecker) fetchIssuerCertificate(ctx context.Context, url stri
 func (r *RevocationChecker) CleanupExpiredCache(ctx context.Context) error {
 	return r.repo.DeleteExpiredOCSPResponses(ctx)
 }
-

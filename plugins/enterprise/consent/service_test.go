@@ -8,13 +8,13 @@ import (
 
 // MockRepository implements Repository for testing
 type MockRepository struct {
-	consents       map[string]*ConsentRecord
-	policies       map[string]*ConsentPolicy
-	cookieConsents map[string]*CookieConsent
-	exportRequests map[string]*DataExportRequest
-	deleteRequests map[string]*DataDeletionRequest
+	consents        map[string]*ConsentRecord
+	policies        map[string]*ConsentPolicy
+	cookieConsents  map[string]*CookieConsent
+	exportRequests  map[string]*DataExportRequest
+	deleteRequests  map[string]*DataDeletionRequest
 	privacySettings map[string]*PrivacySettings
-	auditLogs      []*ConsentAuditLog
+	auditLogs       []*ConsentAuditLog
 }
 
 func NewMockRepository() *MockRepository {
@@ -656,4 +656,3 @@ func ptrBool(b bool) *bool {
 func ptrInt(i int) *int {
 	return &i
 }
-

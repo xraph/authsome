@@ -357,9 +357,9 @@ func TestService_Revoke(t *testing.T) {
 
 func TestService_ConfigDefaults(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         Config
-		wantDefaultTTL time.Duration
+		name            string
+		config          Config
+		wantDefaultTTL  time.Duration
 		wantRememberTTL time.Duration
 	}{
 		{
@@ -407,13 +407,12 @@ func TestService_TokenGeneration(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.NotEmpty(t, session.Token)
-		
+
 		// Check for uniqueness
 		assert.False(t, tokens[session.Token], "Token should be unique but found duplicate: %s", session.Token)
 		tokens[session.Token] = true
-		
+
 		// Token should be of reasonable length (base64 encoded 32 bytes = ~44 chars)
 		assert.GreaterOrEqual(t, len(session.Token), 40)
 	}
 }
-

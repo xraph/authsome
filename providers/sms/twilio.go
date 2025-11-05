@@ -30,7 +30,7 @@ func NewTwilioProvider(config TwilioConfig) *TwilioProvider {
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.twilio.com"
 	}
-	
+
 	return &TwilioProvider{
 		config:     config,
 		httpClient: &http.Client{},
@@ -61,10 +61,10 @@ func (p *TwilioProvider) Send(ctx context.Context, notif *notification.Notificat
 	data.Set("Body", notif.Body)
 
 	// Create HTTP request
-	apiURL := fmt.Sprintf("%s/2010-04-01/Accounts/%s/Messages.json", 
+	apiURL := fmt.Sprintf("%s/2010-04-01/Accounts/%s/Messages.json",
 		p.config.BaseURL, p.config.AccountSID)
-	
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, 
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL,
 		strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

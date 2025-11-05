@@ -35,7 +35,7 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 		limit:   limit,
 		window:  window,
 	}
-	
+
 	// Cleanup goroutine
 	go func() {
 		ticker := time.NewTicker(window)
@@ -44,7 +44,7 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 			rl.cleanup()
 		}
 	}()
-	
+
 	return rl
 }
 
@@ -62,10 +62,10 @@ func (rl *rateLimiter) cleanup() {
 func (rl *rateLimiter) allow(clientID string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	
+
 	now := time.Now()
 	limit, exists := rl.clients[clientID]
-	
+
 	if !exists || now.After(limit.resetTime) {
 		rl.clients[clientID] = &clientLimit{
 			count:     1,
@@ -73,11 +73,11 @@ func (rl *rateLimiter) allow(clientID string) bool {
 		}
 		return true
 	}
-	
+
 	if limit.count >= rl.limit {
 		return false
 	}
-	
+
 	limit.count++
 	return true
 }
@@ -89,7 +89,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
 			fmt.Printf("[Dashboard] RequireAuth: Checking authentication for path: %s\n", c.Request().URL.Path)
-			
+
 			// Extract session token from cookie
 			cookie, err := c.Request().Cookie(sessionCookieName)
 			if err != nil || cookie == nil || cookie.Value == "" {
@@ -101,7 +101,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 
 			sessionToken := cookie.Value
 			fmt.Printf("[Dashboard] RequireAuth: Found session token: %s...\n", sessionToken[:min(10, len(sessionToken))])
-			
+
 			// Validate session
 			sess, err := p.sessionSvc.FindByToken(c.Request().Context(), sessionToken)
 			if err != nil {
@@ -117,7 +117,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
-			
+
 			if sess == nil {
 				fmt.Printf("[Dashboard] RequireAuth: Session not found\n")
 				// Session not found, clear cookie and redirect
@@ -185,7 +185,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 			ctx := context.WithValue(c.Request().Context(), "user", user)
 			ctx = context.WithValue(ctx, "session", sess)
 			ctx = context.WithValue(ctx, "authenticated", true)
-			
+
 			// Update request with new context
 			*c.Request() = *c.Request().WithContext(ctx)
 
@@ -207,7 +207,7 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
 			fmt.Printf("[Dashboard] RequireAdmin middleware called for path: %s\n", c.Request().URL.Path)
-			
+
 			// Get user from context (set by RequireAuth)
 			userVal := c.Request().Context().Value("user")
 			if userVal == nil {
@@ -229,7 +229,7 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 				// For now, allow all authenticated users when permission checker is not available
 				fmt.Printf("[Dashboard] Permission checker not initialized, allowing access for user: %s\n", userObj.Email)
 				return next(c)
-				
+
 				/* TODO: Fix when rbac.Context is properly imported
 				rbacCtx := &rbac.Context{
 					Subject:  userObj.ID.String(),
@@ -284,23 +284,23 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 			if sessionCookie, err := c.Request().Cookie(sessionCookieName); err == nil && sessionCookie != nil {
 				sessionID = sessionCookie.Value
 			}
-			
+
 			// If no session, use IP address as fallback
 			if sessionID == "" {
 				sessionID = c.Request().RemoteAddr
 			}
-			
+
 			// Generate or retrieve CSRF token
 			var token string
 			cookie, err := c.Request().Cookie(csrfCookieName)
-			
+
 			if err != nil || cookie == nil || cookie.Value == "" {
 				// Generate new CSRF token bound to session
 				token, err = p.csrfProtector.GenerateToken(sessionID)
 				if err != nil {
 					return fmt.Errorf("failed to generate CSRF token: %w", err)
 				}
-				
+
 				// Set CSRF cookie
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     csrfCookieName,
@@ -322,7 +322,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 			// Validate CSRF token for mutating requests
 			if c.Request().Method == "POST" || c.Request().Method == "PUT" ||
 				c.Request().Method == "DELETE" || c.Request().Method == "PATCH" {
-				
+
 				// Get token from form or header
 				submittedToken := c.Request().FormValue("csrf_token")
 				if submittedToken == "" {
@@ -403,7 +403,7 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 					go func() {
 						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer cancel()
-						
+
 						// TODO: Implement proper audit logging once the Log method signature is clarified
 						_ = p.auditSvc.Log(ctx, &userObj.ID, "dashboard.access", c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
 					}()
@@ -414,4 +414,3 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 		}
 	}
 }
-

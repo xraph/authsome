@@ -467,4 +467,3 @@ func BenchmarkPermissionChecker_HasRole(b *testing.B) {
 		checker.HasRole(ctx, userID, "admin")
 	}
 }
-

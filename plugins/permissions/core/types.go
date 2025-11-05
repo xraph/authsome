@@ -88,15 +88,15 @@ type TemplateParameter struct {
 
 // MigrationStatus tracks RBAC to Permissions migration progress
 type MigrationStatus struct {
-	OrgID           xid.ID    `json:"orgId"`
-	StartedAt       time.Time `json:"startedAt"`
-	CompletedAt     *time.Time `json:"completedAt,omitempty"`
-	Status          string    `json:"status"` // pending, in_progress, completed, failed
-	TotalPolicies   int       `json:"totalPolicies"`
-	MigratedCount   int       `json:"migratedCount"`
-	FailedCount     int       `json:"failedCount"`
-	ValidationPassed bool      `json:"validationPassed"`
-	Errors          []string  `json:"errors,omitempty"`
+	OrgID            xid.ID     `json:"orgId"`
+	StartedAt        time.Time  `json:"startedAt"`
+	CompletedAt      *time.Time `json:"completedAt,omitempty"`
+	Status           string     `json:"status"` // pending, in_progress, completed, failed
+	TotalPolicies    int        `json:"totalPolicies"`
+	MigratedCount    int        `json:"migratedCount"`
+	FailedCount      int        `json:"failedCount"`
+	ValidationPassed bool       `json:"validationPassed"`
+	Errors           []string   `json:"errors,omitempty"`
 }
 
 // AuditEvent records a permission-related event
@@ -113,4 +113,3 @@ type AuditEvent struct {
 	UserAgent    string                 `json:"userAgent" bun:"user_agent"`
 	Timestamp    time.Time              `json:"timestamp" bun:"timestamp,notnull"`
 }
-

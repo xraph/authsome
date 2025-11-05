@@ -31,7 +31,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					// Real implementation in Week 2 will access principal.roles
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("has_any_role",
 			cel.Overload("has_any_role_list",
 				[]*cel.Type{cel.ListType(cel.StringType)},
@@ -39,7 +39,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 				cel.UnaryBinding(func(roles ref.Val) ref.Val {
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("has_all_roles",
 			cel.Overload("has_all_roles_list",
 				[]*cel.Type{cel.ListType(cel.StringType)},
@@ -47,7 +47,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 				cel.UnaryBinding(func(roles ref.Val) ref.Val {
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("in_time_range",
 			cel.Overload("in_time_range_strings",
 				[]*cel.Type{cel.StringType, cel.StringType},
@@ -56,7 +56,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					// Placeholder implementation
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("is_weekday",
 			cel.Overload("is_weekday",
 				[]*cel.Type{},
@@ -66,7 +66,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					weekday := now.Weekday()
 					return types.Bool(weekday >= time.Monday && weekday <= time.Friday)
 				}))),
-		
+
 		cel.Function("ip_in_range",
 			cel.Overload("ip_in_range_list",
 				[]*cel.Type{cel.ListType(cel.StringType)},
@@ -75,7 +75,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					// Placeholder implementation
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("resource_matches",
 			cel.Overload("resource_matches_string",
 				[]*cel.Type{cel.StringType},
@@ -84,7 +84,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					// Placeholder implementation
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("days_since",
 			cel.Overload("days_since_timestamp",
 				[]*cel.Type{cel.TimestampType},
@@ -97,7 +97,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					duration := time.Since(timestamp)
 					return types.Int(int64(duration.Hours() / 24))
 				}))),
-		
+
 		cel.Function("hours_since",
 			cel.Overload("hours_since_timestamp",
 				[]*cel.Type{cel.TimestampType},
@@ -110,7 +110,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					duration := time.Since(timestamp)
 					return types.Int(int64(duration.Hours()))
 				}))),
-		
+
 		cel.Function("in_org",
 			cel.Overload("in_org_string",
 				[]*cel.Type{cel.StringType},
@@ -119,7 +119,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					// Placeholder implementation
 					return types.Bool(false)
 				}))),
-		
+
 		cel.Function("is_member_of",
 			cel.Overload("is_member_of_string",
 				[]*cel.Type{cel.StringType},
@@ -143,12 +143,12 @@ func HasRole(principal map[string]interface{}, role string) bool {
 	if principal == nil {
 		return false
 	}
-	
+
 	roles, ok := principal["roles"]
 	if !ok {
 		return false
 	}
-	
+
 	// Handle []interface{}
 	if roleList, ok := roles.([]interface{}); ok {
 		for _, r := range roleList {
@@ -160,7 +160,7 @@ func HasRole(principal map[string]interface{}, role string) bool {
 		}
 		return false
 	}
-	
+
 	// Handle []string
 	if roleList, ok := roles.([]string); ok {
 		for _, r := range roleList {
@@ -170,6 +170,6 @@ func HasRole(principal map[string]interface{}, role string) bool {
 		}
 		return false
 	}
-	
+
 	return false
 }

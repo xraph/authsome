@@ -362,11 +362,11 @@ func setupDemoRoutes(app *forge.App, auth *authsome.Auth, consentPlugin *consent
 	})
 
 	// Marketing endpoint protected by consent
-	app.GET("/marketing/subscribe", 
+	app.GET("/marketing/subscribe",
 		consentPlugin.RequireConsent("marketing", "email_campaigns")(
 			func(c forge.Context) error {
 				return c.JSON(200, map[string]string{
-					"message": "✅ You have access to marketing features!",
+					"message":    "✅ You have access to marketing features!",
 					"subscribed": "You are now subscribed to our newsletter",
 				})
 			},
@@ -385,4 +385,3 @@ func setupDemoRoutes(app *forge.App, auth *authsome.Auth, consentPlugin *consent
 		),
 	)
 }
-

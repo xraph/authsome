@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/core/session"
-	"github.com/xraph/authsome/core/auth"
-	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/forms"
+	"github.com/xraph/authsome/core/jwt"
+	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/user"
 )
 
 // Context keys for multi-tenancy

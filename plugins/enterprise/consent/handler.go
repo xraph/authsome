@@ -148,7 +148,7 @@ func (h *Handler) RevokeConsent(c forge.Context) error {
 
 	granted := false
 	req.Granted = &granted
-	
+
 	_, err := h.service.UpdateConsent(c.Request().Context(), id, orgID, userID, &req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -442,4 +442,3 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 	Error   string `json:"error,omitempty"`
 }
-

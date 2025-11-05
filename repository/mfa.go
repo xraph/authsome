@@ -47,11 +47,11 @@ func (r *MFARepository) GetFactor(ctx context.Context, factorID xid.ID) (*schema
 func (r *MFARepository) ListUserFactors(ctx context.Context, userID xid.ID, statusFilter ...string) ([]*schema.MFAFactor, error) {
 	var factors []*schema.MFAFactor
 	query := r.db.NewSelect().Model(&factors).Where("user_id = ?", userID)
-	
+
 	if len(statusFilter) > 0 {
 		query = query.Where("status IN (?)", bun.In(statusFilter))
 	}
-	
+
 	err := query.Order("created_at DESC").Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -123,11 +123,11 @@ func (r *MFARepository) CleanupExpiredChallenges(ctx context.Context) (int, erro
 		Where("expires_at < ?", time.Now()).
 		Where("status = ?", "pending").
 		Exec(ctx)
-	
+
 	if err != nil {
 		return 0, err
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	return int(rows), nil
 }
@@ -188,11 +188,11 @@ func (r *MFARepository) CleanupExpiredSessions(ctx context.Context) (int, error)
 		Where("expires_at < ?", time.Now()).
 		Where("completed_at IS NULL").
 		Exec(ctx)
-	
+
 	if err != nil {
 		return 0, err
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	return int(rows), nil
 }
@@ -262,11 +262,11 @@ func (r *MFARepository) CleanupExpiredDevices(ctx context.Context) (int, error) 
 		Model((*schema.MFATrustedDevice)(nil)).
 		Where("expires_at < ?", time.Now()).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return 0, err
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	return int(rows), nil
 }
@@ -290,17 +290,17 @@ func (r *MFARepository) UpsertPolicy(ctx context.Context, policy *schema.MFAPoli
 	err := r.db.NewSelect().Model(existing).
 		Where("organization_id = ?", policy.OrganizationID).
 		Scan(ctx)
-	
+
 	if err == sql.ErrNoRows {
 		// Create new
 		_, err = r.db.NewInsert().Model(policy).Exec(ctx)
 		return err
 	}
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// Update existing
 	policy.ID = existing.ID
 	_, err = r.db.NewUpdate().Model(policy).WherePK().Exec(ctx)
@@ -346,11 +346,11 @@ func (r *MFARepository) CleanupOldAttempts(ctx context.Context, olderThan time.T
 		Model((*schema.MFAAttempt)(nil)).
 		Where("created_at < ?", olderThan).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return 0, err
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	return int(rows), nil
 }
@@ -388,4 +388,3 @@ func (r *MFARepository) GetRiskAssessmentBySession(ctx context.Context, sessionI
 	}
 	return assessment, err
 }
-

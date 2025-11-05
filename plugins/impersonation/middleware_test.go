@@ -31,15 +31,15 @@ func TestMiddleware_Handle_WithImpersonation(t *testing.T) {
 	sessionSvc.sessions[sessionID.String()] = session
 
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		NewSessionID:    &sessionID,
-		SessionToken:    sessionToken,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		NewSessionID:   &sessionID,
+		SessionToken:   sessionToken,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -452,15 +452,15 @@ func TestMiddleware_IndicatorMessage_Custom(t *testing.T) {
 	sessionSvc.sessions[sessionID.String()] = session
 
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		NewSessionID:    &sessionID,
-		SessionToken:    sessionToken,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		NewSessionID:   &sessionID,
+		SessionToken:   sessionToken,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -493,4 +493,3 @@ func TestMiddleware_IndicatorMessage_Custom(t *testing.T) {
 	require.NotNil(t, retrieved)
 	assert.Equal(t, customMessage, retrieved.IndicatorMsg)
 }
-

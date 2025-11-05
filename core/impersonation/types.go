@@ -63,19 +63,19 @@ type ListResponse struct {
 
 // SessionInfo represents impersonation session information
 type SessionInfo struct {
-	ID              xid.ID    `json:"id"`
-	OrganizationID  xid.ID    `json:"organization_id"`
-	ImpersonatorID  xid.ID    `json:"impersonator_id"`
-	TargetUserID    xid.ID    `json:"target_user_id"`
-	Reason          string    `json:"reason"`
-	TicketNumber    string    `json:"ticket_number,omitempty"`
-	Active          bool      `json:"active"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	EndedAt         *time.Time `json:"ended_at,omitempty"`
-	EndReason       string    `json:"end_reason,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	
+	ID             xid.ID     `json:"id"`
+	OrganizationID xid.ID     `json:"organization_id"`
+	ImpersonatorID xid.ID     `json:"impersonator_id"`
+	TargetUserID   xid.ID     `json:"target_user_id"`
+	Reason         string     `json:"reason"`
+	TicketNumber   string     `json:"ticket_number,omitempty"`
+	Active         bool       `json:"active"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	EndedAt        *time.Time `json:"ended_at,omitempty"`
+	EndReason      string     `json:"end_reason,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+
 	// Enriched data
 	ImpersonatorEmail string `json:"impersonator_email,omitempty"`
 	ImpersonatorName  string `json:"impersonator_name,omitempty"`
@@ -85,15 +85,15 @@ type SessionInfo struct {
 
 // AuditListRequest represents a request to list audit events
 type AuditListRequest struct {
-	OrganizationID  xid.ID  `json:"organization_id" validate:"required"`
-	ImpersonationID *xid.ID `json:"impersonation_id,omitempty"` // Filter by impersonation session
-	ImpersonatorID  *xid.ID `json:"impersonator_id,omitempty"`  // Filter by impersonator
-	TargetUserID    *xid.ID `json:"target_user_id,omitempty"`   // Filter by target user
-	EventType       string  `json:"event_type,omitempty"`       // Filter by event type
+	OrganizationID  xid.ID     `json:"organization_id" validate:"required"`
+	ImpersonationID *xid.ID    `json:"impersonation_id,omitempty"` // Filter by impersonation session
+	ImpersonatorID  *xid.ID    `json:"impersonator_id,omitempty"`  // Filter by impersonator
+	TargetUserID    *xid.ID    `json:"target_user_id,omitempty"`   // Filter by target user
+	EventType       string     `json:"event_type,omitempty"`       // Filter by event type
 	Since           *time.Time `json:"since,omitempty"`
 	Until           *time.Time `json:"until,omitempty"`
-	Limit           int     `json:"limit"`
-	Offset          int     `json:"offset"`
+	Limit           int        `json:"limit"`
+	Offset          int        `json:"offset"`
 }
 
 // AuditEvent represents an audit event
@@ -129,4 +129,3 @@ type VerifyResponse struct {
 	TargetUserID    *xid.ID    `json:"target_user_id,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 }
-

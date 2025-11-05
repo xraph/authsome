@@ -222,14 +222,14 @@ func (p *VPNAPIProvider) Check(ctx context.Context, ip string) (*DetectionResult
 
 	var result struct {
 		Security struct {
-			VPN       bool   `json:"vpn"`
-			Proxy     bool   `json:"proxy"`
-			Tor       bool   `json:"tor"`
-			Relay     bool   `json:"relay"`
+			VPN   bool `json:"vpn"`
+			Proxy bool `json:"proxy"`
+			Tor   bool `json:"tor"`
+			Relay bool `json:"relay"`
 		} `json:"security"`
 		Network struct {
-			Network      string `json:"network"`
-			AutonomousSystemNumber string `json:"autonomous_system_number"`
+			Network                      string `json:"network"`
+			AutonomousSystemNumber       string `json:"autonomous_system_number"`
 			AutonomousSystemOrganization string `json:"autonomous_system_organization"`
 		} `json:"network"`
 	}
@@ -302,4 +302,3 @@ func (p *StaticDetectionProvider) AddTor(ip string) {
 func (p *StaticDetectionProvider) AddDatacenter(ip string) {
 	p.datacenterIPs[ip] = true
 }
-

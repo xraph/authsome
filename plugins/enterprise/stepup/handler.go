@@ -527,12 +527,12 @@ func (h *Handler) Status(c forge.Context) error {
 	)
 
 	return c.JSON(200, map[string]interface{}{
-		"enabled":             h.config.Enabled,
-		"current_level":       currentLevel,
-		"pending_count":       len(pending),
-		"remembered_devices":  len(devices),
-		"remember_enabled":    h.config.RememberStepUp,
-		"risk_based_enabled":  h.config.RiskBasedEnabled,
+		"enabled":            h.config.Enabled,
+		"current_level":      currentLevel,
+		"pending_count":      len(pending),
+		"remembered_devices": len(devices),
+		"remember_enabled":   h.config.RememberStepUp,
+		"risk_based_enabled": h.config.RiskBasedEnabled,
 	})
 }
 
@@ -579,4 +579,3 @@ func generateID() string {
 	// Simple ID generation - in production use UUID
 	return fmt.Sprintf("pol_%d", time.Now().UnixNano())
 }
-

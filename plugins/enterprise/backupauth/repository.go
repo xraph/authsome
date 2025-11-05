@@ -528,4 +528,3 @@ func (r *BunRepository) GetRecoveryStats(ctx context.Context, orgID string, star
 
 	return stats, nil
 }
-

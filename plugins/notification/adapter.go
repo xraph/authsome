@@ -19,9 +19,9 @@ func NewAdapter(templateSvc *TemplateService) *Adapter {
 
 // SendMFACode sends an MFA verification code via email or SMS
 func (a *Adapter) SendMFACode(ctx context.Context, orgID, recipient, code string, expiryMinutes int, notifType notification.NotificationType) error {
-	userName := "User" // Default, can be passed as parameter
+	userName := "User"    // Default, can be passed as parameter
 	appName := "AuthSome" // Can be from config
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.mfa_code",
@@ -40,7 +40,7 @@ func (a *Adapter) SendMFACode(ctx context.Context, orgID, recipient, code string
 // SendEmailOTP sends an email OTP code
 func (a *Adapter) SendEmailOTP(ctx context.Context, orgID, email, code string, expiryMinutes int) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.email_otp",
@@ -58,7 +58,7 @@ func (a *Adapter) SendEmailOTP(ctx context.Context, orgID, email, code string, e
 // SendPhoneOTP sends a phone OTP code via SMS
 func (a *Adapter) SendPhoneOTP(ctx context.Context, orgID, phone, code string) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.phone_otp",
@@ -75,7 +75,7 @@ func (a *Adapter) SendPhoneOTP(ctx context.Context, orgID, phone, code string) e
 // SendMagicLink sends a magic link email
 func (a *Adapter) SendMagicLink(ctx context.Context, orgID, email, userName, magicLink string, expiryMinutes int) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.magic_link",
@@ -94,7 +94,7 @@ func (a *Adapter) SendMagicLink(ctx context.Context, orgID, email, userName, mag
 // SendVerificationEmail sends an email verification link
 func (a *Adapter) SendVerificationEmail(ctx context.Context, orgID, email, userName, verificationURL, verificationCode string, expiryMinutes int) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.verify_email",
@@ -114,7 +114,7 @@ func (a *Adapter) SendVerificationEmail(ctx context.Context, orgID, email, userN
 // SendPasswordReset sends a password reset email
 func (a *Adapter) SendPasswordReset(ctx context.Context, orgID, email, userName, resetURL, resetCode string, expiryMinutes int) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.password_reset",
@@ -134,7 +134,7 @@ func (a *Adapter) SendPasswordReset(ctx context.Context, orgID, email, userName,
 // SendWelcomeEmail sends a welcome email to new users
 func (a *Adapter) SendWelcomeEmail(ctx context.Context, orgID, email, userName, loginURL string) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.welcome",
@@ -153,7 +153,7 @@ func (a *Adapter) SendWelcomeEmail(ctx context.Context, orgID, email, userName, 
 // SendSecurityAlert sends a security alert notification
 func (a *Adapter) SendSecurityAlert(ctx context.Context, orgID, email, userName, eventType, eventTime, location, device string) error {
 	appName := "AuthSome"
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    "auth.security_alert",
@@ -176,12 +176,12 @@ func (a *Adapter) SendCustom(ctx context.Context, orgID, templateKey, recipient 
 	if variables == nil {
 		variables = make(map[string]interface{})
 	}
-	
+
 	// Add default app_name if not provided
 	if _, ok := variables["app_name"]; !ok {
 		variables["app_name"] = "AuthSome"
 	}
-	
+
 	_, err := a.templateSvc.SendWithTemplate(ctx, &SendWithTemplateRequest{
 		OrganizationID: orgID,
 		TemplateKey:    templateKey,
@@ -209,4 +209,3 @@ func (a *Adapter) SendDirectSMS(ctx context.Context, orgID, recipient, body stri
 	}
 	return nil
 }
-

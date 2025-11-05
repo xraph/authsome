@@ -408,7 +408,7 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 		for name, typeStr := range route.Response {
 			field := manifest.ParseField(name, typeStr)
 			goType := g.mapTypeToGo(field.Type)
-			
+
 			// For arrays, use pointer to element type for custom types
 			if field.Array {
 				// Check if it's a custom type (not a primitive)
@@ -418,7 +418,7 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 					goType = "[]" + goType
 				}
 			}
-			
+
 			jsonTag := field.Name
 			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", g.exportedName(field.Name), goType, jsonTag))
 		}
@@ -517,7 +517,7 @@ func (g *GoGenerator) generatePluginFile(m *manifest.Manifest) error {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("package %s\n\n", m.PluginID))
-	
+
 	// Check if we need net/url import (for path parameters)
 	hasPathParams := false
 	for _, route := range m.Routes {
@@ -526,7 +526,7 @@ func (g *GoGenerator) generatePluginFile(m *manifest.Manifest) error {
 			break
 		}
 	}
-	
+
 	sb.WriteString("import (\n")
 	sb.WriteString("\t\"context\"\n")
 	if hasPathParams {
@@ -606,7 +606,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 		for name, typeStr := range route.Response {
 			field := manifest.ParseField(name, typeStr)
 			goType := g.mapTypeToGoWithPackage(field.Type)
-			
+
 			// For arrays, use pointer to element type for custom types
 			if field.Array {
 				// Check if it's a custom type (not a primitive)
@@ -616,7 +616,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 					goType = "[]" + goType
 				}
 			}
-			
+
 			jsonTag := field.Name
 			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", g.exportedName(field.Name), goType, jsonTag))
 		}

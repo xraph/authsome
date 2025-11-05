@@ -212,7 +212,7 @@ func (app *ComprehensiveApp) setupRoutes() error {
 // setupAppRoutes adds application-specific routes
 func (app *ComprehensiveApp) setupAppRoutes() {
 	router := app.app.Router()
-	
+
 	// Health check
 	router.GET("/health", func(c forge.Context) error {
 		return c.JSON(200, map[string]string{
@@ -225,9 +225,9 @@ func (app *ComprehensiveApp) setupAppRoutes() {
 	// Status endpoint
 	router.GET("/status", func(c forge.Context) error {
 		return c.JSON(200, map[string]interface{}{
-			"authsome":  "initialized",
-			"database":  "connected",
-			"plugins":   []string{"dashboard", "multitenancy", "username", "twofa", "emailotp", "magiclink", "phone", "passkey", "anonymous", "sso"},
+			"authsome": "initialized",
+			"database": "connected",
+			"plugins":  []string{"dashboard", "multitenancy", "username", "twofa", "emailotp", "magiclink", "phone", "passkey", "anonymous", "sso"},
 		})
 	})
 

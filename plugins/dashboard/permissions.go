@@ -51,7 +51,7 @@ func newPermissionCache(ttl time.Duration) *permissionCache {
 		entries: make(map[string]*cacheEntry),
 		ttl:     ttl,
 	}
-	
+
 	// Background cleanup
 	go func() {
 		ticker := time.NewTicker(ttl)
@@ -60,30 +60,30 @@ func newPermissionCache(ttl time.Duration) *permissionCache {
 			c.cleanup()
 		}
 	}()
-	
+
 	return c
 }
 
 func (c *permissionCache) get(userID string) ([]string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.entries[userID]
 	if !exists {
 		return nil, false
 	}
-	
+
 	if time.Now().After(entry.expiresAt) {
 		return nil, false
 	}
-	
+
 	return entry.roles, true
 }
 
 func (c *permissionCache) set(userID string, roles []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.entries[userID] = &cacheEntry{
 		roles:     roles,
 		expiresAt: time.Now().Add(c.ttl),
@@ -99,7 +99,7 @@ func (c *permissionCache) invalidate(userID string) {
 func (c *permissionCache) cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	now := time.Now()
 	for key, entry := range c.entries {
 		if now.After(entry.expiresAt) {
@@ -114,22 +114,22 @@ func (p *PermissionChecker) getUserRoles(ctx context.Context, userID xid.ID) ([]
 	if roles, ok := p.roleCache.get(userID.String()); ok {
 		return roles, nil
 	}
-	
+
 	// Fetch from database
 	roleSchemas, err := p.userRoleRepo.ListRolesForUser(ctx, userID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user roles: %w", err)
 	}
-	
+
 	// Extract role names
 	roles := make([]string, len(roleSchemas))
 	for i, r := range roleSchemas {
 		roles[i] = r.Name
 	}
-	
+
 	// Cache the result
 	p.roleCache.set(userID.String(), roles)
-	
+
 	return roles, nil
 }
 
@@ -141,14 +141,14 @@ func (p *PermissionChecker) Can(ctx context.Context, userID xid.ID, action, reso
 	if err != nil {
 		return false
 	}
-	
+
 	// Build RBAC context
 	rbacCtx := &rbac.Context{
 		Subject:  userID.String(),
 		Action:   action,
 		Resource: resource,
 	}
-	
+
 	// Check permission with roles
 	return p.rbacSvc.AllowedWithRoles(rbacCtx, roles)
 }
@@ -179,7 +179,7 @@ func (p *PermissionChecker) HasRole(ctx context.Context, userID xid.ID, roleName
 	if err != nil {
 		return false
 	}
-	
+
 	for _, role := range roles {
 		if role == roleName {
 			return true
@@ -194,12 +194,12 @@ func (p *PermissionChecker) HasAnyRole(ctx context.Context, userID xid.ID, roleN
 	if err != nil {
 		return false
 	}
-	
+
 	roleSet := make(map[string]bool, len(roles))
 	for _, role := range roles {
 		roleSet[role] = true
 	}
-	
+
 	for _, roleName := range roleNames {
 		if roleSet[roleName] {
 			return true
@@ -323,24 +323,24 @@ func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
 		"role:admin can view,edit,delete,create on users",
 		"role:admin can view,delete on sessions",
 		"role:admin can view on audit_logs",
-		
+
 		// Owner role policies (inherits admin + more)
 		"role:owner can dashboard.view on dashboard",
 		"role:owner can view,edit,delete,create on users",
 		"role:owner can view,delete on sessions",
 		"role:owner can view on audit_logs",
 		"role:owner can manage on system",
-		
+
 		// Superadmin role (full access)
 		"role:superadmin can * on *",
 	}
-	
+
 	for _, policy := range policies {
 		if err := rbacSvc.AddExpression(policy); err != nil {
 			return fmt.Errorf("failed to add policy %q: %w", policy, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -351,7 +351,7 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 	if err != nil {
 		return fmt.Errorf("failed to list roles: %w", err)
 	}
-	
+
 	var adminRole *schema.Role
 	for i := range roles {
 		if roles[i].Name == "admin" {
@@ -359,7 +359,7 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 			break
 		}
 	}
-	
+
 	// Create admin role if it doesn't exist
 	if adminRole == nil {
 		adminRole = &schema.Role{
@@ -369,17 +369,16 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 		}
 		adminRole.CreatedBy = userID
 		adminRole.UpdatedBy = userID
-		
+
 		if err := roleRepo.Create(ctx, adminRole); err != nil {
 			return fmt.Errorf("failed to create admin role: %w", err)
 		}
 	}
-	
+
 	// Assign admin role to user
 	if err := userRoleRepo.Assign(ctx, userID, adminRole.ID, orgID); err != nil {
 		return fmt.Errorf("failed to assign admin role: %w", err)
 	}
-	
+
 	return nil
 }
-

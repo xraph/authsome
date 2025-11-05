@@ -380,4 +380,3 @@ func (r *BunRepository) ListAuditLogs(ctx context.Context, userID, orgID string,
 	}
 	return logs, nil
 }
-

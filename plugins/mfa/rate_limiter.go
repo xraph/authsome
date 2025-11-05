@@ -26,10 +26,10 @@ func NewRateLimiter(config *RateLimitConfig, repo *repository.MFARepository) *Ra
 
 // LimitResult represents the result of a rate limit check
 type LimitResult struct {
-	Allowed       bool
-	RetryAfter    *time.Duration
-	AttemptsLeft  int
-	LockoutEnds   *time.Time
+	Allowed      bool
+	RetryAfter   *time.Duration
+	AttemptsLeft int
+	LockoutEnds  *time.Time
 }
 
 // CheckUserLimit checks if a user has exceeded rate limits
@@ -37,16 +37,16 @@ func (r *RateLimiter) CheckUserLimit(ctx context.Context, userID xid.ID) (*Limit
 	if !r.config.Enabled {
 		return &LimitResult{Allowed: true, AttemptsLeft: r.config.MaxAttempts}, nil
 	}
-	
+
 	window := time.Duration(r.config.WindowMinutes) * time.Minute
 	since := time.Now().Add(-window)
-	
+
 	// Count failed attempts in the window
 	failedCount, err := r.repo.CountFailedAttempts(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count attempts: %w", err)
 	}
-	
+
 	// Check if user is locked out
 	if failedCount >= r.config.MaxAttempts {
 		// Calculate lockout end time
@@ -54,13 +54,13 @@ func (r *RateLimiter) CheckUserLimit(ctx context.Context, userID xid.ID) (*Limit
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if len(attempts) > 0 {
 			// Find the first attempt that triggered lockout
 			lockoutStart := attempts[0].CreatedAt
 			lockoutDuration := time.Duration(r.config.LockoutMinutes) * time.Minute
 			lockoutEnd := lockoutStart.Add(lockoutDuration)
-			
+
 			if time.Now().Before(lockoutEnd) {
 				// Still locked out
 				retryAfter := time.Until(lockoutEnd)
@@ -73,13 +73,13 @@ func (r *RateLimiter) CheckUserLimit(ctx context.Context, userID xid.ID) (*Limit
 			}
 		}
 	}
-	
+
 	// Calculate remaining attempts
 	attemptsLeft := r.config.MaxAttempts - failedCount
 	if attemptsLeft < 0 {
 		attemptsLeft = 0
 	}
-	
+
 	return &LimitResult{
 		Allowed:      true,
 		AttemptsLeft: attemptsLeft,
@@ -91,16 +91,16 @@ func (r *RateLimiter) CheckFactorLimit(ctx context.Context, userID xid.ID, facto
 	if !r.config.Enabled {
 		return &LimitResult{Allowed: true, AttemptsLeft: r.config.MaxAttempts}, nil
 	}
-	
+
 	window := time.Duration(r.config.WindowMinutes) * time.Minute
 	since := time.Now().Add(-window)
-	
+
 	// Get recent attempts for this factor type
 	attempts, err := r.repo.GetRecentAttempts(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attempts: %w", err)
 	}
-	
+
 	// Count failed attempts for this factor type
 	failedCount := 0
 	for _, attempt := range attempts {
@@ -108,7 +108,7 @@ func (r *RateLimiter) CheckFactorLimit(ctx context.Context, userID xid.ID, facto
 			failedCount++
 		}
 	}
-	
+
 	// Check if locked out
 	if failedCount >= r.config.MaxAttempts {
 		// Find the most recent failed attempt for this factor
@@ -119,11 +119,11 @@ func (r *RateLimiter) CheckFactorLimit(ctx context.Context, userID xid.ID, facto
 				break
 			}
 		}
-		
+
 		if lastFailedAttempt != nil {
 			lockoutDuration := time.Duration(r.config.LockoutMinutes) * time.Minute
 			lockoutEnd := lastFailedAttempt.Add(lockoutDuration)
-			
+
 			if time.Now().Before(lockoutEnd) {
 				retryAfter := time.Until(lockoutEnd)
 				return &LimitResult{
@@ -135,12 +135,12 @@ func (r *RateLimiter) CheckFactorLimit(ctx context.Context, userID xid.ID, facto
 			}
 		}
 	}
-	
+
 	attemptsLeft := r.config.MaxAttempts - failedCount
 	if attemptsLeft < 0 {
 		attemptsLeft = 0
 	}
-	
+
 	return &LimitResult{
 		Allowed:      true,
 		AttemptsLeft: attemptsLeft,
@@ -157,20 +157,20 @@ func (r *RateLimiter) RecordAttempt(ctx context.Context, userID xid.ID, factorID
 		Success:  success,
 		Metadata: make(map[string]interface{}),
 	}
-	
+
 	// Copy metadata
 	for k, v := range metadata {
 		attempt.Metadata[k] = v
 	}
-	
+
 	if !success {
 		attempt.FailureReason = metadata["failure_reason"]
 	}
-	
+
 	// Set audit fields
 	attempt.AuditableModel.CreatedBy = userID
 	attempt.AuditableModel.UpdatedBy = userID
-	
+
 	return r.repo.CreateAttempt(ctx, attempt)
 }
 
@@ -180,17 +180,17 @@ func (r *RateLimiter) GetExponentialBackoff(attemptNumber int) time.Duration {
 	if attemptNumber <= 0 {
 		return 0
 	}
-	
+
 	baseDelay := time.Second
 	maxDelay := time.Duration(r.config.LockoutMinutes) * time.Minute
-	
+
 	// Calculate 2^attemptNumber seconds
 	delay := baseDelay * (1 << uint(attemptNumber-1))
-	
+
 	if delay > maxDelay {
 		delay = maxDelay
 	}
-	
+
 	return delay
 }
 
@@ -200,7 +200,7 @@ func (r *RateLimiter) IsLockedOut(ctx context.Context, userID xid.ID) (bool, *ti
 	if err != nil {
 		return false, nil, err
 	}
-	
+
 	return !result.Allowed, result.LockoutEnds, nil
 }
 
@@ -211,4 +211,3 @@ func (r *RateLimiter) ClearLockout(ctx context.Context, userID xid.ID) error {
 	// In production, add a "cleared" flag to attempts
 	return nil
 }
-

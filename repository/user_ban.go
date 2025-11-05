@@ -35,11 +35,11 @@ func (r *UserBanRepository) FindActiveBan(ctx context.Context, userID string) (*
 		Order("created_at DESC").
 		Limit(1).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return ban, nil
 }
 
@@ -51,11 +51,11 @@ func (r *UserBanRepository) FindBansByUser(ctx context.Context, userID string) (
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return bans, nil
 }
 
@@ -75,10 +75,10 @@ func (r *UserBanRepository) FindBanByID(ctx context.Context, banID string) (*sch
 		Model(ban).
 		Where("id = ?", banID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return ban, nil
 }

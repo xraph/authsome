@@ -10,25 +10,25 @@ import (
 type UserService interface {
 	// GetUser fetches a user by ID
 	GetUser(ctx context.Context, userID string) (*User, error)
-	
+
 	// GetUsers fetches multiple users by IDs
 	GetUsers(ctx context.Context, userIDs []string) ([]*User, error)
 }
 
 // User represents user data for attribute resolution
 type User struct {
-	ID           string                 `json:"id"`
-	Email        string                 `json:"email"`
-	Name         string                 `json:"name"`
-	Roles        []string               `json:"roles"`
-	Groups       []string               `json:"groups"`
-	OrgID        string                 `json:"org_id"`
-	Department   string                 `json:"department"`
-	Permissions  []string               `json:"permissions"`
-	Metadata     map[string]interface{} `json:"metadata"`
-	CreatedAt    string                 `json:"created_at"`
-	EmailVerified bool                  `json:"email_verified"`
-	Active       bool                   `json:"active"`
+	ID            string                 `json:"id"`
+	Email         string                 `json:"email"`
+	Name          string                 `json:"name"`
+	Roles         []string               `json:"roles"`
+	Groups        []string               `json:"groups"`
+	OrgID         string                 `json:"org_id"`
+	Department    string                 `json:"department"`
+	Permissions   []string               `json:"permissions"`
+	Metadata      map[string]interface{} `json:"metadata"`
+	CreatedAt     string                 `json:"created_at"`
+	EmailVerified bool                   `json:"email_verified"`
+	Active        bool                   `json:"active"`
 }
 
 // UserAttributeProvider fetches user attributes from the user service
@@ -55,7 +55,7 @@ func (p *UserAttributeProvider) GetAttributes(ctx context.Context, key string) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user: %w", err)
 	}
-	
+
 	return userToAttributes(user), nil
 }
 
@@ -66,12 +66,12 @@ func (p *UserAttributeProvider) GetBatchAttributes(ctx context.Context, keys []s
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
-	
+
 	result := make(map[string]map[string]interface{})
 	for _, user := range users {
 		result[user.ID] = userToAttributes(user)
 	}
-	
+
 	return result, nil
 }
 
@@ -80,7 +80,7 @@ func userToAttributes(user *User) map[string]interface{} {
 	if user == nil {
 		return make(map[string]interface{})
 	}
-	
+
 	attrs := map[string]interface{}{
 		"id":             user.ID,
 		"email":          user.Email,
@@ -94,7 +94,7 @@ func userToAttributes(user *User) map[string]interface{} {
 		"email_verified": user.EmailVerified,
 		"active":         user.Active,
 	}
-	
+
 	// Merge metadata
 	if user.Metadata != nil {
 		for k, v := range user.Metadata {
@@ -102,7 +102,7 @@ func userToAttributes(user *User) map[string]interface{} {
 			attrs["meta_"+k] = v
 		}
 	}
-	
+
 	return attrs
 }
 
@@ -142,4 +142,3 @@ func (m *MockUserService) GetUsers(ctx context.Context, userIDs []string) ([]*Us
 	}
 	return result, nil
 }
-

@@ -38,4 +38,3 @@ func (s *Service) Health(ctx context.Context) error {
 	// TODO: Implement health checks
 	return nil
 }
-

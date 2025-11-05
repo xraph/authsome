@@ -38,8 +38,8 @@ type RateLimitConfig struct {
 
 // IPWhitelistConfig configures IP whitelisting
 type IPWhitelistConfig struct {
-	Enabled      bool `json:"enabled" yaml:"enabled"`
-	StrictMode   bool `json:"strict_mode" yaml:"strict_mode"` // Reject if IP not in allowlist
+	Enabled    bool `json:"enabled" yaml:"enabled"`
+	StrictMode bool `json:"strict_mode" yaml:"strict_mode"` // Reject if IP not in allowlist
 }
 
 // WebhookConfig configures webhook notifications for API key events
@@ -139,4 +139,3 @@ func (c *Config) Validate() error {
 
 	return nil
 }
-

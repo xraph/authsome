@@ -14,16 +14,16 @@ import (
 type BanRepository interface {
 	// Create a new ban record
 	CreateBan(ctx context.Context, ban *schema.UserBan) error
-	
+
 	// Find active ban for a user
 	FindActiveBan(ctx context.Context, userID string) (*schema.UserBan, error)
-	
+
 	// Find all bans for a user (including inactive)
 	FindBansByUser(ctx context.Context, userID string) ([]*schema.UserBan, error)
-	
+
 	// Update ban record (for unbanning)
 	UpdateBan(ctx context.Context, ban *schema.UserBan) error
-	
+
 	// Find ban by ID
 	FindBanByID(ctx context.Context, banID string) (*schema.UserBan, error)
 }
@@ -52,9 +52,9 @@ type BanRequest struct {
 
 // UnbanRequest represents a request to unban a user
 type UnbanRequest struct {
-	UserID      string
-	UnbannedBy  string
-	Reason      string
+	UserID     string
+	UnbannedBy string
+	Reason     string
 }
 
 // BanService handles user banning operations

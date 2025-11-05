@@ -26,7 +26,7 @@ type FormSchema struct {
 // FormField represents a single form field configuration
 type FormField struct {
 	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`        // text, email, password, select, checkbox, etc.
+	Type        string                 `json:"type"` // text, email, password, select, checkbox, etc.
 	Label       string                 `json:"label"`
 	Placeholder string                 `json:"placeholder"`
 	Required    bool                   `json:"required"`

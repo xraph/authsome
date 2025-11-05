@@ -14,14 +14,14 @@ type Repository interface {
 	UpdateProfile(ctx context.Context, profile *ComplianceProfile) error
 	DeleteProfile(ctx context.Context, id string) error
 	ListProfiles(ctx context.Context, filters ProfileFilters) ([]*ComplianceProfile, error)
-	
+
 	// Compliance Checks
 	CreateCheck(ctx context.Context, check *ComplianceCheck) error
 	GetCheck(ctx context.Context, id string) (*ComplianceCheck, error)
 	ListChecks(ctx context.Context, profileID string, filters CheckFilters) ([]*ComplianceCheck, error)
 	UpdateCheck(ctx context.Context, check *ComplianceCheck) error
 	GetDueChecks(ctx context.Context) ([]*ComplianceCheck, error)
-	
+
 	// Violations
 	CreateViolation(ctx context.Context, violation *ComplianceViolation) error
 	GetViolation(ctx context.Context, id string) (*ComplianceViolation, error)
@@ -29,20 +29,20 @@ type Repository interface {
 	UpdateViolation(ctx context.Context, violation *ComplianceViolation) error
 	ResolveViolation(ctx context.Context, id, resolvedBy string) error
 	CountViolations(ctx context.Context, orgID string, status string) (int, error)
-	
+
 	// Reports
 	CreateReport(ctx context.Context, report *ComplianceReport) error
 	GetReport(ctx context.Context, id string) (*ComplianceReport, error)
 	ListReports(ctx context.Context, filters ReportFilters) ([]*ComplianceReport, error)
 	UpdateReport(ctx context.Context, report *ComplianceReport) error
 	DeleteReport(ctx context.Context, id string) error
-	
+
 	// Evidence
 	CreateEvidence(ctx context.Context, evidence *ComplianceEvidence) error
 	GetEvidence(ctx context.Context, id string) (*ComplianceEvidence, error)
 	ListEvidence(ctx context.Context, filters EvidenceFilters) ([]*ComplianceEvidence, error)
 	DeleteEvidence(ctx context.Context, id string) error
-	
+
 	// Policies
 	CreatePolicy(ctx context.Context, policy *CompliancePolicy) error
 	GetPolicy(ctx context.Context, id string) (*CompliancePolicy, error)
@@ -50,7 +50,7 @@ type Repository interface {
 	ListPolicies(ctx context.Context, filters PolicyFilters) ([]*CompliancePolicy, error)
 	UpdatePolicy(ctx context.Context, policy *CompliancePolicy) error
 	DeletePolicy(ctx context.Context, id string) error
-	
+
 	// Training
 	CreateTraining(ctx context.Context, training *ComplianceTraining) error
 	GetTraining(ctx context.Context, id string) (*ComplianceTraining, error)
@@ -71,12 +71,12 @@ type ProfileFilters struct {
 
 // CheckFilters for querying checks
 type CheckFilters struct {
-	ProfileID    string
-	CheckType    string
-	Status       string
-	SinceBefore  time.Time
-	Limit        int
-	Offset       int
+	ProfileID   string
+	CheckType   string
+	Status      string
+	SinceBefore time.Time
+	Limit       int
+	Offset      int
 }
 
 // ViolationFilters for querying violations
@@ -137,4 +137,3 @@ type TrainingFilters struct {
 	Limit          int
 	Offset         int
 }
-

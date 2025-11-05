@@ -127,9 +127,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
 	}
-	
+
 	basePath := p.config.API.BasePath
-	
+
 	// Certificate Management
 	if p.config.API.EnableManagement {
 		router.POST(basePath+"/certificates", p.handler.RegisterCertificate)
@@ -138,32 +138,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		router.POST(basePath+"/certificates/:id/revoke", p.handler.RevokeCertificate)
 		router.GET(basePath+"/certificates/expiring", p.handler.GetExpiringCertificates)
 	}
-	
+
 	// Authentication
 	router.POST(basePath+"/authenticate", p.handler.AuthenticateWithCertificate)
-	
+
 	// Trust Anchors
 	if p.config.API.EnableManagement {
 		router.POST(basePath+"/trust-anchors", p.handler.AddTrustAnchor)
 		router.GET(basePath+"/trust-anchors", p.handler.GetTrustAnchors)
 	}
-	
+
 	// Policies
 	if p.config.API.EnableManagement {
 		router.POST(basePath+"/policies", p.handler.CreatePolicy)
 		router.GET(basePath+"/policies/:id", p.handler.GetPolicy)
 	}
-	
+
 	// Validation
 	if p.config.API.EnableValidation {
 		router.POST(basePath+"/validate", p.handler.ValidateCertificate)
 	}
-	
+
 	// Statistics
 	if p.config.API.EnableMetrics {
 		router.GET(basePath+"/stats/auth", p.handler.GetAuthStats)
 	}
-	
+
 	return nil
 }
 
@@ -172,7 +172,7 @@ func (p *Plugin) registerHooks(hookRegistry *hooks.HookRegistry) error {
 	// Register authentication hooks if needed
 	// hookRegistry.RegisterBeforeSignIn(p.onBeforeSignIn)
 	// hookRegistry.RegisterAfterSignIn(p.onAfterSignIn)
-	
+
 	return nil
 }
 
@@ -222,4 +222,3 @@ func (p *Plugin) Shutdown() error {
 	}
 	return nil
 }
-

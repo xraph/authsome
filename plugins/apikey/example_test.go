@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome"
-	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/core/apikey"
+	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/forge"
 )
 
@@ -17,7 +17,7 @@ import (
 func ExamplePlugin_basic() {
 	// Initialize database (example)
 	var db *bun.DB // Your database connection
-	
+
 	// Create AuthSome instance
 	auth := authsome.New(
 		authsome.WithDatabase(db),
@@ -40,9 +40,9 @@ func ExamplePlugin_basic() {
 
 // Example: Protect routes with API key middleware
 func ExamplePlugin_protectRoutes() {
-	var auth *authsome.Auth // Initialized AuthSome instance
+	var auth *authsome.Auth         // Initialized AuthSome instance
 	var apikey *apikeyPlugin.Plugin // Initialized plugin
-	
+
 	app := forge.New()
 	router := app.Router()
 
@@ -58,11 +58,11 @@ func ExamplePlugin_protectRoutes() {
 		key := apikeyPlugin.GetAPIKey(c)
 		orgID := apikeyPlugin.GetOrgID(c)
 		user := apikeyPlugin.GetUser(c)
-		
+
 		_ = key
 		_ = orgID
 		_ = user
-		
+
 		return c.JSON(200, map[string]string{"status": "ok"})
 	})
 
@@ -74,7 +74,7 @@ func ExamplePlugin_protectRoutes() {
 	router.POST("/api/v1/settings", func(c forge.Context) error {
 		return c.JSON(200, map[string]string{"status": "ok"})
 	}).Use(apikey.RequirePermission("settings:write"))
-	
+
 	_ = auth
 }
 
@@ -100,7 +100,7 @@ func ExamplePlugin_createKey() {
 
 	// IMPORTANT: Store key.Key securely - it won't be shown again!
 	// key.Key = "ak_abc123_xyz789.secret_token"
-	
+
 	_ = key
 }
 
@@ -108,24 +108,24 @@ func ExamplePlugin_createKey() {
 func TestAPIKeyAuthentication(t *testing.T) {
 	// This is a placeholder test showing the structure
 	// Actual implementation would need database setup
-	
+
 	t.Skip("Integration test - requires database setup")
-	
+
 	// Setup
 	var db *bun.DB
 	var ctx = context.Background()
-	
+
 	auth := authsome.New(
 		authsome.WithDatabase(db),
 	)
-	
+
 	plugin := apikeyPlugin.NewPlugin()
 	err := auth.Use(plugin)
 	require.NoError(t, err)
-	
+
 	err = auth.Initialize(ctx)
 	require.NoError(t, err)
-	
+
 	// Create API key
 	service := plugin.Service()
 	key, err := service.CreateAPIKey(ctx, &apikey.CreateAPIKeyRequest{
@@ -137,7 +137,7 @@ func TestAPIKeyAuthentication(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, key.Key)
-	
+
 	// Verify API key
 	resp, err := service.VerifyAPIKey(ctx, &apikey.VerifyAPIKeyRequest{
 		Key: key.Key,
@@ -150,7 +150,7 @@ func TestAPIKeyAuthentication(t *testing.T) {
 // TestRateLimiting tests rate limit enforcement
 func TestRateLimiting(t *testing.T) {
 	t.Skip("Integration test - requires rate limiter setup")
-	
+
 	// Rate limiting is enforced automatically in middleware
 	// when a rate limiter service is available
 }
@@ -158,8 +158,7 @@ func TestRateLimiting(t *testing.T) {
 // TestMultiTenancy tests organization context injection
 func TestMultiTenancy(t *testing.T) {
 	t.Skip("Integration test - requires multi-tenancy plugin")
-	
+
 	// API keys automatically inject organization context
 	// The organization ID from the API key is used to scope all operations
 }
-

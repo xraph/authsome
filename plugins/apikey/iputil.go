@@ -12,10 +12,10 @@ func extractClientIP(remoteAddr string) string {
 	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
 		remoteAddr = remoteAddr[:idx]
 	}
-	
+
 	// Remove IPv6 brackets
 	remoteAddr = strings.Trim(remoteAddr, "[]")
-	
+
 	return remoteAddr
 }
 
@@ -25,19 +25,19 @@ func isIPAllowed(clientIP string, allowedIPs []string) bool {
 	if len(allowedIPs) == 0 {
 		return true // No whitelist = allow all
 	}
-	
+
 	// Parse client IP
 	ip := net.ParseIP(clientIP)
 	if ip == nil {
 		return false // Invalid IP
 	}
-	
+
 	for _, allowed := range allowedIPs {
 		// Try exact match first
 		if allowed == clientIP {
 			return true
 		}
-		
+
 		// Try CIDR notation
 		if strings.Contains(allowed, "/") {
 			_, ipNet, err := net.ParseCIDR(allowed)
@@ -55,7 +55,7 @@ func isIPAllowed(clientIP string, allowedIPs []string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -78,5 +78,3 @@ func validateIPWhitelist(ips []string) error {
 	}
 	return nil
 }
-
-

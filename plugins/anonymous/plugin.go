@@ -25,17 +25,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("anonymous plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for anonymous plugin")
 	}
-	
+
 	p.db = db
 	users := repo.NewUserRepository(db)
 	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)

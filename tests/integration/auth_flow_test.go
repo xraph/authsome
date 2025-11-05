@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -72,7 +73,7 @@ func TestAuthFlow_Complete(t *testing.T) {
 
 		assert.NotNil(t, result["user"], "Response should contain user")
 		assert.NotNil(t, result["token"], "Response should contain token")
-		
+
 		user := result["user"].(map[string]interface{})
 		assert.Equal(t, email, user["email"], "User email should match")
 		assert.Equal(t, name, user["name"], "User name should match")
@@ -115,7 +116,7 @@ func TestAuthFlow_Complete(t *testing.T) {
 
 		assert.NotNil(t, result["user"], "Response should contain user")
 		assert.NotNil(t, result["token"], "Response should contain token")
-		
+
 		sessionToken = result["token"].(string)
 		assert.NotEmpty(t, sessionToken, "Session token should not be empty")
 	})
@@ -248,7 +249,7 @@ func setupTestDatabase(t *testing.T) *bun.DB {
 	ctx := context.Background()
 	// TODO: Run actual migrations
 	// For now, create basic tables manually
-	
+
 	_, err = db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
@@ -282,4 +283,3 @@ func setupTestDatabase(t *testing.T) *bun.DB {
 
 	return db
 }
-

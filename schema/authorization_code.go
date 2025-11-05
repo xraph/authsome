@@ -16,18 +16,18 @@ type AuthorizationCode struct {
 	UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
 
 	// OAuth2/OIDC fields
-	Code         string    `bun:",unique,notnull"` // The authorization code
-	ClientID     string    `bun:",notnull"`        // OAuth client ID
-	UserID       xid.ID    `bun:",notnull"`        // User who authorized
-	RedirectURI  string    `bun:",notnull"`        // Redirect URI used in auth request
-	Scope        string    `bun:",notnull"`        // Requested scopes
-	State        string    `bun:""`                // State parameter from auth request
-	Nonce        string    `bun:""`                // Nonce for OIDC
-	CodeChallenge string   `bun:""`                // PKCE code challenge
-	CodeChallengeMethod string `bun:""`            // PKCE challenge method (S256, plain)
-	ExpiresAt    time.Time `bun:",notnull"`        // Code expiration (typically 10 minutes)
-	Used         bool      `bun:",notnull,default:false"` // Whether code has been exchanged
-	UsedAt       *time.Time `bun:""`               // When code was used
+	Code                string     `bun:",unique,notnull"`        // The authorization code
+	ClientID            string     `bun:",notnull"`               // OAuth client ID
+	UserID              xid.ID     `bun:",notnull"`               // User who authorized
+	RedirectURI         string     `bun:",notnull"`               // Redirect URI used in auth request
+	Scope               string     `bun:",notnull"`               // Requested scopes
+	State               string     `bun:""`                       // State parameter from auth request
+	Nonce               string     `bun:""`                       // Nonce for OIDC
+	CodeChallenge       string     `bun:""`                       // PKCE code challenge
+	CodeChallengeMethod string     `bun:""`                       // PKCE challenge method (S256, plain)
+	ExpiresAt           time.Time  `bun:",notnull"`               // Code expiration (typically 10 minutes)
+	Used                bool       `bun:",notnull,default:false"` // Whether code has been exchanged
+	UsedAt              *time.Time `bun:""`                       // When code was used
 }
 
 // IsExpired checks if the authorization code has expired

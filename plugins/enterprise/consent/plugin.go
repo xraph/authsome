@@ -300,7 +300,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 func (p *Plugin) onUserCreated(ctx context.Context, u *user.User) error {
 	// When a new user is created, initialize default privacy settings
 	// and check if there are required consents to be granted
-	
+
 	// In SaaS mode, get organization from context
 	orgID := "default" // Standalone mode
 	if orgIDCtx, ok := ctx.Value("organization_id").(string); ok {
@@ -326,7 +326,7 @@ func (p *Plugin) onUserCreated(ctx context.Context, u *user.User) error {
 func (p *Plugin) onBeforeUserDelete(ctx context.Context, u *user.User) error {
 	// Before deleting a user, check if there's a data deletion request
 	// This ensures compliance with GDPR Article 17
-	
+
 	orgID := "default"
 	if orgIDCtx, ok := ctx.Value("organization_id").(string); ok {
 		orgID = orgIDCtx
@@ -355,7 +355,7 @@ func (p *Plugin) onBeforeUserDelete(ctx context.Context, u *user.User) error {
 func (p *Plugin) onOrganizationCreated(ctx context.Context, org interface{}) error {
 	// When a new organization is created in SaaS mode,
 	// initialize default privacy settings for that organization
-	
+
 	// Extract organization ID from interface
 	var orgID string
 	switch o := org.(type) {
@@ -592,4 +592,3 @@ type ConsentAuditLogsResponse struct {
 type ConsentReportResponse struct {
 	ID string `json:"id" example:"report_123"`
 }
-

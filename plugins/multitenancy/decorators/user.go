@@ -29,7 +29,7 @@ func NewMultiTenantUserService(userService user.ServiceInterface, orgService *or
 func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	
+
 	// Special case: First user creation (system owner)
 	// If no organization context is provided, check if this is the very first user
 	// The first user will create the platform organization via hooks
@@ -44,11 +44,11 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 			if err != nil {
 				return nil, err
 			}
-			
+
 			fmt.Printf("[MultiTenancy] First user created (system owner): %s\n", newUser.Email)
 			return newUser, nil
 		}
-		
+
 		// Organizations exist but no context provided - error
 		return nil, fmt.Errorf("organization context required")
 	}
@@ -157,7 +157,7 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *user.UpdateUserRequest) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	
+
 	// Special case: First user update (e.g., email verification during signup)
 	// If no organization context and no organizations exist yet, allow the update
 	if orgID == "" {
@@ -169,7 +169,7 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 			fmt.Printf("[MultiTenancy] First user update allowed without org context: %s\n", u.Email)
 			return s.userService.Update(ctx, u, req)
 		}
-		
+
 		// Organizations exist but no context provided - error
 		return nil, fmt.Errorf("organization context required")
 	}

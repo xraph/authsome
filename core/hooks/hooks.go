@@ -26,10 +26,10 @@ type HookRegistry struct {
 	afterSessionRevoke  []AfterSessionRevokeHook
 
 	// Auth hooks
-	beforeSignUp []BeforeSignUpHook
-	afterSignUp  []AfterSignUpHook
-	beforeSignIn []BeforeSignInHook
-	afterSignIn  []AfterSignInHook
+	beforeSignUp  []BeforeSignUpHook
+	afterSignUp   []AfterSignUpHook
+	beforeSignIn  []BeforeSignInHook
+	afterSignIn   []AfterSignInHook
 	beforeSignOut []BeforeSignOutHook
 	afterSignOut  []AfterSignOutHook
 

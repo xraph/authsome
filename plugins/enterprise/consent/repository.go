@@ -636,4 +636,3 @@ func (r *BunRepository) GetConsentStats(ctx context.Context, orgID string, start
 
 	return stats, nil
 }
-

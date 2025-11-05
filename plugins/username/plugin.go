@@ -28,17 +28,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("username plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for username plugin")
 	}
-	
+
 	p.db = db
 	// Construct local core services
 	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)

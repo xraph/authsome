@@ -33,13 +33,13 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 		Config         map[string]interface{} `json:"config"`
 		Metadata       map[string]interface{} `json:"metadata"`
 	}
-	
+
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"error": "invalid request body",
 		})
 	}
-	
+
 	// Get user from context (set by auth middleware)
 	userID := c.Get("user_id")
 	if userID == nil {
@@ -47,12 +47,12 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 			"error": "unauthorized",
 		})
 	}
-	
+
 	orgID := c.Get("organization_id")
 	if orgID == nil {
 		orgID = "default"
 	}
-	
+
 	session, err := h.service.CreateVerificationSession(c.Context(), &CreateSessionRequest{
 		UserID:         userID.(string),
 		OrganizationID: orgID.(string),
@@ -65,11 +65,11 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 		IPAddress:      c.Request().RemoteAddr,
 		UserAgent:      c.Request().Header.Get("User-Agent"),
 	})
-	
+
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"session": session,
 	})
@@ -84,12 +84,12 @@ func (h *Handler) GetVerificationSession(c forge.Context) error {
 			"error": "session ID is required",
 		})
 	}
-	
+
 	session, err := h.service.GetVerificationSession(c.Context(), sessionID)
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"session": session,
 	})
@@ -104,12 +104,12 @@ func (h *Handler) GetVerification(c forge.Context) error {
 			"error": "verification ID is required",
 		})
 	}
-	
+
 	verification, err := h.service.GetVerification(c.Context(), id)
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"verification": verification,
 	})
@@ -124,27 +124,27 @@ func (h *Handler) GetUserVerifications(c forge.Context) error {
 			"error": "unauthorized",
 		})
 	}
-	
+
 	limit := 20
 	offset := 0
-	
+
 	if limitStr := c.Query("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
 	}
-	
+
 	if offsetStr := c.Query("offset"); offsetStr != "" {
 		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
 			offset = o
 		}
 	}
-	
+
 	verifications, err := h.service.GetUserVerifications(c.Context(), userID.(string), limit, offset)
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"verifications": verifications,
 		"limit":         limit,
@@ -161,12 +161,12 @@ func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 			"error": "unauthorized",
 		})
 	}
-	
+
 	status, err := h.service.GetUserVerificationStatus(c.Context(), userID.(string))
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": status,
 	})
@@ -181,22 +181,22 @@ func (h *Handler) RequestReverification(c forge.Context) error {
 			"error": "unauthorized",
 		})
 	}
-	
+
 	orgID := c.Get("organization_id")
 	if orgID == nil {
 		orgID = "default"
 	}
-	
+
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	
+
 	_ = c.BindJSON(&req)
-	
+
 	if err := h.service.RequestReverification(c.Context(), userID.(string), orgID.(string), req.Reason); err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "reverification requested",
 	})
@@ -211,7 +211,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 			"error": "provider is required",
 		})
 	}
-	
+
 	// Read body
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
@@ -219,7 +219,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 			"error": "failed to read request body",
 		})
 	}
-	
+
 	// Get signature from header
 	signature := c.Request().Header.Get("X-Signature")
 	if signature == "" {
@@ -231,14 +231,14 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 			signature = c.Request().Header.Get("X-SHA2-Signature")
 		}
 	}
-	
+
 	// Process webhook
 	if err := h.processWebhook(c, provider, signature, body); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
 			"error": "webhook processing failed",
 		})
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"received": true,
 	})
@@ -254,31 +254,31 @@ func (h *Handler) AdminBlockUser(c forge.Context) error {
 			"error": "forbidden",
 		})
 	}
-	
+
 	userID := c.Param("userId")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"error": "user ID is required",
 		})
 	}
-	
+
 	orgID := c.Get("organization_id")
 	if orgID == nil {
 		orgID = "default"
 	}
-	
+
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	
+
 	if err := c.BindJSON(&req); err != nil {
 		req.Reason = "administrative action"
 	}
-	
+
 	if err := h.service.BlockUser(c.Context(), userID, orgID.(string), req.Reason); err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "user blocked",
 	})
@@ -292,23 +292,23 @@ func (h *Handler) AdminUnblockUser(c forge.Context) error {
 			"error": "forbidden",
 		})
 	}
-	
+
 	userID := c.Param("userId")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"error": "user ID is required",
 		})
 	}
-	
+
 	orgID := c.Get("organization_id")
 	if orgID == nil {
 		orgID = "default"
 	}
-	
+
 	if err := h.service.UnblockUser(c.Context(), userID, orgID.(string)); err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "user unblocked",
 	})
@@ -322,19 +322,19 @@ func (h *Handler) AdminGetUserVerificationStatus(c forge.Context) error {
 			"error": "forbidden",
 		})
 	}
-	
+
 	userID := c.Param("userId")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"error": "user ID is required",
 		})
 	}
-	
+
 	status, err := h.service.GetUserVerificationStatus(c.Context(), userID)
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": status,
 	})
@@ -348,34 +348,34 @@ func (h *Handler) AdminGetUserVerifications(c forge.Context) error {
 			"error": "forbidden",
 		})
 	}
-	
+
 	userID := c.Param("userId")
 	if userID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"error": "user ID is required",
 		})
 	}
-	
+
 	limit := 20
 	offset := 0
-	
+
 	if limitStr := c.Query("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
 	}
-	
+
 	if offsetStr := c.Query("offset"); offsetStr != "" {
 		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
 			offset = o
 		}
 	}
-	
+
 	verifications, err := h.service.GetUserVerifications(c.Context(), userID, limit, offset)
 	if err != nil {
 		return handleError(c, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"verifications": verifications,
 		"limit":         limit,
@@ -394,33 +394,33 @@ func (h *Handler) processWebhook(ctx forge.Context, provider, signature string, 
 			break
 		}
 	}
-	
+
 	if p == nil {
 		return ErrUnsupportedProvider
 	}
-	
+
 	// Verify webhook signature
 	valid, err := p.VerifyWebhook(signature, string(payload))
 	if err != nil {
 		return fmt.Errorf("webhook verification failed: %w", err)
 	}
-	
+
 	if !valid {
 		return ErrProviderWebhookInvalid
 	}
-	
+
 	// Parse webhook
 	webhook, err := p.ParseWebhook(payload)
 	if err != nil {
 		return fmt.Errorf("webhook parsing failed: %w", err)
 	}
-	
+
 	// Process based on event type
 	switch webhook.EventType {
 	case "check.completed", "verification.completed", "identity.verification_session.verified":
 		// Get the verification record
 		var verification *schema.IdentityVerification
-		
+
 		if webhook.CheckID != "" {
 			verification, err = h.service.repo.GetVerificationByProviderCheckID(ctx.Context(), webhook.CheckID)
 		} else if webhook.SessionID != "" {
@@ -431,26 +431,26 @@ func (h *Handler) processWebhook(ctx forge.Context, provider, signature string, 
 				verification, err = h.service.repo.GetLatestVerificationByUser(ctx.Context(), session.UserID)
 			}
 		}
-		
+
 		if err != nil || verification == nil {
 			// Create new verification if not found
 			// This might be a standalone check initiated through provider dashboard
 			return nil
 		}
-		
+
 		// Process the result
 		result := convertWebhookToResult(webhook)
 		return h.service.ProcessVerificationResult(ctx.Context(), verification.ID, result)
-		
+
 	case "check.failed", "verification.failed", "identity.verification_session.requires_input":
 		// Handle failure cases
 		// Similar logic to completed case
-		
+
 	default:
 		// Log unknown event type
 		return nil
 	}
-	
+
 	return nil
 }
 
@@ -459,7 +459,7 @@ func (h *Handler) isAdmin(c forge.Context) bool {
 	if role == nil {
 		return false
 	}
-	
+
 	return role == "admin" || role == "super_admin"
 }
 
@@ -469,27 +469,27 @@ func handleError(c forge.Context, err error) error {
 		return c.JSON(http.StatusNotFound, map[string]interface{}{
 			"error": err.Error(),
 		})
-		
+
 	case ErrVerificationBlocked, ErrMaxAttemptsReached, ErrRateLimitExceeded:
 		return c.JSON(http.StatusTooManyRequests, map[string]interface{}{
 			"error": err.Error(),
 		})
-		
+
 	case ErrHighRiskDetected, ErrSanctionsListMatch, ErrPEPDetected, ErrAgeBelowMinimum:
 		return c.JSON(http.StatusForbidden, map[string]interface{}{
 			"error": err.Error(),
 		})
-		
+
 	case ErrVerificationExpired, ErrSessionExpired, ErrDocumentExpired:
 		return c.JSON(http.StatusGone, map[string]interface{}{
 			"error": err.Error(),
 		})
-		
+
 	case ErrDocumentNotSupported, ErrCountryNotSupported:
 		return c.JSON(http.StatusUnprocessableEntity, map[string]interface{}{
 			"error": err.Error(),
 		})
-		
+
 	default:
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
 			"error": "internal server error",
@@ -504,26 +504,26 @@ func convertWebhookToResult(webhook *WebhookPayload) *VerificationResult {
 			ProviderData: webhook.RawPayload,
 		}
 	}
-	
+
 	result := &VerificationResult{
-		Status:           webhook.Result.Status,
-		IsVerified:       webhook.Result.Result == "clear",
-		RiskScore:        webhook.Result.RiskScore,
-		ConfidenceScore:  webhook.Result.ConfidenceScore,
-		ProviderData:     webhook.RawPayload,
-		FirstName:        webhook.Result.FirstName,
-		LastName:         webhook.Result.LastName,
-		DateOfBirth:      webhook.Result.DateOfBirth,
-		DocumentNumber:   webhook.Result.DocumentNumber,
-		DocumentCountry:  webhook.Result.DocumentCountry,
-		Nationality:      webhook.Result.Nationality,
-		Gender:           webhook.Result.Gender,
+		Status:            webhook.Result.Status,
+		IsVerified:        webhook.Result.Result == "clear",
+		RiskScore:         webhook.Result.RiskScore,
+		ConfidenceScore:   webhook.Result.ConfidenceScore,
+		ProviderData:      webhook.RawPayload,
+		FirstName:         webhook.Result.FirstName,
+		LastName:          webhook.Result.LastName,
+		DateOfBirth:       webhook.Result.DateOfBirth,
+		DocumentNumber:    webhook.Result.DocumentNumber,
+		DocumentCountry:   webhook.Result.DocumentCountry,
+		Nationality:       webhook.Result.Nationality,
+		Gender:            webhook.Result.Gender,
 		IsOnSanctionsList: webhook.Result.IsOnSanctionsList,
-		IsPEP:            webhook.Result.IsPEP,
-		LivenessScore:    webhook.Result.LivenessScore,
-		IsLive:           webhook.Result.IsLive,
+		IsPEP:             webhook.Result.IsPEP,
+		LivenessScore:     webhook.Result.LivenessScore,
+		IsLive:            webhook.Result.IsLive,
 	}
-	
+
 	// Determine risk level based on score
 	if result.RiskScore >= 70 {
 		result.RiskLevel = "high"
@@ -532,7 +532,7 @@ func convertWebhookToResult(webhook *WebhookPayload) *VerificationResult {
 	} else {
 		result.RiskLevel = "low"
 	}
-	
+
 	// Build rejection reasons
 	if !result.IsVerified {
 		for _, subResult := range webhook.Result.SubResults {
@@ -541,7 +541,6 @@ func convertWebhookToResult(webhook *WebhookPayload) *VerificationResult {
 			}
 		}
 	}
-	
+
 	return result
 }
-

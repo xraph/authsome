@@ -477,4 +477,3 @@ func getMFADescription(mfaType string) string {
 		return "Multi-factor authentication method"
 	}
 }
-

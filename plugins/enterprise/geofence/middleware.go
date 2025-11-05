@@ -66,9 +66,9 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 			UserID:         userID,
 			OrganizationID: orgID,
 			SessionID:      sessionID,
-		IPAddress:      ip,
-		UserAgent:      c.Request().Header.Get("User-Agent"),
-		EventType:      "request",
+			IPAddress:      ip,
+			UserAgent:      c.Request().Header.Get("User-Agent"),
+			EventType:      "request",
 		}
 
 		result, err := m.service.CheckLocation(c.Context(), req)
@@ -111,7 +111,7 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 // getClientIP extracts the client IP address from the request
 func (m *Middleware) getClientIP(c forge.Context) string {
 	req := c.Request()
-	
+
 	// Check various headers in order of preference
 	// X-Forwarded-For
 	if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
@@ -267,4 +267,3 @@ func (m *Middleware) BlockTor(next func(forge.Context) error) func(forge.Context
 		return next(c)
 	}
 }
-

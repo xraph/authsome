@@ -73,18 +73,18 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 
 	// Create JWT key record
 	jwtKey := &JWTKey{
-		ID:          id,
-		OrgID:       req.OrgID,
-		KeyID:       keyID,
-		Algorithm:   req.Algorithm,
-		KeyType:     req.KeyType,
-		PrivateKey:  encryptedPrivateKey,
-		PublicKey:   string(publicKeyBytes),
-		IsActive:    true,
-		ExpiresAt:   expiresAt,
-		Metadata:    req.Metadata,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:         id,
+		OrgID:      req.OrgID,
+		KeyID:      keyID,
+		Algorithm:  req.Algorithm,
+		KeyType:    req.KeyType,
+		PrivateKey: encryptedPrivateKey,
+		PublicKey:  string(publicKeyBytes),
+		IsActive:   true,
+		ExpiresAt:  expiresAt,
+		Metadata:   req.Metadata,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 
 	// Save to database
@@ -108,11 +108,11 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to find signing key: %w", err)
 	}
-	
+
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no active signing key found for organization")
 	}
-	
+
 	signingKey := keys[0]
 
 	// Check if key is active and not expired
@@ -146,7 +146,7 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 			expiresIn = 1 * time.Hour
 		}
 	}
-	
+
 	now := time.Now()
 	expiresAt := now.Add(expiresIn)
 
@@ -424,7 +424,7 @@ func (s *Service) parsePrivateKey(keyData, algorithm string) (interface{}, error
 	if strings.HasPrefix(algorithm, "RS") {
 		return x509.ParsePKCS1PrivateKey(block.Bytes)
 	}
-	
+
 	return x509.ParsePKCS8PrivateKey(block.Bytes)
 }
 

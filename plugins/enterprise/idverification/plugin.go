@@ -57,58 +57,58 @@ func (p *Plugin) Init(container interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid container type")
 	}
-	
+
 	// Get database
 	db, ok := deps["db"].(*bun.DB)
 	if !ok {
 		return fmt.Errorf("database not found in container")
 	}
 	p.db = db
-	
+
 	// Get config manager
 	configManager, ok := deps["config"].(forge.ConfigManager)
 	if !ok {
 		return fmt.Errorf("config manager not found in container")
 	}
-	
+
 	// Bind configuration
 	var config Config
 	if err := configManager.Bind("auth.idverification", &config); err != nil {
 		// Use default config if not found
 		config = DefaultConfig()
 	}
-	
+
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	p.config = config
-	
+
 	// Get optional services
 	if auditSvc, ok := deps["audit"].(*audit.Service); ok {
 		p.auditService = auditSvc
 	}
-	
+
 	if webhookSvc, ok := deps["webhook"].(*webhook.Service); ok {
 		p.webhookService = webhookSvc
 	}
-	
+
 	// Create repository
 	p.repo = repository.NewIdentityVerificationRepository(db)
-	
+
 	// Create service
 	service, err := NewService(p.repo, config, p.auditService, p.webhookService)
 	if err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}
 	p.service = service
-	
+
 	// Create handler
 	p.handler = NewHandler(service)
-	
+
 	// Create middleware
 	p.middleware = NewMiddleware(service)
-	
+
 	return nil
 }
 
@@ -117,26 +117,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled {
 		return nil
 	}
-	
+
 	// Public routes (require authentication)
 	verificationGroup := router.Group("/verification")
 	{
 		// Session management
 		verificationGroup.POST("/sessions", p.handler.CreateVerificationSession)
 		verificationGroup.GET("/sessions/:id", p.handler.GetVerificationSession)
-		
+
 		// User verifications
 		verificationGroup.GET("/me", p.handler.GetUserVerifications)
 		verificationGroup.GET("/me/status", p.handler.GetUserVerificationStatus)
 		verificationGroup.POST("/me/reverify", p.handler.RequestReverification)
-		
+
 		// Single verification
 		verificationGroup.GET("/:id", p.handler.GetVerification)
-		
+
 		// Webhook endpoint (no auth required, verified by signature)
 		verificationGroup.POST("/webhook/:provider", p.handler.HandleWebhook)
 	}
-	
+
 	// Admin routes (require admin role)
 	adminGroup := router.Group("/verification/admin")
 	{
@@ -145,14 +145,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		adminGroup.GET("/users/:userId/status", p.handler.AdminGetUserVerificationStatus)
 		adminGroup.GET("/users/:userId/verifications", p.handler.AdminGetUserVerifications)
 	}
-	
+
 	return nil
 }
 
 // Migrate runs database migrations for the plugin
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
-	
+
 	// Create identity_verifications table
 	if _, err := p.db.NewCreateTable().
 		Model((*schema.IdentityVerification)(nil)).
@@ -160,7 +160,7 @@ func (p *Plugin) Migrate() error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create identity_verifications table: %w", err)
 	}
-	
+
 	// Create indexes for identity_verifications
 	indexes := []struct {
 		name    string
@@ -175,7 +175,7 @@ func (p *Plugin) Migrate() error {
 		{"idx_iv_created_at", []string{"created_at"}},
 		{"idx_iv_expires_at", []string{"expires_at"}},
 	}
-	
+
 	for _, idx := range indexes {
 		if _, err := p.db.NewCreateIndex().
 			Model((*schema.IdentityVerification)(nil)).
@@ -186,7 +186,7 @@ func (p *Plugin) Migrate() error {
 			return fmt.Errorf("failed to create index %s: %w", idx.name, err)
 		}
 	}
-	
+
 	// Create identity_verification_documents table
 	if _, err := p.db.NewCreateTable().
 		Model((*schema.IdentityVerificationDocument)(nil)).
@@ -194,7 +194,7 @@ func (p *Plugin) Migrate() error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create identity_verification_documents table: %w", err)
 	}
-	
+
 	// Create indexes for identity_verification_documents
 	docIndexes := []struct {
 		name    string
@@ -204,7 +204,7 @@ func (p *Plugin) Migrate() error {
 		{"idx_ivd_created_at", []string{"created_at"}},
 		{"idx_ivd_retain_until", []string{"retain_until"}},
 	}
-	
+
 	for _, idx := range docIndexes {
 		if _, err := p.db.NewCreateIndex().
 			Model((*schema.IdentityVerificationDocument)(nil)).
@@ -215,7 +215,7 @@ func (p *Plugin) Migrate() error {
 			return fmt.Errorf("failed to create index %s: %w", idx.name, err)
 		}
 	}
-	
+
 	// Create identity_verification_sessions table
 	if _, err := p.db.NewCreateTable().
 		Model((*schema.IdentityVerificationSession)(nil)).
@@ -223,7 +223,7 @@ func (p *Plugin) Migrate() error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create identity_verification_sessions table: %w", err)
 	}
-	
+
 	// Create indexes for identity_verification_sessions
 	sessionIndexes := []struct {
 		name    string
@@ -234,7 +234,7 @@ func (p *Plugin) Migrate() error {
 		{"idx_ivs_status", []string{"status"}},
 		{"idx_ivs_expires_at", []string{"expires_at"}},
 	}
-	
+
 	for _, idx := range sessionIndexes {
 		if _, err := p.db.NewCreateIndex().
 			Model((*schema.IdentityVerificationSession)(nil)).
@@ -245,7 +245,7 @@ func (p *Plugin) Migrate() error {
 			return fmt.Errorf("failed to create index %s: %w", idx.name, err)
 		}
 	}
-	
+
 	// Create user_verification_status table
 	if _, err := p.db.NewCreateTable().
 		Model((*schema.UserVerificationStatus)(nil)).
@@ -253,7 +253,7 @@ func (p *Plugin) Migrate() error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create user_verification_status table: %w", err)
 	}
-	
+
 	// Create indexes for user_verification_status
 	statusIndexes := []struct {
 		name    string
@@ -266,7 +266,7 @@ func (p *Plugin) Migrate() error {
 		{"idx_uvs_is_blocked", []string{"is_blocked"}},
 		{"idx_uvs_requires_reverification", []string{"requires_reverification"}},
 	}
-	
+
 	for _, idx := range statusIndexes {
 		if _, err := p.db.NewCreateIndex().
 			Model((*schema.UserVerificationStatus)(nil)).
@@ -277,7 +277,7 @@ func (p *Plugin) Migrate() error {
 			return fmt.Errorf("failed to create index %s: %w", idx.name, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -316,4 +316,3 @@ func (p *Plugin) Middleware() func(next func(forge.Context) error) func(forge.Co
 	}
 	return p.middleware.LoadVerificationStatus
 }
-

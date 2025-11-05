@@ -6,14 +6,14 @@ import "time"
 type ConsentType string
 
 const (
-	ConsentTypeCookies          ConsentType = "cookies"
-	ConsentTypeMarketing        ConsentType = "marketing"
-	ConsentTypeAnalytics        ConsentType = "analytics"
-	ConsentTypeTerms            ConsentType = "terms"
-	ConsentTypePrivacy          ConsentType = "privacy"
-	ConsentTypeDataProcessing   ConsentType = "data_processing"
-	ConsentTypeThirdParty       ConsentType = "third_party"
-	ConsentTypeCommunications   ConsentType = "communications"
+	ConsentTypeCookies        ConsentType = "cookies"
+	ConsentTypeMarketing      ConsentType = "marketing"
+	ConsentTypeAnalytics      ConsentType = "analytics"
+	ConsentTypeTerms          ConsentType = "terms"
+	ConsentTypePrivacy        ConsentType = "privacy"
+	ConsentTypeDataProcessing ConsentType = "data_processing"
+	ConsentTypeThirdParty     ConsentType = "third_party"
+	ConsentTypeCommunications ConsentType = "communications"
 )
 
 // AgreementType represents different types of data processing agreements
@@ -30,11 +30,11 @@ const (
 type ConsentAction string
 
 const (
-	ActionGranted  ConsentAction = "granted"
-	ActionRevoked  ConsentAction = "revoked"
-	ActionUpdated  ConsentAction = "updated"
-	ActionExpired  ConsentAction = "expired"
-	ActionRenewed  ConsentAction = "renewed"
+	ActionGranted ConsentAction = "granted"
+	ActionRevoked ConsentAction = "revoked"
+	ActionUpdated ConsentAction = "updated"
+	ActionExpired ConsentAction = "expired"
+	ActionRenewed ConsentAction = "renewed"
 )
 
 // RequestStatus represents the status of data export/deletion requests
@@ -61,20 +61,20 @@ const (
 
 // CreateConsentRequest represents a request to record consent
 type CreateConsentRequest struct {
-	UserID       string                 `json:"userId" validate:"required"`
-	ConsentType  string                 `json:"consentType" validate:"required"`
-	Purpose      string                 `json:"purpose" validate:"required"`
-	Granted      bool                   `json:"granted"`
-	Version      string                 `json:"version" validate:"required"`
-	ExpiresIn    *int                   `json:"expiresIn,omitempty"` // Days until expiry
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	UserID      string                 `json:"userId" validate:"required"`
+	ConsentType string                 `json:"consentType" validate:"required"`
+	Purpose     string                 `json:"purpose" validate:"required"`
+	Granted     bool                   `json:"granted"`
+	Version     string                 `json:"version" validate:"required"`
+	ExpiresIn   *int                   `json:"expiresIn,omitempty"` // Days until expiry
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // UpdateConsentRequest represents a request to update consent
 type UpdateConsentRequest struct {
-	Granted   *bool                  `json:"granted,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	Reason    string                 `json:"reason,omitempty"`
+	Granted  *bool                  `json:"granted,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Reason   string                 `json:"reason,omitempty"`
 }
 
 // CreatePolicyRequest represents a request to create a consent policy
@@ -104,15 +104,15 @@ type UpdatePolicyRequest struct {
 
 // CreateDPARequest represents a request to create a data processing agreement
 type CreateDPARequest struct {
-	AgreementType    string                 `json:"agreementType" validate:"required"`
-	Version          string                 `json:"version" validate:"required"`
-	Content          string                 `json:"content" validate:"required"`
-	SignedByName     string                 `json:"signedByName" validate:"required"`
-	SignedByTitle    string                 `json:"signedByTitle" validate:"required"`
-	SignedByEmail    string                 `json:"signedByEmail" validate:"required,email"`
-	EffectiveDate    time.Time              `json:"effectiveDate" validate:"required"`
-	ExpiryDate       *time.Time             `json:"expiryDate,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	AgreementType string                 `json:"agreementType" validate:"required"`
+	Version       string                 `json:"version" validate:"required"`
+	Content       string                 `json:"content" validate:"required"`
+	SignedByName  string                 `json:"signedByName" validate:"required"`
+	SignedByTitle string                 `json:"signedByTitle" validate:"required"`
+	SignedByEmail string                 `json:"signedByEmail" validate:"required,email"`
+	EffectiveDate time.Time              `json:"effectiveDate" validate:"required"`
+	ExpiryDate    *time.Time             `json:"expiryDate,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // CookieConsentRequest represents a cookie consent preference
@@ -141,27 +141,27 @@ type DataDeletionRequestInput struct {
 
 // ConsentSummary provides a summary of user's consent status
 type ConsentSummary struct {
-	UserID             string                        `json:"userId"`
-	OrganizationID     string                        `json:"organizationId"`
-	TotalConsents      int                           `json:"totalConsents"`
-	GrantedConsents    int                           `json:"grantedConsents"`
-	RevokedConsents    int                           `json:"revokedConsents"`
-	ExpiredConsents    int                           `json:"expiredConsents"`
-	PendingRenewals    int                           `json:"pendingRenewals"`
-	ConsentsByType     map[string]ConsentTypeStatus  `json:"consentsByType"`
-	LastConsentUpdate  *time.Time                    `json:"lastConsentUpdate,omitempty"`
-	HasPendingDeletion bool                          `json:"hasPendingDeletion"`
-	HasPendingExport   bool                          `json:"hasPendingExport"`
+	UserID             string                       `json:"userId"`
+	OrganizationID     string                       `json:"organizationId"`
+	TotalConsents      int                          `json:"totalConsents"`
+	GrantedConsents    int                          `json:"grantedConsents"`
+	RevokedConsents    int                          `json:"revokedConsents"`
+	ExpiredConsents    int                          `json:"expiredConsents"`
+	PendingRenewals    int                          `json:"pendingRenewals"`
+	ConsentsByType     map[string]ConsentTypeStatus `json:"consentsByType"`
+	LastConsentUpdate  *time.Time                   `json:"lastConsentUpdate,omitempty"`
+	HasPendingDeletion bool                         `json:"hasPendingDeletion"`
+	HasPendingExport   bool                         `json:"hasPendingExport"`
 }
 
 // ConsentTypeStatus represents consent status for a specific type
 type ConsentTypeStatus struct {
-	Type      string     `json:"type"`
-	Granted   bool       `json:"granted"`
-	Version   string     `json:"version"`
-	GrantedAt time.Time  `json:"grantedAt"`
-	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	NeedsRenewal bool    `json:"needsRenewal"`
+	Type         string     `json:"type"`
+	Granted      bool       `json:"granted"`
+	Version      string     `json:"version"`
+	GrantedAt    time.Time  `json:"grantedAt"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	NeedsRenewal bool       `json:"needsRenewal"`
 }
 
 // PrivacySettingsRequest represents a request to update privacy settings
@@ -187,18 +187,18 @@ type PrivacySettingsRequest struct {
 
 // ConsentReport provides analytics and reporting data
 type ConsentReport struct {
-	OrganizationID      string                  `json:"organizationId"`
-	ReportPeriodStart   time.Time               `json:"reportPeriodStart"`
-	ReportPeriodEnd     time.Time               `json:"reportPeriodEnd"`
-	TotalUsers          int                     `json:"totalUsers"`
-	UsersWithConsent    int                     `json:"usersWithConsent"`
-	ConsentRate         float64                 `json:"consentRate"`
-	ConsentsByType      map[string]ConsentStats `json:"consentsByType"`
-	PendingDeletions    int                     `json:"pendingDeletions"`
-	CompletedDeletions  int                     `json:"completedDeletions"`
-	DataExportsThisPeriod int                   `json:"dataExportsThisPeriod"`
-	DPAsActive          int                     `json:"dpasActive"`
-	DPAsExpiringSoon    int                     `json:"dpasExpiringSoon"`
+	OrganizationID        string                  `json:"organizationId"`
+	ReportPeriodStart     time.Time               `json:"reportPeriodStart"`
+	ReportPeriodEnd       time.Time               `json:"reportPeriodEnd"`
+	TotalUsers            int                     `json:"totalUsers"`
+	UsersWithConsent      int                     `json:"usersWithConsent"`
+	ConsentRate           float64                 `json:"consentRate"`
+	ConsentsByType        map[string]ConsentStats `json:"consentsByType"`
+	PendingDeletions      int                     `json:"pendingDeletions"`
+	CompletedDeletions    int                     `json:"completedDeletions"`
+	DataExportsThisPeriod int                     `json:"dataExportsThisPeriod"`
+	DPAsActive            int                     `json:"dpasActive"`
+	DPAsExpiringSoon      int                     `json:"dpasExpiringSoon"`
 }
 
 // ConsentStats provides statistics for a consent type
@@ -211,4 +211,3 @@ type ConsentStats struct {
 	GrantRate       float64 `json:"grantRate"`
 	AverageLifetime int     `json:"averageLifetime"` // Days
 }
-

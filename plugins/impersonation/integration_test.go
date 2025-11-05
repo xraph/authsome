@@ -356,28 +356,28 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	// Create expired sessions
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
-			ID:              xid.New(),
-			OrganizationID:  orgID,
-			ImpersonatorID:  admin.ID,
-			TargetUserID:    target.ID,
-			Active:          true,
-			ExpiresAt:       time.Now().Add(-1 * time.Hour), // Already expired
-			Reason:          "Test expired session",
-			CreatedAt:       time.Now(),
+			ID:             xid.New(),
+			OrganizationID: orgID,
+			ImpersonatorID: admin.ID,
+			TargetUserID:   target.ID,
+			Active:         true,
+			ExpiresAt:      time.Now().Add(-1 * time.Hour), // Already expired
+			Reason:         "Test expired session",
+			CreatedAt:      time.Now(),
 		}
 		repo.sessions[session.ID.String()] = session
 	}
 
 	// Create active non-expired session
 	activeSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour), // Still valid
-		Reason:          "Test active session",
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour), // Still valid
+		Reason:         "Test active session",
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[activeSession.ID.String()] = activeSession
 
@@ -487,4 +487,3 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	assert.Equal(t, admin1.ID, listResp.Sessions[0].ImpersonatorID)
 	assert.Equal(t, target1.ID, listResp.Sessions[0].TargetUserID)
 }
-

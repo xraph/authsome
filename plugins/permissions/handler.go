@@ -127,4 +127,3 @@ func (h *Handler) GetAuditLog(c forge.Context) error {
 func (h *Handler) GetAnalytics(c forge.Context) error {
 	return c.JSON(501, map[string]string{"message": "Not implemented yet"})
 }
-

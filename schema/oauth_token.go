@@ -16,16 +16,16 @@ type OAuthToken struct {
 	UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
 
 	// Token fields
-	AccessToken  string    `bun:",unique,notnull"` // The access token
-	RefreshToken string    `bun:",unique"`         // Optional refresh token
-	TokenType    string    `bun:",notnull,default:'Bearer'"` // Token type (Bearer)
-	ClientID     string    `bun:",notnull"`        // OAuth client ID
-	UserID       xid.ID    `bun:",notnull"`        // User who owns the token
-	Scope        string    `bun:",notnull"`        // Granted scopes
-	ExpiresAt    time.Time `bun:",notnull"`        // Token expiration
-	RefreshExpiresAt *time.Time `bun:""`           // Refresh token expiration
-	Revoked      bool      `bun:",notnull,default:false"` // Whether token is revoked
-	RevokedAt    *time.Time `bun:""`              // When token was revoked
+	AccessToken      string     `bun:",unique,notnull"`           // The access token
+	RefreshToken     string     `bun:",unique"`                   // Optional refresh token
+	TokenType        string     `bun:",notnull,default:'Bearer'"` // Token type (Bearer)
+	ClientID         string     `bun:",notnull"`                  // OAuth client ID
+	UserID           xid.ID     `bun:",notnull"`                  // User who owns the token
+	Scope            string     `bun:",notnull"`                  // Granted scopes
+	ExpiresAt        time.Time  `bun:",notnull"`                  // Token expiration
+	RefreshExpiresAt *time.Time `bun:""`                          // Refresh token expiration
+	Revoked          bool       `bun:",notnull,default:false"`    // Whether token is revoked
+	RevokedAt        *time.Time `bun:""`                          // When token was revoked
 }
 
 // IsExpired checks if the access token has expired

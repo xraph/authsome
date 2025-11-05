@@ -37,11 +37,11 @@ func (r *Repository) FindProvisioningTokenByPrefix(ctx context.Context, prefix s
 		Where("token_prefix = ?", prefix).
 		Where("revoked_at IS NULL").
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("token not found: %w", err)
 	}
-	
+
 	return &token, nil
 }
 
@@ -52,11 +52,11 @@ func (r *Repository) FindProvisioningTokenByID(ctx context.Context, id xid.ID) (
 		Model(&token).
 		Where("id = ?", id).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("token not found: %w", err)
 	}
-	
+
 	return &token, nil
 }
 
@@ -71,33 +71,33 @@ func (r *Repository) ListProvisioningTokens(ctx context.Context, orgID xid.ID, l
 		Limit(limit).
 		Offset(offset).
 		Scan(ctx)
-	
+
 	return tokens, err
 }
 
 // UpdateProvisioningToken updates a provisioning token
 func (r *Repository) UpdateProvisioningToken(ctx context.Context, token *ProvisioningToken) error {
 	token.UpdatedAt = time.Now()
-	
+
 	_, err := r.db.NewUpdate().
 		Model(token).
 		WherePK().
 		Exec(ctx)
-	
+
 	return err
 }
 
 // RevokeProvisioningToken revokes a provisioning token
 func (r *Repository) RevokeProvisioningToken(ctx context.Context, id xid.ID) error {
 	now := time.Now()
-	
+
 	_, err := r.db.NewUpdate().
 		Model((*ProvisioningToken)(nil)).
 		Set("revoked_at = ?", now).
 		Set("updated_at = ?", now).
 		Where("id = ?", id).
 		Exec(ctx)
-	
+
 	return err
 }
 
@@ -108,7 +108,7 @@ func (r *Repository) CountProvisioningTokens(ctx context.Context, orgID xid.ID) 
 		Where("org_id = ?", orgID).
 		Where("revoked_at IS NULL").
 		Count(ctx)
-	
+
 	return count, err
 }
 
@@ -127,7 +127,7 @@ func (r *Repository) ListProvisioningLogs(ctx context.Context, orgID xid.ID, fil
 	query := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
 		Where("org_id = ?", orgID)
-	
+
 	// Apply filters
 	if operation, ok := filters["operation"].(string); ok && operation != "" {
 		query = query.Where("operation = ?", operation)
@@ -144,14 +144,14 @@ func (r *Repository) ListProvisioningLogs(ctx context.Context, orgID xid.ID, fil
 	if endDate, ok := filters["end_date"].(time.Time); ok {
 		query = query.Where("created_at <= ?", endDate)
 	}
-	
+
 	var logs []*ProvisioningLog
 	err := query.
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
 		Scan(ctx, &logs)
-	
+
 	return logs, err
 }
 
@@ -160,7 +160,7 @@ func (r *Repository) CountProvisioningLogs(ctx context.Context, orgID xid.ID, fi
 	query := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
 		Where("org_id = ?", orgID)
-	
+
 	// Apply same filters as ListProvisioningLogs
 	if operation, ok := filters["operation"].(string); ok && operation != "" {
 		query = query.Where("operation = ?", operation)
@@ -177,14 +177,14 @@ func (r *Repository) CountProvisioningLogs(ctx context.Context, orgID xid.ID, fi
 	if endDate, ok := filters["end_date"].(time.Time); ok {
 		query = query.Where("created_at <= ?", endDate)
 	}
-	
+
 	return query.Count(ctx)
 }
 
 // GetProvisioningStats returns provisioning statistics
 func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, startDate, endDate time.Time) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
-	
+
 	// Total operations
 	totalCount, err := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
@@ -192,12 +192,12 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 		Where("created_at >= ?", startDate).
 		Where("created_at <= ?", endDate).
 		Count(ctx)
-	
+
 	if err != nil {
 		return nil, err
 	}
 	stats["total_operations"] = totalCount
-	
+
 	// Success rate
 	successCount, err := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
@@ -206,25 +206,25 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 		Where("created_at <= ?", endDate).
 		Where("success = ?", true).
 		Count(ctx)
-	
+
 	if err != nil {
 		return nil, err
 	}
 	stats["successful_operations"] = successCount
 	stats["failed_operations"] = totalCount - successCount
-	
+
 	if totalCount > 0 {
 		stats["success_rate"] = float64(successCount) / float64(totalCount) * 100
 	} else {
 		stats["success_rate"] = 0.0
 	}
-	
+
 	// Operations by type
 	type OperationCount struct {
 		Operation string `bun:"operation"`
 		Count     int    `bun:"count"`
 	}
-	
+
 	var operationCounts []OperationCount
 	err = r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
@@ -235,17 +235,17 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 		Where("created_at <= ?", endDate).
 		Group("operation").
 		Scan(ctx, &operationCounts)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	operationStats := make(map[string]int)
 	for _, oc := range operationCounts {
 		operationStats[oc.Operation] = oc.Count
 	}
 	stats["operations_by_type"] = operationStats
-	
+
 	// Average duration
 	var avgDuration float64
 	err = r.db.NewSelect().
@@ -255,12 +255,12 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 		Where("created_at >= ?", startDate).
 		Where("created_at <= ?", endDate).
 		Scan(ctx, &avgDuration)
-	
+
 	if err != nil {
 		return nil, err
 	}
 	stats["average_duration_ms"] = avgDuration
-	
+
 	return stats, nil
 }
 
@@ -281,23 +281,23 @@ func (r *Repository) GetAttributeMapping(ctx context.Context, orgID xid.ID) (*At
 		Model(&mapping).
 		Where("org_id = ?", orgID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("attribute mapping not found: %w", err)
 	}
-	
+
 	return &mapping, nil
 }
 
 // UpdateAttributeMapping updates attribute mapping
 func (r *Repository) UpdateAttributeMapping(ctx context.Context, mapping *AttributeMapping) error {
 	mapping.UpdatedAt = time.Now()
-	
+
 	_, err := r.db.NewUpdate().
 		Model(mapping).
 		WherePK().
 		Exec(ctx)
-	
+
 	return err
 }
 
@@ -319,11 +319,11 @@ func (r *Repository) FindGroupMapping(ctx context.Context, orgID xid.ID, scimGro
 		Where("org_id = ?", orgID).
 		Where("scim_group_id = ?", scimGroupID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("group mapping not found: %w", err)
 	}
-	
+
 	return &mapping, nil
 }
 
@@ -335,19 +335,19 @@ func (r *Repository) ListGroupMappings(ctx context.Context, orgID xid.ID) ([]*Gr
 		Where("org_id = ?", orgID).
 		Order("created_at DESC").
 		Scan(ctx)
-	
+
 	return mappings, err
 }
 
 // UpdateGroupMapping updates a group mapping
 func (r *Repository) UpdateGroupMapping(ctx context.Context, mapping *GroupMapping) error {
 	mapping.UpdatedAt = time.Now()
-	
+
 	_, err := r.db.NewUpdate().
 		Model(mapping).
 		WherePK().
 		Exec(ctx)
-	
+
 	return err
 }
 
@@ -357,7 +357,7 @@ func (r *Repository) DeleteGroupMapping(ctx context.Context, id xid.ID) error {
 		Model((*GroupMapping)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-	
+
 	return err
 }
 
@@ -370,7 +370,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create provisioning_tokens table: %w", err)
 	}
-	
+
 	// Create indexes for provisioning_tokens
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningToken)(nil)).
@@ -380,7 +380,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningToken)(nil)).
 		Index("idx_provisioning_tokens_prefix").
@@ -389,7 +389,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	// Create provisioning_logs table
 	if _, err := r.db.NewCreateTable().
 		Model((*ProvisioningLog)(nil)).
@@ -397,7 +397,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create provisioning_logs table: %w", err)
 	}
-	
+
 	// Create indexes for provisioning_logs
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningLog)(nil)).
@@ -407,7 +407,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningLog)(nil)).
 		Index("idx_provisioning_logs_created_at").
@@ -416,7 +416,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningLog)(nil)).
 		Index("idx_provisioning_logs_operation").
@@ -425,7 +425,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	// Create attribute_mappings table
 	if _, err := r.db.NewCreateTable().
 		Model((*AttributeMapping)(nil)).
@@ -433,7 +433,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create attribute_mappings table: %w", err)
 	}
-	
+
 	// Create indexes for attribute_mappings
 	if _, err := r.db.NewCreateIndex().
 		Model((*AttributeMapping)(nil)).
@@ -444,7 +444,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	// Create group_mappings table
 	if _, err := r.db.NewCreateTable().
 		Model((*GroupMapping)(nil)).
@@ -452,7 +452,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create group_mappings table: %w", err)
 	}
-	
+
 	// Create indexes for group_mappings
 	if _, err := r.db.NewCreateIndex().
 		Model((*GroupMapping)(nil)).
@@ -462,7 +462,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	if _, err := r.db.NewCreateIndex().
 		Model((*GroupMapping)(nil)).
 		Index("idx_group_mappings_scim_group_id").
@@ -472,7 +472,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	
+
 	fmt.Println("[SCIM] Database migrations completed successfully")
 	return nil
 }
@@ -489,11 +489,11 @@ func (r *Repository) FindGroupMappingByTargetID(ctx context.Context, targetID xi
 		Model(&mapping).
 		Where("target_id = ?", targetID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("group mapping not found: %w", err)
 	}
-	
+
 	return &mapping, nil
 }
 
@@ -505,11 +505,11 @@ func (r *Repository) FindGroupMappingBySCIMID(ctx context.Context, scimGroupID s
 		Where("scim_group_id = ?", scimGroupID).
 		Where("org_id = ?", orgID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("group mapping not found: %w", err)
 	}
-	
+
 	return &mapping, nil
 }
 
@@ -520,11 +520,10 @@ func (r *Repository) FindAttributeMappingByOrgID(ctx context.Context, orgID xid.
 		Model(&mapping).
 		Where("org_id = ?", orgID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("attribute mapping not found: %w", err)
 	}
-	
+
 	return &mapping, nil
 }
-

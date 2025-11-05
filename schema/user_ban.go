@@ -19,14 +19,14 @@ type UserBan struct {
 	UnbannedByID string `bun:"unbanned_by_id" json:"unbanned_by_id,omitempty"`
 
 	// Ban details
-	Reason    string `bun:"reason,notnull" json:"reason"`
-	IsActive  bool   `bun:"is_active,notnull,default:true" json:"is_active"`
+	Reason    string     `bun:"reason,notnull" json:"reason"`
+	IsActive  bool       `bun:"is_active,notnull,default:true" json:"is_active"`
 	ExpiresAt *time.Time `bun:"expires_at" json:"expires_at,omitempty"`
 
 	// Timestamps
-	CreatedAt   time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt   time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updated_at"`
-	UnbannedAt  *time.Time `bun:"unbanned_at" json:"unbanned_at,omitempty"`
+	CreatedAt  time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt  time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updated_at"`
+	UnbannedAt *time.Time `bun:"unbanned_at" json:"unbanned_at,omitempty"`
 
 	// Relations
 	User       *User `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`

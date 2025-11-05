@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/forge"
 )
 
@@ -22,7 +22,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithTags("Notifications"),
 			forge.WithValidation(true),
 		)
-		
+
 		notifications.GET("", handler.ListNotifications,
 			forge.WithName("notifications.list"),
 			forge.WithSummary("List notifications"),
@@ -31,7 +31,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithResponseSchema(500, "Internal server error", NotificationErrorResponse{}),
 			forge.WithTags("Notifications"),
 		)
-		
+
 		notifications.GET("/:id", handler.GetNotification,
 			forge.WithName("notifications.get"),
 			forge.WithSummary("Get notification"),
@@ -42,7 +42,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithResponseSchema(500, "Internal server error", NotificationErrorResponse{}),
 			forge.WithTags("Notifications"),
 		)
-		
+
 		notifications.PUT("/:id/status", handler.UpdateDeliveryStatus,
 			forge.WithName("notifications.status.update"),
 			forge.WithSummary("Update notification status"),
@@ -70,7 +70,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithTags("Notifications", "Templates"),
 			forge.WithValidation(true),
 		)
-		
+
 		templates.GET("", handler.ListTemplates,
 			forge.WithName("notifications.templates.list"),
 			forge.WithSummary("List notification templates"),
@@ -79,7 +79,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithResponseSchema(500, "Internal server error", NotificationErrorResponse{}),
 			forge.WithTags("Notifications", "Templates"),
 		)
-		
+
 		templates.GET("/:id", handler.GetTemplate,
 			forge.WithName("notifications.templates.get"),
 			forge.WithSummary("Get notification template"),
@@ -90,7 +90,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithResponseSchema(500, "Internal server error", NotificationErrorResponse{}),
 			forge.WithTags("Notifications", "Templates"),
 		)
-		
+
 		templates.PUT("/:id", handler.UpdateTemplate,
 			forge.WithName("notifications.templates.update"),
 			forge.WithSummary("Update notification template"),
@@ -102,7 +102,7 @@ func RegisterNotificationRoutes(router forge.Router, handler *handlers.Notificat
 			forge.WithTags("Notifications", "Templates"),
 			forge.WithValidation(true),
 		)
-		
+
 		templates.DELETE("/:id", handler.DeleteTemplate,
 			forge.WithName("notifications.templates.delete"),
 			forge.WithSummary("Delete notification template"),

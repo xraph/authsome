@@ -9,10 +9,10 @@ import (
 
 // Mock repository for testing
 type mockRepository struct {
-	certificates  map[string]*Certificate
-	trustAnchors  map[string]*TrustAnchor
-	policies      map[string]*CertificatePolicy
-	authEvents    []*CertificateAuthEvent
+	certificates map[string]*Certificate
+	trustAnchors map[string]*TrustAnchor
+	policies     map[string]*CertificatePolicy
+	authEvents   []*CertificateAuthEvent
 }
 
 func newMockRepository() *mockRepository {
@@ -285,15 +285,15 @@ func TestService_RegisterCertificate(t *testing.T) {
 	repo := newMockRepository()
 	config := DefaultConfig()
 	config.Validation.ValidateChain = false // Disable chain validation for this test
-	
+
 	validator := NewCertificateValidator(config, repo, nil)
 	service := NewService(config, repo, validator, nil, nil, nil)
 
 	req := &RegisterCertificateRequest{
-		OrganizationID: "test_org",
-		UserID:         "user_123",
-		CertificatePEM: string(certPEM),
-		CertificateType: "user",
+		OrganizationID:   "test_org",
+		UserID:           "user_123",
+		CertificatePEM:   string(certPEM),
+		CertificateType:  "user",
 		CertificateClass: "standard",
 	}
 
@@ -371,15 +371,15 @@ func TestService_CreatePolicy(t *testing.T) {
 	service := NewService(config, repo, nil, nil, nil, nil)
 
 	req := &CreatePolicyRequest{
-		OrganizationID: "test_org",
-		Name:           "High Security Policy",
-		Description:    "Policy for sensitive operations",
-		RequirePinning: true,
-		MinKeySize:     4096,
+		OrganizationID:       "test_org",
+		Name:                 "High Security Policy",
+		Description:          "Policy for sensitive operations",
+		RequirePinning:       true,
+		MinKeySize:           4096,
 		AllowedKeyAlgorithms: StringArray{"RSA", "ECDSA"},
-		RequireCRLCheck: true,
-		RequireOCSPCheck: true,
-		IsDefault: true,
+		RequireCRLCheck:      true,
+		RequireOCSPCheck:     true,
+		IsDefault:            true,
 	}
 
 	policy, err := service.CreatePolicy(context.Background(), req)
@@ -451,20 +451,19 @@ func BenchmarkService_RegisterCertificate(b *testing.B) {
 	repo := newMockRepository()
 	config := DefaultConfig()
 	config.Validation.ValidateChain = false
-	
+
 	validator := NewCertificateValidator(config, repo, nil)
 	service := NewService(config, repo, validator, nil, nil, nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		req := &RegisterCertificateRequest{
-			OrganizationID: "test_org",
-			UserID:         "user_123",
-			CertificatePEM: string(certPEM),
-			CertificateType: "user",
+			OrganizationID:   "test_org",
+			UserID:           "user_123",
+			CertificatePEM:   string(certPEM),
+			CertificateType:  "user",
 			CertificateClass: "standard",
 		}
 		_, _ = service.RegisterCertificate(context.Background(), req)
 	}
 }
-

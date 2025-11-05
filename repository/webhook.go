@@ -51,7 +51,7 @@ func (r *webhookRepository) FindByID(ctx context.Context, id xid.ID) (*webhook.W
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &webhook.Webhook{
 		ID:             schemaWebhook.ID,
 		OrganizationID: schemaWebhook.OrganizationID,
@@ -71,11 +71,11 @@ func (r *webhookRepository) FindByOrgID(ctx context.Context, orgID string, enabl
 	query := r.db.NewSelect().
 		Model(&schemaWebhooks).
 		Where("organization_id = ? AND deleted_at IS NULL", orgID)
-	
+
 	if enabled != nil {
 		query = query.Where("active = ?", *enabled)
 	}
-	
+
 	err := query.Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -83,7 +83,7 @@ func (r *webhookRepository) FindByOrgID(ctx context.Context, orgID string, enabl
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Count total
 	countQuery := r.db.NewSelect().
 		Model((*schema.Webhook)(nil)).
@@ -95,7 +95,7 @@ func (r *webhookRepository) FindByOrgID(ctx context.Context, orgID string, enabl
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Convert to core types
 	webhooks := make([]*webhook.Webhook, len(schemaWebhooks))
 	for i, sw := range schemaWebhooks {
@@ -111,7 +111,7 @@ func (r *webhookRepository) FindByOrgID(ctx context.Context, orgID string, enabl
 			UpdatedAt:      sw.UpdatedAt,
 		}
 	}
-	
+
 	return webhooks, int64(total), nil
 }
 
@@ -126,7 +126,7 @@ func (r *webhookRepository) FindByOrgAndEvent(ctx context.Context, orgID, eventT
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert to core types
 	webhooks := make([]*webhook.Webhook, len(schemaWebhooks))
 	for i, sw := range schemaWebhooks {
@@ -142,7 +142,7 @@ func (r *webhookRepository) FindByOrgAndEvent(ctx context.Context, orgID, eventT
 			UpdatedAt:      sw.UpdatedAt,
 		}
 	}
-	
+
 	return webhooks, nil
 }
 
@@ -221,7 +221,7 @@ func (r *webhookRepository) FindEventByID(ctx context.Context, id xid.ID) (*webh
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &webhook.Event{
 		ID:             schemaEvent.ID,
 		Type:           schemaEvent.Type,
@@ -245,7 +245,7 @@ func (r *webhookRepository) ListEvents(ctx context.Context, orgID string, offset
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Count total
 	total, err := r.db.NewSelect().
 		Model((*schema.Event)(nil)).
@@ -254,7 +254,7 @@ func (r *webhookRepository) ListEvents(ctx context.Context, orgID string, offset
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Convert to core types
 	events := make([]*webhook.Event, len(schemaEvents))
 	for i, se := range schemaEvents {
@@ -267,7 +267,7 @@ func (r *webhookRepository) ListEvents(ctx context.Context, orgID string, offset
 			CreatedAt:      se.CreatedAt,
 		}
 	}
-	
+
 	return events, int64(total), nil
 }
 
@@ -302,7 +302,7 @@ func (r *webhookRepository) FindDeliveryByID(ctx context.Context, id xid.ID) (*w
 	if err != nil {
 		return nil, err
 	}
-	
+
 	delivery := &webhook.Delivery{
 		ID:          schemaDelivery.ID,
 		WebhookID:   schemaDelivery.WebhookID,
@@ -313,7 +313,7 @@ func (r *webhookRepository) FindDeliveryByID(ctx context.Context, id xid.ID) (*w
 		CreatedAt:   schemaDelivery.CreatedAt,
 		UpdatedAt:   schemaDelivery.UpdatedAt,
 	}
-	
+
 	if schemaDelivery.StatusCode != nil {
 		delivery.StatusCode = *schemaDelivery.StatusCode
 	}
@@ -323,7 +323,7 @@ func (r *webhookRepository) FindDeliveryByID(ctx context.Context, id xid.ID) (*w
 	if schemaDelivery.Error != nil {
 		delivery.Error = *schemaDelivery.Error
 	}
-	
+
 	return delivery, nil
 }
 
@@ -333,11 +333,11 @@ func (r *webhookRepository) FindDeliveriesByWebhook(ctx context.Context, webhook
 	query := r.db.NewSelect().
 		Model(&schemaDeliveries).
 		Where("webhook_id = ?", webhookID)
-	
+
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
-	
+
 	err := query.Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -345,7 +345,7 @@ func (r *webhookRepository) FindDeliveriesByWebhook(ctx context.Context, webhook
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Count total
 	countQuery := r.db.NewSelect().
 		Model((*schema.Delivery)(nil)).
@@ -357,7 +357,7 @@ func (r *webhookRepository) FindDeliveriesByWebhook(ctx context.Context, webhook
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Convert to core types
 	deliveries := make([]*webhook.Delivery, len(schemaDeliveries))
 	for i, sd := range schemaDeliveries {
@@ -371,7 +371,7 @@ func (r *webhookRepository) FindDeliveriesByWebhook(ctx context.Context, webhook
 			CreatedAt:   sd.CreatedAt,
 			UpdatedAt:   sd.UpdatedAt,
 		}
-		
+
 		if sd.StatusCode != nil {
 			delivery.StatusCode = *sd.StatusCode
 		}
@@ -381,10 +381,10 @@ func (r *webhookRepository) FindDeliveriesByWebhook(ctx context.Context, webhook
 		if sd.Error != nil {
 			delivery.Error = *sd.Error
 		}
-		
+
 		deliveries[i] = delivery
 	}
-	
+
 	return deliveries, int64(total), nil
 }
 
@@ -413,7 +413,7 @@ func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int
 	var schemaDeliveries []*schema.Delivery
 	err := r.db.NewSelect().
 		Model(&schemaDeliveries).
-		Where("status IN (?, ?) AND (next_retry_at IS NULL OR next_retry_at <= ?)", 
+		Where("status IN (?, ?) AND (next_retry_at IS NULL OR next_retry_at <= ?)",
 			webhook.DeliveryStatusPending, webhook.DeliveryStatusRetrying, time.Now()).
 		Order("created_at ASC").
 		Limit(limit).
@@ -421,7 +421,7 @@ func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert to core types
 	deliveries := make([]*webhook.Delivery, len(schemaDeliveries))
 	for i, sd := range schemaDeliveries {
@@ -435,7 +435,7 @@ func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int
 			CreatedAt:   sd.CreatedAt,
 			UpdatedAt:   sd.UpdatedAt,
 		}
-		
+
 		if sd.StatusCode != nil {
 			delivery.StatusCode = *sd.StatusCode
 		}
@@ -445,9 +445,9 @@ func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int
 		if sd.Error != nil {
 			delivery.Error = *sd.Error
 		}
-		
+
 		deliveries[i] = delivery
 	}
-	
+
 	return deliveries, nil
 }

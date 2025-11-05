@@ -20,12 +20,12 @@ type Repository interface {
 	UpdateCertificate(ctx context.Context, cert *Certificate) error
 	RevokeCertificate(ctx context.Context, id string, reason string) error
 	DeleteCertificate(ctx context.Context, id string) error
-	
+
 	// Certificate queries
 	GetUserCertificates(ctx context.Context, userID string) ([]*Certificate, error)
 	GetDeviceCertificates(ctx context.Context, deviceID string) ([]*Certificate, error)
 	GetExpiringCertificates(ctx context.Context, orgID string, days int) ([]*Certificate, error)
-	
+
 	// Trust Anchors
 	CreateTrustAnchor(ctx context.Context, anchor *TrustAnchor) error
 	GetTrustAnchor(ctx context.Context, id string) (*TrustAnchor, error)
@@ -33,7 +33,7 @@ type Repository interface {
 	ListTrustAnchors(ctx context.Context, orgID string) ([]*TrustAnchor, error)
 	UpdateTrustAnchor(ctx context.Context, anchor *TrustAnchor) error
 	DeleteTrustAnchor(ctx context.Context, id string) error
-	
+
 	// CRLs
 	CreateCRL(ctx context.Context, crl *CertificateRevocationList) error
 	GetCRL(ctx context.Context, id string) (*CertificateRevocationList, error)
@@ -41,18 +41,18 @@ type Repository interface {
 	ListCRLs(ctx context.Context, trustAnchorID string) ([]*CertificateRevocationList, error)
 	UpdateCRL(ctx context.Context, crl *CertificateRevocationList) error
 	DeleteCRL(ctx context.Context, id string) error
-	
+
 	// OCSP Responses
 	CreateOCSPResponse(ctx context.Context, resp *OCSPResponse) error
 	GetOCSPResponse(ctx context.Context, certificateID string) (*OCSPResponse, error)
 	UpdateOCSPResponse(ctx context.Context, resp *OCSPResponse) error
 	DeleteExpiredOCSPResponses(ctx context.Context) error
-	
+
 	// Auth Events
 	CreateAuthEvent(ctx context.Context, event *CertificateAuthEvent) error
 	ListAuthEvents(ctx context.Context, filters AuthEventFilters) ([]*CertificateAuthEvent, error)
 	GetAuthEventStats(ctx context.Context, orgID string, since time.Time) (*AuthEventStats, error)
-	
+
 	// Policies
 	CreatePolicy(ctx context.Context, policy *CertificatePolicy) error
 	GetPolicy(ctx context.Context, id string) (*CertificatePolicy, error)
@@ -163,7 +163,7 @@ func (r *BunRepository) GetCertificateBySerialNumber(ctx context.Context, serial
 
 func (r *BunRepository) ListCertificates(ctx context.Context, filters CertificateFilters) ([]*Certificate, error) {
 	query := r.db.NewSelect().Model((*Certificate)(nil))
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
@@ -179,22 +179,22 @@ func (r *BunRepository) ListCertificates(ctx context.Context, filters Certificat
 	if filters.CertType != "" {
 		query = query.Where("certificate_type = ?", filters.CertType)
 	}
-	
+
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
 	if filters.Offset > 0 {
 		query = query.Offset(filters.Offset)
 	}
-	
+
 	query = query.Order("created_at DESC")
-	
+
 	var certs []*Certificate
 	err := query.Scan(ctx, &certs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list certificates: %w", err)
 	}
-	
+
 	return certs, nil
 }
 
@@ -502,7 +502,7 @@ func (r *BunRepository) CreateAuthEvent(ctx context.Context, event *CertificateA
 
 func (r *BunRepository) ListAuthEvents(ctx context.Context, filters AuthEventFilters) ([]*CertificateAuthEvent, error) {
 	query := r.db.NewSelect().Model((*CertificateAuthEvent)(nil))
-	
+
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
@@ -524,28 +524,28 @@ func (r *BunRepository) ListAuthEvents(ctx context.Context, filters AuthEventFil
 	if !filters.Until.IsZero() {
 		query = query.Where("created_at <= ?", filters.Until)
 	}
-	
+
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
 	if filters.Offset > 0 {
 		query = query.Offset(filters.Offset)
 	}
-	
+
 	query = query.Order("created_at DESC")
-	
+
 	var events []*CertificateAuthEvent
 	err := query.Scan(ctx, &events)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list auth events: %w", err)
 	}
-	
+
 	return events, nil
 }
 
 func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, since time.Time) (*AuthEventStats, error) {
 	stats := &AuthEventStats{}
-	
+
 	// Total attempts
 	count, err := r.db.NewSelect().
 		Model((*CertificateAuthEvent)(nil)).
@@ -556,7 +556,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 		return nil, fmt.Errorf("failed to count total attempts: %w", err)
 	}
 	stats.TotalAttempts = count
-	
+
 	// Successful auths
 	successCount, err := r.db.NewSelect().
 		Model((*CertificateAuthEvent)(nil)).
@@ -568,7 +568,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 		return nil, fmt.Errorf("failed to count successful auths: %w", err)
 	}
 	stats.SuccessfulAuths = successCount
-	
+
 	// Failed auths
 	failedCount, err := r.db.NewSelect().
 		Model((*CertificateAuthEvent)(nil)).
@@ -580,7 +580,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 		return nil, fmt.Errorf("failed to count failed auths: %w", err)
 	}
 	stats.FailedAuths = failedCount
-	
+
 	// Validation errors
 	errorCount, err := r.db.NewSelect().
 		Model((*CertificateAuthEvent)(nil)).
@@ -592,7 +592,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 		return nil, fmt.Errorf("failed to count errors: %w", err)
 	}
 	stats.ValidationErrors = errorCount
-	
+
 	return stats, nil
 }
 
@@ -673,4 +673,3 @@ func (r *BunRepository) DeletePolicy(ctx context.Context, id string) error {
 	}
 	return nil
 }
-

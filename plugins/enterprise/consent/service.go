@@ -186,10 +186,10 @@ func (s *Service) GetConsentSummary(ctx context.Context, userID, orgID string) (
 	}
 
 	summary := &ConsentSummary{
-		UserID:          userID,
-		OrganizationID:  orgID,
-		TotalConsents:   len(consents),
-		ConsentsByType:  make(map[string]ConsentTypeStatus),
+		UserID:         userID,
+		OrganizationID: orgID,
+		TotalConsents:  len(consents),
+		ConsentsByType: make(map[string]ConsentTypeStatus),
 	}
 
 	now := time.Now()
@@ -465,7 +465,7 @@ func (s *Service) RequestDataExport(ctx context.Context, userID, orgID string, r
 			}
 		}
 		if count >= s.config.DataExport.MaxRequests {
-			return nil, fmt.Errorf("export request limit exceeded: max %d per %v", 
+			return nil, fmt.Errorf("export request limit exceeded: max %d per %v",
 				s.config.DataExport.MaxRequests, s.config.DataExport.RequestPeriod)
 		}
 	}
@@ -515,7 +515,7 @@ func (s *Service) processDataExport(ctx context.Context, req *DataExportRequest)
 		case "profile":
 			if s.userService != nil {
 				userXID, _ := xid.FromString(req.UserID)
-			user, err := s.userService.FindByID(ctx, userXID)
+				user, err := s.userService.FindByID(ctx, userXID)
 				if err == nil {
 					data["profile"] = user
 				}
@@ -593,7 +593,7 @@ func (s *Service) createExportFile(req *DataExportRequest, data map[string]inter
 
 	// Check size limit
 	if int64(len(content)) > s.config.DataExport.MaxExportSize {
-		return "", 0, fmt.Errorf("export size exceeds limit: %d > %d bytes", 
+		return "", 0, fmt.Errorf("export size exceeds limit: %d > %d bytes",
 			len(content), s.config.DataExport.MaxExportSize)
 	}
 
@@ -939,21 +939,21 @@ func (s *Service) UpdatePrivacySettings(ctx context.Context, orgID, updatedBy st
 // createDefaultPrivacySettings creates default privacy settings for an organization
 func (s *Service) createDefaultPrivacySettings(ctx context.Context, orgID string) (*PrivacySettings, error) {
 	settings := &PrivacySettings{
-		OrganizationID:              orgID,
-		ConsentRequired:             true,
-		CookieConsentEnabled:        true,
-		CookieConsentStyle:          "banner",
-		DataRetentionDays:           2555, // 7 years
-		AnonymousConsentEnabled:     true,
-		GDPRMode:                    s.config.GDPREnabled,
-		CCPAMode:                    s.config.CCPAEnabled,
-		AutoDeleteAfterDays:         0, // Disabled by default
-		RequireExplicitConsent:      true,
-		AllowDataPortability:        true,
-		ExportFormat:                []string{"json", "csv"},
-		DataExportExpiryHours:       72, // 3 days
+		OrganizationID:                  orgID,
+		ConsentRequired:                 true,
+		CookieConsentEnabled:            true,
+		CookieConsentStyle:              "banner",
+		DataRetentionDays:               2555, // 7 years
+		AnonymousConsentEnabled:         true,
+		GDPRMode:                        s.config.GDPREnabled,
+		CCPAMode:                        s.config.CCPAEnabled,
+		AutoDeleteAfterDays:             0, // Disabled by default
+		RequireExplicitConsent:          true,
+		AllowDataPortability:            true,
+		ExportFormat:                    []string{"json", "csv"},
+		DataExportExpiryHours:           72, // 3 days
 		RequireAdminApprovalForDeletion: true,
-		DeletionGracePeriodDays:     30,
+		DeletionGracePeriodDays:         30,
 	}
 
 	if err := s.repo.CreatePrivacySettings(ctx, settings); err != nil {
@@ -1084,4 +1084,3 @@ func (s *Service) generateDigitalSignature(content, email string) string {
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
 }
-

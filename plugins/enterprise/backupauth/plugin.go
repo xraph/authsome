@@ -19,14 +19,14 @@ const (
 
 // Plugin implements the AuthSome plugin interface for backup authentication
 type Plugin struct {
-	service          *Service
-	config           *Config
-	handler          *Handler
-	repo             Repository
-	providers        ProviderRegistry
-	db               *bun.DB
-	cleanupTicker    *time.Ticker
-	cleanupDone      chan bool
+	service       *Service
+	config        *Config
+	handler       *Handler
+	repo          Repository
+	providers     ProviderRegistry
+	db            *bun.DB
+	cleanupTicker *time.Ticker
+	cleanupDone   chan bool
 }
 
 // NewPlugin creates a new backup authentication plugin instance
@@ -429,4 +429,3 @@ func (p *Plugin) SetNotificationProvider(provider NotificationProvider) {
 		registry.SetNotificationProvider(provider)
 	}
 }
-

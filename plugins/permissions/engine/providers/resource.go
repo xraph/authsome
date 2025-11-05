@@ -10,7 +10,7 @@ import (
 type ResourceService interface {
 	// GetResource fetches a resource by type and ID
 	GetResource(ctx context.Context, resourceType, resourceID string) (*Resource, error)
-	
+
 	// GetResources fetches multiple resources
 	GetResources(ctx context.Context, requests []ResourceRequest) ([]*Resource, error)
 }
@@ -65,12 +65,12 @@ func (p *ResourceAttributeProvider) GetAttributes(ctx context.Context, key strin
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resource, err := p.resourceService.GetResource(ctx, resourceType, resourceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch resource: %w", err)
 	}
-	
+
 	return resourceToAttributes(resource), nil
 }
 
@@ -85,20 +85,20 @@ func (p *ResourceAttributeProvider) GetBatchAttributes(ctx context.Context, keys
 		}
 		requests = append(requests, ResourceRequest{Type: resourceType, ID: resourceID})
 	}
-	
+
 	// Fetch resources
 	resources, err := p.resourceService.GetResources(ctx, requests)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch resources: %w", err)
 	}
-	
+
 	// Build result map
 	result := make(map[string]map[string]interface{})
 	for _, resource := range resources {
 		key := fmt.Sprintf("%s:%s", resource.Type, resource.ID)
 		result[key] = resourceToAttributes(resource)
 	}
-	
+
 	return result, nil
 }
 
@@ -107,7 +107,7 @@ func parseResourceKey(key string) (string, string, error) {
 	// Simple split by ":"
 	// In production, you might want more sophisticated parsing
 	var resourceType, resourceID string
-	
+
 	for i, ch := range key {
 		if ch == ':' {
 			resourceType = key[:i]
@@ -115,11 +115,11 @@ func parseResourceKey(key string) (string, string, error) {
 			break
 		}
 	}
-	
+
 	if resourceType == "" || resourceID == "" {
 		return "", "", fmt.Errorf("invalid resource key format: %s (expected 'type:id')", key)
 	}
-	
+
 	return resourceType, resourceID, nil
 }
 
@@ -128,31 +128,31 @@ func resourceToAttributes(resource *Resource) map[string]interface{} {
 	if resource == nil {
 		return make(map[string]interface{})
 	}
-	
+
 	attrs := map[string]interface{}{
-		"id":            resource.ID,
-		"type":          resource.Type,
-		"name":          resource.Name,
-		"owner":         resource.Owner,
-		"org_id":        resource.OrgID,
-		"team_id":       resource.TeamID,
-		"project_id":    resource.ProjectID,
-		"visibility":    resource.Visibility,
-		"status":        resource.Status,
-		"tags":          resource.Tags,
-		"created_at":    resource.CreatedAt,
-		"updated_at":    resource.UpdatedAt,
-		"created_by":    resource.CreatedBy,
-		"confidential":  resource.Confidential,
+		"id":           resource.ID,
+		"type":         resource.Type,
+		"name":         resource.Name,
+		"owner":        resource.Owner,
+		"org_id":       resource.OrgID,
+		"team_id":      resource.TeamID,
+		"project_id":   resource.ProjectID,
+		"visibility":   resource.Visibility,
+		"status":       resource.Status,
+		"tags":         resource.Tags,
+		"created_at":   resource.CreatedAt,
+		"updated_at":   resource.UpdatedAt,
+		"created_by":   resource.CreatedBy,
+		"confidential": resource.Confidential,
 	}
-	
+
 	// Merge metadata
 	if resource.Metadata != nil {
 		for k, v := range resource.Metadata {
 			attrs["meta_"+k] = v
 		}
 	}
-	
+
 	return attrs
 }
 
@@ -195,4 +195,3 @@ func (m *MockResourceService) GetResources(ctx context.Context, requests []Resou
 	}
 	return result, nil
 }
-

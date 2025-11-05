@@ -9,34 +9,34 @@ import (
 
 // RequestContext contains ephemeral request-specific data
 type RequestContext struct {
-	IP           string                 `json:"ip"`
-	UserAgent    string                 `json:"user_agent"`
-	Method       string                 `json:"method"`
-	Path         string                 `json:"path"`
-	Timestamp    time.Time              `json:"timestamp"`
-	Geolocation  *Geolocation           `json:"geolocation,omitempty"`
-	Device       *DeviceInfo            `json:"device,omitempty"`
-	Headers      map[string]string      `json:"headers,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	IP          string                 `json:"ip"`
+	UserAgent   string                 `json:"user_agent"`
+	Method      string                 `json:"method"`
+	Path        string                 `json:"path"`
+	Timestamp   time.Time              `json:"timestamp"`
+	Geolocation *Geolocation           `json:"geolocation,omitempty"`
+	Device      *DeviceInfo            `json:"device,omitempty"`
+	Headers     map[string]string      `json:"headers,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Geolocation contains geographic information about the request
 type Geolocation struct {
-	Country     string  `json:"country"`
-	Region      string  `json:"region"`
-	City        string  `json:"city"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Timezone    string  `json:"timezone"`
+	Country   string  `json:"country"`
+	Region    string  `json:"region"`
+	City      string  `json:"city"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Timezone  string  `json:"timezone"`
 }
 
 // DeviceInfo contains device-specific information
 type DeviceInfo struct {
-	Type       string `json:"type"`        // mobile, desktop, tablet
-	OS         string `json:"os"`          // iOS, Android, Windows, macOS, Linux
-	Browser    string `json:"browser"`     // Chrome, Firefox, Safari, etc.
-	IsMobile   bool   `json:"is_mobile"`
-	IsDesktop  bool   `json:"is_desktop"`
+	Type      string `json:"type"`    // mobile, desktop, tablet
+	OS        string `json:"os"`      // iOS, Android, Windows, macOS, Linux
+	Browser   string `json:"browser"` // Chrome, Firefox, Safari, etc.
+	IsMobile  bool   `json:"is_mobile"`
+	IsDesktop bool   `json:"is_desktop"`
 }
 
 // ContextAttributeProvider provides request context attributes
@@ -72,11 +72,11 @@ func (p *ContextAttributeProvider) GetBatchAttributes(ctx context.Context, keys 
 	attrs := contextToAttributes(&RequestContext{
 		Timestamp: time.Now().UTC(),
 	})
-	
+
 	for _, key := range keys {
 		result[key] = attrs
 	}
-	
+
 	return result, nil
 }
 
@@ -85,7 +85,7 @@ func contextToAttributes(reqCtx *RequestContext) map[string]interface{} {
 	if reqCtx == nil {
 		return make(map[string]interface{})
 	}
-	
+
 	attrs := map[string]interface{}{
 		"ip":         reqCtx.IP,
 		"user_agent": reqCtx.UserAgent,
@@ -94,13 +94,13 @@ func contextToAttributes(reqCtx *RequestContext) map[string]interface{} {
 		"timestamp":  reqCtx.Timestamp,
 		"time":       reqCtx.Timestamp, // Alias for easier access
 	}
-	
+
 	// Add time-based attributes
 	now := reqCtx.Timestamp
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	
+
 	attrs["hour"] = now.Hour()
 	attrs["day_of_week"] = int(now.Weekday())
 	attrs["day"] = now.Day()
@@ -108,7 +108,7 @@ func contextToAttributes(reqCtx *RequestContext) map[string]interface{} {
 	attrs["year"] = now.Year()
 	attrs["is_weekday"] = now.Weekday() >= time.Monday && now.Weekday() <= time.Friday
 	attrs["is_weekend"] = now.Weekday() == time.Saturday || now.Weekday() == time.Sunday
-	
+
 	// Add geolocation if present
 	if reqCtx.Geolocation != nil {
 		attrs["country"] = reqCtx.Geolocation.Country
@@ -118,7 +118,7 @@ func contextToAttributes(reqCtx *RequestContext) map[string]interface{} {
 		attrs["longitude"] = reqCtx.Geolocation.Longitude
 		attrs["timezone"] = reqCtx.Geolocation.Timezone
 	}
-	
+
 	// Add device info if present
 	if reqCtx.Device != nil {
 		attrs["device_type"] = reqCtx.Device.Type
@@ -127,21 +127,21 @@ func contextToAttributes(reqCtx *RequestContext) map[string]interface{} {
 		attrs["is_mobile"] = reqCtx.Device.IsMobile
 		attrs["is_desktop"] = reqCtx.Device.IsDesktop
 	}
-	
+
 	// Add headers
 	if reqCtx.Headers != nil {
 		for k, v := range reqCtx.Headers {
 			attrs["header_"+k] = v
 		}
 	}
-	
+
 	// Merge metadata
 	if reqCtx.Metadata != nil {
 		for k, v := range reqCtx.Metadata {
 			attrs["meta_"+k] = v
 		}
 	}
-	
+
 	return attrs
 }
 
@@ -153,18 +153,18 @@ func IPInRange(ip string, cidrs []string) bool {
 	if ipAddr == nil {
 		return false
 	}
-	
+
 	for _, cidr := range cidrs {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			continue
 		}
-		
+
 		if network.Contains(ipAddr) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -176,27 +176,27 @@ func InTimeRange(now time.Time, start, end string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	// Parse end time
 	endHour, endMin, err := parseTime(end)
 	if err != nil {
 		return false
 	}
-	
+
 	// Get current time components
 	nowHour := now.Hour()
 	nowMin := now.Minute()
-	
+
 	// Convert to minutes since midnight for easier comparison
 	nowMinutes := nowHour*60 + nowMin
 	startMinutes := startHour*60 + startMin
 	endMinutes := endHour*60 + endMin
-	
+
 	// Handle overnight ranges (e.g., "22:00" to "06:00")
 	if endMinutes < startMinutes {
 		return nowMinutes >= startMinutes || nowMinutes <= endMinutes
 	}
-	
+
 	return nowMinutes >= startMinutes && nowMinutes <= endMinutes
 }
 
@@ -207,11 +207,11 @@ func parseTime(timeStr string) (hour, min int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	
+
 	if h < 0 || h > 23 || m < 0 || m > 59 {
 		return 0, 0, fmt.Errorf("invalid time: %s", timeStr)
 	}
-	
+
 	return h, m, nil
 }
 
@@ -231,4 +231,3 @@ func HoursSince(t time.Time) int {
 	duration := time.Since(t)
 	return int(duration.Hours())
 }
-

@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	authsometesting "github.com/xraph/authsome/testing"
 	"github.com/xraph/authsome/plugins/enterprise/consent"
+	authsometesting "github.com/xraph/authsome/testing"
 )
 
 // TestIntegration_ConsentLifecycle tests the full consent creation, update, and revocation flow
@@ -122,10 +122,10 @@ func TestIntegration_CookieConsent(t *testing.T) {
 	t.Run("GetCookiePreferences", func(t *testing.T) {
 		// Record preferences first
 		req := &consent.CookieConsentRequest{
-			Essential:   true,
-			Functional:  false,
-			Analytics:   true,
-			Marketing:   true,
+			Essential:  true,
+			Functional: false,
+			Analytics:  true,
+			Marketing:  true,
 		}
 		_, err := service.RecordCookieConsent(ctx, org.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
@@ -188,7 +188,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 
 	t.Run("MultipleFormats", func(t *testing.T) {
 		formats := []string{"json", "csv", "xml"}
-		
+
 		for _, format := range formats {
 			req := &consent.DataExportRequestInput{
 				Format:          format,
@@ -313,7 +313,7 @@ func TestIntegration_MultiTenancy(t *testing.T) {
 		// Verify consents are isolated by organization
 		consents1, _ := service.ListConsentsByUser(ctx, user.ID.String(), org1.ID.String())
 		consents2, _ := service.ListConsentsByUser(ctx, user.ID.String(), org2.ID.String())
-		
+
 		// Find the marketing consents
 		var found1, found2 bool
 		for _, c := range consents1 {
@@ -337,7 +337,7 @@ func TestIntegration_MultiTenancy(t *testing.T) {
 		// Get privacy settings for both orgs
 		settings1, err := service.GetPrivacySettings(ctx, org1.ID.String())
 		require.NoError(t, err)
-		
+
 		settings2, err := service.GetPrivacySettings(ctx, org2.ID.String())
 		require.NoError(t, err)
 
@@ -457,4 +457,3 @@ func stringPtr(s string) *string {
 func intPtr(i int) *int {
 	return &i
 }
-

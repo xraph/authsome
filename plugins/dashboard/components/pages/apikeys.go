@@ -3,32 +3,32 @@ package pages
 import (
 	"fmt"
 
-	. "maragu.dev/gomponents/html"
-	g "maragu.dev/gomponents"
 	lucide "github.com/eduardolat/gomponents-lucide"
+	g "maragu.dev/gomponents"
+	. "maragu.dev/gomponents/html"
 )
 
 // APIKeyData represents an API key for display
 type APIKeyData struct {
-	ID          string
-	Name        string
-	Key         string // Only shown once after creation
-	Prefix      string // Always shown (first 8 chars)
-	Scopes      []string
-	RateLimit   int
-	ExpiresAt   string
-	LastUsedAt  string
-	CreatedAt   string
-	IsActive    bool
+	ID         string
+	Name       string
+	Key        string // Only shown once after creation
+	Prefix     string // Always shown (first 8 chars)
+	Scopes     []string
+	RateLimit  int
+	ExpiresAt  string
+	LastUsedAt string
+	CreatedAt  string
+	IsActive   bool
 }
 
 // APIKeysTabPageData contains data for the API keys management tab
 type APIKeysTabPageData struct {
-	APIKeys        []APIKeyData
-	Organizations  []OrganizationOption // For organization selector
-	IsSaaSMode     bool
-	CanCreateKeys  bool
-	CSRFToken      string
+	APIKeys       []APIKeyData
+	Organizations []OrganizationOption // For organization selector
+	IsSaaSMode    bool
+	CanCreateKeys bool
+	CSRFToken     string
 }
 
 // OrganizationOption represents an organization for selection
@@ -469,4 +469,3 @@ func organizationOptions(orgs []OrganizationOption) []g.Node {
 	}
 	return nodes
 }
-

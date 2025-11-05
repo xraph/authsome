@@ -37,17 +37,17 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("social plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for social plugin")
 	}
-	
+
 	p.db = db
 
 	// Create repositories
@@ -208,7 +208,7 @@ type SocialSignInResponse struct {
 }
 
 type SocialCallbackResponse struct {
-	Token string `json:"token" example:"eyJhbGci..."`
+	Token string      `json:"token" example:"eyJhbGci..."`
 	User  interface{} `json:"user"`
 }
 

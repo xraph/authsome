@@ -103,4 +103,3 @@ func (r *bunRepository) CreateAuditEvent(ctx context.Context, event *core.AuditE
 func (r *bunRepository) ListAuditEvents(ctx context.Context, orgID string, filters AuditFilters) ([]*core.AuditEvent, error) {
 	return nil, nil
 }
-

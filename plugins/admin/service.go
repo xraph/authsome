@@ -512,7 +512,7 @@ func (s *Service) checkAdminPermission(ctx context.Context, userID, permission s
 	// For now, check if user is in admin role or has required role from config
 	// Full RBAC integration can be added when role repository is available
 	// TODO: Integrate with role repository when available for granular permissions
-	
+
 	// Placeholder: Assume users calling admin endpoints have been authenticated
 	// and authorized at the route level. Production deployments should implement
 	// proper RBAC checks here using a role repository.

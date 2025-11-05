@@ -31,7 +31,7 @@ func NewMultiTenantSessionService(sessionService session.ServiceInterface, orgSe
 func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.CreateSessionRequest) (*session.Session, error) {
 	// Get organization from context
 	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	
+
 	// Special case: First user session creation or no context provided
 	// If no organization context, check if user belongs to any organization yet
 	if !ok || orgID == "" {
@@ -43,14 +43,14 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 			fmt.Printf("[MultiTenancy] First user session creation allowed (no orgs yet): %s\n", req.UserID)
 			return s.sessionService.Create(ctx, req)
 		}
-		
+
 		// Organizations exist - user might have just been added to one
 		// Try to find which organization this user belongs to
 		memberships, err := s.orgService.GetUserMemberships(ctx, req.UserID.String())
 		if err != nil || len(memberships) == 0 {
 			return nil, fmt.Errorf("organization context not found and user has no organizations")
 		}
-		
+
 		// Use the first organization the user belongs to
 		orgID = memberships[0].OrganizationID
 		fmt.Printf("[MultiTenancy] No org context provided, using user's primary organization for session: %s\n", orgID)
@@ -90,7 +90,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 
 	// Get organization from context
 	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	
+
 	// If no organization context, try to find one for the user
 	if !ok || orgID == "" {
 		// Check if there are any organizations
@@ -100,14 +100,14 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 			fmt.Printf("[MultiTenancy] Session lookup without org context (no orgs yet): %s\n", sess.UserID)
 			return sess, nil
 		}
-		
+
 		// Organizations exist - get user's memberships
 		memberships, err := s.orgService.GetUserMemberships(ctx, sess.UserID.String())
 		if err != nil || len(memberships) == 0 {
 			// User has no organizations
 			return nil, fmt.Errorf("session user has no organization memberships")
 		}
-		
+
 		// User has organizations - allow the session
 		// (In a more sophisticated system, you might want to set org context here)
 		fmt.Printf("[MultiTenancy] Session lookup without org context, user has orgs: %s\n", sess.UserID)
@@ -206,7 +206,7 @@ func (s *MultiTenantSessionService) RevokeByID(ctx context.Context, id xid.ID) e
 	// Note: We need FindByID in the core service, or we get the session another way
 	// For now, we'll trust the session exists and belongs to a valid user
 	// In production, add FindByID to the interface and use it here
-	
+
 	// Revoke session using core service
 	return s.sessionService.RevokeByID(ctx, id)
 }

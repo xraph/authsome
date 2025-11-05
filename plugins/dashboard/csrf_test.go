@@ -397,4 +397,3 @@ func BenchmarkCSRFProtector_GenerateAndValidate(b *testing.B) {
 		protector.ValidateToken(token, sessionID)
 	}
 }
-

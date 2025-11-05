@@ -19,14 +19,14 @@ type JWTKey struct {
 	OrgID string `bun:"org_id,notnull" json:"org_id"`
 
 	// Key identification
-	KeyID     string `bun:"key_id,notnull,unique" json:"key_id"`     // Kid for JWKS
-	Algorithm string `bun:"algorithm,notnull" json:"algorithm"`      // EdDSA, RS256, etc.
-	KeyType   string `bun:"key_type,notnull" json:"key_type"`        // OKP, RSA
-	Curve     string `bun:"curve" json:"curve,omitempty"`            // Ed25519, P-256, etc.
+	KeyID     string `bun:"key_id,notnull,unique" json:"key_id"` // Kid for JWKS
+	Algorithm string `bun:"algorithm,notnull" json:"algorithm"`  // EdDSA, RS256, etc.
+	KeyType   string `bun:"key_type,notnull" json:"key_type"`    // OKP, RSA
+	Curve     string `bun:"curve" json:"curve,omitempty"`        // Ed25519, P-256, etc.
 
 	// Key material (encrypted)
-	PrivateKey []byte `bun:"private_key,notnull" json:"-"`           // Encrypted private key
-	PublicKey  []byte `bun:"public_key,notnull" json:"public_key"`   // Public key for JWKS
+	PrivateKey []byte `bun:"private_key,notnull" json:"-"`         // Encrypted private key
+	PublicKey  []byte `bun:"public_key,notnull" json:"public_key"` // Public key for JWKS
 
 	// Key status
 	Active    bool       `bun:"active,notnull,default:true" json:"active"`

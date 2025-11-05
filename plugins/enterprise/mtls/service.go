@@ -11,12 +11,12 @@ import (
 
 // Service handles mTLS business logic
 type Service struct {
-	config         *Config
-	repo           Repository
-	validator      *CertificateValidator
-	revChecker     *RevocationChecker
-	smartCard      *SmartCardProvider
-	hsmManager     *HSMManager
+	config     *Config
+	repo       Repository
+	validator  *CertificateValidator
+	revChecker *RevocationChecker
+	smartCard  *SmartCardProvider
+	hsmManager *HSMManager
 }
 
 // NewService creates a new mTLS service
@@ -47,66 +47,66 @@ func (s *Service) RegisterCertificate(ctx context.Context, req *RegisterCertific
 	if block == nil {
 		return nil, ErrInvalidPEM
 	}
-	
+
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCertificateParseFailed, err)
 	}
-	
+
 	// Validate certificate
 	validationResult, err := s.validator.ValidateCertificate(ctx, []byte(req.CertificatePEM), req.OrganizationID)
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
-	
+
 	if !validationResult.Valid {
 		return nil, fmt.Errorf("certificate validation failed: %v", validationResult.Errors)
 	}
-	
+
 	// Check if certificate already exists
 	fingerprint := calculateFingerprint(cert.Raw)
 	existing, _ := s.repo.GetCertificateByFingerprint(ctx, fingerprint)
 	if existing != nil {
 		return nil, fmt.Errorf("certificate already registered")
 	}
-	
+
 	// Extract certificate information
 	certRecord := &Certificate{
-		ID:                 generateID(),
-		OrganizationID:     req.OrganizationID,
-		UserID:             req.UserID,
-		DeviceID:           req.DeviceID,
-		Subject:            cert.Subject.String(),
-		Issuer:             cert.Issuer.String(),
-		SerialNumber:       cert.SerialNumber.String(),
-		Fingerprint:        fingerprint,
-		FingerprintSHA1:    calculateSHA1Fingerprint(cert.Raw),
-		CertificatePEM:     req.CertificatePEM,
-		PublicKeyPEM:       extractPublicKeyPEM(cert),
-		NotBefore:          cert.NotBefore,
-		NotAfter:           cert.NotAfter,
-		CertificateType:    req.CertificateType,
-		CertificateClass:   req.CertificateClass,
-		Status:             "active",
-		PIVCardID:          req.PIVCardID,
-		CACNumber:          req.CACNumber,
-		HSMKeyID:           req.HSMKeyID,
-		HSMProvider:        req.HSMProvider,
-		IsPinned:           req.IsPinned,
-		KeyUsage:           extractKeyUsage(cert),
-		ExtendedKeyUsage:   extractExtendedKeyUsage(cert),
-		SubjectAltNames:    extractSubjectAltNames(cert),
-		Metadata:           req.Metadata,
+		ID:               generateID(),
+		OrganizationID:   req.OrganizationID,
+		UserID:           req.UserID,
+		DeviceID:         req.DeviceID,
+		Subject:          cert.Subject.String(),
+		Issuer:           cert.Issuer.String(),
+		SerialNumber:     cert.SerialNumber.String(),
+		Fingerprint:      fingerprint,
+		FingerprintSHA1:  calculateSHA1Fingerprint(cert.Raw),
+		CertificatePEM:   req.CertificatePEM,
+		PublicKeyPEM:     extractPublicKeyPEM(cert),
+		NotBefore:        cert.NotBefore,
+		NotAfter:         cert.NotAfter,
+		CertificateType:  req.CertificateType,
+		CertificateClass: req.CertificateClass,
+		Status:           "active",
+		PIVCardID:        req.PIVCardID,
+		CACNumber:        req.CACNumber,
+		HSMKeyID:         req.HSMKeyID,
+		HSMProvider:      req.HSMProvider,
+		IsPinned:         req.IsPinned,
+		KeyUsage:         extractKeyUsage(cert),
+		ExtendedKeyUsage: extractExtendedKeyUsage(cert),
+		SubjectAltNames:  extractSubjectAltNames(cert),
+		Metadata:         req.Metadata,
 	}
-	
+
 	// Create certificate record
 	if err := s.repo.CreateCertificate(ctx, certRecord); err != nil {
 		return nil, fmt.Errorf("failed to register certificate: %w", err)
 	}
-	
+
 	// Log auth event
 	s.logAuthEvent(ctx, certRecord.ID, req.OrganizationID, req.UserID, "certificate_registered", "success", nil)
-	
+
 	return certRecord, nil
 }
 
@@ -117,7 +117,7 @@ func (s *Service) AuthenticateWithCertificate(ctx context.Context, certPEM []byt
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
-	
+
 	if !validationResult.Valid {
 		s.logAuthEvent(ctx, "", orgID, "", "auth_attempt", "failed", map[string]interface{}{
 			"errors": validationResult.Errors,
@@ -128,16 +128,16 @@ func (s *Service) AuthenticateWithCertificate(ctx context.Context, certPEM []byt
 			Errors:           validationResult.Errors,
 		}, nil
 	}
-	
+
 	cert := validationResult.Certificate
 	fingerprint := calculateFingerprint(cert.Raw)
-	
+
 	// Get certificate from database
 	certRecord, err := s.repo.GetCertificateByFingerprint(ctx, fingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("certificate not registered")
 	}
-	
+
 	// Check certificate status
 	if certRecord.Status != "active" {
 		s.logAuthEvent(ctx, certRecord.ID, orgID, certRecord.UserID, "auth_attempt", "failed", map[string]interface{}{
@@ -149,10 +149,10 @@ func (s *Service) AuthenticateWithCertificate(ctx context.Context, certPEM []byt
 			Errors:           []error{fmt.Errorf("certificate is %s", certRecord.Status)},
 		}, nil
 	}
-	
+
 	// Update certificate usage stats
 	s.updateCertificateUsage(ctx, certRecord.ID)
-	
+
 	// Check PIV/CAC if applicable
 	if certRecord.CertificateClass == "piv" && s.config.SmartCard.EnablePIV {
 		pivInfo, err := s.smartCard.ValidatePIVCard(ctx, cert)
@@ -167,7 +167,7 @@ func (s *Service) AuthenticateWithCertificate(ctx context.Context, certPEM []byt
 				Errors:           []error{err},
 			}, nil
 		}
-		
+
 		s.logAuthEvent(ctx, certRecord.ID, orgID, certRecord.UserID, "auth_success", "success", map[string]interface{}{
 			"method":   "piv",
 			"cardInfo": pivInfo,
@@ -185,7 +185,7 @@ func (s *Service) AuthenticateWithCertificate(ctx context.Context, certPEM []byt
 				Errors:           []error{err},
 			}, nil
 		}
-		
+
 		s.logAuthEvent(ctx, certRecord.ID, orgID, certRecord.UserID, "auth_success", "success", map[string]interface{}{
 			"method":   "cac",
 			"cardInfo": cacInfo,
@@ -195,7 +195,7 @@ func (s *Service) AuthenticateWithCertificate(ctx context.Context, certPEM []byt
 			"method": "standard",
 		})
 	}
-	
+
 	return &AuthenticationResult{
 		Success:          true,
 		UserID:           certRecord.UserID,
@@ -211,15 +211,15 @@ func (s *Service) RevokeCertificate(ctx context.Context, id string, reason strin
 	if err != nil {
 		return err
 	}
-	
+
 	if err := s.repo.RevokeCertificate(ctx, id, reason); err != nil {
 		return err
 	}
-	
+
 	s.logAuthEvent(ctx, id, cert.OrganizationID, cert.UserID, "certificate_revoked", "success", map[string]interface{}{
 		"reason": reason,
 	})
-	
+
 	return nil
 }
 
@@ -242,25 +242,25 @@ func (s *Service) AddTrustAnchor(ctx context.Context, req *AddTrustAnchorRequest
 	if block == nil {
 		return nil, ErrInvalidPEM
 	}
-	
+
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCertificateParseFailed, err)
 	}
-	
+
 	// Verify it's a CA certificate
 	if !cert.IsCA {
 		return nil, fmt.Errorf("certificate is not a CA certificate")
 	}
-	
+
 	fingerprint := calculateFingerprint(cert.Raw)
-	
+
 	// Check if already exists
 	existing, _ := s.repo.GetTrustAnchorByFingerprint(ctx, fingerprint)
 	if existing != nil {
 		return nil, fmt.Errorf("trust anchor already exists")
 	}
-	
+
 	anchor := &TrustAnchor{
 		ID:             generateID(),
 		OrganizationID: req.OrganizationID,
@@ -279,11 +279,11 @@ func (s *Service) AddTrustAnchor(ctx context.Context, req *AddTrustAnchorRequest
 		Status:         "active",
 		Metadata:       req.Metadata,
 	}
-	
+
 	if err := s.repo.CreateTrustAnchor(ctx, anchor); err != nil {
 		return nil, fmt.Errorf("failed to create trust anchor: %w", err)
 	}
-	
+
 	return anchor, nil
 }
 
@@ -297,31 +297,31 @@ func (s *Service) GetTrustAnchors(ctx context.Context, orgID string) ([]*TrustAn
 // CreatePolicy creates a certificate policy
 func (s *Service) CreatePolicy(ctx context.Context, req *CreatePolicyRequest) (*CertificatePolicy, error) {
 	policy := &CertificatePolicy{
-		ID:                      generateID(),
-		OrganizationID:          req.OrganizationID,
-		Name:                    req.Name,
-		Description:             req.Description,
-		RequirePinning:          req.RequirePinning,
-		AllowSelfSigned:         req.AllowSelfSigned,
-		RequireCRLCheck:         req.RequireCRLCheck,
-		RequireOCSPCheck:        req.RequireOCSPCheck,
-		MinKeySize:              req.MinKeySize,
-		AllowedKeyAlgorithms:    req.AllowedKeyAlgorithms,
-		AllowedSignatureAlgs:    req.AllowedSignatureAlgs,
-		MaxCertificateAge:       req.MaxCertificateAge,
-		MinRemainingValidity:    req.MinRemainingValidity,
-		RequirePIV:              req.RequirePIV,
-		RequireCAC:              req.RequireCAC,
-		RequireHSM:              req.RequireHSM,
-		Status:                  "active",
-		IsDefault:               req.IsDefault,
-		Metadata:                req.Metadata,
+		ID:                   generateID(),
+		OrganizationID:       req.OrganizationID,
+		Name:                 req.Name,
+		Description:          req.Description,
+		RequirePinning:       req.RequirePinning,
+		AllowSelfSigned:      req.AllowSelfSigned,
+		RequireCRLCheck:      req.RequireCRLCheck,
+		RequireOCSPCheck:     req.RequireOCSPCheck,
+		MinKeySize:           req.MinKeySize,
+		AllowedKeyAlgorithms: req.AllowedKeyAlgorithms,
+		AllowedSignatureAlgs: req.AllowedSignatureAlgs,
+		MaxCertificateAge:    req.MaxCertificateAge,
+		MinRemainingValidity: req.MinRemainingValidity,
+		RequirePIV:           req.RequirePIV,
+		RequireCAC:           req.RequireCAC,
+		RequireHSM:           req.RequireHSM,
+		Status:               "active",
+		IsDefault:            req.IsDefault,
+		Metadata:             req.Metadata,
 	}
-	
+
 	if err := s.repo.CreatePolicy(ctx, policy); err != nil {
 		return nil, fmt.Errorf("failed to create policy: %w", err)
 	}
-	
+
 	return policy, nil
 }
 
@@ -349,11 +349,11 @@ func (s *Service) updateCertificateUsage(ctx context.Context, certID string) {
 	if err != nil {
 		return
 	}
-	
+
 	now := time.Now()
 	cert.LastUsedAt = &now
 	cert.UseCount++
-	
+
 	_ = s.repo.UpdateCertificate(ctx, cert)
 }
 
@@ -367,7 +367,7 @@ func (s *Service) logAuthEvent(ctx context.Context, certID, orgID, userID, event
 		Status:          status,
 		ValidationSteps: metadata,
 	}
-	
+
 	_ = s.repo.CreateAuthEvent(ctx, event)
 }
 
@@ -378,7 +378,7 @@ type RegisterCertificateRequest struct {
 	UserID           string                 `json:"userId,omitempty"`
 	DeviceID         string                 `json:"deviceId,omitempty"`
 	CertificatePEM   string                 `json:"certificatePem"`
-	CertificateType  string                 `json:"certificateType"` // user, device, service
+	CertificateType  string                 `json:"certificateType"`  // user, device, service
 	CertificateClass string                 `json:"certificateClass"` // standard, piv, cac, smartcard
 	PIVCardID        string                 `json:"pivCardId,omitempty"`
 	CACNumber        string                 `json:"cacNumber,omitempty"`
@@ -432,18 +432,18 @@ func extractPublicKeyPEM(cert *x509.Certificate) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	pemBlock := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKeyBytes,
 	})
-	
+
 	return string(pemBlock)
 }
 
 func extractKeyUsage(cert *x509.Certificate) []string {
 	var usages []string
-	
+
 	if cert.KeyUsage&x509.KeyUsageDigitalSignature != 0 {
 		usages = append(usages, "digitalSignature")
 	}
@@ -456,13 +456,13 @@ func extractKeyUsage(cert *x509.Certificate) []string {
 	if cert.KeyUsage&x509.KeyUsageDataEncipherment != 0 {
 		usages = append(usages, "dataEncipherment")
 	}
-	
+
 	return usages
 }
 
 func extractExtendedKeyUsage(cert *x509.Certificate) []string {
 	var usages []string
-	
+
 	for _, eku := range cert.ExtKeyUsage {
 		switch eku {
 		case x509.ExtKeyUsageClientAuth:
@@ -475,27 +475,27 @@ func extractExtendedKeyUsage(cert *x509.Certificate) []string {
 			usages = append(usages, "emailProtection")
 		}
 	}
-	
+
 	return usages
 }
 
 func extractSubjectAltNames(cert *x509.Certificate) StringArray {
 	var names []string
-	
+
 	names = append(names, cert.DNSNames...)
-	
+
 	for _, email := range cert.EmailAddresses {
 		names = append(names, "email:"+email)
 	}
-	
+
 	for _, ip := range cert.IPAddresses {
 		names = append(names, "ip:"+ip.String())
 	}
-	
+
 	for _, uri := range cert.URIs {
 		names = append(names, "uri:"+uri.String())
 	}
-	
+
 	return names
 }
 
@@ -504,4 +504,3 @@ func calculateSHA1Fingerprint(certDER []byte) string {
 	// In production, use crypto/sha1
 	return ""
 }
-

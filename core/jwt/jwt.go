@@ -10,40 +10,40 @@ import (
 
 // JWTKey represents a JWT signing key
 type JWTKey struct {
-	ID          xid.ID    `json:"id"`
-	OrgID       string    `json:"org_id"`
-	KeyID       string    `json:"key_id"`
-	Algorithm   string    `json:"algorithm"`
-	KeyType     string    `json:"key_type"`
-	Curve       string    `json:"curve,omitempty"`
-	PrivateKey  string    `json:"-"` // Never expose in JSON
-	PublicKey   string    `json:"public_key"`
-	IsActive    bool      `json:"is_active"`
-	UsageCount  int64     `json:"usage_count"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	ID         xid.ID                 `json:"id"`
+	OrgID      string                 `json:"org_id"`
+	KeyID      string                 `json:"key_id"`
+	Algorithm  string                 `json:"algorithm"`
+	KeyType    string                 `json:"key_type"`
+	Curve      string                 `json:"curve,omitempty"`
+	PrivateKey string                 `json:"-"` // Never expose in JSON
+	PublicKey  string                 `json:"public_key"`
+	IsActive   bool                   `json:"is_active"`
+	UsageCount int64                  `json:"usage_count"`
+	LastUsedAt *time.Time             `json:"last_used_at"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	ExpiresAt  *time.Time             `json:"expires_at"`
+	Metadata   map[string]interface{} `json:"metadata"`
 }
 
 // TokenClaims represents JWT token claims
 type TokenClaims struct {
-	UserID       string                 `json:"user_id"`
-	OrgID        string                 `json:"org_id"`
-	SessionID    string                 `json:"session_id,omitempty"`
-	Scopes       []string               `json:"scopes,omitempty"`
-	Permissions  []string               `json:"permissions,omitempty"`
-	TokenType    string                 `json:"token_type"` // access, refresh, id
-	Audience     []string               `json:"aud,omitempty"`
-	Subject      string                 `json:"sub"`
-	Issuer       string                 `json:"iss"`
-	IssuedAt     *jwt.NumericDate       `json:"iat"`
-	ExpiresAt    *jwt.NumericDate       `json:"exp"`
-	NotBefore    *jwt.NumericDate       `json:"nbf,omitempty"`
-	JwtID        string                 `json:"jti"`
-	KeyID        string                 `json:"kid"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	UserID      string                 `json:"user_id"`
+	OrgID       string                 `json:"org_id"`
+	SessionID   string                 `json:"session_id,omitempty"`
+	Scopes      []string               `json:"scopes,omitempty"`
+	Permissions []string               `json:"permissions,omitempty"`
+	TokenType   string                 `json:"token_type"` // access, refresh, id
+	Audience    []string               `json:"aud,omitempty"`
+	Subject     string                 `json:"sub"`
+	Issuer      string                 `json:"iss"`
+	IssuedAt    *jwt.NumericDate       `json:"iat"`
+	ExpiresAt   *jwt.NumericDate       `json:"exp"`
+	NotBefore   *jwt.NumericDate       `json:"nbf,omitempty"`
+	JwtID       string                 `json:"jti"`
+	KeyID       string                 `json:"kid"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -88,15 +88,15 @@ type VerifyTokenRequest struct {
 
 // VerifyTokenResponse represents the response from token verification
 type VerifyTokenResponse struct {
-	Valid       bool          `json:"valid"`
-	Claims      *TokenClaims  `json:"claims,omitempty"`
-	Error       string        `json:"error,omitempty"`
-	UserID      string        `json:"user_id,omitempty"`
-	OrgID       string        `json:"org_id,omitempty"`
-	SessionID   string        `json:"session_id,omitempty"`
-	Scopes      []string      `json:"scopes,omitempty"`
-	Permissions []string      `json:"permissions,omitempty"`
-	ExpiresAt   *time.Time    `json:"expires_at,omitempty"`
+	Valid       bool         `json:"valid"`
+	Claims      *TokenClaims `json:"claims,omitempty"`
+	Error       string       `json:"error,omitempty"`
+	UserID      string       `json:"user_id,omitempty"`
+	OrgID       string       `json:"org_id,omitempty"`
+	SessionID   string       `json:"session_id,omitempty"`
+	Scopes      []string     `json:"scopes,omitempty"`
+	Permissions []string     `json:"permissions,omitempty"`
+	ExpiresAt   *time.Time   `json:"expires_at,omitempty"`
 }
 
 // JWKSResponse represents a JSON Web Key Set response
@@ -110,12 +110,12 @@ type JWK struct {
 	KeyID     string   `json:"kid"`
 	Use       string   `json:"use"`
 	Algorithm string   `json:"alg"`
-	N         string   `json:"n,omitempty"`         // RSA modulus
-	E         string   `json:"e,omitempty"`         // RSA exponent
-	X         string   `json:"x,omitempty"`         // ECDSA x coordinate
-	Y         string   `json:"y,omitempty"`         // ECDSA y coordinate
-	Curve     string   `json:"crv,omitempty"`       // ECDSA curve
-	KeyOps    []string `json:"key_ops,omitempty"`   // Key operations
+	N         string   `json:"n,omitempty"`       // RSA modulus
+	E         string   `json:"e,omitempty"`       // RSA exponent
+	X         string   `json:"x,omitempty"`       // ECDSA x coordinate
+	Y         string   `json:"y,omitempty"`       // ECDSA y coordinate
+	Curve     string   `json:"crv,omitempty"`     // ECDSA curve
+	KeyOps    []string `json:"key_ops,omitempty"` // Key operations
 }
 
 // ListJWTKeysRequest represents a request to list JWT keys

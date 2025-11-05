@@ -12,16 +12,16 @@ import (
 
 // DashboardStats represents statistics for the dashboard
 type DashboardStats struct {
-	TotalUsers      int
-	ActiveUsers     int
-	NewUsersToday   int
-	TotalSessions   int
-	ActiveSessions  int
-	FailedLogins    int
-	UserGrowth      float64
-	SessionGrowth   float64
-	RecentActivity  []ActivityItem
-	SystemStatus    []StatusItem
+	TotalUsers     int
+	ActiveUsers    int
+	NewUsersToday  int
+	TotalSessions  int
+	ActiveSessions int
+	FailedLogins   int
+	UserGrowth     float64
+	SessionGrowth  float64
+	RecentActivity []ActivityItem
+	SystemStatus   []StatusItem
 }
 
 // ActivityItem represents a recent activity entry
@@ -66,12 +66,12 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	activeSessions := 0
 	activeUsers := make(map[string]bool) // Track unique active users
 	recentSessions := 0                  // Sessions created in last 7 days
-	
+
 	for _, sess := range allSessions {
 		if sess.ExpiresAt.After(now) {
 			activeSessions++
 			activeUsers[sess.UserID.String()] = true
-			
+
 			// Check if session was created in last 7 days
 			if sess.CreatedAt.After(now.Add(-7 * 24 * time.Hour)) {
 				recentSessions++
@@ -118,19 +118,19 @@ func (h *Handler) getFailedLoginCount(ctx context.Context) int {
 
 	now := time.Now()
 	yesterday := now.Add(-24 * time.Hour)
-	
+
 	// Search for failed login events
 	events, err := h.auditSvc.Search(ctx, audit.ListParams{
 		Action: "auth.login.failed",
 		Since:  &yesterday,
 		Limit:  1000,
 	})
-	
+
 	if err != nil {
 		fmt.Printf("[Dashboard] Failed to fetch failed login events: %v\n", err)
 		return 0
 	}
-	
+
 	return len(events)
 }
 
@@ -246,7 +246,7 @@ func (h *Handler) getSystemStatus() []StatusItem {
 // formatTimeAgo formats a time as "X minutes ago"
 func formatTimeAgo(t time.Time) string {
 	diff := time.Since(t)
-	
+
 	switch {
 	case diff < time.Minute:
 		return "just now"
@@ -272,4 +272,3 @@ func formatTimeAgo(t time.Time) string {
 		return t.Format("Jan 2, 2006")
 	}
 }
-

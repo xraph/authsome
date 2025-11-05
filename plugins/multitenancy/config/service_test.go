@@ -79,68 +79,96 @@ func (m *MockConfigManager) AllKeys() []string {
 }
 
 // Stub methods to satisfy interface (not used in our tests)
-func (m *MockConfigManager) Name() string                                                                     { return "mock" }
-func (m *MockConfigManager) SecretsManager() forge.SecretsManager                                             { return nil }
-func (m *MockConfigManager) LoadFrom(sources ...forge.ConfigSource) error                                     { return nil }
-func (m *MockConfigManager) Watch(ctx context.Context) error                                                  { return nil }
-func (m *MockConfigManager) Reload() error                                                                    { return nil }
-func (m *MockConfigManager) ReloadContext(ctx context.Context) error                                          { return nil }
-func (m *MockConfigManager) Validate() error                                                                  { return nil }
-func (m *MockConfigManager) Stop() error                                                                      { return nil }
-func (m *MockConfigManager) GetInt8(key string, defaultValue ...int8) int8                                    { return 0 }
-func (m *MockConfigManager) GetInt16(key string, defaultValue ...int16) int16                                 { return 0 }
-func (m *MockConfigManager) GetInt32(key string, defaultValue ...int32) int32                                 { return 0 }
-func (m *MockConfigManager) GetInt64(key string, defaultValue ...int64) int64                                 { return 0 }
-func (m *MockConfigManager) GetUint(key string, defaultValue ...uint) uint                                    { return 0 }
-func (m *MockConfigManager) GetUint8(key string, defaultValue ...uint8) uint8                                 { return 0 }
-func (m *MockConfigManager) GetUint16(key string, defaultValue ...uint16) uint16                              { return 0 }
-func (m *MockConfigManager) GetUint32(key string, defaultValue ...uint32) uint32                              { return 0 }
-func (m *MockConfigManager) GetUint64(key string, defaultValue ...uint64) uint64                              { return 0 }
-func (m *MockConfigManager) GetFloat32(key string, defaultValue ...float32) float32                           { return 0 }
-func (m *MockConfigManager) GetFloat64(key string, defaultValue ...float64) float64                           { return 0 }
-func (m *MockConfigManager) GetDuration(key string, defaultValue ...time.Duration) time.Duration              { return 0 }
-func (m *MockConfigManager) GetTime(key string, defaultValue ...time.Time) time.Time                          { return time.Time{} }
-func (m *MockConfigManager) GetSizeInBytes(key string, defaultValue ...uint64) uint64                         { return 0 }
-func (m *MockConfigManager) GetStringSlice(key string, defaultValue ...[]string) []string                     { return nil }
-func (m *MockConfigManager) GetIntSlice(key string, defaultValue ...[]int) []int                              { return nil }
-func (m *MockConfigManager) GetInt64Slice(key string, defaultValue ...[]int64) []int64                        { return nil }
-func (m *MockConfigManager) GetFloat64Slice(key string, defaultValue ...[]float64) []float64                  { return nil }
-func (m *MockConfigManager) GetBoolSlice(key string, defaultValue ...[]bool) []bool                           { return nil }
-func (m *MockConfigManager) GetStringMap(key string, defaultValue ...map[string]string) map[string]string     { return nil }
-func (m *MockConfigManager) GetStringMapString(key string, defaultValue ...map[string]string) map[string]string { return nil }
-func (m *MockConfigManager) GetStringMapStringSlice(key string, defaultValue ...map[string][]string) map[string][]string { return nil }
-func (m *MockConfigManager) GetWithOptions(key string, opts ...forge.GetOption) (interface{}, error)          { return nil, nil }
-func (m *MockConfigManager) GetStringWithOptions(key string, opts ...forge.GetOption) (string, error)         { return "", nil }
-func (m *MockConfigManager) GetIntWithOptions(key string, opts ...forge.GetOption) (int, error)               { return 0, nil }
-func (m *MockConfigManager) GetBoolWithOptions(key string, opts ...forge.GetOption) (bool, error)             { return false, nil }
-func (m *MockConfigManager) GetDurationWithOptions(key string, opts ...forge.GetOption) (time.Duration, error) { return 0, nil }
-func (m *MockConfigManager) BindWithDefault(key string, target interface{}, defaultValue interface{}) error  { return nil }
-func (m *MockConfigManager) BindWithOptions(key string, target interface{}, options forge.BindOptions) error { return nil }
-func (m *MockConfigManager) WatchWithCallback(key string, callback func(string, interface{}))                {}
-func (m *MockConfigManager) WatchChanges(callback func(forge.ConfigChange))                                  {}
-func (m *MockConfigManager) GetSourceMetadata() map[string]*forge.SourceMetadata                             { return nil }
-func (m *MockConfigManager) GetKeys() []string                                                                { return m.AllKeys() }
-func (m *MockConfigManager) GetSection(key string) map[string]interface{}                                     { return nil }
-func (m *MockConfigManager) HasKey(key string) bool                                                           { return m.IsSet(key) }
-func (m *MockConfigManager) Size() int                                                                        { return len(m.data) }
-func (m *MockConfigManager) Sub(key string) forge.ConfigManager                                               { return nil }
-func (m *MockConfigManager) MergeWith(other forge.ConfigManager) error                                        { return nil }
-func (m *MockConfigManager) Clone() forge.ConfigManager                                                       { return m }
-func (m *MockConfigManager) GetAllSettings() map[string]interface{}                                           { return m.data }
-func (m *MockConfigManager) Reset()                                                                           {}
-func (m *MockConfigManager) ExpandEnvVars() error                                                             { return nil }
-func (m *MockConfigManager) SafeGet(key string, expectedType reflect.Type) (interface{}, error)              { return nil, nil }
-func (m *MockConfigManager) GetBytesSize(key string, defaultValue ...uint64) uint64                           { return 0 }
-func (m *MockConfigManager) InConfig(key string) bool                                                         { return m.IsSet(key) }
-func (m *MockConfigManager) UnmarshalKey(key string, rawVal interface{}) error                                { return nil }
-func (m *MockConfigManager) Unmarshal(rawVal interface{}) error                                               { return nil }
-func (m *MockConfigManager) AllSettings() map[string]interface{}                                              { return m.data }
-func (m *MockConfigManager) ReadInConfig() error                                                              { return nil }
-func (m *MockConfigManager) SetConfigType(configType string)                                                  {}
-func (m *MockConfigManager) SetConfigFile(filePath string) error                                              { return nil }
-func (m *MockConfigManager) ConfigFileUsed() string                                                           { return "" }
-func (m *MockConfigManager) WatchConfig() error                                                               { return nil }
-func (m *MockConfigManager) OnConfigChange(callback func(forge.ConfigChange))                                {}
+func (m *MockConfigManager) Name() string                                           { return "mock" }
+func (m *MockConfigManager) SecretsManager() forge.SecretsManager                   { return nil }
+func (m *MockConfigManager) LoadFrom(sources ...forge.ConfigSource) error           { return nil }
+func (m *MockConfigManager) Watch(ctx context.Context) error                        { return nil }
+func (m *MockConfigManager) Reload() error                                          { return nil }
+func (m *MockConfigManager) ReloadContext(ctx context.Context) error                { return nil }
+func (m *MockConfigManager) Validate() error                                        { return nil }
+func (m *MockConfigManager) Stop() error                                            { return nil }
+func (m *MockConfigManager) GetInt8(key string, defaultValue ...int8) int8          { return 0 }
+func (m *MockConfigManager) GetInt16(key string, defaultValue ...int16) int16       { return 0 }
+func (m *MockConfigManager) GetInt32(key string, defaultValue ...int32) int32       { return 0 }
+func (m *MockConfigManager) GetInt64(key string, defaultValue ...int64) int64       { return 0 }
+func (m *MockConfigManager) GetUint(key string, defaultValue ...uint) uint          { return 0 }
+func (m *MockConfigManager) GetUint8(key string, defaultValue ...uint8) uint8       { return 0 }
+func (m *MockConfigManager) GetUint16(key string, defaultValue ...uint16) uint16    { return 0 }
+func (m *MockConfigManager) GetUint32(key string, defaultValue ...uint32) uint32    { return 0 }
+func (m *MockConfigManager) GetUint64(key string, defaultValue ...uint64) uint64    { return 0 }
+func (m *MockConfigManager) GetFloat32(key string, defaultValue ...float32) float32 { return 0 }
+func (m *MockConfigManager) GetFloat64(key string, defaultValue ...float64) float64 { return 0 }
+func (m *MockConfigManager) GetDuration(key string, defaultValue ...time.Duration) time.Duration {
+	return 0
+}
+func (m *MockConfigManager) GetTime(key string, defaultValue ...time.Time) time.Time {
+	return time.Time{}
+}
+func (m *MockConfigManager) GetSizeInBytes(key string, defaultValue ...uint64) uint64     { return 0 }
+func (m *MockConfigManager) GetStringSlice(key string, defaultValue ...[]string) []string { return nil }
+func (m *MockConfigManager) GetIntSlice(key string, defaultValue ...[]int) []int          { return nil }
+func (m *MockConfigManager) GetInt64Slice(key string, defaultValue ...[]int64) []int64    { return nil }
+func (m *MockConfigManager) GetFloat64Slice(key string, defaultValue ...[]float64) []float64 {
+	return nil
+}
+func (m *MockConfigManager) GetBoolSlice(key string, defaultValue ...[]bool) []bool { return nil }
+func (m *MockConfigManager) GetStringMap(key string, defaultValue ...map[string]string) map[string]string {
+	return nil
+}
+func (m *MockConfigManager) GetStringMapString(key string, defaultValue ...map[string]string) map[string]string {
+	return nil
+}
+func (m *MockConfigManager) GetStringMapStringSlice(key string, defaultValue ...map[string][]string) map[string][]string {
+	return nil
+}
+func (m *MockConfigManager) GetWithOptions(key string, opts ...forge.GetOption) (interface{}, error) {
+	return nil, nil
+}
+func (m *MockConfigManager) GetStringWithOptions(key string, opts ...forge.GetOption) (string, error) {
+	return "", nil
+}
+func (m *MockConfigManager) GetIntWithOptions(key string, opts ...forge.GetOption) (int, error) {
+	return 0, nil
+}
+func (m *MockConfigManager) GetBoolWithOptions(key string, opts ...forge.GetOption) (bool, error) {
+	return false, nil
+}
+func (m *MockConfigManager) GetDurationWithOptions(key string, opts ...forge.GetOption) (time.Duration, error) {
+	return 0, nil
+}
+func (m *MockConfigManager) BindWithDefault(key string, target interface{}, defaultValue interface{}) error {
+	return nil
+}
+func (m *MockConfigManager) BindWithOptions(key string, target interface{}, options forge.BindOptions) error {
+	return nil
+}
+func (m *MockConfigManager) WatchWithCallback(key string, callback func(string, interface{})) {}
+func (m *MockConfigManager) WatchChanges(callback func(forge.ConfigChange))                   {}
+func (m *MockConfigManager) GetSourceMetadata() map[string]*forge.SourceMetadata              { return nil }
+func (m *MockConfigManager) GetKeys() []string                                                { return m.AllKeys() }
+func (m *MockConfigManager) GetSection(key string) map[string]interface{}                     { return nil }
+func (m *MockConfigManager) HasKey(key string) bool                                           { return m.IsSet(key) }
+func (m *MockConfigManager) Size() int                                                        { return len(m.data) }
+func (m *MockConfigManager) Sub(key string) forge.ConfigManager                               { return nil }
+func (m *MockConfigManager) MergeWith(other forge.ConfigManager) error                        { return nil }
+func (m *MockConfigManager) Clone() forge.ConfigManager                                       { return m }
+func (m *MockConfigManager) GetAllSettings() map[string]interface{}                           { return m.data }
+func (m *MockConfigManager) Reset()                                                           {}
+func (m *MockConfigManager) ExpandEnvVars() error                                             { return nil }
+func (m *MockConfigManager) SafeGet(key string, expectedType reflect.Type) (interface{}, error) {
+	return nil, nil
+}
+func (m *MockConfigManager) GetBytesSize(key string, defaultValue ...uint64) uint64 { return 0 }
+func (m *MockConfigManager) InConfig(key string) bool                               { return m.IsSet(key) }
+func (m *MockConfigManager) UnmarshalKey(key string, rawVal interface{}) error      { return nil }
+func (m *MockConfigManager) Unmarshal(rawVal interface{}) error                     { return nil }
+func (m *MockConfigManager) AllSettings() map[string]interface{}                    { return m.data }
+func (m *MockConfigManager) ReadInConfig() error                                    { return nil }
+func (m *MockConfigManager) SetConfigType(configType string)                        {}
+func (m *MockConfigManager) SetConfigFile(filePath string) error                    { return nil }
+func (m *MockConfigManager) ConfigFileUsed() string                                 { return "" }
+func (m *MockConfigManager) WatchConfig() error                                     { return nil }
+func (m *MockConfigManager) OnConfigChange(callback func(forge.ConfigChange))       {}
 
 // Ensure MockConfigManager implements forge.ConfigManager
 var _ forge.ConfigManager = (*MockConfigManager)(nil)
@@ -399,4 +427,3 @@ func TestService_LoadOrganizationConfigRequiresOrgID(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "organization ID is required")
 }
-

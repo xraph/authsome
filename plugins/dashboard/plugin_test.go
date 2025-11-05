@@ -64,32 +64,32 @@ func TestPlugin_Migrate(t *testing.T) {
 
 func TestTemplateFuncs(t *testing.T) {
 	funcs := templateFuncs()
-	
+
 	t.Run("inc", func(t *testing.T) {
 		inc := funcs["inc"].(func(int) int)
 		assert.Equal(t, 2, inc(1))
 		assert.Equal(t, 11, inc(10))
 	})
-	
+
 	t.Run("dec", func(t *testing.T) {
 		dec := funcs["dec"].(func(int) int)
 		assert.Equal(t, 0, dec(1))
 		assert.Equal(t, 9, dec(10))
 	})
-	
+
 	t.Run("mul", func(t *testing.T) {
 		mul := funcs["mul"].(func(int, int) int)
 		assert.Equal(t, 6, mul(2, 3))
 		assert.Equal(t, 20, mul(4, 5))
 	})
-	
+
 	t.Run("slice", func(t *testing.T) {
 		slice := funcs["slice"].(func(string, int, int) string)
 		assert.Equal(t, "hel", slice("hello", 0, 3))
 		assert.Equal(t, "lo", slice("hello", 3, 5))
 		assert.Equal(t, "", slice("hello", 10, 15))
 	})
-	
+
 	t.Run("upper", func(t *testing.T) {
 		upper := funcs["upper"].(func(string) string)
 		assert.Equal(t, "H", upper("hello"))
@@ -108,4 +108,3 @@ func TestNewPlugin(t *testing.T) {
 	assert.Nil(t, p.auditSvc)
 	assert.Nil(t, p.rbacSvc)
 }
-

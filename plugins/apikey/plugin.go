@@ -65,7 +65,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Get services from registry
 	auditSvc := serviceRegistry.AuditService()
 	rateLimitSvc := serviceRegistry.RateLimitService()
-	
+
 	userSvcInterface := serviceRegistry.UserService()
 	var userSvc *user.Service
 	if userSvcInterface != nil {
@@ -116,7 +116,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		apikeys.PUT("/:id", p.handler.UpdateAPIKey)
 		apikeys.DELETE("/:id", p.handler.DeleteAPIKey)
 		apikeys.POST("/:id/rotate", p.handler.RotateAPIKey)
-		
+
 		// Public verification endpoint for testing
 		apikeys.POST("/verify", p.handler.VerifyAPIKey)
 	}
@@ -194,7 +194,7 @@ func (p *Plugin) startCleanupScheduler() {
 
 	go func() {
 		log.Printf("[APIKey Plugin] Cleanup scheduler started (interval: %v)", p.config.AutoCleanup.Interval)
-		
+
 		// Run cleanup immediately on start
 		p.runCleanup()
 
@@ -233,4 +233,3 @@ func (p *Plugin) StopCleanupScheduler() {
 		log.Println("[APIKey Plugin] Cleanup scheduler stopped")
 	}
 }
-

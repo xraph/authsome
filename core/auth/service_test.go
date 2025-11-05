@@ -143,7 +143,7 @@ func TestService_SignUp(t *testing.T) {
 					UpdatedAt:    time.Now(),
 				}
 				mu.On("Create", mock.Anything, mock.AnythingOfType("*user.CreateUserRequest")).Return(createdUser, nil)
-				
+
 				createdSession := &session.Session{
 					ID:        xid.New(),
 					Token:     "test-token-12345",
@@ -309,7 +309,7 @@ func TestService_SignIn(t *testing.T) {
 					PasswordHash: passwordHash,
 				}
 				mu.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
-				
+
 				createdSession := &session.Session{
 					ID:        xid.New(),
 					Token:     "test-token-12345",
@@ -342,7 +342,7 @@ func TestService_SignIn(t *testing.T) {
 					PasswordHash: passwordHash,
 				}
 				mu.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
-				
+
 				createdSession := &session.Session{
 					ID:        xid.New(),
 					Token:     "test-token-12345",
@@ -583,7 +583,7 @@ func TestService_GetSession(t *testing.T) {
 					ExpiresAt: time.Now().Add(24 * time.Hour),
 				}
 				ms.On("FindByToken", mock.Anything, validToken).Return(sess, nil)
-				
+
 				existingUser := &user.User{
 					ID:    userID,
 					Email: "test@example.com",
@@ -668,4 +668,3 @@ func TestService_GetSession(t *testing.T) {
 		})
 	}
 }
-

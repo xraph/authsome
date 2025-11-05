@@ -13,7 +13,7 @@ func TestService_CreateProfile(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	req := &CreateProfileRequest{
 		OrganizationID: "org_123",
 		Standard:       StandardSOC2,
@@ -22,10 +22,10 @@ func TestService_CreateProfile(t *testing.T) {
 			RequirementMFARequired,
 		},
 	}
-	
+
 	// Act
 	profile, err := service.CreateProfile(ctx, req)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, profile)
@@ -41,20 +41,20 @@ func TestService_CreateProfile_DuplicateOrganization(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	req := &CreateProfileRequest{
 		OrganizationID: "org_123",
 		Standard:       StandardSOC2,
 		Requirements:   []string{RequirementPasswordMinLength12},
 	}
-	
+
 	// Create first profile
 	_, err := service.CreateProfile(ctx, req)
 	require.NoError(t, err)
-	
+
 	// Act - try to create second profile for same org
 	_, err = service.CreateProfile(ctx, req)
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, ErrProfileAlreadyExists, err)
@@ -64,7 +64,7 @@ func TestService_GetProfile(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	// Create a profile
 	created, err := service.CreateProfile(ctx, &CreateProfileRequest{
 		OrganizationID: "org_123",
@@ -72,10 +72,10 @@ func TestService_GetProfile(t *testing.T) {
 		Requirements:   []string{RequirementPasswordMinLength12},
 	})
 	require.NoError(t, err)
-	
+
 	// Act
 	retrieved, err := service.GetProfile(ctx, created.ID)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, retrieved.ID)
@@ -86,10 +86,10 @@ func TestService_GetProfile_NotFound(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	// Act
 	_, err := service.GetProfile(ctx, "non_existent_id")
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, ErrProfileNotFound, err)
@@ -99,7 +99,7 @@ func TestService_UpdateProfile(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	// Create initial profile
 	profile, err := service.CreateProfile(ctx, &CreateProfileRequest{
 		OrganizationID: "org_123",
@@ -107,7 +107,7 @@ func TestService_UpdateProfile(t *testing.T) {
 		Requirements:   []string{RequirementPasswordMinLength12},
 	})
 	require.NoError(t, err)
-	
+
 	// Act - update requirements
 	req := &UpdateProfileRequest{
 		Requirements: []string{
@@ -117,7 +117,7 @@ func TestService_UpdateProfile(t *testing.T) {
 		},
 	}
 	updated, err := service.UpdateProfile(ctx, profile.ID, req)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.Len(t, updated.Requirements, 3)
@@ -129,20 +129,20 @@ func TestService_DeleteProfile(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	profile, err := service.CreateProfile(ctx, &CreateProfileRequest{
 		OrganizationID: "org_123",
 		Standard:       StandardSOC2,
 		Requirements:   []string{RequirementPasswordMinLength12},
 	})
 	require.NoError(t, err)
-	
+
 	// Act
 	err = service.DeleteProfile(ctx, profile.ID)
-	
+
 	// Assert
 	require.NoError(t, err)
-	
+
 	// Verify it's gone
 	_, err = service.GetProfile(ctx, profile.ID)
 	assert.Error(t, err)
@@ -153,22 +153,22 @@ func TestService_RunChecks(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
-	
+
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	// Act
 	checks, err := service.RunChecks(ctx, profile.ID)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotEmpty(t, checks)
-	
+
 	// Verify all check types are covered
 	checkTypes := make(map[CheckType]bool)
 	for _, check := range checks {
 		checkTypes[check.CheckType] = true
 	}
-	
+
 	assert.True(t, checkTypes[CheckTypePasswordStrength])
 	assert.True(t, checkTypes[CheckTypeMFACoverage])
 	assert.True(t, checkTypes[CheckTypeSessionManagement])
@@ -209,23 +209,23 @@ func TestService_GenerateReport(t *testing.T) {
 			wantErr:  false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			ctx := context.Background()
 			service := setupTestService(t)
 			profile := createTestProfile(t, service, "org_123", tt.standard)
-			
+
 			req := &GenerateReportRequest{
 				ProfileID: profile.ID,
 				Standard:  tt.standard,
 				Format:    "pdf",
 			}
-			
+
 			// Act
 			report, err := service.GenerateReport(ctx, req)
-			
+
 			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -245,7 +245,7 @@ func TestService_CreateViolation(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	req := &CreateViolationRequest{
 		ProfileID:      profile.ID,
 		OrganizationID: "org_123",
@@ -254,10 +254,10 @@ func TestService_CreateViolation(t *testing.T) {
 		Severity:       SeverityHigh,
 		Description:    "Password does not meet minimum length requirement",
 	}
-	
+
 	// Act
 	violation, err := service.CreateViolation(ctx, req)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotEmpty(t, violation.ID)
@@ -271,7 +271,7 @@ func TestService_ResolveViolation(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	// Create a violation
 	violation, err := service.CreateViolation(ctx, &CreateViolationRequest{
 		ProfileID:      profile.ID,
@@ -282,13 +282,13 @@ func TestService_ResolveViolation(t *testing.T) {
 		Description:    "Password does not meet minimum length requirement",
 	})
 	require.NoError(t, err)
-	
+
 	// Act
 	err = service.ResolveViolation(ctx, violation.ID, "admin_user")
-	
+
 	// Assert
 	require.NoError(t, err)
-	
+
 	// Verify status changed
 	resolved, err := service.repo.GetViolation(ctx, violation.ID)
 	require.NoError(t, err)
@@ -301,14 +301,14 @@ func TestService_GetComplianceStatus(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	// Run some checks first
 	_, err := service.RunChecks(ctx, profile.ID)
 	require.NoError(t, err)
-	
+
 	// Act
 	status, err := service.GetComplianceStatus(ctx, profile.OrganizationID)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, status)
@@ -322,7 +322,7 @@ func TestService_CreateEvidence(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	req := &CreateEvidenceRequest{
 		ProfileID:      profile.ID,
 		OrganizationID: "org_123",
@@ -332,10 +332,10 @@ func TestService_CreateEvidence(t *testing.T) {
 		EvidenceType:   "document",
 		Content:        "Policy content here...",
 	}
-	
+
 	// Act
 	evidence, err := service.CreateEvidence(ctx, req)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotEmpty(t, evidence.ID)
@@ -348,7 +348,7 @@ func TestService_CreatePolicy(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	req := &CreatePolicyRequest{
 		OrganizationID: "org_123",
 		ProfileID:      profile.ID,
@@ -358,10 +358,10 @@ func TestService_CreatePolicy(t *testing.T) {
 		Rules:          map[string]interface{}{"min_length": 12, "require_special": true},
 		Enabled:        true,
 	}
-	
+
 	// Act
 	policy, err := service.CreatePolicy(ctx, req)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotEmpty(t, policy.ID)
@@ -374,7 +374,7 @@ func TestService_CreateTraining(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	req := &CreateTrainingRequest{
 		ProfileID:      profile.ID,
 		OrganizationID: "org_123",
@@ -383,10 +383,10 @@ func TestService_CreateTraining(t *testing.T) {
 		Standard:       StandardSOC2,
 		DueDate:        time.Now().Add(30 * 24 * time.Hour),
 	}
-	
+
 	// Act
 	training, err := service.CreateTraining(ctx, req)
-	
+
 	// Assert
 	require.NoError(t, err)
 	assert.NotEmpty(t, training.ID)
@@ -399,7 +399,7 @@ func TestService_CompleteTraining(t *testing.T) {
 	ctx := context.Background()
 	service := setupTestService(t)
 	profile := createTestProfile(t, service, "org_123", StandardSOC2)
-	
+
 	// Create training
 	training, err := service.CreateTraining(ctx, &CreateTrainingRequest{
 		ProfileID:      profile.ID,
@@ -410,13 +410,13 @@ func TestService_CompleteTraining(t *testing.T) {
 		DueDate:        time.Now().Add(30 * 24 * time.Hour),
 	})
 	require.NoError(t, err)
-	
+
 	// Act
 	err = service.CompleteTraining(ctx, training.ID, "user_123")
-	
+
 	// Assert
 	require.NoError(t, err)
-	
+
 	// Verify status changed
 	completed, err := service.repo.GetTraining(ctx, training.ID)
 	require.NoError(t, err)
@@ -445,16 +445,16 @@ func TestService_CreateProfileFromTemplate(t *testing.T) {
 			wantErr:  false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			ctx := context.Background()
 			service := setupTestService(t)
-			
+
 			// Act
 			profile, err := service.CreateProfileFromTemplate(ctx, "org_123", tt.standard)
-			
+
 			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -472,15 +472,15 @@ func TestService_CreateProfileFromTemplate(t *testing.T) {
 
 func setupTestService(t *testing.T) *Service {
 	t.Helper()
-	
+
 	mockRepo := NewMockRepository()
 	mockAudit := NewMockAuditService()
 	mockUser := NewMockUserService()
 	mockOrg := NewMockOrganizationService()
 	mockEmail := NewMockEmailService()
-	
+
 	config := DefaultConfig()
-	
+
 	return NewService(
 		mockRepo,
 		config,
@@ -493,7 +493,7 @@ func setupTestService(t *testing.T) *Service {
 
 func createTestProfile(t *testing.T, service *Service, orgID string, standard ComplianceStandard) *ComplianceProfile {
 	t.Helper()
-	
+
 	profile, err := service.CreateProfile(context.Background(), &CreateProfileRequest{
 		OrganizationID: orgID,
 		Standard:       standard,
@@ -502,8 +502,7 @@ func createTestProfile(t *testing.T, service *Service, orgID string, standard Co
 			RequirementMFARequired,
 		},
 	})
-	
+
 	require.NoError(t, err)
 	return profile
 }
-

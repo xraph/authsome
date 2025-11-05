@@ -51,22 +51,22 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 	if e == "" {
 		return "", fmt.Errorf("missing email")
 	}
-	
+
 	token, err := crypto.GenerateToken(32)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Calculate expiry
 	expiryDuration := time.Duration(s.config.ExpiryMinutes) * time.Minute
-	
+
 	if err := s.repo.Create(ctx, e, token, time.Now().Add(expiryDuration)); err != nil {
 		return "", err
 	}
-	
+
 	esc := url.QueryEscape(token)
 	magicLink := s.config.BaseURL + "/api/auth/magic-link/verify?token=" + esc
-	
+
 	// Get user name for personalization
 	userName := e
 	if u, _ := s.users.FindByEmail(ctx, e); u != nil && u.Name != "" {
@@ -74,7 +74,7 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 	} else if at := strings.Index(e, "@"); at > 0 {
 		userName = e[:at]
 	}
-	
+
 	// Send via notification plugin if available
 	if s.notifAdapter != nil {
 		err := s.notifAdapter.SendMagicLink(ctx, "default", e, userName, magicLink, s.config.ExpiryMinutes)
@@ -83,11 +83,11 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 			fmt.Printf("Failed to send magic link via notification plugin: %v\n", err)
 		}
 	}
-	
+
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, "magiclink_sent", "email:"+e, ip, ua, "")
 	}
-	
+
 	if s.config.DevExposeURL || s.notifAdapter == nil {
 		return magicLink, nil
 	}

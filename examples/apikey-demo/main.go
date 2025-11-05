@@ -120,7 +120,7 @@ func setupDemoRoutes(router forge.Router, plugin *apikeyPlugin.Plugin) {
 
 	// API v1 routes - protected by API key
 	apiV1 := router.Group("/api/v1")
-	
+
 	// Apply API key authentication middleware
 	// This makes API key auth optional - sets context if valid key provided
 	apiV1.Use(plugin.Middleware())
@@ -271,4 +271,3 @@ func createDemoAPIKey(service *apikey.Service) {
 	fmt.Println("=================================")
 	fmt.Println()
 }
-

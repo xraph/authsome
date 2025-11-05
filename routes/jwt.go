@@ -22,7 +22,7 @@ func RegisterJWTRoutes(router forge.Router, handler *jwtPlugin.Handler) {
 			forge.WithTags("JWT", "Keys"),
 			forge.WithValidation(true),
 		)
-		
+
 		jwtKeys.GET("", handler.ListJWTKeys,
 			forge.WithName("jwt.keys.list"),
 			forge.WithSummary("List JWT keys"),
@@ -48,7 +48,7 @@ func RegisterJWTRoutes(router forge.Router, handler *jwtPlugin.Handler) {
 			forge.WithTags("JWT", "Tokens"),
 			forge.WithValidation(true),
 		)
-		
+
 		jwtTokens.POST("/verify", handler.VerifyToken,
 			forge.WithName("jwt.verify"),
 			forge.WithSummary("Verify JWT token"),
@@ -60,7 +60,7 @@ func RegisterJWTRoutes(router forge.Router, handler *jwtPlugin.Handler) {
 			forge.WithTags("JWT", "Tokens"),
 			forge.WithValidation(true),
 		)
-		
+
 		jwtTokens.GET("/jwks", handler.GetJWKS,
 			forge.WithName("jwt.jwks"),
 			forge.WithSummary("Get JSON Web Key Set (JWKS)"),

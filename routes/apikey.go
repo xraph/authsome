@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/forge"
 )
 
@@ -22,7 +22,7 @@ func RegisterAPIKeyRoutes(router forge.Router, handler *handlers.APIKeyHandler) 
 			forge.WithTags("API Keys"),
 			forge.WithValidation(true),
 		)
-		
+
 		apikeys.GET("", handler.ListAPIKeys,
 			forge.WithName("apikey.list"),
 			forge.WithSummary("List API keys"),
@@ -31,7 +31,7 @@ func RegisterAPIKeyRoutes(router forge.Router, handler *handlers.APIKeyHandler) 
 			forge.WithResponseSchema(500, "Internal server error", APIKeyErrorResponse{}),
 			forge.WithTags("API Keys"),
 		)
-		
+
 		apikeys.GET("/:id", handler.GetAPIKey,
 			forge.WithName("apikey.get"),
 			forge.WithSummary("Get API key"),
@@ -41,7 +41,7 @@ func RegisterAPIKeyRoutes(router forge.Router, handler *handlers.APIKeyHandler) 
 			forge.WithResponseSchema(404, "API key not found", APIKeyErrorResponse{}),
 			forge.WithTags("API Keys"),
 		)
-		
+
 		apikeys.PUT("/:id", handler.UpdateAPIKey,
 			forge.WithName("apikey.update"),
 			forge.WithSummary("Update API key"),
@@ -53,7 +53,7 @@ func RegisterAPIKeyRoutes(router forge.Router, handler *handlers.APIKeyHandler) 
 			forge.WithTags("API Keys"),
 			forge.WithValidation(true),
 		)
-		
+
 		apikeys.DELETE("/:id", handler.DeleteAPIKey,
 			forge.WithName("apikey.delete"),
 			forge.WithSummary("Delete API key"),
@@ -63,7 +63,7 @@ func RegisterAPIKeyRoutes(router forge.Router, handler *handlers.APIKeyHandler) 
 			forge.WithResponseSchema(500, "Internal server error", APIKeyErrorResponse{}),
 			forge.WithTags("API Keys"),
 		)
-		
+
 		apikeys.POST("/verify", handler.VerifyAPIKey,
 			forge.WithName("apikey.verify"),
 			forge.WithSummary("Verify API key"),

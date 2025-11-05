@@ -34,23 +34,23 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("phone plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for phone plugin")
 	}
-	
+
 	p.db = db
-	
+
 	// TODO: Get notification adapter from service registry when available
 	// For now, plugins will work without notification adapter (graceful degradation)
 	// The notification plugin should be registered first and will set up its services
-	
+
 	pr := repo.NewPhoneRepository(db)
 	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
 	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)

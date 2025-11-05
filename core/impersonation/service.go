@@ -15,66 +15,66 @@ import (
 )
 
 var (
-	ErrPermissionDenied        = errors.New("impersonation: permission denied")
-	ErrUserNotFound            = errors.New("impersonation: user not found")
-	ErrSessionNotFound         = errors.New("impersonation: session not found")
-	ErrImpersonationNotFound   = errors.New("impersonation: impersonation session not found")
-	ErrAlreadyImpersonating    = errors.New("impersonation: already impersonating another user")
-	ErrCannotImpersonateSelf   = errors.New("impersonation: cannot impersonate yourself")
-	ErrSessionExpired          = errors.New("impersonation: session expired")
-	ErrInvalidReason           = errors.New("impersonation: reason must be at least 10 characters")
-	ErrInvalidDuration         = errors.New("impersonation: duration must be between 1 minute and max allowed")
+	ErrPermissionDenied      = errors.New("impersonation: permission denied")
+	ErrUserNotFound          = errors.New("impersonation: user not found")
+	ErrSessionNotFound       = errors.New("impersonation: session not found")
+	ErrImpersonationNotFound = errors.New("impersonation: impersonation session not found")
+	ErrAlreadyImpersonating  = errors.New("impersonation: already impersonating another user")
+	ErrCannotImpersonateSelf = errors.New("impersonation: cannot impersonate yourself")
+	ErrSessionExpired        = errors.New("impersonation: session expired")
+	ErrInvalidReason         = errors.New("impersonation: reason must be at least 10 characters")
+	ErrInvalidDuration       = errors.New("impersonation: duration must be between 1 minute and max allowed")
 )
 
 // Config holds impersonation service configuration
 type Config struct {
 	// Time limits
-	DefaultDurationMinutes int           `json:"default_duration_minutes" yaml:"default_duration_minutes"`
-	MaxDurationMinutes     int           `json:"max_duration_minutes" yaml:"max_duration_minutes"`
-	MinDurationMinutes     int           `json:"min_duration_minutes" yaml:"min_duration_minutes"`
-	
+	DefaultDurationMinutes int `json:"default_duration_minutes" yaml:"default_duration_minutes"`
+	MaxDurationMinutes     int `json:"max_duration_minutes" yaml:"max_duration_minutes"`
+	MinDurationMinutes     int `json:"min_duration_minutes" yaml:"min_duration_minutes"`
+
 	// Security
-	RequireReason          bool          `json:"require_reason" yaml:"require_reason"`
-	RequireTicket          bool          `json:"require_ticket" yaml:"require_ticket"`
-	MinReasonLength        int           `json:"min_reason_length" yaml:"min_reason_length"`
-	
+	RequireReason   bool `json:"require_reason" yaml:"require_reason"`
+	RequireTicket   bool `json:"require_ticket" yaml:"require_ticket"`
+	MinReasonLength int  `json:"min_reason_length" yaml:"min_reason_length"`
+
 	// RBAC
-	RequirePermission      bool          `json:"require_permission" yaml:"require_permission"`
-	ImpersonatePermission  string        `json:"impersonate_permission" yaml:"impersonate_permission"`
-	
+	RequirePermission     bool   `json:"require_permission" yaml:"require_permission"`
+	ImpersonatePermission string `json:"impersonate_permission" yaml:"impersonate_permission"`
+
 	// Audit
-	AuditAllActions        bool          `json:"audit_all_actions" yaml:"audit_all_actions"` // Log every action during impersonation
-	
+	AuditAllActions bool `json:"audit_all_actions" yaml:"audit_all_actions"` // Log every action during impersonation
+
 	// Auto-cleanup
-	AutoCleanupEnabled     bool          `json:"auto_cleanup_enabled" yaml:"auto_cleanup_enabled"`
-	CleanupIntervalMinutes int           `json:"cleanup_interval_minutes" yaml:"cleanup_interval_minutes"`
+	AutoCleanupEnabled     bool `json:"auto_cleanup_enabled" yaml:"auto_cleanup_enabled"`
+	CleanupIntervalMinutes int  `json:"cleanup_interval_minutes" yaml:"cleanup_interval_minutes"`
 }
 
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		DefaultDurationMinutes:  30,
-		MaxDurationMinutes:      480, // 8 hours
-		MinDurationMinutes:      1,
-		RequireReason:           true,
-		RequireTicket:           false,
-		MinReasonLength:         10,
-		RequirePermission:       true,
-		ImpersonatePermission:   "impersonate:user",
-		AuditAllActions:         true,
-		AutoCleanupEnabled:      true,
-		CleanupIntervalMinutes:  15,
+		DefaultDurationMinutes: 30,
+		MaxDurationMinutes:     480, // 8 hours
+		MinDurationMinutes:     1,
+		RequireReason:          true,
+		RequireTicket:          false,
+		MinReasonLength:        10,
+		RequirePermission:      true,
+		ImpersonatePermission:  "impersonate:user",
+		AuditAllActions:        true,
+		AutoCleanupEnabled:     true,
+		CleanupIntervalMinutes: 15,
 	}
 }
 
 // Service handles impersonation business logic
 type Service struct {
-	repo        Repository
-	userSvc     user.ServiceInterface
-	sessionSvc  session.ServiceInterface
-	auditSvc    *audit.Service
-	rbacSvc     *rbac.Service
-	config      Config
+	repo       Repository
+	userSvc    user.ServiceInterface
+	sessionSvc session.ServiceInterface
+	auditSvc   *audit.Service
+	rbacSvc    *rbac.Service
+	config     Config
 }
 
 // NewService creates a new impersonation service
@@ -166,20 +166,20 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 
 	// Create impersonation record
 	impersonationSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  req.OrganizationID,
-		ImpersonatorID:  req.ImpersonatorID,
-		TargetUserID:    req.TargetUserID,
-		NewSessionID:    &newSession.ID,
-		SessionToken:    newSession.Token, // Store token for later revocation
-		Reason:          req.Reason,
-		TicketNumber:    req.TicketNumber,
-		IPAddress:       req.IPAddress,
-		UserAgent:       req.UserAgent,
-		Active:          true,
-		ExpiresAt:       time.Now().UTC().Add(time.Duration(duration) * time.Minute),
-		CreatedAt:       time.Now().UTC(),
-		UpdatedAt:       time.Now().UTC(),
+		ID:             xid.New(),
+		OrganizationID: req.OrganizationID,
+		ImpersonatorID: req.ImpersonatorID,
+		TargetUserID:   req.TargetUserID,
+		NewSessionID:   &newSession.ID,
+		SessionToken:   newSession.Token, // Store token for later revocation
+		Reason:         req.Reason,
+		TicketNumber:   req.TicketNumber,
+		IPAddress:      req.IPAddress,
+		UserAgent:      req.UserAgent,
+		Active:         true,
+		ExpiresAt:      time.Now().UTC().Add(time.Duration(duration) * time.Minute),
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
 	}
 
 	if err := s.repo.Create(ctx, impersonationSession); err != nil {
@@ -190,13 +190,13 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 
 	// Log audit event
 	s.auditLog(ctx, &impersonationSession.ID, "impersonation_started", req.OrganizationID, req.ImpersonatorID, req.IPAddress, req.UserAgent, map[string]string{
-		"target_user_id":      req.TargetUserID.String(),
-		"target_user_email":   targetUser.Email,
-		"impersonator_email":  impersonator.Email,
-		"reason":              req.Reason,
-		"ticket_number":       req.TicketNumber,
-		"duration_minutes":    fmt.Sprintf("%d", duration),
-		"expires_at":          impersonationSession.ExpiresAt.Format(time.RFC3339),
+		"target_user_id":     req.TargetUserID.String(),
+		"target_user_email":  targetUser.Email,
+		"impersonator_email": impersonator.Email,
+		"reason":             req.Reason,
+		"ticket_number":      req.TicketNumber,
+		"duration_minutes":   fmt.Sprintf("%d", duration),
+		"expires_at":         impersonationSession.ExpiresAt.Format(time.RFC3339),
 	})
 
 	// Create detailed audit event in impersonation audit table
@@ -208,11 +208,11 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 		IPAddress:       req.IPAddress,
 		UserAgent:       req.UserAgent,
 		Details: map[string]string{
-			"target_user_id":     req.TargetUserID.String(),
-			"impersonator_id":    req.ImpersonatorID.String(),
-			"reason":             req.Reason,
-			"ticket_number":      req.TicketNumber,
-			"duration_minutes":   fmt.Sprintf("%d", duration),
+			"target_user_id":   req.TargetUserID.String(),
+			"impersonator_id":  req.ImpersonatorID.String(),
+			"reason":           req.Reason,
+			"ticket_number":    req.TicketNumber,
+			"duration_minutes": fmt.Sprintf("%d", duration),
 		},
 		CreatedAt: time.Now().UTC(),
 	}
@@ -287,8 +287,8 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 		OrganizationID:  req.OrganizationID,
 		EventType:       "ended",
 		Details: map[string]string{
-			"end_reason":     impersonationSession.EndReason,
-			"duration":       time.Since(impersonationSession.CreatedAt).String(),
+			"end_reason": impersonationSession.EndReason,
+			"duration":   time.Since(impersonationSession.CreatedAt).String(),
 		},
 		CreatedAt: time.Now().UTC(),
 	}
@@ -461,4 +461,3 @@ func (s *Service) auditLog(ctx context.Context, impersonationID *xid.ID, action 
 
 	_ = s.auditSvc.Log(ctx, &userID, action, resource, ip, ua, metadataStr)
 }
-

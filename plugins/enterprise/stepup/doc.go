@@ -371,13 +371,13 @@
 //
 // # Best Practices
 //
-//   1. Start Conservative - Begin with stricter rules, relax as needed
-//   2. Monitor Patterns - Review audit logs for optimization opportunities
-//   3. User Communication - Clearly explain why verification is required
-//   4. Graceful Degradation - Handle failures gracefully
-//   5. Test Thoroughly - Test all security levels and edge cases
-//   6. Regular Review - Review and update rules periodically
-//   7. Performance - Use caching for high-traffic routes
+//  1. Start Conservative - Begin with stricter rules, relax as needed
+//  2. Monitor Patterns - Review audit logs for optimization opportunities
+//  3. User Communication - Clearly explain why verification is required
+//  4. Graceful Degradation - Handle failures gracefully
+//  5. Test Thoroughly - Test all security levels and edge cases
+//  6. Regular Review - Review and update rules periodically
+//  7. Performance - Use caching for high-traffic routes
 //
 // # Documentation
 //
@@ -394,4 +394,3 @@
 //   - Documentation: https://authsome.dev/docs/plugins/stepup
 //   - Issues: https://github.com/xraph/authsome/issues
 package stepup
-

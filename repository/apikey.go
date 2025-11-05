@@ -180,7 +180,7 @@ func (r *APIKeyRepository) CleanupExpired(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	return int(rowsAffected), err
 }

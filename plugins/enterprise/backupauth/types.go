@@ -10,22 +10,22 @@ import (
 
 // StartRecoveryRequest initiates a recovery session
 type StartRecoveryRequest struct {
-	UserID         string   `json:"userId"`
-	Email          string   `json:"email,omitempty"`
+	UserID          string         `json:"userId"`
+	Email           string         `json:"email,omitempty"`
 	PreferredMethod RecoveryMethod `json:"preferredMethod,omitempty"`
-	DeviceID       string   `json:"deviceId,omitempty"`
+	DeviceID        string         `json:"deviceId,omitempty"`
 }
 
 // StartRecoveryResponse returns recovery session details
 type StartRecoveryResponse struct {
-	SessionID       xid.ID           `json:"sessionId"`
-	Status          RecoveryStatus   `json:"status"`
+	SessionID        xid.ID           `json:"sessionId"`
+	Status           RecoveryStatus   `json:"status"`
 	AvailableMethods []RecoveryMethod `json:"availableMethods"`
-	RequiredSteps   int              `json:"requiredSteps"`
-	CompletedSteps  int              `json:"completedSteps"`
-	ExpiresAt       time.Time        `json:"expiresAt"`
-	RiskScore       float64          `json:"riskScore,omitempty"`
-	RequiresReview  bool             `json:"requiresReview"`
+	RequiredSteps    int              `json:"requiredSteps"`
+	CompletedSteps   int              `json:"completedSteps"`
+	ExpiresAt        time.Time        `json:"expiresAt"`
+	RiskScore        float64          `json:"riskScore,omitempty"`
+	RequiresReview   bool             `json:"requiresReview"`
 }
 
 // ContinueRecoveryRequest continues a recovery session with method selection
@@ -36,13 +36,13 @@ type ContinueRecoveryRequest struct {
 
 // ContinueRecoveryResponse provides next steps
 type ContinueRecoveryResponse struct {
-	SessionID      xid.ID           `json:"sessionId"`
-	Method         RecoveryMethod   `json:"method"`
-	CurrentStep    int              `json:"currentStep"`
-	TotalSteps     int              `json:"totalSteps"`
-	Instructions   string           `json:"instructions"`
-	Data           map[string]interface{} `json:"data,omitempty"`
-	ExpiresAt      time.Time        `json:"expiresAt"`
+	SessionID    xid.ID                 `json:"sessionId"`
+	Method       RecoveryMethod         `json:"method"`
+	CurrentStep  int                    `json:"currentStep"`
+	TotalSteps   int                    `json:"totalSteps"`
+	Instructions string                 `json:"instructions"`
+	Data         map[string]interface{} `json:"data,omitempty"`
+	ExpiresAt    time.Time              `json:"expiresAt"`
 }
 
 // CompleteRecoveryRequest finalizes recovery
@@ -52,11 +52,11 @@ type CompleteRecoveryRequest struct {
 
 // CompleteRecoveryResponse returns recovery completion details
 type CompleteRecoveryResponse struct {
-	SessionID   xid.ID    `json:"sessionId"`
+	SessionID   xid.ID         `json:"sessionId"`
 	Status      RecoveryStatus `json:"status"`
-	CompletedAt time.Time `json:"completedAt"`
-	Token       string    `json:"token,omitempty"` // Temporary token to reset password
-	Message     string    `json:"message"`
+	CompletedAt time.Time      `json:"completedAt"`
+	Token       string         `json:"token,omitempty"` // Temporary token to reset password
+	Message     string         `json:"message"`
 }
 
 // CancelRecoveryRequest cancels a recovery session
@@ -75,10 +75,10 @@ type GenerateRecoveryCodesRequest struct {
 
 // GenerateRecoveryCodesResponse returns generated codes
 type GenerateRecoveryCodesResponse struct {
-	Codes      []string  `json:"codes"`
-	Count      int       `json:"count"`
+	Codes       []string  `json:"codes"`
+	Count       int       `json:"count"`
 	GeneratedAt time.Time `json:"generatedAt"`
-	Warning    string    `json:"warning"`
+	Warning     string    `json:"warning"`
 }
 
 // VerifyRecoveryCodeRequest verifies a recovery code
@@ -89,9 +89,9 @@ type VerifyRecoveryCodeRequest struct {
 
 // VerifyRecoveryCodeResponse returns verification result
 type VerifyRecoveryCodeResponse struct {
-	Valid         bool   `json:"valid"`
-	RemainingCodes int   `json:"remainingCodes,omitempty"`
-	Message       string `json:"message"`
+	Valid          bool   `json:"valid"`
+	RemainingCodes int    `json:"remainingCodes,omitempty"`
+	Message        string `json:"message"`
 }
 
 // ===== Security Questions =====
@@ -135,17 +135,17 @@ type GetSecurityQuestionsResponse struct {
 
 // VerifySecurityAnswersRequest verifies security answers
 type VerifySecurityAnswersRequest struct {
-	SessionID xid.ID                `json:"sessionId"`
-	Answers   map[string]string     `json:"answers"` // questionID -> answer
+	SessionID xid.ID            `json:"sessionId"`
+	Answers   map[string]string `json:"answers"` // questionID -> answer
 }
 
 // VerifySecurityAnswersResponse returns verification result
 type VerifySecurityAnswersResponse struct {
-	Valid          bool   `json:"valid"`
-	CorrectAnswers int    `json:"correctAnswers"`
-	RequiredAnswers int   `json:"requiredAnswers"`
-	AttemptsLeft   int    `json:"attemptsLeft"`
-	Message        string `json:"message"`
+	Valid           bool   `json:"valid"`
+	CorrectAnswers  int    `json:"correctAnswers"`
+	RequiredAnswers int    `json:"requiredAnswers"`
+	AttemptsLeft    int    `json:"attemptsLeft"`
+	Message         string `json:"message"`
 }
 
 // ===== Trusted Contacts =====
@@ -190,11 +190,11 @@ type RequestTrustedContactVerificationRequest struct {
 
 // RequestTrustedContactVerificationResponse returns request result
 type RequestTrustedContactVerificationResponse struct {
-	ContactID    xid.ID    `json:"contactId"`
-	ContactName  string    `json:"contactName"`
-	NotifiedAt   time.Time `json:"notifiedAt"`
-	ExpiresAt    time.Time `json:"expiresAt"`
-	Message      string    `json:"message"`
+	ContactID   xid.ID    `json:"contactId"`
+	ContactName string    `json:"contactName"`
+	NotifiedAt  time.Time `json:"notifiedAt"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	Message     string    `json:"message"`
 }
 
 // ListTrustedContactsResponse returns user's trusted contacts
@@ -225,16 +225,16 @@ type RemoveTrustedContactRequest struct {
 // SendVerificationCodeRequest sends a verification code
 type SendVerificationCodeRequest struct {
 	SessionID xid.ID         `json:"sessionId"`
-	Method    RecoveryMethod `json:"method"` // email_verification or sms_verification
+	Method    RecoveryMethod `json:"method"`           // email_verification or sms_verification
 	Target    string         `json:"target,omitempty"` // Email or phone if different from user's
 }
 
 // SendVerificationCodeResponse returns send result
 type SendVerificationCodeResponse struct {
-	Sent       bool      `json:"sent"`
-	MaskedTarget string  `json:"maskedTarget"` // e.g., "j***@example.com" or "+1***5678"
-	ExpiresAt  time.Time `json:"expiresAt"`
-	Message    string    `json:"message"`
+	Sent         bool      `json:"sent"`
+	MaskedTarget string    `json:"maskedTarget"` // e.g., "j***@example.com" or "+1***5678"
+	ExpiresAt    time.Time `json:"expiresAt"`
+	Message      string    `json:"message"`
 }
 
 // VerifyCodeRequest verifies a sent code
@@ -284,10 +284,10 @@ type StartVideoSessionResponse struct {
 
 // CompleteVideoSessionRequest completes video verification (admin)
 type CompleteVideoSessionRequest struct {
-	VideoSessionID     xid.ID `json:"videoSessionId"`
-	VerificationResult string `json:"verificationResult"` // approved, rejected
-	Notes              string `json:"notes,omitempty"`
-	LivenessPassed     bool   `json:"livenessPassed"`
+	VideoSessionID     xid.ID  `json:"videoSessionId"`
+	VerificationResult string  `json:"verificationResult"` // approved, rejected
+	Notes              string  `json:"notes,omitempty"`
+	LivenessPassed     bool    `json:"livenessPassed"`
 	LivenessScore      float64 `json:"livenessScore,omitempty"`
 }
 
@@ -304,10 +304,10 @@ type CompleteVideoSessionResponse struct {
 // UploadDocumentRequest uploads verification documents
 type UploadDocumentRequest struct {
 	SessionID    xid.ID `json:"sessionId"`
-	DocumentType string `json:"documentType"` // passport, drivers_license, etc.
-	FrontImage   string `json:"frontImage"` // Base64 encoded
+	DocumentType string `json:"documentType"`        // passport, drivers_license, etc.
+	FrontImage   string `json:"frontImage"`          // Base64 encoded
 	BackImage    string `json:"backImage,omitempty"` // Base64 encoded
-	Selfie       string `json:"selfie,omitempty"` // Base64 encoded
+	Selfie       string `json:"selfie,omitempty"`    // Base64 encoded
 }
 
 // UploadDocumentResponse returns upload result
@@ -326,20 +326,20 @@ type GetDocumentVerificationRequest struct {
 
 // GetDocumentVerificationResponse returns verification status
 type GetDocumentVerificationResponse struct {
-	DocumentID      xid.ID    `json:"documentId"`
-	Status          string    `json:"status"` // pending, verified, rejected
-	ConfidenceScore float64   `json:"confidenceScore,omitempty"`
+	DocumentID      xid.ID     `json:"documentId"`
+	Status          string     `json:"status"` // pending, verified, rejected
+	ConfidenceScore float64    `json:"confidenceScore,omitempty"`
 	VerifiedAt      *time.Time `json:"verifiedAt,omitempty"`
-	RejectionReason string    `json:"rejectionReason,omitempty"`
-	Message         string    `json:"message"`
+	RejectionReason string     `json:"rejectionReason,omitempty"`
+	Message         string     `json:"message"`
 }
 
 // ReviewDocumentRequest reviews document (admin)
 type ReviewDocumentRequest struct {
-	DocumentID      xid.ID  `json:"documentId"`
-	Approved        bool    `json:"approved"`
-	RejectionReason string  `json:"rejectionReason,omitempty"`
-	Notes           string  `json:"notes,omitempty"`
+	DocumentID      xid.ID `json:"documentId"`
+	Approved        bool   `json:"approved"`
+	RejectionReason string `json:"rejectionReason,omitempty"`
+	Notes           string `json:"notes,omitempty"`
 }
 
 // ===== Admin Endpoints =====
@@ -418,15 +418,15 @@ type GetRecoveryStatsRequest struct {
 
 // GetRecoveryStatsResponse returns statistics
 type GetRecoveryStatsResponse struct {
-	TotalAttempts      int                        `json:"totalAttempts"`
-	SuccessfulRecoveries int                      `json:"successfulRecoveries"`
-	FailedRecoveries   int                        `json:"failedRecoveries"`
-	PendingRecoveries  int                        `json:"pendingRecoveries"`
-	SuccessRate        float64                    `json:"successRate"`
-	MethodStats        map[RecoveryMethod]int     `json:"methodStats"`
-	AverageRiskScore   float64                    `json:"averageRiskScore"`
-	HighRiskAttempts   int                        `json:"highRiskAttempts"`
-	AdminReviewsRequired int                      `json:"adminReviewsRequired"`
+	TotalAttempts        int                    `json:"totalAttempts"`
+	SuccessfulRecoveries int                    `json:"successfulRecoveries"`
+	FailedRecoveries     int                    `json:"failedRecoveries"`
+	PendingRecoveries    int                    `json:"pendingRecoveries"`
+	SuccessRate          float64                `json:"successRate"`
+	MethodStats          map[RecoveryMethod]int `json:"methodStats"`
+	AverageRiskScore     float64                `json:"averageRiskScore"`
+	HighRiskAttempts     int                    `json:"highRiskAttempts"`
+	AdminReviewsRequired int                    `json:"adminReviewsRequired"`
 }
 
 // ===== Configuration =====
@@ -453,11 +453,11 @@ type GetRecoveryConfigResponse struct {
 
 // HealthCheckResponse returns plugin health status
 type HealthCheckResponse struct {
-	Healthy          bool              `json:"healthy"`
-	Version          string            `json:"version"`
-	EnabledMethods   []RecoveryMethod  `json:"enabledMethods"`
-	ProvidersStatus  map[string]string `json:"providersStatus,omitempty"`
-	Message          string            `json:"message,omitempty"`
+	Healthy         bool              `json:"healthy"`
+	Version         string            `json:"version"`
+	EnabledMethods  []RecoveryMethod  `json:"enabledMethods"`
+	ProvidersStatus map[string]string `json:"providersStatus,omitempty"`
+	Message         string            `json:"message,omitempty"`
 }
 
 // ===== Common Types =====
@@ -475,4 +475,3 @@ type SuccessResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
-

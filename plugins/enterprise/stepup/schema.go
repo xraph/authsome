@@ -13,8 +13,8 @@ type StepUpVerification struct {
 	IP            string                 `bun:"ip" json:"ip"`
 	UserAgent     string                 `bun:"user_agent" json:"user_agent"`
 	DeviceID      string                 `bun:"device_id" json:"device_id"`
-	Reason        string                 `bun:"reason" json:"reason"`           // Why step-up was required
-	RuleName      string                 `bun:"rule_name" json:"rule_name"`     // Which rule triggered
+	Reason        string                 `bun:"reason" json:"reason"`       // Why step-up was required
+	RuleName      string                 `bun:"rule_name" json:"rule_name"` // Which rule triggered
 	VerifiedAt    time.Time              `bun:"verified_at,notnull" json:"verified_at"`
 	ExpiresAt     time.Time              `bun:"expires_at,notnull" json:"expires_at"`
 	Metadata      map[string]interface{} `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
@@ -23,29 +23,29 @@ type StepUpVerification struct {
 
 // StepUpRequirement represents a step-up requirement record
 type StepUpRequirement struct {
-	ID              string                 `bun:"id,pk" json:"id"`
-	UserID          string                 `bun:"user_id,notnull" json:"user_id"`
-	OrgID           string                 `bun:"org_id,notnull" json:"org_id"`
-	SessionID       string                 `bun:"session_id" json:"session_id"`
-	RequiredLevel   SecurityLevel          `bun:"required_level,notnull" json:"required_level"`
-	CurrentLevel    SecurityLevel          `bun:"current_level,notnull" json:"current_level"`
-	Route           string                 `bun:"route" json:"route"`
-	Method          string                 `bun:"method" json:"method"`
-	Amount          float64                `bun:"amount" json:"amount,omitempty"`
-	Currency        string                 `bun:"currency" json:"currency,omitempty"`
-	ResourceType    string                 `bun:"resource_type" json:"resource_type,omitempty"`
-	ResourceAction  string                 `bun:"resource_action" json:"resource_action,omitempty"`
-	RuleName        string                 `bun:"rule_name" json:"rule_name"`
-	Reason          string                 `bun:"reason" json:"reason"`
-	Status          string                 `bun:"status,notnull" json:"status"` // pending, fulfilled, expired, bypassed
-	ChallengeToken  string                 `bun:"challenge_token" json:"challenge_token,omitempty"`
-	IP              string                 `bun:"ip" json:"ip"`
-	UserAgent       string                 `bun:"user_agent" json:"user_agent"`
-	RiskScore       float64                `bun:"risk_score" json:"risk_score,omitempty"`
-	Metadata        map[string]interface{} `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
-	CreatedAt       time.Time              `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
-	ExpiresAt       time.Time              `bun:"expires_at,notnull" json:"expires_at"`
-	FulfilledAt     *time.Time             `bun:"fulfilled_at" json:"fulfilled_at,omitempty"`
+	ID             string                 `bun:"id,pk" json:"id"`
+	UserID         string                 `bun:"user_id,notnull" json:"user_id"`
+	OrgID          string                 `bun:"org_id,notnull" json:"org_id"`
+	SessionID      string                 `bun:"session_id" json:"session_id"`
+	RequiredLevel  SecurityLevel          `bun:"required_level,notnull" json:"required_level"`
+	CurrentLevel   SecurityLevel          `bun:"current_level,notnull" json:"current_level"`
+	Route          string                 `bun:"route" json:"route"`
+	Method         string                 `bun:"method" json:"method"`
+	Amount         float64                `bun:"amount" json:"amount,omitempty"`
+	Currency       string                 `bun:"currency" json:"currency,omitempty"`
+	ResourceType   string                 `bun:"resource_type" json:"resource_type,omitempty"`
+	ResourceAction string                 `bun:"resource_action" json:"resource_action,omitempty"`
+	RuleName       string                 `bun:"rule_name" json:"rule_name"`
+	Reason         string                 `bun:"reason" json:"reason"`
+	Status         string                 `bun:"status,notnull" json:"status"` // pending, fulfilled, expired, bypassed
+	ChallengeToken string                 `bun:"challenge_token" json:"challenge_token,omitempty"`
+	IP             string                 `bun:"ip" json:"ip"`
+	UserAgent      string                 `bun:"user_agent" json:"user_agent"`
+	RiskScore      float64                `bun:"risk_score" json:"risk_score,omitempty"`
+	Metadata       map[string]interface{} `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
+	CreatedAt      time.Time              `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+	ExpiresAt      time.Time              `bun:"expires_at,notnull" json:"expires_at"`
+	FulfilledAt    *time.Time             `bun:"fulfilled_at" json:"fulfilled_at,omitempty"`
 }
 
 // StepUpRememberedDevice represents a device that's remembered for step-up bypass
@@ -95,22 +95,21 @@ type StepUpPolicy struct {
 
 // StepUpAuditLog represents audit logs for step-up events
 type StepUpAuditLog struct {
-	ID         string                 `bun:"id,pk" json:"id"`
-	UserID     string                 `bun:"user_id,notnull" json:"user_id"`
-	OrgID      string                 `bun:"org_id,notnull" json:"org_id"`
-	EventType  string                 `bun:"event_type,notnull" json:"event_type"`
-	EventData  map[string]interface{} `bun:"event_data,type:jsonb" json:"event_data"`
-	IP         string                 `bun:"ip" json:"ip"`
-	UserAgent  string                 `bun:"user_agent" json:"user_agent"`
-	Severity   string                 `bun:"severity,notnull" json:"severity"` // info, warning, critical
-	CreatedAt  time.Time              `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+	ID        string                 `bun:"id,pk" json:"id"`
+	UserID    string                 `bun:"user_id,notnull" json:"user_id"`
+	OrgID     string                 `bun:"org_id,notnull" json:"org_id"`
+	EventType string                 `bun:"event_type,notnull" json:"event_type"`
+	EventData map[string]interface{} `bun:"event_data,type:jsonb" json:"event_data"`
+	IP        string                 `bun:"ip" json:"ip"`
+	UserAgent string                 `bun:"user_agent" json:"user_agent"`
+	Severity  string                 `bun:"severity,notnull" json:"severity"` // info, warning, critical
+	CreatedAt time.Time              `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // Table names
-func (*StepUpVerification) TableName() string      { return "stepup_verifications" }
-func (*StepUpRequirement) TableName() string       { return "stepup_requirements" }
-func (*StepUpRememberedDevice) TableName() string  { return "stepup_remembered_devices" }
-func (*StepUpAttempt) TableName() string           { return "stepup_attempts" }
-func (*StepUpPolicy) TableName() string            { return "stepup_policies" }
-func (*StepUpAuditLog) TableName() string          { return "stepup_audit_logs" }
-
+func (*StepUpVerification) TableName() string     { return "stepup_verifications" }
+func (*StepUpRequirement) TableName() string      { return "stepup_requirements" }
+func (*StepUpRememberedDevice) TableName() string { return "stepup_remembered_devices" }
+func (*StepUpAttempt) TableName() string          { return "stepup_attempts" }
+func (*StepUpPolicy) TableName() string           { return "stepup_policies" }
+func (*StepUpAuditLog) TableName() string         { return "stepup_audit_logs" }

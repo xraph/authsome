@@ -317,7 +317,7 @@ func (m *Middleware) EvaluateMiddleware() forge.MiddlewareFunc {
 	return func(next forge.HandlerFunc) forge.HandlerFunc {
 		return func(c forge.Context) error {
 			userID, orgID, sessionID := m.extractUserContext(c)
-			
+
 			// Only evaluate if user is authenticated
 			if userID != "" {
 				evalCtx := &EvaluationContext{
@@ -335,7 +335,7 @@ func (m *Middleware) EvaluateMiddleware() forge.MiddlewareFunc {
 					// Store in context for handlers
 					ctx := context.WithValue(c.Request().Context(), "stepup_evaluation", result)
 					c.SetRequest(c.Request().WithContext(ctx))
-					
+
 					// Also set as context value for easy access
 					c.Set("stepup_evaluation", result)
 				}
@@ -355,4 +355,3 @@ func GetEvaluationFromContext(c forge.Context) (*EvaluationResult, error) {
 	}
 	return nil, fmt.Errorf("no step-up evaluation found in context")
 }
-

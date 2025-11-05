@@ -17,7 +17,7 @@ func TestNewParser(t *testing.T) {
 func TestParser_Parse_ValidExpressions(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	tests := []struct {
 		name       string
 		expression string
@@ -104,7 +104,7 @@ func TestParser_Parse_ValidExpressions(t *testing.T) {
 			wantErr:    false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ast, err := parser.Parse(tt.expression)
@@ -122,7 +122,7 @@ func TestParser_Parse_ValidExpressions(t *testing.T) {
 func TestParser_Parse_InvalidExpressions(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	tests := []struct {
 		name       string
 		expression string
@@ -164,7 +164,7 @@ func TestParser_Parse_InvalidExpressions(t *testing.T) {
 			errorMsg:   "expression must return boolean",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ast, err := parser.Parse(tt.expression)
@@ -178,11 +178,11 @@ func TestParser_Parse_InvalidExpressions(t *testing.T) {
 func TestParser_Program(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	expression := `resource.owner == principal.id`
 	ast, err := parser.Parse(expression)
 	require.NoError(t, err)
-	
+
 	prg, err := parser.Program(ast)
 	require.NoError(t, err)
 	assert.NotNil(t, prg)
@@ -191,7 +191,7 @@ func TestParser_Program(t *testing.T) {
 func TestParser_ValidateExpression(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	tests := []struct {
 		name       string
 		expression string
@@ -208,7 +208,7 @@ func TestParser_ValidateExpression(t *testing.T) {
 			wantErr:    true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := parser.ValidateExpression(tt.expression)
@@ -224,7 +224,7 @@ func TestParser_ValidateExpression(t *testing.T) {
 func TestParser_ExampleExpressions(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	// Verify all example expressions are valid
 	for name, expression := range ExampleExpressions {
 		t.Run(name, func(t *testing.T) {
@@ -238,12 +238,12 @@ func TestParser_ExampleExpressions(t *testing.T) {
 func TestParser_ExpressionComplexity(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	tests := []struct {
-		name           string
-		expression     string
-		minComplexity  int
-		maxComplexity  int
+		name          string
+		expression    string
+		minComplexity int
+		maxComplexity int
 	}{
 		{
 			name:          "simple equality",
@@ -258,12 +258,12 @@ func TestParser_ExpressionComplexity(t *testing.T) {
 			maxComplexity: 20,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ast, err := parser.Parse(tt.expression)
 			require.NoError(t, err)
-			
+
 			complexity := parser.ExpressionComplexity(ast)
 			assert.GreaterOrEqual(t, complexity, tt.minComplexity)
 			assert.LessOrEqual(t, complexity, tt.maxComplexity)
@@ -274,7 +274,7 @@ func TestParser_ExpressionComplexity(t *testing.T) {
 func TestParser_GetFunctionHelp(t *testing.T) {
 	parser, err := NewParser()
 	require.NoError(t, err)
-	
+
 	help := parser.GetFunctionHelp()
 	assert.NotEmpty(t, help)
 	assert.Contains(t, help, "has_role(role)")
@@ -285,9 +285,9 @@ func TestParser_GetFunctionHelp(t *testing.T) {
 func BenchmarkParser_Parse(b *testing.B) {
 	parser, err := NewParser()
 	require.NoError(b, err)
-	
+
 	expression := `resource.owner == principal.id || has_role("admin")`
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := parser.Parse(expression)
@@ -300,11 +300,11 @@ func BenchmarkParser_Parse(b *testing.B) {
 func BenchmarkParser_Program(b *testing.B) {
 	parser, err := NewParser()
 	require.NoError(b, err)
-	
+
 	expression := `resource.owner == principal.id || has_role("admin")`
 	ast, err := parser.Parse(expression)
 	require.NoError(b, err)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := parser.Program(ast)
@@ -313,4 +313,3 @@ func BenchmarkParser_Program(b *testing.B) {
 		}
 	}
 }
-

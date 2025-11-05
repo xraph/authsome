@@ -17,16 +17,16 @@ import (
 
 // Service provides backup authentication operations
 type Service struct {
-	repo     Repository
-	config   *Config
+	repo      Repository
+	config    *Config
 	providers ProviderRegistry
 }
 
 // NewService creates a new backup authentication service
 func NewService(repo Repository, config *Config, providers ProviderRegistry) *Service {
 	return &Service{
-		repo:     repo,
-		config:   config,
+		repo:      repo,
+		config:    config,
 		providers: providers,
 	}
 }
@@ -98,14 +98,14 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 	availableMethods := s.getAvailableMethods(ctx, userID, orgID)
 
 	return &StartRecoveryResponse{
-		SessionID:       session.ID,
-		Status:          session.Status,
+		SessionID:        session.ID,
+		Status:           session.Status,
 		AvailableMethods: availableMethods,
-		RequiredSteps:   len(session.RequiredSteps),
-		CompletedSteps:  0,
-		ExpiresAt:       session.ExpiresAt,
-		RiskScore:       riskScore,
-		RequiresReview:  session.RequiresReview,
+		RequiredSteps:    len(session.RequiredSteps),
+		CompletedSteps:   0,
+		ExpiresAt:        session.ExpiresAt,
+		RiskScore:        riskScore,
+		RequiresReview:   session.RequiresReview,
 	}, nil
 }
 
@@ -248,10 +248,10 @@ func (s *Service) GenerateRecoveryCodes(ctx context.Context, userID xid.ID, orgI
 	}
 
 	return &GenerateRecoveryCodesResponse{
-		Codes:      codes,
-		Count:      len(codes),
+		Codes:       codes,
+		Count:       len(codes),
 		GeneratedAt: time.Now(),
-		Warning:    "Store these codes securely. Each can only be used once.",
+		Warning:     "Store these codes securely. Each can only be used once.",
 	}, nil
 }
 
@@ -1006,4 +1006,3 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
-

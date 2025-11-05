@@ -29,7 +29,7 @@ func TestMeetsVerificationLevel(t *testing.T) {
 		{"invalid", "full", false},
 		{"full", "invalid", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.current+"_vs_"+tt.required, func(t *testing.T) {
 			result := meetsVerificationLevel(tt.current, tt.required)
@@ -42,14 +42,14 @@ func TestMeetsVerificationLevel(t *testing.T) {
 
 func TestVerificationLevelHierarchy(t *testing.T) {
 	levels := []string{"none", "basic", "enhanced", "full"}
-	
+
 	for i, currentLevel := range levels {
 		for j, requiredLevel := range levels {
 			t.Run(currentLevel+"_vs_"+requiredLevel, func(t *testing.T) {
 				result := meetsVerificationLevel(currentLevel, requiredLevel)
 				expected := i >= j
 				if result != expected {
-					t.Errorf("Expected %v for %s (level %d) vs %s (level %d), got %v", 
+					t.Errorf("Expected %v for %s (level %d) vs %s (level %d), got %v",
 						expected, currentLevel, i, requiredLevel, j, result)
 				}
 			})

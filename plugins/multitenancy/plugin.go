@@ -167,7 +167,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Multitenancy", "Organizations"),
 			forge.WithValidation(true),
 		)
-		
+
 		orgGroup.GET("", p.orgHandler.ListOrganizations,
 			forge.WithName("multitenancy.organizations.list"),
 			forge.WithSummary("List organizations"),
@@ -176,7 +176,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(500, "Internal server error", MultitenancyErrorResponse{}),
 			forge.WithTags("Multitenancy", "Organizations"),
 		)
-		
+
 		orgGroup.GET("/:orgId", p.orgHandler.GetOrganization,
 			forge.WithName("multitenancy.organizations.get"),
 			forge.WithSummary("Get organization"),
@@ -185,7 +185,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multitenancy", "Organizations"),
 		)
-		
+
 		orgGroup.PUT("/:orgId", p.orgHandler.UpdateOrganization,
 			forge.WithName("multitenancy.organizations.update"),
 			forge.WithSummary("Update organization"),
@@ -196,7 +196,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Multitenancy", "Organizations"),
 			forge.WithValidation(true),
 		)
-		
+
 		orgGroup.DELETE("/:orgId", p.orgHandler.DeleteOrganization,
 			forge.WithName("multitenancy.organizations.delete"),
 			forge.WithSummary("Delete organization"),
@@ -218,7 +218,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multitenancy", "Organizations", "Members"),
 			)
-			
+
 			memberGroup.POST("/invite", p.memberHandler.InviteMember,
 				forge.WithName("multitenancy.members.invite"),
 				forge.WithSummary("Invite member to organization"),
@@ -228,7 +228,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Multitenancy", "Organizations", "Members"),
 				forge.WithValidation(true),
 			)
-			
+
 			memberGroup.PUT("/:memberId", p.memberHandler.UpdateMember,
 				forge.WithName("multitenancy.members.update"),
 				forge.WithSummary("Update member"),
@@ -239,7 +239,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Multitenancy", "Organizations", "Members"),
 				forge.WithValidation(true),
 			)
-			
+
 			memberGroup.DELETE("/:memberId", p.memberHandler.RemoveMember,
 				forge.WithName("multitenancy.members.remove"),
 				forge.WithSummary("Remove member"),
@@ -262,7 +262,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multitenancy", "Organizations", "Teams"),
 			)
-			
+
 			teamGroup.POST("", p.teamHandler.CreateTeam,
 				forge.WithName("multitenancy.teams.create"),
 				forge.WithSummary("Create team"),
@@ -272,7 +272,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Multitenancy", "Organizations", "Teams"),
 				forge.WithValidation(true),
 			)
-			
+
 			teamGroup.GET("/:teamId", p.teamHandler.GetTeam,
 				forge.WithName("multitenancy.teams.get"),
 				forge.WithSummary("Get team"),
@@ -281,7 +281,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multitenancy", "Organizations", "Teams"),
 			)
-			
+
 			teamGroup.PUT("/:teamId", p.teamHandler.UpdateTeam,
 				forge.WithName("multitenancy.teams.update"),
 				forge.WithSummary("Update team"),
@@ -292,7 +292,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Multitenancy", "Organizations", "Teams"),
 				forge.WithValidation(true),
 			)
-			
+
 			teamGroup.DELETE("/:teamId", p.teamHandler.DeleteTeam,
 				forge.WithName("multitenancy.teams.delete"),
 				forge.WithSummary("Delete team"),
@@ -302,7 +302,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multitenancy", "Organizations", "Teams"),
 			)
-			
+
 			teamGroup.POST("/:teamId/members", p.teamHandler.AddTeamMember,
 				forge.WithName("multitenancy.teams.members.add"),
 				forge.WithSummary("Add team member"),
@@ -313,7 +313,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Multitenancy", "Organizations", "Teams"),
 				forge.WithValidation(true),
 			)
-			
+
 			teamGroup.DELETE("/:teamId/members/:memberId", p.teamHandler.RemoveTeamMember,
 				forge.WithName("multitenancy.teams.members.remove"),
 				forge.WithSummary("Remove team member"),
@@ -337,7 +337,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Invitation not found or expired", MultitenancyErrorResponse{}),
 			forge.WithTags("Multitenancy", "Invitations"),
 		)
-		
+
 		inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation,
 			forge.WithName("multitenancy.invitations.accept"),
 			forge.WithSummary("Accept invitation"),
@@ -347,7 +347,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multitenancy", "Invitations"),
 		)
-		
+
 		inviteGroup.POST("/:token/decline", p.memberHandler.DeclineInvitation,
 			forge.WithName("multitenancy.invitations.decline"),
 			forge.WithSummary("Decline invitation"),
@@ -474,12 +474,12 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 	if err != nil || len(orgs) == 0 {
 		// This is the first user - create the platform organization
 		fmt.Printf("[MultiTenancy] Creating platform organization for first user: %s\n", u.Email)
-		
+
 		platformSlug := p.config.PlatformOrganizationID
 		if platformSlug == "" {
 			platformSlug = "platform"
 		}
-		
+
 		platformOrg, err := p.orgService.CreateOrganization(ctx, &organization.CreateOrganizationRequest{
 			Name: "Platform Organization",
 			Slug: platformSlug,
@@ -487,12 +487,12 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 		if err != nil {
 			return fmt.Errorf("failed to create platform organization: %w", err)
 		}
-		
+
 		fmt.Printf("[MultiTenancy] ✅ Platform organization created: %s (ID: %s)\n", platformOrg.Name, platformOrg.ID)
 		fmt.Printf("[MultiTenancy] ✅ First user %s is now platform owner\n", u.Email)
 		return nil
 	}
-	
+
 	// Not the first user - add to default organization
 	defaultOrg, err := p.orgService.GetDefaultOrganization(ctx)
 	if err != nil {

@@ -171,7 +171,7 @@ func getTestDB(t *testing.T) *bun.DB {
 
 	// Try to connect to test database
 	dsn := "postgres://postgres:postgres@localhost:5432/authsome_test?sslmode=disable"
-	
+
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	db := bun.NewDB(sqldb, pgdialect.New())
 
@@ -311,4 +311,3 @@ func BenchmarkGetTableName(b *testing.B) {
 		_ = GetTableName("auth", "users")
 	}
 }
-

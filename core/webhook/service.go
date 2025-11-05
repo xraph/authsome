@@ -59,7 +59,7 @@ func NewService(config Config, repo Repository, auditSvc *audit.Service) *Servic
 	}
 
 	service := &Service{
-		repo:    repo,
+		repo:     repo,
 		auditSvc: auditSvc,
 		config:   config,
 		client:   client,
@@ -115,8 +115,8 @@ func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) 
 	}
 
 	// Audit log
-	s.auditSvc.Log(ctx, nil, req.OrganizationID, "webhook", "create", "", 
-		fmt.Sprintf(`{"webhook_id":"%s","url":"%s","events":%s}`, 
+	s.auditSvc.Log(ctx, nil, req.OrganizationID, "webhook", "create", "",
+		fmt.Sprintf(`{"webhook_id":"%s","url":"%s","events":%s}`,
 			webhook.ID.String(), webhook.URL, mustMarshal(webhook.Events)))
 
 	return webhook, nil
@@ -333,7 +333,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 
 		// Update webhook last delivery
 		s.repo.UpdateLastDelivery(ctx, webhook.ID, now)
-		
+
 		// Reset failure count on success
 		if webhook.FailureCount > 0 {
 			s.repo.UpdateFailureCount(ctx, webhook.ID, 0)
@@ -369,11 +369,11 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 
 	// Calculate delay
 	delay := s.calculateRetryDelay(webhook.RetryBackoff, delivery.Attempt)
-	
+
 	// Schedule retry
 	go func() {
 		time.Sleep(delay)
-		
+
 		// Create new delivery attempt
 		newDelivery := &Delivery{
 			ID:        xid.New(),
@@ -457,7 +457,7 @@ func (s *Service) startDeliveryWorkers() {
 // processFailedDeliveries processes failed deliveries for retry
 func (s *Service) processFailedDeliveries() {
 	ctx := context.Background()
-	
+
 	deliveries, err := s.repo.FindPendingDeliveries(ctx, s.config.BatchSize)
 	if err != nil {
 		return

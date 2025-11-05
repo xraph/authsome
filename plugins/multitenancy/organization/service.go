@@ -104,7 +104,7 @@ func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizatio
 	// Check if there are any organizations yet
 	orgs, err := s.orgRepo.List(ctx, 1, 0)
 	isFirstOrg := (err != nil || len(orgs) == 0)
-	
+
 	// Allow creation if this is the first organization (platform org for system owner)
 	// Otherwise check if organization creation is enabled
 	if !isFirstOrg && !s.config.EnableOrganizationCreation {

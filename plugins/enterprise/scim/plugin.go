@@ -25,11 +25,11 @@ type Plugin struct {
 	config  *Config
 	service *Service
 	handler *Handler
-	
+
 	// Dependencies
 	db             *bun.DB
-	userService    user.ServiceInterface  // Use interface to support decorated services
-	orgService     interface{}            // Use interface{} to support both core and multitenancy org services
+	userService    user.ServiceInterface // Use interface to support decorated services
+	orgService     interface{}           // Use interface{} to support both core and multitenancy org services
 	auditService   *audit.Service
 	webhookService *webhook.Service
 }
@@ -66,50 +66,50 @@ func (p *Plugin) Init(auth interface{}) error {
 		GetServiceRegistry() *registry.ServiceRegistry
 		GetDB() *bun.DB
 	}
-	
+
 	srGetter, ok := auth.(serviceRegistryGetter)
 	if !ok {
 		return fmt.Errorf("SCIM plugin requires auth instance with GetServiceRegistry and GetDB")
 	}
-	
+
 	serviceRegistry := srGetter.GetServiceRegistry()
 	if serviceRegistry == nil {
 		return fmt.Errorf("service registry not available")
 	}
-	
+
 	p.db = srGetter.GetDB()
 	if p.db == nil {
 		return fmt.Errorf("database not available for SCIM plugin - ensure database is properly initialized before authsome")
 	}
-	
+
 	// Get required services from registry
 	p.userService = serviceRegistry.UserService()
 	if p.userService == nil {
 		return fmt.Errorf("user service not found in registry")
 	}
-	
+
 	// Get organization service (required for multi-tenancy)
 	// Note: Can be either core/organization.Service or multitenancy/organization.Service
 	p.orgService = serviceRegistry.OrganizationService()
 	if p.orgService == nil {
 		return fmt.Errorf("organization service not found in registry")
 	}
-	
+
 	// Get audit service
 	p.auditService = serviceRegistry.AuditService()
 	if p.auditService == nil {
 		return fmt.Errorf("audit service not found in registry")
 	}
-	
+
 	// Get webhook service
 	p.webhookService = serviceRegistry.WebhookService()
 	if p.webhookService == nil {
 		return fmt.Errorf("webhook service not found in registry")
 	}
-	
+
 	// Load configuration
 	p.config = DefaultConfig()
-	
+
 	// TODO: Load from config manager when registry supports ConfigManager()
 	// For now, use default configuration
 	// Future: Implement config loading like:
@@ -119,14 +119,14 @@ func (p *Plugin) Init(auth interface{}) error {
 	//         p.config = cfg
 	//     }
 	// }
-	
+
 	if err := p.config.Validate(); err != nil {
 		return fmt.Errorf("invalid SCIM config: %w", err)
 	}
-	
+
 	// Initialize repository
 	repo := NewRepository(p.db)
-	
+
 	// Initialize service
 	p.service = NewService(ServiceConfig{
 		Config:         p.config,
@@ -136,10 +136,10 @@ func (p *Plugin) Init(auth interface{}) error {
 		AuditService:   p.auditService,
 		WebhookService: p.webhookService,
 	})
-	
+
 	// Initialize handler
 	p.handler = NewHandler(p.service, p.config)
-	
+
 	fmt.Println("[SCIM] Plugin initialized successfully")
 	return nil
 }
@@ -149,26 +149,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
 		return fmt.Errorf("SCIM handler not initialized; call Init first")
 	}
-	
+
 	// Create middleware chain for SCIM endpoints (auth, org resolution, rate limiting)
 	scimChain := func(h func(forge.Context) error) func(forge.Context) error {
 		return p.AuthMiddleware()(p.OrgResolutionMiddleware()(p.RateLimitMiddleware()(h)))
 	}
-	
+
 	// SCIM 2.0 base path as per RFC 7644
 	scimGroup := router.Group("/scim/v2")
-	
+
 	// Service Provider Configuration (RFC 7643 Section 5)
 	scimGroup.GET("/ServiceProviderConfig", scimChain(p.handler.GetServiceProviderConfig))
-	
+
 	// Resource Types (RFC 7643 Section 6)
 	scimGroup.GET("/ResourceTypes", scimChain(p.handler.GetResourceTypes))
 	scimGroup.GET("/ResourceTypes/:id", scimChain(p.handler.GetResourceType))
-	
+
 	// Schemas (RFC 7643 Section 7)
 	scimGroup.GET("/Schemas", scimChain(p.handler.GetSchemas))
 	scimGroup.GET("/Schemas/:id", scimChain(p.handler.GetSchema))
-	
+
 	// Users endpoint (RFC 7644 Section 3)
 	scimGroup.POST("/Users", scimChain(p.handler.CreateUser))
 	scimGroup.GET("/Users", scimChain(p.handler.ListUsers))
@@ -176,7 +176,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.PUT("/Users/:id", scimChain(p.handler.ReplaceUser))
 	scimGroup.PATCH("/Users/:id", scimChain(p.handler.UpdateUser))
 	scimGroup.DELETE("/Users/:id", scimChain(p.handler.DeleteUser))
-	
+
 	// Groups endpoint (RFC 7644 Section 3)
 	scimGroup.POST("/Groups", scimChain(p.handler.CreateGroup))
 	scimGroup.GET("/Groups", scimChain(p.handler.ListGroups))
@@ -184,34 +184,34 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.PUT("/Groups/:id", scimChain(p.handler.ReplaceGroup))
 	scimGroup.PATCH("/Groups/:id", scimChain(p.handler.UpdateGroup))
 	scimGroup.DELETE("/Groups/:id", scimChain(p.handler.DeleteGroup))
-	
+
 	// Bulk operations (RFC 7644 Section 3.7)
 	scimGroup.POST("/Bulk", scimChain(p.handler.BulkOperation))
-	
+
 	// Search endpoint (RFC 7644 Section 3.4.3)
 	scimGroup.POST("/.search", scimChain(p.handler.Search))
-	
+
 	// Create admin middleware chain (SCIM auth + admin check)
 	adminChain := func(h func(forge.Context) error) func(forge.Context) error {
 		return p.AuthMiddleware()(p.OrgResolutionMiddleware()(p.RequireAdminMiddleware()(h)))
 	}
-	
+
 	// Custom endpoints for provisioning management (non-standard)
 	adminGroup := router.Group("/api/scim-admin")
-	
+
 	// Token management
 	adminGroup.POST("/tokens", adminChain(p.handler.CreateProvisioningToken))
 	adminGroup.GET("/tokens", adminChain(p.handler.ListProvisioningTokens))
 	adminGroup.DELETE("/tokens/:id", adminChain(p.handler.RevokeProvisioningToken))
-	
+
 	// Attribute mapping configuration
 	adminGroup.GET("/mappings", adminChain(p.handler.GetAttributeMappings))
 	adminGroup.PUT("/mappings", adminChain(p.handler.UpdateAttributeMappings))
-	
+
 	// Provisioning logs and audit
 	adminGroup.GET("/logs", adminChain(p.handler.GetProvisioningLogs))
 	adminGroup.GET("/stats", adminChain(p.handler.GetProvisioningStats))
-	
+
 	fmt.Println("[SCIM] Routes registered successfully")
 	fmt.Println("  - POST   /scim/v2/Users (create user)")
 	fmt.Println("  - GET    /scim/v2/Users (list users)")
@@ -222,7 +222,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	fmt.Println("  - POST   /scim/v2/Groups (create group)")
 	fmt.Println("  - GET    /scim/v2/Groups (list groups)")
 	fmt.Println("  - POST   /scim/v2/Bulk (bulk operations)")
-	
+
 	return nil
 }
 
@@ -232,10 +232,10 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	hooks.RegisterAfterUserCreate(p.handleUserCreated)
 	hooks.RegisterAfterUserUpdate(p.handleUserUpdated)
 	hooks.RegisterAfterUserDelete(p.handleUserDeleted)
-	
+
 	// Hook into organization creation to set up default SCIM config
 	hooks.RegisterAfterOrganizationCreate(p.handleOrganizationCreated)
-	
+
 	return nil
 }
 
@@ -251,7 +251,7 @@ func (p *Plugin) Migrate() error {
 	if p.service == nil {
 		return fmt.Errorf("service not initialized")
 	}
-	
+
 	ctx := context.Background()
 	return p.service.Migrate(ctx)
 }
@@ -314,4 +314,3 @@ func (p *Plugin) Health(ctx context.Context) error {
 	}
 	return p.service.Health(ctx)
 }
-

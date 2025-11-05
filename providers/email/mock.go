@@ -43,10 +43,10 @@ func (p *MockEmailProvider) Send(ctx context.Context, notif *notification.Notifi
 		Subject:   notif.Subject,
 		Body:      notif.Body,
 	})
-	
+
 	// Set a mock provider ID
 	notif.ProviderID = fmt.Sprintf("mock-%d", len(p.SentEmails))
-	
+
 	return nil
 }
 
@@ -77,4 +77,3 @@ func (p *MockEmailProvider) GetLastEmail() *MockEmail {
 	}
 	return &p.SentEmails[len(p.SentEmails)-1]
 }
-

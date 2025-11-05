@@ -22,9 +22,9 @@ func TestNewHandler(t *testing.T) {
 	auditSvc := &audit.Service{}
 	rbacSvc := &rbac.Service{}
 	basePath := "/api/auth"
-	
+
 	handler := NewHandler(tmpl, assets, userSvc, sessionSvc, auditSvc, rbacSvc, basePath)
-	
+
 	require.NotNil(t, handler)
 	assert.Equal(t, tmpl, handler.templates)
 	assert.Equal(t, userSvc, handler.userSvc)
@@ -52,7 +52,7 @@ func TestGetContentType(t *testing.T) {
 		{".ttf", "font/ttf"},
 		{".xyz", "application/octet-stream"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.ext, func(t *testing.T) {
 			result := getContentType(tt.ext)
@@ -67,7 +67,7 @@ func TestPageData(t *testing.T) {
 		ID:    xid.New(),
 		Email: "test@example.com",
 	}
-	
+
 	data := PageData{
 		Title:      "Test Page",
 		ActivePage: "dashboard",
@@ -77,7 +77,7 @@ func TestPageData(t *testing.T) {
 		Error:      "test error",
 		Success:    "test success",
 	}
-	
+
 	assert.Equal(t, "Test Page", data.Title)
 	assert.Equal(t, "dashboard", data.ActivePage)
 	assert.Equal(t, testUser, data.User)

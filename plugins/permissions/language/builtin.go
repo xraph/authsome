@@ -24,7 +24,7 @@ func (b *BuiltinFunctions) HasRole(role string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	roles, ok := principal["roles"].([]interface{})
 	if !ok {
 		// Try string slice
@@ -37,7 +37,7 @@ func (b *BuiltinFunctions) HasRole(role string) bool {
 		}
 		return false
 	}
-	
+
 	for _, r := range roles {
 		if roleStr, ok := r.(string); ok {
 			if strings.EqualFold(roleStr, role) {
@@ -45,7 +45,7 @@ func (b *BuiltinFunctions) HasRole(role string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -75,7 +75,7 @@ func (b *BuiltinFunctions) InTimeRange(start, end string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	// Get current time from request or use now
 	var currentTime time.Time
 	if reqTime, ok := request["time"].(time.Time); ok {
@@ -83,7 +83,7 @@ func (b *BuiltinFunctions) InTimeRange(start, end string) bool {
 	} else {
 		currentTime = time.Now().UTC()
 	}
-	
+
 	// Parse start time
 	startParts := strings.Split(start, ":")
 	if len(startParts) != 2 {
@@ -97,7 +97,7 @@ func (b *BuiltinFunctions) InTimeRange(start, end string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	// Parse end time
 	endParts := strings.Split(end, ":")
 	if len(endParts) != 2 {
@@ -111,17 +111,17 @@ func (b *BuiltinFunctions) InTimeRange(start, end string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	// Convert current time to minutes since midnight
 	currentMinutes := currentTime.Hour()*60 + currentTime.Minute()
 	startMinutes := startHour*60 + startMin
 	endMinutes := endHour*60 + endMin
-	
+
 	// Handle ranges that cross midnight
 	if endMinutes < startMinutes {
 		return currentMinutes >= startMinutes || currentMinutes <= endMinutes
 	}
-	
+
 	return currentMinutes >= startMinutes && currentMinutes <= endMinutes
 }
 
@@ -131,14 +131,14 @@ func (b *BuiltinFunctions) IsWeekday() bool {
 	if !ok {
 		return false
 	}
-	
+
 	var currentTime time.Time
 	if reqTime, ok := request["time"].(time.Time); ok {
 		currentTime = reqTime
 	} else {
 		currentTime = time.Now().UTC()
 	}
-	
+
 	weekday := currentTime.Weekday()
 	return weekday >= time.Monday && weekday <= time.Friday
 }
@@ -149,28 +149,28 @@ func (b *BuiltinFunctions) IPInRange(cidrs []string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	ipStr, ok := request["ip"].(string)
 	if !ok {
 		return false
 	}
-	
+
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return false
 	}
-	
+
 	for _, cidr := range cidrs {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			continue
 		}
-		
+
 		if network.Contains(ip) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -180,23 +180,23 @@ func (b *BuiltinFunctions) ResourceMatches(pattern string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	resourceID, ok := resource["id"].(string)
 	if !ok {
 		return false
 	}
-	
+
 	// Simple wildcard matching
 	if pattern == "*" {
 		return true
 	}
-	
+
 	// Suffix wildcard: "project:*"
 	if strings.HasSuffix(pattern, ":*") {
 		prefix := strings.TrimSuffix(pattern, ":*")
 		return strings.HasPrefix(resourceID, prefix+":")
 	}
-	
+
 	// Exact match
 	return resourceID == pattern
 }
@@ -207,14 +207,14 @@ func (b *BuiltinFunctions) DaysSince(timestamp time.Time) int64 {
 	if !ok {
 		return 0
 	}
-	
+
 	var currentTime time.Time
 	if reqTime, ok := request["time"].(time.Time); ok {
 		currentTime = reqTime
 	} else {
 		currentTime = time.Now().UTC()
 	}
-	
+
 	duration := currentTime.Sub(timestamp)
 	return int64(duration.Hours() / 24)
 }
@@ -225,14 +225,14 @@ func (b *BuiltinFunctions) HoursSince(timestamp time.Time) int64 {
 	if !ok {
 		return 0
 	}
-	
+
 	var currentTime time.Time
 	if reqTime, ok := request["time"].(time.Time); ok {
 		currentTime = reqTime
 	} else {
 		currentTime = time.Now().UTC()
 	}
-	
+
 	duration := currentTime.Sub(timestamp)
 	return int64(duration.Hours())
 }
@@ -243,12 +243,12 @@ func (b *BuiltinFunctions) InOrg(orgID string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	resourceOrgID, ok := resource["org_id"].(string)
 	if !ok {
 		return false
 	}
-	
+
 	return resourceOrgID == orgID
 }
 
@@ -258,20 +258,20 @@ func (b *BuiltinFunctions) IsMemberOf(orgID string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	// Check direct org_id
 	if principalOrgID, ok := principal["org_id"].(string); ok {
 		if principalOrgID == orgID {
 			return true
 		}
 	}
-	
+
 	// Check organizations array
 	orgs, ok := principal["organizations"].([]interface{})
 	if !ok {
 		return false
 	}
-	
+
 	for _, org := range orgs {
 		if orgStr, ok := org.(string); ok {
 			if orgStr == orgID {
@@ -279,14 +279,14 @@ func (b *BuiltinFunctions) IsMemberOf(orgID string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
 // CreateFunctionBindings creates function bindings for CEL evaluation
 func CreateFunctionBindings(ctx map[string]interface{}) map[string]interface{} {
 	builtins := NewBuiltinFunctions(ctx)
-	
+
 	return map[string]interface{}{
 		"has_role": func(role string) bool {
 			return builtins.HasRole(role)

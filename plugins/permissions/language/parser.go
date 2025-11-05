@@ -20,15 +20,15 @@ func NewParser() (*Parser, error) {
 		cel.Variable("resource", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("request", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("action", cel.StringType),
-		
+
 		// Use AuthSome custom library for functions
 		cel.Lib(authsomeLib{}),
 	)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
-	
+
 	return &Parser{env: env}, nil
 }
 
@@ -37,17 +37,17 @@ func (p *Parser) Parse(expression string) (*cel.Ast, error) {
 	if expression == "" {
 		return nil, fmt.Errorf("expression cannot be empty")
 	}
-	
+
 	ast, issues := p.env.Compile(expression)
 	if issues != nil && issues.Err() != nil {
 		return nil, fmt.Errorf("parse error: %w", issues.Err())
 	}
-	
+
 	// Verify the expression returns a boolean
 	if ast.OutputType().String() != "bool" {
 		return nil, fmt.Errorf("expression must return boolean, got %v", ast.OutputType())
 	}
-	
+
 	return ast, nil
 }
 
@@ -103,10 +103,10 @@ func estimateComplexityNode(expr interface{}, depth int) int {
 
 // Example expressions for testing
 var ExampleExpressions = map[string]string{
-	"owner_only":       `resource.owner == principal.id`,
-	"admin_or_owner":   `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
-	"business_hours":   `is_weekday()`, // Custom function that works
-	"team_members":     `principal.team_id == resource.team_id`,
-	"public_or_owner":  `resource.visibility == "public" || resource.owner == principal.id`,
-	"complex_abac":     `resource.confidentiality == "public" || (resource.confidentiality == "internal" && principal.org_id == resource.org_id) || resource.owner == principal.id`,
+	"owner_only":      `resource.owner == principal.id`,
+	"admin_or_owner":  `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
+	"business_hours":  `is_weekday()`, // Custom function that works
+	"team_members":    `principal.team_id == resource.team_id`,
+	"public_or_owner": `resource.visibility == "public" || resource.owner == principal.id`,
+	"complex_abac":    `resource.confidentiality == "public" || (resource.confidentiality == "internal" && principal.org_id == resource.org_id) || resource.owner == principal.id`,
 }

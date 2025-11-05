@@ -25,7 +25,7 @@ var (
 	ErrInvalidSignature = errors.New("invalid digital signature")
 
 	// Cookie Consent Errors
-	ErrCookieConsentNotFound = errors.New("cookie consent not found")
+	ErrCookieConsentNotFound    = errors.New("cookie consent not found")
 	ErrInvalidCookiePreferences = errors.New("invalid cookie preferences")
 
 	// Data Export Errors
@@ -47,9 +47,8 @@ var (
 	ErrInvalidRetentionPeriod  = errors.New("invalid data retention period")
 
 	// General Errors
-	ErrUnauthorized    = errors.New("unauthorized access")
-	ErrInvalidRequest  = errors.New("invalid request")
+	ErrUnauthorized         = errors.New("unauthorized access")
+	ErrInvalidRequest       = errors.New("invalid request")
 	ErrOrganizationNotFound = errors.New("organization not found")
-	ErrUserNotFound    = errors.New("user not found")
+	ErrUserNotFound         = errors.New("user not found")
 )
-

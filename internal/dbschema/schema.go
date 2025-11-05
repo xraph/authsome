@@ -28,7 +28,7 @@ func ValidateSchemaName(schema string) error {
 	// - Can contain letters, digits, underscores, dollar signs
 	// - Max 63 bytes
 	// - Case insensitive by default (we enforce lowercase for consistency)
-	
+
 	if len(schema) > 63 {
 		return fmt.Errorf("schema name too long (max 63 characters): %s", schema)
 	}
@@ -94,7 +94,7 @@ func quoteIdentifier(name string) string {
 
 // WrapConnection wraps a bun.DB connection to automatically apply schema for all operations
 // Returns a new DB connection with the search_path set
-// Note: This only affects the current connection. For connection pools, 
+// Note: This only affects the current connection. For connection pools,
 // you should call ApplySchema in a connection hook
 func WrapConnection(ctx context.Context, db *bun.DB, schemaName string) (*bun.DB, error) {
 	if schemaName == "" {
@@ -130,7 +130,7 @@ func (h *schemaHook) BeforeQuery(ctx context.Context, event *bun.QueryEvent) con
 	// For safety, we only set search_path on the first query in a session
 	// This is handled automatically by PostgreSQL session state
 	// No action needed here as ApplySchema already set it
-	
+
 	return ctx
 }
 
@@ -138,4 +138,3 @@ func (h *schemaHook) BeforeQuery(ctx context.Context, event *bun.QueryEvent) con
 func (h *schemaHook) AfterQuery(ctx context.Context, event *bun.QueryEvent) {
 	// No-op
 }
-

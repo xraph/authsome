@@ -325,7 +325,7 @@ func (r *BunRepository) IsLocationTrusted(ctx context.Context, userID xid.ID, la
 		Where("user_id = ?", userID).
 		Where("expires_at IS NULL OR expires_at > ?", time.Now()).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return false, nil, err
 	}
@@ -420,7 +420,7 @@ func (r *BunRepository) GetCachedGeoData(ctx context.Context, ip string) (*GeoCa
 		Where("ip_address = ?", ip).
 		Where("expires_at > ?", time.Now()).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -495,4 +495,3 @@ func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 
 	return earthRadiusKm * c
 }
-

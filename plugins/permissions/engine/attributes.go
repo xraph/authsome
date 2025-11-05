@@ -10,11 +10,11 @@ import (
 type AttributeProvider interface {
 	// Name returns the provider name (e.g., "user", "resource", "request")
 	Name() string
-	
+
 	// GetAttributes fetches attributes for a given entity
 	// The key format depends on the provider (e.g., "user:123", "resource:doc_456")
 	GetAttributes(ctx context.Context, key string) (map[string]interface{}, error)
-	
+
 	// GetBatchAttributes fetches attributes for multiple entities
 	// Returns a map of key -> attributes
 	GetBatchAttributes(ctx context.Context, keys []string) (map[string]map[string]interface{}, error)
@@ -80,16 +80,16 @@ func (r *AttributeResolver) RegisterProvider(provider AttributeProvider) error {
 	if provider == nil {
 		return fmt.Errorf("provider cannot be nil")
 	}
-	
+
 	name := provider.Name()
 	if name == "" {
 		return fmt.Errorf("provider name cannot be empty")
 	}
-	
+
 	if _, exists := r.providers[name]; exists {
 		return fmt.Errorf("provider '%s' already registered", name)
 	}
-	
+
 	r.providers[name] = provider
 	return nil
 }
@@ -113,19 +113,19 @@ func (r *AttributeResolver) Resolve(ctx context.Context, providerName, key strin
 			return attrs, nil
 		}
 	}
-	
+
 	// Get provider
 	provider, err := r.GetProvider(providerName)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Fetch from provider
 	attrs, err := provider.GetAttributes(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attributes from provider '%s': %w", providerName, err)
 	}
-	
+
 	// Cache the result
 	if r.cache != nil {
 		// Default TTL: 5 minutes for most attributes
@@ -136,7 +136,7 @@ func (r *AttributeResolver) Resolve(ctx context.Context, providerName, key strin
 			_ = err
 		}
 	}
-	
+
 	return attrs, nil
 }
 
@@ -145,17 +145,17 @@ func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName strin
 	if len(keys) == 0 {
 		return make(map[string]map[string]interface{}), nil
 	}
-	
+
 	// Get provider
 	provider, err := r.GetProvider(providerName)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check which keys are in cache
 	result := make(map[string]map[string]interface{})
 	uncachedKeys := make([]string, 0, len(keys))
-	
+
 	if r.cache != nil {
 		for _, key := range keys {
 			cacheKey := fmt.Sprintf("%s:%s", providerName, key)
@@ -168,18 +168,18 @@ func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName strin
 	} else {
 		uncachedKeys = keys
 	}
-	
+
 	// Fetch uncached keys from provider
 	if len(uncachedKeys) > 0 {
 		batchResult, err := provider.GetBatchAttributes(ctx, uncachedKeys)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get batch attributes from provider '%s': %w", providerName, err)
 		}
-		
+
 		// Merge with cached results and update cache
 		for key, attrs := range batchResult {
 			result[key] = attrs
-			
+
 			if r.cache != nil {
 				cacheKey := fmt.Sprintf("%s:%s", providerName, key)
 				ttl := 5 * time.Minute
@@ -189,7 +189,7 @@ func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName strin
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -201,12 +201,12 @@ func (r *AttributeResolver) EnrichEvaluationContext(ctx context.Context, evalCtx
 	// 1. Analyze which attributes are needed based on the policies
 	// 2. Fetch missing attributes from providers
 	// 3. Add them to the evaluation context
-	
+
 	// Example future implementation:
 	// - If principal.id is set but principal.roles is missing, fetch from user provider
 	// - If resource.type and resource.id are set but resource.owner is missing, fetch from resource provider
 	// - Add request context attributes (IP, time, location) if not present
-	
+
 	return nil
 }
 
@@ -223,7 +223,7 @@ func (r *AttributeResolver) ResolveMultiple(ctx context.Context, requests []Attr
 	for _, req := range requests {
 		providerRequests[req.Provider] = append(providerRequests[req.Provider], req.Key)
 	}
-	
+
 	// Fetch from each provider
 	result := make(map[string]map[string]interface{})
 	for providerName, keys := range providerRequests {
@@ -231,14 +231,14 @@ func (r *AttributeResolver) ResolveMultiple(ctx context.Context, requests []Attr
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Merge results with provider prefix
 		for key, attrs := range batchResult {
 			fullKey := fmt.Sprintf("%s:%s", providerName, key)
 			result[fullKey] = attrs
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -258,4 +258,3 @@ func (r *AttributeResolver) ClearCacheKey(ctx context.Context, providerName, key
 	cacheKey := fmt.Sprintf("%s:%s", providerName, key)
 	return r.cache.Delete(ctx, cacheKey)
 }
-

@@ -69,11 +69,11 @@ func (p *SMTPProvider) Send(ctx context.Context, notif *notification.Notificatio
 
 	// Send email
 	addr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
-	
+
 	if p.config.UseTLS {
 		return p.sendWithTLS(addr, auth, p.config.From, []string{notif.Recipient}, []byte(msg))
 	}
-	
+
 	return smtp.SendMail(addr, auth, p.config.From, []string{notif.Recipient}, []byte(msg))
 }
 

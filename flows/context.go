@@ -8,17 +8,17 @@ import (
 
 // FlowContext provides execution context for flows with state management
 type FlowContext struct {
-	ctx        context.Context
-	flowID     string
-	sessionID  string
-	userID     string
-	orgID      string
-	data       map[string]interface{}
-	metadata   map[string]interface{}
-	startTime  time.Time
+	ctx         context.Context
+	flowID      string
+	sessionID   string
+	userID      string
+	orgID       string
+	data        map[string]interface{}
+	metadata    map[string]interface{}
+	startTime   time.Time
 	currentStep string
-	errors     []string
-	mutex      sync.RWMutex
+	errors      []string
+	mutex       sync.RWMutex
 }
 
 // NewFlowContext creates a new flow context
@@ -134,7 +134,7 @@ func (fc *FlowContext) GetInt(key string) int {
 func (fc *FlowContext) GetData() map[string]interface{} {
 	fc.mutex.RLock()
 	defer fc.mutex.RUnlock()
-	
+
 	data := make(map[string]interface{})
 	for k, v := range fc.data {
 		data[k] = v

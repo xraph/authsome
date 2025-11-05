@@ -319,13 +319,13 @@ func TestService_Start_AlreadyImpersonating(t *testing.T) {
 
 	// Create existing active impersonation
 	existingSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[existingSession.ID.String()] = existingSession
 
@@ -369,16 +369,16 @@ func TestService_End_Success(t *testing.T) {
 	sessionID := xid.New()
 	sessionToken := "token_test"
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		NewSessionID:    &sessionID,
-		SessionToken:    sessionToken,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		Reason:          "Test impersonation",
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		NewSessionID:   &sessionID,
+		SessionToken:   sessionToken,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		Reason:         "Test impersonation",
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -433,13 +433,13 @@ func TestService_End_WrongImpersonator(t *testing.T) {
 
 	// Create active impersonation
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -464,14 +464,14 @@ func TestService_List_Success(t *testing.T) {
 	// Create multiple impersonation sessions
 	for i := 0; i < 5; i++ {
 		session := &schema.ImpersonationSession{
-			ID:              xid.New(),
-			OrganizationID:  orgID,
-			ImpersonatorID:  admin.ID,
-			TargetUserID:    target.ID,
-			Active:          i < 3, // First 3 active, last 2 inactive
-			ExpiresAt:       time.Now().Add(1 * time.Hour),
-			Reason:          "Test session",
-			CreatedAt:       time.Now(),
+			ID:             xid.New(),
+			OrganizationID: orgID,
+			ImpersonatorID: admin.ID,
+			TargetUserID:   target.ID,
+			Active:         i < 3, // First 3 active, last 2 inactive
+			ExpiresAt:      time.Now().Add(1 * time.Hour),
+			Reason:         "Test session",
+			CreatedAt:      time.Now(),
 		}
 		repo.sessions[session.ID.String()] = session
 	}
@@ -504,14 +504,14 @@ func TestService_Verify_Active(t *testing.T) {
 
 	sessionID := xid.New()
 	impSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		NewSessionID:    &sessionID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour),
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		NewSessionID:   &sessionID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[impSession.ID.String()] = impSession
 
@@ -551,26 +551,26 @@ func TestService_ExpireSessions(t *testing.T) {
 	// Create expired sessions
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
-			ID:              xid.New(),
-			OrganizationID:  orgID,
-			ImpersonatorID:  admin.ID,
-			TargetUserID:    target.ID,
-			Active:          true,
-			ExpiresAt:       time.Now().Add(-1 * time.Hour), // Expired
-			CreatedAt:       time.Now(),
+			ID:             xid.New(),
+			OrganizationID: orgID,
+			ImpersonatorID: admin.ID,
+			TargetUserID:   target.ID,
+			Active:         true,
+			ExpiresAt:      time.Now().Add(-1 * time.Hour), // Expired
+			CreatedAt:      time.Now(),
 		}
 		repo.sessions[session.ID.String()] = session
 	}
 
 	// Create active non-expired session
 	activeSession := &schema.ImpersonationSession{
-		ID:              xid.New(),
-		OrganizationID:  orgID,
-		ImpersonatorID:  admin.ID,
-		TargetUserID:    target.ID,
-		Active:          true,
-		ExpiresAt:       time.Now().Add(1 * time.Hour), // Not expired
-		CreatedAt:       time.Now(),
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		ImpersonatorID: admin.ID,
+		TargetUserID:   target.ID,
+		Active:         true,
+		ExpiresAt:      time.Now().Add(1 * time.Hour), // Not expired
+		CreatedAt:      time.Now(),
 	}
 	repo.sessions[activeSession.ID.String()] = activeSession
 
@@ -602,7 +602,7 @@ func TestService_CustomDuration(t *testing.T) {
 	resp, err := service.Start(context.Background(), req)
 
 	require.NoError(t, err)
-	
+
 	// Verify expiration is approximately correct (within 1 minute)
 	expectedExpiry := time.Now().Add(time.Duration(customDuration) * time.Minute)
 	assert.WithinDuration(t, expectedExpiry, resp.ExpiresAt, 1*time.Minute)
@@ -647,4 +647,3 @@ func TestService_InvalidDuration(t *testing.T) {
 		})
 	}
 }
-

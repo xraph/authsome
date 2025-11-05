@@ -84,12 +84,12 @@ func (s *Service) DeleteOrganization(ctx context.Context, id xid.ID) error {
 
 // ListOrganizations returns a paginated list of organizations
 func (s *Service) ListOrganizations(ctx context.Context, limit, offset int) ([]*Organization, error) {
-    return s.repo.ListOrganizations(ctx, limit, offset)
+	return s.repo.ListOrganizations(ctx, limit, offset)
 }
 
 // CountOrganizations returns total number of organizations
 func (s *Service) CountOrganizations(ctx context.Context) (int, error) {
-    return s.repo.CountOrganizations(ctx)
+	return s.repo.CountOrganizations(ctx)
 }
 
 // CreateMember adds a new member to an organization
@@ -111,12 +111,12 @@ func (s *Service) FindMember(ctx context.Context, orgID, userID xid.ID) (*Member
 
 // ListMembers lists members in an organization
 func (s *Service) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Member, error) {
-    return s.repo.ListMembers(ctx, orgID, limit, offset)
+	return s.repo.ListMembers(ctx, orgID, limit, offset)
 }
 
 // CountMembers returns total number of members in an organization
 func (s *Service) CountMembers(ctx context.Context, orgID xid.ID) (int, error) {
-    return s.repo.CountMembers(ctx, orgID)
+	return s.repo.CountMembers(ctx, orgID)
 }
 
 // UpdateMember updates a member
@@ -144,12 +144,12 @@ func (s *Service) FindTeamByID(ctx context.Context, id xid.ID) (*Team, error) {
 
 // ListTeams lists teams in an organization with pagination
 func (s *Service) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Team, error) {
-    return s.repo.ListTeams(ctx, orgID, limit, offset)
+	return s.repo.ListTeams(ctx, orgID, limit, offset)
 }
 
 // CountTeams returns total number of teams in an organization
 func (s *Service) CountTeams(ctx context.Context, orgID xid.ID) (int, error) {
-    return s.repo.CountTeams(ctx, orgID)
+	return s.repo.CountTeams(ctx, orgID)
 }
 
 // UpdateTeam updates a team
@@ -175,12 +175,12 @@ func (s *Service) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID)
 
 // ListTeamMembers lists members of a team with pagination
 func (s *Service) ListTeamMembers(ctx context.Context, teamID xid.ID, limit, offset int) ([]*TeamMember, error) {
-    return s.repo.ListTeamMembers(ctx, teamID, limit, offset)
+	return s.repo.ListTeamMembers(ctx, teamID, limit, offset)
 }
 
 // CountTeamMembers returns total number of members in a team
 func (s *Service) CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error) {
-    return s.repo.CountTeamMembers(ctx, teamID)
+	return s.repo.CountTeamMembers(ctx, teamID)
 }
 
 // CreateInvitation creates an organization invitation

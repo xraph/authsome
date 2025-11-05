@@ -41,29 +41,29 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
 	}
-	
+
 	authInst, ok := dep.(authInstance)
 	if !ok {
 		return fmt.Errorf("notification plugin requires auth instance with GetDB method")
 	}
-	
+
 	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available for notification plugin")
 	}
-	
+
 	p.db = db
-	
+
 	// Use default config
 	p.config = DefaultConfig()
-	
+
 	// Initialize repositories
 	notificationRepo := repo.NewNotificationRepository(db)
 	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	
+
 	// Create template engine
 	templateEngine := NewTemplateEngine()
-	
+
 	// Initialize core notification service
 	notificationConfig := notification.Config{
 		DefaultProvider: make(map[notification.NotificationType]string),
@@ -71,22 +71,22 @@ func (p *Plugin) Init(dep interface{}) error {
 		RetryDelay:      p.config.RetryDelay,
 		CleanupAfter:    p.config.CleanupAfter,
 	}
-	
+
 	p.service = notification.NewService(
 		notificationRepo,
 		templateEngine,
 		auditSvc,
 		notificationConfig,
 	)
-	
+
 	// Register providers based on configuration
 	if err := p.registerProviders(); err != nil {
 		return fmt.Errorf("failed to register providers: %w", err)
 	}
-	
+
 	// Initialize template service
 	p.templateSvc = NewTemplateService(p.service, notificationRepo, p.config)
-	
+
 	return nil
 }
 
@@ -95,10 +95,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil || p.templateSvc == nil {
 		return nil
 	}
-	
+
 	// Create handler
 	handler := NewHandler(p.service, p.templateSvc, p.config)
-	
+
 	// Template management routes
 	templates := router.Group("/templates")
 	{
@@ -110,7 +110,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		templates.POST("/:id/preview", handler.PreviewTemplate)
 		templates.POST("/render", handler.RenderTemplate)
 	}
-	
+
 	// Notification sending routes
 	notifications := router.Group("/notifications")
 	{
@@ -119,10 +119,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		notifications.GET("/:id", handler.GetNotification)
 		notifications.POST("/:id/resend", handler.ResendNotification)
 	}
-	
+
 	// Webhook for provider callbacks (e.g., delivery status)
 	router.POST("/notifications/webhook/:provider", handler.HandleWebhook)
-	
+
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if hookRegistry == nil {
 		return nil
 	}
-	
+
 	// Register after user create hook to send welcome email
 	if p.config.AutoSendWelcome {
 		hookRegistry.RegisterAfterUserCreate(func(ctx context.Context, createdUser *user.User) error {
@@ -139,16 +139,16 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			if p.service != nil && p.templateSvc != nil && createdUser != nil && createdUser.Email != "" {
 				// Use "default" organization
 				orgID := "default"
-				
+
 				// Create adapter for sending
 				adapter := NewAdapter(p.templateSvc)
-				
+
 				// Send welcome email
 				userName := createdUser.Name
 				if userName == "" {
 					userName = createdUser.Email
 				}
-				
+
 				err := adapter.SendWelcomeEmail(ctx, orgID, createdUser.Email, userName, "")
 				if err != nil {
 					// Log error but don't fail user creation
@@ -158,7 +158,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			return nil
 		})
 	}
-	
+
 	return nil
 }
 
@@ -175,9 +175,9 @@ func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
-	
+
 	ctx := context.Background()
-	
+
 	// Create notification_templates table
 	_, err := p.db.NewCreateTable().
 		Model((*schema.NotificationTemplate)(nil)).
@@ -186,7 +186,7 @@ func (p *Plugin) Migrate() error {
 	if err != nil {
 		return fmt.Errorf("failed to create notification_templates table: %w", err)
 	}
-	
+
 	// Create notifications table
 	_, err = p.db.NewCreateTable().
 		Model((*schema.Notification)(nil)).
@@ -195,7 +195,7 @@ func (p *Plugin) Migrate() error {
 	if err != nil {
 		return fmt.Errorf("failed to create notifications table: %w", err)
 	}
-	
+
 	// Create indexes
 	_, err = p.db.NewCreateIndex().
 		Model((*schema.NotificationTemplate)(nil)).
@@ -207,7 +207,7 @@ func (p *Plugin) Migrate() error {
 	if err != nil {
 		return fmt.Errorf("failed to create notification_templates index: %w", err)
 	}
-	
+
 	_, err = p.db.NewCreateIndex().
 		Model((*schema.Notification)(nil)).
 		Index("idx_notifications_org_status").
@@ -217,7 +217,7 @@ func (p *Plugin) Migrate() error {
 	if err != nil {
 		return fmt.Errorf("failed to create notifications index: %w", err)
 	}
-	
+
 	// Add default templates if enabled
 	if p.config.AddDefaultTemplates && !p.defaultsAdded {
 		if err := p.addDefaultTemplates(ctx); err != nil {
@@ -225,14 +225,14 @@ func (p *Plugin) Migrate() error {
 		}
 		p.defaultsAdded = true
 	}
-	
+
 	return nil
 }
 
 // addDefaultTemplates adds default notification templates
 func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
 	templates := DefaultTemplates()
-	
+
 	for _, tmpl := range templates {
 		// Check if template already exists
 		existing, err := p.service.CreateTemplate(ctx, &notification.CreateTemplateRequest{
@@ -249,12 +249,12 @@ func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
 				"description": tmpl.Description,
 			},
 		})
-		
+
 		if err != nil {
 			// Template might already exist, continue
 			continue
 		}
-		
+
 		// Store HTML version if available
 		if tmpl.BodyHTML != "" && existing != nil {
 			_ = p.service.UpdateTemplate(ctx, existing.ID, &notification.UpdateTemplateRequest{
@@ -262,7 +262,7 @@ func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
 			})
 		}
 	}
-	
+
 	return nil
 }
 
@@ -288,7 +288,7 @@ func (p *Plugin) registerProviders() error {
 			return fmt.Errorf("failed to register email provider: %w", err)
 		}
 	}
-	
+
 	// Register SMS provider
 	smsProvider, err := p.createSMSProvider()
 	if err != nil {
@@ -299,7 +299,7 @@ func (p *Plugin) registerProviders() error {
 			return fmt.Errorf("failed to register SMS provider: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -333,7 +333,7 @@ func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 			return email.NewMockEmailProvider()
 		},
 	}
-	
+
 	switch p.config.Providers.Email.Provider {
 	case "smtp":
 		return emailProviders.smtp(), nil
@@ -367,7 +367,7 @@ func (p *Plugin) createSMSProvider() (notification.Provider, error) {
 			return sms.NewMockSMSProvider()
 		},
 	}
-	
+
 	switch p.config.Providers.SMS.Provider {
 	case "twilio":
 		return smsProviders.twilio(), nil
@@ -406,4 +406,3 @@ func getBoolConfig(config map[string]interface{}, key string, defaultValue bool)
 	}
 	return defaultValue
 }
-

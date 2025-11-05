@@ -27,17 +27,17 @@ func (h *Handler) EnrollFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	var req FactorEnrollmentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	
+
 	resp, err := h.service.EnrollFactor(c.Request().Context(), userID, &req)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, resp)
 }
 
@@ -47,15 +47,15 @@ func (h *Handler) ListFactors(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	// Check for active_only query param
 	activeOnly := c.Request().URL.Query().Get("active_only") == "true"
-	
+
 	factors, err := h.service.ListFactors(c.Request().Context(), userID, activeOnly)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"factors": factors,
 		"count":   len(factors),
@@ -68,23 +68,23 @@ func (h *Handler) GetFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid factor ID"})
 	}
-	
+
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
 		return c.JSON(404, map[string]string{"error": "factor not found"})
 	}
-	
+
 	// Verify factor belongs to user
 	if factor.UserID != userID {
 		return c.JSON(403, map[string]string{"error": "forbidden"})
 	}
-	
+
 	return c.JSON(200, factor)
 }
 
@@ -94,13 +94,13 @@ func (h *Handler) UpdateFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid factor ID"})
 	}
-	
+
 	// First verify factor belongs to user
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
@@ -109,16 +109,16 @@ func (h *Handler) UpdateFactor(c forge.Context) error {
 	if factor.UserID != userID {
 		return c.JSON(403, map[string]string{"error": "forbidden"})
 	}
-	
+
 	var updates map[string]interface{}
 	if err := json.NewDecoder(c.Request().Body).Decode(&updates); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	
+
 	if err := h.service.UpdateFactor(c.Request().Context(), factorID, updates); err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]string{"message": "factor updated"})
 }
 
@@ -128,13 +128,13 @@ func (h *Handler) DeleteFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid factor ID"})
 	}
-	
+
 	// Verify factor belongs to user
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
@@ -143,11 +143,11 @@ func (h *Handler) DeleteFactor(c forge.Context) error {
 	if factor.UserID != userID {
 		return c.JSON(403, map[string]string{"error": "forbidden"})
 	}
-	
+
 	if err := h.service.DeleteFactor(c.Request().Context(), factorID); err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]string{"message": "factor deleted"})
 }
 
@@ -157,13 +157,13 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid factor ID"})
 	}
-	
+
 	// Verify factor belongs to user
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
@@ -172,18 +172,18 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 	if factor.UserID != userID {
 		return c.JSON(403, map[string]string{"error": "forbidden"})
 	}
-	
+
 	var req struct {
 		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	
+
 	if err := h.service.VerifyEnrollment(c.Request().Context(), factorID, req.Code); err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]string{"message": "factor verified"})
 }
 
@@ -195,28 +195,28 @@ func (h *Handler) InitiateChallenge(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	var req ChallengeRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		// Use empty request if no body provided
 		req = ChallengeRequest{}
 	}
-	
+
 	// Override userID from context
 	req.UserID = userID
-	
+
 	// Add IP and user agent to metadata
 	if req.Metadata == nil {
 		req.Metadata = make(map[string]any)
 	}
 	req.Metadata["ip_address"] = c.Request().RemoteAddr
 	req.Metadata["user_agent"] = c.Request().UserAgent()
-	
+
 	resp, err := h.service.InitiateChallenge(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, resp)
 }
 
@@ -226,20 +226,20 @@ func (h *Handler) VerifyChallenge(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	var req VerificationRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	
+
 	// Verify challenge belongs to user (done in service)
 	resp, err := h.service.VerifyChallenge(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	_ = userID // Verify in service layer
-	
+
 	return c.JSON(200, resp)
 }
 
@@ -249,9 +249,9 @@ func (h *Handler) GetChallengeStatus(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	_ = userID // TODO: Implement challenge status lookup
-	
+
 	return c.JSON(501, map[string]string{"error": "not implemented"})
 }
 
@@ -263,16 +263,16 @@ func (h *Handler) TrustDevice(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	var deviceInfo DeviceInfo
 	if err := json.NewDecoder(c.Request().Body).Decode(&deviceInfo); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	
+
 	if err := h.service.TrustDevice(c.Request().Context(), userID, &deviceInfo); err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]string{"message": "device trusted"})
 }
 
@@ -282,12 +282,12 @@ func (h *Handler) ListTrustedDevices(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	devices, err := h.service.ListTrustedDevices(c.Request().Context(), userID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"devices": devices,
 		"count":   len(devices),
@@ -300,20 +300,20 @@ func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	deviceIDStr := c.Param("id")
 	deviceID, err := xid.FromString(deviceIDStr)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid device ID"})
 	}
-	
+
 	// TODO: Verify device belongs to user
 	_ = userID
-	
+
 	if err := h.service.RevokeTrustedDevice(c.Request().Context(), deviceID); err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, map[string]string{"message": "device revoked"})
 }
 
@@ -325,14 +325,14 @@ func (h *Handler) GetStatus(c forge.Context) error {
 	if err != nil {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
-	
+
 	deviceID := c.Request().URL.Query().Get("device_id")
-	
+
 	status, err := h.service.GetMFAStatus(c.Request().Context(), userID, deviceID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
-	
+
 	return c.JSON(200, status)
 }
 
@@ -340,7 +340,7 @@ func (h *Handler) GetStatus(c forge.Context) error {
 func (h *Handler) GetPolicy(c forge.Context) error {
 	// TODO: Get organization ID from context
 	// For now, return config-based policy
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"enabled":               h.service.config.Enabled,
 		"required_factor_count": h.service.config.RequiredFactorCount,
@@ -373,12 +373,11 @@ func getUserIDFromContext(c forge.Context) (xid.ID, error) {
 	if userID, ok := c.Get("user_id").(xid.ID); ok {
 		return userID, nil
 	}
-	
+
 	// Try to get from string
 	if userIDStr, ok := c.Get("user_id").(string); ok {
 		return xid.FromString(userIDStr)
 	}
-	
+
 	return xid.ID{}, fmt.Errorf("user_id not found in context")
 }
-

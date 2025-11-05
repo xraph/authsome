@@ -30,13 +30,13 @@ func NewTemplateService(
 
 // SendWithTemplateRequest represents a request to send a notification using a template
 type SendWithTemplateRequest struct {
-	OrganizationID string                 `json:"organization_id"`
-	TemplateKey    string                 `json:"template_key"`
+	OrganizationID string                        `json:"organization_id"`
+	TemplateKey    string                        `json:"template_key"`
 	Type           notification.NotificationType `json:"type"`
-	Recipient      string                 `json:"recipient"`
-	Variables      map[string]interface{} `json:"variables"`
-	Language       string                 `json:"language,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Recipient      string                        `json:"recipient"`
+	Variables      map[string]interface{}        `json:"variables"`
+	Language       string                        `json:"language,omitempty"`
+	Metadata       map[string]interface{}        `json:"metadata,omitempty"`
 }
 
 // SendWithTemplate sends a notification using a template
@@ -46,13 +46,13 @@ func (s *TemplateService) SendWithTemplate(ctx context.Context, req *SendWithTem
 	if orgID == "" {
 		orgID = "default"
 	}
-	
+
 	// Determine language
 	language := req.Language
 	if language == "" {
 		language = s.config.DefaultLanguage
 	}
-	
+
 	// Find template - try org-specific first, then default
 	template, err := s.findTemplate(ctx, orgID, req.TemplateKey, string(req.Type), language)
 	if err != nil {
@@ -61,7 +61,7 @@ func (s *TemplateService) SendWithTemplate(ctx context.Context, req *SendWithTem
 	if template == nil {
 		return nil, fmt.Errorf("template not found: %s", req.TemplateKey)
 	}
-	
+
 	// Send notification using the template
 	return s.notificationSvc.Send(ctx, &notification.SendRequest{
 		OrganizationID: orgID,
@@ -118,7 +118,7 @@ func (s *TemplateService) findTemplate(ctx context.Context, orgID, templateKey, 
 			return template, nil
 		}
 	}
-	
+
 	// Fall back to default template
 	return s.repo.FindTemplateByKey(ctx, "default", templateKey, notifType, language)
 }
@@ -129,10 +129,10 @@ func (s *TemplateService) RenderTemplate(ctx context.Context, templateID xid.ID,
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	// Create a temporary template engine
 	engine := NewTemplateEngine()
-	
+
 	// Render subject
 	if template.Subject != "" {
 		subject, err = engine.Render(template.Subject, variables)
@@ -140,13 +140,12 @@ func (s *TemplateService) RenderTemplate(ctx context.Context, templateID xid.ID,
 			return "", "", fmt.Errorf("failed to render subject: %w", err)
 		}
 	}
-	
+
 	// Render body
 	body, err = engine.Render(template.Body, variables)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to render body: %w", err)
 	}
-	
+
 	return subject, body, nil
 }
-

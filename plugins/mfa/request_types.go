@@ -35,7 +35,7 @@ type GetFactorRequest struct {
 type UpdateFactorRequest struct {
 	// Path parameters
 	ID string `path:"id" validate:"required" description:"Factor ID"`
-	
+
 	// Body fields
 	Name     *string         `json:"name,omitempty" validate:"omitempty,min=1,max=100" description:"New name for the factor"`
 	Priority *FactorPriority `json:"priority,omitempty" validate:"omitempty,oneof=primary backup optional" description:"New priority level"`
@@ -53,7 +53,7 @@ type DeleteFactorRequest struct {
 type VerifyEnrolledFactorRequest struct {
 	// Path parameters
 	ID string `path:"id" validate:"required" description:"Factor ID to verify"`
-	
+
 	// Body fields
 	Code string         `json:"code,omitempty" validate:"required_without=Data" description:"Verification code for OTP-based factors"`
 	Data map[string]any `json:"data,omitempty" description:"Verification data for complex factors (WebAuthn, etc.)"`
@@ -130,22 +130,22 @@ type GetStatusRequest struct {
 // UpdatePolicyRequest represents the request to update MFA policy (admin only)
 type UpdatePolicyRequest struct {
 	// Body fields
-	RequiredFactorCount    *int          `json:"requiredFactorCount,omitempty" validate:"omitempty,min=0,max=5" description:"Number of factors required"`
-	AllowedFactorTypes     []FactorType  `json:"allowedFactorTypes,omitempty" description:"Permitted factor types"`
-	RequiredFactorTypes    []FactorType  `json:"requiredFactorTypes,omitempty" description:"Mandatory factor types"`
-	GracePeriodDays        *int          `json:"gracePeriodDays,omitempty" validate:"omitempty,min=0,max=365" description:"Days before MFA is enforced"`
-	TrustedDeviceDays      *int          `json:"trustedDeviceDays,omitempty" validate:"omitempty,min=1,max=365" description:"Days device remains trusted"`
-	StepUpRequired         *bool         `json:"stepUpRequired,omitempty" description:"Require step-up authentication for sensitive operations"`
-	AdaptiveMFAEnabled     *bool         `json:"adaptiveMfaEnabled,omitempty" description:"Enable risk-based MFA"`
-	MaxFailedAttempts      *int          `json:"maxFailedAttempts,omitempty" validate:"omitempty,min=1,max=10" description:"Maximum failed verification attempts"`
-	LockoutDurationMinutes *int          `json:"lockoutDurationMinutes,omitempty" validate:"omitempty,min=1,max=1440" description:"Account lockout duration in minutes"`
+	RequiredFactorCount    *int         `json:"requiredFactorCount,omitempty" validate:"omitempty,min=0,max=5" description:"Number of factors required"`
+	AllowedFactorTypes     []FactorType `json:"allowedFactorTypes,omitempty" description:"Permitted factor types"`
+	RequiredFactorTypes    []FactorType `json:"requiredFactorTypes,omitempty" description:"Mandatory factor types"`
+	GracePeriodDays        *int         `json:"gracePeriodDays,omitempty" validate:"omitempty,min=0,max=365" description:"Days before MFA is enforced"`
+	TrustedDeviceDays      *int         `json:"trustedDeviceDays,omitempty" validate:"omitempty,min=1,max=365" description:"Days device remains trusted"`
+	StepUpRequired         *bool        `json:"stepUpRequired,omitempty" description:"Require step-up authentication for sensitive operations"`
+	AdaptiveMFAEnabled     *bool        `json:"adaptiveMfaEnabled,omitempty" description:"Enable risk-based MFA"`
+	MaxFailedAttempts      *int         `json:"maxFailedAttempts,omitempty" validate:"omitempty,min=1,max=10" description:"Maximum failed verification attempts"`
+	LockoutDurationMinutes *int         `json:"lockoutDurationMinutes,omitempty" validate:"omitempty,min=1,max=1440" description:"Account lockout duration in minutes"`
 }
 
 // ResetUserMFARequest represents the request to reset user's MFA (admin only)
 type ResetUserMFARequest struct {
 	// Path parameters
 	ID string `path:"id" validate:"required" description:"User ID whose MFA should be reset"`
-	
+
 	// Body fields
 	Reason string `json:"reason,omitempty" validate:"omitempty,min=1,max=500" description:"Reason for MFA reset (for audit trail)"`
 }
@@ -172,4 +172,3 @@ type SuccessResponse struct {
 	Message string         `json:"message" description:"Success message"`
 	Data    map[string]any `json:"data,omitempty" description:"Additional response data"`
 }
-

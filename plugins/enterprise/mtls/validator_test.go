@@ -410,4 +410,3 @@ func BenchmarkFingerprintCalculation(b *testing.B) {
 		_ = calculateFingerprint(block.Bytes)
 	}
 }
-

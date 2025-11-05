@@ -15,20 +15,20 @@ type CompiledPolicy struct {
 	NamespaceID xid.ID
 	Name        string
 	Description string
-	
+
 	// Compiled CEL program
 	Program cel.Program
 	AST     *cel.Ast
-	
+
 	// Indexing keys for fast lookup
 	ResourceType string
 	Actions      []string
 	Priority     int
-	
+
 	// Metadata
 	Version    int
 	CompiledAt time.Time
-	
+
 	// Performance tracking
 	EvaluationCount int64
 	AvgLatencyMs    float64
@@ -38,13 +38,13 @@ type CompiledPolicy struct {
 type EvaluationContext struct {
 	// Principal (user making the request)
 	Principal map[string]interface{} `json:"principal"`
-	
+
 	// Resource being accessed
 	Resource map[string]interface{} `json:"resource"`
-	
+
 	// Request context (IP, time, method, etc.)
 	Request map[string]interface{} `json:"request"`
-	
+
 	// Action being performed
 	Action string `json:"action"`
 }
@@ -53,19 +53,19 @@ type EvaluationContext struct {
 type Decision struct {
 	// Allowed indicates if access is granted
 	Allowed bool `json:"allowed"`
-	
+
 	// MatchedPolicies lists policies that allowed access
 	MatchedPolicies []string `json:"matchedPolicies,omitempty"`
-	
+
 	// EvaluatedPolicies is the total number of policies checked
 	EvaluatedPolicies int `json:"evaluatedPolicies"`
-	
+
 	// EvaluationTime is how long evaluation took
 	EvaluationTime time.Duration `json:"evaluationTime"`
-	
+
 	// CacheHit indicates if result came from cache
 	CacheHit bool `json:"cacheHit"`
-	
+
 	// Error if evaluation failed
 	Error string `json:"error,omitempty"`
 }
@@ -84,15 +84,14 @@ func (k IndexKey) String() string {
 
 // EvaluationStats tracks performance metrics for policies
 type EvaluationStats struct {
-	PolicyID         string
-	EvaluationCount  int64
-	TotalLatencyMs   float64
-	AvgLatencyMs     float64
-	P50LatencyMs     float64
-	P99LatencyMs     float64
-	AllowCount       int64
-	DenyCount        int64
-	ErrorCount       int64
-	LastEvaluated    time.Time
+	PolicyID        string
+	EvaluationCount int64
+	TotalLatencyMs  float64
+	AvgLatencyMs    float64
+	P50LatencyMs    float64
+	P99LatencyMs    float64
+	AllowCount      int64
+	DenyCount       int64
+	ErrorCount      int64
+	LastEvaluated   time.Time
 }
-

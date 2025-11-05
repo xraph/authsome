@@ -64,7 +64,7 @@ func init() {
 		}
 
 		// Create indexes for performance
-		
+
 		// Certificates indexes
 		_, err = db.NewCreateIndex().
 			Model((*mtls.Certificate)(nil)).
@@ -279,4 +279,3 @@ func init() {
 		return nil
 	})
 }
-

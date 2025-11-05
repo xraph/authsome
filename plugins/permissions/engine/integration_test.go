@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 	"testing"
-	
+
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,11 +19,11 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 	// Step 1: Create compiler and evaluator
 	compiler, err := NewCompiler(DefaultCompilerConfig())
 	require.NoError(t, err)
-	
+
 	// Step 2: Set up attribute resolver with mock providers
 	cache := NewSimpleAttributeCache()
 	resolver := NewAttributeResolver(cache)
-	
+
 	// Add mock user service
 	userService := providers.NewMockUserService()
 	userService.AddUser(&providers.User{
@@ -43,7 +43,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 	})
 	userProvider := providers.NewUserAttributeProvider(userService)
 	resolver.RegisterProvider(userProvider)
-	
+
 	// Add mock resource service
 	resourceService := providers.NewMockResourceService()
 	resourceService.AddResource(&providers.Resource{
@@ -57,16 +57,16 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 	})
 	resourceProvider := providers.NewResourceAttributeProvider(resourceService)
 	resolver.RegisterProvider(resourceProvider)
-	
+
 	// Add context provider
 	contextProvider := providers.NewContextAttributeProvider()
 	resolver.RegisterProvider(contextProvider)
-	
+
 	// Create evaluator with resolver
 	evaluatorConfig := DefaultEvaluatorConfig()
 	evaluatorConfig.AttributeResolver = resolver
 	evaluator := NewEvaluator(evaluatorConfig)
-	
+
 	// Step 3: Define policies
 	tests := []struct {
 		name          string
@@ -221,29 +221,29 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 			description:   "Bob is neither admin nor owner (all fetched), should be denied",
 		},
 	}
-	
+
 	ctx := context.Background()
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Compile policy
 			compiled, err := compiler.Compile(tt.policy)
 			require.NoError(t, err, "policy should compile")
-			
+
 			// Evaluate with automatic attribute enrichment
 			decision, err := evaluator.Evaluate(ctx, []*CompiledPolicy{compiled}, tt.evalCtx)
 			require.NoError(t, err, "evaluation should not error")
 			require.NotNil(t, decision, "decision should not be nil")
-			
+
 			// Check result
 			assert.Equal(t, tt.expectAllowed, decision.Allowed, tt.description)
-			
+
 			// Verify that attributes were enriched
 			if tt.expectAllowed {
 				// If allowed, at least one policy should have matched
 				assert.Greater(t, len(decision.MatchedPolicies), 0, "should have matched policies")
 			}
-			
+
 			// Verify evaluation metrics
 			assert.Greater(t, decision.EvaluatedPolicies, 0, "should have evaluated at least one policy")
 			assert.Greater(t, decision.EvaluationTime, int64(0), "evaluation time should be recorded")
@@ -257,7 +257,7 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 	// Setup
 	cache := NewSimpleAttributeCache()
 	resolver := NewAttributeResolver(cache)
-	
+
 	userService := providers.NewMockUserService()
 	userService.AddUser(&providers.User{
 		ID:    "user_123",
@@ -267,13 +267,13 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 	})
 	userProvider := providers.NewUserAttributeProvider(userService)
 	resolver.RegisterProvider(userProvider)
-	
+
 	evaluatorConfig := DefaultEvaluatorConfig()
 	evaluatorConfig.AttributeResolver = resolver
 	evaluator := NewEvaluator(evaluatorConfig)
-	
+
 	ctx := context.Background()
-	
+
 	// Test 1: Principal has ID but no roles - should fetch from service
 	evalCtx1 := &EvaluationContext{
 		Principal: map[string]interface{}{
@@ -283,12 +283,12 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 		Resource: map[string]interface{}{},
 		Action:   "read",
 	}
-	
+
 	err := evaluator.EnrichEvaluationContext(ctx, evalCtx1)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"admin"}, evalCtx1.Principal["roles"])
 	assert.Equal(t, "From Service", evalCtx1.Principal["name"])
-	
+
 	// Test 2: Principal has ID and roles - should NOT overwrite
 	evalCtx2 := &EvaluationContext{
 		Principal: map[string]interface{}{
@@ -300,7 +300,7 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 		Resource: map[string]interface{}{},
 		Action:   "read",
 	}
-	
+
 	err = evaluator.EnrichEvaluationContext(ctx, evalCtx2)
 	require.NoError(t, err)
 	// Should keep pre-existing values
@@ -313,7 +313,7 @@ func TestAttributeCaching(t *testing.T) {
 	// Setup
 	cache := NewSimpleAttributeCache()
 	resolver := NewAttributeResolver(cache)
-	
+
 	userService := providers.NewMockUserService()
 	userService.AddUser(&providers.User{
 		ID:    "user_123",
@@ -322,38 +322,37 @@ func TestAttributeCaching(t *testing.T) {
 	})
 	userProvider := providers.NewUserAttributeProvider(userService)
 	resolver.RegisterProvider(userProvider)
-	
+
 	evaluatorConfig := DefaultEvaluatorConfig()
 	evaluatorConfig.AttributeResolver = resolver
 	evaluator := NewEvaluator(evaluatorConfig)
-	
+
 	ctx := context.Background()
-	
+
 	// First evaluation - should fetch from service
 	evalCtx1 := &EvaluationContext{
 		Principal: map[string]interface{}{"id": "user_123"},
 		Resource:  map[string]interface{}{},
 		Action:    "read",
 	}
-	
+
 	err := evaluator.EnrichEvaluationContext(ctx, evalCtx1)
 	require.NoError(t, err)
 	assert.Equal(t, "Alice", evalCtx1.Principal["name"])
-	
+
 	// Second evaluation - should use cache (verify by checking cache directly)
 	evalCtx2 := &EvaluationContext{
 		Principal: map[string]interface{}{"id": "user_123"},
 		Resource:  map[string]interface{}{},
 		Action:    "read",
 	}
-	
+
 	err = evaluator.EnrichEvaluationContext(ctx, evalCtx2)
 	require.NoError(t, err)
 	assert.Equal(t, "Alice", evalCtx2.Principal["name"])
-	
+
 	// Verify cache was used by checking cache directly
 	cached, found := cache.Get(ctx, "user:user_123")
 	assert.True(t, found, "user should be in cache")
 	assert.Equal(t, "Alice", cached["name"])
 }
-

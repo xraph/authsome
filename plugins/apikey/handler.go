@@ -209,7 +209,7 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 		OrgID  string `json:"org_id"`
 		UserID string `json:"user_id"`
 	}
-	
+
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{
 			"error": "Invalid request body",
@@ -276,4 +276,3 @@ func (h *Handler) VerifyAPIKey(c forge.Context) error {
 
 	return c.JSON(200, response)
 }
-

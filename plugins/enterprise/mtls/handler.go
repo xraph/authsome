@@ -32,14 +32,14 @@ func (h *Handler) RegisterCertificate(c forge.Context) error {
 			"error": "invalid request",
 		})
 	}
-	
+
 	cert, err := h.service.RegisterCertificate(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(400, map[string]string{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(201, cert)
 }
 
@@ -52,7 +52,7 @@ func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 			"error": "no client certificate provided",
 		})
 	}
-	
+
 	// Get organization ID from query parameter
 	orgID := c.Query("organizationId")
 	if orgID == "" {
@@ -60,25 +60,25 @@ func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 			"error": "organization ID required",
 		})
 	}
-	
+
 	// Get certificate PEM
 	peerCert := c.Request().TLS.PeerCertificates[0]
 	certPEM := certToPEM(peerCert.Raw)
-	
+
 	result, err := h.service.AuthenticateWithCertificate(c.Request().Context(), certPEM, orgID)
 	if err != nil {
 		return c.JSON(500, map[string]string{
 			"error": err.Error(),
 		})
 	}
-	
+
 	if !result.Success {
 		return c.JSON(401, map[string]interface{}{
 			"success": false,
 			"errors":  result.Errors,
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"success":       true,
 		"userId":        result.UserID,
@@ -95,14 +95,14 @@ func (h *Handler) GetCertificate(c forge.Context) error {
 			"error": "certificate ID required",
 		})
 	}
-	
+
 	cert, err := h.service.GetCertificate(c.Request().Context(), id)
 	if err != nil {
 		return c.JSON(404, map[string]string{
 			"error": "certificate not found",
 		})
 	}
-	
+
 	return c.JSON(200, cert)
 }
 
@@ -116,26 +116,26 @@ func (h *Handler) ListCertificates(c forge.Context) error {
 		Status:         c.Query("status"),
 		CertType:       c.Query("type"),
 	}
-	
+
 	if limit := c.Query("limit"); limit != "" {
 		if l, err := strconv.Atoi(limit); err == nil {
 			filters.Limit = l
 		}
 	}
-	
+
 	if offset := c.Query("offset"); offset != "" {
 		if o, err := strconv.Atoi(offset); err == nil {
 			filters.Offset = o
 		}
 	}
-	
+
 	certs, err := h.service.ListCertificates(c.Request().Context(), filters)
 	if err != nil {
 		return c.JSON(500, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"certificates": certs,
 		"total":        len(certs),
@@ -151,7 +151,7 @@ func (h *Handler) RevokeCertificate(c forge.Context) error {
 			"error": "certificate ID required",
 		})
 	}
-	
+
 	var req struct {
 		Reason string `json:"reason"`
 	}
@@ -160,13 +160,13 @@ func (h *Handler) RevokeCertificate(c forge.Context) error {
 			"error": "invalid request",
 		})
 	}
-	
+
 	if err := h.service.RevokeCertificate(c.Request().Context(), id, req.Reason); err != nil {
 		return c.JSON(500, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"success": true,
 		"message": "certificate revoked",
@@ -184,14 +184,14 @@ func (h *Handler) AddTrustAnchor(c forge.Context) error {
 			"error": "invalid request",
 		})
 	}
-	
+
 	anchor, err := h.service.AddTrustAnchor(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(400, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(201, anchor)
 }
 
@@ -204,14 +204,14 @@ func (h *Handler) GetTrustAnchors(c forge.Context) error {
 			"error": "organization ID required",
 		})
 	}
-	
+
 	anchors, err := h.service.GetTrustAnchors(c.Request().Context(), orgID)
 	if err != nil {
 		return c.JSON(500, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"trustAnchors": anchors,
 		"total":        len(anchors),
@@ -229,14 +229,14 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 			"error": "invalid request",
 		})
 	}
-	
+
 	policy, err := h.service.CreatePolicy(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(400, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(201, policy)
 }
 
@@ -249,14 +249,14 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 			"error": "policy ID required",
 		})
 	}
-	
+
 	policy, err := h.service.GetPolicy(c.Request().Context(), id)
 	if err != nil {
 		return c.JSON(404, map[string]interface{}{
 			"error": "policy not found",
 		})
 	}
-	
+
 	return c.JSON(200, policy)
 }
 
@@ -271,23 +271,23 @@ func (h *Handler) GetAuthStats(c forge.Context) error {
 			"error": "organization ID required",
 		})
 	}
-	
+
 	// Default to last 30 days
 	since := time.Now().AddDate(0, 0, -30)
-	
+
 	if sinceParam := c.Query("since"); sinceParam != "" {
 		if parsed, err := time.Parse(time.RFC3339, sinceParam); err == nil {
 			since = parsed
 		}
 	}
-	
+
 	stats, err := h.service.GetAuthEventStats(c.Request().Context(), orgID, since)
 	if err != nil {
 		return c.JSON(500, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(200, stats)
 }
 
@@ -300,21 +300,21 @@ func (h *Handler) GetExpiringCertificates(c forge.Context) error {
 			"error": "organization ID required",
 		})
 	}
-	
+
 	days := 30 // Default to 30 days
 	if daysParam := c.Query("days"); daysParam != "" {
 		if d, err := strconv.Atoi(daysParam); err == nil {
 			days = d
 		}
 	}
-	
+
 	certs, err := h.service.GetExpiringCertificates(c.Request().Context(), orgID, days)
 	if err != nil {
 		return c.JSON(500, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"certificates": certs,
 		"total":        len(certs),
@@ -331,30 +331,30 @@ func (h *Handler) ValidateCertificate(c forge.Context) error {
 		CertificatePEM string `json:"certificatePem"`
 		OrganizationID string `json:"organizationId"`
 	}
-	
+
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, map[string]interface{}{
 			"error": "invalid request",
 		})
 	}
-	
+
 	result, err := h.service.validator.ValidateCertificate(
 		c.Request().Context(),
 		[]byte(req.CertificatePEM),
 		req.OrganizationID,
 	)
-	
+
 	if err != nil {
 		return c.JSON(500, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
-		"valid":           result.Valid,
-		"errors":          result.Errors,
-		"warnings":        result.Warnings,
-		"validationSteps": result.ValidationSteps,
+		"valid":            result.Valid,
+		"errors":           result.Errors,
+		"warnings":         result.Warnings,
+		"validationSteps":  result.ValidationSteps,
 		"revocationStatus": result.RevocationStatus,
 	})
 }
@@ -368,4 +368,3 @@ func certToPEM(derBytes []byte) []byte {
 	}
 	return pem.EncodeToMemory(pemBlock)
 }
-

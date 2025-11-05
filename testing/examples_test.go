@@ -71,7 +71,7 @@ func TestExample_MultiOrg(t *testing.T) {
 	user := mock.CreateUser("user@example.com", "Test User")
 	org1 := mock.GetDefaultOrg()
 	org2 := mock.CreateOrganization("Second Org", "second-org")
-	
+
 	// Add user to second org with admin role
 	mock.AddUserToOrg(user.ID.String(), org2.ID.String(), "admin")
 
@@ -107,7 +107,7 @@ func TestExample_RoleBasedAuth(t *testing.T) {
 	// Create users with different roles
 	adminUser := mock.CreateUserWithRole("admin@example.com", "Admin User", "admin")
 	memberUser := mock.CreateUserWithRole("member@example.com", "Member User", "member")
-	
+
 	org := mock.GetDefaultOrg()
 
 	// Test admin access
@@ -131,7 +131,7 @@ func TestExample_SessionExpiration(t *testing.T) {
 	defer mock.Reset()
 
 	user := mock.CreateUser("user@example.com", "Test User")
-	
+
 	// Create an expired session
 	expiredSession := mock.CreateExpiredSession(user.ID.String(), mock.GetDefaultOrg().ID.String())
 
@@ -251,7 +251,7 @@ func TestExample_ServiceMethods(t *testing.T) {
 	t.Run("organization service", func(t *testing.T) {
 		// Create org
 		org := mock.CreateOrganization("Test Org", "test-org-2")
-		
+
 		// Get by ID
 		retrieved, err := mock.OrganizationService.GetByID(ctx, org.ID.String())
 		require.NoError(t, err)
@@ -336,9 +336,9 @@ func TestExample_Metadata(t *testing.T) {
 	// Create organization with metadata
 	org := mock.CreateOrganization("Test Org", "test-org-meta")
 	org.Metadata = map[string]interface{}{
-		"industry":  "Technology",
-		"size":      "Enterprise",
-		"region":    "US-West",
+		"industry": "Technology",
+		"size":     "Enterprise",
+		"region":   "US-West",
 	}
 
 	// Verify metadata
