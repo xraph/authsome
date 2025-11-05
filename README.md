@@ -1,10 +1,15 @@
 # AuthSome
 
+[![CI](https://github.com/xraph/farp/workflows/CI/badge.svg)](https://github.com/xraph/farp/actions?query=workflow%3ACI)
 [![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://golang.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/xraph/authsome)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xraph/authsome)](https://goreportcard.com/report/github.com/xraph/authsome)
-[![Documentation](https://img.shields.io/badge/docs-available-blue.svg)](https://authsome.dev)
+[![GoDoc](https://godoc.org/github.com/xraph/authsome?status.svg)](https://godoc.org/github.com/xraph/authsome)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-available-blue.svg)](https://authsome.xraph.dev)
+[![Release](https://img.shields.io/github/v/release/xraph/authsome)](https://github.com/xraph/authsome/releases)
+
+**Authors**: [Rex Raphael](githib.com/juicycleff)
+**Last Updated**: 2025-11-01
 
 > A comprehensive, pluggable authentication framework for Go, inspired by better-auth. Enterprise-grade authentication with multi-tenancy support, designed to integrate seamlessly with the Forge framework.
 

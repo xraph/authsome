@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xraph/authsome/core/audit"
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/impersonation"
-	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -173,14 +172,62 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	api := router.Group("/api/impersonation")
 
 	// Impersonation management endpoints
-	api.POST("/start", p.handler.StartImpersonation)
-	api.POST("/end", p.handler.EndImpersonation)
-	api.GET("/:id", p.handler.GetImpersonation)
-	api.GET("/", p.handler.ListImpersonations)
-	api.POST("/verify", p.handler.VerifyImpersonation)
+	api.POST("/start", p.handler.StartImpersonation,
+		forge.WithName("impersonation.start"),
+		forge.WithSummary("Start impersonation"),
+		forge.WithDescription("Begin impersonating another user. Requires admin privileges and creates an audit trail."),
+		forge.WithResponseSchema(200, "Impersonation started", ImpersonationStartResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ImpersonationErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", ImpersonationErrorResponse{}),
+		forge.WithTags("Impersonation"),
+		forge.WithValidation(true),
+	)
+	
+	api.POST("/end", p.handler.EndImpersonation,
+		forge.WithName("impersonation.end"),
+		forge.WithSummary("End impersonation"),
+		forge.WithDescription("End the current impersonation session and restore the original user context"),
+		forge.WithResponseSchema(200, "Impersonation ended", ImpersonationEndResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or no active impersonation", ImpersonationErrorResponse{}),
+		forge.WithTags("Impersonation"),
+	)
+	
+	api.GET("/:id", p.handler.GetImpersonation,
+		forge.WithName("impersonation.get"),
+		forge.WithSummary("Get impersonation details"),
+		forge.WithDescription("Retrieve details of a specific impersonation session"),
+		forge.WithResponseSchema(200, "Impersonation retrieved", ImpersonationSession{}),
+		forge.WithResponseSchema(404, "Impersonation not found", ImpersonationErrorResponse{}),
+		forge.WithTags("Impersonation"),
+	)
+	
+	api.GET("/", p.handler.ListImpersonations,
+		forge.WithName("impersonation.list"),
+		forge.WithSummary("List impersonations"),
+		forge.WithDescription("List all impersonation sessions (active and historical) with pagination support"),
+		forge.WithResponseSchema(200, "Impersonations retrieved", ImpersonationListResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
+		forge.WithTags("Impersonation"),
+	)
+	
+	api.POST("/verify", p.handler.VerifyImpersonation,
+		forge.WithName("impersonation.verify"),
+		forge.WithSummary("Verify impersonation"),
+		forge.WithDescription("Verify if the current session is an active impersonation"),
+		forge.WithResponseSchema(200, "Verification result", ImpersonationVerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ImpersonationErrorResponse{}),
+		forge.WithTags("Impersonation"),
+	)
 
 	// Audit endpoints
-	api.GET("/audit", p.handler.ListAuditEvents)
+	api.GET("/audit", p.handler.ListAuditEvents,
+		forge.WithName("impersonation.audit.list"),
+		forge.WithSummary("List impersonation audit events"),
+		forge.WithDescription("Retrieve audit logs of all impersonation activities for compliance and security monitoring"),
+		forge.WithResponseSchema(200, "Audit events retrieved", ImpersonationAuditResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
+		forge.WithTags("Impersonation", "Audit"),
+	)
 
 	fmt.Printf("[Impersonation Plugin] Routes registered:\n")
 	fmt.Printf("  - POST   /api/impersonation/start\n")
@@ -192,6 +239,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	return nil
 }
+
+// DTOs for impersonation routes (placeholder types)
+type ImpersonationErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type ImpersonationStartResponse struct {
+	SessionID  string `json:"session_id"`
+	ImpersonatorID string `json:"impersonator_id"`
+	TargetUserID string `json:"target_user_id"`
+	StartedAt string `json:"started_at"`
+}
+
+type ImpersonationEndResponse struct {
+	Status string `json:"status" example:"success"`
+	EndedAt string `json:"ended_at"`
+}
+
+type ImpersonationSession struct{}
+type ImpersonationListResponse []interface{}
+type ImpersonationVerifyResponse struct {
+	IsImpersonating bool `json:"is_impersonating"`
+	ImpersonatorID string `json:"impersonator_id,omitempty"`
+	TargetUserID string `json:"target_user_id,omitempty"`
+}
+type ImpersonationAuditResponse []interface{}
 
 // RegisterHooks registers lifecycle hooks
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
@@ -242,7 +315,7 @@ func (p *Plugin) Health(ctx context.Context) error {
 	// Check if we can query the database
 	// We'll do a simple count query
 	req := &impersonation.ListRequest{
-		OrganizationID: [20]byte{}, // dummy org ID
+		OrganizationID: xid.NilID(), // dummy org ID
 		Limit:          1,
 	}
 	_, err := p.service.List(ctx, req)

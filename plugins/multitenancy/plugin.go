@@ -158,44 +158,229 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Organization management routes
 	orgGroup := router.Group("/organizations")
 	{
-		orgGroup.POST("", p.orgHandler.CreateOrganization)
-		orgGroup.GET("", p.orgHandler.ListOrganizations)
-		orgGroup.GET("/:orgId", p.orgHandler.GetOrganization)
-		orgGroup.PUT("/:orgId", p.orgHandler.UpdateOrganization)
-		orgGroup.DELETE("/:orgId", p.orgHandler.DeleteOrganization)
+		orgGroup.POST("", p.orgHandler.CreateOrganization,
+			forge.WithName("multitenancy.organizations.create"),
+			forge.WithSummary("Create organization"),
+			forge.WithDescription("Create a new organization in multi-tenant mode"),
+			forge.WithResponseSchema(200, "Organization created", organization.Organization{}),
+			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Organizations"),
+			forge.WithValidation(true),
+		)
+		
+		orgGroup.GET("", p.orgHandler.ListOrganizations,
+			forge.WithName("multitenancy.organizations.list"),
+			forge.WithSummary("List organizations"),
+			forge.WithDescription("List all organizations the user has access to"),
+			forge.WithResponseSchema(200, "Organizations retrieved", OrganizationsListResponse{}),
+			forge.WithResponseSchema(500, "Internal server error", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Organizations"),
+		)
+		
+		orgGroup.GET("/:orgId", p.orgHandler.GetOrganization,
+			forge.WithName("multitenancy.organizations.get"),
+			forge.WithSummary("Get organization"),
+			forge.WithDescription("Retrieve a specific organization by ID"),
+			forge.WithResponseSchema(200, "Organization retrieved", organization.Organization{}),
+			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Organizations"),
+		)
+		
+		orgGroup.PUT("/:orgId", p.orgHandler.UpdateOrganization,
+			forge.WithName("multitenancy.organizations.update"),
+			forge.WithSummary("Update organization"),
+			forge.WithDescription("Update organization details (name, metadata, settings)"),
+			forge.WithResponseSchema(200, "Organization updated", organization.Organization{}),
+			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Organizations"),
+			forge.WithValidation(true),
+		)
+		
+		orgGroup.DELETE("/:orgId", p.orgHandler.DeleteOrganization,
+			forge.WithName("multitenancy.organizations.delete"),
+			forge.WithSummary("Delete organization"),
+			forge.WithDescription("Delete an organization and all associated data. This action is irreversible."),
+			forge.WithResponseSchema(200, "Organization deleted", MultitenancyStatusResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Organizations"),
+		)
 
 		// Member management
 		memberGroup := orgGroup.Group("/:orgId/members")
 		{
-			memberGroup.GET("", p.memberHandler.ListMembers)
-			memberGroup.POST("/invite", p.memberHandler.InviteMember)
-			memberGroup.PUT("/:memberId", p.memberHandler.UpdateMember)
-			memberGroup.DELETE("/:memberId", p.memberHandler.RemoveMember)
+			memberGroup.GET("", p.memberHandler.ListMembers,
+				forge.WithName("multitenancy.members.list"),
+				forge.WithSummary("List organization members"),
+				forge.WithDescription("List all members of an organization with their roles and status"),
+				forge.WithResponseSchema(200, "Members retrieved", MembersListResponse{}),
+				forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Members"),
+			)
+			
+			memberGroup.POST("/invite", p.memberHandler.InviteMember,
+				forge.WithName("multitenancy.members.invite"),
+				forge.WithSummary("Invite member to organization"),
+				forge.WithDescription("Send an invitation to a user to join the organization"),
+				forge.WithResponseSchema(200, "Invitation sent", organization.Invitation{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Members"),
+				forge.WithValidation(true),
+			)
+			
+			memberGroup.PUT("/:memberId", p.memberHandler.UpdateMember,
+				forge.WithName("multitenancy.members.update"),
+				forge.WithSummary("Update member"),
+				forge.WithDescription("Update member role or status within the organization"),
+				forge.WithResponseSchema(200, "Member updated", organization.Member{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Members"),
+				forge.WithValidation(true),
+			)
+			
+			memberGroup.DELETE("/:memberId", p.memberHandler.RemoveMember,
+				forge.WithName("multitenancy.members.remove"),
+				forge.WithSummary("Remove member"),
+				forge.WithDescription("Remove a member from the organization"),
+				forge.WithResponseSchema(200, "Member removed", MultitenancyStatusResponse{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Members"),
+			)
 		}
 
 		// Team management
 		teamGroup := orgGroup.Group("/:orgId/teams")
 		{
-			teamGroup.GET("", p.teamHandler.ListTeams)
-			teamGroup.POST("", p.teamHandler.CreateTeam)
-			teamGroup.GET("/:teamId", p.teamHandler.GetTeam)
-			teamGroup.PUT("/:teamId", p.teamHandler.UpdateTeam)
-			teamGroup.DELETE("/:teamId", p.teamHandler.DeleteTeam)
-			teamGroup.POST("/:teamId/members", p.teamHandler.AddTeamMember)
-			teamGroup.DELETE("/:teamId/members/:memberId", p.teamHandler.RemoveTeamMember)
+			teamGroup.GET("", p.teamHandler.ListTeams,
+				forge.WithName("multitenancy.teams.list"),
+				forge.WithSummary("List teams"),
+				forge.WithDescription("List all teams within the organization"),
+				forge.WithResponseSchema(200, "Teams retrieved", TeamsListResponse{}),
+				forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+			)
+			
+			teamGroup.POST("", p.teamHandler.CreateTeam,
+				forge.WithName("multitenancy.teams.create"),
+				forge.WithSummary("Create team"),
+				forge.WithDescription("Create a new team within the organization"),
+				forge.WithResponseSchema(200, "Team created", organization.Team{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithValidation(true),
+			)
+			
+			teamGroup.GET("/:teamId", p.teamHandler.GetTeam,
+				forge.WithName("multitenancy.teams.get"),
+				forge.WithSummary("Get team"),
+				forge.WithDescription("Retrieve a specific team by ID"),
+				forge.WithResponseSchema(200, "Team retrieved", organization.Team{}),
+				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+			)
+			
+			teamGroup.PUT("/:teamId", p.teamHandler.UpdateTeam,
+				forge.WithName("multitenancy.teams.update"),
+				forge.WithSummary("Update team"),
+				forge.WithDescription("Update team details (name, description, etc.)"),
+				forge.WithResponseSchema(200, "Team updated", organization.Team{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithValidation(true),
+			)
+			
+			teamGroup.DELETE("/:teamId", p.teamHandler.DeleteTeam,
+				forge.WithName("multitenancy.teams.delete"),
+				forge.WithSummary("Delete team"),
+				forge.WithDescription("Delete a team from the organization"),
+				forge.WithResponseSchema(200, "Team deleted", MultitenancyStatusResponse{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+			)
+			
+			teamGroup.POST("/:teamId/members", p.teamHandler.AddTeamMember,
+				forge.WithName("multitenancy.teams.members.add"),
+				forge.WithSummary("Add team member"),
+				forge.WithDescription("Add a member to a team"),
+				forge.WithResponseSchema(200, "Team member added", MultitenancyStatusResponse{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithValidation(true),
+			)
+			
+			teamGroup.DELETE("/:teamId/members/:memberId", p.teamHandler.RemoveTeamMember,
+				forge.WithName("multitenancy.teams.members.remove"),
+				forge.WithSummary("Remove team member"),
+				forge.WithDescription("Remove a member from a team"),
+				forge.WithResponseSchema(200, "Team member removed", MultitenancyStatusResponse{}),
+				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
+				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+			)
 		}
 	}
 
 	// Invitation routes
 	inviteGroup := router.Group("/invitations")
 	{
-		inviteGroup.GET("/:token", p.memberHandler.GetInvitation)
-		inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation)
-		inviteGroup.POST("/:token/decline", p.memberHandler.DeclineInvitation)
+		inviteGroup.GET("/:token", p.memberHandler.GetInvitation,
+			forge.WithName("multitenancy.invitations.get"),
+			forge.WithSummary("Get invitation"),
+			forge.WithDescription("Retrieve invitation details by token"),
+			forge.WithResponseSchema(200, "Invitation retrieved", organization.Invitation{}),
+			forge.WithResponseSchema(404, "Invitation not found or expired", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Invitations"),
+		)
+		
+		inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation,
+			forge.WithName("multitenancy.invitations.accept"),
+			forge.WithSummary("Accept invitation"),
+			forge.WithDescription("Accept an organization invitation and become a member"),
+			forge.WithResponseSchema(200, "Invitation accepted", MultitenancyStatusResponse{}),
+			forge.WithResponseSchema(400, "Invalid or expired invitation", MultitenancyErrorResponse{}),
+			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Invitations"),
+		)
+		
+		inviteGroup.POST("/:token/decline", p.memberHandler.DeclineInvitation,
+			forge.WithName("multitenancy.invitations.decline"),
+			forge.WithSummary("Decline invitation"),
+			forge.WithDescription("Decline an organization invitation"),
+			forge.WithResponseSchema(200, "Invitation declined", MultitenancyStatusResponse{}),
+			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Invitations"),
+		)
 	}
 
 	return nil
 }
+
+// DTOs for multitenancy routes
+
+// MultitenancyErrorResponse represents an error response
+type MultitenancyErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+// MultitenancyStatusResponse represents a status response
+type MultitenancyStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+// OrganizationsListResponse represents a list of organizations
+type OrganizationsListResponse []organization.Organization
+
+// MembersListResponse represents a list of members
+type MembersListResponse []organization.Member
+
+// TeamsListResponse represents a list of teams
+type TeamsListResponse []organization.Team
 
 // RegisterHooks registers the plugin's hooks
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {

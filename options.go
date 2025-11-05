@@ -114,3 +114,14 @@ func WithRBACEnforcement(enabled bool) Option {
 		a.config.RBACEnforce = enabled
 	}
 }
+
+// WithDatabaseSchema sets the PostgreSQL schema for AuthSome tables
+// This allows organizational separation of auth tables from application tables
+// Example: WithDatabaseSchema("auth") creates tables in the "auth" schema
+// Default: "" (uses database default, typically "public")
+// Note: Schema must be valid SQL identifier; will be created if it doesn't exist
+func WithDatabaseSchema(schema string) Option {
+	return func(a *Auth) {
+		a.config.DatabaseSchema = schema
+	}
+}

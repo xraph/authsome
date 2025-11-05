@@ -120,48 +120,154 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	consentGroup := router.Group(p.config.Dashboard.Path)
 	{
 		// Consent records (user endpoints)
-		consentGroup.POST("/records", p.handler.CreateConsent)
-		// consentGroup.GET("/records", p.handler.ListConsentsByUser)  // Implemented but not named correctly
-		consentGroup.GET("/records/:id", p.handler.GetConsent)
-		consentGroup.PUT("/records/:id", p.handler.UpdateConsent)
-		consentGroup.POST("/revoke/:id", p.handler.RevokeConsent)
-		// consentGroup.GET("/summary", p.handler.GetConsentSummary)  // TODO: Implement
+		consentGroup.POST("/records", p.handler.CreateConsent,
+			forge.WithName("consent.records.create"),
+			forge.WithSummary("Create consent record"),
+			forge.WithDescription("Record user consent for data processing activities"),
+			forge.WithResponseSchema(200, "Consent recorded", ConsentRecordResponse{}),
+			forge.WithTags("Consent", "GDPR"),
+			forge.WithValidation(true),
+		)
+		consentGroup.GET("/records/:id", p.handler.GetConsent,
+			forge.WithName("consent.records.get"),
+			forge.WithSummary("Get consent record"),
+			forge.WithDescription("Retrieve a specific consent record"),
+			forge.WithResponseSchema(200, "Consent record retrieved", ConsentRecordResponse{}),
+			forge.WithTags("Consent", "GDPR"),
+		)
+		consentGroup.PUT("/records/:id", p.handler.UpdateConsent,
+			forge.WithName("consent.records.update"),
+			forge.WithSummary("Update consent record"),
+			forge.WithDescription("Update an existing consent record"),
+			forge.WithResponseSchema(200, "Consent updated", ConsentRecordResponse{}),
+			forge.WithTags("Consent", "GDPR"),
+			forge.WithValidation(true),
+		)
+		consentGroup.POST("/revoke/:id", p.handler.RevokeConsent,
+			forge.WithName("consent.records.revoke"),
+			forge.WithSummary("Revoke consent"),
+			forge.WithDescription("Revoke previously given consent"),
+			forge.WithResponseSchema(200, "Consent revoked", ConsentStatusResponse{}),
+			forge.WithTags("Consent", "GDPR"),
+		)
 
 		// Consent policies (read endpoints public, write endpoints admin only)
-		consentGroup.POST("/policies", p.handler.CreateConsentPolicy)
-		// consentGroup.GET("/policies", p.handler.ListPolicies)  // TODO: Implement
-		consentGroup.GET("/policies/:id", p.handler.GetConsentPolicy)
-		// consentGroup.GET("/policies/latest/:type", p.handler.GetLatestPolicy)  // TODO: Implement
-		// consentGroup.PUT("/policies/:id", p.handler.UpdatePolicy)  // TODO: Implement
-		// consentGroup.POST("/policies/:id/publish", p.handler.PublishPolicy)  // TODO: Implement
+		consentGroup.POST("/policies", p.handler.CreateConsentPolicy,
+			forge.WithName("consent.policies.create"),
+			forge.WithSummary("Create consent policy"),
+			forge.WithDescription("Create a new consent policy (admin only)"),
+			forge.WithResponseSchema(200, "Policy created", ConsentPolicyResponse{}),
+			forge.WithTags("Consent", "Policies"),
+			forge.WithValidation(true),
+		)
+		consentGroup.GET("/policies/:id", p.handler.GetConsentPolicy,
+			forge.WithName("consent.policies.get"),
+			forge.WithSummary("Get consent policy"),
+			forge.WithDescription("Retrieve a specific consent policy"),
+			forge.WithResponseSchema(200, "Policy retrieved", ConsentPolicyResponse{}),
+			forge.WithTags("Consent", "Policies"),
+		)
 
 		// Cookie consent (public endpoints for anonymous users)
-		consentGroup.POST("/cookies", p.handler.RecordCookieConsent)
-		consentGroup.GET("/cookies", p.handler.GetCookieConsent)
-		// consentGroup.PUT("/cookies/:id", p.handler.UpdateCookieConsent)  // TODO: Implement
+		consentGroup.POST("/cookies", p.handler.RecordCookieConsent,
+			forge.WithName("consent.cookies.record"),
+			forge.WithSummary("Record cookie consent"),
+			forge.WithDescription("Record user's cookie consent preferences"),
+			forge.WithResponseSchema(200, "Cookie consent recorded", ConsentCookieResponse{}),
+			forge.WithTags("Consent", "Cookies"),
+			forge.WithValidation(true),
+		)
+		consentGroup.GET("/cookies", p.handler.GetCookieConsent,
+			forge.WithName("consent.cookies.get"),
+			forge.WithSummary("Get cookie consent"),
+			forge.WithDescription("Retrieve user's cookie consent preferences"),
+			forge.WithResponseSchema(200, "Cookie consent retrieved", ConsentCookieResponse{}),
+			forge.WithTags("Consent", "Cookies"),
+		)
 
 		// Data export (GDPR Article 20 - Right to Data Portability)
-		consentGroup.POST("/export", p.handler.RequestDataExport)
-		// consentGroup.GET("/export", p.handler.ListExportRequests)  // TODO: Implement
-		consentGroup.GET("/export/:id", p.handler.GetDataExport)
-		consentGroup.GET("/export/:id/download", p.handler.DownloadDataExport)
+		consentGroup.POST("/export", p.handler.RequestDataExport,
+			forge.WithName("consent.export.request"),
+			forge.WithSummary("Request data export"),
+			forge.WithDescription("Request export of all user data (GDPR Article 20)"),
+			forge.WithResponseSchema(200, "Export request created", ConsentExportResponse{}),
+			forge.WithTags("Consent", "GDPR", "Data Rights"),
+			forge.WithValidation(true),
+		)
+		consentGroup.GET("/export/:id", p.handler.GetDataExport,
+			forge.WithName("consent.export.get"),
+			forge.WithSummary("Get data export status"),
+			forge.WithDescription("Get status of a data export request"),
+			forge.WithResponseSchema(200, "Export status retrieved", ConsentExportResponse{}),
+			forge.WithTags("Consent", "GDPR", "Data Rights"),
+		)
+		consentGroup.GET("/export/:id/download", p.handler.DownloadDataExport,
+			forge.WithName("consent.export.download"),
+			forge.WithSummary("Download data export"),
+			forge.WithDescription("Download exported user data"),
+			forge.WithResponseSchema(200, "Export file", ConsentExportFileResponse{}),
+			forge.WithTags("Consent", "GDPR", "Data Rights"),
+		)
 
 		// Data deletion (GDPR Article 17 - Right to be Forgotten)
-		consentGroup.POST("/deletion", p.handler.RequestDataDeletion)
-		// consentGroup.GET("/deletion", p.handler.ListDeletionRequests)  // TODO: Implement
-		consentGroup.GET("/deletion/:id", p.handler.GetDataDeletion)
-		consentGroup.POST("/deletion/:id/approve", p.handler.ApproveDeletionRequest)   // Admin only
-		// consentGroup.POST("/deletion/:id/process", p.handler.ProcessDeletionRequest) // TODO: Implement (Admin only)
+		consentGroup.POST("/deletion", p.handler.RequestDataDeletion,
+			forge.WithName("consent.deletion.request"),
+			forge.WithSummary("Request data deletion"),
+			forge.WithDescription("Request deletion of all user data (GDPR Article 17 - Right to be Forgotten)"),
+			forge.WithResponseSchema(200, "Deletion request created", ConsentDeletionResponse{}),
+			forge.WithTags("Consent", "GDPR", "Data Rights"),
+			forge.WithValidation(true),
+		)
+		consentGroup.GET("/deletion/:id", p.handler.GetDataDeletion,
+			forge.WithName("consent.deletion.get"),
+			forge.WithSummary("Get data deletion status"),
+			forge.WithDescription("Get status of a data deletion request"),
+			forge.WithResponseSchema(200, "Deletion status retrieved", ConsentDeletionResponse{}),
+			forge.WithTags("Consent", "GDPR", "Data Rights"),
+		)
+		consentGroup.POST("/deletion/:id/approve", p.handler.ApproveDeletionRequest,
+			forge.WithName("consent.deletion.approve"),
+			forge.WithSummary("Approve deletion request"),
+			forge.WithDescription("Approve a data deletion request (admin only)"),
+			forge.WithResponseSchema(200, "Deletion approved", ConsentStatusResponse{}),
+			forge.WithTags("Consent", "GDPR", "Data Rights", "Admin"),
+		)
 
 		// Privacy settings (admin only)
-		consentGroup.GET("/settings", p.handler.GetPrivacySettings)
-		consentGroup.PUT("/settings", p.handler.UpdatePrivacySettings)
+		consentGroup.GET("/settings", p.handler.GetPrivacySettings,
+			forge.WithName("consent.settings.get"),
+			forge.WithSummary("Get privacy settings"),
+			forge.WithDescription("Get privacy and consent settings"),
+			forge.WithResponseSchema(200, "Settings retrieved", ConsentSettingsResponse{}),
+			forge.WithTags("Consent", "Settings"),
+		)
+		consentGroup.PUT("/settings", p.handler.UpdatePrivacySettings,
+			forge.WithName("consent.settings.update"),
+			forge.WithSummary("Update privacy settings"),
+			forge.WithDescription("Update privacy and consent settings (admin only)"),
+			forge.WithResponseSchema(200, "Settings updated", ConsentSettingsResponse{}),
+			forge.WithTags("Consent", "Settings", "Admin"),
+			forge.WithValidation(true),
+		)
 
 		// Audit logs
-		consentGroup.GET("/audit", p.handler.GetConsentAuditLogs)
+		consentGroup.GET("/audit", p.handler.GetConsentAuditLogs,
+			forge.WithName("consent.audit.list"),
+			forge.WithSummary("List consent audit logs"),
+			forge.WithDescription("List all consent and data processing audit logs"),
+			forge.WithResponseSchema(200, "Audit logs retrieved", ConsentAuditLogsResponse{}),
+			forge.WithTags("Consent", "Audit"),
+		)
 
 		// Reports (admin only)
-		consentGroup.POST("/reports", p.handler.GenerateConsentReport)
+		consentGroup.POST("/reports", p.handler.GenerateConsentReport,
+			forge.WithName("consent.reports.generate"),
+			forge.WithSummary("Generate consent report"),
+			forge.WithDescription("Generate a consent and GDPR compliance report (admin only)"),
+			forge.WithResponseSchema(200, "Report generated", ConsentReportResponse{}),
+			forge.WithTags("Consent", "Reports", "Admin"),
+			forge.WithValidation(true),
+		)
 
 		// Data Processing Agreements - TODO: Implement handlers
 		// consentGroup.POST("/dpa", p.handler.CreateDPA)
@@ -441,5 +547,49 @@ func (p *Plugin) GetUserConsentStatus(ctx context.Context, userID, orgID, consen
 	}
 
 	return consent.Granted, nil
+}
+
+// DTOs for consent routes
+type ConsentStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type ConsentRecordResponse struct {
+	ID string `json:"id" example:"consent_123"`
+}
+
+type ConsentPolicyResponse struct {
+	ID string `json:"id" example:"policy_123"`
+}
+
+type ConsentCookieResponse struct {
+	Preferences interface{} `json:"preferences"`
+}
+
+type ConsentExportResponse struct {
+	ID     string `json:"id" example:"export_123"`
+	Status string `json:"status" example:"processing"`
+}
+
+type ConsentExportFileResponse struct {
+	ContentType string `json:"content_type" example:"application/zip"`
+	Data        []byte `json:"data"`
+}
+
+type ConsentDeletionResponse struct {
+	ID     string `json:"id" example:"deletion_123"`
+	Status string `json:"status" example:"pending"`
+}
+
+type ConsentSettingsResponse struct {
+	Settings interface{} `json:"settings"`
+}
+
+type ConsentAuditLogsResponse struct {
+	AuditLogs []interface{} `json:"audit_logs"`
+}
+
+type ConsentReportResponse struct {
+	ID string `json:"id" example:"report_123"`
 }
 

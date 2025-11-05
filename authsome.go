@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/authsome/handlers"
+	"github.com/xraph/authsome/internal/dbschema"
 	"github.com/xraph/authsome/internal/validator"
 	"github.com/xraph/authsome/plugins"
 	jwtplugin "github.com/xraph/authsome/plugins/jwt"
@@ -127,6 +128,15 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	db, ok := a.db.(*bun.DB)
 	if !ok || db == nil {
 		return errors.New("invalid or missing bun.DB instance")
+	}
+
+	// Apply custom database schema if configured
+	// This creates the schema and sets the search_path for all subsequent operations
+	if a.config.DatabaseSchema != "" {
+		if err := dbschema.ApplySchema(ctx, db, a.config.DatabaseSchema); err != nil {
+			return fmt.Errorf("failed to apply database schema '%s': %w", a.config.DatabaseSchema, err)
+		}
+		fmt.Printf("[AuthSome] ✅ Applied custom database schema: %s\n", a.config.DatabaseSchema)
 	}
 
 	// Initialize repositories

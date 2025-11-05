@@ -84,11 +84,47 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	handler := NewHandler(p.service)
 
 	// Router is already scoped to the correct basePath
-	router.POST("/signin/social", handler.SignIn)
-	router.GET("/callback/:provider", handler.Callback)
-	router.POST("/account/link", handler.LinkAccount)
-	router.DELETE("/account/unlink/:provider", handler.UnlinkAccount)
-	router.GET("/providers", handler.ListProviders)
+	router.POST("/signin/social", handler.SignIn,
+		forge.WithName("social.signin"),
+		forge.WithSummary("Sign in with social provider"),
+		forge.WithDescription("Initiate OAuth sign-in flow with a social provider (Google, GitHub, Facebook, etc.)"),
+		forge.WithResponseSchema(200, "OAuth redirect URL", SocialSignInResponse{}),
+		forge.WithResponseSchema(400, "Invalid provider", SocialErrorResponse{}),
+		forge.WithTags("Social", "Authentication"),
+		forge.WithValidation(true),
+	)
+	router.GET("/callback/:provider", handler.Callback,
+		forge.WithName("social.callback"),
+		forge.WithSummary("OAuth callback"),
+		forge.WithDescription("Handle OAuth provider callback and complete authentication"),
+		forge.WithResponseSchema(200, "Authentication successful", SocialCallbackResponse{}),
+		forge.WithResponseSchema(400, "OAuth error", SocialErrorResponse{}),
+		forge.WithTags("Social", "Authentication"),
+	)
+	router.POST("/account/link", handler.LinkAccount,
+		forge.WithName("social.link"),
+		forge.WithSummary("Link social account"),
+		forge.WithDescription("Link a social provider account to existing user account"),
+		forge.WithResponseSchema(200, "Account linked", SocialLinkResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", SocialErrorResponse{}),
+		forge.WithTags("Social", "Account Management"),
+		forge.WithValidation(true),
+	)
+	router.DELETE("/account/unlink/:provider", handler.UnlinkAccount,
+		forge.WithName("social.unlink"),
+		forge.WithSummary("Unlink social account"),
+		forge.WithDescription("Unlink a social provider account from user account"),
+		forge.WithResponseSchema(200, "Account unlinked", SocialStatusResponse{}),
+		forge.WithResponseSchema(404, "Provider not linked", SocialErrorResponse{}),
+		forge.WithTags("Social", "Account Management"),
+	)
+	router.GET("/providers", handler.ListProviders,
+		forge.WithName("social.providers.list"),
+		forge.WithSummary("List available providers"),
+		forge.WithDescription("List all configured social authentication providers"),
+		forge.WithResponseSchema(200, "Providers list", SocialProvidersResponse{}),
+		forge.WithTags("Social", "Configuration"),
+	)
 	return nil
 }
 
@@ -156,4 +192,30 @@ func (p *Plugin) Migrate() error {
 // GetService returns the social service (for testing/internal use)
 func (p *Plugin) GetService() *Service {
 	return p.service
+}
+
+// DTOs for social routes
+type SocialErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type SocialStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type SocialSignInResponse struct {
+	RedirectURL string `json:"redirect_url" example:"https://accounts.google.com/o/oauth2/v2/auth?..."`
+}
+
+type SocialCallbackResponse struct {
+	Token string `json:"token" example:"eyJhbGci..."`
+	User  interface{} `json:"user"`
+}
+
+type SocialLinkResponse struct {
+	Linked bool `json:"linked" example:"true"`
+}
+
+type SocialProvidersResponse struct {
+	Providers []string `json:"providers" example:"[\"google\",\"github\",\"facebook\"]"`
 }

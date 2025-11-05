@@ -182,45 +182,177 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Test route without middleware
 	router.GET("/dashboard/ping", func(c forge.Context) error {
 		return c.JSON(200, map[string]string{"message": "Dashboard plugin is working!"})
-	})
+	},
+		forge.WithName("dashboard.ping"),
+		forge.WithSummary("Dashboard health check"),
+		forge.WithDescription("Verify that the dashboard plugin is loaded and working"),
+		forge.WithResponseSchema(200, "Dashboard is working", DashboardPingResponse{}),
+		forge.WithTags("Dashboard", "Health"),
+	)
 
 	// Public routes (no auth middleware) - these must be accessible without authentication
-	publicRoutes := []struct {
-		method  string
-		path    string
-		handler func(forge.Context) error
-	}{
-		{"GET", "/dashboard/login", p.handler.ServeLogin},
-		{"POST", "/dashboard/login", p.handler.HandleLogin},
-		{"GET", "/dashboard/signup", p.handler.ServeSignup},
-		{"POST", "/dashboard/signup", p.handler.HandleSignup},
-		{"POST", "/dashboard/logout", p.handler.HandleLogout},
-		{"GET", "/dashboard/logout", p.handler.HandleLogout}, // Support GET for convenience
-	}
+	router.GET("/dashboard/login", p.handler.ServeLogin,
+		forge.WithName("dashboard.login.page"),
+		forge.WithSummary("Login page"),
+		forge.WithDescription("Render the admin dashboard login page"),
+		forge.WithResponseSchema(200, "Login page HTML", DashboardHTMLResponse{}),
+		forge.WithTags("Dashboard", "Authentication"),
+	)
 
-	for _, route := range publicRoutes {
-		switch route.method {
-		case "GET":
-			router.GET(route.path, route.handler)
-		case "POST":
-			router.POST(route.path, route.handler)
-		}
-	}
+	router.POST("/dashboard/login", p.handler.HandleLogin,
+		forge.WithName("dashboard.login.submit"),
+		forge.WithSummary("Process login"),
+		forge.WithDescription("Authenticate admin user and create dashboard session"),
+		forge.WithResponseSchema(200, "Login successful", DashboardLoginResponse{}),
+		forge.WithResponseSchema(401, "Invalid credentials", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Authentication"),
+		forge.WithValidation(true),
+	)
+
+	router.GET("/dashboard/signup", p.handler.ServeSignup,
+		forge.WithName("dashboard.signup.page"),
+		forge.WithSummary("Signup page"),
+		forge.WithDescription("Render the admin dashboard signup page"),
+		forge.WithResponseSchema(200, "Signup page HTML", DashboardHTMLResponse{}),
+		forge.WithTags("Dashboard", "Authentication"),
+	)
+
+	router.POST("/dashboard/signup", p.handler.HandleSignup,
+		forge.WithName("dashboard.signup.submit"),
+		forge.WithSummary("Process signup"),
+		forge.WithDescription("Register new admin user for dashboard access"),
+		forge.WithResponseSchema(200, "Signup successful", DashboardLoginResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Authentication"),
+		forge.WithValidation(true),
+	)
+
+	router.POST("/dashboard/logout", p.handler.HandleLogout,
+		forge.WithName("dashboard.logout"),
+		forge.WithSummary("Logout"),
+		forge.WithDescription("End dashboard session and logout admin user"),
+		forge.WithResponseSchema(200, "Logout successful", DashboardStatusResponse{}),
+		forge.WithTags("Dashboard", "Authentication"),
+	)
+
+	router.GET("/dashboard/logout", p.handler.HandleLogout,
+		forge.WithName("dashboard.logout.get"),
+		forge.WithSummary("Logout (GET)"),
+		forge.WithDescription("End dashboard session via GET request (for convenience)"),
+		forge.WithResponseSchema(200, "Logout successful", DashboardStatusResponse{}),
+		forge.WithTags("Dashboard", "Authentication"),
+	)
 
 	// Dashboard pages (with auth middleware)
-	router.GET("/dashboard/", chain(p.handler.ServeDashboard))
-	router.GET("/dashboard/users", chain(p.handler.ServeUsers))
-	router.GET("/dashboard/users/:id", chain(p.handler.ServeUserDetail))
-	router.GET("/dashboard/users/:id/edit", chain(p.handler.ServeUserEdit))
-	router.POST("/dashboard/users/:id/edit", chain(p.handler.HandleUserEdit))
-	router.POST("/dashboard/users/:id/delete", chain(p.handler.HandleUserDelete))
-	router.GET("/dashboard/sessions", chain(p.handler.ServeSessions))
-	router.POST("/dashboard/sessions/:id/revoke", chain(p.handler.HandleRevokeSession))
-	router.POST("/dashboard/sessions/revoke-user", chain(p.handler.HandleRevokeUserSessions))
-	router.GET("/dashboard/settings", chain(p.handler.ServeSettings))
+	router.GET("/dashboard/", chain(p.handler.ServeDashboard),
+		forge.WithName("dashboard.home"),
+		forge.WithSummary("Dashboard home"),
+		forge.WithDescription("Render the main admin dashboard page with statistics and overview"),
+		forge.WithResponseSchema(200, "Dashboard home HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin"),
+	)
+
+	router.GET("/dashboard/users", chain(p.handler.ServeUsers),
+		forge.WithName("dashboard.users.list"),
+		forge.WithSummary("List users"),
+		forge.WithDescription("Render the user management page with list of all users"),
+		forge.WithResponseSchema(200, "Users list HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Users"),
+	)
+
+	router.GET("/dashboard/users/:id", chain(p.handler.ServeUserDetail),
+		forge.WithName("dashboard.users.detail"),
+		forge.WithSummary("User detail"),
+		forge.WithDescription("Render detailed view of a specific user"),
+		forge.WithResponseSchema(200, "User detail HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Users"),
+	)
+
+	router.GET("/dashboard/users/:id/edit", chain(p.handler.ServeUserEdit),
+		forge.WithName("dashboard.users.edit.page"),
+		forge.WithSummary("Edit user page"),
+		forge.WithDescription("Render the user edit form"),
+		forge.WithResponseSchema(200, "User edit form HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Users"),
+	)
+
+	router.POST("/dashboard/users/:id/edit", chain(p.handler.HandleUserEdit),
+		forge.WithName("dashboard.users.edit.submit"),
+		forge.WithSummary("Update user"),
+		forge.WithDescription("Process user edit form and update user information"),
+		forge.WithResponseSchema(200, "User updated", DashboardStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Users"),
+		forge.WithValidation(true),
+	)
+
+	router.POST("/dashboard/users/:id/delete", chain(p.handler.HandleUserDelete),
+		forge.WithName("dashboard.users.delete"),
+		forge.WithSummary("Delete user"),
+		forge.WithDescription("Delete a user account (requires admin privileges)"),
+		forge.WithResponseSchema(200, "User deleted", DashboardStatusResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", DashboardErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Users"),
+	)
+
+	router.GET("/dashboard/sessions", chain(p.handler.ServeSessions),
+		forge.WithName("dashboard.sessions.list"),
+		forge.WithSummary("List sessions"),
+		forge.WithDescription("Render the session management page with all active sessions"),
+		forge.WithResponseSchema(200, "Sessions list HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Sessions"),
+	)
+
+	router.POST("/dashboard/sessions/:id/revoke", chain(p.handler.HandleRevokeSession),
+		forge.WithName("dashboard.sessions.revoke"),
+		forge.WithSummary("Revoke session"),
+		forge.WithDescription("Revoke a specific user session by ID"),
+		forge.WithResponseSchema(200, "Session revoked", DashboardStatusResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithResponseSchema(404, "Session not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Sessions"),
+	)
+
+	router.POST("/dashboard/sessions/revoke-user", chain(p.handler.HandleRevokeUserSessions),
+		forge.WithName("dashboard.sessions.revoke.user"),
+		forge.WithSummary("Revoke all user sessions"),
+		forge.WithDescription("Revoke all sessions for a specific user"),
+		forge.WithResponseSchema(200, "User sessions revoked", DashboardStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Sessions"),
+		forge.WithValidation(true),
+	)
+
+	router.GET("/dashboard/settings", chain(p.handler.ServeSettings),
+		forge.WithName("dashboard.settings"),
+		forge.WithSummary("Settings page"),
+		forge.WithDescription("Render the dashboard settings and configuration page"),
+		forge.WithResponseSchema(200, "Settings page HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Settings"),
+	)
 
 	// Static assets (no auth required)
-	router.GET("/dashboard/static/*", p.handler.ServeStatic)
+	router.GET("/dashboard/static/*", p.handler.ServeStatic,
+		forge.WithName("dashboard.static"),
+		forge.WithSummary("Static assets"),
+		forge.WithDescription("Serve static assets (CSS, JS, images) for the dashboard"),
+		forge.WithResponseSchema(200, "Static file", DashboardStaticResponse{}),
+		forge.WithResponseSchema(404, "File not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Assets"),
+	)
 
 	// 404 catch-all for any unmatched dashboard routes (must be last)
 	// Note: This won't catch routes that match above patterns
@@ -240,6 +372,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	fmt.Printf("  - GET  %s/dashboard/static/* (assets)\n", p.basePath)
 
 	return nil
+}
+
+// DTOs for dashboard routes
+type DashboardErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type DashboardStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type DashboardHTMLResponse struct {
+	HTML string `json:"html" example:"<html>...</html>"`
+}
+
+type DashboardPingResponse struct {
+	Message string `json:"message" example:"Dashboard plugin is working!"`
+}
+
+type DashboardLoginResponse struct {
+	RedirectURL string `json:"redirect_url" example:"/dashboard/"`
+}
+
+type DashboardStaticResponse struct {
+	ContentType string `json:"content_type" example:"text/css"`
+	Content     []byte `json:"content"`
 }
 
 // RegisterHooks registers hooks for the dashboard plugin

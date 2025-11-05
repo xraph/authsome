@@ -38,4 +38,10 @@ type Config struct {
 	DatabaseManagerName string
 	// UseForgeDI indicates whether to resolve database from Forge DI container
 	UseForgeDI bool
+
+	// DatabaseSchema specifies the PostgreSQL schema for AuthSome tables
+	// Default: "" (uses database default, typically "public")
+	// Example: "auth" will store all tables in the auth schema
+	// Note: This is NOT for multi-tenancy, just organizational separation
+	DatabaseSchema string
 }

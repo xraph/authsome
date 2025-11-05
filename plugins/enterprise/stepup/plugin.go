@@ -26,9 +26,6 @@ type Plugin struct {
 	middleware *Middleware
 	repo       Repository
 	db         *bun.DB
-
-	// Service dependencies
-	auditService audit.ServiceInterface
 }
 
 // NewPlugin creates a new step-up authentication plugin instance
@@ -85,12 +82,10 @@ func (p *Plugin) Init(auth interface{}) error {
 		return fmt.Errorf("service registry not available")
 	}
 
-	// Get audit service
+	// Get audit service and wrap it with adapter
+	var auditAdapter AuditServiceInterface
 	if auditSvc := serviceRegistry.AuditService(); auditSvc != nil {
-		// Type assertion to our interface
-		if audSvc, ok := auditSvc.(audit.ServiceInterface); ok {
-			p.auditService = audSvc
-		}
+		auditAdapter = &auditServiceAdapter{svc: auditSvc}
 	}
 
 	// Initialize repository
@@ -102,7 +97,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	}
 
 	// Initialize service
-	p.service = NewService(p.repo, p.config, p.auditService)
+	p.service = NewService(p.repo, p.config, auditAdapter)
 
 	// Initialize handler
 	p.handler = NewHandler(p.service, p.config)
@@ -131,30 +126,119 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	group := router.Group("/stepup")
 
 	// Evaluation endpoints
-	group.POST("/evaluate", p.handler.Evaluate)
-	group.POST("/verify", p.handler.Verify)
-	group.GET("/status", p.handler.Status)
+	group.POST("/evaluate", p.handler.Evaluate,
+		forge.WithName("stepup.evaluate"),
+		forge.WithSummary("Evaluate step-up requirement"),
+		forge.WithDescription("Evaluate if step-up authentication is required for an action"),
+		forge.WithResponseSchema(200, "Evaluation result", StepUpEvaluationResponse{}),
+		forge.WithTags("Step-Up", "Authentication"),
+		forge.WithValidation(true),
+	)
+	group.POST("/verify", p.handler.Verify,
+		forge.WithName("stepup.verify"),
+		forge.WithSummary("Verify step-up authentication"),
+		forge.WithDescription("Verify step-up authentication credentials (password, MFA, etc.)"),
+		forge.WithResponseSchema(200, "Verification successful", StepUpVerificationResponse{}),
+		forge.WithResponseSchema(401, "Verification failed", StepUpErrorResponse{}),
+		forge.WithTags("Step-Up", "Authentication"),
+		forge.WithValidation(true),
+	)
+	group.GET("/status", p.handler.Status,
+		forge.WithName("stepup.status"),
+		forge.WithSummary("Get step-up status"),
+		forge.WithDescription("Get current step-up authentication status for the session"),
+		forge.WithResponseSchema(200, "Status retrieved", StepUpStatusResponse{}),
+		forge.WithTags("Step-Up", "Authentication"),
+	)
 
 	// Requirements management
-	group.GET("/requirements/:id", p.handler.GetRequirement)
-	group.GET("/requirements/pending", p.handler.ListPendingRequirements)
+	group.GET("/requirements/:id", p.handler.GetRequirement,
+		forge.WithName("stepup.requirements.get"),
+		forge.WithSummary("Get step-up requirement"),
+		forge.WithDescription("Retrieve details of a specific step-up requirement"),
+		forge.WithResponseSchema(200, "Requirement retrieved", StepUpRequirementResponse{}),
+		forge.WithTags("Step-Up", "Requirements"),
+	)
+	group.GET("/requirements/pending", p.handler.ListPendingRequirements,
+		forge.WithName("stepup.requirements.pending"),
+		forge.WithSummary("List pending requirements"),
+		forge.WithDescription("List all pending step-up requirements for current user"),
+		forge.WithResponseSchema(200, "Pending requirements", StepUpRequirementsResponse{}),
+		forge.WithTags("Step-Up", "Requirements"),
+	)
 
 	// Verifications history
-	group.GET("/verifications", p.handler.ListVerifications)
+	group.GET("/verifications", p.handler.ListVerifications,
+		forge.WithName("stepup.verifications.list"),
+		forge.WithSummary("List verifications"),
+		forge.WithDescription("List step-up verification history"),
+		forge.WithResponseSchema(200, "Verifications retrieved", StepUpVerificationsResponse{}),
+		forge.WithTags("Step-Up", "History"),
+	)
 
 	// Remembered devices management
-	group.GET("/devices", p.handler.ListRememberedDevices)
-	group.DELETE("/devices/:id", p.handler.ForgetDevice)
+	group.GET("/devices", p.handler.ListRememberedDevices,
+		forge.WithName("stepup.devices.list"),
+		forge.WithSummary("List remembered devices"),
+		forge.WithDescription("List devices that are remembered for step-up authentication"),
+		forge.WithResponseSchema(200, "Devices retrieved", StepUpDevicesResponse{}),
+		forge.WithTags("Step-Up", "Devices"),
+	)
+	group.DELETE("/devices/:id", p.handler.ForgetDevice,
+		forge.WithName("stepup.devices.forget"),
+		forge.WithSummary("Forget device"),
+		forge.WithDescription("Remove a device from remembered devices list"),
+		forge.WithResponseSchema(200, "Device forgotten", StepUpStatusResponse{}),
+		forge.WithTags("Step-Up", "Devices"),
+	)
 
 	// Policies management (organization-level)
-	group.POST("/policies", p.handler.CreatePolicy)
-	group.GET("/policies", p.handler.ListPolicies)
-	group.GET("/policies/:id", p.handler.GetPolicy)
-	group.PUT("/policies/:id", p.handler.UpdatePolicy)
-	group.DELETE("/policies/:id", p.handler.DeletePolicy)
+	group.POST("/policies", p.handler.CreatePolicy,
+		forge.WithName("stepup.policies.create"),
+		forge.WithSummary("Create step-up policy"),
+		forge.WithDescription("Create a new step-up authentication policy"),
+		forge.WithResponseSchema(200, "Policy created", StepUpPolicyResponse{}),
+		forge.WithTags("Step-Up", "Policies"),
+		forge.WithValidation(true),
+	)
+	group.GET("/policies", p.handler.ListPolicies,
+		forge.WithName("stepup.policies.list"),
+		forge.WithSummary("List step-up policies"),
+		forge.WithDescription("List all step-up authentication policies"),
+		forge.WithResponseSchema(200, "Policies retrieved", StepUpPoliciesResponse{}),
+		forge.WithTags("Step-Up", "Policies"),
+	)
+	group.GET("/policies/:id", p.handler.GetPolicy,
+		forge.WithName("stepup.policies.get"),
+		forge.WithSummary("Get step-up policy"),
+		forge.WithDescription("Retrieve a specific step-up policy"),
+		forge.WithResponseSchema(200, "Policy retrieved", StepUpPolicyResponse{}),
+		forge.WithTags("Step-Up", "Policies"),
+	)
+	group.PUT("/policies/:id", p.handler.UpdatePolicy,
+		forge.WithName("stepup.policies.update"),
+		forge.WithSummary("Update step-up policy"),
+		forge.WithDescription("Update an existing step-up authentication policy"),
+		forge.WithResponseSchema(200, "Policy updated", StepUpPolicyResponse{}),
+		forge.WithTags("Step-Up", "Policies"),
+		forge.WithValidation(true),
+	)
+	group.DELETE("/policies/:id", p.handler.DeletePolicy,
+		forge.WithName("stepup.policies.delete"),
+		forge.WithSummary("Delete step-up policy"),
+		forge.WithDescription("Delete a step-up authentication policy"),
+		forge.WithResponseSchema(200, "Policy deleted", StepUpStatusResponse{}),
+		forge.WithTags("Step-Up", "Policies"),
+	)
 
 	// Audit logs
-	group.GET("/audit", p.handler.GetAuditLogs)
+	group.GET("/audit", p.handler.GetAuditLogs,
+		forge.WithName("stepup.audit.list"),
+		forge.WithSummary("Get audit logs"),
+		forge.WithDescription("Retrieve step-up authentication audit logs"),
+		forge.WithResponseSchema(200, "Audit logs retrieved", StepUpAuditLogsResponse{}),
+		forge.WithTags("Step-Up", "Audit"),
+	)
 
 	fmt.Println("[StepUp] Routes registered successfully")
 	fmt.Println("[StepUp] Available endpoints:")
@@ -356,3 +440,73 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// auditServiceAdapter adapts the core audit service to match the plugin's expected interface
+type auditServiceAdapter struct {
+	svc *audit.Service
+}
+
+// Log implements AuditServiceInterface by converting Event to the core audit service's signature
+func (a *auditServiceAdapter) Log(ctx context.Context, event *audit.Event) error {
+	if a.svc == nil {
+		return nil // No-op if audit service not available
+	}
+
+	// Convert Event to the parameters expected by core audit service
+	// Signature: Log(ctx, userID, action, resource, ip, ua, metadata)
+	return a.svc.Log(
+		ctx,
+		event.UserID,
+		event.Action,
+		event.Resource,
+		event.IPAddress,
+		event.UserAgent,
+		event.Metadata,
+	)
+}
+
+// DTOs for step-up routes
+type StepUpErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type StepUpStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type StepUpEvaluationResponse struct {
+	Required bool   `json:"required" example:"true"`
+	Reason   string `json:"reason,omitempty" example:"High-value transaction"`
+}
+
+type StepUpVerificationResponse struct {
+	Verified  bool   `json:"verified" example:"true"`
+	ExpiresAt string `json:"expires_at,omitempty" example:"2024-01-01T00:00:00Z"`
+}
+
+type StepUpRequirementResponse struct {
+	ID string `json:"id" example:"req_123"`
+}
+
+type StepUpRequirementsResponse struct {
+	Requirements []interface{} `json:"requirements"`
+}
+
+type StepUpVerificationsResponse struct {
+	Verifications []interface{} `json:"verifications"`
+}
+
+type StepUpDevicesResponse struct {
+	Devices []interface{} `json:"devices"`
+}
+
+type StepUpPolicyResponse struct {
+	ID string `json:"id" example:"policy_123"`
+}
+
+type StepUpPoliciesResponse struct {
+	Policies []interface{} `json:"policies"`
+}
+
+type StepUpAuditLogsResponse struct {
+	AuditLogs []interface{} `json:"audit_logs"`
+}

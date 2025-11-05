@@ -184,46 +184,221 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Rule Management
 	if p.config.API.EnableManagement {
-		router.POST(basePath+"/rules", p.handler.CreateRule)
-		router.GET(basePath+"/rules", p.handler.ListRules)
-		router.GET(basePath+"/rules/:id", p.handler.GetRule)
-		router.PUT(basePath+"/rules/:id", p.handler.UpdateRule)
-		router.DELETE(basePath+"/rules/:id", p.handler.DeleteRule)
+		router.POST(basePath+"/rules", p.handler.CreateRule,
+			forge.WithName("geofence.rules.create"),
+			forge.WithSummary("Create geofence rule"),
+			forge.WithDescription("Create a new geographic restriction rule for country/region-based access control"),
+			forge.WithResponseSchema(200, "Rule created", GeofenceRuleResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Rules"),
+			forge.WithValidation(true),
+		)
+		router.GET(basePath+"/rules", p.handler.ListRules,
+			forge.WithName("geofence.rules.list"),
+			forge.WithSummary("List geofence rules"),
+			forge.WithDescription("List all geographic restriction rules with optional filtering"),
+			forge.WithResponseSchema(200, "Rules retrieved", GeofenceRulesResponse{}),
+			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Rules"),
+		)
+		router.GET(basePath+"/rules/:id", p.handler.GetRule,
+			forge.WithName("geofence.rules.get"),
+			forge.WithSummary("Get geofence rule"),
+			forge.WithDescription("Retrieve a specific geofence rule by ID"),
+			forge.WithResponseSchema(200, "Rule retrieved", GeofenceRuleResponse{}),
+			forge.WithResponseSchema(404, "Rule not found", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Rules"),
+		)
+		router.PUT(basePath+"/rules/:id", p.handler.UpdateRule,
+			forge.WithName("geofence.rules.update"),
+			forge.WithSummary("Update geofence rule"),
+			forge.WithDescription("Update an existing geofence rule's countries, regions, or behavior"),
+			forge.WithResponseSchema(200, "Rule updated", GeofenceRuleResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
+			forge.WithResponseSchema(404, "Rule not found", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Rules"),
+			forge.WithValidation(true),
+		)
+		router.DELETE(basePath+"/rules/:id", p.handler.DeleteRule,
+			forge.WithName("geofence.rules.delete"),
+			forge.WithSummary("Delete geofence rule"),
+			forge.WithDescription("Remove a geofence rule"),
+			forge.WithResponseSchema(200, "Rule deleted", GeofenceStatusResponse{}),
+			forge.WithResponseSchema(404, "Rule not found", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Rules"),
+		)
 	}
 
 	// Validation
 	if p.config.API.EnableValidation {
-		router.POST(basePath+"/check", p.handler.CheckLocation)
-		router.GET(basePath+"/lookup/:ip", p.handler.LookupIP)
+		router.POST(basePath+"/check", p.handler.CheckLocation,
+			forge.WithName("geofence.check"),
+			forge.WithSummary("Check location"),
+			forge.WithDescription("Validate if a location (IP or coordinates) is allowed by geofence rules"),
+			forge.WithResponseSchema(200, "Location checked", GeofenceCheckResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Validation"),
+			forge.WithValidation(true),
+		)
+		router.GET(basePath+"/lookup/:ip", p.handler.LookupIP,
+			forge.WithName("geofence.lookup"),
+			forge.WithSummary("Lookup IP location"),
+			forge.WithDescription("Get geographic information for an IP address"),
+			forge.WithResponseSchema(200, "IP lookup successful", GeofenceLookupResponse{}),
+			forge.WithResponseSchema(400, "Invalid IP address", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Validation"),
+		)
 	}
 
 	// Location Events & History
-	router.GET(basePath+"/events", p.handler.ListLocationEvents)
-	router.GET(basePath+"/events/:id", p.handler.GetLocationEvent)
+	router.GET(basePath+"/events", p.handler.ListLocationEvents,
+		forge.WithName("geofence.events.list"),
+		forge.WithSummary("List location events"),
+		forge.WithDescription("Retrieve history of location-based authentication events"),
+		forge.WithResponseSchema(200, "Events retrieved", GeofenceEventsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Events"),
+	)
+	router.GET(basePath+"/events/:id", p.handler.GetLocationEvent,
+		forge.WithName("geofence.events.get"),
+		forge.WithSummary("Get location event"),
+		forge.WithDescription("Retrieve details of a specific location event"),
+		forge.WithResponseSchema(200, "Event retrieved", GeofenceEventResponse{}),
+		forge.WithResponseSchema(404, "Event not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Events"),
+	)
 
 	// Travel Alerts
-	router.GET(basePath+"/travel-alerts", p.handler.ListTravelAlerts)
-	router.GET(basePath+"/travel-alerts/:id", p.handler.GetTravelAlert)
-	router.POST(basePath+"/travel-alerts/:id/approve", p.handler.ApproveTravelAlert)
-	router.POST(basePath+"/travel-alerts/:id/deny", p.handler.DenyTravelAlert)
+	router.GET(basePath+"/travel-alerts", p.handler.ListTravelAlerts,
+		forge.WithName("geofence.travel.list"),
+		forge.WithSummary("List travel alerts"),
+		forge.WithDescription("List pending travel notifications requiring approval"),
+		forge.WithResponseSchema(200, "Travel alerts retrieved", GeofenceTravelAlertsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Travel"),
+	)
+	router.GET(basePath+"/travel-alerts/:id", p.handler.GetTravelAlert,
+		forge.WithName("geofence.travel.get"),
+		forge.WithSummary("Get travel alert"),
+		forge.WithDescription("Retrieve details of a specific travel alert"),
+		forge.WithResponseSchema(200, "Travel alert retrieved", GeofenceTravelAlertResponse{}),
+		forge.WithResponseSchema(404, "Travel alert not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Travel"),
+	)
+	router.POST(basePath+"/travel-alerts/:id/approve", p.handler.ApproveTravelAlert,
+		forge.WithName("geofence.travel.approve"),
+		forge.WithSummary("Approve travel alert"),
+		forge.WithDescription("Approve a travel notification to allow access from the new location"),
+		forge.WithResponseSchema(200, "Travel approved", GeofenceStatusResponse{}),
+		forge.WithResponseSchema(404, "Travel alert not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Travel"),
+	)
+	router.POST(basePath+"/travel-alerts/:id/deny", p.handler.DenyTravelAlert,
+		forge.WithName("geofence.travel.deny"),
+		forge.WithSummary("Deny travel alert"),
+		forge.WithDescription("Deny a travel notification to block access from the new location"),
+		forge.WithResponseSchema(200, "Travel denied", GeofenceStatusResponse{}),
+		forge.WithResponseSchema(404, "Travel alert not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Travel"),
+	)
 
 	// Trusted Locations
-	router.POST(basePath+"/trusted-locations", p.handler.CreateTrustedLocation)
-	router.GET(basePath+"/trusted-locations", p.handler.ListTrustedLocations)
-	router.GET(basePath+"/trusted-locations/:id", p.handler.GetTrustedLocation)
-	router.PUT(basePath+"/trusted-locations/:id", p.handler.UpdateTrustedLocation)
-	router.DELETE(basePath+"/trusted-locations/:id", p.handler.DeleteTrustedLocation)
+	router.POST(basePath+"/trusted-locations", p.handler.CreateTrustedLocation,
+		forge.WithName("geofence.trusted.create"),
+		forge.WithSummary("Add trusted location"),
+		forge.WithDescription("Mark a location as trusted for a user to bypass geofence restrictions"),
+		forge.WithResponseSchema(200, "Trusted location created", GeofenceTrustedLocationResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Trusted Locations"),
+		forge.WithValidation(true),
+	)
+	router.GET(basePath+"/trusted-locations", p.handler.ListTrustedLocations,
+		forge.WithName("geofence.trusted.list"),
+		forge.WithSummary("List trusted locations"),
+		forge.WithDescription("List all trusted locations for users"),
+		forge.WithResponseSchema(200, "Trusted locations retrieved", GeofenceTrustedLocationsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Trusted Locations"),
+	)
+	router.GET(basePath+"/trusted-locations/:id", p.handler.GetTrustedLocation,
+		forge.WithName("geofence.trusted.get"),
+		forge.WithSummary("Get trusted location"),
+		forge.WithDescription("Retrieve details of a specific trusted location"),
+		forge.WithResponseSchema(200, "Trusted location retrieved", GeofenceTrustedLocationResponse{}),
+		forge.WithResponseSchema(404, "Trusted location not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Trusted Locations"),
+	)
+	router.PUT(basePath+"/trusted-locations/:id", p.handler.UpdateTrustedLocation,
+		forge.WithName("geofence.trusted.update"),
+		forge.WithSummary("Update trusted location"),
+		forge.WithDescription("Update a trusted location's details or expiration"),
+		forge.WithResponseSchema(200, "Trusted location updated", GeofenceTrustedLocationResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
+		forge.WithResponseSchema(404, "Trusted location not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Trusted Locations"),
+		forge.WithValidation(true),
+	)
+	router.DELETE(basePath+"/trusted-locations/:id", p.handler.DeleteTrustedLocation,
+		forge.WithName("geofence.trusted.delete"),
+		forge.WithSummary("Remove trusted location"),
+		forge.WithDescription("Remove a trusted location"),
+		forge.WithResponseSchema(200, "Trusted location deleted", GeofenceStatusResponse{}),
+		forge.WithResponseSchema(404, "Trusted location not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Trusted Locations"),
+	)
 
 	// Violations
-	router.GET(basePath+"/violations", p.handler.ListViolations)
-	router.GET(basePath+"/violations/:id", p.handler.GetViolation)
-	router.POST(basePath+"/violations/:id/resolve", p.handler.ResolveViolation)
+	router.GET(basePath+"/violations", p.handler.ListViolations,
+		forge.WithName("geofence.violations.list"),
+		forge.WithSummary("List geofence violations"),
+		forge.WithDescription("List all geofence policy violations with details"),
+		forge.WithResponseSchema(200, "Violations retrieved", GeofenceViolationsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Violations"),
+	)
+	router.GET(basePath+"/violations/:id", p.handler.GetViolation,
+		forge.WithName("geofence.violations.get"),
+		forge.WithSummary("Get geofence violation"),
+		forge.WithDescription("Retrieve details of a specific geofence violation"),
+		forge.WithResponseSchema(200, "Violation retrieved", GeofenceViolationResponse{}),
+		forge.WithResponseSchema(404, "Violation not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Violations"),
+	)
+	router.POST(basePath+"/violations/:id/resolve", p.handler.ResolveViolation,
+		forge.WithName("geofence.violations.resolve"),
+		forge.WithSummary("Resolve violation"),
+		forge.WithDescription("Mark a geofence violation as resolved with optional notes"),
+		forge.WithResponseSchema(200, "Violation resolved", GeofenceStatusResponse{}),
+		forge.WithResponseSchema(404, "Violation not found", GeofenceErrorResponse{}),
+		forge.WithTags("Geofence", "Violations"),
+	)
 
 	// Metrics & Analytics
 	if p.config.API.EnableMetrics {
-		router.GET(basePath+"/metrics", p.handler.GetMetrics)
-		router.GET(basePath+"/analytics/locations", p.handler.GetLocationAnalytics)
-		router.GET(basePath+"/analytics/violations", p.handler.GetViolationAnalytics)
+		router.GET(basePath+"/metrics", p.handler.GetMetrics,
+			forge.WithName("geofence.metrics"),
+			forge.WithSummary("Get geofence metrics"),
+			forge.WithDescription("Retrieve geofence usage metrics and statistics"),
+			forge.WithResponseSchema(200, "Metrics retrieved", GeofenceMetricsResponse{}),
+			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Analytics"),
+		)
+		router.GET(basePath+"/analytics/locations", p.handler.GetLocationAnalytics,
+			forge.WithName("geofence.analytics.locations"),
+			forge.WithSummary("Get location analytics"),
+			forge.WithDescription("Analyze authentication patterns by geographic location"),
+			forge.WithResponseSchema(200, "Location analytics retrieved", GeofenceLocationAnalyticsResponse{}),
+			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Analytics"),
+		)
+		router.GET(basePath+"/analytics/violations", p.handler.GetViolationAnalytics,
+			forge.WithName("geofence.analytics.violations"),
+			forge.WithSummary("Get violation analytics"),
+			forge.WithDescription("Analyze geofence violation patterns and trends"),
+			forge.WithResponseSchema(200, "Violation analytics retrieved", GeofenceViolationAnalyticsResponse{}),
+			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
+			forge.WithTags("Geofence", "Analytics"),
+		)
 	}
 
 	fmt.Printf("[Geofence Plugin] Registered routes under %s\n", basePath)
@@ -308,5 +483,78 @@ func (p *Plugin) Health(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// DTOs for geofence routes
+type GeofenceErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type GeofenceStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type GeofenceRuleResponse struct {
+	ID string `json:"id" example:"rule_123"`
+}
+
+type GeofenceRulesResponse struct {
+	Rules []interface{} `json:"rules"`
+}
+
+type GeofenceCheckResponse struct {
+	Allowed bool   `json:"allowed" example:"true"`
+	Country string `json:"country,omitempty" example:"US"`
+}
+
+type GeofenceLookupResponse struct {
+	Country   string  `json:"country" example:"US"`
+	City      string  `json:"city,omitempty" example:"San Francisco"`
+	Latitude  float64 `json:"latitude,omitempty" example:"37.7749"`
+	Longitude float64 `json:"longitude,omitempty" example:"-122.4194"`
+}
+
+type GeofenceEventsResponse struct {
+	Events []interface{} `json:"events"`
+}
+
+type GeofenceEventResponse struct {
+	ID string `json:"id" example:"event_123"`
+}
+
+type GeofenceTravelAlertsResponse struct {
+	TravelAlerts []interface{} `json:"travel_alerts"`
+}
+
+type GeofenceTravelAlertResponse struct {
+	ID string `json:"id" example:"alert_123"`
+}
+
+type GeofenceTrustedLocationResponse struct {
+	ID string `json:"id" example:"trusted_123"`
+}
+
+type GeofenceTrustedLocationsResponse struct {
+	TrustedLocations []interface{} `json:"trusted_locations"`
+}
+
+type GeofenceViolationsResponse struct {
+	Violations []interface{} `json:"violations"`
+}
+
+type GeofenceViolationResponse struct {
+	ID string `json:"id" example:"violation_123"`
+}
+
+type GeofenceMetricsResponse struct {
+	Metrics interface{} `json:"metrics"`
+}
+
+type GeofenceLocationAnalyticsResponse struct {
+	Analytics interface{} `json:"analytics"`
+}
+
+type GeofenceViolationAnalyticsResponse struct {
+	Analytics interface{} `json:"analytics"`
 }
 
