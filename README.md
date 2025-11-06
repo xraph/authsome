@@ -1,5 +1,7 @@
 # AuthSome
 
+Authsome™ is an authentication and authorization backend maintained by XRAPH™.
+
 [![CI](https://github.com/xraph/farp/workflows/CI/badge.svg)](https://github.com/xraph/farp/actions?query=workflow%3ACI)
 [![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xraph/authsome)](https://goreportcard.com/report/github.com/xraph/authsome)

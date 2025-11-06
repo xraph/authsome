@@ -42,10 +42,16 @@ func setupTestAppSSO(t *testing.T) (*bun.DB, *http.ServeMux) {
 	}
 
 	mux := http.NewServeMux()
-	app := forge.NewApp(mux)
-	if err := p.RegisterRoutes(app); err != nil {
+	app := forge.NewApp(forge.AppConfig{
+		Name:        "test-sso",
+		Environment: "test",
+	})
+	router := app.Router()
+	if err := p.RegisterRoutes(router); err != nil {
 		t.Fatalf("register routes: %v", err)
 	}
+	// Mount the router handler to the mux
+	mux.Handle("/", app.Router().Handler())
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
 	return db, mux
 }

@@ -1,12 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Shield,
   Zap,
-  Users,
-  Code,
-  Globe,
-  Lock,
 } from "lucide-react";
 import {
   Card,
@@ -17,12 +12,9 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
 import { LineShadowText } from "@/components/ui/line-shadow-text";
 import FeatureHighlightSection from "@/components/feature-highlight-section";
-import HeroSection2 from "@/components/hero-section";
-import ConceptsHighlightSection from "@/components/concepts-highlight-section";
 import SpecialHighlightSection from "@/components/special-highlight-section";
 import FooterSection from "@/components/footer-section";
 import { SvgGradientBackground } from "@/components/misc-components";
@@ -46,9 +38,9 @@ function HeroSection() {
             Enterprise-Grade Authentication
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-            Auth
+            AuthSome
             <LineShadowText className="italic" shadowColor='black'>
-              some
+              UI
             </LineShadowText>
           </h1>
           <p className="mt-6 text-lg leading-8 text-muted-foreground">
@@ -81,128 +73,6 @@ function HeroSection() {
   );
 }
 
-/**
- * Feature Cards Section with Aceternity UI Bento Grid
- * Showcases key capabilities of AuthSome with glassmorphism effects and hover animations
- */
-function FeaturesSection() {
-  const features = [
-    {
-      icon: Shield,
-      title: "Enterprise Security",
-      description:
-        "Built-in security features including rate limiting, device tracking, and audit logging with comprehensive threat detection.",
-      className: "md:col-span-2",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-pink-500/20" />
-      ),
-    },
-    {
-      icon: Users,
-      title: "Multi-Tenancy",
-      description:
-        "Organization-scoped configurations and user management with seamless tenant isolation.",
-      className: "md:col-span-1",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-green-500/10 via-emerald-500/10 to-teal-500/10 dark:from-green-500/20 dark:via-emerald-500/20 dark:to-teal-500/20" />
-      ),
-    },
-    {
-      icon: Code,
-      title: "Plugin Architecture",
-      description:
-        "12+ authentication methods via extensible plugin system. Add custom auth flows easily.",
-      className: "md:col-span-1",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-orange-500/10 via-red-500/10 to-pink-500/10 dark:from-orange-500/20 dark:via-red-500/20 dark:to-pink-500/20" />
-      ),
-    },
-    {
-      icon: Globe,
-      title: "Framework Agnostic",
-      description:
-        "Mounts on Forge framework but designed to work with any Go web framework.",
-      className: "md:col-span-2",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-cyan-500/10 via-blue-500/10 to-indigo-500/10 dark:from-cyan-500/20 dark:via-blue-500/20 dark:to-indigo-500/20" />
-      ),
-    },
-    {
-      icon: Lock,
-      title: "RBAC & Policies",
-      description:
-        "Role-based access control with policy language for fine-grained permissions.",
-      className: "md:col-span-1",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/20 dark:to-fuchsia-500/20" />
-      ),
-    },
-    {
-      icon: Zap,
-      title: "High Performance",
-      description:
-        "Session caching with Redis, connection pooling, and optimized database queries for lightning-fast responses.",
-      className: "md:col-span-2",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-yellow-500/10 via-orange-500/10 to-red-500/10 dark:from-yellow-500/20 dark:via-orange-500/20 dark:to-red-500/20" />
-      ),
-    },
-  ];
-
-  return (
-    <section className="py-24 sm:py-32 relative">
-      {/* Background with subtle pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background/95 to-muted/20" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
-
-      <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-            Everything you need for authentication
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
-            From simple username/password to enterprise SSO, AuthSome provides
-            all the tools you need.
-          </p>
-        </div>
-
-        {/* Aceternity UI Bento Grid */}
-        <div className="mx-auto mt-16 grid max-w-7xl grid-cols-1 gap-4 sm:mt-20 md:auto-rows-[18rem] md:grid-cols-3">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className={cn(
-                "group/bento row-span-1 flex flex-col justify-between space-y-4 rounded-xl border border-transparent bg-white p-4 shadow-input transition duration-200 hover:shadow-xl dark:border-white/[0.2] dark:bg-black dark:shadow-none",
-                feature.className
-              )}
-            >
-              {/* Header with gradient background */}
-              {feature.header}
-
-              {/* Content with hover animation */}
-              <div className="transition duration-200 group-hover/bento:translate-x-2">
-                {/* Icon */}
-                <div className="mb-2">
-                  <feature.icon className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
-                </div>
-
-                {/* Title */}
-                <div className="mb-2 mt-2 font-sans font-bold text-neutral-600 dark:text-neutral-200">
-                  {feature.title}
-                </div>
-
-                {/* Description */}
-                <div className="font-sans text-xs font-normal text-neutral-600 dark:text-neutral-300">
-                  {feature.description}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 /**
  * Quick Start Section
@@ -441,7 +311,7 @@ function ContainerSection({ children }: { children: ReactNode }) {
  * Main Home Page Component
  * Combines all sections into a comprehensive landing page
  */
-export default function HomePage() {
+export default function UIPage() {
   return (
     <main className="min-h-screen">
       <ContainerSection>

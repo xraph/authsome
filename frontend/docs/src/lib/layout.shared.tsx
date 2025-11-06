@@ -5,6 +5,12 @@ import Image from 'next/image';
 
 export const linkItems: LinkItemType[] = [
   {
+    text: 'Auth UI',
+    url: '/ui',
+    icon: <LayoutTemplate />,
+    active: 'nested-url',
+  },
+  {
     text: 'Documentation',
     url: '/docs',
     icon: <LayoutTemplate />,

@@ -5,8 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +19,241 @@ import (
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
+
+// routerController is a local type alias to work around router.Controller being from internal package
+// This is a workaround since we can't import github.com/xraph/forge/internal/router directly
+type routerController any
+
+// testRouter implements forge.Router for testing
+type testRouter struct {
+	mux  *http.ServeMux
+	base string
+}
+
+func (r *testRouter) Group(basePath string, opts ...forge.GroupOption) forge.Router {
+	newBase := r.base
+	if !strings.HasPrefix(basePath, "/") {
+		newBase += "/"
+	}
+	newBase += basePath
+	return &testRouter{mux: r.mux, base: newBase}
+}
+
+func (r *testRouter) AsyncAPISpec() *forge.AsyncAPISpec {
+	return nil // No-op for testing
+}
+
+func (r *testRouter) OpenAPISpec() *forge.OpenAPISpec {
+	return nil // No-op for testing
+}
+
+func (r *testRouter) EnableWebTransport(config forge.WebTransportConfig) error {
+	return nil // No-op for testing
+}
+
+func (r *testRouter) EventStream(path string, handler forge.SSEHandler, opts ...forge.RouteOption) error {
+	return nil // No-op for testing
+}
+
+func (r *testRouter) Handler() http.Handler {
+	return r.mux // Return the underlying mux as the handler
+}
+
+// RegisterController accepts router.Controller
+// Using type alias as workaround since router.Controller is from internal package
+func (r *testRouter) RegisterController(controller routerController) error {
+	// No-op for testing - controller registration not needed for these tests
+	_ = controller
+	return nil
+}
+
+func (r *testRouter) HEAD(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("HEAD", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) GET(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("GET", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) POST(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("POST", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) PUT(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("PUT", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) PATCH(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("PATCH", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) DELETE(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("DELETE", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) OPTIONS(path string, handler any, opts ...forge.RouteOption) error {
+	if h, ok := handler.(func(forge.Context) error); ok {
+		r.handle("OPTIONS", path, h)
+	}
+	return nil
+}
+
+func (r *testRouter) handle(method, path string, h func(forge.Context) error) {
+	fullPath := r.base + path
+	r.mux.HandleFunc(fullPath, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != method {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		// Create a minimal forge.Context for testing
+		ctx := &testContext{w: w, r: req}
+		if err := h(ctx); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		}
+	})
+}
+
+// testContext implements forge.Context for testing
+type testContext struct {
+	w http.ResponseWriter
+	r *http.Request
+}
+
+func (c *testContext) Request() *http.Request { return c.r }
+func (c *testContext) Header(key string) string {
+	return c.r.Header.Get(key) // For getting header values
+}
+func (c *testContext) Headers() http.Header {
+	return c.w.Header() // For SetHeader and other header operations
+}
+func (c *testContext) JSON(status int, v interface{}) error {
+	c.w.Header().Set("Content-Type", "application/json")
+	c.w.WriteHeader(status)
+	return json.NewEncoder(c.w).Encode(v)
+}
+func (c *testContext) Param(name string) string { return "" } // Not needed for these tests
+func (c *testContext) Query(key string) string  { return c.r.URL.Query().Get(key) }
+func (c *testContext) SetHeader(key, value string) {
+	c.w.Header().Set(key, value)
+}
+func (c *testContext) Response() http.ResponseWriter { return c.w }
+func (c *testContext) String(status int, s string) error {
+	c.w.WriteHeader(status)
+	_, err := c.w.Write([]byte(s))
+	return err
+}
+func (c *testContext) Redirect(status int, url string) error {
+	http.Redirect(c.w, c.r, url, status)
+	return nil
+}
+func (c *testContext) Cookie(name string) (string, error) {
+	ck, err := c.r.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+	return ck.Value, nil
+}
+func (c *testContext) DeleteCookie(name string) {
+	http.SetCookie(c.w, &http.Cookie{
+		Name:   name,
+		Value:  "",
+		MaxAge: -1,
+	})
+}
+func (c *testContext) DeleteSessionValue(key string) {
+	// No-op for testing - session storage not needed for these tests
+}
+func (c *testContext) DestroySession() error {
+	// No-op for testing - session destruction not needed for these tests
+	return nil
+}
+func (c *testContext) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
+	// File upload not needed for these tests
+	return nil, nil, nil
+}
+func (c *testContext) FormFiles(name string) ([]*multipart.FileHeader, error) {
+	// Multiple file upload not needed for these tests
+	return nil, nil
+}
+func (c *testContext) FormValue(key string) string {
+	return c.r.FormValue(key)
+}
+func (c *testContext) FormValues(key string) []string {
+	return c.r.Form[key] // Return form values for the key
+}
+func (c *testContext) GetAllCookies() map[string]string {
+	cookies := make(map[string]string)
+	for _, cookie := range c.r.Cookies() {
+		cookies[cookie.Name] = cookie.Value
+	}
+	return cookies
+}
+func (c *testContext) GetSessionValue(key string) (any, bool) {
+	// No-op for testing - session storage not needed for these tests
+	return nil, false
+}
+func (c *testContext) HasCookie(name string) bool {
+	_, err := c.r.Cookie(name)
+	return err == nil
+}
+func (c *testContext) Must(key string) any {
+	// No-op for testing - Must is typically used for required values
+	return nil
+}
+func (c *testContext) MustGet(key string) any {
+	// No-op for testing - MustGet is typically used for required values
+	return nil
+}
+func (c *testContext) HTML(status int, html string) error {
+	c.w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.w.WriteHeader(status)
+	_, err := c.w.Write([]byte(html))
+	return err
+}
+func (c *testContext) Get(key string) interface{}        { return nil }
+func (c *testContext) Set(key string, value interface{}) {}
+func (c *testContext) SetRequest(r *http.Request)        { c.r = r }
+func (c *testContext) Bind(v interface{}) error {
+	return json.NewDecoder(c.r.Body).Decode(v)
+}
+func (c *testContext) BindJSON(v interface{}) error {
+	return json.NewDecoder(c.r.Body).Decode(v)
+}
+func (c *testContext) BindXML(v interface{}) error {
+	// XML binding not needed for these tests
+	return nil
+}
+func (c *testContext) Bytes(status int, data []byte) error {
+	c.w.Header().Set("Content-Type", "application/octet-stream")
+	c.w.WriteHeader(status)
+	_, err := c.w.Write(data)
+	return err
+}
+func (c *testContext) Container() forge.Container {
+	return nil // No-op for testing
+}
+func (c *testContext) Context() context.Context {
+	return c.r.Context() // Return the request context
+}
 
 // setupTestApp initializes in-memory Bun DB, creates necessary tables, and mounts multisession routes
 func setupTestAppMS(t *testing.T) (*bun.DB, *http.ServeMux, *Plugin) {
@@ -45,8 +282,8 @@ func setupTestAppMS(t *testing.T) (*bun.DB, *http.ServeMux, *Plugin) {
 	}
 
 	mux := http.NewServeMux()
-	app := forge.NewApp(mux)
-	if err := p.RegisterRoutes(app); err != nil {
+	router := &testRouter{mux: mux, base: "/api/auth"}
+	if err := p.RegisterRoutes(router); err != nil {
 		t.Fatalf("register routes: %v", err)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })

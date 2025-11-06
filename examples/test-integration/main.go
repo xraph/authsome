@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/notification"
@@ -451,15 +452,19 @@ func testProviders(ts *TestSuite) {
 	mockProvider := sms.NewMockSMSProvider()
 
 	// Test sending with mock provider
-	testSendRequest := &notification.SendRequest{
+	testNotification := &notification.Notification{
+		ID:             xid.New(),
+		OrganizationID: testOrgID,
 		Type:           notification.NotificationTypeSMS,
 		Recipient:      "+1234567890",
 		Subject:        "Test SMS",
 		Body:           "This is a test SMS",
-		OrganizationID: testOrgID,
+		Status:         notification.NotificationStatusPending,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
-	err := mockProvider.Send(context.Background(), testSendRequest)
+	err := mockProvider.Send(context.Background(), testNotification)
 
 	ts.AddResult("Mock SMS Send", err == nil, "Mock SMS provider send", err)
 
