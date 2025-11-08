@@ -50,8 +50,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 	// Router is already scoped to the correct basePath
 	h := NewHandler(p.service)
-	router.POST("/anonymous/signin", h.SignIn)
+	router.POST("/anonymous/signin", h.SignIn,
+		forge.WithName("anonymous.signin"),
+		forge.WithSummary("Sign in as anonymous user"),
+		forge.WithDescription("Creates a guest user and session for anonymous access. Returns session token for subsequent requests"),
+		forge.WithResponseSchema(200, "Anonymous session created", AnonymousSignInResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", AnonymousErrorResponse{}),
+		forge.WithTags("Anonymous", "Authentication"),
+		forge.WithValidation(true),
+	)
 	return nil
+}
+
+// Response types for anonymous routes
+type AnonymousErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type AnonymousSignInResponse struct {
+	Token   string      `json:"token" example:"session_token_abc123"`
+	Session interface{} `json:"session"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

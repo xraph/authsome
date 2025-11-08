@@ -3,6 +3,7 @@ package scim
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
@@ -159,37 +160,213 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup := router.Group("/scim/v2")
 
 	// Service Provider Configuration (RFC 7643 Section 5)
-	scimGroup.GET("/ServiceProviderConfig", scimChain(p.handler.GetServiceProviderConfig))
+	scimGroup.GET("/ServiceProviderConfig", scimChain(p.handler.GetServiceProviderConfig),
+		forge.WithName("scim.serviceprovider.config"),
+		forge.WithSummary("Get service provider configuration"),
+		forge.WithDescription("Returns SCIM 2.0 service provider configuration including supported features, authentication schemes, and capabilities"),
+		forge.WithResponseSchema(200, "Service provider configuration", ServiceProviderConfig{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("SCIM", "Configuration"),
+	)
 
 	// Resource Types (RFC 7643 Section 6)
-	scimGroup.GET("/ResourceTypes", scimChain(p.handler.GetResourceTypes))
-	scimGroup.GET("/ResourceTypes/:id", scimChain(p.handler.GetResourceType))
+	scimGroup.GET("/ResourceTypes", scimChain(p.handler.GetResourceTypes),
+		forge.WithName("scim.resourcetypes.list"),
+		forge.WithSummary("List resource types"),
+		forge.WithDescription("Returns all supported SCIM resource types (User, Group) with their schemas and endpoints"),
+		forge.WithResponseSchema(200, "List of resource types", ListResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("SCIM", "ResourceTypes"),
+	)
+
+	scimGroup.GET("/ResourceTypes/:id", scimChain(p.handler.GetResourceType),
+		forge.WithName("scim.resourcetypes.get"),
+		forge.WithSummary("Get resource type"),
+		forge.WithDescription("Returns details for a specific SCIM resource type (User or Group)"),
+		forge.WithResponseSchema(200, "Resource type details", ResourceType{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Resource type not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "ResourceTypes"),
+	)
 
 	// Schemas (RFC 7643 Section 7)
-	scimGroup.GET("/Schemas", scimChain(p.handler.GetSchemas))
-	scimGroup.GET("/Schemas/:id", scimChain(p.handler.GetSchema))
+	scimGroup.GET("/Schemas", scimChain(p.handler.GetSchemas),
+		forge.WithName("scim.schemas.list"),
+		forge.WithSummary("List schemas"),
+		forge.WithDescription("Returns all supported SCIM schemas including core user schema, enterprise extension, and group schema"),
+		forge.WithResponseSchema(200, "List of schemas", ListResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("SCIM", "Schemas"),
+	)
+
+	scimGroup.GET("/Schemas/:id", scimChain(p.handler.GetSchema),
+		forge.WithName("scim.schemas.get"),
+		forge.WithSummary("Get schema"),
+		forge.WithDescription("Returns detailed schema definition for a specific SCIM schema ID"),
+		forge.WithResponseSchema(200, "Schema definition", Schema{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Schema not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Schemas"),
+	)
 
 	// Users endpoint (RFC 7644 Section 3)
-	scimGroup.POST("/Users", scimChain(p.handler.CreateUser))
-	scimGroup.GET("/Users", scimChain(p.handler.ListUsers))
-	scimGroup.GET("/Users/:id", scimChain(p.handler.GetUser))
-	scimGroup.PUT("/Users/:id", scimChain(p.handler.ReplaceUser))
-	scimGroup.PATCH("/Users/:id", scimChain(p.handler.UpdateUser))
-	scimGroup.DELETE("/Users/:id", scimChain(p.handler.DeleteUser))
+	scimGroup.POST("/Users", scimChain(p.handler.CreateUser),
+		forge.WithName("scim.users.create"),
+		forge.WithSummary("Create user"),
+		forge.WithDescription("Creates a new user via SCIM 2.0 provisioning. Supports core user attributes and enterprise extension"),
+		forge.WithResponseSchema(201, "User created", SCIMUser{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(409, "User already exists", ErrorResponse{}),
+		forge.WithTags("SCIM", "Users"),
+		forge.WithValidation(true),
+	)
+
+	scimGroup.GET("/Users", scimChain(p.handler.ListUsers),
+		forge.WithName("scim.users.list"),
+		forge.WithSummary("List users"),
+		forge.WithDescription("Lists users with filtering, sorting, and pagination support. Supports SCIM filter syntax"),
+		forge.WithResponseSchema(200, "List of users", ListResponse{}),
+		forge.WithResponseSchema(400, "Invalid filter", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("SCIM", "Users"),
+	)
+
+	scimGroup.GET("/Users/:id", scimChain(p.handler.GetUser),
+		forge.WithName("scim.users.get"),
+		forge.WithSummary("Get user"),
+		forge.WithDescription("Retrieves a specific user by SCIM ID with all attributes and extensions"),
+		forge.WithResponseSchema(200, "User details", SCIMUser{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Users"),
+	)
+
+	scimGroup.PUT("/Users/:id", scimChain(p.handler.ReplaceUser),
+		forge.WithName("scim.users.replace"),
+		forge.WithSummary("Replace user"),
+		forge.WithDescription("Replaces all user attributes with the provided values (full update)"),
+		forge.WithResponseSchema(200, "User updated", SCIMUser{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Users"),
+		forge.WithValidation(true),
+	)
+
+	scimGroup.PATCH("/Users/:id", scimChain(p.handler.UpdateUser),
+		forge.WithName("scim.users.update"),
+		forge.WithSummary("Update user"),
+		forge.WithDescription("Partially updates user attributes using SCIM PATCH operations (add, remove, replace)"),
+		forge.WithResponseSchema(200, "User updated", SCIMUser{}),
+		forge.WithResponseSchema(400, "Invalid patch operation", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Users"),
+		forge.WithValidation(true),
+	)
+
+	scimGroup.DELETE("/Users/:id", scimChain(p.handler.DeleteUser),
+		forge.WithName("scim.users.delete"),
+		forge.WithSummary("Delete user"),
+		forge.WithDescription("Deletes a user by SCIM ID. User is soft-deleted and can be restored if configured"),
+		forge.WithResponseSchema(204, "User deleted", nil),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Users"),
+	)
 
 	// Groups endpoint (RFC 7644 Section 3)
-	scimGroup.POST("/Groups", scimChain(p.handler.CreateGroup))
-	scimGroup.GET("/Groups", scimChain(p.handler.ListGroups))
-	scimGroup.GET("/Groups/:id", scimChain(p.handler.GetGroup))
-	scimGroup.PUT("/Groups/:id", scimChain(p.handler.ReplaceGroup))
-	scimGroup.PATCH("/Groups/:id", scimChain(p.handler.UpdateGroup))
-	scimGroup.DELETE("/Groups/:id", scimChain(p.handler.DeleteGroup))
+	scimGroup.POST("/Groups", scimChain(p.handler.CreateGroup),
+		forge.WithName("scim.groups.create"),
+		forge.WithSummary("Create group"),
+		forge.WithDescription("Creates a new group via SCIM 2.0 provisioning with optional member references"),
+		forge.WithResponseSchema(201, "Group created", SCIMGroup{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(409, "Group already exists", ErrorResponse{}),
+		forge.WithTags("SCIM", "Groups"),
+		forge.WithValidation(true),
+	)
+
+	scimGroup.GET("/Groups", scimChain(p.handler.ListGroups),
+		forge.WithName("scim.groups.list"),
+		forge.WithSummary("List groups"),
+		forge.WithDescription("Lists groups with filtering, sorting, and pagination support. Supports SCIM filter syntax"),
+		forge.WithResponseSchema(200, "List of groups", ListResponse{}),
+		forge.WithResponseSchema(400, "Invalid filter", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("SCIM", "Groups"),
+	)
+
+	scimGroup.GET("/Groups/:id", scimChain(p.handler.GetGroup),
+		forge.WithName("scim.groups.get"),
+		forge.WithSummary("Get group"),
+		forge.WithDescription("Retrieves a specific group by SCIM ID with all members and attributes"),
+		forge.WithResponseSchema(200, "Group details", SCIMGroup{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Groups"),
+	)
+
+	scimGroup.PUT("/Groups/:id", scimChain(p.handler.ReplaceGroup),
+		forge.WithName("scim.groups.replace"),
+		forge.WithSummary("Replace group"),
+		forge.WithDescription("Replaces all group attributes and members with the provided values (full update)"),
+		forge.WithResponseSchema(200, "Group updated", SCIMGroup{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Groups"),
+		forge.WithValidation(true),
+	)
+
+	scimGroup.PATCH("/Groups/:id", scimChain(p.handler.UpdateGroup),
+		forge.WithName("scim.groups.update"),
+		forge.WithSummary("Update group"),
+		forge.WithDescription("Partially updates group attributes and members using SCIM PATCH operations (add, remove, replace)"),
+		forge.WithResponseSchema(200, "Group updated", SCIMGroup{}),
+		forge.WithResponseSchema(400, "Invalid patch operation", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Groups"),
+		forge.WithValidation(true),
+	)
+
+	scimGroup.DELETE("/Groups/:id", scimChain(p.handler.DeleteGroup),
+		forge.WithName("scim.groups.delete"),
+		forge.WithSummary("Delete group"),
+		forge.WithDescription("Deletes a group by SCIM ID. Group memberships are preserved but group is removed"),
+		forge.WithResponseSchema(204, "Group deleted", nil),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
+		forge.WithTags("SCIM", "Groups"),
+	)
 
 	// Bulk operations (RFC 7644 Section 3.7)
-	scimGroup.POST("/Bulk", scimChain(p.handler.BulkOperation))
+	scimGroup.POST("/Bulk", scimChain(p.handler.BulkOperation),
+		forge.WithName("scim.bulk.operation"),
+		forge.WithSummary("Bulk operations"),
+		forge.WithDescription("Performs multiple SCIM operations in a single request. Supports create, update, and delete operations on users and groups"),
+		forge.WithResponseSchema(200, "Bulk operation results", BulkResponse{}),
+		forge.WithResponseSchema(400, "Invalid bulk request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(413, "Request too large", ErrorResponse{}),
+		forge.WithTags("SCIM", "Bulk"),
+		forge.WithValidation(true),
+	)
 
 	// Search endpoint (RFC 7644 Section 3.4.3)
-	scimGroup.POST("/.search", scimChain(p.handler.Search))
+	scimGroup.POST("/.search", scimChain(p.handler.Search),
+		forge.WithName("scim.search"),
+		forge.WithSummary("Search resources"),
+		forge.WithDescription("Advanced search endpoint for users and groups with complex filter expressions and pagination"),
+		forge.WithResponseSchema(200, "Search results", ListResponse{}),
+		forge.WithResponseSchema(400, "Invalid search request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("SCIM", "Search"),
+		forge.WithValidation(true),
+	)
 
 	// Create admin middleware chain (SCIM auth + admin check)
 	adminChain := func(h func(forge.Context) error) func(forge.Context) error {
@@ -197,20 +374,86 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Custom endpoints for provisioning management (non-standard)
-	adminGroup := router.Group("/api/scim-admin")
+	adminGroup := router.Group("/admin/scim")
 
 	// Token management
-	adminGroup.POST("/tokens", adminChain(p.handler.CreateProvisioningToken))
-	adminGroup.GET("/tokens", adminChain(p.handler.ListProvisioningTokens))
-	adminGroup.DELETE("/tokens/:id", adminChain(p.handler.RevokeProvisioningToken))
+	adminGroup.POST("/tokens", adminChain(p.handler.CreateProvisioningToken),
+		forge.WithName("scim.admin.tokens.create"),
+		forge.WithSummary("Create provisioning token"),
+		forge.WithDescription("Creates a new SCIM provisioning token (Bearer token) for authenticating SCIM requests. Token is shown only once"),
+		forge.WithResponseSchema(201, "Token created", SCIMTokenResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", SCIMErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Tokens"),
+		forge.WithValidation(true),
+	)
+
+	adminGroup.GET("/tokens", adminChain(p.handler.ListProvisioningTokens),
+		forge.WithName("scim.admin.tokens.list"),
+		forge.WithSummary("List provisioning tokens"),
+		forge.WithDescription("Lists all provisioning tokens for the organization with pagination. Token values are never returned"),
+		forge.WithResponseSchema(200, "List of tokens", SCIMTokenListResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Tokens"),
+	)
+
+	adminGroup.DELETE("/tokens/:id", adminChain(p.handler.RevokeProvisioningToken),
+		forge.WithName("scim.admin.tokens.revoke"),
+		forge.WithSummary("Revoke provisioning token"),
+		forge.WithDescription("Revokes a provisioning token by ID. Token can no longer be used for SCIM authentication"),
+		forge.WithResponseSchema(200, "Token revoked", SCIMStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", SCIMErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithResponseSchema(404, "Token not found", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Tokens"),
+	)
 
 	// Attribute mapping configuration
-	adminGroup.GET("/mappings", adminChain(p.handler.GetAttributeMappings))
-	adminGroup.PUT("/mappings", adminChain(p.handler.UpdateAttributeMappings))
+	adminGroup.GET("/mappings", adminChain(p.handler.GetAttributeMappings),
+		forge.WithName("scim.admin.mappings.get"),
+		forge.WithSummary("Get attribute mappings"),
+		forge.WithDescription("Retrieves custom attribute mappings for SCIM attributes to AuthSome fields"),
+		forge.WithResponseSchema(200, "Attribute mappings", SCIMAttributeMappingsResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Mappings"),
+	)
+
+	adminGroup.PUT("/mappings", adminChain(p.handler.UpdateAttributeMappings),
+		forge.WithName("scim.admin.mappings.update"),
+		forge.WithSummary("Update attribute mappings"),
+		forge.WithDescription("Updates custom attribute mappings for SCIM attributes to AuthSome fields. Used for custom field mapping"),
+		forge.WithResponseSchema(200, "Mappings updated", SCIMStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", SCIMErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Mappings"),
+		forge.WithValidation(true),
+	)
 
 	// Provisioning logs and audit
-	adminGroup.GET("/logs", adminChain(p.handler.GetProvisioningLogs))
-	adminGroup.GET("/stats", adminChain(p.handler.GetProvisioningStats))
+	adminGroup.GET("/logs", adminChain(p.handler.GetProvisioningLogs),
+		forge.WithName("scim.admin.logs.get"),
+		forge.WithSummary("Get provisioning logs"),
+		forge.WithDescription("Retrieves provisioning operation logs with filtering by action, pagination, and detailed request/response data"),
+		forge.WithResponseSchema(200, "Provisioning logs", SCIMLogsResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Logs"),
+	)
+
+	adminGroup.GET("/stats", adminChain(p.handler.GetProvisioningStats),
+		forge.WithName("scim.admin.stats.get"),
+		forge.WithSummary("Get provisioning statistics"),
+		forge.WithDescription("Returns real-time SCIM provisioning metrics including request counts, error rates, and performance statistics"),
+		forge.WithResponseSchema(200, "Provisioning statistics", SCIMStatsResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
+		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
+		forge.WithTags("SCIM", "Admin", "Stats"),
+	)
 
 	fmt.Println("[SCIM] Routes registered successfully")
 	fmt.Println("  - POST   /scim/v2/Users (create user)")
@@ -313,4 +556,78 @@ func (p *Plugin) Health(ctx context.Context) error {
 		return fmt.Errorf("service not initialized")
 	}
 	return p.service.Health(ctx)
+}
+
+// Response types for admin endpoints (for API documentation)
+
+// SCIMErrorResponse represents an error response for admin endpoints
+type SCIMErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+// SCIMStatusResponse represents a status response
+type SCIMStatusResponse struct {
+	Message string `json:"message" example:"Operation successful"`
+}
+
+// SCIMTokenResponse represents a token creation response
+type SCIMTokenResponse struct {
+	Token   string `json:"token" example:"scim_abc123"`
+	ID      string `json:"id" example:"01HZ"`
+	Name    string `json:"name" example:"Production SCIM Token"`
+	Message string `json:"message" example:"Store this token securely"`
+}
+
+// SCIMTokenListResponse represents a list of tokens response
+type SCIMTokenListResponse struct {
+	Tokens []SCIMTokenInfo `json:"tokens"`
+	Total  int             `json:"total" example:"5"`
+	Limit  int             `json:"limit" example:"50"`
+	Offset int             `json:"offset" example:"0"`
+}
+
+// SCIMTokenInfo represents token information (without sensitive data)
+type SCIMTokenInfo struct {
+	ID          string     `json:"id" example:"01HZ..."`
+	Name        string     `json:"name" example:"Production SCIM Token"`
+	Description string     `json:"description" example:"Token for Okta provisioning"`
+	Scopes      []string   `json:"scopes" example:"users,groups"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	ExpiresAt   *time.Time `json:"expires_at"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+}
+
+// SCIMAttributeMappingsResponse represents attribute mappings response
+type SCIMAttributeMappingsResponse struct {
+	Mappings map[string]string `json:"mappings" example:"userName:email,displayName:name"`
+}
+
+// SCIMLogsResponse represents provisioning logs response
+type SCIMLogsResponse struct {
+	Logs   []SCIMLogInfo `json:"logs"`
+	Total  int           `json:"total" example:"100"`
+	Limit  int           `json:"limit" example:"50"`
+	Offset int           `json:"offset" example:"0"`
+}
+
+// SCIMLogInfo represents a single log entry
+type SCIMLogInfo struct {
+	ID           string    `json:"id" example:"01HZ..."`
+	Operation    string    `json:"operation" example:"CREATE_USER"`
+	ResourceType string    `json:"resource_type" example:"User"`
+	ResourceID   string    `json:"resource_id" example:"01HZ..."`
+	Method       string    `json:"method" example:"POST"`
+	Path         string    `json:"path" example:"/scim/v2/Users"`
+	StatusCode   int       `json:"status_code" example:"201"`
+	Success      bool      `json:"success" example:"true"`
+	ErrorMessage string    `json:"error_message"`
+	CreatedAt    time.Time `json:"created_at"`
+	DurationMS   int       `json:"duration_ms" example:"45"`
+}
+
+// SCIMStatsResponse represents provisioning statistics response
+type SCIMStatsResponse struct {
+	SCIMMetrics map[string]interface{} `json:"scim_metrics"`
 }

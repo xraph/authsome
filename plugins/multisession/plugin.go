@@ -62,10 +62,52 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the auth basePath, create multi-session sub-group
 	grp := router.Group("/multi-session")
 	h := NewHandler(p.service)
-	grp.GET("/list", h.List)
-	grp.POST("/set-active", h.SetActive)
-	grp.POST("/delete/{id}", h.Delete)
+	grp.GET("/list", h.List,
+		forge.WithName("multisession.list"),
+		forge.WithSummary("List user sessions"),
+		forge.WithDescription("Returns all active sessions for the current authenticated user"),
+		forge.WithResponseSchema(200, "Sessions retrieved", MultiSessionListResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
+	grp.POST("/set-active", h.SetActive,
+		forge.WithName("multisession.setactive"),
+		forge.WithSummary("Set active session"),
+		forge.WithDescription("Switches the current session cookie to the specified session ID"),
+		forge.WithResponseSchema(200, "Session activated", MultiSessionSetActiveResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+		forge.WithValidation(true),
+	)
+	grp.POST("/delete/{id}", h.Delete,
+		forge.WithName("multisession.delete"),
+		forge.WithSummary("Delete session"),
+		forge.WithDescription("Revokes and deletes a specific session by ID for the current user"),
+		forge.WithResponseSchema(200, "Session deleted", MultiSessionDeleteResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
 	return nil
+}
+
+// Response types for multi-session routes
+type MultiSessionErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type MultiSessionListResponse struct {
+	Sessions []interface{} `json:"sessions"`
+}
+
+type MultiSessionSetActiveResponse struct {
+	Session interface{} `json:"session"`
+	Token   string      `json:"token" example:"session_token_abc123"`
+}
+
+type MultiSessionDeleteResponse struct {
+	Status string `json:"status" example:"deleted"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

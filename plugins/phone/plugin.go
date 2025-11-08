@@ -72,9 +72,36 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the correct basePath
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/phone/send-code": {Window: time.Minute, Max: 5}}})
 	h := NewHandler(p.service, rls)
-	router.POST("/phone/send-code", h.SendCode)
-	router.POST("/phone/verify", h.Verify)
-	router.POST("/phone/signin", h.SignIn)
+	router.POST("/phone/send-code", h.SendCode,
+		forge.WithName("phone.sendcode"),
+		forge.WithSummary("Send phone verification code"),
+		forge.WithDescription("Sends a verification code via SMS to the specified phone number. Rate limited to 5 requests per minute per phone"),
+		forge.WithResponseSchema(200, "Code sent", PhoneSendCodeResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PhoneErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many requests", PhoneErrorResponse{}),
+		forge.WithTags("Phone", "Authentication"),
+		forge.WithValidation(true),
+	)
+	router.POST("/phone/verify", h.Verify,
+		forge.WithName("phone.verify"),
+		forge.WithSummary("Verify phone code"),
+		forge.WithDescription("Verifies the phone verification code and creates a user session on success. Supports implicit signup if enabled"),
+		forge.WithResponseSchema(200, "Code verified", PhoneVerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PhoneErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid code", PhoneErrorResponse{}),
+		forge.WithTags("Phone", "Authentication"),
+		forge.WithValidation(true),
+	)
+	router.POST("/phone/signin", h.SignIn,
+		forge.WithName("phone.signin"),
+		forge.WithSummary("Sign in with phone"),
+		forge.WithDescription("Alias for phone verification. Verifies the phone code and creates a user session"),
+		forge.WithResponseSchema(200, "Sign in successful", PhoneVerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PhoneErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid code", PhoneErrorResponse{}),
+		forge.WithTags("Phone", "Authentication"),
+		forge.WithValidation(true),
+	)
 	return nil
 }
 
@@ -89,4 +116,20 @@ func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 	_, err := p.db.NewCreateTable().Model((*schema.PhoneVerification)(nil)).IfNotExists().Exec(ctx)
 	return err
+}
+
+// Response types for phone routes
+type PhoneErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type PhoneSendCodeResponse struct {
+	Status  string `json:"status" example:"sent"`
+	DevCode string `json:"dev_code,omitempty" example:"123456"`
+}
+
+type PhoneVerifyResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token" example:"session_token_abc123"`
 }

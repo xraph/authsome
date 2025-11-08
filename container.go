@@ -40,30 +40,22 @@ func ResolveDatabase(container forge.Container) (*bun.DB, error) {
 	}
 
 	// Fall back to Forge's database extension
-	svc, err = container.Resolve(database.DatabaseKey)
+	db, err := database.GetSQL(container)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve database from container: %w", err)
 	}
 
-	db, ok := svc.(*bun.DB)
-	if !ok {
-		return nil, fmt.Errorf("database service has invalid type")
-	}
 	return db, nil
 }
 
 // ResolveDatabaseManager resolves Forge's DatabaseManager from the container
 // This is useful for plugins that need access to multiple databases
 func ResolveDatabaseManager(container forge.Container) (*forgedb.DatabaseManager, error) {
-	svc, err := container.Resolve(forgedb.ManagerKey)
+	manager, err := database.GetManager(container)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve database manager: %w", err)
 	}
 
-	manager, ok := svc.(*forgedb.DatabaseManager)
-	if !ok {
-		return nil, fmt.Errorf("database manager has invalid type")
-	}
 	return manager, nil
 }
 

@@ -68,12 +68,59 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the auth basePath, create passkey sub-group
 	grp := router.Group("/passkey")
 	h := NewHandler(p.service)
-	grp.POST("/register/begin", h.BeginRegister)
-	grp.POST("/register/finish", h.FinishRegister)
-	grp.POST("/login/begin", h.BeginLogin)
-	grp.POST("/login/finish", h.FinishLogin)
-	grp.GET("/list", h.List)
-	grp.DELETE("/:id", h.Delete)
+	grp.POST("/register/begin", h.BeginRegister,
+		forge.WithName("passkey.register.begin"),
+		forge.WithSummary("Begin passkey registration"),
+		forge.WithDescription("Initiates WebAuthn/FIDO2 passkey registration. Returns challenge and credential creation options"),
+		forge.WithResponseSchema(200, "Registration options", PasskeyRegistrationOptionsResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PasskeyErrorResponse{}),
+		forge.WithTags("Passkey", "WebAuthn", "Registration"),
+		forge.WithValidation(true),
+	)
+	grp.POST("/register/finish", h.FinishRegister,
+		forge.WithName("passkey.register.finish"),
+		forge.WithSummary("Finish passkey registration"),
+		forge.WithDescription("Completes WebAuthn/FIDO2 passkey registration with credential attestation"),
+		forge.WithResponseSchema(200, "Passkey registered", PasskeyStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PasskeyErrorResponse{}),
+		forge.WithTags("Passkey", "WebAuthn", "Registration"),
+		forge.WithValidation(true),
+	)
+	grp.POST("/login/begin", h.BeginLogin,
+		forge.WithName("passkey.login.begin"),
+		forge.WithSummary("Begin passkey login"),
+		forge.WithDescription("Initiates WebAuthn/FIDO2 passkey authentication. Returns challenge and credential request options"),
+		forge.WithResponseSchema(200, "Login options", PasskeyLoginOptionsResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PasskeyErrorResponse{}),
+		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
+		forge.WithValidation(true),
+	)
+	grp.POST("/login/finish", h.FinishLogin,
+		forge.WithName("passkey.login.finish"),
+		forge.WithSummary("Finish passkey login"),
+		forge.WithDescription("Completes WebAuthn/FIDO2 passkey authentication with credential assertion and creates user session"),
+		forge.WithResponseSchema(200, "Login successful", PasskeyLoginResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PasskeyErrorResponse{}),
+		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
+		forge.WithValidation(true),
+	)
+	grp.GET("/list", h.List,
+		forge.WithName("passkey.list"),
+		forge.WithSummary("List passkeys"),
+		forge.WithDescription("Lists all registered passkeys for a user"),
+		forge.WithResponseSchema(200, "Passkeys retrieved", PasskeyListResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PasskeyErrorResponse{}),
+		forge.WithTags("Passkey", "Management"),
+	)
+	grp.DELETE("/:id", h.Delete,
+		forge.WithName("passkey.delete"),
+		forge.WithSummary("Delete passkey"),
+		forge.WithDescription("Deletes a registered passkey by ID"),
+		forge.WithResponseSchema(200, "Passkey deleted", PasskeyStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", PasskeyErrorResponse{}),
+		forge.WithResponseSchema(404, "Passkey not found", PasskeyErrorResponse{}),
+		forge.WithTags("Passkey", "Management"),
+	)
 	return nil
 }
 
@@ -88,4 +135,31 @@ func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 	_, err := p.db.NewCreateTable().Model((*schema.Passkey)(nil)).IfNotExists().Exec(ctx)
 	return err
+}
+
+// Response types for passkey routes
+type PasskeyErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type PasskeyStatusResponse struct {
+	Status string `json:"status" example:"registered"`
+}
+
+type PasskeyRegistrationOptionsResponse struct {
+	Options interface{} `json:"options"`
+}
+
+type PasskeyLoginOptionsResponse struct {
+	Options interface{} `json:"options"`
+}
+
+type PasskeyLoginResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token" example:"session_token_abc123"`
+}
+
+type PasskeyListResponse struct {
+	Passkeys []interface{} `json:"passkeys"`
 }

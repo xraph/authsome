@@ -239,6 +239,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	a.serviceRegistry.SetDeviceService(a.deviceService)
 	a.serviceRegistry.SetRBACService(a.rbacService)
 	a.serviceRegistry.SetRateLimitService(a.rateLimitService)
+	a.serviceRegistry.SetOrganizationService(a.organizationService)
 
 	// Register services into Forge DI container
 	if err := a.registerServicesIntoContainer(db); err != nil {
@@ -559,7 +560,7 @@ func (a *Auth) resolveDatabase() error {
 		}
 
 		// Try to resolve from Forge database extension
-		dbInterface, err := container.Resolve(database.DatabaseKey)
+		dbInterface, err := database.GetDatabase(container)
 		if err != nil {
 			return fmt.Errorf("failed to resolve database from Forge DI: %w", err)
 		}

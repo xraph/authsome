@@ -74,9 +74,41 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the correct basePath
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/magic-link/send": {Window: time.Minute, Max: 5}}})
 	h := NewHandler(p.service, rls)
-	router.POST("/magic-link/send", h.Send)
-	router.GET("/magic-link/verify", h.Verify)
+	router.POST("/magic-link/send", h.Send,
+		forge.WithName("magiclink.send"),
+		forge.WithSummary("Send magic link"),
+		forge.WithDescription("Sends a passwordless authentication link to the specified email address. Rate limited to 5 requests per minute per email"),
+		forge.WithResponseSchema(200, "Magic link sent", MagicLinkSendResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", MagicLinkErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many requests", MagicLinkErrorResponse{}),
+		forge.WithTags("MagicLink", "Authentication"),
+		forge.WithValidation(true),
+	)
+	router.GET("/magic-link/verify", h.Verify,
+		forge.WithName("magiclink.verify"),
+		forge.WithSummary("Verify magic link"),
+		forge.WithDescription("Verifies the magic link token from email and creates a user session on success. Supports implicit signup if enabled"),
+		forge.WithResponseSchema(200, "Magic link verified", MagicLinkVerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", MagicLinkErrorResponse{}),
+		forge.WithTags("MagicLink", "Authentication"),
+	)
 	return nil
+}
+
+// Response types for magic link routes
+type MagicLinkErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type MagicLinkSendResponse struct {
+	Status string `json:"status" example:"sent"`
+	DevURL string `json:"dev_url,omitempty" example:"http://localhost:3000/magic-link/verify?token=abc123"`
+}
+
+type MagicLinkVerifyResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token" example:"session_token_abc123"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

@@ -75,9 +75,43 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Set up a simple in-memory rate limit: 5 sends per minute per email
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/email-otp/send": {Window: time.Minute, Max: 5}}})
 	h := NewHandler(p.service, rls)
-	router.POST("/email-otp/send", h.Send)
-	router.POST("/email-otp/verify", h.Verify)
+	router.POST("/email-otp/send", h.Send,
+		forge.WithName("emailotp.send"),
+		forge.WithSummary("Send email OTP"),
+		forge.WithDescription("Sends a one-time password (OTP) to the specified email address. Rate limited to 5 requests per minute per email"),
+		forge.WithResponseSchema(200, "OTP sent", EmailOTPSendResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", EmailOTPErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many requests", EmailOTPErrorResponse{}),
+		forge.WithTags("EmailOTP", "Authentication"),
+		forge.WithValidation(true),
+	)
+	router.POST("/email-otp/verify", h.Verify,
+		forge.WithName("emailotp.verify"),
+		forge.WithSummary("Verify email OTP"),
+		forge.WithDescription("Verifies the OTP code and creates a user session on success. Supports implicit signup if enabled"),
+		forge.WithResponseSchema(200, "OTP verified", EmailOTPVerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", EmailOTPErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid OTP", EmailOTPErrorResponse{}),
+		forge.WithTags("EmailOTP", "Authentication"),
+		forge.WithValidation(true),
+	)
 	return nil
+}
+
+// Response types for email OTP routes
+type EmailOTPErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type EmailOTPSendResponse struct {
+	Status string `json:"status" example:"sent"`
+	DevOTP string `json:"dev_otp,omitempty" example:"123456"`
+}
+
+type EmailOTPVerifyResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token" example:"session_token_abc123"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

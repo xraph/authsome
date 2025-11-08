@@ -132,36 +132,132 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Certificate Management
 	if p.config.API.EnableManagement {
-		router.POST(basePath+"/certificates", p.handler.RegisterCertificate)
-		router.GET(basePath+"/certificates", p.handler.ListCertificates)
-		router.GET(basePath+"/certificates/:id", p.handler.GetCertificate)
-		router.POST(basePath+"/certificates/:id/revoke", p.handler.RevokeCertificate)
-		router.GET(basePath+"/certificates/expiring", p.handler.GetExpiringCertificates)
+		router.POST(basePath+"/certificates", p.handler.RegisterCertificate,
+			forge.WithName("mtls.certificates.register"),
+			forge.WithSummary("Register certificate"),
+			forge.WithDescription("Registers a new X.509 certificate for mTLS authentication"),
+			forge.WithResponseSchema(201, "Certificate registered", MTLSCertificateResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Certificates"),
+			forge.WithValidation(true),
+		)
+		router.GET(basePath+"/certificates", p.handler.ListCertificates,
+			forge.WithName("mtls.certificates.list"),
+			forge.WithSummary("List certificates"),
+			forge.WithDescription("Lists all registered certificates for the authenticated user or organization"),
+			forge.WithResponseSchema(200, "Certificates retrieved", MTLSCertificateListResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Certificates"),
+		)
+		router.GET(basePath+"/certificates/:id", p.handler.GetCertificate,
+			forge.WithName("mtls.certificates.get"),
+			forge.WithSummary("Get certificate"),
+			forge.WithDescription("Retrieves details of a specific certificate by ID"),
+			forge.WithResponseSchema(200, "Certificate retrieved", MTLSCertificateResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithResponseSchema(404, "Certificate not found", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Certificates"),
+		)
+		router.POST(basePath+"/certificates/:id/revoke", p.handler.RevokeCertificate,
+			forge.WithName("mtls.certificates.revoke"),
+			forge.WithSummary("Revoke certificate"),
+			forge.WithDescription("Revokes a certificate by ID. Certificate can no longer be used for authentication"),
+			forge.WithResponseSchema(200, "Certificate revoked", mTLSStatusResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithResponseSchema(404, "Certificate not found", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Certificates"),
+		)
+		router.GET(basePath+"/certificates/expiring", p.handler.GetExpiringCertificates,
+			forge.WithName("mtls.certificates.expiring"),
+			forge.WithSummary("Get expiring certificates"),
+			forge.WithDescription("Lists certificates that are expiring within the configured warning period"),
+			forge.WithResponseSchema(200, "Expiring certificates retrieved", MTLSCertificateListResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Certificates"),
+		)
 	}
 
 	// Authentication
-	router.POST(basePath+"/authenticate", p.handler.AuthenticateWithCertificate)
+	router.POST(basePath+"/authenticate", p.handler.AuthenticateWithCertificate,
+		forge.WithName("mtls.authenticate"),
+		forge.WithSummary("Authenticate with certificate"),
+		forge.WithDescription("Authenticates using client certificate from TLS connection. Requires valid X.509 certificate"),
+		forge.WithResponseSchema(200, "Authentication successful", mTLSAuthResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
+		forge.WithResponseSchema(401, "Authentication failed", mTLSErrorResponse{}),
+		forge.WithTags("mTLS", "Authentication"),
+	)
 
 	// Trust Anchors
 	if p.config.API.EnableManagement {
-		router.POST(basePath+"/trust-anchors", p.handler.AddTrustAnchor)
-		router.GET(basePath+"/trust-anchors", p.handler.GetTrustAnchors)
+		router.POST(basePath+"/trust-anchors", p.handler.AddTrustAnchor,
+			forge.WithName("mtls.trustanchors.add"),
+			forge.WithSummary("Add trust anchor"),
+			forge.WithDescription("Adds a new trust anchor (CA certificate) for certificate validation"),
+			forge.WithResponseSchema(201, "Trust anchor added", mTLSTrustAnchorResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "TrustAnchors"),
+			forge.WithValidation(true),
+		)
+		router.GET(basePath+"/trust-anchors", p.handler.GetTrustAnchors,
+			forge.WithName("mtls.trustanchors.list"),
+			forge.WithSummary("List trust anchors"),
+			forge.WithDescription("Lists all configured trust anchors (CA certificates)"),
+			forge.WithResponseSchema(200, "Trust anchors retrieved", mTLSTrustAnchorListResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "TrustAnchors"),
+		)
 	}
 
 	// Policies
 	if p.config.API.EnableManagement {
-		router.POST(basePath+"/policies", p.handler.CreatePolicy)
-		router.GET(basePath+"/policies/:id", p.handler.GetPolicy)
+		router.POST(basePath+"/policies", p.handler.CreatePolicy,
+			forge.WithName("mtls.policies.create"),
+			forge.WithSummary("Create certificate policy"),
+			forge.WithDescription("Creates a new certificate validation policy with rules and constraints"),
+			forge.WithResponseSchema(201, "Policy created", mTLSPolicyResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Policies"),
+			forge.WithValidation(true),
+		)
+		router.GET(basePath+"/policies/:id", p.handler.GetPolicy,
+			forge.WithName("mtls.policies.get"),
+			forge.WithSummary("Get certificate policy"),
+			forge.WithDescription("Retrieves details of a specific certificate validation policy"),
+			forge.WithResponseSchema(200, "Policy retrieved", mTLSPolicyResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithResponseSchema(404, "Policy not found", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Policies"),
+		)
 	}
 
 	// Validation
 	if p.config.API.EnableValidation {
-		router.POST(basePath+"/validate", p.handler.ValidateCertificate)
+		router.POST(basePath+"/validate", p.handler.ValidateCertificate,
+			forge.WithName("mtls.validate"),
+			forge.WithSummary("Validate certificate"),
+			forge.WithDescription("Validates a certificate without authenticating. Checks signature, expiration, revocation, and policy compliance"),
+			forge.WithResponseSchema(200, "Certificate validated", mTLSValidationResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Validation"),
+			forge.WithValidation(true),
+		)
 	}
 
 	// Statistics
 	if p.config.API.EnableMetrics {
-		router.GET(basePath+"/stats/auth", p.handler.GetAuthStats)
+		router.GET(basePath+"/stats/auth", p.handler.GetAuthStats,
+			forge.WithName("mtls.stats.auth"),
+			forge.WithSummary("Get authentication statistics"),
+			forge.WithDescription("Returns mTLS authentication statistics including success rates, certificate usage, and error counts"),
+			forge.WithResponseSchema(200, "Statistics retrieved", mTLSStatsResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
+			forge.WithTags("mTLS", "Statistics"),
+		)
 	}
 
 	return nil
@@ -221,4 +317,50 @@ func (p *Plugin) Shutdown() error {
 		return p.hsmManager.Shutdown()
 	}
 	return nil
+}
+
+// Response types for mTLS routes
+type mTLSErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type mTLSStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type MTLSCertificateResponse struct {
+	Certificate interface{} `json:"certificate"`
+}
+
+type MTLSCertificateListResponse struct {
+	Certificates []interface{} `json:"certificates"`
+}
+
+type mTLSAuthResponse struct {
+	Success      bool   `json:"success" example:"true"`
+	UserID       string `json:"userId,omitempty" example:"01HZ..."`
+	CertificateID string `json:"certificateId,omitempty" example:"cert_123"`
+	Errors       []string `json:"errors,omitempty"`
+}
+
+type mTLSTrustAnchorResponse struct {
+	TrustAnchor interface{} `json:"trust_anchor"`
+}
+
+type mTLSTrustAnchorListResponse struct {
+	TrustAnchors []interface{} `json:"trust_anchors"`
+}
+
+type mTLSPolicyResponse struct {
+	Policy interface{} `json:"policy"`
+}
+
+type mTLSValidationResponse struct {
+	Valid   bool     `json:"valid" example:"true"`
+	Errors  []string `json:"errors,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+type mTLSStatsResponse struct {
+	Stats interface{} `json:"stats"`
 }

@@ -80,13 +80,11 @@ func (p *Plugin) Init(dep interface{}) error {
 	}
 
 	// Get plugin registry to check which plugins are enabled
-	fmt.Printf("[Dashboard] ========== PLUGIN DETECTION START ==========\n")
 	p.enabledPlugins = make(map[string]bool)
 
 	pluginRegistry := authInstance.GetPluginRegistry()
 	if pluginRegistry != nil {
 		pluginList := pluginRegistry.List()
-		fmt.Printf("[Dashboard] ✅ Plugin registry found, detected %d plugins\n", len(pluginList))
 		for _, plugin := range pluginList {
 			pluginID := plugin.ID()
 			p.enabledPlugins[pluginID] = true
@@ -95,10 +93,6 @@ func (p *Plugin) Init(dep interface{}) error {
 	} else {
 		fmt.Printf("[Dashboard] ⚠️  Plugin registry is nil\n")
 	}
-
-	fmt.Printf("[Dashboard] Final enabled plugins count: %d\n", len(p.enabledPlugins))
-	fmt.Printf("[Dashboard] Final enabled plugins map: %v\n", p.enabledPlugins)
-	fmt.Printf("[Dashboard] ========== PLUGIN DETECTION END ==========\n")
 
 	// Get required services from registry using specific getters
 	p.userSvc = serviceRegistry.UserService()
@@ -135,7 +129,6 @@ func (p *Plugin) Init(dep interface{}) error {
 	// Initialize Permission Checker
 	userRoleRepo := repository.NewUserRoleRepository(db)
 	p.permChecker = NewPermissionChecker(p.rbacSvc, userRoleRepo)
-	fmt.Println("[Dashboard] ✅ Permission checker initialized")
 
 	// Initialize CSRF Protector
 	csrfProtector, err := NewCSRFProtector()
@@ -143,7 +136,6 @@ func (p *Plugin) Init(dep interface{}) error {
 		return fmt.Errorf("failed to initialize CSRF protector: %w", err)
 	}
 	p.csrfProtector = csrfProtector
-	fmt.Println("[Dashboard] ✅ CSRF protector initialized")
 
 	// Templates no longer needed - using gomponents
 	// Initialize handler with services, base path, and enabled plugins
@@ -161,8 +153,6 @@ func (p *Plugin) Init(dep interface{}) error {
 		p.enabledPlugins,
 	)
 
-	fmt.Println("[Dashboard] ✅ Handler initialized with RBAC and CSRF protection")
-
 	return nil
 }
 
@@ -171,8 +161,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
 		return fmt.Errorf("dashboard handler not initialized; call Init first")
 	}
-
-	fmt.Printf("[Dashboard] Registering routes with basePath: %s\n", p.basePath)
 
 	// Create middleware chain
 	chain := func(h func(forge.Context) error) func(forge.Context) error {

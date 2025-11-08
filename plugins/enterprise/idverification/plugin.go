@@ -122,28 +122,115 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	verificationGroup := router.Group("/verification")
 	{
 		// Session management
-		verificationGroup.POST("/sessions", p.handler.CreateVerificationSession)
-		verificationGroup.GET("/sessions/:id", p.handler.GetVerificationSession)
+		verificationGroup.POST("/sessions", p.handler.CreateVerificationSession,
+			forge.WithName("idverification.sessions.create"),
+			forge.WithSummary("Create verification session"),
+			forge.WithDescription("Creates a new identity verification session with the specified provider (Onfido, Jumio, Stripe Identity)"),
+			forge.WithResponseSchema(201, "Session created", IDVerificationSessionResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Sessions"),
+			forge.WithValidation(true),
+		)
+		verificationGroup.GET("/sessions/:id", p.handler.GetVerificationSession,
+			forge.WithName("idverification.sessions.get"),
+			forge.WithSummary("Get verification session"),
+			forge.WithDescription("Retrieves details of a specific verification session by ID"),
+			forge.WithResponseSchema(200, "Session retrieved", IDVerificationSessionResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(404, "Session not found", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Sessions"),
+		)
 
 		// User verifications
-		verificationGroup.GET("/me", p.handler.GetUserVerifications)
-		verificationGroup.GET("/me/status", p.handler.GetUserVerificationStatus)
-		verificationGroup.POST("/me/reverify", p.handler.RequestReverification)
+		verificationGroup.GET("/me", p.handler.GetUserVerifications,
+			forge.WithName("idverification.user.verifications"),
+			forge.WithSummary("Get user verifications"),
+			forge.WithDescription("Retrieves all identity verifications for the current authenticated user"),
+			forge.WithResponseSchema(200, "Verifications retrieved", IDVerificationListResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "User"),
+		)
+		verificationGroup.GET("/me/status", p.handler.GetUserVerificationStatus,
+			forge.WithName("idverification.user.status"),
+			forge.WithSummary("Get user verification status"),
+			forge.WithDescription("Retrieves the current verification status for the authenticated user"),
+			forge.WithResponseSchema(200, "Status retrieved", IDVerificationStatusResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "User"),
+		)
+		verificationGroup.POST("/me/reverify", p.handler.RequestReverification,
+			forge.WithName("idverification.user.reverify"),
+			forge.WithSummary("Request reverification"),
+			forge.WithDescription("Requests a new identity verification for the current user"),
+			forge.WithResponseSchema(200, "Reverification requested", IDVerificationSessionResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "User"),
+			forge.WithValidation(true),
+		)
 
 		// Single verification
-		verificationGroup.GET("/:id", p.handler.GetVerification)
+		verificationGroup.GET("/:id", p.handler.GetVerification,
+			forge.WithName("idverification.get"),
+			forge.WithSummary("Get verification"),
+			forge.WithDescription("Retrieves details of a specific identity verification by ID"),
+			forge.WithResponseSchema(200, "Verification retrieved", IDVerificationResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(404, "Verification not found", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification"),
+		)
 
 		// Webhook endpoint (no auth required, verified by signature)
-		verificationGroup.POST("/webhook/:provider", p.handler.HandleWebhook)
+		verificationGroup.POST("/webhook/:provider", p.handler.HandleWebhook,
+			forge.WithName("idverification.webhook"),
+			forge.WithSummary("Handle provider webhook"),
+			forge.WithDescription("Receives webhook events from identity verification providers (Onfido, Jumio, Stripe Identity). Signature verified"),
+			forge.WithResponseSchema(200, "Webhook processed", IDVerificationWebhookResponse{}),
+			forge.WithResponseSchema(400, "Invalid webhook", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Webhooks"),
+		)
 	}
 
 	// Admin routes (require admin role)
 	adminGroup := router.Group("/verification/admin")
 	{
-		adminGroup.POST("/users/:userId/block", p.handler.AdminBlockUser)
-		adminGroup.POST("/users/:userId/unblock", p.handler.AdminUnblockUser)
-		adminGroup.GET("/users/:userId/status", p.handler.AdminGetUserVerificationStatus)
-		adminGroup.GET("/users/:userId/verifications", p.handler.AdminGetUserVerifications)
+		adminGroup.POST("/users/:userId/block", p.handler.AdminBlockUser,
+			forge.WithName("idverification.admin.users.block"),
+			forge.WithSummary("Block user"),
+			forge.WithDescription("Blocks a user from identity verification (admin only)"),
+			forge.WithResponseSchema(200, "User blocked", IDVerificationStatusResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Admin"),
+		)
+		adminGroup.POST("/users/:userId/unblock", p.handler.AdminUnblockUser,
+			forge.WithName("idverification.admin.users.unblock"),
+			forge.WithSummary("Unblock user"),
+			forge.WithDescription("Unblocks a user for identity verification (admin only)"),
+			forge.WithResponseSchema(200, "User unblocked", IDVerificationStatusResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Admin"),
+		)
+		adminGroup.GET("/users/:userId/status", p.handler.AdminGetUserVerificationStatus,
+			forge.WithName("idverification.admin.users.status"),
+			forge.WithSummary("Get user verification status (admin)"),
+			forge.WithDescription("Retrieves verification status for a specific user (admin only)"),
+			forge.WithResponseSchema(200, "Status retrieved", IDVerificationStatusResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Admin"),
+		)
+		adminGroup.GET("/users/:userId/verifications", p.handler.AdminGetUserVerifications,
+			forge.WithName("idverification.admin.users.verifications"),
+			forge.WithSummary("Get user verifications (admin)"),
+			forge.WithDescription("Retrieves all verifications for a specific user (admin only)"),
+			forge.WithResponseSchema(200, "Verifications retrieved", IDVerificationListResponse{}),
+			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
+			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
+			forge.WithTags("IdentityVerification", "Admin"),
+		)
 	}
 
 	return nil
@@ -315,4 +402,29 @@ func (p *Plugin) Middleware() func(next func(forge.Context) error) func(forge.Co
 		}
 	}
 	return p.middleware.LoadVerificationStatus
+}
+
+// Response types for identity verification routes
+type IDVerificationErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type IDVerificationSessionResponse struct {
+	Session interface{} `json:"session"`
+}
+
+type IDVerificationResponse struct {
+	Verification interface{} `json:"verification"`
+}
+
+type IDVerificationListResponse struct {
+	Verifications []interface{} `json:"verifications"`
+}
+
+type IDVerificationStatusResponse struct {
+	Status interface{} `json:"status"`
+}
+
+type IDVerificationWebhookResponse struct {
+	Status string `json:"status" example:"processed"`
 }

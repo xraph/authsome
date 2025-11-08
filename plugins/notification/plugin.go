@@ -102,26 +102,116 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Template management routes
 	templates := router.Group("/templates")
 	{
-		templates.POST("", handler.CreateTemplate)
-		templates.GET("", handler.ListTemplates)
-		templates.GET("/:id", handler.GetTemplate)
-		templates.PUT("/:id", handler.UpdateTemplate)
-		templates.DELETE("/:id", handler.DeleteTemplate)
-		templates.POST("/:id/preview", handler.PreviewTemplate)
-		templates.POST("/render", handler.RenderTemplate)
+		templates.POST("", handler.CreateTemplate,
+			forge.WithName("notification.templates.create"),
+			forge.WithSummary("Create notification template"),
+			forge.WithDescription("Creates a new notification template for email or SMS with subject, body, and variables"),
+			forge.WithResponseSchema(201, "Template created", NotificationTemplateResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+			forge.WithValidation(true),
+		)
+		templates.GET("", handler.ListTemplates,
+			forge.WithName("notification.templates.list"),
+			forge.WithSummary("List notification templates"),
+			forge.WithDescription("Lists all notification templates with optional filtering by organization, type, and language"),
+			forge.WithResponseSchema(200, "Templates retrieved", NotificationTemplateListResponse{}),
+			forge.WithTags("Notification", "Templates"),
+		)
+		templates.GET("/:id", handler.GetTemplate,
+			forge.WithName("notification.templates.get"),
+			forge.WithSummary("Get notification template"),
+			forge.WithDescription("Retrieves details of a specific notification template by ID"),
+			forge.WithResponseSchema(200, "Template retrieved", NotificationTemplateResponse{}),
+			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+		)
+		templates.PUT("/:id", handler.UpdateTemplate,
+			forge.WithName("notification.templates.update"),
+			forge.WithSummary("Update notification template"),
+			forge.WithDescription("Updates an existing notification template with new subject, body, or variables"),
+			forge.WithResponseSchema(200, "Template updated", NotificationTemplateResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
+			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+			forge.WithValidation(true),
+		)
+		templates.DELETE("/:id", handler.DeleteTemplate,
+			forge.WithName("notification.templates.delete"),
+			forge.WithSummary("Delete notification template"),
+			forge.WithDescription("Deletes a notification template by ID"),
+			forge.WithResponseSchema(200, "Template deleted", NotificationStatusResponse{}),
+			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+		)
+		templates.POST("/:id/preview", handler.PreviewTemplate,
+			forge.WithName("notification.templates.preview"),
+			forge.WithSummary("Preview notification template"),
+			forge.WithDescription("Renders a notification template with provided variables for preview"),
+			forge.WithResponseSchema(200, "Template preview", NotificationPreviewResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
+			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+			forge.WithValidation(true),
+		)
+		templates.POST("/render", handler.RenderTemplate,
+			forge.WithName("notification.templates.render"),
+			forge.WithSummary("Render notification template"),
+			forge.WithDescription("Renders a notification template with provided variables without saving"),
+			forge.WithResponseSchema(200, "Template rendered", NotificationPreviewResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+			forge.WithValidation(true),
+		)
 	}
 
 	// Notification sending routes
 	notifications := router.Group("/notifications")
 	{
-		notifications.POST("/send", handler.SendNotification)
-		notifications.GET("", handler.ListNotifications)
-		notifications.GET("/:id", handler.GetNotification)
-		notifications.POST("/:id/resend", handler.ResendNotification)
+		notifications.POST("/send", handler.SendNotification,
+			forge.WithName("notification.send"),
+			forge.WithSummary("Send notification"),
+			forge.WithDescription("Sends a notification (email or SMS) using a template with provided variables"),
+			forge.WithResponseSchema(200, "Notification sent", NotificationResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Sending"),
+			forge.WithValidation(true),
+		)
+		notifications.GET("", handler.ListNotifications,
+			forge.WithName("notification.list"),
+			forge.WithSummary("List notifications"),
+			forge.WithDescription("Lists all sent notifications with optional filtering by organization, status, and type"),
+			forge.WithResponseSchema(200, "Notifications retrieved", NotificationListResponse{}),
+			forge.WithTags("Notification", "History"),
+		)
+		notifications.GET("/:id", handler.GetNotification,
+			forge.WithName("notification.get"),
+			forge.WithSummary("Get notification"),
+			forge.WithDescription("Retrieves details of a specific sent notification by ID including delivery status"),
+			forge.WithResponseSchema(200, "Notification retrieved", NotificationResponse{}),
+			forge.WithResponseSchema(404, "Notification not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "History"),
+		)
+		notifications.POST("/:id/resend", handler.ResendNotification,
+			forge.WithName("notification.resend"),
+			forge.WithSummary("Resend notification"),
+			forge.WithDescription("Resends a previously sent notification by ID"),
+			forge.WithResponseSchema(200, "Notification resent", NotificationResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
+			forge.WithResponseSchema(404, "Notification not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Sending"),
+		)
 	}
 
 	// Webhook for provider callbacks (e.g., delivery status)
-	router.POST("/notifications/webhook/:provider", handler.HandleWebhook)
+	router.POST("/notifications/webhook/:provider", handler.HandleWebhook,
+		forge.WithName("notification.webhook"),
+		forge.WithSummary("Handle provider webhook"),
+		forge.WithDescription("Receives webhook events from notification providers (SendGrid, Twilio, etc.) for delivery status updates"),
+		forge.WithResponseSchema(200, "Webhook processed", NotificationWebhookResponse{}),
+		forge.WithResponseSchema(400, "Invalid webhook", NotificationErrorResponse{}),
+		forge.WithTags("Notification", "Webhooks"),
+	)
 
 	return nil
 }
@@ -405,4 +495,40 @@ func getBoolConfig(config map[string]interface{}, key string, defaultValue bool)
 		return val
 	}
 	return defaultValue
+}
+
+// Response types for notification routes
+type NotificationErrorResponse struct {
+	Error string `json:"error" example:"Error message"`
+}
+
+type NotificationStatusResponse struct {
+	Status string `json:"status" example:"success"`
+}
+
+type NotificationTemplateResponse struct {
+	Template interface{} `json:"template"`
+}
+
+type NotificationTemplateListResponse struct {
+	Templates []interface{} `json:"templates"`
+	Total     int           `json:"total" example:"10"`
+}
+
+type NotificationPreviewResponse struct {
+	Subject string `json:"subject" example:"Welcome to AuthSome"`
+	Body    string `json:"body" example:"Hello {{name}}, welcome to AuthSome!"`
+}
+
+type NotificationResponse struct {
+	Notification interface{} `json:"notification"`
+}
+
+type NotificationListResponse struct {
+	Notifications []interface{} `json:"notifications"`
+	Total         int           `json:"total" example:"50"`
+}
+
+type NotificationWebhookResponse struct {
+	Status string `json:"status" example:"processed"`
 }
