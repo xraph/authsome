@@ -337,10 +337,10 @@ type MTLSCertificateListResponse struct {
 }
 
 type mTLSAuthResponse struct {
-	Success      bool   `json:"success" example:"true"`
-	UserID       string `json:"userId,omitempty" example:"01HZ..."`
-	CertificateID string `json:"certificateId,omitempty" example:"cert_123"`
-	Errors       []string `json:"errors,omitempty"`
+	Success       bool     `json:"success" example:"true"`
+	UserID        string   `json:"userId,omitempty" example:"01HZ..."`
+	CertificateID string   `json:"certificateId,omitempty" example:"cert_123"`
+	Errors        []string `json:"errors,omitempty"`
 }
 
 type mTLSTrustAnchorResponse struct {
@@ -356,8 +356,8 @@ type mTLSPolicyResponse struct {
 }
 
 type mTLSValidationResponse struct {
-	Valid   bool     `json:"valid" example:"true"`
-	Errors  []string `json:"errors,omitempty"`
+	Valid    bool     `json:"valid" example:"true"`
+	Errors   []string `json:"errors,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
 }
 

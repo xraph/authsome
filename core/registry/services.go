@@ -35,6 +35,9 @@ type ServiceRegistry struct {
 	// Hook registry
 	hookRegistry *hooks.HookRegistry
 
+	// Role registry for role bootstrap system
+	roleRegistry *rbac.RoleRegistry
+
 	// Plugin-provided services (for multi-tenancy)
 	organizationService interface{} // Will be set by multi-tenancy plugin
 	configService       interface{} // Will be set by multi-tenancy plugin
@@ -44,6 +47,7 @@ type ServiceRegistry struct {
 func NewServiceRegistry() *ServiceRegistry {
 	return &ServiceRegistry{
 		hookRegistry: hooks.NewHookRegistry(),
+		roleRegistry: rbac.NewRoleRegistry(),
 	}
 }
 
@@ -148,6 +152,11 @@ func (r *ServiceRegistry) RateLimitService() *ratelimit.Service {
 // Hook registry getter
 func (r *ServiceRegistry) HookRegistry() *hooks.HookRegistry {
 	return r.hookRegistry
+}
+
+// Role registry getter
+func (r *ServiceRegistry) RoleRegistry() *rbac.RoleRegistry {
+	return r.roleRegistry
 }
 
 // Service replacement methods (used by plugins to decorate services)

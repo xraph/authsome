@@ -1,10 +1,10 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/interfaces"
 )
 
@@ -12,10 +12,15 @@ import (
 // and injects it into the context for multi-tenant operations
 func OrganizationContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		orgID := extractOrganizationID(r)
+		orgIDStr := extractOrganizationID(r)
 
-		if orgID != "" {
-			ctx := context.WithValue(r.Context(), interfaces.OrganizationContextKey, orgID)
+		if orgIDStr != "" {
+			orgID, _ := xid.FromString(orgIDStr)
+			// if err != nil {
+			// 	return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+			// }
+			ctx := interfaces.SetOrganizationID(r.Context(), orgID)
+			// ctx := context.WithValue(r.Context(), interfaces.OrganizationContextKey, orgID)
 			r = r.WithContext(ctx)
 		}
 

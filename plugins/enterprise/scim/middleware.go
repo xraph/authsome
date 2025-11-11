@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/forge"
 	"golang.org/x/time/rate"
 )
@@ -48,7 +49,7 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 			}
 
 			// Store org ID and token info in forge context values
-			c.Set("org_id", provToken.OrgID.String())
+			c.Set("org_id", provToken.OrgID)
 			c.Set("scim_token", provToken)
 			c.Set("token_scopes", provToken.Scopes)
 
@@ -106,10 +107,10 @@ func (p *Plugin) RateLimitMiddleware() func(func(forge.Context) error) func(forg
 				return next(c)
 			}
 
-			orgIDStr := orgID.(string)
+			orgIDStr := orgID.(xid.ID)
 
 			// Get or create rate limiter for this organization
-			limiterInterface, _ := limiters.LoadOrStore(orgIDStr, rate.NewLimiter(
+			limiterInterface, _ := limiters.LoadOrStore(orgIDStr.String(), rate.NewLimiter(
 				rate.Limit(float64(p.config.RateLimit.RequestsPerMin)/60.0), // Per second rate
 				p.config.RateLimit.BurstSize,
 			))

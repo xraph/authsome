@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"github.com/uptrace/bun"
 	core "github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/schema"
@@ -35,7 +36,7 @@ func (r *SecurityRepository) fromSchema(se *schema.SecurityEvent) *core.Security
 		UserAgent: se.UserAgent,
 		Geo:       se.Geo,
 		CreatedAt: se.CreatedAt,
-		UpdatedAt: se.UpdatedAt.Time,
+		UpdatedAt: se.UpdatedAt,
 	}
 }
 

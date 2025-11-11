@@ -10,9 +10,10 @@ type Organization struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:organizations,alias:o"`
 
-	ID       xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	Name     string                 `json:"name" bun:"name,notnull"`
-	Slug     string                 `json:"slug" bun:"slug,notnull,unique"`
-	Logo     string                 `json:"logo" bun:"logo"`
-	Metadata map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	ID         xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
+	Name       string                 `json:"name" bun:"name,notnull"`
+	Slug       string                 `json:"slug" bun:"slug,notnull,unique"`
+	Logo       string                 `json:"logo" bun:"logo"`
+	Metadata   map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	IsPlatform bool                   `json:"isPlatform" bun:"is_platform,default:false"` // Identifies the single platform organization
 }

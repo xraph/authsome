@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
 	aud "github.com/xraph/authsome/core/audit"
@@ -28,6 +30,7 @@ import (
 	jwtplugin "github.com/xraph/authsome/plugins/jwt"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/routes"
+	"github.com/xraph/authsome/schema"
 	memstore "github.com/xraph/authsome/storage"
 	"github.com/xraph/forge"
 	"github.com/xraph/forge/extensions/database"
@@ -246,6 +249,19 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to register services into DI container: %w", err)
 	}
 
+	// Ensure platform organization exists before plugins initialize
+	// This is needed for role bootstrap later
+	platformOrg, err := a.ensurePlatformOrganization(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to ensure platform organization: %w", err)
+	}
+
+	// Register default platform roles before plugins initialize
+	// Plugins can then extend or override these roles
+	if err := rbac.RegisterDefaultPlatformRoles(a.serviceRegistry.RoleRegistry()); err != nil {
+		return fmt.Errorf("failed to register default platform roles: %w", err)
+	}
+
 	// Initialize plugins with full Auth instance and run complete lifecycle
 	if a.pluginRegistry != nil {
 		for _, p := range a.pluginRegistry.List() {
@@ -254,17 +270,28 @@ func (a *Auth) Initialize(ctx context.Context) error {
 				return fmt.Errorf("plugin %s init failed: %w", p.ID(), err)
 			}
 
-			// 2. Register hooks
+			// 2. Register roles (optional interface)
+			// If plugin implements PluginWithRoles, it can register its roles
+			if rolePlugin, ok := p.(interface {
+				RegisterRoles(registry interface{}) error
+			}); ok {
+				fmt.Printf("[AuthSome] Plugin %s registering roles...\n", p.ID())
+				if err := rolePlugin.RegisterRoles(a.serviceRegistry.RoleRegistry()); err != nil {
+					return fmt.Errorf("plugin %s register roles failed: %w", p.ID(), err)
+				}
+			}
+
+			// 3. Register hooks
 			if err := p.RegisterHooks(a.hookRegistry); err != nil {
 				return fmt.Errorf("plugin %s register hooks failed: %w", p.ID(), err)
 			}
 
-			// 3. Register service decorators (plugins can replace core services)
+			// 4. Register service decorators (plugins can replace core services)
 			if err := p.RegisterServiceDecorators(a.serviceRegistry); err != nil {
 				return fmt.Errorf("plugin %s register decorators failed: %w", p.ID(), err)
 			}
 
-			// 4. Run migrations
+			// 5. Run migrations
 			if err := p.Migrate(); err != nil {
 				return fmt.Errorf("plugin %s migrate failed: %w", p.ID(), err)
 			}
@@ -283,6 +310,79 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		}
 	}
 
+	// Bootstrap roles and permissions to platform organization
+	// This happens AFTER plugins have registered their roles
+	if err := a.bootstrapRoles(ctx, db, platformOrg.ID); err != nil {
+		return fmt.Errorf("failed to bootstrap roles: %w", err)
+	}
+
+	return nil
+}
+
+// ensurePlatformOrganization ensures the platform organization exists
+// This is the single foundational organization for the entire system
+// Returns the platform organization (existing or newly created)
+func (a *Auth) ensurePlatformOrganization(ctx context.Context) (*schema.Organization, error) {
+	db, ok := a.db.(*bun.DB)
+	if !ok {
+		return nil, fmt.Errorf("invalid database instance")
+	}
+
+	// Check if platform org exists
+	var platformOrg schema.Organization
+	err := db.NewSelect().
+		Model(&platformOrg).
+		Where("is_platform = ?", true).
+		Scan(ctx)
+
+	if err == nil {
+		// Platform org exists
+		fmt.Printf("[AuthSome] ✅ Platform organization found: %s (ID: %s)\n",
+			platformOrg.Name, platformOrg.ID.String())
+		return &platformOrg, nil
+	}
+
+	// Platform org doesn't exist - create it
+	fmt.Println("[AuthSome] Platform organization not found, creating...")
+
+	platformOrg = schema.Organization{
+		ID:         xid.New(),
+		Name:       "Platform Organization",
+		Slug:       "platform",
+		IsPlatform: true,
+		Metadata:   map[string]interface{}{},
+	}
+	platformOrg.CreatedAt = time.Now()
+	platformOrg.UpdatedAt = time.Now()
+	platformOrg.CreatedBy = platformOrg.ID // Self-created
+	platformOrg.UpdatedBy = platformOrg.ID
+	platformOrg.Version = 1
+
+	_, err = db.NewInsert().Model(&platformOrg).Exec(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create platform organization: %w", err)
+	}
+
+	fmt.Printf("[AuthSome] ✅ Created platform organization: %s (ID: %s)\n",
+		platformOrg.Name, platformOrg.ID.String())
+
+	return &platformOrg, nil
+}
+
+// bootstrapRoles applies all registered roles to the platform organization
+// This is called after plugins have initialized and registered their roles
+func (a *Auth) bootstrapRoles(ctx context.Context, db *bun.DB, platformOrgID xid.ID) error {
+	roleRegistry := a.serviceRegistry.RoleRegistry()
+	if roleRegistry == nil {
+		return fmt.Errorf("role registry not initialized")
+	}
+
+	fmt.Println("[AuthSome] Starting role bootstrap...")
+	if err := roleRegistry.Bootstrap(ctx, db, a.rbacService, platformOrgID); err != nil {
+		return fmt.Errorf("role bootstrap failed: %w", err)
+	}
+
+	fmt.Println("[AuthSome] ✅ Role bootstrap complete")
 	return nil
 }
 

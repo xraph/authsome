@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 )
@@ -29,7 +30,7 @@ func (r *OrganizationRepository) Create(ctx context.Context, org *organization.O
 }
 
 // FindByID finds an organization by ID
-func (r *OrganizationRepository) FindByID(ctx context.Context, id string) (*organization.Organization, error) {
+func (r *OrganizationRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Organization, error) {
 	org := &organization.Organization{}
 	err := r.db.NewSelect().Model(org).Where("id = ?", id).Scan(ctx)
 	if err != nil {
@@ -64,7 +65,7 @@ func (r *OrganizationRepository) Update(ctx context.Context, org *organization.O
 }
 
 // Delete deletes an organization
-func (r *OrganizationRepository) Delete(ctx context.Context, id string) error {
+func (r *OrganizationRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*organization.Organization)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete organization: %w", err)

@@ -46,7 +46,7 @@ func (r *AuditRepository) fromSchema(ae *schema.AuditEvent) *core.Event {
 		UserAgent: ae.UserAgent,
 		Metadata:  ae.Metadata,
 		CreatedAt: ae.CreatedAt,
-		UpdatedAt: ae.UpdatedAt.Time,
+		UpdatedAt: ae.UpdatedAt,
 	}
 }
 

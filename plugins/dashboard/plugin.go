@@ -1,19 +1,23 @@
 package dashboard
 
 import (
+	"context"
 	"embed"
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/interfaces"
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins"
+	mtorg "github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
@@ -35,11 +39,105 @@ type Plugin struct {
 	csrfProtector  *CSRFProtector
 	basePath       string
 	enabledPlugins map[string]bool
+	config         Config
+	defaultConfig  Config
+	platformOrgID  xid.ID // Platform organization ID for context injection
+	db             *bun.DB
 }
 
-// NewPlugin creates a new dashboard plugin instance
-func NewPlugin() *Plugin {
-	return &Plugin{}
+// Config holds the dashboard plugin configuration
+type Config struct {
+	// EnableSignup allows new users to sign up for dashboard access
+	EnableSignup bool `json:"enableSignup"`
+
+	// RequireEmailVerification requires email verification for new signups
+	RequireEmailVerification bool `json:"requireEmailVerification"`
+
+	// SessionDuration sets the duration for dashboard sessions in hours
+	SessionDuration int `json:"sessionDuration"`
+
+	// MaxLoginAttempts sets the maximum login attempts before lockout
+	MaxLoginAttempts int `json:"maxLoginAttempts"`
+
+	// LockoutDuration sets the lockout duration in minutes
+	LockoutDuration int `json:"lockoutDuration"`
+
+	// DefaultTheme sets the default theme (light, dark, auto)
+	DefaultTheme string `json:"defaultTheme"`
+}
+
+// PluginOption is a functional option for configuring the dashboard plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithEnableSignup sets whether signup is enabled
+func WithEnableSignup(enabled bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.EnableSignup = enabled
+	}
+}
+
+// WithRequireEmailVerification sets whether email verification is required
+func WithRequireEmailVerification(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireEmailVerification = required
+	}
+}
+
+// WithSessionDuration sets the session duration in hours
+func WithSessionDuration(hours int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SessionDuration = hours
+	}
+}
+
+// WithMaxLoginAttempts sets the maximum login attempts
+func WithMaxLoginAttempts(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxLoginAttempts = max
+	}
+}
+
+// WithLockoutDuration sets the lockout duration in minutes
+func WithLockoutDuration(minutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.LockoutDuration = minutes
+	}
+}
+
+// WithDefaultTheme sets the default theme
+func WithDefaultTheme(theme string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.DefaultTheme = theme
+	}
+}
+
+// NewPlugin creates a new dashboard plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: Config{
+			EnableSignup:             true,
+			RequireEmailVerification: false,
+			SessionDuration:          24, // 24 hours
+			MaxLoginAttempts:         5,
+			LockoutDuration:          15, // 15 minutes
+			DefaultTheme:             "auto",
+		},
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 // ID returns the unique identifier for this plugin
@@ -53,13 +151,30 @@ func (p *Plugin) Init(dep interface{}) error {
 	type authInstanceInterface interface {
 		GetDB() *bun.DB
 		GetServiceRegistry() *registry.ServiceRegistry
+		GetHookRegistry() *hooks.HookRegistry
 		GetBasePath() string
 		GetPluginRegistry() *plugins.Registry
+		GetForgeApp() forge.App
 	}
 
 	authInstance, ok := dep.(authInstanceInterface)
 	if !ok {
-		return fmt.Errorf("dashboard plugin requires auth instance with GetDB, GetServiceRegistry, GetBasePath, and GetPluginRegistry methods")
+		return fmt.Errorf("dashboard plugin requires auth instance with GetDB, GetServiceRegistry, GetHookRegistry, GetBasePath, GetPluginRegistry, and GetForgeApp methods")
+	}
+
+	// Get Forge app and config manager
+	forgeApp := authInstance.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available")
+	}
+	configManager := forgeApp.Config()
+
+	// Bind plugin configuration using Forge ConfigManager with provided defaults
+	if err := configManager.BindWithDefault("auth.dashboard", &p.config, p.defaultConfig); err != nil {
+		// Log but don't fail - use defaults
+		fmt.Printf("[Dashboard] Warning: failed to bind dashboard config: %v\n", err)
+		// Fall back to default config
+		p.config = p.defaultConfig
 	}
 
 	serviceRegistry := authInstance.GetServiceRegistry()
@@ -67,11 +182,17 @@ func (p *Plugin) Init(dep interface{}) error {
 		return fmt.Errorf("service registry not available")
 	}
 
+	hookRegistry := authInstance.GetHookRegistry()
+	if hookRegistry == nil {
+		return fmt.Errorf("hook registry not available")
+	}
+
 	// Get database for repository initialization
 	db := authInstance.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available")
 	}
+	p.db = db
 
 	// Get base path (e.g., "/api/auth")
 	p.basePath = authInstance.GetBasePath()
@@ -120,8 +241,15 @@ func (p *Plugin) Init(dep interface{}) error {
 
 	// Get Organization service and check if we're in SaaS mode
 	if orgSvcInterface := serviceRegistry.OrganizationService(); orgSvcInterface != nil {
+		// Try to get core organization service
 		if orgSvc, ok := orgSvcInterface.(*organization.Service); ok {
 			p.orgService = orgSvc
+			p.isSaaSMode = serviceRegistry.IsMultiTenant()
+		}
+
+		// Try to get multitenancy organization service
+		if _, ok := orgSvcInterface.(*mtorg.Service); ok {
+			// Multitenancy service is available, will be set in handler
 			p.isSaaSMode = serviceRegistry.IsMultiTenant()
 		}
 	}
@@ -137,6 +265,36 @@ func (p *Plugin) Init(dep interface{}) error {
 	}
 	p.csrfProtector = csrfProtector
 
+	// Note: Role registration now happens via RegisterRoles() method (PluginWithRoles interface)
+	// This is called automatically by the authsome initialization system
+
+	// Get platform organization ID for context injection
+	// Dashboard always operates in platform organization context
+	var platformOrg struct {
+		ID xid.ID `bun:"id"`
+	}
+	err = db.NewSelect().
+		Table("organizations").
+		Column("id").
+		Where("is_platform = ?", true).
+		Scan(context.Background(), &platformOrg)
+
+	if err != nil {
+		fmt.Printf("[Dashboard] Warning: Could not find platform organization: %v\n", err)
+		fmt.Printf("[Dashboard] Dashboard will operate without platform org context\n")
+	} else {
+		p.platformOrgID = platformOrg.ID
+		fmt.Printf("[Dashboard] ✅ Platform organization ID loaded: %s\n", p.platformOrgID.String())
+	}
+
+	// Setup default RBAC policies for immediate use (backward compatibility)
+	// The role bootstrap will ensure these are persisted
+	fmt.Printf("[Dashboard] Setting up default RBAC policies...\n")
+	if err := SetupDefaultPolicies(p.rbacSvc); err != nil {
+		return fmt.Errorf("failed to setup default policies: %w", err)
+	}
+	fmt.Printf("[Dashboard] ✅ Default RBAC policies configured\n")
+
 	// Templates no longer needed - using gomponents
 	// Initialize handler with services, base path, and enabled plugins
 	p.handler = NewHandler(
@@ -151,9 +309,64 @@ func (p *Plugin) Init(dep interface{}) error {
 		p.isSaaSMode,
 		p.basePath,
 		p.enabledPlugins,
+		hookRegistry,
 	)
 
+	// Set multitenancy organization service if available
+	if orgSvcInterface := serviceRegistry.OrganizationService(); orgSvcInterface != nil {
+		if mtOrgSvc, ok := orgSvcInterface.(*mtorg.Service); ok {
+			p.handler.SetMultitenancyOrgService(mtOrgSvc)
+		}
+	}
+
 	return nil
+}
+
+// RegisterRoles implements the PluginWithRoles optional interface
+// This is called automatically during server initialization to register dashboard roles
+func (p *Plugin) RegisterRoles(registry interface{}) error {
+	roleRegistry, ok := registry.(*rbac.RoleRegistry)
+	if !ok {
+		return fmt.Errorf("invalid role registry type")
+	}
+
+	fmt.Printf("[Dashboard] Registering dashboard roles in RoleRegistry...\n")
+
+	// Dashboard plugin extends/modifies the default roles with additional permissions
+	// Note: Default roles (superadmin, owner, admin, member) are already registered by core
+	// We extend them with dashboard-specific permissions
+	if err := RegisterDashboardRoles(roleRegistry); err != nil {
+		return fmt.Errorf("failed to register dashboard roles: %w", err)
+	}
+
+	fmt.Printf("[Dashboard] ✅ Dashboard roles registered\n")
+	return nil
+}
+
+// PlatformOrgContext middleware injects platform organization context into all dashboard requests
+// Dashboard always operates in the context of the platform organization without requiring API keys
+func (p *Plugin) PlatformOrgContext() func(func(forge.Context) error) func(forge.Context) error {
+	return func(next func(forge.Context) error) func(forge.Context) error {
+		return func(c forge.Context) error {
+			// Skip if platform org ID not set
+			if p.platformOrgID.IsNil() {
+				return next(c)
+			}
+
+			// Inject platform organization ID into request context using the SetOrganizationID helper
+			// This gives dashboard implicit platform-level access without needing API keys
+			ctx := interfaces.SetOrganizationID(c.Request().Context(), p.platformOrgID)
+
+			// Create new request with updated context
+			r := c.Request().WithContext(ctx)
+
+			// Store the new request - we need to use reflection or direct access
+			// Since Forge Context wraps *http.Request, we update it directly
+			*c.Request() = *r
+
+			return next(c)
+		}
+	}
 }
 
 // RegisterRoutes registers the dashboard routes
@@ -162,9 +375,15 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return fmt.Errorf("dashboard handler not initialized; call Init first")
 	}
 
-	// Create middleware chain
+	// Create middleware chain with platform org context
+	// Platform org context is injected FIRST, then other middleware
 	chain := func(h func(forge.Context) error) func(forge.Context) error {
-		return p.RequireAuth()(p.RequireAdmin()(p.AuditLog()(p.RateLimit()(h))))
+		return p.PlatformOrgContext()(p.RequireAuth()(p.RequireAdmin()(p.AuditLog()(p.RateLimit()(h)))))
+	}
+
+	// Chain for authenticated routes (login/signup) - with platform org context but no auth
+	authlessChain := func(h func(forge.Context) error) func(forge.Context) error {
+		return p.PlatformOrgContext()(h)
 	}
 
 	// Test route without middleware
@@ -178,8 +397,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Dashboard", "Health"),
 	)
 
-	// Public routes (no auth middleware) - these must be accessible without authentication
-	router.GET("/dashboard/login", p.handler.ServeLogin,
+	// Public routes (no auth middleware) - with platform org context injection
+	// These must be accessible without authentication but still need platform org context
+	router.GET("/dashboard/login", authlessChain(p.handler.ServeLogin),
 		forge.WithName("dashboard.login.page"),
 		forge.WithSummary("Login page"),
 		forge.WithDescription("Render the admin dashboard login page"),
@@ -187,7 +407,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Dashboard", "Authentication"),
 	)
 
-	router.POST("/dashboard/login", p.handler.HandleLogin,
+	router.POST("/dashboard/login", authlessChain(p.handler.HandleLogin),
 		forge.WithName("dashboard.login.submit"),
 		forge.WithSummary("Process login"),
 		forge.WithDescription("Authenticate admin user and create dashboard session"),
@@ -197,7 +417,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithValidation(true),
 	)
 
-	router.GET("/dashboard/signup", p.handler.ServeSignup,
+	router.GET("/dashboard/signup", authlessChain(p.handler.ServeSignup),
 		forge.WithName("dashboard.signup.page"),
 		forge.WithSummary("Signup page"),
 		forge.WithDescription("Render the admin dashboard signup page"),
@@ -205,7 +425,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Dashboard", "Authentication"),
 	)
 
-	router.POST("/dashboard/signup", p.handler.HandleSignup,
+	router.POST("/dashboard/signup", authlessChain(p.handler.HandleSignup),
 		forge.WithName("dashboard.signup.submit"),
 		forge.WithSummary("Process signup"),
 		forge.WithDescription("Register new admin user for dashboard access"),
@@ -331,6 +551,81 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 		forge.WithTags("Dashboard", "Admin", "Settings"),
 	)
+
+	// Organization management routes (only available in SaaS mode)
+	if p.isSaaSMode {
+		router.GET("/dashboard/organizations", chain(p.handler.ServeOrganizations),
+			forge.WithName("dashboard.organizations.list"),
+			forge.WithSummary("List organizations"),
+			forge.WithDescription("Render the organizations management page with list of all organizations"),
+			forge.WithResponseSchema(200, "Organizations list HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+		)
+
+		router.GET("/dashboard/organizations/create", chain(p.handler.ServeOrganizationCreate),
+			forge.WithName("dashboard.organizations.create.page"),
+			forge.WithSummary("Create organization page"),
+			forge.WithDescription("Render the organization creation form"),
+			forge.WithResponseSchema(200, "Create organization form HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+		)
+
+		router.POST("/dashboard/organizations/create", chain(p.handler.HandleOrganizationCreate),
+			forge.WithName("dashboard.organizations.create.submit"),
+			forge.WithSummary("Create organization"),
+			forge.WithDescription("Process organization creation form and create new organization"),
+			forge.WithResponseSchema(200, "Organization created", DashboardStatusResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+			forge.WithValidation(true),
+		)
+
+		router.GET("/dashboard/organizations/:id", chain(p.handler.ServeOrganizationDetail),
+			forge.WithName("dashboard.organizations.detail"),
+			forge.WithSummary("Organization detail"),
+			forge.WithDescription("Render detailed view of a specific organization"),
+			forge.WithResponseSchema(200, "Organization detail HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+		)
+
+		router.GET("/dashboard/organizations/:id/edit", chain(p.handler.ServeOrganizationEdit),
+			forge.WithName("dashboard.organizations.edit.page"),
+			forge.WithSummary("Edit organization page"),
+			forge.WithDescription("Render the organization edit form"),
+			forge.WithResponseSchema(200, "Edit organization form HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+		)
+
+		router.POST("/dashboard/organizations/:id/edit", chain(p.handler.HandleOrganizationEdit),
+			forge.WithName("dashboard.organizations.edit.submit"),
+			forge.WithSummary("Update organization"),
+			forge.WithDescription("Process organization edit form and update organization information"),
+			forge.WithResponseSchema(200, "Organization updated", DashboardStatusResponse{}),
+			forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+			forge.WithValidation(true),
+		)
+
+		router.POST("/dashboard/organizations/:id/delete", chain(p.handler.HandleOrganizationDelete),
+			forge.WithName("dashboard.organizations.delete"),
+			forge.WithSummary("Delete organization"),
+			forge.WithDescription("Delete an organization (requires admin privileges)"),
+			forge.WithResponseSchema(200, "Organization deleted", DashboardStatusResponse{}),
+			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+			forge.WithResponseSchema(403, "Insufficient privileges", DashboardErrorResponse{}),
+			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
+			forge.WithTags("Dashboard", "Admin", "Organizations"),
+		)
+	}
 
 	// Static assets (no auth required)
 	router.GET("/dashboard/static/*", p.handler.ServeStatic,

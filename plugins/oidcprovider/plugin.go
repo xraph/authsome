@@ -252,13 +252,13 @@ type OIDCTokenResponse struct {
 }
 
 type OIDCUserInfoResponse struct {
-	Sub            string `json:"sub" example:"01HZ..."`
-	Email          string `json:"email,omitempty" example:"user@example.com"`
-	EmailVerified  bool   `json:"email_verified,omitempty" example:"true"`
-	Name           string `json:"name,omitempty" example:"John Doe"`
-	GivenName      string `json:"given_name,omitempty" example:"John"`
-	FamilyName     string `json:"family_name,omitempty" example:"Doe"`
-	Picture        string `json:"picture,omitempty" example:"https://example.com/avatar.jpg"`
+	Sub           string `json:"sub" example:"01HZ..."`
+	Email         string `json:"email,omitempty" example:"user@example.com"`
+	EmailVerified bool   `json:"email_verified,omitempty" example:"true"`
+	Name          string `json:"name,omitempty" example:"John Doe"`
+	GivenName     string `json:"given_name,omitempty" example:"John"`
+	FamilyName    string `json:"family_name,omitempty" example:"Doe"`
+	Picture       string `json:"picture,omitempty" example:"https://example.com/avatar.jpg"`
 }
 
 type OIDCJWKSResponse struct {

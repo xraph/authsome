@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 )
@@ -29,7 +30,7 @@ func (r *TeamRepository) Create(ctx context.Context, team *organization.Team) er
 }
 
 // FindByID finds a team by ID
-func (r *TeamRepository) FindByID(ctx context.Context, id string) (*organization.Team, error) {
+func (r *TeamRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Team, error) {
 	team := &organization.Team{}
 	err := r.db.NewSelect().Model(team).Where("id = ?", id).Scan(ctx)
 	if err != nil {
@@ -51,7 +52,7 @@ func (r *TeamRepository) Update(ctx context.Context, team *organization.Team) er
 }
 
 // Delete deletes a team
-func (r *TeamRepository) Delete(ctx context.Context, id string) error {
+func (r *TeamRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*organization.Team)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete team: %w", err)
@@ -60,7 +61,7 @@ func (r *TeamRepository) Delete(ctx context.Context, id string) error {
 }
 
 // ListByOrganization lists teams by organization with pagination
-func (r *TeamRepository) ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*organization.Team, error) {
+func (r *TeamRepository) ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*organization.Team, error) {
 	var teams []*organization.Team
 
 	// Get paginated results
@@ -79,7 +80,7 @@ func (r *TeamRepository) ListByOrganization(ctx context.Context, orgID string, l
 }
 
 // AddMember adds a member to a team
-func (r *TeamRepository) AddMember(ctx context.Context, teamID, memberID, role string) error {
+func (r *TeamRepository) AddMember(ctx context.Context, teamID, memberID xid.ID, role string) error {
 	teamMember := &organization.TeamMember{
 		TeamID:   teamID,
 		MemberID: memberID,
@@ -93,7 +94,7 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID, memberID, role s
 }
 
 // RemoveMember removes a member from a team
-func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, memberID string) error {
+func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, memberID xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*organization.TeamMember)(nil)).
 		Where("team_id = ? AND member_id = ?", teamID, memberID).
@@ -105,7 +106,7 @@ func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, memberID stri
 }
 
 // ListMembers lists members of a team
-func (r *TeamRepository) ListMembers(ctx context.Context, teamID string) ([]*organization.Member, error) {
+func (r *TeamRepository) ListMembers(ctx context.Context, teamID xid.ID) ([]*organization.Member, error) {
 	var members []*organization.Member
 
 	// Join team_members with members to get full member details
@@ -123,7 +124,7 @@ func (r *TeamRepository) ListMembers(ctx context.Context, teamID string) ([]*org
 }
 
 // CountByOrganization returns the total number of teams in an organization
-func (r *TeamRepository) CountByOrganization(ctx context.Context, orgID string) (int, error) {
+func (r *TeamRepository) CountByOrganization(ctx context.Context, orgID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*organization.Team)(nil)).
 		Where("organization_id = ?", orgID).

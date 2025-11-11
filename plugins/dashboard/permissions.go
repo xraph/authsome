@@ -315,24 +315,117 @@ func (d *DashboardPermissions) CanViewAuditLogs() bool {
 	return d.Can("view", "audit_logs") || d.IsSuperAdmin()
 }
 
-// SetupDefaultPolicies creates default RBAC policies for the dashboard
-func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
-	// Admin role policies
-	policies := []string{
-		"role:admin can dashboard.view on dashboard",
-		"role:admin can view,edit,delete,create on users",
-		"role:admin can view,delete on sessions",
-		"role:admin can view on audit_logs",
+// RegisterDashboardRoles registers dashboard-specific roles in the RoleRegistry
+// This extends the default platform roles with dashboard-specific permissions
+// Supports override semantics - plugins can modify other plugins' roles
+func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
+	// Dashboard plugin extends the default roles with dashboard-specific permissions
+	// These will be merged with existing role definitions (override semantics)
 
-		// Owner role policies (inherits admin + more)
+	// Extend superadmin with dashboard permissions (redundant since * on * covers everything)
+	// But explicit for documentation purposes
+	if err := registry.RegisterRole(&rbac.RoleDefinition{
+		Name:        "superadmin",
+		Description: "System Superadministrator (Platform Owner)",
+		IsPlatform:  true,
+		Priority:    100,
+		Permissions: []string{
+			"* on *", // Unrestricted access
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register superadmin role: %w", err)
+	}
+
+	// Extend owner with dashboard management permissions
+	if err := registry.RegisterRole(&rbac.RoleDefinition{
+		Name:        "owner",
+		Description: "Organization Owner",
+		IsPlatform:  false,
+		Priority:    80,
+		Permissions: []string{
+			"* on organization.*",
+			"dashboard.view on dashboard",
+			"view,edit,delete,create on users",
+			"view,delete on sessions",
+			"view on audit_logs",
+			"manage on apikeys",
+			"manage on settings",
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register owner role: %w", err)
+	}
+
+	// Extend admin with dashboard permissions (inherits from member)
+	if err := registry.RegisterRole(&rbac.RoleDefinition{
+		Name:         "admin",
+		Description:  "Organization Administrator",
+		IsPlatform:   false,
+		InheritsFrom: "member", // Inherits member permissions
+		Priority:     60,
+		Permissions: []string{
+			"dashboard.view on dashboard",
+			"view,edit,delete,create on users",
+			"view,delete on sessions",
+			"view on audit_logs",
+			"view,create on apikeys",
+			"view on settings",
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register admin role: %w", err)
+	}
+
+	// Extend member with basic dashboard access
+	if err := registry.RegisterRole(&rbac.RoleDefinition{
+		Name:        "member",
+		Description: "Regular User",
+		IsPlatform:  false,
+		Priority:    40,
+		Permissions: []string{
+			"dashboard.view on dashboard",
+			"view on profile",
+			"edit on profile",
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register member role: %w", err)
+	}
+
+	return nil
+}
+
+// SetupDefaultPolicies creates default RBAC policies for the dashboard
+// Role hierarchy: superadmin > owner > admin > member
+// This is kept for backward compatibility and immediate policy loading
+// The role bootstrap system will persist these roles to the database
+func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
+	policies := []string{
+		// Superadmin role (Platform Owner - First User)
+		// Has unrestricted access to everything across all organizations
+		"role:superadmin can * on *",
+
+		// Owner role (Organization Owner)
+		// Full control over their organization and its resources
+		"role:owner can * on organization.*",
 		"role:owner can dashboard.view on dashboard",
 		"role:owner can view,edit,delete,create on users",
 		"role:owner can view,delete on sessions",
 		"role:owner can view on audit_logs",
-		"role:owner can manage on system",
+		"role:owner can manage on apikeys",
+		"role:owner can manage on settings",
 
-		// Superadmin role (full access)
-		"role:superadmin can * on *",
+		// Admin role (Organization Administrator)
+		// Can manage users and resources but not organization settings
+		"role:admin can dashboard.view on dashboard",
+		"role:admin can view,edit,delete,create on users",
+		"role:admin can view,delete on sessions",
+		"role:admin can view on audit_logs",
+		"role:admin can view,create on apikeys",
+		"role:admin can view on settings",
+
+		// Member role (Regular User)
+		// Basic dashboard access and self-management
+		"role:member can dashboard.view on dashboard",
+		"role:member can view on profile",
+		"role:member can edit on profile",
 	}
 
 	for _, policy := range policies {
@@ -345,9 +438,11 @@ func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
 }
 
 // EnsureFirstUserIsAdmin assigns admin role to the first user
+// DEPRECATED: Use EnsureFirstUserIsSuperAdmin for first user setup
 func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo *repository.UserRoleRepository, roleRepo *repository.RoleRepository) error {
-	// Check if admin role exists
-	roles, err := roleRepo.ListByOrg(ctx, nil)
+	// Check if admin role exists in the platform organization
+	orgIDStr := orgID.String()
+	roles, err := roleRepo.ListByOrg(ctx, &orgIDStr)
 	if err != nil {
 		return fmt.Errorf("failed to list roles: %w", err)
 	}
@@ -363,9 +458,10 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 	// Create admin role if it doesn't exist
 	if adminRole == nil {
 		adminRole = &schema.Role{
-			ID:          xid.New(),
-			Name:        "admin",
-			Description: "Dashboard Administrator",
+			ID:             xid.New(),
+			OrganizationID: &orgID,
+			Name:           "admin",
+			Description:    "Dashboard Administrator",
 		}
 		adminRole.CreatedBy = userID
 		adminRole.UpdatedBy = userID
@@ -379,6 +475,61 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 	if err := userRoleRepo.Assign(ctx, userID, adminRole.ID, orgID); err != nil {
 		return fmt.Errorf("failed to assign admin role: %w", err)
 	}
+
+	return nil
+}
+
+// EnsureFirstUserIsSuperAdmin assigns superadmin role to the first user
+// This makes them the platform owner with full system access
+func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo *repository.UserRoleRepository, roleRepo *repository.RoleRepository) error {
+	fmt.Printf("[Dashboard] EnsureFirstUserIsSuperAdmin called - userID: %s, orgID: %s\n", userID.String(), orgID.String())
+
+	// Check if superadmin role exists in the platform organization
+	orgIDStr := orgID.String()
+	roles, err := roleRepo.ListByOrg(ctx, &orgIDStr)
+	if err != nil {
+		fmt.Printf("[Dashboard] ERROR: Failed to list roles: %v\n", err)
+		return fmt.Errorf("failed to list roles: %w", err)
+	}
+	fmt.Printf("[Dashboard] Found %d existing roles in platform organization\n", len(roles))
+
+	var superadminRole *schema.Role
+	for i := range roles {
+		if roles[i].Name == "superadmin" {
+			superadminRole = &roles[i]
+			fmt.Printf("[Dashboard] Found existing superadmin role: %s\n", superadminRole.ID.String())
+			break
+		}
+	}
+
+	// Create superadmin role if it doesn't exist
+	if superadminRole == nil {
+		fmt.Printf("[Dashboard] Superadmin role not found, creating new one...\n")
+		superadminRole = &schema.Role{
+			ID:             xid.New(),
+			OrganizationID: &orgID,
+			Name:           "superadmin",
+			Description:    "System Superadministrator (Platform Owner)",
+		}
+		superadminRole.CreatedBy = userID
+		superadminRole.UpdatedBy = userID
+
+		fmt.Printf("[Dashboard] Creating role in platform organization: ID=%s, Name=%s, OrgID=%s\n", superadminRole.ID.String(), superadminRole.Name, orgID.String())
+		if err := roleRepo.Create(ctx, superadminRole); err != nil {
+			fmt.Printf("[Dashboard] ERROR: Failed to create superadmin role in database: %v\n", err)
+			return fmt.Errorf("failed to create superadmin role: %w", err)
+		}
+		fmt.Printf("[Dashboard] ✅ Superadmin role created in database: %s\n", superadminRole.ID.String())
+	}
+
+	// Assign superadmin role to user
+	fmt.Printf("[Dashboard] Assigning superadmin role to user - userID: %s, roleID: %s, orgID: %s\n",
+		userID.String(), superadminRole.ID.String(), orgID.String())
+	if err := userRoleRepo.Assign(ctx, userID, superadminRole.ID, orgID); err != nil {
+		fmt.Printf("[Dashboard] ERROR: Failed to assign role to user: %v\n", err)
+		return fmt.Errorf("failed to assign superadmin role: %w", err)
+	}
+	fmt.Printf("[Dashboard] ✅ Role assignment successful\n")
 
 	return nil
 }

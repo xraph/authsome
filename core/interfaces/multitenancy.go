@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
@@ -18,6 +19,18 @@ type contextKey string
 const (
 	OrganizationContextKey contextKey = "organization_id"
 )
+
+func GetOrganizationID(ctx context.Context) (xid.ID, error) {
+	orgID, ok := ctx.Value(OrganizationContextKey).(xid.ID)
+	if !ok {
+		return xid.ID{}, errors.New("organization context not found")
+	}
+	return orgID, nil
+}
+
+func SetOrganizationID(ctx context.Context, orgID xid.ID) context.Context {
+	return context.WithValue(ctx, OrganizationContextKey, orgID)
+}
 
 // MultiTenantUserService extends user service with organization-aware operations
 type MultiTenantUserService interface {

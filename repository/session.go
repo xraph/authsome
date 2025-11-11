@@ -29,7 +29,7 @@ func (r *SessionRepository) toSchema(s *core.Session) *schema.Session {
 		UserAgent: s.UserAgent,
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: s.CreatedAt,
-			UpdatedAt: bun.NullTime{Time: s.UpdatedAt},
+			UpdatedAt: s.UpdatedAt,
 			CreatedBy: s.UserID,
 			UpdatedBy: s.UserID,
 		},
@@ -48,7 +48,7 @@ func (r *SessionRepository) fromSchema(ss *schema.Session) *core.Session {
 		IPAddress: ss.IPAddress,
 		UserAgent: ss.UserAgent,
 		CreatedAt: ss.CreatedAt,
-		UpdatedAt: ss.UpdatedAt.Time,
+		UpdatedAt: ss.UpdatedAt,
 	}
 }
 

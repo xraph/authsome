@@ -14,74 +14,84 @@ export function MinimalFooter() {
 	const company = [
 		{
 			title: 'About Us',
-			href: '#',
+			href: 'https://xraph.com/about',
+			target: '_blank',
 		},
-		{
-			title: 'Careers',
-			href: '#',
-		},
-		{
-			title: 'Brand assets',
-			href: '#',
-		},
-		{
-			title: 'Privacy Policy',
-			href: '#',
-		},
-		{
-			title: 'Terms of Service',
-			href: '#',
-		},
+		// {
+		// 	title: 'Careers',
+		// 	href: '#',
+		// },
+		// {
+		// 	title: 'Brand assets',
+		// 	href: '#',
+		// },
+		// {
+		// 	title: 'Privacy Policy',
+		// 	href: '#',
+		// },
+		// {
+		// 	title: 'Terms of Service',
+		// 	href: '#',
+		// },
 	];
 
 	const resources = [
 		{
 			title: 'Blog',
-			href: '#',
+			href: '/blog',
 		},
 		{
 			title: 'Help Center',
-			href: '#',
+			href: '/help',
 		},
 		{
 			title: 'Contact Support',
-			href: '#',
+			href: 'https://xraph.com/contact',
+			target: '_blank',
 		},
 		{
 			title: 'Community',
-			href: '#',
+			href: 'https://xraph.com/community',
 		},
 		{
 			title: 'Security',
-			href: '#',
+			href: '/security',
 		},
 	];
 
 	const socialLinks = [
-		{
-			icon: <FacebookIcon className="size-4" />,
-			link: '#',
-		},
+		// {
+		// 	icon: <FacebookIcon className="size-4" />,
+		// 	link: '#',
+		// },
 		{
 			icon: <GithubIcon className="size-4" />,
-			link: '#',
+			link: 'https://github.com/xraph',
+			target: '_blank',
 		},
 		{
 			icon: <InstagramIcon className="size-4" />,
-			link: '#',
+			link: 'https://www.instagram.com/bonze_raph',
+			target: '_blank',
 		},
 		{
 			icon: <LinkedinIcon className="size-4" />,
-			link: '#',
+			link: 'https://www.linkedin.com/in/rex-raphael/',
+			target: '_blank',
+		},
+		{
+			icon: <GithubIcon className="size-4" />,
+			link: 'https://github.com/juicycleff',
+			target: '_blank',
 		},
 		{
 			icon: <TwitterIcon className="size-4" />,
 			link: '#',
 		},
-		{
-			icon: <YoutubeIcon className="size-4" />,
-			link: '#',
-		},
+		// {
+		// 	icon: <YoutubeIcon className="size-4" />,
+		// 	link: '#',
+		// },
 	];
 	return (
 		<footer className="relative">

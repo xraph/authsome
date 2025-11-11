@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/forge"
 )
@@ -22,9 +23,14 @@ func NewMemberHandler(orgService *organization.Service) *MemberHandler {
 
 // AddMember handles adding a member to an organization
 func (h *MemberHandler) AddMember(c forge.Context) error {
-	orgID := c.Param("orgId")
-	if orgID == "" {
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
 	}
 
 	var req struct {
@@ -35,7 +41,12 @@ func (h *MemberHandler) AddMember(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	member, err := h.orgService.AddMember(c.Request().Context(), orgID, req.UserID, req.Role)
+	userID, err := xid.FromString(req.UserID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user ID"})
+	}
+
+	member, err := h.orgService.AddMember(c.Request().Context(), orgID, userID, req.Role)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -45,13 +56,17 @@ func (h *MemberHandler) AddMember(c forge.Context) error {
 
 // RemoveMember handles removing a member from an organization
 func (h *MemberHandler) RemoveMember(c forge.Context) error {
-	memberID := c.Param("memberId")
+	memberIDStr := c.Param("memberId")
 
-	if memberID == "" {
+	if memberIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
 	}
+	memberID, err := xid.FromString(memberIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid member ID"})
+	}
 
-	err := h.orgService.RemoveMember(c.Request().Context(), memberID)
+	err = h.orgService.RemoveMember(c.Request().Context(), memberID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -61,9 +76,13 @@ func (h *MemberHandler) RemoveMember(c forge.Context) error {
 
 // ListMembers handles listing organization members
 func (h *MemberHandler) ListMembers(c forge.Context) error {
-	orgID := c.Param("orgId")
-	if orgID == "" {
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
 	}
 
 	// Parse pagination parameters
@@ -99,10 +118,15 @@ func (h *MemberHandler) ListMembers(c forge.Context) error {
 
 // UpdateMemberRole handles updating a member's role in an organization
 func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
-	memberID := c.Param("memberId")
+	memberIDStr := c.Param("memberId")
 
-	if memberID == "" {
+	if memberIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
+	}
+
+	memberID, err := xid.FromString(memberIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid member ID"})
 	}
 
 	var req organization.UpdateMemberRequest
@@ -120,9 +144,14 @@ func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 
 // InviteMember handles inviting a member to an organization
 func (h *MemberHandler) InviteMember(c forge.Context) error {
-	orgID := c.Param("orgId")
-	if orgID == "" {
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
 	}
 
 	var req organization.InviteMemberRequest
@@ -131,8 +160,15 @@ func (h *MemberHandler) InviteMember(c forge.Context) error {
 	}
 
 	// Get inviter user ID from context (this would typically come from auth middleware)
-	inviterUserID := c.Request().Header.Get("X-User-ID") // placeholder
-	if inviterUserID == "" {
+	inviterUserIDStr := c.Request().Header.Get("X-User-ID") // placeholder
+	if inviterUserIDStr == "" {
+		return c.JSON(401, map[string]string{"error": "unauthorized"})
+	}
+	inviterUserID, err := xid.FromString(inviterUserIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid inviter user ID"})
+	}
+	if inviterUserID.IsNil() {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
 
@@ -146,9 +182,14 @@ func (h *MemberHandler) InviteMember(c forge.Context) error {
 
 // UpdateMember handles updating a member in an organization
 func (h *MemberHandler) UpdateMember(c forge.Context) error {
-	memberID := c.Param("memberId")
-	if memberID == "" {
+	memberIDStr := c.Param("memberId")
+	if memberIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
+	}
+
+	memberID, err := xid.FromString(memberIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid member ID"})
 	}
 
 	var req organization.UpdateMemberRequest
@@ -187,9 +228,14 @@ func (h *MemberHandler) AcceptInvitation(c forge.Context) error {
 	}
 
 	// Get user ID from context (this would typically come from auth middleware)
-	userID := c.Request().Header.Get("X-User-ID") // placeholder
-	if userID == "" {
+	userIDStr := c.Request().Header.Get("X-User-ID") // placeholder
+	if userIDStr == "" {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
+	}
+
+	userID, err := xid.FromString(userIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user ID"})
 	}
 
 	member, err := h.orgService.AcceptInvitation(c.Request().Context(), token, userID)

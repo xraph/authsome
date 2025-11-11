@@ -15,16 +15,75 @@ import (
 
 // Plugin implements the social OAuth plugin
 type Plugin struct {
-	db      *bun.DB
-	service *Service
-	config  Config
+	db            *bun.DB
+	service       *Service
+	config        Config
+	defaultConfig Config
 }
 
-// NewPlugin creates a new social OAuth plugin
-func NewPlugin() *Plugin {
-	return &Plugin{
-		config: DefaultConfig(),
+// PluginOption is a functional option for configuring the social plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
 	}
+}
+
+// WithProvider adds a provider configuration
+func WithProvider(name string, clientID, clientSecret, callbackURL string, scopes []string) PluginOption {
+	return func(p *Plugin) {
+		if p.defaultConfig.Providers == nil {
+			p.defaultConfig.Providers = make(map[string]ProviderConfig)
+		}
+		p.defaultConfig.Providers[name] = ProviderConfig{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			CallbackURL:  callbackURL,
+			Scopes:       scopes,
+			Enabled:      true,
+		}
+	}
+}
+
+// WithAutoCreateUser sets whether to auto-create users
+func WithAutoCreateUser(auto bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AutoCreateUser = auto
+	}
+}
+
+// WithAllowLinking sets whether to allow account linking
+func WithAllowLinking(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowLinking = allow
+	}
+}
+
+// WithTrustEmailVerified sets whether to trust provider email verification
+func WithTrustEmailVerified(trust bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.TrustEmailVerified = trust
+	}
+}
+
+// NewPlugin creates a new social OAuth plugin with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	// Set config to default config
+	p.config = p.defaultConfig
+
+	return p
 }
 
 // ID returns the plugin identifier
@@ -36,11 +95,12 @@ func (p *Plugin) ID() string {
 func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
+		GetForgeApp() forge.App
 	}
 
 	authInst, ok := dep.(authInstance)
 	if !ok {
-		return fmt.Errorf("social plugin requires auth instance with GetDB method")
+		return fmt.Errorf("social plugin requires auth instance with GetDB and GetForgeApp methods")
 	}
 
 	db := authInst.GetDB()
@@ -49,6 +109,22 @@ func (p *Plugin) Init(dep interface{}) error {
 	}
 
 	p.db = db
+
+	// Get Forge app and config manager
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp != nil {
+		configManager := forgeApp.Config()
+
+		// Bind configuration using Forge ConfigManager with provided defaults
+		if err := configManager.BindWithDefault("auth.social", &p.config, p.defaultConfig); err != nil {
+			// Log but don't fail - use defaults
+			fmt.Printf("[Social] Warning: failed to bind config: %v\n", err)
+			p.config = p.defaultConfig
+		}
+	} else {
+		// Fallback to default config if no Forge app
+		p.config = p.defaultConfig
+	}
 
 	// Create repositories
 	socialRepo := repository.NewSocialAccountRepository(db)

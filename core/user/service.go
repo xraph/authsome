@@ -47,6 +47,7 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service) *Servi
 
 // Create creates a new user
 func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, error) {
+	fmt.Printf("[User Service] Create: Request: %+v\n", req)
 	if !validator.ValidateEmail(req.Email) {
 		return nil, types.NewValidationError("email", "invalid email")
 	}
@@ -245,6 +246,11 @@ func (s *Service) Search(ctx context.Context, query string, opts types.Paginatio
 		return nil, 0, err
 	}
 	return list, total, nil
+}
+
+// Count implements ServiceInterface.
+func (s *Service) Count(ctx context.Context) (int, error) {
+	return s.repo.Count(ctx)
 }
 
 // CountCreatedToday returns the count of users created today

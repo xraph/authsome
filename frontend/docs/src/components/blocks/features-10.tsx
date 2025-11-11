@@ -12,8 +12,8 @@ export function Features() {
                         <CardHeader className="pb-3">
                             <CardHeading
                                 icon={MapIcon}
-                                title="Real time location tracking"
-                                description="Advanced tracking system, Instantly locate all your assets."
+                                title="Concent and Compliance"
+                                description="Compliance with GDPR, CCPA, and other privacy laws."
                             />
                         </CardHeader>
 
@@ -35,8 +35,8 @@ export function Features() {
                         <CardHeader className="pb-3">
                             <CardHeading
                                 icon={Calendar}
-                                title="Advanced Scheduling"
-                                description="Scheduling system, Instantly locate all your assets."
+                                title="Dashboard Plugin"
+                                description="Manage your users, organizations, and applications with ease."
                             />
                         </CardHeader>
 
@@ -57,7 +57,9 @@ export function Features() {
                     </FeatureCard>
 
                     <FeatureCard className="p-6 md:col-span-2">
-                        <p className="mx-auto my-6 max-w-md text-balance text-center text-2xl font-semibold">Smart scheduling with automated reminders for maintenance.</p>
+                        <p className="mx-auto my-6 max-w-md text-balance text-center text-2xl font-semibold">
+                            Auth should be secure, compliant, easy to use and should match today's security threats
+                        </p>
 
                         <div className="flex justify-center gap-6 overflow-hidden">
                             <CircularUI

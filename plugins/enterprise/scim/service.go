@@ -63,7 +63,7 @@ func (s *Service) getOrgService() *organization.Service {
 // User Provisioning Operations
 
 // CreateUser provisions a new user via SCIM
-func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID string) (*SCIMUser, error) {
+func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.ID) (*SCIMUser, error) {
 	// Validate required attributes
 	if err := s.validateUserAttributes(scimUser); err != nil {
 		return nil, fmt.Errorf("invalid user attributes: %w", err)
@@ -112,7 +112,7 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID stri
 	}
 
 	// Add user to organization
-	_, err = s.getOrgService().AddMember(ctx, orgID, createdUser.ID.String(), s.config.UserProvisioning.DefaultRole)
+	_, err = s.getOrgService().AddMember(ctx, orgID, createdUser.ID, s.config.UserProvisioning.DefaultRole)
 	if err != nil {
 		// Rollback user creation?
 		return nil, fmt.Errorf("failed to add user to organization: %w", err)
@@ -130,7 +130,7 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID stri
 
 	// Record metrics
 	s.metrics.RecordUserOperation("create")
-	s.metrics.RecordOperation("CREATE_USER", "success", orgID)
+	s.metrics.RecordOperation("CREATE_USER", "success", orgID.String())
 
 	// Send webhook if configured
 	if s.config.Webhooks.Enabled && s.config.Webhooks.NotifyOnCreate {
@@ -151,19 +151,14 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID stri
 }
 
 // GetUser retrieves a user by ID
-func (s *Service) GetUser(ctx context.Context, id, orgID string) (*SCIMUser, error) {
-	userXID, err := xid.FromString(id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
-	}
-
-	authUser, err := s.userService.FindByID(ctx, userXID)
+func (s *Service) GetUser(ctx context.Context, id, orgID xid.ID) (*SCIMUser, error) {
+	authUser, err := s.userService.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
 	// Verify user belongs to organization
-	isMember, err := s.getOrgService().IsUserMember(ctx, orgID, authUser.ID.String())
+	isMember, err := s.getOrgService().IsUserMember(ctx, orgID, authUser.ID)
 	if err != nil || !isMember {
 		return nil, fmt.Errorf("user not found in organization")
 	}
@@ -172,20 +167,14 @@ func (s *Service) GetUser(ctx context.Context, id, orgID string) (*SCIMUser, err
 
 	// Record metrics
 	s.metrics.RecordUserOperation("read")
-	s.metrics.RecordOperation("GET_USER", "success", orgID)
+	s.metrics.RecordOperation("GET_USER", "success", orgID.String())
 
 	return scimUser, nil
 }
 
 // UpdateUser updates a user via SCIM PATCH
-func (s *Service) UpdateUser(ctx context.Context, id, orgID string, patch *PatchOp) (*SCIMUser, error) {
-	// Get existing user
-	userXID, err := xid.FromString(id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
-	}
-
-	authUser, err := s.userService.FindByID(ctx, userXID)
+func (s *Service) UpdateUser(ctx context.Context, id, orgID xid.ID, patch *PatchOp) (*SCIMUser, error) {
+	authUser, err := s.userService.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
@@ -207,7 +196,7 @@ func (s *Service) UpdateUser(ctx context.Context, id, orgID string, patch *Patch
 
 	// Record metrics
 	s.metrics.RecordUserOperation("update")
-	s.metrics.RecordOperation("PATCH_USER", "success", orgID)
+	s.metrics.RecordOperation("PATCH_USER", "success", orgID.String())
 
 	// Send webhook
 	if s.config.Webhooks.Enabled && s.config.Webhooks.NotifyOnUpdate {
@@ -224,13 +213,8 @@ func (s *Service) UpdateUser(ctx context.Context, id, orgID string, patch *Patch
 }
 
 // ReplaceUser replaces a user via SCIM PUT
-func (s *Service) ReplaceUser(ctx context.Context, id, orgID string, scimUser *SCIMUser) (*SCIMUser, error) {
-	userXID, err := xid.FromString(id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
-	}
-
-	authUser, err := s.userService.FindByID(ctx, userXID)
+func (s *Service) ReplaceUser(ctx context.Context, id, orgID xid.ID, scimUser *SCIMUser) (*SCIMUser, error) {
+	authUser, err := s.userService.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
@@ -258,16 +242,11 @@ func (s *Service) ReplaceUser(ctx context.Context, id, orgID string, scimUser *S
 }
 
 // DeleteUser de-provisions a user
-func (s *Service) DeleteUser(ctx context.Context, id, orgID string) error {
-	userXID, err := xid.FromString(id)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %w", err)
-	}
-
+func (s *Service) DeleteUser(ctx context.Context, id, orgID xid.ID) error {
 	// Soft delete or hard delete based on config
 	if s.config.UserProvisioning.SoftDeleteOnDeProvision {
 		// Soft delete: deactivate user by setting email verified to false
-		authUser, err := s.userService.FindByID(ctx, userXID)
+		authUser, err := s.userService.FindByID(ctx, id)
 		if err != nil {
 			return fmt.Errorf("user not found: %w", err)
 		}
@@ -282,14 +261,14 @@ func (s *Service) DeleteUser(ctx context.Context, id, orgID string) error {
 		}
 	} else {
 		// Hard delete
-		if err := s.userService.Delete(ctx, userXID); err != nil {
+		if err := s.userService.Delete(ctx, id); err != nil {
 			return fmt.Errorf("failed to delete user: %w", err)
 		}
 	}
 
 	// Record metrics
 	s.metrics.RecordUserOperation("delete")
-	s.metrics.RecordOperation("DELETE_USER", "success", orgID)
+	s.metrics.RecordOperation("DELETE_USER", "success", orgID.String())
 
 	// Send webhook
 	if s.config.Webhooks.Enabled && s.config.Webhooks.NotifyOnDelete {
@@ -305,7 +284,7 @@ func (s *Service) DeleteUser(ctx context.Context, id, orgID string) error {
 }
 
 // ListUsers lists users with filtering and pagination
-func (s *Service) ListUsers(ctx context.Context, orgID string, filter string, startIndex, count int) (*ListResponse, error) {
+func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, startIndex, count int) (*ListResponse, error) {
 	// Get paginated members
 	offset := startIndex - 1
 	if offset < 0 {
@@ -320,8 +299,7 @@ func (s *Service) ListUsers(ctx context.Context, orgID string, filter string, st
 	// Convert to SCIM users and apply filtering
 	resources := make([]interface{}, 0, len(members))
 	for _, member := range members {
-		userID, _ := xid.FromString(member.UserID)
-		authUser, err := s.userService.FindByID(ctx, userID)
+		authUser, err := s.userService.FindByID(ctx, member.UserID)
 		if err != nil {
 			continue // Skip invalid users
 		}
@@ -426,7 +404,7 @@ func (s *Service) matchesSCIMFilter(user *SCIMUser, filter string) bool {
 // Group Operations
 
 // CreateGroup creates a new group (maps to team/role)
-func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID string) (*SCIMGroup, error) {
+func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID xid.ID) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
 		return nil, fmt.Errorf("group synchronization is disabled")
 	}
@@ -445,8 +423,8 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID s
 		}
 
 		// Store mapping
-		orgXID, _ := xid.FromString(orgID)
-		teamXID, _ := xid.FromString(team.ID)
+		orgXID := orgID
+		teamXID := team.ID
 		mapping := &GroupMapping{
 			ID:            xid.New(),
 			OrgID:         orgXID,
@@ -462,12 +440,16 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID s
 			return nil, fmt.Errorf("failed to store group mapping: %w", err)
 		}
 
-		scimGroup.ID = team.ID
+		scimGroup.ID = team.ID.String()
 	}
 
 	// Sync members
 	if len(scimGroup.Members) > 0 {
-		if err := s.syncGroupMembers(ctx, scimGroup.ID, scimGroup.Members, orgID); err != nil {
+		scimGroupID, err := xid.FromString(scimGroup.ID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid group ID: %w", err)
+		}
+		if err := s.syncGroupMembers(ctx, scimGroupID, scimGroup.Members, orgID); err != nil {
 			fmt.Printf("[SCIM] Failed to sync group members: %v\n", err)
 		}
 	}
@@ -476,20 +458,13 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID s
 }
 
 // GetGroup retrieves a group by ID
-func (s *Service) GetGroup(ctx context.Context, id, orgID string) (*SCIMGroup, error) {
+func (s *Service) GetGroup(ctx context.Context, id, orgID xid.ID) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
 		return nil, fmt.Errorf("group synchronization is disabled")
 	}
 
-	teamXID, err := xid.FromString(id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid group ID: %w", err)
-	}
-
-	_ = orgID // orgID may be used for validation in production
-
 	// Get group mapping
-	mapping, err := s.repo.FindGroupMappingByTargetID(ctx, teamXID)
+	mapping, err := s.repo.FindGroupMappingByTargetID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("group mapping not found: %w", err)
 	}
@@ -506,7 +481,7 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID string) (*SCIMGroup, e
 	// Build SCIM group
 	scimGroup := &SCIMGroup{
 		Schemas:     []string{SchemaGroup},
-		ID:          team.ID,
+		ID:          team.ID.String(),
 		ExternalID:  mapping.SCIMGroupID,
 		DisplayName: team.Name,
 		Meta: &Meta{
@@ -521,7 +496,7 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID string) (*SCIMGroup, e
 	for _, member := range members {
 		// Members in team are already Member objects with UserID
 		scimGroup.Members = append(scimGroup.Members, MemberReference{
-			Value:   member.UserID,
+			Value:   member.UserID.String(),
 			Display: "", // Would need to fetch user details
 		})
 	}
@@ -530,7 +505,7 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID string) (*SCIMGroup, e
 }
 
 // UpdateGroup updates a group via PATCH
-func (s *Service) UpdateGroup(ctx context.Context, id, orgID string, patch *PatchOp) (*SCIMGroup, error) {
+func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *PatchOp) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
 		return nil, fmt.Errorf("group synchronization is disabled")
 	}
@@ -561,7 +536,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID string, patch *Patc
 }
 
 // ReplaceGroup replaces a group via PUT
-func (s *Service) ReplaceGroup(ctx context.Context, id, orgID string, scimGroup *SCIMGroup) (*SCIMGroup, error) {
+func (s *Service) ReplaceGroup(ctx context.Context, id, orgID xid.ID, scimGroup *SCIMGroup) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
 		return nil, fmt.Errorf("group synchronization is disabled")
 	}
@@ -586,18 +561,13 @@ func (s *Service) ReplaceGroup(ctx context.Context, id, orgID string, scimGroup 
 }
 
 // DeleteGroup deletes a group
-func (s *Service) DeleteGroup(ctx context.Context, id, orgID string) error {
+func (s *Service) DeleteGroup(ctx context.Context, id, orgID xid.ID) error {
 	if !s.config.GroupSync.Enabled {
 		return fmt.Errorf("group synchronization is disabled")
 	}
 
-	teamXID, err := xid.FromString(id)
-	if err != nil {
-		return fmt.Errorf("invalid group ID: %w", err)
-	}
-
 	// Delete group mapping
-	mapping, err := s.repo.FindGroupMappingByTargetID(ctx, teamXID)
+	mapping, err := s.repo.FindGroupMappingByTargetID(ctx, id)
 	if err == nil && mapping != nil {
 		_ = s.repo.DeleteGroupMapping(ctx, mapping.ID)
 	}
@@ -611,7 +581,7 @@ func (s *Service) DeleteGroup(ctx context.Context, id, orgID string) error {
 }
 
 // ListGroups lists groups with filtering and pagination
-func (s *Service) ListGroups(ctx context.Context, orgID string, filter string, startIndex, count int) (*ListResponse, error) {
+func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, startIndex, count int) (*ListResponse, error) {
 	if !s.config.GroupSync.Enabled {
 		return &ListResponse{
 			Schemas:      []string{SchemaListResponse},
@@ -637,12 +607,11 @@ func (s *Service) ListGroups(ctx context.Context, orgID string, filter string, s
 	resources := make([]interface{}, 0, len(teams))
 	for _, team := range teams {
 		// Get group mapping for external ID
-		teamXID, _ := xid.FromString(team.ID)
-		mapping, _ := s.repo.FindGroupMappingByTargetID(ctx, teamXID)
+		mapping, _ := s.repo.FindGroupMappingByTargetID(ctx, team.ID)
 
 		scimGroup := &SCIMGroup{
 			Schemas:     []string{SchemaGroup},
-			ID:          team.ID,
+			ID:          team.ID.String(),
 			DisplayName: team.Name,
 			Meta: &Meta{
 				ResourceType: "Group",
@@ -674,7 +643,7 @@ func (s *Service) ListGroups(ctx context.Context, orgID string, filter string, s
 // Token Management
 
 // CreateProvisioningToken creates a new SCIM provisioning token
-func (s *Service) CreateProvisioningToken(ctx context.Context, orgID, name, description string, scopes []string, expiresAt *time.Time) (string, *ProvisioningToken, error) {
+func (s *Service) CreateProvisioningToken(ctx context.Context, orgID xid.ID, name, description string, scopes []string, expiresAt *time.Time) (string, *ProvisioningToken, error) {
 	// Generate random token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -690,11 +659,9 @@ func (s *Service) CreateProvisioningToken(ctx context.Context, orgID, name, desc
 		return "", nil, fmt.Errorf("failed to hash token: %w", err)
 	}
 
-	orgXID, _ := xid.FromString(orgID)
-
 	provToken := &ProvisioningToken{
 		ID:          xid.New(),
-		OrgID:       orgXID,
+		OrgID:       orgID,
 		Name:        name,
 		Description: description,
 		TokenHash:   string(hashedToken),
@@ -711,7 +678,7 @@ func (s *Service) CreateProvisioningToken(ctx context.Context, orgID, name, desc
 
 	// Record metrics
 	s.metrics.RecordTokenCreation()
-	s.metrics.RecordOperation("CREATE_TOKEN", "success", orgID)
+	s.metrics.RecordOperation("CREATE_TOKEN", "success", orgID.String())
 
 	// Return the plain token only once
 	return token, provToken, nil
@@ -797,7 +764,7 @@ func (s *Service) getPrimaryEmail(scimUser *SCIMUser) string {
 	return ""
 }
 
-func (s *Service) mapSCIMToAuthSomeUser(scimUser *SCIMUser, orgID string) (*user.User, error) {
+func (s *Service) mapSCIMToAuthSomeUser(scimUser *SCIMUser, orgID xid.ID) (*user.User, error) {
 	email := s.getPrimaryEmail(scimUser)
 
 	name := scimUser.DisplayName
@@ -893,7 +860,7 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organization.Team, op *PatchOperation, orgID string) error {
+func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organization.Team, op *PatchOperation, orgID xid.ID) error {
 	switch op.Op {
 	case "replace":
 		if op.Path == "displayName" {
@@ -913,13 +880,18 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organizati
 				for _, m := range members {
 					if memberMap, ok := m.(map[string]interface{}); ok {
 						if userIDStr, ok := memberMap["value"].(string); ok {
+							userXID, err := xid.FromString(userIDStr)
+							if err != nil {
+								continue
+							}
+
 							// Find member by userID - check if user is member of organization
-							isMember, _ := s.getOrgService().IsUserMember(ctx, orgID, userIDStr)
+							isMember, _ := s.getOrgService().IsUserMember(ctx, orgID, userXID)
 							if isMember {
 								// Get all members and find the one with this userID
 								orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
 								for _, orgMember := range orgMembers {
-									if orgMember.UserID == userIDStr {
+									if orgMember.UserID == userXID {
 										_ = s.getOrgService().AddTeamMember(ctx, team.ID, orgMember.ID, "member")
 										break
 									}
@@ -937,13 +909,17 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organizati
 				for _, m := range members {
 					if memberMap, ok := m.(map[string]interface{}); ok {
 						if userIDStr, ok := memberMap["value"].(string); ok {
+							userID, err := xid.FromString(userIDStr)
+							if err != nil {
+								continue
+							}
 							// Find member by userID
-							isMember, _ := s.getOrgService().IsUserMember(ctx, orgID, userIDStr)
+							isMember, _ := s.getOrgService().IsUserMember(ctx, orgID, userID)
 							if isMember {
 								// Get all members and find the one with this userID
 								orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
 								for _, orgMember := range orgMembers {
-									if orgMember.UserID == userIDStr {
+									if orgMember.UserID == userID {
 										_ = s.getOrgService().AddTeamMember(ctx, team.ID, orgMember.ID, "member")
 										break
 									}
@@ -963,7 +939,7 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organizati
 				// Find member by userID
 				orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
 				for _, orgMember := range orgMembers {
-					if orgMember.UserID == userIDStr {
+					if orgMember.UserID.String() == userIDStr {
 						_ = s.getOrgService().RemoveTeamMember(ctx, team.ID, orgMember.ID)
 						break
 					}
@@ -974,25 +950,22 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, team *organizati
 	return nil
 }
 
-func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []GroupReference, orgID string) error {
+func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []GroupReference, orgID xid.ID) error {
 	if !s.config.GroupSync.Enabled {
 		return nil
 	}
 
-	orgXID, _ := xid.FromString(orgID)
-
 	// Find user's organization member record by userID
-	userIDStr := userID.String()
 	orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-	var memberID string
+	var memberID xid.ID
 	for _, orgMember := range orgMembers {
-		if orgMember.UserID == userIDStr {
+		if orgMember.UserID == userID {
 			memberID = orgMember.ID
 			break
 		}
 	}
 
-	if memberID == "" {
+	if memberID.IsNil() {
 		return fmt.Errorf("user not found in organization")
 	}
 
@@ -1000,14 +973,14 @@ func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []Gr
 	// For each group in the SCIM request, add user to that team
 	for _, groupRef := range groups {
 		// Find team by external ID (group value)
-		mapping, err := s.repo.FindGroupMappingBySCIMID(ctx, groupRef.Value, orgXID)
+		mapping, err := s.repo.FindGroupMappingBySCIMID(ctx, groupRef.Value, orgID)
 		if err != nil {
 			fmt.Printf("[SCIM] Group mapping not found for %s: %v\n", groupRef.Value, err)
 			continue
 		}
 
 		// Add user to team
-		teamID := mapping.TargetID.String()
+		teamID := mapping.TargetID
 		if err := s.getOrgService().AddTeamMember(ctx, teamID, memberID, "member"); err != nil {
 			fmt.Printf("[SCIM] Failed to add user to team: %v\n", err)
 		}
@@ -1016,7 +989,7 @@ func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []Gr
 	return nil
 }
 
-func (s *Service) syncGroupMembers(ctx context.Context, groupID string, members []MemberReference, orgID string) error {
+func (s *Service) syncGroupMembers(ctx context.Context, groupID xid.ID, members []MemberReference, orgID xid.ID) error {
 	if !s.config.GroupSync.Enabled {
 		return nil
 	}
@@ -1034,15 +1007,15 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID string, members 
 
 		// Find the organization member by userID
 		orgMembers, _ := s.getOrgService().ListMembers(ctx, orgID, 10000, 0)
-		var memberID string
+		var memberID xid.ID
 		for _, orgMember := range orgMembers {
-			if orgMember.UserID == userIDStr {
+			if orgMember.UserID.String() == userIDStr {
 				memberID = orgMember.ID
 				break
 			}
 		}
 
-		if memberID == "" {
+		if memberID.IsNil() {
 			fmt.Printf("[SCIM] User %s not found in organization\n", memberRef.Value)
 			continue
 		}
@@ -1068,7 +1041,7 @@ func (s *Service) sendProvisioningWebhook(ctx context.Context, event string, dat
 // Bulk Operations (RFC 7644 Section 3.7)
 
 // ProcessBulkOperation processes a bulk operation request
-func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest, orgID string) (*BulkResponse, error) {
+func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest, orgID xid.ID) (*BulkResponse, error) {
 	response := &BulkResponse{
 		Schemas:    []string{SchemaBulkResponse},
 		Operations: []BulkOperationResult{},
@@ -1153,7 +1126,11 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 					Detail:  "Invalid path",
 				}
 			} else {
-				resourceID := pathParts[len(pathParts)-1]
+				resID := pathParts[len(pathParts)-1]
+				resourceID, err := xid.FromString(resID)
+				if err != nil {
+					respOp.Status = 400
+				}
 
 				if strings.Contains(op.Path, "/Users/") {
 					scimUser, ok := op.Data.(*SCIMUser)
@@ -1191,7 +1168,11 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 					Detail:  "Invalid path",
 				}
 			} else {
-				resourceID := pathParts[len(pathParts)-1]
+				resID := pathParts[len(pathParts)-1]
+				resourceID, err := xid.FromString(resID)
+				if err != nil {
+					respOp.Status = 400
+				}
 
 				if strings.Contains(op.Path, "/Users/") {
 					patchOp, ok := op.Data.(*PatchOp)
@@ -1229,7 +1210,11 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 					Detail:  "Invalid path",
 				}
 			} else {
-				resourceID := pathParts[len(pathParts)-1]
+				resID := pathParts[len(pathParts)-1]
+				resourceID, err := xid.FromString(resID)
+				if err != nil {
+					respOp.Status = 400
+				}
 
 				if strings.Contains(op.Path, "/Users/") {
 					err := s.DeleteUser(ctx, resourceID, orgID)
@@ -1281,8 +1266,8 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 // Token Management Operations
 
 // ListProvisioningTokens lists all provisioning tokens for an organization
-func (s *Service) ListProvisioningTokens(ctx context.Context, orgID string, limit, offset int) ([]*ProvisioningToken, int, error) {
-	orgXID, _ := xid.FromString(orgID)
+func (s *Service) ListProvisioningTokens(ctx context.Context, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, int, error) {
+	orgXID := orgID
 
 	tokens, err := s.repo.ListProvisioningTokens(ctx, orgXID, limit, offset)
 	if err != nil {
@@ -1308,8 +1293,8 @@ func (s *Service) RevokeProvisioningToken(ctx context.Context, tokenID string) e
 // Attribute Mapping Operations
 
 // GetAttributeMappings retrieves attribute mappings for an organization
-func (s *Service) GetAttributeMappings(ctx context.Context, orgID string) (map[string]string, error) {
-	orgXID, _ := xid.FromString(orgID)
+func (s *Service) GetAttributeMappings(ctx context.Context, orgID xid.ID) (map[string]string, error) {
+	orgXID := orgID
 
 	mapping, err := s.repo.FindAttributeMappingByOrgID(ctx, orgXID)
 	if err != nil {
@@ -1321,8 +1306,8 @@ func (s *Service) GetAttributeMappings(ctx context.Context, orgID string) (map[s
 }
 
 // UpdateAttributeMappings updates attribute mappings for an organization
-func (s *Service) UpdateAttributeMappings(ctx context.Context, orgID string, mappings map[string]string) error {
-	orgXID, _ := xid.FromString(orgID)
+func (s *Service) UpdateAttributeMappings(ctx context.Context, orgID xid.ID, mappings map[string]string) error {
+	orgXID := orgID
 
 	// Find existing mapping
 	existingMapping, err := s.repo.FindAttributeMappingByOrgID(ctx, orgXID)
@@ -1348,8 +1333,8 @@ func (s *Service) UpdateAttributeMappings(ctx context.Context, orgID string, map
 // Provisioning Logs Operations
 
 // GetProvisioningLogs retrieves provisioning logs with filtering
-func (s *Service) GetProvisioningLogs(ctx context.Context, orgID string, action string, limit, offset int) ([]*ProvisioningLog, int, error) {
-	orgXID, _ := xid.FromString(orgID)
+func (s *Service) GetProvisioningLogs(ctx context.Context, orgID xid.ID, action string, limit, offset int) ([]*ProvisioningLog, int, error) {
+	orgXID := orgID
 
 	// Build filters
 	filters := make(map[string]interface{})
@@ -1386,9 +1371,9 @@ func (s *Service) Migrate(ctx context.Context) error {
 }
 
 // InitializeOrgSCIMConfig initializes default SCIM config for an organization
-func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, orgID string) error {
+func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, orgID xid.ID) error {
 	// Create default attribute mapping
-	orgXID, _ := xid.FromString(orgID)
+	orgXID := orgID
 	mapping := &AttributeMapping{
 		ID:        xid.New(),
 		OrgID:     orgXID,

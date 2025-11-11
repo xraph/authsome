@@ -14,6 +14,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/interfaces"
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
@@ -22,6 +23,9 @@ import (
 	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/authsome/plugins/dashboard/components/pages"
+	mtorg "github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/authsome/repository"
+	"github.com/xraph/authsome/schema"
 	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
@@ -36,10 +40,12 @@ type Handler struct {
 	rbacSvc        *rbac.Service
 	apikeyService  *apikey.Service
 	orgService     *organization.Service
+	mtOrgService   *mtorg.Service // Multitenancy organization service
 	db             *bun.DB
 	isSaaSMode     bool
 	basePath       string
 	enabledPlugins map[string]bool
+	hookRegistry   *hooks.HookRegistry // For executing lifecycle hooks
 }
 
 // NewHandler creates a new dashboard handler
@@ -55,8 +61,9 @@ func NewHandler(
 	isSaaSMode bool,
 	basePath string,
 	enabledPlugins map[string]bool,
+	hookRegistry *hooks.HookRegistry,
 ) *Handler {
-	return &Handler{
+	h := &Handler{
 		assets:         assets,
 		userSvc:        userSvc,
 		sessionSvc:     sessionSvc,
@@ -68,7 +75,17 @@ func NewHandler(
 		isSaaSMode:     isSaaSMode,
 		basePath:       basePath,
 		enabledPlugins: enabledPlugins,
+		hookRegistry:   hookRegistry,
 	}
+
+	// Try to get multitenancy organization service if available
+	// This will be set by the plugin during initialization
+	return h
+}
+
+// SetMultitenancyOrgService sets the multitenancy organization service
+func (h *Handler) SetMultitenancyOrgService(svc *mtorg.Service) {
+	h.mtOrgService = svc
 }
 
 // PageData represents common data for all pages
@@ -104,6 +121,7 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		User:       user,
 		CSRFToken:  h.getCSRFToken(c),
 		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
 	}
 
 	// Convert to pages.DashboardStats
@@ -203,6 +221,7 @@ func (h *Handler) ServeUsers(c forge.Context) error {
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "users",
 		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
 	}
 
 	usersData := pages.UsersData{
@@ -268,6 +287,7 @@ func (h *Handler) ServeUserDetail(c forge.Context) error {
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "users",
 		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
 	}
 
 	detailData := pages.UserDetailPageData{
@@ -315,6 +335,7 @@ func (h *Handler) ServeUserEdit(c forge.Context) error {
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "users",
 		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
 	}
 
 	editData := pages.UserEditPageData{
@@ -460,6 +481,7 @@ func (h *Handler) ServeSessions(c forge.Context) error {
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "sessions",
 		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
 	}
 
 	// Convert sessions to page data format
@@ -539,6 +561,7 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 		CSRFToken:  h.getCSRFToken(c),
 		ActivePage: "settings",
 		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
 	}
 
 	// Populate settings data
@@ -712,10 +735,14 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 		return h.renderLoginError(c, "Email and password are required", redirect)
 	}
 
-	// In multi-tenant mode, we need to set organization context for user lookup
-	// Try to find user without organization context first
+	// Find user by email
+	// Platform users (first user) can login without organization context
+	// The multitenancy decorator will handle this automatically
 	ctx := c.Request().Context()
 	user, err := h.userSvc.FindByEmail(ctx, email)
+	fmt.Printf("[Dashboard] Login: Email: %s\n", email)
+	fmt.Printf("[Dashboard] Login: User: %+v\n", user)
+	fmt.Printf("[Dashboard] Login: Error: %+v\n", err)
 
 	// If we get "organization context required" error, we're in multi-tenant mode
 	// Try with the first organization from database
@@ -745,9 +772,49 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 		return h.renderLoginError(c, "Invalid email or password", redirect)
 	}
 
+	fmt.Printf("[Dashboard] Login: Found user %s (ID: %s), checking password...\n", user.Email, user.ID)
+	fmt.Printf("[Dashboard] Login: Password hash length: %d, hash preview: %s...\n", len(user.PasswordHash), func() string {
+		if len(user.PasswordHash) > 20 {
+			return user.PasswordHash[:20]
+		}
+		return user.PasswordHash
+	}())
+
+	fmt.Printf("[Dashboard] Login: Password: %s\n", password)
+	fmt.Printf("[Dashboard] Login: Password hash: %s\n", user.PasswordHash)
+
 	// Verify password
-	if !crypto.CheckPassword(password, user.PasswordHash) {
+	passwordValid := crypto.CheckPassword(password, user.PasswordHash)
+	fmt.Printf("[Dashboard] Login: Password check result: %v\n", passwordValid)
+	if !passwordValid {
+		fmt.Printf("[Dashboard] Login error: Password verification failed for user %s\n", user.Email)
 		return h.renderLoginError(c, "Invalid email or password", redirect)
+	}
+
+	fmt.Printf("[Dashboard] Login: Password verified successfully for user %s\n", user.Email)
+
+	// Check if user is a member of the platform organization
+	// Dashboard access is restricted to platform organization members only
+	if h.mtOrgService != nil {
+		platformOrg, err := h.mtOrgService.GetOrganizationBySlug(ctx, "platform")
+		if err != nil {
+			fmt.Printf("[Dashboard] Login error: Could not find platform organization: %v\n", err)
+			return h.renderLoginError(c, "Access denied: Platform organization not found", redirect)
+		}
+
+		// Check if user is a member of the platform organization
+		isMember, err := h.mtOrgService.IsMember(ctx, platformOrg.ID, user.ID)
+		if err != nil {
+			fmt.Printf("[Dashboard] Login error: Failed to check organization membership: %v\n", err)
+			return h.renderLoginError(c, "Access denied: Unable to verify membership", redirect)
+		}
+
+		if !isMember {
+			fmt.Printf("[Dashboard] Login error: User %s is not a member of platform organization\n", user.Email)
+			return h.renderLoginError(c, "Access denied: Only platform users can access this dashboard", redirect)
+		}
+
+		fmt.Printf("[Dashboard] Login: User %s verified as platform organization member\n", user.Email)
 	}
 
 	// Note: Role checking is now handled by the RequireAdmin middleware
@@ -892,6 +959,7 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 	fmt.Printf("[Dashboard] Is first user: %v\n", isFirstUser)
 
 	// Create user
+	fmt.Printf("[Dashboard] Signup: Creating user with email: %s, password length: %d\n", email, len(password))
 	newUser, err := h.userSvc.Create(c.Request().Context(), &user.CreateUserRequest{
 		Email:    email,
 		Password: password,
@@ -903,8 +971,21 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 	}
 
 	fmt.Printf("[Dashboard] User created successfully: %s (%s)\n", newUser.Email, newUser.ID.String())
+	fmt.Printf("[Dashboard] Signup: Password hash stored - length: %d, preview: %s...\n", len(newUser.PasswordHash), func() string {
+		if len(newUser.PasswordHash) > 20 {
+			return newUser.PasswordHash[:20]
+		}
+		return newUser.PasswordHash
+	}())
 
-	// If this is the first user, auto-verify email and assign admin/owner role
+	// Test password verification immediately after creation
+	testPasswordCheck := crypto.CheckPassword(password, newUser.PasswordHash)
+	fmt.Printf("[Dashboard] Signup: Immediate password verification test: %v\n", testPasswordCheck)
+	if !testPasswordCheck {
+		fmt.Printf("[Dashboard] ERROR: Password verification failed immediately after creation! This indicates a hashing issue.\n")
+	}
+
+	// If this is the first user, auto-verify email, assign admin/owner role, and create organization
 	if isFirstUser {
 		// Auto-verify the first user's email
 		emailVerified := true
@@ -914,28 +995,84 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		if err != nil {
 			fmt.Printf("[Dashboard] Warning: Failed to auto-verify first user email: %v\n", err)
 		} else {
-			newUser = updatedUser // Update the user object with verified status
-			fmt.Printf("[Dashboard] ✅ First user email auto-verified: %s\n", newUser.Email)
+			// Reload user from database to ensure we have the latest data including password hash
+			reloadedUser, err := h.userSvc.FindByID(c.Request().Context(), updatedUser.ID)
+			if err != nil {
+				fmt.Printf("[Dashboard] Warning: Failed to reload user after email verification: %v\n", err)
+				newUser = updatedUser // Fallback to updated user
+			} else {
+				newUser = reloadedUser // Use reloaded user with fresh data
+				fmt.Printf("[Dashboard] ✅ First user email auto-verified: %s\n", newUser.Email)
+				fmt.Printf("[Dashboard] Reloaded user - password hash length: %d\n", len(newUser.PasswordHash))
+			}
 		}
 
-		// Assign admin role to first user using RBAC service
-		// Create a policy that grants full dashboard access to this user
-		adminPolicy := &rbac.Policy{
-			Subject:  newUser.ID.String(),
-			Actions:  []string{"*"}, // All actions
-			Resource: "dashboard",
+		// Execute user creation hooks - this is where the multitenancy plugin creates the platform org
+		ctx := c.Request().Context()
+		if h.hookRegistry != nil {
+			fmt.Printf("[Dashboard] Executing after-user-create hooks for first user: %s\n", newUser.Email)
+			if err := h.hookRegistry.ExecuteAfterUserCreate(ctx, newUser); err != nil {
+				fmt.Printf("[Dashboard] ERROR: Hook execution failed: %v\n", err)
+			} else {
+				fmt.Printf("[Dashboard] ✅ Hooks executed successfully\n")
+			}
 		}
-		h.rbacSvc.AddPolicy(adminPolicy)
 
-		// Also grant system owner access
-		ownerPolicy := &rbac.Policy{
-			Subject:  newUser.ID.String(),
-			Actions:  []string{"*"}, // All actions
-			Resource: "system",
+		// Now get the platform organization ID
+		var orgID xid.ID
+		if h.mtOrgService != nil {
+			// SaaS mode: use multitenancy service
+			platformOrg, err := h.mtOrgService.GetOrganizationBySlug(ctx, "platform")
+			if err != nil {
+				fmt.Printf("[Dashboard] Warning: Could not find platform organization after hook execution: %v\n", err)
+				// Try to get any organization as fallback
+				orgs, err := h.mtOrgService.ListOrganizations(ctx, 1, 0)
+				if err == nil && len(orgs) > 0 {
+					orgID = orgs[0].ID
+					fmt.Printf("[Dashboard] Using first available organization for role assignment: %s\n", orgID.String())
+				}
+			} else {
+				orgID = platformOrg.ID
+				fmt.Printf("[Dashboard] ✅ Platform organization found via multitenancy service: %s (ID: %s)\n", platformOrg.Name, orgID.String())
+			}
+		} else {
+			// Standalone mode: query database directly for platform organization
+			fmt.Printf("[Dashboard] Standalone mode detected, querying database directly for platform organization...\n")
+			var platformOrg schema.Organization
+			err := h.db.NewSelect().
+				Model(&platformOrg).
+				Where("is_platform = ?", true).
+				Limit(1).
+				Scan(ctx)
+
+			if err != nil {
+				fmt.Printf("[Dashboard] ERROR: Failed to find platform organization in database: %v\n", err)
+			} else {
+				orgID = platformOrg.ID
+				fmt.Printf("[Dashboard] ✅ Platform organization found in database: %s (ID: %s)\n", platformOrg.Name, orgID.String())
+			}
 		}
-		h.rbacSvc.AddPolicy(ownerPolicy)
 
-		fmt.Printf("[Dashboard] ✨ First user created (system owner): %s (%s) - Email verified ✅ & Admin roles assigned ✅\n", newUser.Email, newUser.ID.String())
+		// Assign SUPERADMIN role to first user in the database
+		// This makes them the platform owner with full system access
+		userRoleRepo := repository.NewUserRoleRepository(h.db)
+		roleRepo := repository.NewRoleRepository(h.db)
+
+		if orgID.IsNil() {
+			fmt.Printf("[Dashboard] ERROR: No organization ID available for role assignment. Cannot assign superadmin role.\n")
+			fmt.Printf("[Dashboard] This likely means no platform organization exists in the system.\n")
+		} else {
+			// Assign superadmin role to user within platform organization context
+			if err := EnsureFirstUserIsSuperAdmin(ctx, newUser.ID, orgID, userRoleRepo, roleRepo); err != nil {
+				fmt.Printf("[Dashboard] ERROR: Failed to assign superadmin role to first user: %v\n", err)
+			} else {
+				fmt.Printf("[Dashboard] ✅ Superadmin role assigned to first user: %s (org: %s)\n", newUser.Email, orgID.String())
+			}
+		}
+
+		// Role-based RBAC policies are set up via SetupDefaultPolicies()
+		// No need for user-specific policies - the superadmin role grants all permissions
+		fmt.Printf("[Dashboard] ✨ First user created (platform owner): %s (%s) - Email verified ✅ & Superadmin role assigned ✅\n", newUser.Email, newUser.ID.String())
 	}
 
 	// Create session for the new user
@@ -1128,6 +1265,7 @@ func (h *Handler) renderError(c forge.Context, message string, err error) error 
 		CSRFToken:      h.getCSRFToken(c),
 		ActivePage:     "",
 		BasePath:       h.basePath,
+		IsSaaSMode:     h.isSaaSMode,
 		Error:          errorMsg,
 		Year:           time.Now().Year(),
 		EnabledPlugins: h.enabledPlugins,
@@ -1232,4 +1370,321 @@ func getContentType(ext string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// Organization Management Handlers (only available in SaaS mode)
+
+// ServeOrganizations serves the organizations list page
+func (h *Handler) ServeOrganizations(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Get pagination parameters
+	page := 1
+	if pageParam := c.Query("page"); pageParam != "" {
+		fmt.Sscanf(pageParam, "%d", &page)
+	}
+
+	pageSize := 20
+	if sizeParam := c.Query("size"); sizeParam != "" {
+		fmt.Sscanf(sizeParam, "%d", &pageSize)
+	}
+
+	offset := (page - 1) * pageSize
+
+	// List organizations
+	orgs, err := h.mtOrgService.ListOrganizations(c.Request().Context(), pageSize, offset)
+	if err != nil {
+		return h.renderError(c, "Failed to load organizations", err)
+	}
+
+	// Get total count (simplified - in production, use a Count method)
+	total := len(orgs) // This is approximate, should use proper count
+	totalPages := (total + pageSize - 1) / pageSize
+
+	pageData := components.PageData{
+		Title:      "Organizations",
+		User:       currentUser,
+		CSRFToken:  h.getCSRFToken(c),
+		ActivePage: "organizations",
+		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
+	}
+
+	orgsData := pages.OrganizationsData{
+		Organizations: orgs,
+		Page:          page,
+		TotalPages:    totalPages,
+		Total:         total,
+	}
+
+	content := pages.OrganizationsPage(orgsData, h.basePath)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeOrganizationDetail serves a single organization detail page
+func (h *Handler) ServeOrganizationDetail(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	orgID := c.Param("id")
+	if orgID == "" {
+		return h.renderError(c, "Organization ID is required", fmt.Errorf("missing organization ID"))
+	}
+
+	xidOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return h.renderError(c, "Invalid organization ID", err)
+	}
+
+	// Get organization
+	org, err := h.mtOrgService.GetOrganization(c.Request().Context(), xidOrgID)
+	if err != nil {
+		return h.renderError(c, "Organization not found", err)
+	}
+
+	// Get organization members
+	members, err := h.mtOrgService.ListMembers(c.Request().Context(), xidOrgID, 100, 0)
+	if err != nil {
+		fmt.Printf("[Dashboard] Warning: Failed to load members: %v\n", err)
+		members = []*mtorg.Member{}
+	}
+
+	pageData := components.PageData{
+		Title:      "Organization: " + org.Name,
+		User:       currentUser,
+		CSRFToken:  h.getCSRFToken(c),
+		ActivePage: "organizations",
+		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
+	}
+
+	orgDetailData := pages.OrganizationDetailData{
+		Organization: org,
+		Members:      members,
+	}
+
+	content := pages.OrganizationDetailPage(orgDetailData, h.basePath)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeOrganizationCreate serves the organization creation form
+func (h *Handler) ServeOrganizationCreate(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	pageData := components.PageData{
+		Title:      "Create Organization",
+		User:       currentUser,
+		CSRFToken:  h.getCSRFToken(c),
+		ActivePage: "organizations",
+		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
+	}
+
+	content := pages.OrganizationCreatePage(h.basePath, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleOrganizationCreate processes the organization creation form
+func (h *Handler) HandleOrganizationCreate(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Parse form data
+	if err := c.Request().ParseForm(); err != nil {
+		return h.renderError(c, "Invalid form data", err)
+	}
+
+	name := c.Request().FormValue("name")
+	slug := c.Request().FormValue("slug")
+	redirect := c.Request().FormValue("redirect")
+	csrfToken := c.Request().FormValue("csrf_token")
+
+	// Validate CSRF token
+	if csrfToken == "" {
+		return h.renderError(c, "Invalid CSRF token", fmt.Errorf("missing CSRF token"))
+	}
+
+	// Validate inputs
+	if name == "" || slug == "" {
+		return h.renderError(c, "Name and slug are required", fmt.Errorf("missing required fields"))
+	}
+
+	// Create organization
+	createReq := &mtorg.CreateOrganizationRequest{
+		Name: name,
+		Slug: slug,
+	}
+
+	org, err := h.mtOrgService.CreateOrganization(c.Request().Context(), createReq, currentUser.ID)
+	if err != nil {
+		return h.renderError(c, fmt.Sprintf("Failed to create organization: %v", err), err)
+	}
+
+	fmt.Printf("[Dashboard] Organization created: %s (%s)\n", org.Name, org.ID)
+
+	// Redirect to organization detail page
+	if redirect == "" {
+		redirect = h.basePath + "/dashboard/organizations/" + org.ID.String()
+	}
+
+	return c.Redirect(http.StatusFound, redirect)
+}
+
+// ServeOrganizationEdit serves the organization edit form
+func (h *Handler) ServeOrganizationEdit(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	orgID := c.Param("id")
+	if orgID == "" {
+		return h.renderError(c, "Organization ID is required", fmt.Errorf("missing organization ID"))
+	}
+
+	xidOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return h.renderError(c, "Invalid organization ID", err)
+	}
+
+	// Get organization
+	org, err := h.mtOrgService.GetOrganization(c.Request().Context(), xidOrgID)
+	if err != nil {
+		return h.renderError(c, "Organization not found", err)
+	}
+
+	pageData := components.PageData{
+		Title:      "Edit Organization: " + org.Name,
+		User:       currentUser,
+		CSRFToken:  h.getCSRFToken(c),
+		ActivePage: "organizations",
+		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
+	}
+
+	orgEditData := pages.OrganizationEditData{
+		Organization: org,
+	}
+
+	content := pages.OrganizationEditPage(orgEditData, h.basePath, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleOrganizationEdit processes the organization edit form
+func (h *Handler) HandleOrganizationEdit(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	orgID := c.Param("id")
+	if orgID == "" {
+		return h.renderError(c, "Organization ID is required", fmt.Errorf("missing organization ID"))
+	}
+
+	// Parse form data
+	if err := c.Request().ParseForm(); err != nil {
+		return h.renderError(c, "Invalid form data", err)
+	}
+
+	name := c.Request().FormValue("name")
+	redirect := c.Request().FormValue("redirect")
+	csrfToken := c.Request().FormValue("csrf_token")
+
+	// Validate CSRF token
+	if csrfToken == "" {
+		return h.renderError(c, "Invalid CSRF token", fmt.Errorf("missing CSRF token"))
+	}
+
+	// Update organization
+	updateReq := &mtorg.UpdateOrganizationRequest{}
+	if name != "" {
+		updateReq.Name = &name
+	}
+
+	xidOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return h.renderError(c, "Invalid organization ID", err)
+	}
+
+	org, err := h.mtOrgService.UpdateOrganization(c.Request().Context(), xidOrgID, updateReq)
+	if err != nil {
+		return h.renderError(c, fmt.Sprintf("Failed to update organization: %v", err), err)
+	}
+
+	fmt.Printf("[Dashboard] Organization updated: %s (%s)\n", org.Name, org.ID)
+
+	// Redirect to organization detail page
+	if redirect == "" {
+		redirect = h.basePath + "/dashboard/organizations/" + orgID
+	}
+
+	return c.Redirect(http.StatusFound, redirect)
+}
+
+// HandleOrganizationDelete processes organization deletion
+func (h *Handler) HandleOrganizationDelete(c forge.Context) error {
+	if !h.isSaaSMode || h.mtOrgService == nil {
+		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
+	}
+
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	orgID := c.Param("id")
+	if orgID == "" {
+		return h.renderError(c, "Organization ID is required", fmt.Errorf("missing organization ID"))
+	}
+
+	xidOrgID, err := xid.FromString(orgID)
+	if err != nil {
+		return h.renderError(c, "Invalid organization ID", err)
+	}
+
+	// Delete organization
+	err = h.mtOrgService.DeleteOrganization(c.Request().Context(), xidOrgID)
+	if err != nil {
+		return h.renderError(c, fmt.Sprintf("Failed to delete organization: %v", err), err)
+	}
+
+	fmt.Printf("[Dashboard] Organization deleted: %s\n", orgID)
+
+	// Redirect to organizations list
+	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/organizations")
 }

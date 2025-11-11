@@ -599,7 +599,7 @@ func (s *Service) convertSchemaFactor(sf *schema.MFAFactor) *Factor {
 		LastUsedAt: sf.LastUsedAt,
 		VerifiedAt: sf.VerifiedAt,
 		CreatedAt:  sf.CreatedAt,
-		UpdatedAt:  sf.UpdatedAt.Time,
+		UpdatedAt:  sf.UpdatedAt,
 		ExpiresAt:  sf.ExpiresAt,
 	}
 }

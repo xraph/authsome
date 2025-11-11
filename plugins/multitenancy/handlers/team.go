@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/forge"
 )
@@ -22,9 +23,14 @@ func NewTeamHandler(orgService *organization.Service) *TeamHandler {
 
 // CreateTeam handles team creation requests
 func (h *TeamHandler) CreateTeam(c forge.Context) error {
-	orgID := c.Param("orgId")
-	if orgID == "" {
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
 	}
 
 	var req organization.CreateTeamRequest
@@ -47,7 +53,12 @@ func (h *TeamHandler) GetTeam(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
 	}
 
-	team, err := h.orgService.GetTeam(c.Request().Context(), id)
+	teamID, err := xid.FromString(id)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid team ID"})
+	}
+
+	team, err := h.orgService.GetTeam(c.Request().Context(), teamID)
 	if err != nil {
 		return c.JSON(404, map[string]string{"error": "team not found"})
 	}
@@ -67,7 +78,12 @@ func (h *TeamHandler) UpdateTeam(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	team, err := h.orgService.UpdateTeam(c.Request().Context(), id, &req)
+	teamID, err := xid.FromString(id)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid team ID"})
+	}
+
+	team, err := h.orgService.UpdateTeam(c.Request().Context(), teamID, &req)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -82,7 +98,12 @@ func (h *TeamHandler) DeleteTeam(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
 	}
 
-	err := h.orgService.DeleteTeam(c.Request().Context(), id)
+	teamID, err := xid.FromString(id)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid team ID"})
+	}
+
+	err = h.orgService.DeleteTeam(c.Request().Context(), teamID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -92,8 +113,8 @@ func (h *TeamHandler) DeleteTeam(c forge.Context) error {
 
 // ListTeams handles team listing requests
 func (h *TeamHandler) ListTeams(c forge.Context) error {
-	orgID := c.Param("orgId")
-	if orgID == "" {
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
 	}
 
@@ -115,6 +136,11 @@ func (h *TeamHandler) ListTeams(c forge.Context) error {
 		}
 	}
 
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+	}
+
 	teams, err := h.orgService.ListTeams(c.Request().Context(), orgID, limit, offset)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
@@ -129,20 +155,25 @@ func (h *TeamHandler) ListTeams(c forge.Context) error {
 
 // AddTeamMember handles adding a member to a team
 func (h *TeamHandler) AddTeamMember(c forge.Context) error {
-	teamID := c.Param("teamId")
-	if teamID == "" {
+	teamIDStr := c.Param("teamId")
+	if teamIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
 	}
 
+	teamID, err := xid.FromString(teamIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid team ID"})
+	}
+
 	var req struct {
-		MemberID string `json:"member_id"`
+		MemberID xid.ID `json:"member_id"`
 		Role     string `json:"role"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	err := h.orgService.AddTeamMember(c.Request().Context(), teamID, req.MemberID, req.Role)
+	err = h.orgService.AddTeamMember(c.Request().Context(), teamID, req.MemberID, req.Role)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -152,17 +183,34 @@ func (h *TeamHandler) AddTeamMember(c forge.Context) error {
 
 // RemoveTeamMember handles removing a member from a team
 func (h *TeamHandler) RemoveTeamMember(c forge.Context) error {
-	teamID := c.Param("teamId")
-	memberID := c.Param("memberId")
-
-	if teamID == "" {
+	teamIDStr := c.Param("teamId")
+	if teamIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "team ID is required"})
 	}
-	if memberID == "" {
+
+	teamID, err := xid.FromString(teamIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid team ID"})
+	}
+
+	memberIDStr := c.Param("memberId")
+	if memberIDStr == "" {
 		return c.JSON(400, map[string]string{"error": "member ID is required"})
 	}
 
-	err := h.orgService.RemoveTeamMember(c.Request().Context(), teamID, memberID)
+	memberID, err := xid.FromString(memberIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid member ID"})
+	}
+
+	if teamID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "team ID is required"})
+	}
+	if memberID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "member ID is required"})
+	}
+
+	err = h.orgService.RemoveTeamMember(c.Request().Context(), teamID, memberID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}

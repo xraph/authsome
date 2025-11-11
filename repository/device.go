@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	core "github.com/xraph/authsome/core/device"
@@ -36,7 +37,7 @@ func (r *DeviceRepository) fromSchema(sd *schema.Device) *core.Device {
 		IPAddress:   sd.IPAddress,
 		LastActive:  sd.LastActive,
 		CreatedAt:   sd.CreatedAt,
-		UpdatedAt:   sd.UpdatedAt.Time,
+		UpdatedAt:   sd.UpdatedAt,
 	}
 }
 

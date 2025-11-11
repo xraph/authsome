@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 )
@@ -30,7 +31,7 @@ func (r *InvitationRepository) Create(ctx context.Context, invitation *organizat
 }
 
 // FindByID finds an invitation by ID
-func (r *InvitationRepository) FindByID(ctx context.Context, id string) (*organization.Invitation, error) {
+func (r *InvitationRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Invitation, error) {
 	invitation := &organization.Invitation{}
 	err := r.db.NewSelect().Model(invitation).Where("id = ?", id).Scan(ctx)
 	if err != nil {
@@ -65,7 +66,7 @@ func (r *InvitationRepository) Update(ctx context.Context, invitation *organizat
 }
 
 // Delete deletes an invitation
-func (r *InvitationRepository) Delete(ctx context.Context, id string) error {
+func (r *InvitationRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*organization.Invitation)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete invitation: %w", err)
@@ -74,7 +75,7 @@ func (r *InvitationRepository) Delete(ctx context.Context, id string) error {
 }
 
 // ListByOrganization lists invitations by organization with pagination
-func (r *InvitationRepository) ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*organization.Invitation, error) {
+func (r *InvitationRepository) ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*organization.Invitation, error) {
 	var invitations []*organization.Invitation
 
 	// Get paginated results

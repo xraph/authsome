@@ -32,13 +32,13 @@ func NewMultiTenantAuthService(authService auth.ServiceInterface, orgService *or
 // SignIn authenticates a user within an organization context
 func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInRequest) (*auth.AuthResponse, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify organization exists
-	_, err := s.orgService.GetOrganization(ctx, orgID)
+	_, err = s.orgService.GetOrganization(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("organization not found: %w", err)
 	}
@@ -50,7 +50,7 @@ func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInReq
 	}
 
 	// Verify user is a member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, response.User.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, response.User.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check organization membership: %w", err)
 	}
@@ -65,13 +65,13 @@ func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInReq
 // SignUp registers a new user and adds them to the organization
 func (s *MultiTenantAuthService) SignUp(ctx context.Context, req *auth.SignUpRequest) (*auth.AuthResponse, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify organization exists
-	_, err := s.orgService.GetOrganization(ctx, orgID)
+	_, err = s.orgService.GetOrganization(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("organization not found: %w", err)
 	}
@@ -83,7 +83,7 @@ func (s *MultiTenantAuthService) SignUp(ctx context.Context, req *auth.SignUpReq
 	}
 
 	// Add user to organization as a member
-	_, err = s.orgService.AddMember(ctx, orgID, response.User.ID.String(), organization.RoleMember)
+	_, err = s.orgService.AddMember(ctx, orgID, response.User.ID, organization.RoleMember)
 	if err != nil {
 		// TODO: Consider rolling back user creation if adding to org fails
 		return nil, fmt.Errorf("failed to add user to organization: %w", err)
@@ -101,9 +101,9 @@ func (s *MultiTenantAuthService) SignOut(ctx context.Context, req *auth.SignOutR
 // CheckCredentials validates user credentials within organization context
 func (s *MultiTenantAuthService) CheckCredentials(ctx context.Context, email, password string) (*user.User, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check credentials using core service
@@ -113,7 +113,7 @@ func (s *MultiTenantAuthService) CheckCredentials(ctx context.Context, email, pa
 	}
 
 	// Verify user is a member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check organization membership: %w", err)
 	}
@@ -128,13 +128,13 @@ func (s *MultiTenantAuthService) CheckCredentials(ctx context.Context, email, pa
 // CreateSessionForUser creates a session for a user within organization context
 func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*auth.AuthResponse, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify user is a member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check organization membership: %w", err)
 	}
@@ -150,9 +150,9 @@ func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *us
 // GetSession retrieves a session within organization context
 func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (*auth.AuthResponse, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get session using core service
@@ -162,7 +162,7 @@ func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (
 	}
 
 	// Verify user belongs to the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, response.User.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, response.User.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check organization membership: %w", err)
 	}
@@ -177,13 +177,13 @@ func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (
 // UpdateUser updates a user within organization context
 func (s *MultiTenantAuthService) UpdateUser(ctx context.Context, id xid.ID, req *user.UpdateUserRequest) (*user.User, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify user is a member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, id.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, id)
 	if err != nil {
 		return nil, err
 	}

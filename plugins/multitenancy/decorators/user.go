@@ -17,6 +17,10 @@ type MultiTenantUserService struct {
 	orgService  *organization.Service
 }
 
+func (s *MultiTenantUserService) Count(ctx context.Context) (int, error) {
+	return s.userService.Count(ctx)
+}
+
 // NewMultiTenantUserService creates a new multi-tenant user service decorator
 func NewMultiTenantUserService(userService user.ServiceInterface, orgService *organization.Service) *MultiTenantUserService {
 	return &MultiTenantUserService{
@@ -30,10 +34,27 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
 
+	usersCount, err := s.userService.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("[MultiTenancy] Users count: %d, orgID: %s\n", usersCount, orgID.String())
+
+	if usersCount == 0 {
+		// No users exist yet - this is the first user (system owner)
+		// Create user without organization membership
+		// The post-creation hook will set up their organization
+		// newUser, err := s.userService.Create(ctx, req)
+		// if err != nil {
+		// 	return nil, err
+		// }
+	}
+
 	// Special case: First user creation (system owner)
 	// If no organization context is provided, check if this is the very first user
 	// The first user will create the platform organization via hooks
-	if orgID == "" {
+	if orgID.IsNil() {
 		// Check if there are any organizations yet
 		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
 		if err != nil || len(orgs) == 0 {
@@ -54,7 +75,7 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	}
 
 	// Validate organization exists
-	_, err := s.orgService.GetOrganization(ctx, orgID)
+	_, err = s.orgService.GetOrganization(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid organization: %w", err)
 	}
@@ -66,7 +87,7 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	}
 
 	// Add user as member of the organization
-	_, err = s.orgService.AddMember(ctx, orgID, newUser.ID.String(), organization.RoleMember)
+	_, err = s.orgService.AddMember(ctx, orgID, newUser.ID, organization.RoleMember)
 	if err != nil {
 		// TODO: Consider rollback strategy
 		return nil, fmt.Errorf("failed to add user to organization: %w", err)
@@ -79,7 +100,7 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
+	if orgID.IsNil() {
 		return nil, fmt.Errorf("organization context required")
 	}
 
@@ -90,7 +111,7 @@ func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +126,34 @@ func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user
 func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
-		return nil, fmt.Errorf("organization context required")
+
+	// Special case: First user lookup (platform owner login)
+	// If no organization context is provided, check if this user is the platform owner
+	if orgID.IsNil() {
+		// Find user using original service
+		foundUser, err := s.userService.FindByEmail(ctx, email)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if this user is a member of the platform organization
+		// Platform owners can login without explicit org context
+		platformOrg, err := s.orgService.GetOrganizationBySlug(ctx, "platform")
+		if err != nil {
+			// Platform org doesn't exist yet - might be during first user setup
+			fmt.Printf("[MultiTenancy] No platform org found, allowing user lookup: %s\n", email)
+			return foundUser, nil
+		}
+
+		// Check if user is platform member
+		isMember, err := s.orgService.IsMember(ctx, platformOrg.ID, foundUser.ID)
+		if err != nil || !isMember {
+			// User is not a platform member - require org context
+			return nil, fmt.Errorf("organization context required")
+		}
+
+		fmt.Printf("[MultiTenancy] Platform user login without org context: %s\n", email)
+		return foundUser, nil
 	}
 
 	// Find user using original service
@@ -116,7 +163,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +178,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username string) (*user.User, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
+	if orgID.IsNil() {
 		return nil, fmt.Errorf("organization context required")
 	}
 
@@ -142,7 +189,7 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +207,7 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 
 	// Special case: First user update (e.g., email verification during signup)
 	// If no organization context and no organizations exist yet, allow the update
-	if orgID == "" {
+	if orgID.IsNil() {
 		// Check if there are any organizations yet
 		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
 		if err != nil || len(orgs) == 0 {
@@ -175,7 +222,7 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -191,12 +238,12 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
+	if orgID.IsNil() {
 		return fmt.Errorf("organization context required")
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, id.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, id)
 	if err != nil {
 		return err
 	}
@@ -205,7 +252,7 @@ func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	}
 
 	// Remove user from organization first
-	err = s.orgService.RemoveUserFromAllOrganizations(ctx, id.String())
+	err = s.orgService.RemoveUserFromAllOrganizations(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to remove user from organizations: %w", err)
 	}
@@ -218,7 +265,7 @@ func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 func (s *MultiTenantUserService) List(ctx context.Context, opts types.PaginationOptions) ([]*user.User, int, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
+	if orgID.IsNil() {
 		return nil, 0, fmt.Errorf("organization context required")
 	}
 
@@ -234,13 +281,12 @@ func (s *MultiTenantUserService) List(ctx context.Context, opts types.Pagination
 	// Get user details for each member
 	users := make([]*user.User, 0, len(members))
 	for _, member := range members {
-		userID, err := xid.FromString(member.UserID)
-		if err != nil {
+		if member.UserID.IsNil() {
 			continue // Skip invalid user IDs
 		}
 
 		// Use the original service to get user details (bypass organization check)
-		u, err := s.userService.FindByID(ctx, userID)
+		u, err := s.userService.FindByID(ctx, member.UserID)
 		if err != nil {
 			continue // Skip users that can't be found
 		}
@@ -252,7 +298,7 @@ func (s *MultiTenantUserService) List(ctx context.Context, opts types.Pagination
 }
 
 // GetOrganizationContext gets the organization ID from context
-func (s *MultiTenantUserService) GetOrganizationContext(ctx context.Context) string {
+func (s *MultiTenantUserService) GetOrganizationContext(ctx context.Context) xid.ID {
 	return s.getOrganizationFromContext(ctx)
 }
 
@@ -265,7 +311,7 @@ func (s *MultiTenantUserService) SetOrganizationContext(ctx context.Context, org
 func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*user.User, int, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
+	if orgID.IsNil() {
 		return nil, 0, fmt.Errorf("organization context required")
 	}
 
@@ -278,7 +324,7 @@ func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts 
 	// Filter users by organization membership
 	filteredUsers := make([]*user.User, 0)
 	for _, u := range users {
-		isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID.String())
+		isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID)
 		if err != nil {
 			continue // Skip on error
 		}
@@ -294,7 +340,7 @@ func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts 
 func (s *MultiTenantUserService) CountCreatedToday(ctx context.Context) (int, error) {
 	// Get organization context
 	orgID := s.getOrganizationFromContext(ctx)
-	if orgID == "" {
+	if orgID.IsNil() {
 		return 0, fmt.Errorf("organization context required")
 	}
 
@@ -304,9 +350,10 @@ func (s *MultiTenantUserService) CountCreatedToday(ctx context.Context) (int, er
 }
 
 // getOrganizationFromContext extracts organization ID from context
-func (s *MultiTenantUserService) getOrganizationFromContext(ctx context.Context) string {
-	if orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string); ok {
-		return orgID
+func (s *MultiTenantUserService) getOrganizationFromContext(ctx context.Context) xid.ID {
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return xid.NilID()
 	}
-	return ""
+	return orgID
 }

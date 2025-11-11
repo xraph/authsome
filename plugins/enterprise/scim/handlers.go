@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/forge"
 )
 
@@ -223,7 +224,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 	}
 
 	// Get organization ID from context (set by middleware)
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	createdUser, err := h.service.CreateUser(c.Request().Context(), &scimUser, orgID)
 	if err != nil {
@@ -241,7 +242,7 @@ func (h *Handler) ListUsers(c forge.Context) error {
 		h.metrics.RecordRequestDuration("GET /Users", time.Since(start))
 	}()
 
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	// Parse query parameters
 	filter := c.Request().URL.Query().Get("filter")
@@ -265,9 +266,14 @@ func (h *Handler) ListUsers(c forge.Context) error {
 // GetUser retrieves a specific user
 func (h *Handler) GetUser(c forge.Context) error {
 	id := c.Param("id")
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
-	scimUser, err := h.service.GetUser(c.Request().Context(), id, orgID)
+	userID, err := xid.FromString(id)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
+
+	scimUser, err := h.service.GetUser(c.Request().Context(), userID, orgID)
 	if err != nil {
 		return h.errorResponse(c, http.StatusNotFound, "", "User not found")
 	}
@@ -278,14 +284,19 @@ func (h *Handler) GetUser(c forge.Context) error {
 // ReplaceUser replaces a user (PUT)
 func (h *Handler) ReplaceUser(c forge.Context) error {
 	id := c.Param("id")
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
+
+	userID, err := xid.FromString(id)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
 
 	var scimUser SCIMUser
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimUser); err != nil {
 		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
 	}
 
-	updatedUser, err := h.service.ReplaceUser(c.Request().Context(), id, orgID, &scimUser)
+	updatedUser, err := h.service.ReplaceUser(c.Request().Context(), userID, orgID, &scimUser)
 	if err != nil {
 		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
 	}
@@ -296,14 +307,19 @@ func (h *Handler) ReplaceUser(c forge.Context) error {
 // UpdateUser updates a user (PATCH)
 func (h *Handler) UpdateUser(c forge.Context) error {
 	id := c.Param("id")
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
+
+	userID, err := xid.FromString(id)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
 
 	var patch PatchOp
 	if err := json.NewDecoder(c.Request().Body).Decode(&patch); err != nil {
 		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
 	}
 
-	updatedUser, err := h.service.UpdateUser(c.Request().Context(), id, orgID, &patch)
+	updatedUser, err := h.service.UpdateUser(c.Request().Context(), userID, orgID, &patch)
 	if err != nil {
 		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
 	}
@@ -314,9 +330,14 @@ func (h *Handler) UpdateUser(c forge.Context) error {
 // DeleteUser deletes a user
 func (h *Handler) DeleteUser(c forge.Context) error {
 	id := c.Param("id")
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
-	if err := h.service.DeleteUser(c.Request().Context(), id, orgID); err != nil {
+	userID, err := xid.FromString(id)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
+
+	if err := h.service.DeleteUser(c.Request().Context(), userID, orgID); err != nil {
 		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
 	}
 
@@ -332,7 +353,7 @@ func (h *Handler) CreateGroup(c forge.Context) error {
 		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
 	}
 
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	createdGroup, err := h.service.CreateGroup(c.Request().Context(), &scimGroup, orgID)
 	if err != nil {
@@ -344,7 +365,7 @@ func (h *Handler) CreateGroup(c forge.Context) error {
 
 // ListGroups lists groups
 func (h *Handler) ListGroups(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	// Get query parameters
 	filter := c.Query("filter")
@@ -368,8 +389,13 @@ func (h *Handler) ListGroups(c forge.Context) error {
 
 // GetGroup retrieves a specific group
 func (h *Handler) GetGroup(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
-	groupID := c.Param("id")
+	orgID := c.Get("org_id").(xid.ID)
+	groupIDStr := c.Param("id")
+
+	groupID, err := xid.FromString(groupIDStr)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
 
 	group, err := h.service.GetGroup(c.Request().Context(), groupID, orgID)
 	if err != nil {
@@ -381,8 +407,12 @@ func (h *Handler) GetGroup(c forge.Context) error {
 
 // ReplaceGroup replaces a group (PUT)
 func (h *Handler) ReplaceGroup(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
-	groupID := c.Param("id")
+	orgID := c.Get("org_id").(xid.ID)
+	groupIDStr := c.Param("id")
+	groupID, err := xid.FromString(groupIDStr)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
 
 	var scimGroup SCIMGroup
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimGroup); err != nil {
@@ -399,8 +429,12 @@ func (h *Handler) ReplaceGroup(c forge.Context) error {
 
 // UpdateGroup updates a group (PATCH)
 func (h *Handler) UpdateGroup(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
-	groupID := c.Param("id")
+	orgID := c.Get("org_id").(xid.ID)
+	groupIDStr := c.Param("id")
+	groupID, err := xid.FromString(groupIDStr)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
 
 	var patch PatchOp
 	if err := json.NewDecoder(c.Request().Body).Decode(&patch); err != nil {
@@ -417,8 +451,12 @@ func (h *Handler) UpdateGroup(c forge.Context) error {
 
 // DeleteGroup deletes a group
 func (h *Handler) DeleteGroup(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
-	groupID := c.Param("id")
+	orgID := c.Get("org_id").(xid.ID)
+	groupIDStr := c.Param("id")
+	groupID, err := xid.FromString(groupIDStr)
+	if err != nil {
+		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+	}
 
 	if err := h.service.DeleteGroup(c.Request().Context(), groupID, orgID); err != nil {
 		return h.errorResponse(c, http.StatusBadRequest, "", err.Error())
@@ -493,7 +531,7 @@ func (h *Handler) Search(c forge.Context) error {
 		searchReq.Count = h.config.Search.DefaultResults
 	}
 
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	listResponse, err := h.service.ListUsers(c.Request().Context(), orgID, searchReq.Filter, searchReq.StartIndex, searchReq.Count)
 	if err != nil {
@@ -518,7 +556,7 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
 	}
 
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	token, provToken, err := h.service.CreateProvisioningToken(
 		c.Request().Context(),
@@ -543,7 +581,7 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 
 // ListProvisioningTokens lists provisioning tokens
 func (h *Handler) ListProvisioningTokens(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	// Get pagination parameters
 	limit := 50
@@ -604,7 +642,7 @@ func (h *Handler) RevokeProvisioningToken(c forge.Context) error {
 
 // GetAttributeMappings gets attribute mappings
 func (h *Handler) GetAttributeMappings(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	mappings, err := h.service.GetAttributeMappings(c.Request().Context(), orgID)
 	if err != nil {
@@ -620,7 +658,7 @@ func (h *Handler) GetAttributeMappings(c forge.Context) error {
 
 // UpdateAttributeMappings updates attribute mappings
 func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	var req struct {
 		Mappings map[string]string `json:"mappings"`
@@ -645,7 +683,7 @@ func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
 
 // GetProvisioningLogs gets provisioning logs
 func (h *Handler) GetProvisioningLogs(c forge.Context) error {
-	orgID := c.Get("org_id").(string)
+	orgID := c.Get("org_id").(xid.ID)
 
 	// Get pagination and filter parameters
 	action := c.Query("action")

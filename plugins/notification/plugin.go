@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/audit"
@@ -22,13 +23,87 @@ type Plugin struct {
 	templateSvc   *TemplateService
 	db            *bun.DB
 	config        Config
+	defaultConfig Config
 	forgeConfig   forge.ConfigManager
 	defaultsAdded bool
 }
 
-// NewPlugin creates a new notification plugin instance
-func NewPlugin() *Plugin {
-	return &Plugin{}
+// PluginOption is a functional option for configuring the notification plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithAddDefaultTemplates sets whether to add default templates
+func WithAddDefaultTemplates(add bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AddDefaultTemplates = add
+	}
+}
+
+// WithDefaultLanguage sets the default language
+func WithDefaultLanguage(lang string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.DefaultLanguage = lang
+	}
+}
+
+// WithAllowOrgOverrides sets whether to allow organization overrides
+func WithAllowOrgOverrides(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowOrgOverrides = allow
+	}
+}
+
+// WithAutoSendWelcome sets whether to auto-send welcome emails
+func WithAutoSendWelcome(auto bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AutoSendWelcome = auto
+	}
+}
+
+// WithRetryConfig sets the retry configuration
+func WithRetryConfig(attempts int, delay time.Duration) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RetryAttempts = attempts
+		p.defaultConfig.RetryDelay = delay
+	}
+}
+
+// WithEmailProvider sets the email provider configuration
+func WithEmailProvider(provider, from, fromName string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.Providers.Email.Provider = provider
+		p.defaultConfig.Providers.Email.From = from
+		p.defaultConfig.Providers.Email.FromName = fromName
+	}
+}
+
+// WithSMSProvider sets the SMS provider configuration
+func WithSMSProvider(provider, from string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.Providers.SMS.Provider = provider
+		p.defaultConfig.Providers.SMS.From = from
+	}
+}
+
+// NewPlugin creates a new notification plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 // ID returns the plugin identifier
@@ -40,11 +115,12 @@ func (p *Plugin) ID() string {
 func (p *Plugin) Init(dep interface{}) error {
 	type authInstance interface {
 		GetDB() *bun.DB
+		GetForgeApp() forge.App
 	}
 
 	authInst, ok := dep.(authInstance)
 	if !ok {
-		return fmt.Errorf("notification plugin requires auth instance with GetDB method")
+		return fmt.Errorf("notification plugin requires auth instance with GetDB and GetForgeApp methods")
 	}
 
 	db := authInst.GetDB()
@@ -54,8 +130,21 @@ func (p *Plugin) Init(dep interface{}) error {
 
 	p.db = db
 
-	// Use default config
-	p.config = DefaultConfig()
+	// Get Forge app and config manager
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp != nil {
+		configManager := forgeApp.Config()
+
+		// Bind configuration using Forge ConfigManager with provided defaults
+		if err := configManager.BindWithDefault("auth.notification", &p.config, p.defaultConfig); err != nil {
+			// Log but don't fail - use defaults
+			fmt.Printf("[Notification] Warning: failed to bind config: %v\n", err)
+			p.config = p.defaultConfig
+		}
+	} else {
+		// Fallback to default config if no Forge app
+		p.config = p.defaultConfig
+	}
 
 	// Initialize repositories
 	notificationRepo := repo.NewNotificationRepository(db)

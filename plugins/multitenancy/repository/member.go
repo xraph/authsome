@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 )
@@ -29,7 +30,7 @@ func (r *MemberRepository) Create(ctx context.Context, member *organization.Memb
 }
 
 // FindByID finds a member by ID
-func (r *MemberRepository) FindByID(ctx context.Context, id string) (*organization.Member, error) {
+func (r *MemberRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Member, error) {
 	member := &organization.Member{}
 	err := r.db.NewSelect().Model(member).Where("id = ?", id).Scan(ctx)
 	if err != nil {
@@ -42,7 +43,7 @@ func (r *MemberRepository) FindByID(ctx context.Context, id string) (*organizati
 }
 
 // FindByOrgAndUser finds a member by organization and user ID
-func (r *MemberRepository) FindByOrgAndUser(ctx context.Context, orgID, userID string) (*organization.Member, error) {
+func (r *MemberRepository) FindByOrgAndUser(ctx context.Context, orgID, userID xid.ID) (*organization.Member, error) {
 	member := &organization.Member{}
 	err := r.db.NewSelect().Model(member).
 		Where("organization_id = ? AND user_id = ?", orgID, userID).
@@ -66,7 +67,7 @@ func (r *MemberRepository) Update(ctx context.Context, member *organization.Memb
 }
 
 // Delete deletes a member
-func (r *MemberRepository) Delete(ctx context.Context, id string) error {
+func (r *MemberRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*organization.Member)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete member: %w", err)
@@ -75,7 +76,7 @@ func (r *MemberRepository) Delete(ctx context.Context, id string) error {
 }
 
 // ListByOrganization lists members by organization with pagination
-func (r *MemberRepository) ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*organization.Member, error) {
+func (r *MemberRepository) ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*organization.Member, error) {
 	var members []*organization.Member
 
 	// Get paginated results
@@ -94,7 +95,7 @@ func (r *MemberRepository) ListByOrganization(ctx context.Context, orgID string,
 }
 
 // FindByUserAndOrg finds a member by user ID and organization ID
-func (r *MemberRepository) FindByUserAndOrg(ctx context.Context, userID, orgID string) (*organization.Member, error) {
+func (r *MemberRepository) FindByUserAndOrg(ctx context.Context, userID, orgID xid.ID) (*organization.Member, error) {
 	var member organization.Member
 	err := r.db.NewSelect().
 		Model(&member).
@@ -110,7 +111,7 @@ func (r *MemberRepository) FindByUserAndOrg(ctx context.Context, userID, orgID s
 }
 
 // DeleteByUserID deletes all memberships for a user
-func (r *MemberRepository) DeleteByUserID(ctx context.Context, userID string) error {
+func (r *MemberRepository) DeleteByUserID(ctx context.Context, userID xid.ID) error {
 	_, err := r.db.NewDelete().Model((*organization.Member)(nil)).Where("user_id = ?", userID).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete user memberships: %w", err)
@@ -119,7 +120,7 @@ func (r *MemberRepository) DeleteByUserID(ctx context.Context, userID string) er
 }
 
 // CountByOrganization returns the total number of members in an organization
-func (r *MemberRepository) CountByOrganization(ctx context.Context, orgID string) (int, error) {
+func (r *MemberRepository) CountByOrganization(ctx context.Context, orgID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*organization.Member)(nil)).
 		Where("organization_id = ?", orgID).
@@ -131,7 +132,7 @@ func (r *MemberRepository) CountByOrganization(ctx context.Context, orgID string
 }
 
 // ListByUser lists organizations a user is a member of
-func (r *MemberRepository) ListByUser(ctx context.Context, userID string) ([]*organization.Member, error) {
+func (r *MemberRepository) ListByUser(ctx context.Context, userID xid.ID) ([]*organization.Member, error) {
 	var members []*organization.Member
 
 	// Get all memberships for the user

@@ -34,7 +34,7 @@ func (r *UserRepository) toSchema(u *core.User) *schema.User {
 		// Auditable fields: default to self for dev/standalone creates
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: u.CreatedAt,
-			UpdatedAt: bun.NullTime{Time: u.UpdatedAt},
+			UpdatedAt: u.UpdatedAt,
 			CreatedBy: u.ID,
 			UpdatedBy: u.ID,
 		},
@@ -56,7 +56,7 @@ func (r *UserRepository) fromSchema(su *schema.User) *core.User {
 		Username:        su.Username,
 		DisplayUsername: su.DisplayUsername,
 		CreatedAt:       su.CreatedAt,
-		UpdatedAt:       su.UpdatedAt.Time,
+		UpdatedAt:       su.UpdatedAt,
 	}
 }
 

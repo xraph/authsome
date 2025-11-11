@@ -23,7 +23,7 @@ func NewMiddleware(service *Service, config *Config) *Middleware {
 
 // RequireLevel returns middleware that enforces a specific security level
 func (m *Middleware) RequireLevel(level SecurityLevel) forge.MiddlewareFunc {
-	return func(next forge.HandlerFunc) forge.HandlerFunc {
+	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			// Extract user context from request
 			userID, orgID, sessionID := m.extractUserContext(c)
@@ -74,8 +74,8 @@ func (m *Middleware) RequireLevel(level SecurityLevel) forge.MiddlewareFunc {
 }
 
 // RequireForRoute returns middleware that checks route-based rules
-func (m *Middleware) RequireForRoute() forge.MiddlewareFunc {
-	return func(next forge.HandlerFunc) forge.HandlerFunc {
+func (m *Middleware) RequireForRoute() forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			// Skip if not enabled
 			if !m.config.Enabled {
@@ -125,7 +125,7 @@ func (m *Middleware) RequireForRoute() forge.MiddlewareFunc {
 
 			// Store result in context for handlers
 			ctx := context.WithValue(c.Request().Context(), "stepup_result", result)
-			c.SetRequest(c.Request().WithContext(ctx))
+			c.Request().WithContext(ctx)
 
 			return next(c)
 		}
@@ -133,8 +133,8 @@ func (m *Middleware) RequireForRoute() forge.MiddlewareFunc {
 }
 
 // RequireForAmount returns middleware that checks amount-based rules
-func (m *Middleware) RequireForAmount(amount float64, currency string) forge.MiddlewareFunc {
-	return func(next forge.HandlerFunc) forge.HandlerFunc {
+func (m *Middleware) RequireForAmount(amount float64, currency string) forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			userID, orgID, sessionID := m.extractUserContext(c)
 			if userID == "" {
@@ -184,8 +184,9 @@ func (m *Middleware) RequireForAmount(amount float64, currency string) forge.Mid
 }
 
 // RequireForResource returns middleware that checks resource-based rules
-func (m *Middleware) RequireForResource(resourceType, action string) forge.MiddlewareFunc {
-	return func(next forge.HandlerFunc) forge.HandlerFunc {
+func (m *Middleware) RequireForResource(resourceType, action string) forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
+
 		return func(c forge.Context) error {
 			userID, orgID, sessionID := m.extractUserContext(c)
 			if userID == "" {
@@ -313,8 +314,8 @@ func (m *Middleware) meetsLevel(current, required SecurityLevel) bool {
 }
 
 // EvaluateMiddleware evaluates but doesn't block - stores result in context
-func (m *Middleware) EvaluateMiddleware() forge.MiddlewareFunc {
-	return func(next forge.HandlerFunc) forge.HandlerFunc {
+func (m *Middleware) EvaluateMiddleware() forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			userID, orgID, sessionID := m.extractUserContext(c)
 
@@ -334,7 +335,7 @@ func (m *Middleware) EvaluateMiddleware() forge.MiddlewareFunc {
 				if result, err := m.service.EvaluateRequirement(c.Request().Context(), evalCtx); err == nil {
 					// Store in context for handlers
 					ctx := context.WithValue(c.Request().Context(), "stepup_evaluation", result)
-					c.SetRequest(c.Request().WithContext(ctx))
+					c.Request().WithContext(ctx)
 
 					// Also set as context value for easy access
 					c.Set("stepup_evaluation", result)

@@ -21,6 +21,7 @@ type Plugin struct {
 	service         *Service
 	adapterRegistry *FactorAdapterRegistry
 	config          *Config
+	defaultConfig   *Config
 
 	// Dependencies from other plugins
 	twofaService    *twofa.Service
@@ -29,11 +30,96 @@ type Plugin struct {
 	// passkeyService  *passkey.Service // Uncomment when passkey is stable
 }
 
-// NewPlugin creates a new MFA plugin
-func NewPlugin() *Plugin {
-	return &Plugin{
-		config: DefaultConfig(),
+// PluginOption is a functional option for configuring the MFA plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg *Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
 	}
+}
+
+// WithEnabled sets whether MFA is enabled
+func WithEnabled(enabled bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.Enabled = enabled
+	}
+}
+
+// WithRequireForAllUsers sets whether MFA is required for all users
+func WithRequireForAllUsers(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireForAllUsers = required
+	}
+}
+
+// WithGracePeriodDays sets the grace period in days
+func WithGracePeriodDays(days int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.GracePeriodDays = days
+	}
+}
+
+// WithTOTP sets the TOTP configuration
+func WithTOTP(enabled bool, issuer string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.TOTP.Enabled = enabled
+		p.defaultConfig.TOTP.Issuer = issuer
+	}
+}
+
+// WithSMS sets the SMS configuration
+func WithSMS(enabled bool, codeLength, expiryMinutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SMS.Enabled = enabled
+		p.defaultConfig.SMS.CodeLength = codeLength
+		p.defaultConfig.SMS.CodeExpiryMinutes = expiryMinutes
+	}
+}
+
+// WithEmail sets the email configuration
+func WithEmail(enabled bool, codeLength, expiryMinutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.Email.Enabled = enabled
+		p.defaultConfig.Email.CodeLength = codeLength
+		p.defaultConfig.Email.CodeExpiryMinutes = expiryMinutes
+	}
+}
+
+// WithBackupCodes sets the backup codes configuration
+func WithBackupCodes(enabled bool, count, length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.BackupCodes.Enabled = enabled
+		p.defaultConfig.BackupCodes.Count = count
+		p.defaultConfig.BackupCodes.Length = length
+	}
+}
+
+// WithAdaptiveMFA sets the adaptive MFA configuration
+func WithAdaptiveMFA(enabled bool, threshold float64) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AdaptiveMFA.Enabled = enabled
+		p.defaultConfig.AdaptiveMFA.RiskThreshold = threshold
+	}
+}
+
+// NewPlugin creates a new MFA plugin with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	// Set config to default config
+	p.config = p.defaultConfig
+
+	return p
 }
 
 // ID returns the plugin identifier
@@ -47,6 +133,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	type authInterface interface {
 		GetDB() *bun.DB
 		GetServiceRegistry() *registry.ServiceRegistry
+		GetForgeApp() forge.App
 	}
 
 	authInstance, ok := auth.(authInterface)
@@ -57,6 +144,22 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.db = authInstance.GetDB()
 	if p.db == nil {
 		return fmt.Errorf("database not available")
+	}
+
+	// Get Forge app and config manager
+	forgeApp := authInstance.GetForgeApp()
+	if forgeApp != nil {
+		configManager := forgeApp.Config()
+
+		// Bind configuration using Forge ConfigManager with provided defaults
+		if err := configManager.BindWithDefault("auth.mfa", p.config, p.defaultConfig); err != nil {
+			// Log but don't fail - use defaults
+			fmt.Printf("[MFA] Warning: failed to bind config: %v\n", err)
+			p.config = p.defaultConfig
+		}
+	} else {
+		// Fallback to default config if no Forge app
+		p.config = p.defaultConfig
 	}
 
 	// Initialize adapter registry

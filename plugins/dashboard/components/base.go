@@ -19,6 +19,7 @@ type PageData struct {
 	Success        string
 	Year           int
 	EnabledPlugins map[string]bool
+	IsSaaSMode     bool // Whether multitenancy is enabled
 }
 
 // BaseLayout renders the main HTML structure

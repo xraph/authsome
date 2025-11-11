@@ -33,7 +33,11 @@ type Plugin struct {
 	db *bun.DB
 
 	// Configuration
-	config Config
+	config        Config
+	defaultConfig Config
+
+	// Logger
+	logger forge.Logger
 }
 
 // Config holds the multi-tenancy plugin configuration
@@ -60,9 +64,83 @@ type Config struct {
 	InvitationExpiryHours int `json:"invitationExpiryHours"`
 }
 
-// NewPlugin creates a new multi-tenancy plugin instance
-func NewPlugin() *Plugin {
-	return &Plugin{}
+// PluginOption is a functional option for configuring the plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithPlatformOrganizationID sets the platform organization ID
+func WithPlatformOrganizationID(id string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.PlatformOrganizationID = id
+	}
+}
+
+// WithDefaultOrganizationName sets the default organization name
+func WithDefaultOrganizationName(name string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.DefaultOrganizationName = name
+	}
+}
+
+// WithEnableOrganizationCreation sets whether organization creation is enabled
+func WithEnableOrganizationCreation(enabled bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.EnableOrganizationCreation = enabled
+	}
+}
+
+// WithMaxMembersPerOrganization sets the maximum members per organization
+func WithMaxMembersPerOrganization(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxMembersPerOrganization = max
+	}
+}
+
+// WithMaxTeamsPerOrganization sets the maximum teams per organization
+func WithMaxTeamsPerOrganization(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxTeamsPerOrganization = max
+	}
+}
+
+// WithRequireInvitation sets whether invitation is required
+func WithRequireInvitation(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireInvitation = required
+	}
+}
+
+// WithInvitationExpiryHours sets the invitation expiry hours
+func WithInvitationExpiryHours(hours int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.InvitationExpiryHours = hours
+	}
+}
+
+// NewPlugin creates a new multi-tenancy plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: Config{
+			DefaultOrganizationName:   "Platform Organization",
+			MaxMembersPerOrganization: 1000,
+			MaxTeamsPerOrganization:   100,
+			InvitationExpiryHours:     72,
+		},
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 // ID returns the plugin identifier
@@ -87,6 +165,9 @@ func (p *Plugin) Init(auth interface{}) error {
 	configManager := forgeApp.Config()
 	serviceRegistry := authInstance.GetServiceRegistry()
 
+	// Get logger from Forge app
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "multitenancy"))
+
 	// Register models with Bun for relationships to work
 	// Register TeamMember first as it's the join table for m2m relationships
 	p.db.RegisterModel((*organization.TeamMember)(nil))
@@ -97,10 +178,10 @@ func (p *Plugin) Init(auth interface{}) error {
 		(*organization.Invitation)(nil),
 	)
 
-	// Try to bind plugin configuration using Forge ConfigManager
-	if err := configManager.Bind("auth.multitenancy", &p.config); err != nil {
+	// Try to bind plugin configuration using Forge ConfigManager with provided defaults
+	if err := configManager.BindWithDefault("auth.multitenancy", &p.config, p.defaultConfig); err != nil {
 		// Log but don't fail - use defaults
-		fmt.Printf("Warning: failed to bind multitenancy config: %v\n", err)
+		p.logger.Warn("failed to bind multitenancy config", forge.F("error", err.Error()))
 	}
 
 	// Set default values
@@ -468,12 +549,14 @@ func (p *Plugin) Migrate() error {
 // Hook handlers
 
 // handleUserCreated is called when a user is created
+// This ensures organization membership in both standalone and SaaS modes
 func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 	// Check if this is the first user (no organizations exist yet)
 	orgs, err := p.orgService.ListOrganizations(ctx, 1, 0)
 	if err != nil || len(orgs) == 0 {
-		// This is the first user - create the platform organization
-		fmt.Printf("[MultiTenancy] Creating platform organization for first user: %s\n", u.Email)
+		// This is the FIRST user - create the platform organization
+		// In both standalone and SaaS modes, this becomes the foundational organization
+		p.logger.Info("creating platform organization for first user", forge.F("email", u.Email))
 
 		platformSlug := p.config.PlatformOrganizationID
 		if platformSlug == "" {
@@ -483,26 +566,49 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 		platformOrg, err := p.orgService.CreateOrganization(ctx, &organization.CreateOrganizationRequest{
 			Name: "Platform Organization",
 			Slug: platformSlug,
-		}, u.ID.String())
+		}, u.ID)
 		if err != nil {
 			return fmt.Errorf("failed to create platform organization: %w", err)
 		}
 
-		fmt.Printf("[MultiTenancy] ✅ Platform organization created: %s (ID: %s)\n", platformOrg.Name, platformOrg.ID)
-		fmt.Printf("[MultiTenancy] ✅ First user %s is now platform owner\n", u.Email)
+		// Add first user as OWNER of platform organization (not just member)
+		_, err = p.orgService.AddMember(ctx, platformOrg.ID, u.ID, organization.RoleOwner)
+		if err != nil {
+			return fmt.Errorf("failed to add first user as platform owner: %w", err)
+		}
+
+		p.logger.Info("platform organization created",
+			forge.F("name", platformOrg.Name),
+			forge.F("id", platformOrg.ID.String()))
+		p.logger.Info("first user is now platform owner",
+			forge.F("email", u.Email),
+			forge.F("role", string(organization.RoleOwner)))
 		return nil
 	}
 
-	// Not the first user - add to default organization
-	defaultOrg, err := p.orgService.GetDefaultOrganization(ctx)
+	// Not the first user - behavior depends on mode
+	// Get the platform/default organization
+	platformOrg, err := p.orgService.GetOrganizationBySlug(ctx, "platform")
 	if err != nil {
-		return fmt.Errorf("failed to get default organization: %w", err)
+		// Fallback to default organization if platform not found
+		platformOrg, err = p.orgService.GetDefaultOrganization(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get platform/default organization: %w", err)
+		}
 	}
 
-	// Add user as member of default organization
-	_, err = p.orgService.AddMember(ctx, defaultOrg.ID, u.ID.String(), "member")
+	// In standalone mode, add all users to the platform organization
+	// In SaaS mode, users will create/join their own organizations
+	// For now, we'll add them to platform org in both modes (can be refined later)
+	_, err = p.orgService.AddMember(ctx, platformOrg.ID, u.ID, organization.RoleMember)
 	if err != nil {
-		return fmt.Errorf("failed to add user to default organization: %w", err)
+		// Check if already a member
+		if err.Error() != "user is already a member of this organization" {
+			return fmt.Errorf("failed to add user to platform organization: %w", err)
+		}
+		p.logger.Info("user already member of platform organization", forge.F("email", u.Email))
+	} else {
+		p.logger.Info("user added to platform organization as member", forge.F("email", u.Email))
 	}
 
 	return nil
@@ -511,7 +617,7 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 // handleUserDeleted is called when a user is deleted
 func (p *Plugin) handleUserDeleted(ctx context.Context, userID xid.ID) error {
 	// Remove user from all organizations
-	return p.orgService.RemoveUserFromAllOrganizations(ctx, userID.String())
+	return p.orgService.RemoveUserFromAllOrganizations(ctx, userID)
 }
 
 // handleSessionCreated is called when a session is created

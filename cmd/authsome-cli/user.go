@@ -341,7 +341,7 @@ func showUser(userID string) error {
 	fmt.Printf("  Name: %s\n", user.Name)
 	fmt.Printf("  Verified: %t\n", user.EmailVerified)
 	fmt.Printf("  Created: %s\n", user.CreatedAt.Format(time.RFC3339))
-	fmt.Printf("  Updated: %s\n", user.UpdatedAt.Time.Format(time.RFC3339))
+	fmt.Printf("  Updated: %s\n", user.UpdatedAt.Format(time.RFC3339))
 
 	if len(memberships) > 0 {
 		fmt.Printf("\nOrganization Memberships:\n")

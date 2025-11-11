@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/forge"
 )
@@ -51,6 +52,27 @@ type AuthInterface interface {
 	GetForgeApp() interface{}                      // Returns forge.App
 	GetServiceRegistry() *registry.ServiceRegistry // Returns service registry
 	GetHookRegistry() *hooks.HookRegistry          // Returns hook registry
+}
+
+// Optional Plugin Interfaces
+// Plugins can optionally implement these interfaces to enable additional functionality
+
+// PluginWithRoles is an optional interface that plugins can implement to register roles
+// in the role bootstrap system. Roles registered here will be automatically bootstrapped
+// to the platform organization during server startup.
+//
+// Example:
+//
+//	func (p *MyPlugin) RegisterRoles(registry *rbac.RoleRegistry) error {
+//	    return registry.RegisterRole(&rbac.RoleDefinition{
+//	        Name:        "custom_role",
+//	        Description: "Custom Role",
+//	        Permissions: []string{"view on custom_resource"},
+//	    })
+//	}
+type PluginWithRoles interface {
+	Plugin
+	RegisterRoles(registry rbac.RoleRegistryInterface) error // registry is *rbac.RoleRegistry
 }
 
 // Registry manages registered plugins

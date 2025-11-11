@@ -42,7 +42,7 @@ func (r *OrganizationRepository) fromOrgSchema(so *schema.Organization) *core.Or
 		Logo:      so.Logo,
 		Metadata:  so.Metadata,
 		CreatedAt: so.CreatedAt,
-		UpdatedAt: so.UpdatedAt.Time,
+		UpdatedAt: so.UpdatedAt,
 	}
 }
 
@@ -121,7 +121,7 @@ func (r *OrganizationRepository) fromMemberSchema(sm *schema.Member) *core.Membe
 		UserID:         sm.UserID,
 		Role:           sm.Role,
 		CreatedAt:      sm.CreatedAt,
-		UpdatedAt:      sm.UpdatedAt.Time,
+		UpdatedAt:      sm.UpdatedAt,
 	}
 }
 
@@ -206,7 +206,7 @@ func (r *OrganizationRepository) fromTeamSchema(st *schema.Team) *core.Team {
 		Name:           st.Name,
 		Description:    st.Description,
 		CreatedAt:      st.CreatedAt,
-		UpdatedAt:      st.UpdatedAt.Time,
+		UpdatedAt:      st.UpdatedAt,
 	}
 }
 

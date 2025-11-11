@@ -117,7 +117,7 @@ type SSOErrorResponse struct {
 }
 
 type SSOProviderResponse struct {
-	Status    string `json:"status" example:"registered"`
+	Status     string `json:"status" example:"registered"`
 	ProviderID string `json:"providerId" example:"provider_123"`
 }
 

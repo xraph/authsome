@@ -79,26 +79,46 @@ func Logo(basePath string) g.Node {
 }
 
 func DesktopNavigation(data PageData) g.Node {
-	return Nav(
-		Class("hidden items-center gap-1.5 lg:flex"),
+	navItems := []g.Node{
 		navLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
 		navLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
 		navLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
-		navLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"),
+	}
+
+	// Add Organizations link if in SaaS mode
+	if data.IsSaaSMode {
+		navItems = append(navItems, navLink("Organizations", data.BasePath+"/dashboard/organizations", data.ActivePage == "organizations"))
+	}
+
+	navItems = append(navItems, navLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"))
+
+	return Nav(
+		Class("hidden items-center gap-1.5 lg:flex"),
+		g.Group(navItems),
 	)
 }
 
 func MobileNavigation(data PageData) g.Node {
+	navItems := []g.Node{
+		mobileNavLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
+		mobileNavLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
+		mobileNavLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
+	}
+
+	// Add Organizations link if in SaaS mode
+	if data.IsSaaSMode {
+		navItems = append(navItems, mobileNavLink("Organizations", data.BasePath+"/dashboard/organizations", data.ActivePage == "organizations"))
+	}
+
+	navItems = append(navItems, mobileNavLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"))
+
 	return Div(
 		g.Attr("x-cloak", ""),
 		g.Attr("x-show", "mobileNavOpen"),
 		Class("lg:hidden"),
 		Nav(
 			Class("flex flex-col gap-2 border-t border-slate-200 dark:border-gray-800 py-4"),
-			mobileNavLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
-			mobileNavLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
-			mobileNavLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
-			mobileNavLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"),
+			g.Group(navItems),
 		),
 	)
 }

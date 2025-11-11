@@ -25,7 +25,7 @@ import HeroSection2 from "@/components/hero-section";
 import ConceptsHighlightSection from "@/components/concepts-highlight-section";
 import SpecialHighlightSection from "@/components/special-highlight-section";
 import FooterSection from "@/components/footer-section";
-import { SvgGradientBackground } from "@/components/misc-components";
+import { SvgMountainBackground, SvgLiquidBackground, SvgWaveBackground, SvgGridDotsBackground } from "@/components/misc-components";
 // import { useTheme } from "next-themes";
 
 /**
@@ -37,7 +37,7 @@ function HeroSection() {
   // const shadowColor = theme.resolvedTheme === "dark" ? "white" : "black"
   return (
     <section className="relative container overflow-hidden  py-24 sm:py-32">
-      <SvgGradientBackground />
+      <SvgWaveBackground />
       <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:60px_60px]" />
       <div className="relative mx-auto max-w-7xl px-6 lg:px-8 grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="mx-auto max-w-2xl text-left">
@@ -73,8 +73,10 @@ function HeroSection() {
           </div>
         </div>
 
-        <div className="mx-auto max-w-2xl text-center">
-          Things to add
+        <div className="mx-auto max-w-2xl text-center relative">
+          <SvgGridDotsBackground dotColor="#8B5CF6" spacing={30} />
+          <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:60px_60px]" />
+          
         </div>
       </div>
     </section>
@@ -211,7 +213,7 @@ function FeaturesSection() {
 function QuickStartSection() {
   return (
     <section className="relative container overflow-hidden  py-24 sm:py-32">
-      <SvgGradientBackground />
+      <SvgLiquidBackground />
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
@@ -224,7 +226,7 @@ function QuickStartSection() {
         </div>
         <div className="mx-auto mt-16 max-w-4xl">
           <div className="grid gap-8 lg:grid-cols-2">
-            <Card>
+            <Card className="shadow-md rounded-sm bg-background/30 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground">
@@ -241,7 +243,7 @@ function QuickStartSection() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="shadow-md rounded-sm bg-background/30 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground">
@@ -460,8 +462,6 @@ export default function HomePage() {
           <SpecialHighlightSection />
           <Separator />
           <QuickStartSection />
-          <Separator />
-          <NavigationSection />
           <Separator />
           <CommunitySection />
           <FooterSection />

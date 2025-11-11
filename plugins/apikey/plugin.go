@@ -22,13 +22,91 @@ type Plugin struct {
 	handler       *Handler
 	middleware    *Middleware
 	config        Config
+	defaultConfig Config
 	cleanupTicker *time.Ticker
 	cleanupDone   chan bool
 }
 
-// NewPlugin creates a new API key plugin instance
-func NewPlugin() *Plugin {
-	return &Plugin{}
+// PluginOption is a functional option for configuring the API key plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithDefaultRateLimit sets the default rate limit
+func WithDefaultRateLimit(limit int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.DefaultRateLimit = limit
+	}
+}
+
+// WithMaxRateLimit sets the maximum rate limit
+func WithMaxRateLimit(limit int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxRateLimit = limit
+	}
+}
+
+// WithDefaultExpiry sets the default key expiry
+func WithDefaultExpiry(expiry time.Duration) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.DefaultExpiry = expiry
+	}
+}
+
+// WithMaxKeysPerUser sets the maximum keys per user
+func WithMaxKeysPerUser(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxKeysPerUser = max
+	}
+}
+
+// WithMaxKeysPerOrg sets the maximum keys per organization
+func WithMaxKeysPerOrg(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxKeysPerOrg = max
+	}
+}
+
+// WithKeyLength sets the API key length
+func WithKeyLength(length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.KeyLength = length
+	}
+}
+
+// WithAllowQueryParam sets whether to allow API keys in query params
+func WithAllowQueryParam(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowQueryParam = allow
+	}
+}
+
+// WithAutoCleanup sets the auto cleanup configuration
+func WithAutoCleanup(enabled bool, interval time.Duration) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AutoCleanup.Enabled = enabled
+		p.defaultConfig.AutoCleanup.Interval = interval
+	}
+}
+
+// NewPlugin creates a new API key plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 // ID returns the plugin identifier
@@ -53,14 +131,13 @@ func (p *Plugin) Init(auth interface{}) error {
 	configManager := forgeApp.Config()
 	serviceRegistry := authInstance.GetServiceRegistry()
 
-	// Load configuration from Forge config manager
-	var config Config
-	if err := configManager.Bind("auth.apikey", &config); err != nil {
+	// Load configuration from Forge config manager with provided defaults
+	if err := configManager.BindWithDefault("auth.apikey", &p.config, p.defaultConfig); err != nil {
 		// Use defaults if binding fails
-		config = DefaultConfig()
+		fmt.Printf("[APIKey] Warning: failed to bind config: %v\n", err)
+		p.config = p.defaultConfig
 	}
-	config.Validate() // Ensure defaults are set
-	p.config = config
+	p.config.Validate() // Ensure defaults are set
 
 	// Get services from registry
 	auditSvc := serviceRegistry.AuditService()
@@ -78,23 +155,23 @@ func (p *Plugin) Init(auth interface{}) error {
 
 	// Initialize service with rate limiting support
 	serviceCfg := apikey.Config{
-		DefaultRateLimit: config.DefaultRateLimit,
-		MaxRateLimit:     config.MaxRateLimit,
-		DefaultExpiry:    config.DefaultExpiry,
-		MaxKeysPerUser:   config.MaxKeysPerUser,
-		MaxKeysPerOrg:    config.MaxKeysPerOrg,
-		KeyLength:        config.KeyLength,
+		DefaultRateLimit: p.config.DefaultRateLimit,
+		MaxRateLimit:     p.config.MaxRateLimit,
+		DefaultExpiry:    p.config.DefaultExpiry,
+		MaxKeysPerUser:   p.config.MaxKeysPerUser,
+		MaxKeysPerOrg:    p.config.MaxKeysPerOrg,
+		KeyLength:        p.config.KeyLength,
 	}
 	p.service = apikey.NewService(apikeyRepo, auditSvc, serviceCfg)
 
 	// Initialize middleware with rate limiting
-	p.middleware = NewMiddleware(p.service, userSvc, rateLimitSvc, config)
+	p.middleware = NewMiddleware(p.service, userSvc, rateLimitSvc, p.config)
 
 	// Initialize handler
-	p.handler = NewHandler(p.service, config)
+	p.handler = NewHandler(p.service, p.config)
 
 	// Start cleanup scheduler if enabled
-	if config.AutoCleanup.Enabled {
+	if p.config.AutoCleanup.Enabled {
 		p.startCleanupScheduler()
 	}
 

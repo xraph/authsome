@@ -138,6 +138,126 @@ type testContext struct {
 	r *http.Request
 }
 
+// NoContent implements shared.Context.
+func (c *testContext) NoContent(code int) error {
+	panic("unimplemented")
+}
+
+// ParamBool implements shared.Context.
+func (c *testContext) ParamBool(name string) (bool, error) {
+	panic("unimplemented")
+}
+
+// ParamBoolDefault implements shared.Context.
+func (c *testContext) ParamBoolDefault(name string, defaultValue bool) bool {
+	panic("unimplemented")
+}
+
+// ParamFloat64 implements shared.Context.
+func (c *testContext) ParamFloat64(name string) (float64, error) {
+	panic("unimplemented")
+}
+
+// ParamFloat64Default implements shared.Context.
+func (c *testContext) ParamFloat64Default(name string, defaultValue float64) float64 {
+	panic("unimplemented")
+}
+
+// ParamInt implements shared.Context.
+func (c *testContext) ParamInt(name string) (int, error) {
+	panic("unimplemented")
+}
+
+// ParamInt64 implements shared.Context.
+func (c *testContext) ParamInt64(name string) (int64, error) {
+	panic("unimplemented")
+}
+
+// ParamInt64Default implements shared.Context.
+func (c *testContext) ParamInt64Default(name string, defaultValue int64) int64 {
+	panic("unimplemented")
+}
+
+// ParamIntDefault implements shared.Context.
+func (c *testContext) ParamIntDefault(name string, defaultValue int) int {
+	panic("unimplemented")
+}
+
+// Params implements shared.Context.
+func (c *testContext) Params() map[string]string {
+	panic("unimplemented")
+}
+
+// ParseMultipartForm implements shared.Context.
+func (c *testContext) ParseMultipartForm(maxMemory int64) error {
+	panic("unimplemented")
+}
+
+// QueryDefault implements shared.Context.
+func (c *testContext) QueryDefault(name string, defaultValue string) string {
+	panic("unimplemented")
+}
+
+// Resolve implements shared.Context.
+func (c *testContext) Resolve(name string) (any, error) {
+	panic("unimplemented")
+}
+
+// SaveSession implements shared.Context.
+func (c *testContext) SaveSession() error {
+	panic("unimplemented")
+}
+
+// Scope implements shared.Context.
+func (c *testContext) Scope() forge.Scope {
+	panic("unimplemented")
+}
+
+// Session implements shared.Context.
+func (c *testContext) Session() (forge.Session, error) {
+	panic("unimplemented")
+}
+
+// SessionID implements shared.Context.
+func (c *testContext) SessionID() string {
+	panic("unimplemented")
+}
+
+// SetCookie implements shared.Context.
+func (c *testContext) SetCookie(name string, value string, maxAge int) {
+	panic("unimplemented")
+}
+
+// SetCookieWithOptions implements shared.Context.
+func (c *testContext) SetCookieWithOptions(name string, value string, path string, domain string, maxAge int, secure bool, httpOnly bool) {
+	panic("unimplemented")
+}
+
+// SetSession implements shared.Context.
+func (c *testContext) SetSession(session forge.Session) {
+	panic("unimplemented")
+}
+
+// SetSessionValue implements shared.Context.
+func (c *testContext) SetSessionValue(key string, value any) {
+	panic("unimplemented")
+}
+
+// Status implements shared.Context.
+func (c *testContext) Status(code int) forge.ResponseBuilder {
+	panic("unimplemented")
+}
+
+// WithContext implements shared.Context.
+func (c *testContext) WithContext(ctx context.Context) {
+	panic("unimplemented")
+}
+
+// XML implements shared.Context.
+func (c *testContext) XML(code int, v any) error {
+	panic("unimplemented")
+}
+
 func (c *testContext) Request() *http.Request { return c.r }
 func (c *testContext) Header(key string) string {
 	return c.r.Header.Get(key) // For getting header values

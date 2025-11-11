@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/rs/xid"
 )
 
 // Service handles organization-related business logic
@@ -35,48 +35,48 @@ type Config struct {
 // OrganizationRepository defines the interface for organization data access
 type OrganizationRepository interface {
 	Create(ctx context.Context, org *Organization) error
-	FindByID(ctx context.Context, id string) (*Organization, error)
+	FindByID(ctx context.Context, id xid.ID) (*Organization, error)
 	FindBySlug(ctx context.Context, slug string) (*Organization, error)
 	List(ctx context.Context, limit, offset int) ([]*Organization, error)
 	Update(ctx context.Context, org *Organization) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, id xid.ID) error
 	Count(ctx context.Context) (int, error)
 }
 
 // MemberRepository defines the interface for member data access
 type MemberRepository interface {
 	Create(ctx context.Context, member *Member) error
-	FindByID(ctx context.Context, id string) (*Member, error)
-	FindByUserAndOrg(ctx context.Context, userID, orgID string) (*Member, error)
-	ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*Member, error)
-	ListByUser(ctx context.Context, userID string) ([]*Member, error)
+	FindByID(ctx context.Context, id xid.ID) (*Member, error)
+	FindByUserAndOrg(ctx context.Context, userID, orgID xid.ID) (*Member, error)
+	ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Member, error)
+	ListByUser(ctx context.Context, userID xid.ID) ([]*Member, error)
 	Update(ctx context.Context, member *Member) error
-	Delete(ctx context.Context, id string) error
-	DeleteByUserID(ctx context.Context, userID string) error
-	CountByOrganization(ctx context.Context, orgID string) (int, error)
+	Delete(ctx context.Context, id xid.ID) error
+	DeleteByUserID(ctx context.Context, userID xid.ID) error
+	CountByOrganization(ctx context.Context, orgID xid.ID) (int, error)
 }
 
 // TeamRepository defines the interface for team data access
 type TeamRepository interface {
 	Create(ctx context.Context, team *Team) error
-	FindByID(ctx context.Context, id string) (*Team, error)
-	ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*Team, error)
+	FindByID(ctx context.Context, id xid.ID) (*Team, error)
+	ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Team, error)
 	Update(ctx context.Context, team *Team) error
-	Delete(ctx context.Context, id string) error
-	CountByOrganization(ctx context.Context, orgID string) (int, error)
-	AddMember(ctx context.Context, teamID, memberID, role string) error
-	RemoveMember(ctx context.Context, teamID, memberID string) error
-	ListMembers(ctx context.Context, teamID string) ([]*Member, error)
+	Delete(ctx context.Context, id xid.ID) error
+	CountByOrganization(ctx context.Context, orgID xid.ID) (int, error)
+	AddMember(ctx context.Context, teamID, memberID xid.ID, role string) error
+	RemoveMember(ctx context.Context, teamID, memberID xid.ID) error
+	ListMembers(ctx context.Context, teamID xid.ID) ([]*Member, error)
 }
 
 // InvitationRepository defines the interface for invitation data access
 type InvitationRepository interface {
 	Create(ctx context.Context, invitation *Invitation) error
-	FindByID(ctx context.Context, id string) (*Invitation, error)
+	FindByID(ctx context.Context, id xid.ID) (*Invitation, error)
 	FindByToken(ctx context.Context, token string) (*Invitation, error)
-	ListByOrganization(ctx context.Context, orgID string, limit, offset int) ([]*Invitation, error)
+	ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Invitation, error)
 	Update(ctx context.Context, invitation *Invitation) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, id xid.ID) error
 	DeleteExpired(ctx context.Context) error
 }
 
@@ -100,7 +100,7 @@ func NewService(
 // Organization management
 
 // CreateOrganization creates a new organization
-func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest, creatorUserID string) (*Organization, error) {
+func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest, creatorUserID xid.ID) (*Organization, error) {
 	// Check if there are any organizations yet
 	orgs, err := s.orgRepo.List(ctx, 1, 0)
 	isFirstOrg := (err != nil || len(orgs) == 0)
@@ -119,7 +119,7 @@ func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizatio
 
 	// Create organization
 	org := &Organization{
-		ID:        uuid.New().String(),
+		ID:        xid.New(),
 		Name:      req.Name,
 		Slug:      req.Slug,
 		Logo:      req.Logo,
@@ -142,7 +142,7 @@ func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizatio
 }
 
 // GetOrganization retrieves an organization by ID
-func (s *Service) GetOrganization(ctx context.Context, id string) (*Organization, error) {
+func (s *Service) GetOrganization(ctx context.Context, id xid.ID) (*Organization, error) {
 	return s.orgRepo.FindByID(ctx, id)
 }
 
@@ -157,7 +157,7 @@ func (s *Service) ListOrganizations(ctx context.Context, limit, offset int) ([]*
 }
 
 // UpdateOrganization updates an organization
-func (s *Service) UpdateOrganization(ctx context.Context, id string, req *UpdateOrganizationRequest) (*Organization, error) {
+func (s *Service) UpdateOrganization(ctx context.Context, id xid.ID, req *UpdateOrganizationRequest) (*Organization, error) {
 	org, err := s.orgRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("organization not found: %w", err)
@@ -183,14 +183,19 @@ func (s *Service) UpdateOrganization(ctx context.Context, id string, req *Update
 }
 
 // DeleteOrganization deletes an organization
-func (s *Service) DeleteOrganization(ctx context.Context, id string) error {
+func (s *Service) DeleteOrganization(ctx context.Context, id xid.ID) error {
 	return s.orgRepo.Delete(ctx, id)
 }
 
 // GetDefaultOrganization returns the default organization for standalone mode
 func (s *Service) GetDefaultOrganization(ctx context.Context) (*Organization, error) {
 	if s.config.PlatformOrganizationID != "" {
-		return s.orgRepo.FindByID(ctx, s.config.PlatformOrganizationID)
+		// Parse the platform org ID from config
+		platformID, err := xid.FromString(s.config.PlatformOrganizationID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid platform organization ID in config: %w", err)
+		}
+		return s.orgRepo.FindByID(ctx, platformID)
 	}
 
 	// Find or create default organization
@@ -205,7 +210,7 @@ func (s *Service) GetDefaultOrganization(ctx context.Context) (*Organization, er
 
 	// Create default organization
 	defaultOrg := &Organization{
-		ID:        uuid.New().String(),
+		ID:        xid.New(),
 		Name:      s.config.DefaultOrganizationName,
 		Slug:      "default",
 		CreatedAt: time.Now(),
@@ -222,7 +227,7 @@ func (s *Service) GetDefaultOrganization(ctx context.Context) (*Organization, er
 // Member management
 
 // AddMember adds a user as a member of an organization
-func (s *Service) AddMember(ctx context.Context, orgID, userID, role string) (*Member, error) {
+func (s *Service) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*Member, error) {
 	// Check if user is already a member
 	existing, err := s.memberRepo.FindByUserAndOrg(ctx, userID, orgID)
 	if err == nil && existing != nil {
@@ -239,7 +244,7 @@ func (s *Service) AddMember(ctx context.Context, orgID, userID, role string) (*M
 	}
 
 	member := &Member{
-		ID:             uuid.New().String(),
+		ID:             xid.New(),
 		OrganizationID: orgID,
 		UserID:         userID,
 		Role:           role,
@@ -256,17 +261,26 @@ func (s *Service) AddMember(ctx context.Context, orgID, userID, role string) (*M
 }
 
 // GetMember retrieves a member by ID
-func (s *Service) GetMember(ctx context.Context, id string) (*Member, error) {
+func (s *Service) GetMember(ctx context.Context, id xid.ID) (*Member, error) {
 	return s.memberRepo.FindByID(ctx, id)
 }
 
+// IsMember checks if a user is a member of an organization
+func (s *Service) IsMember(ctx context.Context, orgID, userID xid.ID) (bool, error) {
+	member, err := s.memberRepo.FindByUserAndOrg(ctx, userID, orgID)
+	if err != nil {
+		return false, nil // User is not a member (or error occurred)
+	}
+	return member != nil && member.Status == StatusActive, nil
+}
+
 // ListMembers lists members of an organization
-func (s *Service) ListMembers(ctx context.Context, orgID string, limit, offset int) ([]*Member, error) {
+func (s *Service) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Member, error) {
 	return s.memberRepo.ListByOrganization(ctx, orgID, limit, offset)
 }
 
 // UpdateMember updates a member
-func (s *Service) UpdateMember(ctx context.Context, id string, req *UpdateMemberRequest) (*Member, error) {
+func (s *Service) UpdateMember(ctx context.Context, id xid.ID, req *UpdateMemberRequest) (*Member, error) {
 	member, err := s.memberRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("member not found: %w", err)
@@ -288,12 +302,12 @@ func (s *Service) UpdateMember(ctx context.Context, id string, req *UpdateMember
 }
 
 // RemoveMember removes a member from an organization
-func (s *Service) RemoveMember(ctx context.Context, id string) error {
+func (s *Service) RemoveMember(ctx context.Context, id xid.ID) error {
 	return s.memberRepo.Delete(ctx, id)
 }
 
 // IsUserMember checks if a user is a member of an organization
-func (s *Service) IsUserMember(ctx context.Context, orgID, userID string) (bool, error) {
+func (s *Service) IsUserMember(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	member, err := s.memberRepo.FindByUserAndOrg(ctx, userID, orgID)
 	if err != nil {
 		return false, nil
@@ -302,19 +316,19 @@ func (s *Service) IsUserMember(ctx context.Context, orgID, userID string) (bool,
 }
 
 // GetUserMemberships returns all organizations a user is a member of
-func (s *Service) GetUserMemberships(ctx context.Context, userID string) ([]*Member, error) {
+func (s *Service) GetUserMemberships(ctx context.Context, userID xid.ID) ([]*Member, error) {
 	return s.memberRepo.ListByUser(ctx, userID)
 }
 
 // RemoveUserFromAllOrganizations removes a user from all organizations
-func (s *Service) RemoveUserFromAllOrganizations(ctx context.Context, userID string) error {
+func (s *Service) RemoveUserFromAllOrganizations(ctx context.Context, userID xid.ID) error {
 	return s.memberRepo.DeleteByUserID(ctx, userID)
 }
 
 // Team management
 
 // CreateTeam creates a new team in an organization
-func (s *Service) CreateTeam(ctx context.Context, orgID string, req *CreateTeamRequest) (*Team, error) {
+func (s *Service) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateTeamRequest) (*Team, error) {
 	// Check team limit
 	count, err := s.teamRepo.CountByOrganization(ctx, orgID)
 	if err != nil {
@@ -325,7 +339,7 @@ func (s *Service) CreateTeam(ctx context.Context, orgID string, req *CreateTeamR
 	}
 
 	team := &Team{
-		ID:             uuid.New().String(),
+		ID:             xid.New(),
 		OrganizationID: orgID,
 		Name:           req.Name,
 		Description:    req.Description,
@@ -342,17 +356,17 @@ func (s *Service) CreateTeam(ctx context.Context, orgID string, req *CreateTeamR
 }
 
 // GetTeam retrieves a team by ID
-func (s *Service) GetTeam(ctx context.Context, id string) (*Team, error) {
+func (s *Service) GetTeam(ctx context.Context, id xid.ID) (*Team, error) {
 	return s.teamRepo.FindByID(ctx, id)
 }
 
 // ListTeams lists teams in an organization
-func (s *Service) ListTeams(ctx context.Context, orgID string, limit, offset int) ([]*Team, error) {
+func (s *Service) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Team, error) {
 	return s.teamRepo.ListByOrganization(ctx, orgID, limit, offset)
 }
 
 // UpdateTeam updates a team
-func (s *Service) UpdateTeam(ctx context.Context, id string, req *UpdateTeamRequest) (*Team, error) {
+func (s *Service) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeamRequest) (*Team, error) {
 	team, err := s.teamRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("team not found: %w", err)
@@ -377,29 +391,29 @@ func (s *Service) UpdateTeam(ctx context.Context, id string, req *UpdateTeamRequ
 }
 
 // DeleteTeam deletes a team
-func (s *Service) DeleteTeam(ctx context.Context, id string) error {
+func (s *Service) DeleteTeam(ctx context.Context, id xid.ID) error {
 	return s.teamRepo.Delete(ctx, id)
 }
 
 // AddTeamMember adds a member to a team
-func (s *Service) AddTeamMember(ctx context.Context, teamID, memberID, role string) error {
+func (s *Service) AddTeamMember(ctx context.Context, teamID, memberID xid.ID, role string) error {
 	return s.teamRepo.AddMember(ctx, teamID, memberID, role)
 }
 
 // RemoveTeamMember removes a member from a team
-func (s *Service) RemoveTeamMember(ctx context.Context, teamID, memberID string) error {
+func (s *Service) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
 	return s.teamRepo.RemoveMember(ctx, teamID, memberID)
 }
 
 // ListTeamMembers lists members of a team
-func (s *Service) ListTeamMembers(ctx context.Context, teamID string) ([]*Member, error) {
+func (s *Service) ListTeamMembers(ctx context.Context, teamID xid.ID) ([]*Member, error) {
 	return s.teamRepo.ListMembers(ctx, teamID)
 }
 
 // Invitation management
 
 // InviteMember creates an invitation for a user to join an organization
-func (s *Service) InviteMember(ctx context.Context, orgID string, req *InviteMemberRequest, inviterUserID string) (*Invitation, error) {
+func (s *Service) InviteMember(ctx context.Context, orgID xid.ID, req *InviteMemberRequest, inviterUserID xid.ID) (*Invitation, error) {
 	// Generate secure token
 	token, err := generateSecureToken()
 	if err != nil {
@@ -407,7 +421,7 @@ func (s *Service) InviteMember(ctx context.Context, orgID string, req *InviteMem
 	}
 
 	invitation := &Invitation{
-		ID:             uuid.New().String(),
+		ID:             xid.New(),
 		OrganizationID: orgID,
 		Email:          req.Email,
 		Role:           req.Role,
@@ -445,7 +459,7 @@ func (s *Service) GetInvitation(ctx context.Context, token string) (*Invitation,
 }
 
 // AcceptInvitation accepts an invitation and adds the user to the organization
-func (s *Service) AcceptInvitation(ctx context.Context, token, userID string) (*Member, error) {
+func (s *Service) AcceptInvitation(ctx context.Context, token string, userID xid.ID) (*Member, error) {
 	invitation, err := s.GetInvitation(ctx, token)
 	if err != nil {
 		return nil, err
@@ -482,7 +496,7 @@ func (s *Service) DeclineInvitation(ctx context.Context, token string) error {
 }
 
 // ListInvitations lists invitations for an organization
-func (s *Service) ListInvitations(ctx context.Context, orgID string, limit, offset int) ([]*Invitation, error) {
+func (s *Service) ListInvitations(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Invitation, error) {
 	return s.invitationRepo.ListByOrganization(ctx, orgID, limit, offset)
 }
 

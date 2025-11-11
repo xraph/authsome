@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 )
 
@@ -24,7 +25,7 @@ var (
 type Organization struct {
 	bun.BaseModel `bun:"table:organizations,alias:o"`
 
-	ID        string                 `bun:"id,pk" json:"id"`
+	ID        xid.ID                 `bun:"id,pk,type:varchar(20)" json:"id"`
 	Name      string                 `bun:"name,notnull" json:"name"`
 	Slug      string                 `bun:"slug,unique,notnull" json:"slug"`
 	Logo      *string                `bun:"logo" json:"logo,omitempty"`
@@ -41,9 +42,9 @@ type Organization struct {
 type Member struct {
 	bun.BaseModel `bun:"table:members,alias:m"`
 
-	ID             string    `bun:"id,pk" json:"id"`
-	OrganizationID string    `bun:"organization_id,notnull" json:"organizationId"`
-	UserID         string    `bun:"user_id,notnull" json:"userId"`
+	ID             xid.ID    `bun:"id,pk,type:varchar(20)" json:"id"`
+	OrganizationID xid.ID    `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	UserID         xid.ID    `bun:"user_id,notnull,type:varchar(20)" json:"userId"`
 	Role           string    `bun:"role,notnull" json:"role"`                      // owner, admin, member
 	Status         string    `bun:"status,notnull,default:'active'" json:"status"` // active, suspended, pending
 	JoinedAt       time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joinedAt"`
@@ -58,8 +59,8 @@ type Member struct {
 type Team struct {
 	bun.BaseModel `bun:"table:teams,alias:t"`
 
-	ID             string                 `bun:"id,pk" json:"id"`
-	OrganizationID string                 `bun:"organization_id,notnull" json:"organizationId"`
+	ID             xid.ID                 `bun:"id,pk,type:varchar(20)" json:"id"`
+	OrganizationID xid.ID                 `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
 	Name           string                 `bun:"name,notnull" json:"name"`
 	Description    *string                `bun:"description" json:"description,omitempty"`
 	Metadata       map[string]interface{} `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
@@ -75,8 +76,8 @@ type Team struct {
 type TeamMember struct {
 	bun.BaseModel `bun:"table:team_members,alias:tm"`
 
-	TeamID   string    `bun:"team_id,pk" json:"teamId"`
-	MemberID string    `bun:"member_id,pk" json:"memberId"`
+	TeamID   xid.ID    `bun:"team_id,pk,type:varchar(20)" json:"teamId"`
+	MemberID xid.ID    `bun:"member_id,pk,type:varchar(20)" json:"memberId"`
 	Role     string    `bun:"role,notnull,default:'member'" json:"role"` // lead, member
 	JoinedAt time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joinedAt"`
 
@@ -89,13 +90,13 @@ type TeamMember struct {
 type Invitation struct {
 	bun.BaseModel `bun:"table:invitations,alias:i"`
 
-	ID             string                 `bun:"id,pk" json:"id"`
-	OrganizationID string                 `bun:"organization_id,notnull" json:"organizationId"`
+	ID             xid.ID                 `bun:"id,pk,type:varchar(20)" json:"id"`
+	OrganizationID xid.ID                 `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
 	Email          string                 `bun:"email,notnull" json:"email"`
 	Role           string                 `bun:"role,notnull" json:"role"`
 	Token          string                 `bun:"token,unique,notnull" json:"token"`
 	Status         string                 `bun:"status,notnull,default:'pending'" json:"status"` // pending, accepted, declined, expired
-	InvitedBy      string                 `bun:"invited_by,notnull" json:"invitedBy"`
+	InvitedBy      xid.ID                 `bun:"invited_by,notnull,type:varchar(20)" json:"invitedBy"`
 	Metadata       map[string]interface{} `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
 	ExpiresAt      time.Time              `bun:"expires_at,notnull" json:"expiresAt"`
 	CreatedAt      time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`

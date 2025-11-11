@@ -3,6 +3,7 @@ package decorators
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/interfaces"
@@ -30,11 +31,11 @@ func NewMultiTenantSessionService(sessionService session.ServiceInterface, orgSe
 // Create creates a new session with organization context
 func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.CreateSessionRequest) (*session.Session, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
+	orgID, err := interfaces.GetOrganizationID(ctx)
 
 	// Special case: First user session creation or no context provided
 	// If no organization context, check if user belongs to any organization yet
-	if !ok || orgID == "" {
+	if err != nil || orgID.IsNil() {
 		// Check if there are any organizations
 		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
 		if err != nil || len(orgs) == 0 {
@@ -46,7 +47,7 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 
 		// Organizations exist - user might have just been added to one
 		// Try to find which organization this user belongs to
-		memberships, err := s.orgService.GetUserMemberships(ctx, req.UserID.String())
+		memberships, err := s.orgService.GetUserMemberships(ctx, req.UserID)
 		if err != nil || len(memberships) == 0 {
 			return nil, fmt.Errorf("organization context not found and user has no organizations")
 		}
@@ -57,13 +58,13 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 	}
 
 	// Verify organization exists
-	_, err := s.orgService.GetOrganization(ctx, orgID)
+	_, err = s.orgService.GetOrganization(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid organization: %w", err)
 	}
 
 	// Verify user belongs to the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, req.UserID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, req.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify organization membership: %w", err)
 	}
@@ -89,10 +90,13 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 	}
 
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// If no organization context, try to find one for the user
-	if !ok || orgID == "" {
+	if err != nil || orgID.IsNil() {
 		// Check if there are any organizations
 		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
 		if err != nil || len(orgs) == 0 {
@@ -102,9 +106,16 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 		}
 
 		// Organizations exist - get user's memberships
-		memberships, err := s.orgService.GetUserMemberships(ctx, sess.UserID.String())
+		memberships, err := s.orgService.GetUserMemberships(ctx, sess.UserID)
 		if err != nil || len(memberships) == 0 {
-			// User has no organizations
+			// User has no organizations - check if this is a newly created session
+			// This handles the race condition where the organization hook hasn't completed yet
+			// Allow sessions created in the last 10 seconds to give hooks time to complete
+			if time.Since(sess.CreatedAt) < 10*time.Second {
+				fmt.Printf("[MultiTenancy] Session lookup: newly created session (created %v ago), allowing while org hook completes: %s\n", time.Since(sess.CreatedAt), sess.UserID)
+				return sess, nil
+			}
+			// User has no organizations and session is not newly created
 			return nil, fmt.Errorf("session user has no organization memberships")
 		}
 
@@ -115,7 +126,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 	}
 
 	// Organization context is present - verify user belongs to it
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, sess.UserID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, sess.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify organization membership: %w", err)
 	}
@@ -146,9 +157,9 @@ func (s *MultiTenantSessionService) Revoke(ctx context.Context, token string) er
 // ListAll lists all sessions within organization context
 func (s *MultiTenantSessionService) ListAll(ctx context.Context, limit, offset int) ([]*session.Session, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("organization context not found")
+	orgID, err := interfaces.GetOrganizationID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get all sessions from core service
@@ -160,7 +171,7 @@ func (s *MultiTenantSessionService) ListAll(ctx context.Context, limit, offset i
 	// Filter sessions by organization membership
 	filteredSessions := make([]*session.Session, 0)
 	for _, sess := range allSessions {
-		isMember, err := s.orgService.IsUserMember(ctx, orgID, sess.UserID.String())
+		isMember, err := s.orgService.IsUserMember(ctx, orgID, sess.UserID)
 		if err != nil {
 			continue // Skip on error
 		}
@@ -175,13 +186,13 @@ func (s *MultiTenantSessionService) ListAll(ctx context.Context, limit, offset i
 // ListByUser lists sessions for a user within organization context
 func (s *MultiTenantSessionService) ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*session.Session, error) {
 	// Get organization from context
-	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
+	orgID, ok := ctx.Value(interfaces.OrganizationContextKey).(xid.ID)
 	if !ok {
 		return nil, fmt.Errorf("organization context not found")
 	}
 
 	// Verify user belongs to the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, userID.String())
+	isMember, err := s.orgService.IsUserMember(ctx, orgID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify organization membership: %w", err)
 	}
@@ -197,7 +208,7 @@ func (s *MultiTenantSessionService) ListByUser(ctx context.Context, userID xid.I
 // RevokeByID revokes a session by ID with organization context
 func (s *MultiTenantSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
 	// Get organization from context
-	_, ok := ctx.Value(interfaces.OrganizationContextKey).(string)
+	_, ok := ctx.Value(interfaces.OrganizationContextKey).(xid.ID)
 	if !ok {
 		return fmt.Errorf("organization context not found")
 	}

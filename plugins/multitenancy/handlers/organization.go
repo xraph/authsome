@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/forge"
 )
@@ -28,9 +29,9 @@ func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 	}
 
 	// TODO: Get creator user ID from context/session
-	creatorUserID := "system" // placeholder
+	// creatorUserID := "system" // placeholder
 
-	org, err := h.orgService.CreateOrganization(c.Request().Context(), &req, creatorUserID)
+	org, err := h.orgService.CreateOrganization(c.Request().Context(), &req, xid.New())
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -45,7 +46,12 @@ func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
 	}
 
-	org, err := h.orgService.GetOrganization(c.Request().Context(), id)
+	orgID, err := xid.FromString(id)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+	}
+
+	org, err := h.orgService.GetOrganization(c.Request().Context(), orgID)
 	if err != nil {
 		return c.JSON(404, map[string]string{"error": "organization not found"})
 	}
@@ -55,9 +61,14 @@ func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 
 // UpdateOrganization handles organization update requests
 func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
-	id := c.Param("id")
-	if id == "" {
+	idStr := c.Param("id")
+	if idStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
 	}
 
 	var req organization.UpdateOrganizationRequest
@@ -65,7 +76,7 @@ func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	org, err := h.orgService.UpdateOrganization(c.Request().Context(), id, &req)
+	org, err := h.orgService.UpdateOrganization(c.Request().Context(), orgID, &req)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -75,12 +86,17 @@ func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 
 // DeleteOrganization handles organization deletion requests
 func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
-	id := c.Param("id")
-	if id == "" {
+	idStr := c.Param("id")
+	if idStr == "" {
 		return c.JSON(400, map[string]string{"error": "organization ID is required"})
 	}
 
-	err := h.orgService.DeleteOrganization(c.Request().Context(), id)
+	orgID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+	}
+
+	err = h.orgService.DeleteOrganization(c.Request().Context(), orgID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
