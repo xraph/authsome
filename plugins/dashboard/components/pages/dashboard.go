@@ -156,7 +156,7 @@ func recentActivityCard(activities []ActivityItem) g.Node {
 	return Div(
 		Class("bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"),
 		Div(
-			Class("px-6 py-5 border-b border-gray-200 dark:border-gray-700"),
+			Class("px-6 py-2 border-b border-gray-200 dark:border-gray-700"),
 			H3(Class("text-lg font-semibold text-gray-900 dark:text-white"), g.Text("Recent Activity")),
 		),
 		Div(
@@ -226,7 +226,7 @@ func systemStatusCard(statuses []StatusItem) g.Node {
 	return Div(
 		Class("bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"),
 		Div(
-			Class("px-6 py-5 border-b border-gray-200 dark:border-gray-700"),
+			Class("px-6 py-2 border-b border-gray-200 dark:border-gray-700"),
 			H3(Class("text-lg font-semibold text-gray-900 dark:text-white"), g.Text("System Status")),
 		),
 		Div(

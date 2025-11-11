@@ -1068,6 +1068,63 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 			} else {
 				fmt.Printf("[Dashboard] ✅ Superadmin role assigned to first user: %s (org: %s)\n", newUser.Email, orgID.String())
 			}
+
+			// ADD: Ensure user is added to members table for organizational access
+			// This is critical for multitenancy decorators to recognize the user
+			fmt.Printf("[Dashboard] Adding first user to members table...\n")
+			if h.mtOrgService != nil {
+				// SaaS mode: use multitenancy service
+				_, err := h.mtOrgService.AddMember(ctx, orgID, newUser.ID, "owner")
+				if err != nil && err.Error() != "user is already a member of this organization" {
+					fmt.Printf("[Dashboard] ERROR: Failed to add first user to members table: %v\n", err)
+				} else {
+					fmt.Printf("[Dashboard] ✅ First user added to members table as owner\n")
+				}
+			} else {
+				// Standalone mode: insert member record directly via database
+				now := time.Now()
+				member := &schema.Member{
+					ID:             xid.New(),
+					OrganizationID: orgID,
+					UserID:         newUser.ID,
+					Role:           "owner",
+					Status:         "active",
+					JoinedAt:       now,
+				}
+				// Set auditable fields on the embedded struct
+				member.AuditableModel.ID = member.ID
+				member.AuditableModel.CreatedBy = newUser.ID
+				member.AuditableModel.UpdatedBy = newUser.ID
+				member.AuditableModel.CreatedAt = now
+				member.AuditableModel.UpdatedAt = now
+				member.AuditableModel.Version = 1
+
+				_, err := h.db.NewInsert().Model(member).Exec(ctx)
+				if err != nil {
+					fmt.Printf("[Dashboard] ERROR: Failed to insert member record: %v\n", err)
+				} else {
+					fmt.Printf("[Dashboard] ✅ First user member record created\n")
+				}
+			}
+
+			// Verify both tables have records
+			fmt.Printf("[Dashboard] Verifying first user setup:\n")
+
+			// Check user_roles
+			roleCount, err := h.db.NewSelect().Table("user_roles").Where("user_id = ?", newUser.ID).Count(ctx)
+			if err != nil {
+				fmt.Printf("[Dashboard]   - ERROR checking user_roles: %v\n", err)
+			} else {
+				fmt.Printf("[Dashboard]   - user_roles records: %d\n", roleCount)
+			}
+
+			// Check members
+			memberCount, err := h.db.NewSelect().Table("members").Where("user_id = ?", newUser.ID).Count(ctx)
+			if err != nil {
+				fmt.Printf("[Dashboard]   - ERROR checking members: %v\n", err)
+			} else {
+				fmt.Printf("[Dashboard]   - members records: %d\n", memberCount)
+			}
 		}
 
 		// Role-based RBAC policies are set up via SetupDefaultPolicies()
@@ -1376,7 +1433,8 @@ func getContentType(ext string) string {
 
 // ServeOrganizations serves the organizations list page
 func (h *Handler) ServeOrganizations(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	// Organization management requires multitenancy service
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 
@@ -1430,7 +1488,7 @@ func (h *Handler) ServeOrganizations(c forge.Context) error {
 
 // ServeOrganizationDetail serves a single organization detail page
 func (h *Handler) ServeOrganizationDetail(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 
@@ -1482,7 +1540,7 @@ func (h *Handler) ServeOrganizationDetail(c forge.Context) error {
 
 // ServeOrganizationCreate serves the organization creation form
 func (h *Handler) ServeOrganizationCreate(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 
@@ -1506,7 +1564,7 @@ func (h *Handler) ServeOrganizationCreate(c forge.Context) error {
 
 // HandleOrganizationCreate processes the organization creation form
 func (h *Handler) HandleOrganizationCreate(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 
@@ -1558,7 +1616,7 @@ func (h *Handler) HandleOrganizationCreate(c forge.Context) error {
 
 // ServeOrganizationEdit serves the organization edit form
 func (h *Handler) ServeOrganizationEdit(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 
@@ -1602,7 +1660,7 @@ func (h *Handler) ServeOrganizationEdit(c forge.Context) error {
 
 // HandleOrganizationEdit processes the organization edit form
 func (h *Handler) HandleOrganizationEdit(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 
@@ -1658,7 +1716,7 @@ func (h *Handler) HandleOrganizationEdit(c forge.Context) error {
 
 // HandleOrganizationDelete processes organization deletion
 func (h *Handler) HandleOrganizationDelete(c forge.Context) error {
-	if !h.isSaaSMode || h.mtOrgService == nil {
+	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
 

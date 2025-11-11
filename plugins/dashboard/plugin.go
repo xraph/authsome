@@ -27,22 +27,23 @@ var assets embed.FS
 
 // Plugin implements the dashboard plugin for AuthSome
 type Plugin struct {
-	handler        *Handler
-	userSvc        user.ServiceInterface
-	sessionSvc     session.ServiceInterface
-	auditSvc       *audit.Service
-	rbacSvc        *rbac.Service
-	apikeyService  *apikey.Service
-	orgService     *organization.Service
-	isSaaSMode     bool
-	permChecker    *PermissionChecker
-	csrfProtector  *CSRFProtector
-	basePath       string
-	enabledPlugins map[string]bool
-	config         Config
-	defaultConfig  Config
-	platformOrgID  xid.ID // Platform organization ID for context injection
-	db             *bun.DB
+	handler         *Handler
+	userSvc         user.ServiceInterface
+	sessionSvc      session.ServiceInterface
+	auditSvc        *audit.Service
+	rbacSvc         *rbac.Service
+	apikeyService   *apikey.Service
+	orgService      *organization.Service
+	isSaaSMode      bool
+	permChecker     *PermissionChecker
+	csrfProtector   *CSRFProtector
+	basePath        string
+	enabledPlugins  map[string]bool
+	config          Config
+	defaultConfig   Config
+	platformOrgID   xid.ID // Platform organization ID for context injection
+	db              *bun.DB
+	serviceRegistry *registry.ServiceRegistry // Store for checking multitenancy service after all plugins init
 }
 
 // Config holds the dashboard plugin configuration
@@ -312,12 +313,12 @@ func (p *Plugin) Init(dep interface{}) error {
 		hookRegistry,
 	)
 
-	// Set multitenancy organization service if available
-	if orgSvcInterface := serviceRegistry.OrganizationService(); orgSvcInterface != nil {
-		if mtOrgSvc, ok := orgSvcInterface.(*mtorg.Service); ok {
-			p.handler.SetMultitenancyOrgService(mtOrgSvc)
-		}
-	}
+	// Store service registry for later access in RegisterRoutes
+	p.serviceRegistry = serviceRegistry
+
+	// Note: Don't check for multitenancy service here during Init()
+	// The multitenancy plugin may not have registered its service yet
+	// We'll check and set it in RegisterRoutes() which is called after all plugins Init()
 
 	return nil
 }
@@ -373,6 +374,22 @@ func (p *Plugin) PlatformOrgContext() func(func(forge.Context) error) func(forge
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
 		return fmt.Errorf("dashboard handler not initialized; call Init first")
+	}
+
+	// NOW check for multitenancy service (after all plugins have initialized)
+	if p.serviceRegistry != nil {
+		if orgSvcInterface := p.serviceRegistry.OrganizationService(); orgSvcInterface != nil {
+			fmt.Printf("[Dashboard] RegisterRoutes: Checking organization service type: %T\n", orgSvcInterface)
+			if mtOrgSvc, ok := orgSvcInterface.(*mtorg.Service); ok {
+				p.handler.SetMultitenancyOrgService(mtOrgSvc)
+				fmt.Printf("[Dashboard] ✅ Multitenancy organization service set in handler\n")
+			} else {
+				fmt.Printf("[Dashboard] ⚠️  Organization service is not multitenancy service (type: %T)\n", orgSvcInterface)
+				fmt.Printf("[Dashboard] SaaS mode: %v, but multitenancy service not available\n", p.isSaaSMode)
+			}
+		} else {
+			fmt.Printf("[Dashboard] RegisterRoutes: No organization service found in registry\n")
+		}
 	}
 
 	// Create middleware chain with platform org context

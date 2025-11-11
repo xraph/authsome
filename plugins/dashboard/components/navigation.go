@@ -12,32 +12,55 @@ import (
 func DashboardHeader(data PageData) g.Node {
 	return Header(
 		ID("page-header"),
-		Class("z-10 flex flex-none items-center pt-5"),
+		Class("z-10 w-full sticky -top-14 shadow-sm backdrop-blur-md"),
 		Div(
-			Class("container mx-auto px-4 lg:px-8 xl:max-w-7xl"),
+			Class("z-10 flex flex-none items-center bg-white/50 dark:bg-gray-900/50 "),
 			Div(
-				Class("-mx-4 border-y border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 shadow-sm sm:rounded-lg sm:border lg:-mx-6 lg:px-6"),
+				Class("container mx-auto px-4 lg:px-8 xl:max-w-7xl"),
 				Div(
-					Class("flex justify-between py-2.5 lg:py-3.5"),
-
-					// Left Section - Logo and Desktop Nav
+					Class("-mx-4 px-4 rounded-none lg:-mx-6 lg:px-6"),
 					Div(
-						Class("flex items-center gap-2 lg:gap-6"),
-						Logo(data.BasePath),
-						DesktopNavigation(data),
+						Class("flex justify-between py-1.5 lg:py-2.5"),
+
+						// Left Section - Logo and Desktop Nav
+						Div(
+							Class("flex items-center gap-2 lg:gap-6"),
+							Logo(data.BasePath),
+						),
+
+						// Right Section - Theme Toggle, User Dropdown, Mobile Nav Toggle
+						Div(
+							Class("flex items-center gap-2"),
+							ThemeToggle(),
+							UserDropdown(data),
+							MobileNavToggle(),
+						),
 					),
 
-					// Right Section - Theme Toggle, User Dropdown, Mobile Nav Toggle
-					Div(
-						Class("flex items-center gap-2"),
-						ThemeToggle(),
-						UserDropdown(data),
-						MobileNavToggle(),
-					),
+					// Mobile Navigation
+					MobileNavigation(data),
 				),
+			),
+		),
+		Div(
+			Class("z-10 flex flex-none items-center border-b border-slate-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 "),
+			Div(
+				Class("container mx-auto px-4 lg:px-8 xl:max-w-7xl"),
+				Div(
+					Class("-mx-4 px-4 rounded-none lg:-mx-6 lg:px-6"),
+					Div(
+						Class("flex justify-between py-1 lg:py-1.5"),
 
-				// Mobile Navigation
-				MobileNavigation(data),
+						// Left Section - Logo and Desktop Nav
+						Div(
+							Class("flex items-center gap-2 lg:gap-6"),
+							DesktopNavigation(data),
+						),
+					),
+
+					// Mobile Navigation
+					MobileNavigation(data),
+				),
 			),
 		),
 	)

@@ -215,16 +215,27 @@ func flashMessages(data PageData) g.Node {
 }
 
 func pageHeading(data PageData) g.Node {
+	if data.Title != "Users" && data.Title != "Sessions" {
+		return Div(
+			Class("mx-auto w-full"),
+		)
+	}
+
 	return Div(
-		Class("container mx-auto px-4 pt-6 lg:px-8 lg:pt-8 xl:max-w-7xl"),
+		Class("mx-auto w-full space-y-2"),
 		Div(
-			Class("flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start"),
 			Div(
-				Class("grow"),
-				H1(Class("mb-1 text-xl font-bold text-slate-900 dark:text-white"), g.Text(data.Title)),
-				H2(
-					Class("text-sm font-medium text-slate-500 dark:text-gray-400"),
-					g.Text("Welcome to your AuthSome dashboard"),
+				Class("container mx-auto px-4 py-6 lg:px-8 lg:py-8 xl:max-w-7xl"),
+				Div(
+					Class("flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start"),
+					Div(
+						Class("grow"),
+						H1(Class("mb-1 text-xl font-bold text-slate-900 dark:text-white"), g.Text(data.Title)),
+						// H2(
+						// 	Class("text-sm font-medium text-slate-500 dark:text-gray-400"),
+						// 	g.Text("Welcome to your AuthSome dashboard"),
+						// ),
+					),
 				),
 			),
 		),
