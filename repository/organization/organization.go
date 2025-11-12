@@ -59,10 +59,10 @@ func (r *organizationRepository) FindBySlug(ctx context.Context, appID, environm
 // ListByUser lists all organizations a user is a member of
 func (r *organizationRepository) ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*schema.Organization, error) {
 	var orgs []*schema.Organization
-	
+
 	query := r.db.NewSelect().
 		Model(&orgs).
-		Join("INNER JOIN user_organization_members AS m ON m.organization_id = uo.id").
+		Join("INNER JOIN organization_members AS m ON m.organization_id = uo.id").
 		Where("m.user_id = ?", userID).
 		Order("uo.created_at DESC")
 
@@ -80,7 +80,7 @@ func (r *organizationRepository) ListByUser(ctx context.Context, userID xid.ID, 
 // ListByApp lists all organizations within an app and environment
 func (r *organizationRepository) ListByApp(ctx context.Context, appID, environmentID xid.ID, limit, offset int) ([]*schema.Organization, error) {
 	var orgs []*schema.Organization
-	
+
 	query := r.db.NewSelect().
 		Model(&orgs).
 		Where("app_id = ? AND environment_id = ?", appID, environmentID).
@@ -119,7 +119,7 @@ func (r *organizationRepository) Delete(ctx context.Context, id xid.ID) error {
 func (r *organizationRepository) CountByUser(ctx context.Context, userID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Organization)(nil)).
-		Join("INNER JOIN user_organization_members AS m ON m.organization_id = user_organizations.id").
+		Join("INNER JOIN organization_members AS m ON m.organization_id = organizations.id").
 		Where("m.user_id = ?", userID).
 		Count(ctx)
 	return count, err
@@ -133,4 +133,3 @@ func (r *organizationRepository) CountByApp(ctx context.Context, appID, environm
 		Count(ctx)
 	return count, err
 }
-

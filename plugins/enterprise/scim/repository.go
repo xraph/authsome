@@ -396,11 +396,11 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		return fmt.Errorf("failed to create provisioning_tokens table: %w", err)
 	}
 
-	// Create indexes for provisioning_tokens
+	// Create indexes for provisioning_tokens (3-tier architecture)
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningToken)(nil)).
-		Index("idx_provisioning_tokens_org").
-		Column("org_id").
+		Index("idx_provisioning_tokens_app_env_org").
+		Column("app_id", "environment_id", "organization_id").
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
@@ -423,11 +423,11 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		return fmt.Errorf("failed to create provisioning_logs table: %w", err)
 	}
 
-	// Create indexes for provisioning_logs
+	// Create indexes for provisioning_logs (3-tier architecture)
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningLog)(nil)).
-		Index("idx_provisioning_logs_org").
-		Column("org_id").
+		Index("idx_provisioning_logs_app_env_org").
+		Column("app_id", "environment_id", "organization_id").
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
@@ -459,11 +459,12 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		return fmt.Errorf("failed to create attribute_mappings table: %w", err)
 	}
 
-	// Create indexes for attribute_mappings
+	// Create indexes for attribute_mappings (3-tier architecture)
+	// Unique constraint on app/env/org combination
 	if _, err := r.db.NewCreateIndex().
 		Model((*AttributeMapping)(nil)).
-		Index("idx_attribute_mappings_org").
-		Column("org_id").
+		Index("idx_attribute_mappings_app_env_org").
+		Column("app_id", "environment_id", "organization_id").
 		Unique().
 		IfNotExists().
 		Exec(ctx); err != nil {
@@ -478,20 +479,21 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		return fmt.Errorf("failed to create group_mappings table: %w", err)
 	}
 
-	// Create indexes for group_mappings
+	// Create indexes for group_mappings (3-tier architecture)
 	if _, err := r.db.NewCreateIndex().
 		Model((*GroupMapping)(nil)).
-		Index("idx_group_mappings_org").
-		Column("org_id").
+		Index("idx_group_mappings_app_env_org").
+		Column("app_id", "environment_id", "organization_id").
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
 
+	// Unique constraint on app/env/org/scim_group_id combination
 	if _, err := r.db.NewCreateIndex().
 		Model((*GroupMapping)(nil)).
 		Index("idx_group_mappings_scim_group_id").
-		Column("org_id", "scim_group_id").
+		Column("app_id", "environment_id", "organization_id", "scim_group_id").
 		Unique().
 		IfNotExists().
 		Exec(ctx); err != nil {

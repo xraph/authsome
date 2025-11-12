@@ -14,6 +14,26 @@ The SCIM (System for Cross-domain Identity Management) 2.0 plugin enables enterp
 - **JIT Provisioning**: Just-In-Time user creation on first login
 - **Enterprise Integration**: Works with Okta, Azure AD, OneLogin, Google Workspace, etc.
 
+## Architecture Modes
+
+SCIM supports **dual-mode operation** to work with different deployment configurations:
+
+### App Mode (Multitenancy Only)
+- SCIM provisions users/groups directly into platform apps
+- Uses multitenancy app service (`*app.Service`)
+- Users are app members, groups are app teams
+- Simpler deployment without organization plugin
+- Token `organization_id` field contains the app ID
+
+### Organization Mode (With Organization Plugin)
+- SCIM provisions users/groups into user-created organizations
+- Uses organization plugin service (`*organization.Service`)
+- Users are organization members, groups are organization teams
+- Full 3-tier: App → Environment → Organization
+- Token includes `app_id`, `environment_id`, and `organization_id`
+
+The plugin automatically detects which service is available and uses the appropriate mode.
+
 ## Features
 
 ### ✅ SCIM 2.0 Standard Compliance
@@ -67,21 +87,73 @@ The SCIM (System for Cross-domain Identity Management) 2.0 plugin enables enterp
 
 ### 1. Add Plugin to Your AuthSome Instance
 
+**App Mode (Multitenancy only):**
 ```go
 package main
 
 import (
     "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/multitenancy"
     "github.com/xraph/authsome/plugins/enterprise/scim"
 )
 
 func main() {
     // Create AuthSome instance
     auth := authsome.New(
-        authsome.WithMode(authsome.ModeSaaS),
         authsome.WithDatabase(db),
         authsome.WithForgeApp(app),
     )
+    
+    // Register multitenancy plugin (required for app mode)
+    if err := auth.RegisterPlugin(multitenancy.NewPlugin()); err != nil {
+        panic(err)
+    }
+    
+    // Register SCIM plugin
+    scimPlugin := scim.NewPlugin()
+    if err := auth.RegisterPlugin(scimPlugin); err != nil {
+        panic(err)
+    }
+    
+    // Initialize AuthSome (this will initialize all plugins)
+    if err := auth.Initialize(ctx); err != nil {
+        panic(err)
+    }
+    
+    // Mount routes
+    if err := auth.Mount(router, "/api/auth"); err != nil {
+        panic(err)
+    }
+}
+```
+
+**Organization Mode (With organization plugin):**
+```go
+package main
+
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/multitenancy"
+    "github.com/xraph/authsome/plugins/organization"
+    "github.com/xraph/authsome/plugins/enterprise/scim"
+)
+
+func main() {
+    // Create AuthSome instance
+    auth := authsome.New(
+        authsome.WithDatabase(db),
+        authsome.WithForgeApp(app),
+    )
+    
+    // Register multitenancy plugin (for apps/environments)
+    if err := auth.RegisterPlugin(multitenancy.NewPlugin()); err != nil {
+        panic(err)
+    }
+    
+    // Register organization plugin (required for organization mode)
+    if err := auth.RegisterPlugin(organization.NewPlugin()); err != nil {
+        panic(err)
+    }
     
     // Register SCIM plugin
     scimPlugin := scim.NewPlugin()
@@ -107,6 +179,17 @@ func main() {
 # config.yaml
 auth:
   plugins:
+    # Multitenancy plugin (required for app mode, or for apps/environments in org mode)
+    multitenancy:
+      enabled: true
+      enableAppCreation: true
+    
+    # Organization plugin (optional - enables organization mode)
+    organization:
+      enabled: true
+      enableUserCreation: true
+    
+    # SCIM plugin
     scim:
       enabled: true
       auth_method: "bearer"
@@ -147,6 +230,10 @@ auth:
         require_org_validation: true
 ```
 
+**Note**: SCIM automatically detects which mode to use:
+- If only multitenancy plugin is loaded → **App Mode** (provisions to apps)
+- If organization plugin is also loaded → **Organization Mode** (provisions to user-created organizations)
+
 ### 3. Run Database Migrations
 
 Migrations run automatically when the plugin is initialized. You can also run them manually:
@@ -161,10 +248,18 @@ if err := scimPlugin.Migrate(); err != nil {
 
 ### Creating a Provisioning Token
 
-Before you can use SCIM, create a provisioning token for your identity provider:
+Before you can use SCIM, create a provisioning token for your identity provider. The token is scoped to the current app/environment/organization context:
+
+**App Mode:**
+- Token is scoped to the app (organization_id = app_id)
+- Provisions users/groups directly into the app
+
+**Organization Mode:**
+- Token is scoped to a specific organization within an app/environment
+- Provisions users/groups into the user-created organization
 
 ```bash
-curl -X POST http://localhost:8080/api/scim-admin/tokens \
+curl -X POST http://localhost:8080/api/admin/scim/tokens \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

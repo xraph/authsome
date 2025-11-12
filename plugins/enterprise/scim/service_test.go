@@ -67,7 +67,7 @@ func TestMapSCIMToAuthSomeUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			user, err := service.mapSCIMToAuthSomeUser(tt.scimUser, "org123")
+			user, err := service.mapSCIMToAuthSomeUser(tt.scimUser, xid.New())
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantEmail, user.Email)
@@ -331,7 +331,7 @@ func TestConcurrentMapSCIMToAuthSomeUser(t *testing.T) {
 
 	for i := 0; i < goroutines; i++ {
 		go func() {
-			_, err := service.mapSCIMToAuthSomeUser(scimUser, "org123")
+			_, err := service.mapSCIMToAuthSomeUser(scimUser, xid.New())
 			if err != nil {
 				errors <- err
 			}
@@ -366,7 +366,7 @@ func BenchmarkMapSCIMToAuthSomeUser(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = service.mapSCIMToAuthSomeUser(scimUser, "org123")
+		_, _ = service.mapSCIMToAuthSomeUser(scimUser, xid.New())
 	}
 }
 

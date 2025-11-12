@@ -25,6 +25,7 @@ import (
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/authsome/internal/dbschema"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/internal/validator"
 	"github.com/xraph/authsome/plugins"
 	jwtplugin "github.com/xraph/authsome/plugins/jwt"
@@ -61,6 +62,7 @@ type Auth struct {
 	config   Config
 	forgeApp forge.App
 	db       interface{} // Will be *bun.DB
+	logger   forge.Logger
 
 	// Core services (using interfaces to allow plugin decoration)
 	userService         user.ServiceInterface
@@ -116,16 +118,19 @@ func New(opts ...Option) *Auth {
 
 // Initialize initializes all core services
 func (a *Auth) Initialize(ctx context.Context) error {
+	a.logger = a.forgeApp.Logger()
+	a.logger.Info("initializing authsome")
 	if a.forgeApp == nil {
 		return fmt.Errorf("forge app not set")
 	}
 
 	// Resolve database from various sources
 	if err := a.resolveDatabase(); err != nil {
-		return fmt.Errorf("failed to resolve database: %w", err)
+		return errs.InternalServerError("failed to resolve database", err)
 	}
 
-	fmt.Println("[AuthSome] Resolved database", a.db)
+	a.logger.Info("resolved database", forge.F("database", a.db))
+
 	// Cast database
 	db, ok := a.db.(*bun.DB)
 	if !ok || db == nil {
@@ -136,9 +141,9 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// This creates the schema and sets the search_path for all subsequent operations
 	if a.config.DatabaseSchema != "" {
 		if err := dbschema.ApplySchema(ctx, db, a.config.DatabaseSchema); err != nil {
-			return fmt.Errorf("failed to apply database schema '%s': %w", a.config.DatabaseSchema, err)
+			return errs.InternalServerError("failed to apply database schema", err)
 		}
-		fmt.Printf("[AuthSome] ✅ Applied custom database schema: %s\n", a.config.DatabaseSchema)
+		a.logger.Info("applied custom database schema", forge.F("schema", a.config.DatabaseSchema))
 	}
 
 	// Initialize repositories
@@ -245,20 +250,20 @@ func (a *Auth) Initialize(ctx context.Context) error {
 
 	// Register services into Forge DI container
 	if err := a.registerServicesIntoContainer(db); err != nil {
-		return fmt.Errorf("failed to register services into DI container: %w", err)
+		return errs.InternalServerError("failed to register services into DI container", err)
 	}
 
 	// Ensure platform organization exists before plugins initialize
 	// This is needed for role bootstrap later
-	platformOrg, err := a.ensurePlatformOrganization(ctx)
+	platformOrg, err := a.ensurePlatformApp(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to ensure platform organization: %w", err)
+		return errs.InternalServerError("failed to ensure platform organization", err)
 	}
 
 	// Register default platform roles before plugins initialize
 	// Plugins can then extend or override these roles
 	if err := rbac.RegisterDefaultPlatformRoles(a.serviceRegistry.RoleRegistry()); err != nil {
-		return fmt.Errorf("failed to register default platform roles: %w", err)
+		return errs.InternalServerError("failed to register default platform roles", err)
 	}
 
 	// Initialize plugins with full Auth instance and run complete lifecycle
@@ -266,7 +271,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		for _, p := range a.pluginRegistry.List() {
 			// 1. Initialize plugin with Auth instance (not just DB)
 			if err := p.Init(a); err != nil {
-				return fmt.Errorf("plugin %s init failed: %w", p.ID(), err)
+				return errs.InternalServerError("plugin init failed", err)
 			}
 
 			// 2. Register roles (optional interface)
@@ -274,25 +279,25 @@ func (a *Auth) Initialize(ctx context.Context) error {
 			if rolePlugin, ok := p.(interface {
 				RegisterRoles(registry interface{}) error
 			}); ok {
-				fmt.Printf("[AuthSome] Plugin %s registering roles...\n", p.ID())
+				a.logger.Info("plugin registering roles", forge.F("plugin", p.ID()))
 				if err := rolePlugin.RegisterRoles(a.serviceRegistry.RoleRegistry()); err != nil {
-					return fmt.Errorf("plugin %s register roles failed: %w", p.ID(), err)
+					return errs.InternalServerError("plugin register roles failed", err)
 				}
 			}
 
 			// 3. Register hooks
 			if err := p.RegisterHooks(a.hookRegistry); err != nil {
-				return fmt.Errorf("plugin %s register hooks failed: %w", p.ID(), err)
+				return errs.InternalServerError("plugin register hooks failed", err)
 			}
 
 			// 4. Register service decorators (plugins can replace core services)
 			if err := p.RegisterServiceDecorators(a.serviceRegistry); err != nil {
-				return fmt.Errorf("plugin %s register decorators failed: %w", p.ID(), err)
+				return errs.InternalServerError("plugin register decorators failed", err)
 			}
 
 			// 5. Run migrations
 			if err := p.Migrate(); err != nil {
-				return fmt.Errorf("plugin %s migrate failed: %w", p.ID(), err)
+				return errs.InternalServerError("plugin migrate failed", err)
 			}
 		}
 
@@ -312,59 +317,57 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// Bootstrap roles and permissions to platform organization
 	// This happens AFTER plugins have registered their roles
 	if err := a.bootstrapRoles(ctx, db, platformOrg.ID); err != nil {
-		return fmt.Errorf("failed to bootstrap roles: %w", err)
+		return errs.InternalServerError("failed to bootstrap roles", err)
 	}
 
 	return nil
 }
 
-// ensurePlatformOrganization ensures the platform organization exists
+// ensurePlatformApp ensures the platform organization exists
 // This is the single foundational organization for the entire system
 // Returns the platform organization (existing or newly created)
-func (a *Auth) ensurePlatformOrganization(ctx context.Context) (*schema.Organization, error) {
+func (a *Auth) ensurePlatformApp(ctx context.Context) (*schema.App, error) {
 	db, ok := a.db.(*bun.DB)
 	if !ok {
-		return nil, fmt.Errorf("invalid database instance")
+		return nil, errs.InternalServerErrorWithMessage("invalid database instance")
 	}
 
 	// Check if platform org exists
-	var platformOrg schema.Organization
+	var platformApp schema.App
 	err := db.NewSelect().
-		Model(&platformOrg).
+		Model(&platformApp).
 		Where("is_platform = ?", true).
 		Scan(ctx)
 
 	if err == nil {
 		// Platform org exists
-		fmt.Printf("[AuthSome] ✅ Platform organization found: %s (ID: %s)\n",
-			platformOrg.Name, platformOrg.ID.String())
-		return &platformOrg, nil
+		a.logger.Info("platform app found", forge.F("app", platformApp.Name), forge.F("id", platformApp.ID.String()))
+		return &platformApp, nil
 	}
 
 	// Platform org doesn't exist - create it
-	fmt.Println("[AuthSome] Platform organization not found, creating...")
+	a.logger.Info("platform app not found, creating...")
 
-	platformOrg = schema.Organization{
+	platformApp = schema.App{
 		ID:       xid.New(),
-		Name:     "Platform Organization",
+		Name:     "Platform App",
 		Slug:     "platform",
 		Metadata: map[string]interface{}{},
 	}
-	platformOrg.CreatedAt = time.Now()
-	platformOrg.UpdatedAt = time.Now()
-	platformOrg.CreatedBy = platformOrg.ID // Self-created
-	platformOrg.UpdatedBy = platformOrg.ID
-	platformOrg.Version = 1
+	platformApp.CreatedAt = time.Now()
+	platformApp.UpdatedAt = time.Now()
+	platformApp.CreatedBy = platformApp.ID // Self-created
+	platformApp.UpdatedBy = platformApp.ID
+	platformApp.Version = 1
 
-	_, err = db.NewInsert().Model(&platformOrg).Exec(ctx)
+	_, err = db.NewInsert().Model(&platformApp).Exec(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create platform organization: %w", err)
+		return nil, errs.InternalServerError("failed to create platform app", err)
 	}
 
-	fmt.Printf("[AuthSome] ✅ Created platform organization: %s (ID: %s)\n",
-		platformOrg.Name, platformOrg.ID.String())
+	a.logger.Info("created platform app", forge.F("app", platformApp.Name), forge.F("id", platformApp.ID.String()))
 
-	return &platformOrg, nil
+	return &platformApp, nil
 }
 
 // bootstrapRoles applies all registered roles to the platform organization
@@ -372,22 +375,22 @@ func (a *Auth) ensurePlatformOrganization(ctx context.Context) (*schema.Organiza
 func (a *Auth) bootstrapRoles(ctx context.Context, db *bun.DB, platformOrgID xid.ID) error {
 	roleRegistry := a.serviceRegistry.RoleRegistry()
 	if roleRegistry == nil {
-		return fmt.Errorf("role registry not initialized")
+		return errs.InternalServerErrorWithMessage("role registry not initialized")
 	}
 
-	fmt.Println("[AuthSome] Starting role bootstrap...")
+	a.logger.Info("starting role bootstrap...")
 	if err := roleRegistry.Bootstrap(ctx, db, a.rbacService, platformOrgID); err != nil {
-		return fmt.Errorf("role bootstrap failed: %w", err)
+		return errs.InternalServerError("role bootstrap failed", err)
 	}
 
-	fmt.Println("[AuthSome] ✅ Role bootstrap complete")
+	a.logger.Info("role bootstrap complete")
 	return nil
 }
 
 // Mount mounts the auth routes to the Forge router
 func (a *Auth) Mount(router forge.Router, basePath string) error {
 	if a.authService == nil {
-		return fmt.Errorf("auth service not initialized; call Initialize first")
+		return errs.InternalServerErrorWithMessage("auth service not initialized; call Initialize first")
 	}
 	if basePath == "" {
 		basePath = a.config.BasePath
@@ -423,15 +426,15 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	if !hasMultitenancyPlugin {
 		// Mount app routes under basePath (not hardcoded)
 		routes.RegisterApp(router, basePath+"/apps", appH)
-		fmt.Println("[AuthSome] Registered built-in app routes (multitenancy plugin not detected)")
+		a.logger.Info("registered built-in app routes (multitenancy plugin not detected)")
 	} else {
-		fmt.Println("[AuthSome] Skipping built-in app routes (multitenancy plugin detected)")
+		a.logger.Info("skipping built-in app routes (multitenancy plugin detected)")
 
 		// Register RBAC-related routes that the multitenancy plugin doesn't handle
 		// These are still needed even with the multitenancy plugin
 		rbacGroup := router.Group(basePath + "/apps")
 		routes.RegisterAppRBAC(rbacGroup, appH)
-		fmt.Println("[AuthSome] Registered app RBAC routes")
+		a.logger.Info("registered app RBAC routes")
 	}
 
 	// Phase 10 routes - create a scoped group for these routes
@@ -446,9 +449,9 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 		// Pass a group with the basePath so plugins are scoped under the auth mount point
 		pluginGroup := router.Group(basePath)
 		for _, p := range a.pluginRegistry.List() {
-			fmt.Printf("[AuthSome] Registering routes for plugin: %s\n", p.ID())
+			a.logger.Info("registering routes for plugin", forge.F("plugin", p.ID()))
 			if err := p.RegisterRoutes(pluginGroup); err != nil {
-				fmt.Printf("[AuthSome] Error registering routes for plugin %s: %v\n", p.ID(), err)
+				a.logger.Error("error registering routes for plugin", forge.F("plugin", p.ID()), forge.F("error", err))
 			}
 		}
 	}
@@ -521,102 +524,102 @@ func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
 	if err := container.Register(ServiceDatabase, func(c forge.Container) (interface{}, error) {
 		return db, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register database: %w", err)
+		return errs.InternalServerError("failed to register database", err)
 	}
 
 	// Register core services as singletons
 	if err := container.Register(ServiceUser, func(c forge.Container) (interface{}, error) {
 		return a.userService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register user service: %w", err)
+		return errs.InternalServerError("failed to register user service", err)
 	}
 
 	if err := container.Register(ServiceSession, func(c forge.Container) (interface{}, error) {
 		return a.sessionService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register session service: %w", err)
+		return errs.InternalServerError("failed to register session service", err)
 	}
 
 	if err := container.Register(ServiceAuth, func(c forge.Container) (interface{}, error) {
 		return a.authService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register auth service: %w", err)
+		return errs.InternalServerError("failed to register auth service", err)
 	}
 
 	if err := container.Register(ServiceApp, func(c forge.Container) (interface{}, error) {
 		return a.organizationService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register app service: %w", err)
+		return errs.InternalServerError("failed to register app service", err)
 	}
 
 	if err := container.Register(ServiceRateLimit, func(c forge.Container) (interface{}, error) {
 		return a.rateLimitService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register rate limit service: %w", err)
+		return errs.InternalServerError("failed to register rate limit service", err)
 	}
 
 	if err := container.Register(ServiceDevice, func(c forge.Container) (interface{}, error) {
 		return a.deviceService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register device service: %w", err)
+		return errs.InternalServerError("failed to register device service", err)
 	}
 
 	if err := container.Register(ServiceSecurity, func(c forge.Container) (interface{}, error) {
 		return a.securityService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register security service: %w", err)
+		return errs.InternalServerError("failed to register security service", err)
 	}
 
 	if err := container.Register(ServiceAudit, func(c forge.Container) (interface{}, error) {
 		return a.auditService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register audit service: %w", err)
+		return errs.InternalServerError("failed to register audit service", err)
 	}
 
 	if err := container.Register(ServiceRBAC, func(c forge.Container) (interface{}, error) {
 		return a.rbacService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register RBAC service: %w", err)
+		return errs.InternalServerError("failed to register RBAC service", err)
 	}
 
 	if err := container.Register(ServiceWebhook, func(c forge.Container) (interface{}, error) {
 		return a.webhookService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register webhook service: %w", err)
+		return errs.InternalServerError("failed to register webhook service", err)
 	}
 
 	if err := container.Register(ServiceNotification, func(c forge.Container) (interface{}, error) {
 		return a.notificationService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register notification service: %w", err)
+		return errs.InternalServerError("failed to register notification service", err)
 	}
 
 	if err := container.Register(ServiceJWT, func(c forge.Container) (interface{}, error) {
 		return a.jwtService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register JWT service: %w", err)
+		return errs.InternalServerError("failed to register JWT service", err)
 	}
 
 	if err := container.Register(ServiceAPIKey, func(c forge.Container) (interface{}, error) {
 		return a.apikeyService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register API key service: %w", err)
+		return errs.InternalServerError("failed to register API key service", err)
 	}
 
 	// Register registries
 	if err := container.Register(ServiceHookRegistry, func(c forge.Container) (interface{}, error) {
 		return a.hookRegistry, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register hook registry: %w", err)
+		return errs.InternalServerError("failed to register hook registry", err)
 	}
 
 	if err := container.Register(ServicePluginRegistry, func(c forge.Container) (interface{}, error) {
 		return a.pluginRegistry, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register plugin registry: %w", err)
+		return errs.InternalServerError("failed to register plugin registry", err)
 	}
 
-	fmt.Println("[AuthSome] Successfully registered all services into Forge DI container")
+	a.logger.Info("successfully registered all services into Forge DI container")
 	return nil
 }
 

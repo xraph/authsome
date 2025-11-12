@@ -10,7 +10,7 @@ import (
 // Organization represents user-created organizations (Clerk-style workspaces) within an environment
 type Organization struct {
 	AuditableModel `bun:",inline"`
-	bun.BaseModel  `bun:"table:user_organizations,alias:uo"`
+	bun.BaseModel  `bun:"table:organizations,alias:uo"`
 
 	ID            xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
 	AppID         xid.ID                 `json:"appID" bun:"app_id,notnull,type:varchar(20)"`
@@ -29,7 +29,7 @@ type Organization struct {
 // OrganizationMember represents membership in user-created organizations
 type OrganizationMember struct {
 	AuditableModel `bun:",inline"`
-	bun.BaseModel  `bun:"table:user_organization_members,alias:uom"`
+	bun.BaseModel  `bun:"table:organization_members,alias:uom"`
 
 	ID             xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
 	OrganizationID xid.ID    `json:"organizationID" bun:"organization_id,notnull,type:varchar(20)"`
@@ -46,7 +46,7 @@ type OrganizationMember struct {
 // OrganizationTeam represents teams within user-created organizations
 type OrganizationTeam struct {
 	AuditableModel `bun:",inline"`
-	bun.BaseModel  `bun:"table:user_organization_teams,alias:uot"`
+	bun.BaseModel  `bun:"table:organization_teams,alias:uot"`
 
 	ID             xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
 	OrganizationID xid.ID                 `json:"organizationID" bun:"organization_id,notnull,type:varchar(20)"`
@@ -61,7 +61,7 @@ type OrganizationTeam struct {
 // OrganizationTeamMember represents team membership within user-created organizations
 type OrganizationTeamMember struct {
 	AuditableModel `bun:",inline"`
-	bun.BaseModel  `bun:"table:user_organization_team_members,alias:uotm"`
+	bun.BaseModel  `bun:"table:organization_team_members,alias:uotm"`
 
 	ID       xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
 	TeamID   xid.ID    `json:"teamID" bun:"team_id,notnull,type:varchar(20)"`
@@ -76,7 +76,7 @@ type OrganizationTeamMember struct {
 // OrganizationInvitation represents invitations to user-created organizations
 type OrganizationInvitation struct {
 	AuditableModel `bun:",inline"`
-	bun.BaseModel  `bun:"table:user_organization_invitations,alias:uoi"`
+	bun.BaseModel  `bun:"table:organization_invitations,alias:uoi"`
 
 	ID             xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
 	OrganizationID xid.ID     `json:"organizationID" bun:"organization_id,notnull,type:varchar(20)"`

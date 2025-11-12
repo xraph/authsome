@@ -89,11 +89,13 @@ func (p *Plugin) Init(auth interface{}) error {
 		return fmt.Errorf("user service not found in registry")
 	}
 
-	// Get organization service (required for multi-tenancy)
-	// Note: Can be either core/organization.Service or multitenancy/organization.Service
+	// Get organization/app service (required for SCIM)
+	// Can be either:
+	// - *app.Service (from multitenancy plugin) - App mode
+	// - *organization.Service (from organization plugin) - Organization mode
 	p.orgService = serviceRegistry.OrganizationService()
 	if p.orgService == nil {
-		return fmt.Errorf("organization service not found in registry")
+		return fmt.Errorf("organization or app service not found in registry - SCIM requires multitenancy or organization plugin")
 	}
 
 	// Get audit service

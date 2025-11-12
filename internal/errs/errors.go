@@ -749,7 +749,11 @@ func BadRequest(msg string) *AuthsomeError {
 	return New(CodeBadRequest, msg, http.StatusBadRequest)
 }
 
-func InternalServerError(msg string) *AuthsomeError {
+func InternalServerError(msg string, err error) *AuthsomeError {
+	return Wrap(err, CodeInternalError, msg, http.StatusInternalServerError)
+}
+
+func InternalServerErrorWithMessage(msg string) *AuthsomeError {
 	return New(CodeInternalError, msg, http.StatusInternalServerError)
 }
 

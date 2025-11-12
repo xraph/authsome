@@ -3,283 +3,46 @@ package migrations
 import (
 	"context"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/schema"
 )
 
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
-		// Create apps table
-		_, err := db.NewCreateTable().
-			Model((*schema.App)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create organizations table
-		_, err = db.NewCreateTable().
-			Model((*schema.Organization)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create users table
-		_, err = db.NewCreateTable().
-			Model((*schema.User)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create members table
-		_, err = db.NewCreateTable().
-			Model((*schema.Member)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create sessions table
-		_, err = db.NewCreateTable().
-			Model((*schema.Session)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create accounts table
-		_, err = db.NewCreateTable().
-			Model((*schema.Account)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create verifications table
-		_, err = db.NewCreateTable().
-			Model((*schema.Verification)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create devices table
-		_, err = db.NewCreateTable().
-			Model((*schema.Device)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create audit events table
-		_, err = db.NewCreateTable().
-			Model((*schema.AuditEvent)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create user bans table
-		_, err = db.NewCreateTable().
-			Model((*schema.UserBan)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create roles table
-		_, err = db.NewCreateTable().
-			Model((*schema.Role)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create permissions table
-		_, err = db.NewCreateTable().
-			Model((*schema.Permission)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create user roles table
-		_, err = db.NewCreateTable().
-			Model((*schema.UserRole)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create policies table
-		_, err = db.NewCreateTable().
-			Model((*schema.Policy)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create API keys table
-		_, err = db.NewCreateTable().
-			Model((*schema.APIKey)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create webhooks table
-		_, err = db.NewCreateTable().
-			Model((*schema.Webhook)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create webhook events table
-		_, err = db.NewCreateTable().
-			Model((*schema.Event)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create webhook deliveries table
-		_, err = db.NewCreateTable().
-			Model((*schema.Delivery)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create form schemas table
-		_, err = db.NewCreateTable().
-			Model((*schema.FormSchema)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create teams table
-		_, err = db.NewCreateTable().
-			Model((*schema.Team)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create team members table
-		_, err = db.NewCreateTable().
-			Model((*schema.TeamMember)(nil)).
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create indexes
-		_, err = db.NewCreateIndex().
-			Model((*schema.User)(nil)).
-			Index("idx_users_email").
-			Column("email").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		_, err = db.NewCreateIndex().
-			Model((*schema.Session)(nil)).
-			Index("idx_sessions_token").
-			Column("token").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		_, err = db.NewCreateIndex().
-			Model((*schema.Member)(nil)).
-			Index("idx_members_org_user").
-			Column("organization_id", "user_id").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Create webhook indexes
-		_, err = db.NewCreateIndex().
-			Model((*schema.Event)(nil)).
-			Index("idx_webhook_events_org").
-			Column("organization_id").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		_, err = db.NewCreateIndex().
-			Model((*schema.Delivery)(nil)).
-			Index("idx_webhook_deliveries_webhook_id").
-			Column("webhook_id").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		_, err = db.NewCreateIndex().
-			Model((*schema.Delivery)(nil)).
-			Index("idx_webhook_deliveries_event_id").
-			Column("event_id").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		_, err = db.NewCreateIndex().
-			Model((*schema.Delivery)(nil)).
-			Index("idx_webhook_deliveries_status").
-			Column("status", "next_retry_at").
-			IfNotExists().
-			Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}, func(ctx context.Context, db *bun.DB) error {
-		// Rollback - drop all tables
-		tables := []string{
+		// Drop existing tables to allow a clean reset (ignoring backward compatibility)
+		drop := []string{
+			"identity_verification_documents",
+			"identity_verification_sessions",
+			"identity_verifications",
+			"authorization_codes",
+			"oauth_tokens",
+			"oauth_clients",
+			"social_accounts",
+			"impersonation_audit",
+			"impersonation_sessions",
+			"mfa_risk_assessments",
+			"mfa_attempts",
+			"mfa_trusted_devices",
+			"mfa_sessions",
+			"mfa_challenges",
+			"mfa_factors",
+			"phone_verifications",
+			"email_otps",
+			"passkeys",
 			"team_members",
 			"teams",
+			"organization_team_members",
+			"organization_teams",
+			"organization_members",
+			"organization_invitations",
+			"usage_events",
 			"form_schemas",
 			"webhook_deliveries",
 			"webhook_events",
 			"webhooks",
+			"notification_templates",
+			"notifications",
 			"api_keys",
 			"policies",
 			"user_roles",
@@ -294,19 +57,343 @@ func init() {
 			"members",
 			"users",
 			"organizations",
+			"environment_promotions",
+			"environments",
+			"jwt_keys",
+			"sso_providers",
 			"apps",
 		}
+		for _, t := range drop {
+			_, _ = db.NewDropTable().Table(t).IfExists().Cascade().Exec(ctx)
+		}
 
-		for _, table := range tables {
-			_, err := db.NewDropTable().
-				Table(table).
-				IfExists().
-				Exec(ctx)
+		// Create core tables
+		if _, err := db.NewCreateTable().Model((*schema.App)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Environment)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.EnvironmentPromotion)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// User organizations
+		if _, err := db.NewCreateTable().Model((*schema.Organization)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.OrganizationMember)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.OrganizationTeam)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.OrganizationTeamMember)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.OrganizationInvitation)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Identity core
+		if _, err := db.NewCreateTable().Model((*schema.User)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Member)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Session)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Account)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Verification)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Device)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.AuditEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.UserBan)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// RBAC
+		if _, err := db.NewCreateTable().Model((*schema.Role)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Permission)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.UserRole)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Policy)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Keys & Providers
+		if _, err := db.NewCreateTable().Model((*schema.JWTKey)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.SSOProvider)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Notifications & Webhooks
+		if _, err := db.NewCreateTable().Model((*schema.NotificationTemplate)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Notification)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Webhook)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Event)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.Delivery)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Forms & Usage
+		if _, err := db.NewCreateTable().Model((*schema.FormSchema)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.UsageEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Teams (app-level)
+		if _, err := db.NewCreateTable().Model((*schema.Team)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.TeamMember)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Plugins: passkey, magic link, phone, email OTP
+		if _, err := db.NewCreateTable().Model((*schema.Passkey)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MagicLink)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.PhoneVerification)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.EmailOTP)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// MFA suite
+		if _, err := db.NewCreateTable().Model((*schema.MFAFactor)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFAChallenge)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFASession)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFATrustedDevice)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFAPolicy)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFAAttempt)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFARiskAssessment)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// OAuth/OIDC
+		if _, err := db.NewCreateTable().Model((*schema.OAuthClient)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.AuthorizationCode)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.OAuthToken)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.SocialAccount)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Impersonation
+		if _, err := db.NewCreateTable().Model((*schema.ImpersonationSession)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.ImpersonationAuditEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Indexes
+		if _, err := db.NewCreateIndex().Model((*schema.User)(nil)).Index("idx_users_email").Column("email").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.Session)(nil)).Index("idx_sessions_token").Column("token").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_org_user").Column("organization_id", "user_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.Event)(nil)).Index("idx_webhook_events_org").Column("organization_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_webhook_id").Column("webhook_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_event_id").Column("event_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_status").Column("status", "next_retry_at").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Composite indexes for usage events
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_endpoint_method").Column("endpoint", "method").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_plugin_feature").Column("plugin", "feature").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Unique constraints where Bun builder support is limited
+		if _, err := db.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_env_app_slug ON environments(app_id, slug)"); err != nil {
+			return err
+		}
+		if _, err := db.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_org_app_env_slug ON organizations(app_id, environment_id, slug)"); err != nil {
+			return err
+		}
+
+		// Usage events indexes (Bun doesn't support `index` in struct tags)
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_user_id").Column("user_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_organization_id").Column("organization_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_session_id").Column("session_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_api_key_id").Column("api_key_id").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_method").Column("method").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_endpoint").Column("endpoint").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_status_code").Column("status_code").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_auth_method").Column("auth_method").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_country").Column("country").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_plugin").Column("plugin").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_feature").Column("feature").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Optional seed: create platform app and default dev environment if not present
+		var count int
+		if err := db.NewSelect().Model((*schema.App)(nil)).ColumnExpr("COUNT(*)").Scan(ctx, &count); err == nil && count == 0 {
+			platformID := xid.New()
+			systemActor := xid.New()
+			_, err := db.NewInsert().Model(&schema.App{ID: platformID, Name: "Platform", Slug: "platform", IsPlatform: true, AuditableModel: schema.AuditableModel{CreatedBy: systemActor, UpdatedBy: systemActor}}).Exec(ctx)
+			if err != nil {
+				return err
+			}
+			_, err = db.NewInsert().Model(&schema.Environment{
+				ID:             xid.New(),
+				AppID:          platformID,
+				Name:           "Development",
+				Slug:           "dev",
+				Type:           schema.EnvironmentTypeDevelopment,
+				Status:         schema.EnvironmentStatusActive,
+				IsDefault:      true,
+				Config:         map[string]interface{}{},
+				AuditableModel: schema.AuditableModel{CreatedBy: systemActor, UpdatedBy: systemActor},
+			}).Exec(ctx)
 			if err != nil {
 				return err
 			}
 		}
 
+		return nil
+	}, func(ctx context.Context, db *bun.DB) error {
+		// Drop all tables in reverse dependency order
+		tables := []string{
+			"identity_verification_documents",
+			"identity_verification_sessions",
+			"identity_verifications",
+			"authorization_codes",
+			"oauth_tokens",
+			"oauth_clients",
+			"social_accounts",
+			"impersonation_audit",
+			"impersonation_sessions",
+			"mfa_risk_assessments",
+			"mfa_attempts",
+			"mfa_trusted_devices",
+			"mfa_sessions",
+			"mfa_challenges",
+			"mfa_factors",
+			"phone_verifications",
+			"email_otps",
+			"passkeys",
+			"team_members",
+			"teams",
+			"organization_team_members",
+			"organization_teams",
+			"organization_members",
+			"organization_invitations",
+			"usage_events",
+			"form_schemas",
+			"webhook_deliveries",
+			"webhook_events",
+			"webhooks",
+			"notification_templates",
+			"notifications",
+			"api_keys",
+			"policies",
+			"user_roles",
+			"permissions",
+			"roles",
+			"user_bans",
+			"audit_events",
+			"devices",
+			"verifications",
+			"accounts",
+			"sessions",
+			"members",
+			"users",
+			"organizations",
+			"environment_promotions",
+			"environments",
+			"jwt_keys",
+			"sso_providers",
+			"apps",
+		}
+		for _, table := range tables {
+			if _, err := db.NewDropTable().Table(table).IfExists().Cascade().Exec(ctx); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }

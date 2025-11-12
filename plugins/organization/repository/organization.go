@@ -62,7 +62,7 @@ func (r *organizationRepository) ListByUser(ctx context.Context, userID xid.ID, 
 
 	query := r.db.NewSelect().
 		Model(&orgs).
-		Join("INNER JOIN user_organization_members AS m ON m.organization_id = uo.id").
+		Join("INNER JOIN organization_members AS m ON m.organization_id = uo.id").
 		Where("m.user_id = ?", userID).
 		Order("uo.created_at DESC")
 
@@ -119,7 +119,7 @@ func (r *organizationRepository) Delete(ctx context.Context, id xid.ID) error {
 func (r *organizationRepository) CountByUser(ctx context.Context, userID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Organization)(nil)).
-		Join("INNER JOIN user_organization_members AS m ON m.organization_id = user_organizations.id").
+		Join("INNER JOIN organization_members AS m ON m.organization_id = organizations.id").
 		Where("m.user_id = ?", userID).
 		Count(ctx)
 	return count, err

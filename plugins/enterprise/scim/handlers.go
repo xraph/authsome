@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/forge"
 )
 
@@ -224,7 +225,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 	}
 
 	// Get organization ID from context (set by middleware)
-	orgID := c.Get("organization_id").(xid.ID)
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
 
 	createdUser, err := h.service.CreateUser(c.Request().Context(), &scimUser, orgID)
 	if err != nil {
@@ -556,11 +557,24 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
 	}
 
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get 3-tier architecture context
+	ctx := c.Request().Context()
+	appIDVal := interfaces.GetAppID(ctx)
+	envIDVal := interfaces.GetEnvironmentID(ctx)
+	orgIDVal := interfaces.GetOrganizationID(ctx)
+
+	// If orgID is not set, this is an error
+	if orgIDVal.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Organization context required",
+		})
+	}
 
 	token, provToken, err := h.service.CreateProvisioningToken(
 		c.Request().Context(),
-		orgID,
+		appIDVal,
+		envIDVal,
+		orgIDVal,
 		req.Name,
 		req.Description,
 		req.Scopes,
@@ -646,9 +660,13 @@ func (h *Handler) RevokeProvisioningToken(c forge.Context) error {
 
 // GetAttributeMappings gets attribute mappings
 func (h *Handler) GetAttributeMappings(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get 3-tier architecture context
+	ctx := c.Request().Context()
+	appID := interfaces.GetAppID(ctx)
+	envID := interfaces.GetEnvironmentID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
 
-	mappings, err := h.service.GetAttributeMappings(c.Request().Context(), orgID)
+	mappings, err := h.service.GetAttributeMappings(c.Request().Context(), appID, envID, orgID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
@@ -662,7 +680,11 @@ func (h *Handler) GetAttributeMappings(c forge.Context) error {
 
 // UpdateAttributeMappings updates attribute mappings
 func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get 3-tier architecture context
+	ctx := c.Request().Context()
+	appID := interfaces.GetAppID(ctx)
+	envID := interfaces.GetEnvironmentID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
 
 	var req struct {
 		Mappings map[string]string `json:"mappings"`
@@ -674,7 +696,7 @@ func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
 		})
 	}
 
-	if err := h.service.UpdateAttributeMappings(c.Request().Context(), orgID, req.Mappings); err != nil {
+	if err := h.service.UpdateAttributeMappings(c.Request().Context(), appID, envID, orgID, req.Mappings); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
 		})

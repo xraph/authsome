@@ -41,7 +41,7 @@ func (h *APIKeyHandler) CreateAPIKey(c forge.Context) error {
 
 	key, err := h.service.CreateAPIKey(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(500, errs.InternalServerError(err.Error()))
+		return c.JSON(500, errs.InternalServerError(err.Error(), err))
 	}
 
 	return c.JSON(201, key)
@@ -53,7 +53,7 @@ type ListAPIKeysRequest = apikey.ListAPIKeysRequest
 func (h *APIKeyHandler) ListAPIKeys(c forge.Context, req ListAPIKeysRequest) error {
 	response, err := h.service.ListAPIKeys(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(500, errs.InternalServerError(err.Error()))
+		return c.JSON(500, errs.InternalServerError("Failed to list API keys", err))
 	}
 
 	return c.JSON(200, response)
@@ -96,7 +96,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c forge.Context, req UpdateAPIKeyRequest) e
 
 	key, err := h.service.UpdateAPIKey(c.Request().Context(), req.ID, userID, req.AppID, req.OrgID, &req.Body)
 	if err != nil {
-		return c.JSON(500, errs.InternalServerError(err.Error()))
+		return c.JSON(500, errs.InternalServerError("Failed to update API key", err))
 	}
 
 	return c.JSON(200, key)
@@ -117,7 +117,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c forge.Context, req DeleteAPIKeyRequest) e
 
 	err := h.service.DeleteAPIKey(c.Request().Context(), req.ID, userID, req.AppID, req.OrgID)
 	if err != nil {
-		return c.JSON(500, errs.InternalServerError(err.Error()))
+		return c.JSON(500, errs.InternalServerError("Failed to delete API key", err))
 	}
 
 	return c.JSON(200, map[string]string{
@@ -143,7 +143,7 @@ func (h *APIKeyHandler) VerifyAPIKey(c forge.Context) error {
 
 	response, err := h.service.VerifyAPIKey(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(500, errs.InternalServerError(err.Error()))
+		return c.JSON(500, errs.InternalServerError("Failed to verify API key", err))
 	}
 
 	if !response.Valid {

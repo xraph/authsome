@@ -340,10 +340,10 @@ type Attribute struct {
 // ProvisioningToken represents a SCIM provisioning token (Bearer token)
 // Updated for 3-tier architecture: App → Environment → Organization
 type ProvisioningToken struct {
-	ID             xid.ID     `bun:"id,pk,type:uuid"`
-	AppID          xid.ID     `bun:"app_id,type:uuid,notnull"`          // Platform app
-	EnvironmentID  xid.ID     `bun:"environment_id,type:uuid,notnull"`  // Target environment (dev, prod, etc.)
-	OrganizationID xid.ID     `bun:"organization_id,type:uuid,notnull"` // User-created organization
+	ID             xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID     `bun:"app_id,type:varchar(20),notnull"`          // Platform app
+	EnvironmentID  xid.ID     `bun:"environment_id,type:varchar(20),notnull"`  // Target environment (dev, prod, etc.)
+	OrganizationID xid.ID     `bun:"organization_id,type:varchar(20),notnull"` // User-created organization
 	Name           string     `bun:"name,notnull"`
 	Description    string     `bun:"description"`
 	TokenHash      string     `bun:"token_hash,notnull,unique"` // bcrypt hash
@@ -351,7 +351,7 @@ type ProvisioningToken struct {
 	Scopes         []string   `bun:"scopes,type:text[],notnull"`
 	ExpiresAt      *time.Time `bun:"expires_at"`
 	LastUsedAt     *time.Time `bun:"last_used_at"`
-	CreatedBy      xid.ID     `bun:"created_by,type:uuid"`
+	CreatedBy      xid.ID     `bun:"created_by,type:varchar(20)"`
 	CreatedAt      time.Time  `bun:"created_at,notnull"`
 	UpdatedAt      time.Time  `bun:"updated_at,notnull"`
 	RevokedAt      *time.Time `bun:"revoked_at"`
@@ -360,11 +360,11 @@ type ProvisioningToken struct {
 // ProvisioningLog represents a log entry for provisioning operations
 // Updated for 3-tier architecture: App → Environment → Organization
 type ProvisioningLog struct {
-	ID             xid.ID                 `bun:"id,pk,type:uuid"`
-	AppID          xid.ID                 `bun:"app_id,type:uuid,notnull"`          // Platform app
-	EnvironmentID  xid.ID                 `bun:"environment_id,type:uuid,notnull"`  // Target environment
-	OrganizationID xid.ID                 `bun:"organization_id,type:uuid,notnull"` // User-created organization
-	TokenID        xid.ID                 `bun:"token_id,type:uuid"`
+	ID             xid.ID                 `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID                 `bun:"app_id,type:varchar(20),notnull"`          // Platform app
+	EnvironmentID  xid.ID                 `bun:"environment_id,type:varchar(20),notnull"`  // Target environment
+	OrganizationID xid.ID                 `bun:"organization_id,type:varchar(20),notnull"` // User-created organization
+	TokenID        xid.ID                 `bun:"token_id,type:varchar(20)"`
 	Operation      string                 `bun:"operation,notnull"`     // CREATE_USER, UPDATE_USER, DELETE_USER, etc.
 	ResourceType   string                 `bun:"resource_type,notnull"` // User, Group
 	ResourceID     string                 `bun:"resource_id"`
@@ -385,11 +385,11 @@ type ProvisioningLog struct {
 // AttributeMapping represents custom attribute mappings per organization
 // Updated for 3-tier architecture: App → Environment → Organization
 type AttributeMapping struct {
-	ID             xid.ID                 `bun:"id,pk,type:uuid"`
-	AppID          xid.ID                 `bun:"app_id,type:uuid,notnull"`                                    // Platform app
-	EnvironmentID  xid.ID                 `bun:"environment_id,type:uuid,notnull"`                            // Target environment
-	OrganizationID xid.ID                 `bun:"organization_id,type:uuid,notnull,unique:org_mapping_unique"` // User-created organization
-	Mappings       map[string]string      `bun:"mappings,type:jsonb,notnull"`                                 // SCIM attr -> AuthSome field
+	ID             xid.ID                 `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID                 `bun:"app_id,type:varchar(20),notnull"`                                    // Platform app
+	EnvironmentID  xid.ID                 `bun:"environment_id,type:varchar(20),notnull"`                            // Target environment
+	OrganizationID xid.ID                 `bun:"organization_id,type:varchar(20),notnull,unique:org_mapping_unique"` // User-created organization
+	Mappings       map[string]string      `bun:"mappings,type:jsonb,notnull"`                                        // SCIM attr -> AuthSome field
 	Metadata       map[string]interface{} `bun:"metadata,type:jsonb"`
 	CreatedAt      time.Time              `bun:"created_at,notnull"`
 	UpdatedAt      time.Time              `bun:"updated_at,notnull"`
@@ -398,14 +398,14 @@ type AttributeMapping struct {
 // GroupMapping represents SCIM group to user-created organization team/role mapping
 // Updated for 3-tier architecture: App → Environment → Organization
 type GroupMapping struct {
-	ID             xid.ID    `bun:"id,pk,type:uuid"`
-	AppID          xid.ID    `bun:"app_id,type:uuid,notnull"`          // Platform app
-	EnvironmentID  xid.ID    `bun:"environment_id,type:uuid,notnull"`  // Target environment
-	OrganizationID xid.ID    `bun:"organization_id,type:uuid,notnull"` // User-created organization
+	ID             xid.ID    `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID    `bun:"app_id,type:varchar(20),notnull"`          // Platform app
+	EnvironmentID  xid.ID    `bun:"environment_id,type:varchar(20),notnull"`  // Target environment
+	OrganizationID xid.ID    `bun:"organization_id,type:varchar(20),notnull"` // User-created organization
 	SCIMGroupID    string    `bun:"scim_group_id,notnull"`
 	SCIMGroupName  string    `bun:"scim_group_name,notnull"`
-	MappingType    string    `bun:"mapping_type,notnull"`        // team, role (in user-created organization)
-	TargetID       xid.ID    `bun:"target_id,type:uuid,notnull"` // Team ID or Role ID in user organization
+	MappingType    string    `bun:"mapping_type,notnull"`               // team, role (in user-created organization)
+	TargetID       xid.ID    `bun:"target_id,type:varchar(20),notnull"` // Team ID or Role ID in user organization
 	CreatedAt      time.Time `bun:"created_at,notnull"`
 	UpdatedAt      time.Time `bun:"updated_at,notnull"`
 }
