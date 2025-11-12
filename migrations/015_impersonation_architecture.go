@@ -17,7 +17,7 @@ func init() {
 		fmt.Println("[Migration 015] Phase 1: Adding user_organization_id columns...")
 
 		// Add user_organization_id to impersonation_sessions
-		_, err := db.Exec(ctx, `
+		_, err := db.ExecContext(ctx, `
 			ALTER TABLE impersonation_sessions 
 			ADD COLUMN IF NOT EXISTS user_organization_id VARCHAR(20)
 		`)
@@ -27,7 +27,7 @@ func init() {
 		fmt.Println("[Migration 015] ✅ Added user_organization_id to impersonation_sessions")
 
 		// Add user_organization_id to impersonation_audit
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			ALTER TABLE impersonation_audit 
 			ADD COLUMN IF NOT EXISTS user_organization_id VARCHAR(20)
 		`)
@@ -42,7 +42,7 @@ func init() {
 		fmt.Println("[Migration 015] Phase 2: Adding indexes...")
 
 		// Index on impersonation_sessions.user_organization_id (for filtering)
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_user_org 
 			ON impersonation_sessions(user_organization_id) 
 			WHERE user_organization_id IS NOT NULL
@@ -53,7 +53,7 @@ func init() {
 		fmt.Println("[Migration 015] ✅ Created index on impersonation_sessions.user_organization_id")
 
 		// Composite index on impersonation_sessions (organization_id, user_organization_id) for queries
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_app_org 
 			ON impersonation_sessions(organization_id, user_organization_id) 
 			WHERE user_organization_id IS NOT NULL
@@ -64,7 +64,7 @@ func init() {
 		fmt.Println("[Migration 015] ✅ Created composite index on impersonation_sessions")
 
 		// Index on impersonation_audit.user_organization_id
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			CREATE INDEX IF NOT EXISTS idx_impersonation_audit_user_org 
 			ON impersonation_audit(user_organization_id) 
 			WHERE user_organization_id IS NOT NULL
@@ -80,7 +80,7 @@ func init() {
 		fmt.Println("[Migration 015] Phase 3: Adding foreign key constraints...")
 
 		// Foreign key: impersonation_sessions.user_organization_id → user_organizations.id
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			DO $$
 			BEGIN
 				IF NOT EXISTS (
@@ -103,7 +103,7 @@ func init() {
 		}
 
 		// Foreign key: impersonation_audit.user_organization_id → user_organizations.id
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			DO $$
 			BEGIN
 				IF NOT EXISTS (
@@ -140,7 +140,7 @@ func init() {
 
 		// Drop foreign key constraints
 		fmt.Println("[Rollback 015] Phase 1: Dropping foreign key constraints...")
-		_, err := db.Exec(ctx, `
+		_, err := db.ExecContext(ctx, `
 			ALTER TABLE impersonation_sessions 
 			DROP CONSTRAINT IF EXISTS fk_impersonation_sessions_user_org
 		`)
@@ -148,7 +148,7 @@ func init() {
 			fmt.Printf("[Rollback 015] Warning: Could not drop FK constraint: %v\n", err)
 		}
 
-		_, err = db.Exec(ctx, `
+		_, err = db.ExecContext(ctx, `
 			ALTER TABLE impersonation_audit 
 			DROP CONSTRAINT IF EXISTS fk_impersonation_audit_user_org
 		`)
@@ -158,29 +158,29 @@ func init() {
 
 		// Drop indexes
 		fmt.Println("[Rollback 015] Phase 2: Dropping indexes...")
-		_, err = db.Exec(ctx, "DROP INDEX IF EXISTS idx_impersonation_sessions_user_org")
+		_, err = db.ExecContext(ctx, "DROP INDEX IF EXISTS idx_impersonation_sessions_user_org")
 		if err != nil {
 			fmt.Printf("[Rollback 015] Warning: Could not drop index: %v\n", err)
 		}
 
-		_, err = db.Exec(ctx, "DROP INDEX IF EXISTS idx_impersonation_sessions_app_org")
+		_, err = db.ExecContext(ctx, "DROP INDEX IF EXISTS idx_impersonation_sessions_app_org")
 		if err != nil {
 			fmt.Printf("[Rollback 015] Warning: Could not drop index: %v\n", err)
 		}
 
-		_, err = db.Exec(ctx, "DROP INDEX IF EXISTS idx_impersonation_audit_user_org")
+		_, err = db.ExecContext(ctx, "DROP INDEX IF EXISTS idx_impersonation_audit_user_org")
 		if err != nil {
 			fmt.Printf("[Rollback 015] Warning: Could not drop index: %v\n", err)
 		}
 
 		// Drop columns
 		fmt.Println("[Rollback 015] Phase 3: Dropping user_organization_id columns...")
-		_, err = db.Exec(ctx, "ALTER TABLE impersonation_sessions DROP COLUMN IF EXISTS user_organization_id")
+		_, err = db.ExecContext(ctx, "ALTER TABLE impersonation_sessions DROP COLUMN IF EXISTS user_organization_id")
 		if err != nil {
 			fmt.Printf("[Rollback 015] Warning: Could not drop column: %v\n", err)
 		}
 
-		_, err = db.Exec(ctx, "ALTER TABLE impersonation_audit DROP COLUMN IF EXISTS user_organization_id")
+		_, err = db.ExecContext(ctx, "ALTER TABLE impersonation_audit DROP COLUMN IF EXISTS user_organization_id")
 		if err != nil {
 			fmt.Printf("[Rollback 015] Warning: Could not drop column: %v\n", err)
 		}
