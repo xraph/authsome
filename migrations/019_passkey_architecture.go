@@ -10,7 +10,7 @@ import (
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Passkey V2 Architecture Migration
-		// Updates user_id to xid type and adds app_id and user_organization_id
+		// Updates user_id to xid type and adds app_id and organization_id
 
 		// Step 1: Add app_id column (required)
 		_, err := db.ExecContext(ctx, `
@@ -21,13 +21,13 @@ func init() {
 			return fmt.Errorf("failed to add app_id column: %w", err)
 		}
 
-		// Step 2: Add user_organization_id column (optional)
+		// Step 2: Add organization_id column (optional)
 		_, err = db.ExecContext(ctx, `
 			ALTER TABLE passkeys 
-			ADD COLUMN IF NOT EXISTS user_organization_id VARCHAR(20)
+			ADD COLUMN IF NOT EXISTS organization_id VARCHAR(20)
 		`)
 		if err != nil {
-			return fmt.Errorf("failed to add user_organization_id column: %w", err)
+			return fmt.Errorf("failed to add organization_id column: %w", err)
 		}
 
 		// Step 3: Update user_id column type from string to xid (varchar(20))
@@ -43,16 +43,16 @@ func init() {
 		// Step 4: Create composite index for efficient lookups
 		_, err = db.ExecContext(ctx, `
 			CREATE INDEX IF NOT EXISTS idx_passkeys_user_app_org 
-			ON passkeys (user_id, app_id, user_organization_id)
+			ON passkeys (user_id, app_id, organization_id)
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to create user_app_org index: %w", err)
 		}
 
-		// Step 5: Create index on (app_id, user_organization_id) for org-scoped queries
+		// Step 5: Create index on (app_id, organization_id) for org-scoped queries
 		_, err = db.ExecContext(ctx, `
 			CREATE INDEX IF NOT EXISTS idx_passkeys_app_org 
-			ON passkeys (app_id, user_organization_id)
+			ON passkeys (app_id, organization_id)
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to create app_org index: %w", err)
@@ -69,15 +69,15 @@ func init() {
 			fmt.Printf("Warning: failed to add app_id foreign key: %v\n", err)
 		}
 
-		// Step 7: Add foreign key constraint for user_organization_id
+		// Step 7: Add foreign key constraint for organization_id
 		_, err = db.ExecContext(ctx, `
 			ALTER TABLE passkeys 
 			ADD CONSTRAINT fk_passkeys_user_org_id 
-			FOREIGN KEY (user_organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+			FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 		`)
 		if err != nil {
 			// Log but don't fail - foreign keys may not be supported
-			fmt.Printf("Warning: failed to add user_organization_id foreign key: %v\n", err)
+			fmt.Printf("Warning: failed to add organization_id foreign key: %v\n", err)
 		}
 
 		// Step 8: Add foreign key constraint for user_id (now xid type)
@@ -109,7 +109,7 @@ func init() {
 			DROP CONSTRAINT IF EXISTS fk_passkeys_user_org_id
 		`)
 		if err != nil {
-			fmt.Printf("Warning: failed to drop user_organization_id foreign key: %v\n", err)
+			fmt.Printf("Warning: failed to drop organization_id foreign key: %v\n", err)
 		}
 
 		_, err = db.ExecContext(ctx, `
@@ -149,7 +149,7 @@ func init() {
 		_, err = db.ExecContext(ctx, `
 			ALTER TABLE passkeys 
 			DROP COLUMN IF EXISTS app_id,
-			DROP COLUMN IF EXISTS user_organization_id
+			DROP COLUMN IF EXISTS organization_id
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to drop V2 columns: %w", err)

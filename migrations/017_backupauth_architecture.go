@@ -10,7 +10,7 @@ import (
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Backup-Auth V2 Architecture Migration
-		// Adds app_id and user_organization_id to all backup-auth tables
+		// Adds app_id and organization_id to all backup-auth tables
 
 		tables := []string{
 			"backup_security_questions",
@@ -33,13 +33,13 @@ func init() {
 				return fmt.Errorf("failed to add app_id to %s: %w", table, err)
 			}
 
-			// Add user_organization_id column (nullable)
+			// Add organization_id column (nullable)
 			_, err = db.ExecContext(ctx, fmt.Sprintf(`
 				ALTER TABLE %s 
-				ADD COLUMN IF NOT EXISTS user_organization_id VARCHAR(20)
+				ADD COLUMN IF NOT EXISTS organization_id VARCHAR(20)
 			`, table))
 			if err != nil {
-				return fmt.Errorf("failed to add user_organization_id to %s: %w", table, err)
+				return fmt.Errorf("failed to add organization_id to %s: %w", table, err)
 			}
 
 			// Migrate existing organization_id to app_id
@@ -73,10 +73,10 @@ func init() {
 				return fmt.Errorf("failed to drop organization_id from %s: %w", table, err)
 			}
 
-			// Add index on app_id and user_organization_id
+			// Add index on app_id and organization_id
 			_, err = db.ExecContext(ctx, fmt.Sprintf(`
 				CREATE INDEX IF NOT EXISTS idx_%s_app_org 
-				ON %s (app_id, user_organization_id)
+				ON %s (app_id, organization_id)
 			`, table, table))
 			if err != nil {
 				return fmt.Errorf("failed to create app_org index on %s: %w", table, err)
@@ -93,15 +93,15 @@ func init() {
 				fmt.Printf("Warning: failed to add app_id foreign key to %s: %v\n", table, err)
 			}
 
-			// Add foreign key constraint for user_organization_id
+			// Add foreign key constraint for organization_id
 			_, err = db.ExecContext(ctx, fmt.Sprintf(`
 				ALTER TABLE %s 
 				ADD CONSTRAINT fk_%s_user_org_id 
-				FOREIGN KEY (user_organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+				FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 			`, table, table))
 			if err != nil {
 				// Log but don't fail - foreign keys may not be supported or already exist
-				fmt.Printf("Warning: failed to add user_organization_id foreign key to %s: %v\n", table, err)
+				fmt.Printf("Warning: failed to add organization_id foreign key to %s: %v\n", table, err)
 			}
 		}
 
@@ -116,7 +116,7 @@ func init() {
 
 		_, err = db.ExecContext(ctx, `
 			CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_recovery_configs_app_org_unique 
-			ON backup_recovery_configs (app_id, COALESCE(user_organization_id, ''))
+			ON backup_recovery_configs (app_id, COALESCE(organization_id, ''))
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to create unique index on backup_recovery_configs: %w", err)
@@ -171,7 +171,7 @@ func init() {
 				DROP CONSTRAINT IF EXISTS fk_%s_user_org_id
 			`, table, table))
 			if err != nil {
-				fmt.Printf("Warning: failed to drop user_organization_id foreign key from %s: %v\n", table, err)
+				fmt.Printf("Warning: failed to drop organization_id foreign key from %s: %v\n", table, err)
 			}
 
 			// Drop indexes
@@ -186,7 +186,7 @@ func init() {
 			_, err = db.ExecContext(ctx, fmt.Sprintf(`
 				ALTER TABLE %s 
 				DROP COLUMN IF EXISTS app_id,
-				DROP COLUMN IF EXISTS user_organization_id
+				DROP COLUMN IF EXISTS organization_id
 			`, table))
 			if err != nil {
 				return fmt.Errorf("failed to drop V2 columns from %s: %w", table, err)

@@ -10,7 +10,7 @@ import (
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Magic-Link V2 Architecture Migration
-		// Adds app_id and user_organization_id to magic_links table
+		// Adds app_id and organization_id to magic_links table
 
 		// Add app_id column (required)
 		_, err := db.ExecContext(ctx, `
@@ -21,19 +21,19 @@ func init() {
 			return fmt.Errorf("failed to add app_id column: %w", err)
 		}
 
-		// Add user_organization_id column (optional)
+		// Add organization_id column (optional)
 		_, err = db.ExecContext(ctx, `
 			ALTER TABLE magic_links 
-			ADD COLUMN IF NOT EXISTS user_organization_id VARCHAR(20)
+			ADD COLUMN IF NOT EXISTS organization_id VARCHAR(20)
 		`)
 		if err != nil {
-			return fmt.Errorf("failed to add user_organization_id column: %w", err)
+			return fmt.Errorf("failed to add organization_id column: %w", err)
 		}
 
-		// Create index on (app_id, user_organization_id, token) for efficient lookups
+		// Create index on (app_id, organization_id, token) for efficient lookups
 		_, err = db.ExecContext(ctx, `
 			CREATE INDEX IF NOT EXISTS idx_magic_links_app_org_token 
-			ON magic_links (app_id, user_organization_id, token)
+			ON magic_links (app_id, organization_id, token)
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to create app_org_token index: %w", err)
@@ -59,15 +59,15 @@ func init() {
 			fmt.Printf("Warning: failed to add app_id foreign key: %v\n", err)
 		}
 
-		// Add foreign key constraint for user_organization_id
+		// Add foreign key constraint for organization_id
 		_, err = db.ExecContext(ctx, `
 			ALTER TABLE magic_links 
 			ADD CONSTRAINT fk_magic_links_user_org_id 
-			FOREIGN KEY (user_organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+			FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 		`)
 		if err != nil {
 			// Log but don't fail - foreign keys may not be supported
-			fmt.Printf("Warning: failed to add user_organization_id foreign key: %v\n", err)
+			fmt.Printf("Warning: failed to add organization_id foreign key: %v\n", err)
 		}
 
 		return nil
@@ -88,7 +88,7 @@ func init() {
 			DROP CONSTRAINT IF EXISTS fk_magic_links_user_org_id
 		`)
 		if err != nil {
-			fmt.Printf("Warning: failed to drop user_organization_id foreign key: %v\n", err)
+			fmt.Printf("Warning: failed to drop organization_id foreign key: %v\n", err)
 		}
 
 		// Drop indexes
@@ -110,7 +110,7 @@ func init() {
 		_, err = db.ExecContext(ctx, `
 			ALTER TABLE magic_links 
 			DROP COLUMN IF EXISTS app_id,
-			DROP COLUMN IF EXISTS user_organization_id
+			DROP COLUMN IF EXISTS organization_id
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to drop V2 columns: %w", err)

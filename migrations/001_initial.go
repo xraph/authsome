@@ -9,8 +9,17 @@ import (
 
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
-		// Create organizations table
+		// Create apps table
 		_, err := db.NewCreateTable().
+			Model((*schema.App)(nil)).
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Create organizations table
+		_, err = db.NewCreateTable().
 			Model((*schema.Organization)(nil)).
 			IfNotExists().
 			Exec(ctx)
@@ -285,6 +294,7 @@ func init() {
 			"members",
 			"users",
 			"organizations",
+			"apps",
 		}
 
 		for _, table := range tables {
