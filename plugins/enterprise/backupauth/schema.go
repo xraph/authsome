@@ -34,13 +34,15 @@ const (
 )
 
 // SecurityQuestion stores user's security questions and hashed answers
+// Updated for V2 architecture: App → Environment → Organization
 type SecurityQuestion struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_security_questions,alias:bsq"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20),unique:user_question"`
-	OrganizationID string `bun:"organization_id,notnull"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20),unique:user_question"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	QuestionID int    `bun:"question_id,notnull,unique:user_question"` // Reference to predefined question
 	CustomText string `bun:"custom_text"`                              // For custom questions
@@ -53,13 +55,15 @@ type SecurityQuestion struct {
 }
 
 // TrustedContact stores emergency contact information for account recovery
+// Updated for V2 architecture: App → Environment → Organization
 type TrustedContact struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_trusted_contacts,alias:btc"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	ContactName  string `bun:"contact_name,notnull"`
 	ContactEmail string `bun:"contact_email"`
@@ -78,13 +82,15 @@ type TrustedContact struct {
 }
 
 // RecoverySession represents an account recovery attempt
+// Updated for V2 architecture: App → Environment → Organization
 type RecoverySession struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_recovery_sessions,alias:brs"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	Status RecoveryStatus `bun:"status,notnull"`
 	Method RecoveryMethod `bun:"method,notnull"`
@@ -121,14 +127,16 @@ type RecoverySession struct {
 }
 
 // VideoVerificationSession stores video verification details
+// Updated for V2 architecture: App → Environment → Organization
 type VideoVerificationSession struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_video_sessions,alias:bvs"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	RecoveryID     xid.ID `bun:"recovery_id,notnull,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	RecoveryID         xid.ID  `bun:"recovery_id,notnull,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	// Video session details
 	SessionURL        string `bun:"session_url"`
@@ -154,14 +162,16 @@ type VideoVerificationSession struct {
 }
 
 // DocumentVerification stores ID document uploads for verification
+// Updated for V2 architecture: App → Environment → Organization
 type DocumentVerification struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_document_verifications,alias:bdv"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	RecoveryID     xid.ID `bun:"recovery_id,notnull,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	RecoveryID         xid.ID  `bun:"recovery_id,notnull,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	// Document details
 	DocumentType   string `bun:"document_type,notnull"` // passport, drivers_license, national_id, etc.
@@ -191,14 +201,16 @@ type DocumentVerification struct {
 }
 
 // RecoveryAttemptLog provides immutable audit trail of recovery attempts
+// Updated for V2 architecture: App → Environment → Organization
 type RecoveryAttemptLog struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_recovery_logs,alias:brl"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	RecoveryID     xid.ID `bun:"recovery_id,notnull,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	RecoveryID         xid.ID  `bun:"recovery_id,notnull,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	Action string         `bun:"action,notnull"` // started, step_completed, verified, failed, etc.
 	Method RecoveryMethod `bun:"method,notnull"`
@@ -215,12 +227,14 @@ type RecoveryAttemptLog struct {
 }
 
 // RecoveryConfiguration stores organization-level recovery settings
+// Updated for V2 architecture: App → Environment → Organization
 type RecoveryConfiguration struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_recovery_configs,alias:brc"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull,unique"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	// Enabled methods
 	EnabledMethods []RecoveryMethod `bun:"enabled_methods,type:jsonb"`
@@ -245,14 +259,16 @@ type RecoveryConfiguration struct {
 }
 
 // RecoveryCodeUsage tracks when recovery codes are used (separate from 2FA backup codes)
+// Updated for V2 architecture: App → Environment → Organization
 type RecoveryCodeUsage struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_code_usage,alias:bcu"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)"`
-	UserID         xid.ID `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string `bun:"organization_id,notnull"`
-	RecoveryID     xid.ID `bun:"recovery_id,notnull,type:varchar(20)"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"`
+	UserID             xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"`       // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
+	RecoveryID         xid.ID  `bun:"recovery_id,notnull,type:varchar(20)"`
 
 	CodeHash  string    `bun:"code_hash,notnull"`
 	UsedAt    time.Time `bun:"used_at,notnull"`

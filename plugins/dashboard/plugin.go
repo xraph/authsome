@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/interfaces"
-	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
@@ -33,7 +33,7 @@ type Plugin struct {
 	auditSvc        *audit.Service
 	rbacSvc         *rbac.Service
 	apikeyService   *apikey.Service
-	orgService      *organization.Service
+	orgService      *app.Service
 	isSaaSMode      bool
 	permChecker     *PermissionChecker
 	csrfProtector   *CSRFProtector
@@ -243,7 +243,7 @@ func (p *Plugin) Init(dep interface{}) error {
 	// Get Organization service and check if we're in SaaS mode
 	if orgSvcInterface := serviceRegistry.OrganizationService(); orgSvcInterface != nil {
 		// Try to get core organization service
-		if orgSvc, ok := orgSvcInterface.(*organization.Service); ok {
+		if orgSvc, ok := orgSvcInterface.(*app.Service); ok {
 			p.orgService = orgSvc
 			p.isSaaSMode = serviceRegistry.IsMultiTenant()
 		}
@@ -569,29 +569,38 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Dashboard", "Admin", "Settings"),
 	)
 
-	// Organization management routes (only available in SaaS mode)
+	router.GET("/dashboard/plugins", chain(p.handler.ServePlugins),
+		forge.WithName("dashboard.plugins"),
+		forge.WithSummary("Plugins page"),
+		forge.WithDescription("Render the plugins management page showing all available plugins and their status"),
+		forge.WithResponseSchema(200, "Plugins page HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Plugins"),
+	)
+
+	// App management routes (only available in SaaS mode)
 	if p.isSaaSMode {
-		router.GET("/dashboard/organizations", chain(p.handler.ServeOrganizations),
-			forge.WithName("dashboard.organizations.list"),
-			forge.WithSummary("List organizations"),
+		router.GET("/dashboard/apps", chain(p.handler.ServeApps),
+			forge.WithName("dashboard.apps.list"),
+			forge.WithSummary("List apps"),
 			forge.WithDescription("Render the organizations management page with list of all organizations"),
 			forge.WithResponseSchema(200, "Organizations list HTML", DashboardHTMLResponse{}),
 			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 			forge.WithTags("Dashboard", "Admin", "Organizations"),
 		)
 
-		router.GET("/dashboard/organizations/create", chain(p.handler.ServeOrganizationCreate),
-			forge.WithName("dashboard.organizations.create.page"),
-			forge.WithSummary("Create organization page"),
+		router.GET("/dashboard/apps/create", chain(p.handler.ServeAppCreate),
+			forge.WithName("dashboard.apps.create.page"),
+			forge.WithSummary("Create app page"),
 			forge.WithDescription("Render the organization creation form"),
-			forge.WithResponseSchema(200, "Create organization form HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(200, "Create app form HTML", DashboardHTMLResponse{}),
 			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 			forge.WithTags("Dashboard", "Admin", "Organizations"),
 		)
 
-		router.POST("/dashboard/organizations/create", chain(p.handler.HandleOrganizationCreate),
-			forge.WithName("dashboard.organizations.create.submit"),
-			forge.WithSummary("Create organization"),
+		router.POST("/dashboard/apps/create", chain(p.handler.HandleAppCreate),
+			forge.WithName("dashboard.apps.create.submit"),
+			forge.WithSummary("Create app"),
 			forge.WithDescription("Process organization creation form and create new organization"),
 			forge.WithResponseSchema(200, "Organization created", DashboardStatusResponse{}),
 			forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
@@ -600,29 +609,29 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		router.GET("/dashboard/organizations/:id", chain(p.handler.ServeOrganizationDetail),
-			forge.WithName("dashboard.organizations.detail"),
-			forge.WithSummary("Organization detail"),
+		router.GET("/dashboard/apps/:id", chain(p.handler.ServeAppDetail),
+			forge.WithName("dashboard.apps.detail"),
+			forge.WithSummary("App detail"),
 			forge.WithDescription("Render detailed view of a specific organization"),
-			forge.WithResponseSchema(200, "Organization detail HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(200, "App detail HTML", DashboardHTMLResponse{}),
 			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
 			forge.WithTags("Dashboard", "Admin", "Organizations"),
 		)
 
-		router.GET("/dashboard/organizations/:id/edit", chain(p.handler.ServeOrganizationEdit),
-			forge.WithName("dashboard.organizations.edit.page"),
-			forge.WithSummary("Edit organization page"),
+		router.GET("/dashboard/apps/:id/edit", chain(p.handler.ServeAppEdit),
+			forge.WithName("dashboard.apps.edit.page"),
+			forge.WithSummary("Edit app page"),
 			forge.WithDescription("Render the organization edit form"),
-			forge.WithResponseSchema(200, "Edit organization form HTML", DashboardHTMLResponse{}),
+			forge.WithResponseSchema(200, "Edit app form HTML", DashboardHTMLResponse{}),
 			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
 			forge.WithTags("Dashboard", "Admin", "Organizations"),
 		)
 
-		router.POST("/dashboard/organizations/:id/edit", chain(p.handler.HandleOrganizationEdit),
-			forge.WithName("dashboard.organizations.edit.submit"),
-			forge.WithSummary("Update organization"),
+		router.POST("/dashboard/apps/:id/edit", chain(p.handler.HandleAppEdit),
+			forge.WithName("dashboard.apps.edit.submit"),
+			forge.WithSummary("Update app"),
 			forge.WithDescription("Process organization edit form and update organization information"),
 			forge.WithResponseSchema(200, "Organization updated", DashboardStatusResponse{}),
 			forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
@@ -632,9 +641,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		router.POST("/dashboard/organizations/:id/delete", chain(p.handler.HandleOrganizationDelete),
-			forge.WithName("dashboard.organizations.delete"),
-			forge.WithSummary("Delete organization"),
+		router.POST("/dashboard/apps/:id/delete", chain(p.handler.HandleAppDelete),
+			forge.WithName("dashboard.apps.delete"),
+			forge.WithSummary("Delete app"),
 			forge.WithDescription("Delete an organization (requires admin privileges)"),
 			forge.WithResponseSchema(200, "Organization deleted", DashboardStatusResponse{}),
 			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),

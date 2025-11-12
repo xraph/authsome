@@ -15,7 +15,7 @@ type SocialAccountRepository interface {
 	Create(ctx context.Context, account *schema.SocialAccount) error
 	FindByID(ctx context.Context, id xid.ID) (*schema.SocialAccount, error)
 	FindByUserAndProvider(ctx context.Context, userID xid.ID, provider string) (*schema.SocialAccount, error)
-	FindByProviderAndProviderID(ctx context.Context, provider, providerID string, orgID xid.ID) (*schema.SocialAccount, error)
+	FindByProviderAndProviderID(ctx context.Context, provider, providerID string, appID xid.ID, userOrganizationID *xid.ID) (*schema.SocialAccount, error)
 	FindByUser(ctx context.Context, userID xid.ID) ([]*schema.SocialAccount, error)
 	Update(ctx context.Context, account *schema.SocialAccount) error
 	Delete(ctx context.Context, id xid.ID) error
@@ -71,12 +71,20 @@ func (r *socialAccountRepository) FindByUserAndProvider(ctx context.Context, use
 	return account, nil
 }
 
-func (r *socialAccountRepository) FindByProviderAndProviderID(ctx context.Context, provider, providerID string, orgID xid.ID) (*schema.SocialAccount, error) {
+func (r *socialAccountRepository) FindByProviderAndProviderID(ctx context.Context, provider, providerID string, appID xid.ID, userOrganizationID *xid.ID) (*schema.SocialAccount, error) {
 	account := &schema.SocialAccount{}
-	err := r.db.NewSelect().
+	q := r.db.NewSelect().
 		Model(account).
-		Where("provider = ? AND provider_id = ? AND organization_id = ? AND revoked = false", provider, providerID, orgID).
-		Scan(ctx)
+		Where("provider = ? AND provider_id = ? AND app_id = ? AND revoked = false", provider, providerID, appID)
+
+	// Scope to org if provided
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found is not an error
 	}

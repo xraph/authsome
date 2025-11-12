@@ -41,6 +41,7 @@ type ServiceRegistry struct {
 	// Plugin-provided services (for multi-tenancy)
 	organizationService interface{} // Will be set by multi-tenancy plugin
 	configService       interface{} // Will be set by multi-tenancy plugin
+	environmentService  interface{} // Will be set by multi-tenancy plugin
 }
 
 // NewServiceRegistry creates a new service registry
@@ -189,8 +190,16 @@ func (r *ServiceRegistry) SetOrganizationService(svc interface{}) {
 	r.organizationService = svc
 }
 
+func (r *ServiceRegistry) SetAppService(svc interface{}) {
+	r.organizationService = svc // organizationService field stores app service (renamed terminology)
+}
+
 func (r *ServiceRegistry) SetConfigService(svc interface{}) {
 	r.configService = svc
+}
+
+func (r *ServiceRegistry) SetEnvironmentService(svc interface{}) {
+	r.environmentService = svc
 }
 
 // Plugin service getters (for multi-tenancy plugin)
@@ -198,8 +207,16 @@ func (r *ServiceRegistry) OrganizationService() interface{} {
 	return r.organizationService
 }
 
+func (r *ServiceRegistry) AppService() interface{} {
+	return r.organizationService // organizationService field stores app service (renamed terminology)
+}
+
 func (r *ServiceRegistry) ConfigService() interface{} {
 	return r.configService
+}
+
+func (r *ServiceRegistry) EnvironmentService() interface{} {
+	return r.environmentService
 }
 
 // Utility methods for plugins
@@ -207,11 +224,19 @@ func (r *ServiceRegistry) HasOrganizationService() bool {
 	return r.organizationService != nil
 }
 
+func (r *ServiceRegistry) HasAppService() bool {
+	return r.organizationService != nil
+}
+
 func (r *ServiceRegistry) HasConfigService() bool {
 	return r.configService != nil
 }
 
+func (r *ServiceRegistry) HasEnvironmentService() bool {
+	return r.environmentService != nil
+}
+
 // IsMultiTenant returns true if the multi-tenancy plugin is active
 func (r *ServiceRegistry) IsMultiTenant() bool {
-	return r.HasOrganizationService()
+	return r.HasAppService()
 }

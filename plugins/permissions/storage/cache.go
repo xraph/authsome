@@ -5,12 +5,14 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/permissions/engine"
 )
 
 // Cache interface defined in interfaces.go
 
 // MemoryCache is an in-memory cache implementation (stub)
+// Updated for V2 architecture: App → Environment → Organization
 type MemoryCache struct{}
 
 // NewMemoryCache creates a new memory cache (stub)
@@ -30,7 +32,13 @@ func (c *MemoryCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *MemoryCache) DeleteByOrg(ctx context.Context, orgID string) error {
+func (c *MemoryCache) DeleteByApp(ctx context.Context, appID xid.ID) error {
+	// TODO: Implement cache invalidation by app
+	return nil
+}
+
+func (c *MemoryCache) DeleteByOrganization(ctx context.Context, appID xid.ID, userOrgID xid.ID) error {
+	// TODO: Implement cache invalidation by organization
 	return nil
 }
 
@@ -47,6 +55,7 @@ func (c *MemoryCache) Stats() CacheStats {
 }
 
 // RedisCache is a Redis-backed cache implementation (stub)
+// Updated for V2 architecture: App → Environment → Organization
 type RedisCache struct {
 	client *redis.Client
 }
@@ -68,7 +77,15 @@ func (c *RedisCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *RedisCache) DeleteByOrg(ctx context.Context, orgID string) error {
+func (c *RedisCache) DeleteByApp(ctx context.Context, appID xid.ID) error {
+	// TODO: Implement Redis cache invalidation by app
+	// Pattern: policy:app:APP_ID:*
+	return nil
+}
+
+func (c *RedisCache) DeleteByOrganization(ctx context.Context, appID xid.ID, userOrgID xid.ID) error {
+	// TODO: Implement Redis cache invalidation by organization
+	// Pattern: policy:app:APP_ID:org:ORG_ID:*
 	return nil
 }
 

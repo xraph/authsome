@@ -11,6 +11,7 @@ import (
 )
 
 // ImpersonationRepository implements the impersonation repository using Bun
+// Updated for V2 architecture: App → Environment → Organization
 type ImpersonationRepository struct {
 	db *bun.DB
 }
@@ -28,12 +29,12 @@ func (r *ImpersonationRepository) Create(ctx context.Context, session *schema.Im
 	return err
 }
 
-// Get retrieves an impersonation session by ID and organization
-func (r *ImpersonationRepository) Get(ctx context.Context, id xid.ID, orgID xid.ID) (*schema.ImpersonationSession, error) {
+// Get retrieves an impersonation session by ID and app (column organization_id contains appID)
+func (r *ImpersonationRepository) Get(ctx context.Context, id xid.ID, appID xid.ID) (*schema.ImpersonationSession, error) {
 	session := new(schema.ImpersonationSession)
 	err := r.db.NewSelect().
 		Model(session).
-		Where("id = ? AND organization_id = ?", id, orgID).
+		Where("id = ? AND organization_id = ?", id, appID).
 		Relation("Impersonator").
 		Relation("TargetUser").
 		Scan(ctx)
@@ -70,12 +71,18 @@ func (r *ImpersonationRepository) Update(ctx context.Context, session *schema.Im
 }
 
 // List retrieves impersonation sessions with filters
+// Note: req.AppID maps to column organization_id (V2 architecture)
 func (r *ImpersonationRepository) List(ctx context.Context, req *impersonation.ListRequest) ([]*schema.ImpersonationSession, error) {
 	var sessions []*schema.ImpersonationSession
 
 	query := r.db.NewSelect().
 		Model(&sessions).
-		Where("organization_id = ?", req.OrganizationID)
+		Where("organization_id = ?", req.AppID)
+
+	// Optional filter by user-created organization
+	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	}
 
 	if req.ImpersonatorID != nil {
 		query = query.Where("impersonator_id = ?", *req.ImpersonatorID)
@@ -113,7 +120,12 @@ func (r *ImpersonationRepository) List(ctx context.Context, req *impersonation.L
 func (r *ImpersonationRepository) Count(ctx context.Context, req *impersonation.ListRequest) (int, error) {
 	query := r.db.NewSelect().
 		Model((*schema.ImpersonationSession)(nil)).
-		Where("organization_id = ?", req.OrganizationID)
+		Where("organization_id = ?", req.AppID)
+
+	// Optional filter by user-created organization
+	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	}
 
 	if req.ImpersonatorID != nil {
 		query = query.Where("impersonator_id = ?", *req.ImpersonatorID)
@@ -133,11 +145,12 @@ func (r *ImpersonationRepository) Count(ctx context.Context, req *impersonation.
 }
 
 // GetActive retrieves the active impersonation session for an impersonator
-func (r *ImpersonationRepository) GetActive(ctx context.Context, impersonatorID xid.ID, orgID xid.ID) (*schema.ImpersonationSession, error) {
+// Note: appID maps to column organization_id (V2 architecture)
+func (r *ImpersonationRepository) GetActive(ctx context.Context, impersonatorID xid.ID, appID xid.ID) (*schema.ImpersonationSession, error) {
 	session := new(schema.ImpersonationSession)
 	err := r.db.NewSelect().
 		Model(session).
-		Where("impersonator_id = ? AND organization_id = ?", impersonatorID, orgID).
+		Where("impersonator_id = ? AND organization_id = ?", impersonatorID, appID).
 		Where("active = ?", true).
 		Where("expires_at > ?", time.Now().UTC()).
 		Where("ended_at IS NULL").
@@ -182,12 +195,18 @@ func (r *ImpersonationRepository) CreateAuditEvent(ctx context.Context, event *s
 }
 
 // ListAuditEvents retrieves audit events with filters
+// Note: req.AppID maps to column organization_id (V2 architecture)
 func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) ([]*schema.ImpersonationAuditEvent, error) {
 	var events []*schema.ImpersonationAuditEvent
 
 	query := r.db.NewSelect().
 		Model(&events).
-		Where("organization_id = ?", req.OrganizationID)
+		Where("organization_id = ?", req.AppID)
+
+	// Optional filter by user-created organization
+	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	}
 
 	if req.ImpersonationID != nil {
 		query = query.Where("impersonation_id = ?", *req.ImpersonationID)
@@ -227,7 +246,12 @@ func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, req *impe
 func (r *ImpersonationRepository) CountAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) (int, error) {
 	query := r.db.NewSelect().
 		Model((*schema.ImpersonationAuditEvent)(nil)).
-		Where("organization_id = ?", req.OrganizationID)
+		Where("organization_id = ?", req.AppID)
+
+	// Optional filter by user-created organization
+	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	}
 
 	if req.ImpersonationID != nil {
 		query = query.Where("impersonation_id = ?", *req.ImpersonationID)

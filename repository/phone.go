@@ -16,23 +16,39 @@ type PhoneRepository struct {
 
 func NewPhoneRepository(db *bun.DB) *PhoneRepository { return &PhoneRepository{db: db} }
 
-// Create stores a new phone verification record
-func (r *PhoneRepository) Create(ctx context.Context, phone, code string, expiresAt time.Time) error {
-	rec := &schema.PhoneVerification{ID: xid.New(), Phone: phone, Code: code, ExpiresAt: expiresAt, Attempts: 0}
+// Create stores a new phone verification record with app and optional org scoping
+func (r *PhoneRepository) Create(ctx context.Context, phone, code string, appID xid.ID, userOrganizationID *xid.ID, expiresAt time.Time) error {
+	rec := &schema.PhoneVerification{
+		ID:                 xid.New(),
+		Phone:              phone,
+		Code:               code,
+		AppID:              appID,
+		UserOrganizationID: userOrganizationID,
+		ExpiresAt:          expiresAt,
+		Attempts:           0,
+	}
 	rec.AuditableModel.CreatedBy = rec.ID
 	rec.AuditableModel.UpdatedBy = rec.ID
 	_, err := r.db.NewInsert().Model(rec).Exec(ctx)
 	return err
 }
 
-// FindByPhone returns the latest active verification for a phone
-func (r *PhoneRepository) FindByPhone(ctx context.Context, phone string, now time.Time) (*schema.PhoneVerification, error) {
+// FindByPhone returns the latest active verification for a phone, scoped to app and optional org
+func (r *PhoneRepository) FindByPhone(ctx context.Context, phone string, appID xid.ID, userOrganizationID *xid.ID, now time.Time) (*schema.PhoneVerification, error) {
 	rec := new(schema.PhoneVerification)
-	err := r.db.NewSelect().Model(rec).
+	q := r.db.NewSelect().Model(rec).
 		Where("phone = ?", phone).
-		Where("expires_at > ?", now).
-		OrderExpr("expires_at DESC").
-		Scan(ctx)
+		Where("app_id = ?", appID).
+		Where("expires_at > ?", now)
+
+	// Scope to org if provided
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.OrderExpr("expires_at DESC").Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

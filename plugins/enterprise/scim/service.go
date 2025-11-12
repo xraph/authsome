@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/plugins/multitenancy/app"
 	"github.com/xraph/authsome/plugins/multitenancy/organization"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -52,8 +53,8 @@ func NewService(cfg ServiceConfig) *Service {
 
 // getOrgService returns the organization service as multitenancy service
 // SCIM requires the multitenancy plugin to be loaded
-func (s *Service) getOrgService() *organization.Service {
-	if svc, ok := s.orgService.(*organization.Service); ok {
+func (s *Service) getOrgService() *app.Service {
+	if svc, ok := s.orgService.(*app.Service); ok {
 		return svc
 	}
 	// This should not happen if multitenancy plugin is properly loaded
@@ -426,14 +427,16 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 		orgXID := orgID
 		teamXID := team.ID
 		mapping := &GroupMapping{
-			ID:            xid.New(),
-			OrgID:         orgXID,
-			SCIMGroupID:   scimGroup.ExternalID,
-			SCIMGroupName: scimGroup.DisplayName,
-			MappingType:   "team",
-			TargetID:      teamXID,
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
+			ID:             xid.New(),
+			AppID:          xid.ID{},
+			EnvironmentID:  xid.ID{},
+			OrganizationID: orgXID,
+			SCIMGroupID:    scimGroup.ExternalID,
+			SCIMGroupName:  scimGroup.DisplayName,
+			MappingType:    "team",
+			TargetID:       teamXID,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 
 		if err := s.repo.CreateGroupMapping(ctx, mapping); err != nil {
@@ -660,16 +663,18 @@ func (s *Service) CreateProvisioningToken(ctx context.Context, orgID xid.ID, nam
 	}
 
 	provToken := &ProvisioningToken{
-		ID:          xid.New(),
-		OrgID:       orgID,
-		Name:        name,
-		Description: description,
-		TokenHash:   string(hashedToken),
-		TokenPrefix: tokenPrefix,
-		Scopes:      scopes,
-		ExpiresAt:   expiresAt,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:             xid.New(),
+		AppID:          xid.ID{},
+		EnvironmentID:  xid.ID{},
+		OrganizationID: orgID,
+		Name:           name,
+		Description:    description,
+		TokenHash:      string(hashedToken),
+		TokenPrefix:    tokenPrefix,
+		Scopes:         scopes,
+		ExpiresAt:      expiresAt,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	if err := s.repo.CreateProvisioningToken(ctx, provToken); err != nil {
@@ -973,7 +978,7 @@ func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []Gr
 	// For each group in the SCIM request, add user to that team
 	for _, groupRef := range groups {
 		// Find team by external ID (group value)
-		mapping, err := s.repo.FindGroupMappingBySCIMID(ctx, groupRef.Value, orgID)
+		mapping, err := s.repo.FindGroupMappingBySCIMID(ctx, xid.ID{}, xid.ID{}, orgID, groupRef.Value)
 		if err != nil {
 			fmt.Printf("[SCIM] Group mapping not found for %s: %v\n", groupRef.Value, err)
 			continue
@@ -1266,10 +1271,9 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 // Token Management Operations
 
 // ListProvisioningTokens lists all provisioning tokens for an organization
-func (s *Service) ListProvisioningTokens(ctx context.Context, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, int, error) {
-	orgXID := orgID
-
-	tokens, err := s.repo.ListProvisioningTokens(ctx, orgXID, limit, offset)
+// Updated for 3-tier architecture
+func (s *Service) ListProvisioningTokens(ctx context.Context, appID, envID, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, int, error) {
+	tokens, err := s.repo.ListProvisioningTokens(ctx, appID, envID, orgID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list tokens: %w", err)
 	}
@@ -1294,9 +1298,7 @@ func (s *Service) RevokeProvisioningToken(ctx context.Context, tokenID string) e
 
 // GetAttributeMappings retrieves attribute mappings for an organization
 func (s *Service) GetAttributeMappings(ctx context.Context, orgID xid.ID) (map[string]string, error) {
-	orgXID := orgID
-
-	mapping, err := s.repo.FindAttributeMappingByOrgID(ctx, orgXID)
+	mapping, err := s.repo.FindAttributeMappingByOrganization(ctx, xid.ID{}, xid.ID{}, orgID)
 	if err != nil {
 		// Return default mappings if none exist
 		return s.config.AttributeMapping.CustomMapping, nil
@@ -1307,19 +1309,19 @@ func (s *Service) GetAttributeMappings(ctx context.Context, orgID xid.ID) (map[s
 
 // UpdateAttributeMappings updates attribute mappings for an organization
 func (s *Service) UpdateAttributeMappings(ctx context.Context, orgID xid.ID, mappings map[string]string) error {
-	orgXID := orgID
-
 	// Find existing mapping
-	existingMapping, err := s.repo.FindAttributeMappingByOrgID(ctx, orgXID)
+	existingMapping, err := s.repo.FindAttributeMappingByOrganization(ctx, xid.ID{}, xid.ID{}, orgID)
 	if err != nil {
 		// Create new mapping
 		mapping := &AttributeMapping{
-			ID:        xid.New(),
-			OrgID:     orgXID,
-			Mappings:  mappings,
-			Metadata:  make(map[string]interface{}),
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			ID:             xid.New(),
+			AppID:          xid.ID{},
+			EnvironmentID:  xid.ID{},
+			OrganizationID: orgID,
+			Mappings:       mappings,
+			Metadata:       make(map[string]interface{}),
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		return s.repo.CreateAttributeMapping(ctx, mapping)
 	}
@@ -1333,22 +1335,21 @@ func (s *Service) UpdateAttributeMappings(ctx context.Context, orgID xid.ID, map
 // Provisioning Logs Operations
 
 // GetProvisioningLogs retrieves provisioning logs with filtering
-func (s *Service) GetProvisioningLogs(ctx context.Context, orgID xid.ID, action string, limit, offset int) ([]*ProvisioningLog, int, error) {
-	orgXID := orgID
-
+// Updated for 3-tier architecture
+func (s *Service) GetProvisioningLogs(ctx context.Context, appID, envID, orgID xid.ID, action string, limit, offset int) ([]*ProvisioningLog, int, error) {
 	// Build filters
 	filters := make(map[string]interface{})
 	if action != "" {
 		filters["operation"] = action
 	}
 
-	logs, err := s.repo.ListProvisioningLogs(ctx, orgXID, filters, limit, offset)
+	logs, err := s.repo.ListProvisioningLogs(ctx, appID, envID, orgID, filters, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list logs: %w", err)
 	}
 
 	// Get total count
-	total, err := s.repo.CountProvisioningLogs(ctx, orgXID, filters)
+	total, err := s.repo.CountProvisioningLogs(ctx, appID, envID, orgID, filters)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count logs: %w", err)
 	}
@@ -1375,12 +1376,14 @@ func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, orgID xid.ID) err
 	// Create default attribute mapping
 	orgXID := orgID
 	mapping := &AttributeMapping{
-		ID:        xid.New(),
-		OrgID:     orgXID,
-		Mappings:  s.config.AttributeMapping.CustomMapping,
-		Metadata:  make(map[string]interface{}),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:             xid.New(),
+		AppID:          xid.ID{},
+		EnvironmentID:  xid.ID{},
+		OrganizationID: orgXID,
+		Mappings:       s.config.AttributeMapping.CustomMapping,
+		Metadata:       make(map[string]interface{}),
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	return s.repo.CreateAttributeMapping(ctx, mapping)

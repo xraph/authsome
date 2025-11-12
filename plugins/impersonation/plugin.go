@@ -315,7 +315,7 @@ func (p *Plugin) Health(ctx context.Context) error {
 	// Check if we can query the database
 	// We'll do a simple count query
 	req := &impersonation.ListRequest{
-		OrganizationID: xid.NilID(), // dummy org ID
+		AppID: xid.NilID(), // dummy org ID
 		Limit:          1,
 	}
 	_, err := p.service.List(ctx, req)

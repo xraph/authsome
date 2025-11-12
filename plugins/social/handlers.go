@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/forge"
 )
 
@@ -47,11 +48,15 @@ func (h *Handler) SignIn(c forge.Context) error {
 		})
 	}
 
-	// Get organization ID from context (set by multitenancy middleware)
-	// For now, use a default organization ID
-	orgID := xid.New() // In production, get from authenticated context
+	// Get app and org from context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
 
-	authURL, err := h.service.GetAuthorizationURL(c.Request().Context(), req.Provider, orgID, req.Scopes)
+	authURL, err := h.service.GetAuthorizationURL(c.Request().Context(), req.Provider, appID, userOrgID, req.Scopes)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -128,7 +133,13 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 		})
 	}
 
-	orgID := xid.New() // In production, get from authenticated context
+	// Get app and org from context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
 
 	var req LinkAccountRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -143,7 +154,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 		})
 	}
 
-	authURL, err := h.service.GetLinkAccountURL(c.Request().Context(), req.Provider, userID, orgID, req.Scopes)
+	authURL, err := h.service.GetLinkAccountURL(c.Request().Context(), req.Provider, userID, appID, userOrgID, req.Scopes)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),

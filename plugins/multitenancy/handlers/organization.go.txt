@@ -1,0 +1,139 @@
+package handlers
+
+import (
+	"encoding/json"
+	"strconv"
+
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/forge"
+)
+
+// OrganizationHandler handles organization-related HTTP requests
+type OrganizationHandler struct {
+	appService *app.Service
+}
+
+// NewOrganizationHandler creates a new organization handler
+func NewOrganizationHandler(orgService *app.Service) *OrganizationHandler {
+	return &OrganizationHandler{
+		appService: orgService,
+	}
+}
+
+// CreateOrganization handles organization creation requests
+func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
+	var req organization.CreateOrganizationRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	// TODO: Get creator user ID from context/session
+	// creatorUserID := "system" // placeholder
+
+	org, err := h.appService.CreateOrganization(c.Request().Context(), &req, xid.New())
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(201, org)
+}
+
+// GetOrganization handles get organization requests
+func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(id)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+	}
+
+	org, err := h.appService.GetOrganization(c.Request().Context(), orgID)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "organization not found"})
+	}
+
+	return c.JSON(200, org)
+}
+
+// UpdateOrganization handles organization update requests
+func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
+	idStr := c.Param("id")
+	if idStr == "" {
+		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+	}
+
+	var req organization.UpdateOrganizationRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	org, err := h.appService.UpdateOrganization(c.Request().Context(), orgID, &req)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(200, org)
+}
+
+// DeleteOrganization handles organization deletion requests
+func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
+	idStr := c.Param("id")
+	if idStr == "" {
+		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	}
+
+	orgID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+	}
+
+	err = h.appService.DeleteOrganization(c.Request().Context(), orgID)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(204, nil)
+}
+
+// ListOrganizations handles list organizations requests
+func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
+	// Parse pagination parameters
+	limitStr := c.Request().URL.Query().Get("limit")
+	offsetStr := c.Request().URL.Query().Get("offset")
+
+	limit := 10 // default
+	offset := 0 // default
+
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	orgs, err := h.appService.ListOrganizations(c.Request().Context(), limit, offset)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"organizations": orgs,
+		"limit":         limit,
+		"offset":        offset,
+	})
+}

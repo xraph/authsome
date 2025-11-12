@@ -10,14 +10,14 @@ func TestNew(t *testing.T) {
 		t.Fatal("expected auth instance, got nil")
 	}
 
-	if auth.config.Mode != ModeStandalone {
-		t.Errorf("expected standalone mode, got %v", auth.config.Mode)
-	}
+	// Mode removed - multitenancy and organization plugins control behavior
+	// No mode check needed; auth initialized successfully
 }
 
-func TestWithMode(t *testing.T) {
-	auth := New(WithMode(ModeSaaS))
-	if auth.config.Mode != ModeSaaS {
-		t.Errorf("expected SaaS mode, got %v", auth.config.Mode)
+func TestWithBasePath(t *testing.T) {
+	basePath := "/auth/v2"
+	auth := New(WithBasePath(basePath))
+	if auth.config.BasePath != basePath {
+		t.Errorf("expected base path %s, got %s", basePath, auth.config.BasePath)
 	}
 }

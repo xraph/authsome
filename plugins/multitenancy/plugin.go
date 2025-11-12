@@ -6,26 +6,31 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	core "github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/plugins/multitenancy/app"
 	"github.com/xraph/authsome/plugins/multitenancy/config"
 	"github.com/xraph/authsome/plugins/multitenancy/decorators"
 	"github.com/xraph/authsome/plugins/multitenancy/handlers"
-	"github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/authsome/plugins/multitenancy/repository"
+	envrepo "github.com/xraph/authsome/repository"
+	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
 // Plugin implements the multi-tenancy plugin
 type Plugin struct {
 	// Core services
-	orgService    *organization.Service
-	configService *config.Service
+	appService         *app.Service
+	configService      *config.Service
+	environmentService *environment.Service
 
 	// Handlers
-	orgHandler    *handlers.OrganizationHandler
+	appHandler    *handlers.AppHandler
 	memberHandler *handlers.MemberHandler
 	teamHandler   *handlers.TeamHandler
 
@@ -42,26 +47,32 @@ type Plugin struct {
 
 // Config holds the multi-tenancy plugin configuration
 type Config struct {
-	// PlatformOrganizationID is the ID of the platform organization
-	PlatformOrganizationID string `json:"platformOrganizationId"`
+	// PlatformAppID is the ID of the platform app
+	PlatformAppID string `json:"platformAppId"`
 
-	// DefaultOrganizationName is the name of the default organization in standalone mode
-	DefaultOrganizationName string `json:"defaultOrganizationName"`
+	// DefaultAppName is the name of the default app in standalone mode
+	DefaultAppName string `json:"defaultAppName"`
 
-	// EnableOrganizationCreation allows users to create new organizations
-	EnableOrganizationCreation bool `json:"enableOrganizationCreation"`
+	// EnableAppCreation allows users to create new apps (multitenancy mode)
+	EnableAppCreation bool `json:"enableAppCreation"`
 
-	// MaxMembersPerOrganization limits the number of members per organization
-	MaxMembersPerOrganization int `json:"maxMembersPerOrganization"`
+	// MaxMembersPerApp limits the number of members per app
+	MaxMembersPerApp int `json:"maxMembersPerApp"`
 
-	// MaxTeamsPerOrganization limits the number of teams per organization
-	MaxTeamsPerOrganization int `json:"maxTeamsPerOrganization"`
+	// MaxTeamsPerApp limits the number of teams per app
+	MaxTeamsPerApp int `json:"maxTeamsPerApp"`
 
-	// RequireInvitation requires invitation for joining organizations
+	// RequireInvitation requires invitation for joining apps
 	RequireInvitation bool `json:"requireInvitation"`
 
 	// InvitationExpiryHours sets how long invitations are valid
 	InvitationExpiryHours int `json:"invitationExpiryHours"`
+
+	// AutoCreateDefaultApp auto-creates default app on server start
+	AutoCreateDefaultApp bool `json:"autoCreateDefaultApp"`
+
+	// DefaultEnvironmentName is the name of the default dev environment
+	DefaultEnvironmentName string `json:"defaultEnvironmentName"`
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -74,38 +85,38 @@ func WithDefaultConfig(cfg Config) PluginOption {
 	}
 }
 
-// WithPlatformOrganizationID sets the platform organization ID
-func WithPlatformOrganizationID(id string) PluginOption {
+// WithPlatformAppID sets the platform app ID
+func WithPlatformAppID(id string) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.PlatformOrganizationID = id
+		p.defaultConfig.PlatformAppID = id
 	}
 }
 
-// WithDefaultOrganizationName sets the default organization name
-func WithDefaultOrganizationName(name string) PluginOption {
+// WithDefaultAppName sets the default app name
+func WithDefaultAppName(name string) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.DefaultOrganizationName = name
+		p.defaultConfig.DefaultAppName = name
 	}
 }
 
-// WithEnableOrganizationCreation sets whether organization creation is enabled
-func WithEnableOrganizationCreation(enabled bool) PluginOption {
+// WithEnableAppCreation sets whether app creation is enabled
+func WithEnableAppCreation(enabled bool) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.EnableOrganizationCreation = enabled
+		p.defaultConfig.EnableAppCreation = enabled
 	}
 }
 
-// WithMaxMembersPerOrganization sets the maximum members per organization
-func WithMaxMembersPerOrganization(max int) PluginOption {
+// WithMaxMembersPerApp sets the maximum members per app
+func WithMaxMembersPerApp(max int) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.MaxMembersPerOrganization = max
+		p.defaultConfig.MaxMembersPerApp = max
 	}
 }
 
-// WithMaxTeamsPerOrganization sets the maximum teams per organization
-func WithMaxTeamsPerOrganization(max int) PluginOption {
+// WithMaxTeamsPerApp sets the maximum teams per app
+func WithMaxTeamsPerApp(max int) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.MaxTeamsPerOrganization = max
+		p.defaultConfig.MaxTeamsPerApp = max
 	}
 }
 
@@ -128,10 +139,12 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
 		defaultConfig: Config{
-			DefaultOrganizationName:   "Platform Organization",
-			MaxMembersPerOrganization: 1000,
-			MaxTeamsPerOrganization:   100,
-			InvitationExpiryHours:     72,
+			DefaultAppName:         "Platform App",
+			MaxMembersPerApp:       1000,
+			MaxTeamsPerApp:         100,
+			InvitationExpiryHours:  72,
+			AutoCreateDefaultApp:   true,
+			DefaultEnvironmentName: "Development",
 		},
 	}
 
@@ -170,12 +183,12 @@ func (p *Plugin) Init(auth interface{}) error {
 
 	// Register models with Bun for relationships to work
 	// Register TeamMember first as it's the join table for m2m relationships
-	p.db.RegisterModel((*organization.TeamMember)(nil))
+	p.db.RegisterModel((*app.TeamMember)(nil))
 	p.db.RegisterModel(
-		(*organization.Organization)(nil),
-		(*organization.Member)(nil),
-		(*organization.Team)(nil),
-		(*organization.Invitation)(nil),
+		(*app.App)(nil),
+		(*app.Member)(nil),
+		(*app.Team)(nil),
+		(*app.Invitation)(nil),
 	)
 
 	// Try to bind plugin configuration using Forge ConfigManager with provided defaults
@@ -185,172 +198,227 @@ func (p *Plugin) Init(auth interface{}) error {
 	}
 
 	// Set default values
-	if p.config.DefaultOrganizationName == "" {
-		p.config.DefaultOrganizationName = "Default Organization"
+	if p.config.DefaultAppName == "" {
+		p.config.DefaultAppName = "Default App"
 	}
-	if p.config.MaxMembersPerOrganization == 0 {
-		p.config.MaxMembersPerOrganization = 100
+	if p.config.DefaultEnvironmentName == "" {
+		p.config.DefaultEnvironmentName = "Development"
 	}
-	if p.config.MaxTeamsPerOrganization == 0 {
-		p.config.MaxTeamsPerOrganization = 10
+	if p.config.MaxMembersPerApp == 0 {
+		p.config.MaxMembersPerApp = 100
+	}
+	if p.config.MaxTeamsPerApp == 0 {
+		p.config.MaxTeamsPerApp = 10
 	}
 	if p.config.InvitationExpiryHours == 0 {
 		p.config.InvitationExpiryHours = 72 // 3 days
 	}
 
 	// Create repositories
-	orgRepo := repository.NewOrganizationRepository(p.db)
-	memberRepo := repository.NewMemberRepository(p.db)
-	teamRepo := repository.NewTeamRepository(p.db)
-	invitationRepo := repository.NewInvitationRepository(p.db)
+	appRepo := repository.NewAppRepository(p.db)
+	memberRepo := repository.NewAppMemberRepository(p.db)
+	teamRepo := repository.NewAppTeamRepository(p.db)
+	invitationRepo := repository.NewAppInvitationRepository(p.db)
 
-	// Create organization service config
-	orgConfig := organization.Config{
-		PlatformOrganizationID:     p.config.PlatformOrganizationID,
-		DefaultOrganizationName:    p.config.DefaultOrganizationName,
-		EnableOrganizationCreation: p.config.EnableOrganizationCreation,
-		MaxMembersPerOrganization:  p.config.MaxMembersPerOrganization,
-		MaxTeamsPerOrganization:    p.config.MaxTeamsPerOrganization,
-		RequireInvitation:          p.config.RequireInvitation,
-		InvitationExpiryHours:      p.config.InvitationExpiryHours,
+	// Create app service config
+	appConfig := app.Config{
+		PlatformAppID:         p.config.PlatformAppID,
+		DefaultAppName:        p.config.DefaultAppName,
+		EnableAppCreation:     p.config.EnableAppCreation,
+		MaxMembersPerApp:      p.config.MaxMembersPerApp,
+		MaxTeamsPerApp:        p.config.MaxTeamsPerApp,
+		RequireInvitation:     p.config.RequireInvitation,
+		InvitationExpiryHours: p.config.InvitationExpiryHours,
 	}
 
 	// Create services
-	p.orgService = organization.NewService(orgConfig, orgRepo, memberRepo, teamRepo, invitationRepo)
+	p.appService = app.NewService(appConfig, appRepo, memberRepo, teamRepo, invitationRepo)
 
-	// Create config service for org-specific config management
+	// Create config service for app-specific config management
 	// This wraps Forge's ConfigManager to provide multi-tenant configuration
 	p.configService = config.NewService(configManager)
 
+	// Create environment repository and service
+	envRepo := envrepo.NewEnvironmentRepository(p.db)
+	envConfig := environment.Config{
+		AutoCreateDev:                  true,
+		DefaultDevName:                 p.config.DefaultEnvironmentName,
+		AllowPromotion:                 true,
+		RequireConfirmationForDataCopy: true,
+		MaxEnvironmentsPerApp:          10,
+	}
+	p.environmentService = environment.NewService(envRepo, envConfig)
+
+	// Bootstrap default app and environment on first initialization
+	if p.config.AutoCreateDefaultApp {
+		ctx := context.Background()
+
+		// Create schema-based repository for bootstrap (bootstrap works with schema.App)
+		schemaAppRepo := envrepo.NewAppRepository(p.db)
+
+		// Create adapter to satisfy environment.AppRepository interface
+		appRepoAdapter := &appRepositoryAdapter{repo: schemaAppRepo}
+
+		bootstrap := environment.NewBootstrap(
+			appRepoAdapter,
+			envRepo,
+			environment.BootstrapConfig{
+				DefaultAppName:       p.config.DefaultAppName,
+				DefaultAppSlug:       "platform",
+				AutoCreateDefaultApp: true,
+				MultitenancyEnabled:  p.config.EnableAppCreation,
+			},
+		)
+
+		defaultApp, defaultEnv, err := bootstrap.EnsureDefaultApp(ctx)
+		if err != nil {
+			p.logger.Error("failed to bootstrap default app",
+				forge.F("error", err.Error()))
+			return fmt.Errorf("bootstrap failed: %w", err)
+		}
+
+		p.logger.Info("default app bootstrap complete",
+			forge.F("app_id", defaultApp.ID.String()),
+			forge.F("app_name", defaultApp.Name),
+			forge.F("env_id", defaultEnv.ID.String()),
+			forge.F("env_name", defaultEnv.Name))
+
+		// Update platform app ID if not set
+		if p.config.PlatformAppID == "" {
+			p.config.PlatformAppID = defaultApp.ID.String()
+		}
+	}
+
 	// Create handlers
-	p.orgHandler = handlers.NewOrganizationHandler(p.orgService)
-	p.memberHandler = handlers.NewMemberHandler(p.orgService)
-	p.teamHandler = handlers.NewTeamHandler(p.orgService)
+	p.appHandler = handlers.NewAppHandler(p.appService)
+	p.memberHandler = handlers.NewMemberHandler(p.appService)
+	p.teamHandler = handlers.NewTeamHandler(p.appService)
 
 	// Register services in the registry
-	serviceRegistry.SetOrganizationService(p.orgService)
+	serviceRegistry.SetAppService(p.appService)
 	serviceRegistry.SetConfigService(p.configService)
+	serviceRegistry.SetEnvironmentService(p.environmentService)
 
 	return nil
 }
 
 // RegisterRoutes registers the plugin's HTTP routes
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
-	// Organization management routes
-	orgGroup := router.Group("/organizations")
+	// App management routes
+	appGroup := router.Group("/apps")
 	{
-		orgGroup.POST("", p.orgHandler.CreateOrganization,
-			forge.WithName("multitenancy.organizations.create"),
-			forge.WithSummary("Create organization"),
-			forge.WithDescription("Create a new organization in multi-tenant mode"),
-			forge.WithResponseSchema(200, "Organization created", organization.Organization{}),
+		appGroup.POST("", p.appHandler.CreateApp,
+			forge.WithName("multitenancy.apps.create"),
+			forge.WithSummary("Create app"),
+			forge.WithDescription("Create a new app in multi-tenant mode"),
+			forge.WithResponseSchema(200, "App created", app.App{}),
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
-			forge.WithTags("Multitenancy", "Organizations"),
+			forge.WithTags("Multitenancy", "Apps"),
 			forge.WithValidation(true),
 		)
 
-		orgGroup.GET("", p.orgHandler.ListOrganizations,
-			forge.WithName("multitenancy.organizations.list"),
-			forge.WithSummary("List organizations"),
-			forge.WithDescription("List all organizations the user has access to"),
-			forge.WithResponseSchema(200, "Organizations retrieved", OrganizationsListResponse{}),
+		appGroup.GET("", p.appHandler.ListApps,
+			forge.WithName("multitenancy.apps.list"),
+			forge.WithSummary("List apps"),
+			forge.WithDescription("List all apps the user has access to"),
+			forge.WithResponseSchema(200, "Apps retrieved", AppsListResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", MultitenancyErrorResponse{}),
-			forge.WithTags("Multitenancy", "Organizations"),
+			forge.WithTags("Multitenancy", "Apps"),
 		)
 
-		orgGroup.GET("/:orgId", p.orgHandler.GetOrganization,
-			forge.WithName("multitenancy.organizations.get"),
-			forge.WithSummary("Get organization"),
-			forge.WithDescription("Retrieve a specific organization by ID"),
-			forge.WithResponseSchema(200, "Organization retrieved", organization.Organization{}),
-			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
-			forge.WithTags("Multitenancy", "Organizations"),
+		appGroup.GET("/:appId", p.appHandler.GetApp,
+			forge.WithName("multitenancy.apps.get"),
+			forge.WithSummary("Get app"),
+			forge.WithDescription("Retrieve a specific app by ID"),
+			forge.WithResponseSchema(200, "App retrieved", app.App{}),
+			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Apps"),
 		)
 
-		orgGroup.PUT("/:orgId", p.orgHandler.UpdateOrganization,
-			forge.WithName("multitenancy.organizations.update"),
-			forge.WithSummary("Update organization"),
-			forge.WithDescription("Update organization details (name, metadata, settings)"),
-			forge.WithResponseSchema(200, "Organization updated", organization.Organization{}),
+		appGroup.PUT("/:appId", p.appHandler.UpdateApp,
+			forge.WithName("multitenancy.apps.update"),
+			forge.WithSummary("Update app"),
+			forge.WithDescription("Update app details (name, metadata, settings)"),
+			forge.WithResponseSchema(200, "App updated", app.App{}),
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
-			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
-			forge.WithTags("Multitenancy", "Organizations"),
+			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Apps"),
 			forge.WithValidation(true),
 		)
 
-		orgGroup.DELETE("/:orgId", p.orgHandler.DeleteOrganization,
-			forge.WithName("multitenancy.organizations.delete"),
-			forge.WithSummary("Delete organization"),
-			forge.WithDescription("Delete an organization and all associated data. This action is irreversible."),
-			forge.WithResponseSchema(200, "Organization deleted", MultitenancyStatusResponse{}),
+		appGroup.DELETE("/:appId", p.appHandler.DeleteApp,
+			forge.WithName("multitenancy.apps.delete"),
+			forge.WithSummary("Delete app"),
+			forge.WithDescription("Delete an app and all associated data. This action is irreversible."),
+			forge.WithResponseSchema(200, "App deleted", MultitenancyStatusResponse{}),
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
-			forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
-			forge.WithTags("Multitenancy", "Organizations"),
+			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
+			forge.WithTags("Multitenancy", "Apps"),
 		)
 
 		// Member management
-		memberGroup := orgGroup.Group("/:orgId/members")
+		memberGroup := appGroup.Group("/:appId/members")
 		{
 			memberGroup.GET("", p.memberHandler.ListMembers,
 				forge.WithName("multitenancy.members.list"),
-				forge.WithSummary("List organization members"),
-				forge.WithDescription("List all members of an organization with their roles and status"),
+				forge.WithSummary("List app members"),
+				forge.WithDescription("List all members of an app with their roles and status"),
 				forge.WithResponseSchema(200, "Members retrieved", MembersListResponse{}),
-				forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Members"),
+				forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Apps", "Members"),
 			)
 
 			memberGroup.POST("/invite", p.memberHandler.InviteMember,
 				forge.WithName("multitenancy.members.invite"),
-				forge.WithSummary("Invite member to organization"),
-				forge.WithDescription("Send an invitation to a user to join the organization"),
-				forge.WithResponseSchema(200, "Invitation sent", organization.Invitation{}),
+				forge.WithSummary("Invite member to app"),
+				forge.WithDescription("Send an invitation to a user to join the app"),
+				forge.WithResponseSchema(200, "Invitation sent", app.Invitation{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Members"),
+				forge.WithTags("Multitenancy", "Apps", "Members"),
 				forge.WithValidation(true),
 			)
 
 			memberGroup.PUT("/:memberId", p.memberHandler.UpdateMember,
 				forge.WithName("multitenancy.members.update"),
 				forge.WithSummary("Update member"),
-				forge.WithDescription("Update member role or status within the organization"),
-				forge.WithResponseSchema(200, "Member updated", organization.Member{}),
+				forge.WithDescription("Update member role or status within the app"),
+				forge.WithResponseSchema(200, "Member updated", app.Member{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Members"),
+				forge.WithTags("Multitenancy", "Apps", "Members"),
 				forge.WithValidation(true),
 			)
 
 			memberGroup.DELETE("/:memberId", p.memberHandler.RemoveMember,
 				forge.WithName("multitenancy.members.remove"),
 				forge.WithSummary("Remove member"),
-				forge.WithDescription("Remove a member from the organization"),
+				forge.WithDescription("Remove a member from the app"),
 				forge.WithResponseSchema(200, "Member removed", MultitenancyStatusResponse{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Members"),
+				forge.WithTags("Multitenancy", "Apps", "Members"),
 			)
 		}
 
 		// Team management
-		teamGroup := orgGroup.Group("/:orgId/teams")
+		teamGroup := appGroup.Group("/:appId/teams")
 		{
 			teamGroup.GET("", p.teamHandler.ListTeams,
 				forge.WithName("multitenancy.teams.list"),
 				forge.WithSummary("List teams"),
-				forge.WithDescription("List all teams within the organization"),
+				forge.WithDescription("List all teams within the app"),
 				forge.WithResponseSchema(200, "Teams retrieved", TeamsListResponse{}),
-				forge.WithResponseSchema(404, "Organization not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 			)
 
 			teamGroup.POST("", p.teamHandler.CreateTeam,
 				forge.WithName("multitenancy.teams.create"),
 				forge.WithSummary("Create team"),
-				forge.WithDescription("Create a new team within the organization"),
-				forge.WithResponseSchema(200, "Team created", organization.Team{}),
+				forge.WithDescription("Create a new team within the app"),
+				forge.WithResponseSchema(200, "Team created", app.Team{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 				forge.WithValidation(true),
 			)
 
@@ -358,30 +426,30 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("multitenancy.teams.get"),
 				forge.WithSummary("Get team"),
 				forge.WithDescription("Retrieve a specific team by ID"),
-				forge.WithResponseSchema(200, "Team retrieved", organization.Team{}),
+				forge.WithResponseSchema(200, "Team retrieved", app.Team{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 			)
 
 			teamGroup.PUT("/:teamId", p.teamHandler.UpdateTeam,
 				forge.WithName("multitenancy.teams.update"),
 				forge.WithSummary("Update team"),
 				forge.WithDescription("Update team details (name, description, etc.)"),
-				forge.WithResponseSchema(200, "Team updated", organization.Team{}),
+				forge.WithResponseSchema(200, "Team updated", app.Team{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 				forge.WithValidation(true),
 			)
 
 			teamGroup.DELETE("/:teamId", p.teamHandler.DeleteTeam,
 				forge.WithName("multitenancy.teams.delete"),
 				forge.WithSummary("Delete team"),
-				forge.WithDescription("Delete a team from the organization"),
+				forge.WithDescription("Delete a team from the app"),
 				forge.WithResponseSchema(200, "Team deleted", MultitenancyStatusResponse{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 			)
 
 			teamGroup.POST("/:teamId/members", p.teamHandler.AddTeamMember,
@@ -391,7 +459,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Team member added", MultitenancyStatusResponse{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 				forge.WithValidation(true),
 			)
 
@@ -402,7 +470,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Team member removed", MultitenancyStatusResponse{}),
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
-				forge.WithTags("Multitenancy", "Organizations", "Teams"),
+				forge.WithTags("Multitenancy", "Apps", "Teams"),
 			)
 		}
 	}
@@ -414,7 +482,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("multitenancy.invitations.get"),
 			forge.WithSummary("Get invitation"),
 			forge.WithDescription("Retrieve invitation details by token"),
-			forge.WithResponseSchema(200, "Invitation retrieved", organization.Invitation{}),
+			forge.WithResponseSchema(200, "Invitation retrieved", app.Invitation{}),
 			forge.WithResponseSchema(404, "Invitation not found or expired", MultitenancyErrorResponse{}),
 			forge.WithTags("Multitenancy", "Invitations"),
 		)
@@ -422,7 +490,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation,
 			forge.WithName("multitenancy.invitations.accept"),
 			forge.WithSummary("Accept invitation"),
-			forge.WithDescription("Accept an organization invitation and become a member"),
+			forge.WithDescription("Accept an app invitation and become a member"),
 			forge.WithResponseSchema(200, "Invitation accepted", MultitenancyStatusResponse{}),
 			forge.WithResponseSchema(400, "Invalid or expired invitation", MultitenancyErrorResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
@@ -432,7 +500,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		inviteGroup.POST("/:token/decline", p.memberHandler.DeclineInvitation,
 			forge.WithName("multitenancy.invitations.decline"),
 			forge.WithSummary("Decline invitation"),
-			forge.WithDescription("Decline an organization invitation"),
+			forge.WithDescription("Decline an app invitation"),
 			forge.WithResponseSchema(200, "Invitation declined", MultitenancyStatusResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multitenancy", "Invitations"),
@@ -454,18 +522,18 @@ type MultitenancyStatusResponse struct {
 	Status string `json:"status" example:"success"`
 }
 
-// OrganizationsListResponse represents a list of organizations
-type OrganizationsListResponse []organization.Organization
+// AppsListResponse represents a list of apps
+type AppsListResponse []app.App
 
 // MembersListResponse represents a list of members
-type MembersListResponse []organization.Member
+type MembersListResponse []app.Member
 
 // TeamsListResponse represents a list of teams
-type TeamsListResponse []organization.Team
+type TeamsListResponse []app.Team
 
 // RegisterHooks registers the plugin's hooks
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
-	// Register organization-related hooks
+	// Register app-related hooks
 	hooks.RegisterAfterUserCreate(p.handleUserCreated)
 	hooks.RegisterAfterUserDelete(p.handleUserDeleted)
 	hooks.RegisterAfterSessionCreate(p.handleSessionCreated)
@@ -477,19 +545,19 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Decorate user service with multi-tenancy support
 	if userService := services.UserService(); userService != nil {
-		decoratedUserService := decorators.NewMultiTenantUserService(userService, p.orgService)
+		decoratedUserService := decorators.NewMultiTenantUserService(userService, p.appService)
 		services.ReplaceUserService(decoratedUserService)
 	}
 
 	// Decorate session service with multi-tenancy support
 	if sessionService := services.SessionService(); sessionService != nil {
-		decoratedSessionService := decorators.NewMultiTenantSessionService(sessionService, p.orgService)
+		decoratedSessionService := decorators.NewMultiTenantSessionService(sessionService, p.appService)
 		services.ReplaceSessionService(decoratedSessionService)
 	}
 
 	// Decorate auth service with multi-tenancy support
 	if authService := services.AuthService(); authService != nil {
-		decoratedAuthService := decorators.NewMultiTenantAuthService(authService, p.orgService)
+		decoratedAuthService := decorators.NewMultiTenantAuthService(authService, p.appService)
 		services.ReplaceAuthService(decoratedAuthService)
 	}
 
@@ -503,17 +571,17 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
-	// Create organization table
+	// Create app table
 	if _, err := p.db.NewCreateTable().
-		Model((*organization.Organization)(nil)).
+		Model((*app.App)(nil)).
 		IfNotExists().
 		Exec(ctx); err != nil {
-		return fmt.Errorf("failed to create organizations table: %w", err)
+		return fmt.Errorf("failed to create apps table: %w", err)
 	}
 
 	// Create member table
 	if _, err := p.db.NewCreateTable().
-		Model((*organization.Member)(nil)).
+		Model((*app.Member)(nil)).
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create members table: %w", err)
@@ -521,7 +589,7 @@ func (p *Plugin) Migrate() error {
 
 	// Create team table
 	if _, err := p.db.NewCreateTable().
-		Model((*organization.Team)(nil)).
+		Model((*app.Team)(nil)).
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create teams table: %w", err)
@@ -529,7 +597,7 @@ func (p *Plugin) Migrate() error {
 
 	// Create team member table
 	if _, err := p.db.NewCreateTable().
-		Model((*organization.TeamMember)(nil)).
+		Model((*app.TeamMember)(nil)).
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create team_members table: %w", err)
@@ -537,7 +605,7 @@ func (p *Plugin) Migrate() error {
 
 	// Create invitation table
 	if _, err := p.db.NewCreateTable().
-		Model((*organization.Invitation)(nil)).
+		Model((*app.Invitation)(nil)).
 		IfNotExists().
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to create invitations table: %w", err)
@@ -546,69 +614,104 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
+// appRepositoryAdapter adapts the schema-based repository to the environment.AppRepository interface
+type appRepositoryAdapter struct {
+	repo *envrepo.AppRepository
+}
+
+func (a *appRepositoryAdapter) Count(ctx context.Context) (int, error) {
+	return a.repo.CountApps(ctx)
+}
+
+func (a *appRepositoryAdapter) Create(ctx context.Context, app *schema.App) error {
+	// Convert schema.App to core.App for the repository
+	coreApp := &core.App{
+		ID:       app.ID,
+		Name:     app.Name,
+		Slug:     app.Slug,
+		Logo:     app.Logo,
+		Metadata: app.Metadata,
+	}
+	return a.repo.CreateApp(ctx, coreApp)
+}
+
+func (a *appRepositoryAdapter) FindBySlug(ctx context.Context, slug string) (*schema.App, error) {
+	coreApp, err := a.repo.FindAppBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	return &schema.App{
+		ID:       coreApp.ID,
+		Name:     coreApp.Name,
+		Slug:     coreApp.Slug,
+		Logo:     coreApp.Logo,
+		Metadata: coreApp.Metadata,
+	}, nil
+}
+
 // Hook handlers
 
 // handleUserCreated is called when a user is created
-// This ensures organization membership in both standalone and SaaS modes
+// This ensures app membership in both standalone and SaaS modes
 func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
-	// Check if this is the first user (no organizations exist yet)
-	orgs, err := p.orgService.ListOrganizations(ctx, 1, 0)
-	if err != nil || len(orgs) == 0 {
-		// This is the FIRST user - create the platform organization
-		// In both standalone and SaaS modes, this becomes the foundational organization
-		p.logger.Info("creating platform organization for first user", forge.F("email", u.Email))
+	// Check if this is the first user (no apps exist yet)
+	apps, err := p.appService.ListApps(ctx, 1, 0)
+	if err != nil || len(apps) == 0 {
+		// This is the FIRST user - create the platform app
+		// In both standalone and SaaS modes, this becomes the foundational app
+		p.logger.Info("creating platform app for first user", forge.F("email", u.Email))
 
-		platformSlug := p.config.PlatformOrganizationID
+		platformSlug := p.config.PlatformAppID
 		if platformSlug == "" {
 			platformSlug = "platform"
 		}
 
-		platformOrg, err := p.orgService.CreateOrganization(ctx, &organization.CreateOrganizationRequest{
-			Name: "Platform Organization",
+		platformApp, err := p.appService.CreateApp(ctx, &app.CreateAppRequest{
+			Name: "Platform App",
 			Slug: platformSlug,
 		}, u.ID)
 		if err != nil {
-			return fmt.Errorf("failed to create platform organization: %w", err)
+			return fmt.Errorf("failed to create platform app: %w", err)
 		}
 
-		// Add first user as OWNER of platform organization (not just member)
-		_, err = p.orgService.AddMember(ctx, platformOrg.ID, u.ID, organization.RoleOwner)
+		// Add first user as OWNER of platform app (not just member)
+		_, err = p.appService.AddMember(ctx, platformApp.ID, u.ID, app.RoleOwner)
 		if err != nil {
 			return fmt.Errorf("failed to add first user as platform owner: %w", err)
 		}
 
-		p.logger.Info("platform organization created",
-			forge.F("name", platformOrg.Name),
-			forge.F("id", platformOrg.ID.String()))
+		p.logger.Info("platform app created",
+			forge.F("name", platformApp.Name),
+			forge.F("id", platformApp.ID.String()))
 		p.logger.Info("first user is now platform owner",
 			forge.F("email", u.Email),
-			forge.F("role", string(organization.RoleOwner)))
+			forge.F("role", string(app.RoleOwner)))
 		return nil
 	}
 
 	// Not the first user - behavior depends on mode
-	// Get the platform/default organization
-	platformOrg, err := p.orgService.GetOrganizationBySlug(ctx, "platform")
+	// Get the platform/default app
+	platformApp, err := p.appService.GetAppBySlug(ctx, "platform")
 	if err != nil {
-		// Fallback to default organization if platform not found
-		platformOrg, err = p.orgService.GetDefaultOrganization(ctx)
+		// Fallback to default app if platform not found
+		platformApp, err = p.appService.GetDefaultApp(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get platform/default organization: %w", err)
+			return fmt.Errorf("failed to get platform/default app: %w", err)
 		}
 	}
 
-	// In standalone mode, add all users to the platform organization
-	// In SaaS mode, users will create/join their own organizations
-	// For now, we'll add them to platform org in both modes (can be refined later)
-	_, err = p.orgService.AddMember(ctx, platformOrg.ID, u.ID, organization.RoleMember)
+	// In standalone mode, add all users to the platform app
+	// In SaaS mode, users will create/join their own apps
+	// For now, we'll add them to platform app in both modes (can be refined later)
+	_, err = p.appService.AddMember(ctx, platformApp.ID, u.ID, app.RoleMember)
 	if err != nil {
 		// Check if already a member
-		if err.Error() != "user is already a member of this organization" {
-			return fmt.Errorf("failed to add user to platform organization: %w", err)
+		if err.Error() != "user is already a member of this app" {
+			return fmt.Errorf("failed to add user to platform app: %w", err)
 		}
-		p.logger.Info("user already member of platform organization", forge.F("email", u.Email))
+		p.logger.Info("user already member of platform app", forge.F("email", u.Email))
 	} else {
-		p.logger.Info("user added to platform organization as member", forge.F("email", u.Email))
+		p.logger.Info("user added to platform app as member", forge.F("email", u.Email))
 	}
 
 	return nil
@@ -616,13 +719,13 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 
 // handleUserDeleted is called when a user is deleted
 func (p *Plugin) handleUserDeleted(ctx context.Context, userID xid.ID) error {
-	// Remove user from all organizations
-	return p.orgService.RemoveUserFromAllOrganizations(ctx, userID)
+	// Remove user from all apps
+	return p.appService.RemoveUserFromAllApps(ctx, userID)
 }
 
 // handleSessionCreated is called when a session is created
 func (p *Plugin) handleSessionCreated(ctx context.Context, s *session.Session) error {
-	// Organization context is handled by the session service decorator
+	// App context is handled by the session service decorator
 	// This hook is mainly for logging/auditing purposes
 	return nil
 }

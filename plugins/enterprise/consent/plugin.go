@@ -8,7 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
-	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/forge"

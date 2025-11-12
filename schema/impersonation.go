@@ -8,17 +8,19 @@ import (
 )
 
 // ImpersonationSession represents an admin impersonating a user
+// Updated for V2 architecture: App → Environment → Organization
 type ImpersonationSession struct {
 	bun.BaseModel `bun:"table:impersonation_sessions,alias:is"`
 
 	// Core fields
-	ID              xid.ID  `bun:"id,pk,type:varchar(20)" json:"id"`
-	OrganizationID  xid.ID  `bun:"organization_id,notnull,type:varchar(20)" json:"organization_id"`
-	ImpersonatorID  xid.ID  `bun:"impersonator_id,notnull,type:varchar(20)" json:"impersonator_id"`     // Admin who is impersonating
-	TargetUserID    xid.ID  `bun:"target_user_id,notnull,type:varchar(20)" json:"target_user_id"`       // User being impersonated
-	OriginalSession *xid.ID `bun:"original_session,type:varchar(20)" json:"original_session,omitempty"` // Admin's original session
-	NewSessionID    *xid.ID `bun:"new_session_id,type:varchar(20)" json:"new_session_id,omitempty"`     // New session for impersonation
-	SessionToken    string  `bun:"session_token,type:text" json:"-"`                                    // Session token for revocation (not exposed in JSON)
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)" json:"id"`
+	AppID              xid.ID  `bun:"organization_id,notnull,type:varchar(20)" json:"appID"`                     // Column still named organization_id for migration compatibility
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationID,omitempty"` // User-created organization (optional)
+	ImpersonatorID     xid.ID  `bun:"impersonator_id,notnull,type:varchar(20)" json:"impersonator_id"`           // Admin who is impersonating
+	TargetUserID       xid.ID  `bun:"target_user_id,notnull,type:varchar(20)" json:"target_user_id"`             // User being impersonated
+	OriginalSession    *xid.ID `bun:"original_session,type:varchar(20)" json:"original_session,omitempty"`       // Admin's original session
+	NewSessionID       *xid.ID `bun:"new_session_id,type:varchar(20)" json:"new_session_id,omitempty"`           // New session for impersonation
+	SessionToken       string  `bun:"session_token,type:text" json:"-"`                                          // Session token for revocation (not exposed in JSON)
 
 	// Metadata
 	Reason       string            `bun:"reason,type:text" json:"reason"`                                 // Required: ticket/reason for impersonation
@@ -38,9 +40,10 @@ type ImpersonationSession struct {
 	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp" json:"updated_at"`
 
 	// Relationships (for joins)
-	Impersonator *User         `bun:"rel:belongs-to,join:impersonator_id=id" json:"impersonator,omitempty"`
-	TargetUser   *User         `bun:"rel:belongs-to,join:target_user_id=id" json:"target_user,omitempty"`
-	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
+	Impersonator     *User         `bun:"rel:belongs-to,join:impersonator_id=id" json:"impersonator,omitempty"`
+	TargetUser       *User         `bun:"rel:belongs-to,join:target_user_id=id" json:"target_user,omitempty"`
+	App              *App          `bun:"rel:belongs-to,join:organization_id=id" json:"app,omitempty"`                   // Platform app
+	UserOrganization *Organization `bun:"rel:belongs-to,join:user_organization_id=id" json:"userOrganization,omitempty"` // User-created org (optional)
 }
 
 // IsExpired checks if the impersonation session has expired
@@ -54,20 +57,24 @@ func (i *ImpersonationSession) IsActive() bool {
 }
 
 // ImpersonationAuditEvent represents a detailed audit log for impersonation events
+// Updated for V2 architecture: App → Environment → Organization
 type ImpersonationAuditEvent struct {
 	bun.BaseModel `bun:"table:impersonation_audit,alias:ia"`
 
-	ID              xid.ID            `bun:"id,pk,type:varchar(20)" json:"id"`
-	ImpersonationID xid.ID            `bun:"impersonation_id,notnull,type:varchar(20)" json:"impersonation_id"`
-	OrganizationID  xid.ID            `bun:"organization_id,notnull,type:varchar(20)" json:"organization_id"`
-	EventType       string            `bun:"event_type,notnull,type:varchar(50)" json:"event_type"` // started, ended, action_performed, expired
-	Action          string            `bun:"action,type:varchar(100)" json:"action,omitempty"`      // Specific action performed during impersonation
-	Resource        string            `bun:"resource,type:varchar(255)" json:"resource,omitempty"`  // Resource accessed
-	IPAddress       string            `bun:"ip_address,type:varchar(45)" json:"ip_address"`
-	UserAgent       string            `bun:"user_agent,type:text" json:"user_agent"`
-	Details         map[string]string `bun:"details,type:jsonb" json:"details,omitempty"`
-	CreatedAt       time.Time         `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+	ID                 xid.ID            `bun:"id,pk,type:varchar(20)" json:"id"`
+	ImpersonationID    xid.ID            `bun:"impersonation_id,notnull,type:varchar(20)" json:"impersonation_id"`
+	AppID              xid.ID            `bun:"organization_id,notnull,type:varchar(20)" json:"appID"`                     // Column still named organization_id for migration compatibility
+	UserOrganizationID *xid.ID           `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationID,omitempty"` // User-created organization (optional)
+	EventType          string            `bun:"event_type,notnull,type:varchar(50)" json:"event_type"`                     // started, ended, action_performed, expired
+	Action             string            `bun:"action,type:varchar(100)" json:"action,omitempty"`                          // Specific action performed during impersonation
+	Resource           string            `bun:"resource,type:varchar(255)" json:"resource,omitempty"`                      // Resource accessed
+	IPAddress          string            `bun:"ip_address,type:varchar(45)" json:"ip_address"`
+	UserAgent          string            `bun:"user_agent,type:text" json:"user_agent"`
+	Details            map[string]string `bun:"details,type:jsonb" json:"details,omitempty"`
+	CreatedAt          time.Time         `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 
 	// Relationships
 	ImpersonationSession *ImpersonationSession `bun:"rel:belongs-to,join:impersonation_id=id" json:"impersonation_session,omitempty"`
+	App                  *App                  `bun:"rel:belongs-to,join:organization_id=id" json:"app,omitempty"`
+	UserOrganization     *Organization         `bun:"rel:belongs-to,join:user_organization_id=id" json:"userOrganization,omitempty"`
 }

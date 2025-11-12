@@ -25,6 +25,10 @@ type SessionsPageData struct {
 	Query     string
 	BasePath  string
 	CSRFToken string
+	// Statistics
+	AvgDuration      string // e.g., "2.5h", "45m"
+	SessionsToday    int
+	SessionsThisWeek int
 }
 
 // SessionsPage renders the full sessions management page
@@ -37,7 +41,7 @@ func SessionsPage(data SessionsPageData) g.Node {
 		sessionsTable(data),
 
 		// Statistics Cards
-		statisticsCards(),
+		statisticsCards(data),
 	)
 }
 
@@ -240,11 +244,17 @@ func sessionRow(session SessionData, basePath, csrfToken string) g.Node {
 	)
 }
 
-func statisticsCards() g.Node {
+func statisticsCards(data SessionsPageData) g.Node {
+	// Use real statistics or show "N/A" if no data
+	avgDuration := data.AvgDuration
+	if avgDuration == "" {
+		avgDuration = "N/A"
+	}
+
 	return Div(Class("grid grid-cols-1 gap-4 md:grid-cols-3"),
-		statCard("2.5h", "Average Duration", "Per session average", lucide.Clock(Class("hi-outline hi-clock inline-block size-6")), "violet"),
-		statCard("0", "Today", "New sessions today", lucide.Check(Class("hi-outline hi-check-circle inline-block size-6")), "emerald"),
-		statCard("0", "This Week", "Last 7 days", lucide.Calendar(Class("hi-outline hi-calendar inline-block size-6")), "blue"),
+		statCard(avgDuration, "Average Duration", "Per session average", lucide.Clock(Class("hi-outline hi-clock inline-block size-6")), "violet"),
+		statCard(fmt.Sprintf("%d", data.SessionsToday), "Today", "New sessions today", lucide.Check(Class("hi-outline hi-check-circle inline-block size-6")), "emerald"),
+		statCard(fmt.Sprintf("%d", data.SessionsThisWeek), "This Week", "Last 7 days", lucide.Calendar(Class("hi-outline hi-calendar inline-block size-6")), "blue"),
 	)
 }
 

@@ -138,6 +138,8 @@ const (
 	CodeDatabaseError  = "DATABASE_ERROR"
 	CodeCacheError     = "CACHE_ERROR"
 	CodeConfigError    = "CONFIG_ERROR"
+	CodeBadRequest     = "BAD_REQUEST"
+	CodeNotFound       = "NOT_FOUND"
 )
 
 // =============================================================================
@@ -740,6 +742,18 @@ func CacheError(operation string, err error) *AuthsomeError {
 func ConfigError(key string, err error) *AuthsomeError {
 	return Wrap(err, CodeConfigError, "Configuration error", http.StatusInternalServerError).
 		WithContext("config_key", key)
+}
+
+func BadRequest(msg string) *AuthsomeError {
+	return New(CodeBadRequest, msg, http.StatusBadRequest)
+}
+
+func InternalServerError(msg string) *AuthsomeError {
+	return New(CodeInternalError, msg, http.StatusInternalServerError)
+}
+
+func NotFound(msg string) *AuthsomeError {
+	return New(CodeNotFound, msg, http.StatusNotFound)
 }
 
 // =============================================================================

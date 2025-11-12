@@ -48,8 +48,10 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 				})
 			}
 
-			// Store org ID and token info in forge context values
-			c.Set("org_id", provToken.OrgID)
+			// Store organization context (3-tier architecture) and token info in forge context values
+			c.Set("app_id", provToken.AppID)
+			c.Set("environment_id", provToken.EnvironmentID)
+			c.Set("organization_id", provToken.OrganizationID)
 			c.Set("scim_token", provToken)
 			c.Set("token_scopes", provToken.Scopes)
 
@@ -58,27 +60,20 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 	}
 }
 
-// OrgResolutionMiddleware ensures organization context is set
+// OrgResolutionMiddleware ensures organization context is set (3-tier architecture)
 func (p *Plugin) OrgResolutionMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			// Organization ID should already be set by AuthMiddleware
-			orgID := c.Get("org_id")
-			if orgID == nil || orgID.(string) == "" {
+			// Organization context should already be set by AuthMiddleware (3-tier: app, env, org)
+			appID := c.Get("app_id")
+			envID := c.Get("environment_id")
+			orgID := c.Get("organization_id")
+
+			if appID == nil || envID == nil || orgID == nil {
 				return c.JSON(http.StatusForbidden, &ErrorResponse{
 					Schemas: []string{SchemaError},
 					Status:  http.StatusForbidden,
 					Detail:  "Organization context not found",
-				})
-			}
-
-			// Validate organization exists (basic check)
-			// In production, you might want to verify the organization exists in the database
-			if orgID.(string) == "" {
-				return c.JSON(http.StatusForbidden, &ErrorResponse{
-					Schemas: []string{SchemaError},
-					Status:  http.StatusForbidden,
-					Detail:  "Invalid organization ID",
 				})
 			}
 
@@ -101,7 +96,7 @@ func (p *Plugin) RateLimitMiddleware() func(func(forge.Context) error) func(forg
 
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			orgID := c.Get("org_id")
+			orgID := c.Get("organization_id") // Updated to organization_id for 3-tier architecture
 			if orgID == nil {
 				// No org ID, skip rate limiting
 				return next(c)
@@ -186,7 +181,7 @@ func (p *Plugin) LoggingMiddleware() func(func(forge.Context) error) func(forge.
 			duration := time.Since(start)
 
 			// Log the operation
-			orgID := c.Get("org_id")
+			orgID := c.Get("organization_id") // Updated to organization_id for 3-tier architecture
 			if orgID != nil {
 				// TODO: Create provisioning log entry
 				_ = duration // Use duration for logging

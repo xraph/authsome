@@ -1,35 +1,208 @@
-auth:
-    mode: standalone
-    password:
-        minLength: 8
-        requireLower: true
-        requireNumbers: true
-        requireSymbols: false
-        requireUpper: true
-    rateLimit:
-        enabled: true
-        maxAttempts: 5
-        windowMs: 900000
-    session:
-        cookieMaxAge: 86400
-        cookieName: authsome-session
-        cookieSecure: false
-database:
-    url: authsome.db
-email:
-    provider: smtp
-    smtp:
-        from: noreply@example.com
-        host: localhost
-        password: ""
-        port: 587
-        username: ""
-plugins:
-    twofa:
-        enabled: false
-    username:
-        enabled: true
+# AuthSome V2 Configuration - SaaS Mode
+# This configuration enables full multi-tenancy with user-created organizations
+
 server:
-    baseUrl: http://localhost:8080
+  host: localhost
+  port: 8080
+  baseUrl: http://localhost:8080
+  readTimeout: 60s
+  writeTimeout: 60s
+
+database:
+  driver: sqlite  # Options: sqlite, postgres
+  url: authsome.db
+  # For PostgreSQL:
+  # url: postgresql://user:password@localhost:5432/authsome?sslmode=disable
+  maxOpenConns: 25
+  maxIdleConns: 5
+  connMaxLifetime: 3600s
+
+auth:
+  # App configuration (platform tenant)
+  app:
+    platform_id: "platform"  # Default platform app ID
+    default_name: "Platform"
+    auto_create: true  # Auto-create default app on startup
+  
+  # Password requirements
+  password:
+    minLength: 8
+    requireLower: true
+    requireUpper: true
+    requireNumbers: true
+    requireSymbols: false
+  
+  # Session configuration
+  session:
+    cookieName: authsome-session
+    cookieMaxAge: 86400  # 24 hours in seconds
+    cookieSecure: false  # Set to true in production with HTTPS
+    cookieHttpOnly: true
+    cookieSameSite: lax
+  
+  # JWT configuration
+  jwt:
+    secret: "your-secret-key-change-in-production"  # MUST change in production
+    expiration: 24h
+    refreshExpiration: 720h  # 30 days
+  
+  # Rate limiting
+  rateLimit:
+    enabled: true
+    maxAttempts: 5
+    windowMs: 900000  # 15 minutes
+    blockDuration: 3600000  # 1 hour
+  
+  # CORS configuration
+  cors:
+    allowedOrigins:
+      - "http://localhost:3000"
+      - "http://localhost:8080"
+    allowedMethods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "PATCH"
+      - "DELETE"
+    allowedHeaders:
+      - "Authorization"
+      - "Content-Type"
+      - "X-Organization-ID"
+      - "X-Environment"
+    credentials: true
+
+# Email provider configuration
+email:
+  provider: smtp  # Options: smtp, sendgrid, mailgun
+  smtp:
     host: localhost
-    port: 8080
+    port: 587
+    username: ""
+    password: ""
+    from: noreply@example.com
+    useTLS: true
+
+# Plugins configuration
+plugins:
+  # Multi-tenancy plugin (manages Apps)
+  multitenancy:
+    enabled: true
+    enableAppCreation: true  # Allow creating multiple apps in SaaS mode
+    autoCreateDefaultApp: true
+    defaultAppName: "Platform"
+    defaultEnvironmentName: "Development"
+  
+  # Organization plugin (user-created workspaces)
+  organization:
+    enabled: true
+    enableUserCreation: true  # Allow users to create organizations
+    maxPerUser: 5  # Maximum organizations per user
+    defaultRole: "owner"  # Default role for org creator
+    requireInvitation: false  # Users can join without invitation
+    allowPublicOrgs: false
+  
+  # Environment plugin
+  environment:
+    enabled: true
+    autoCreateDev: true  # Auto-create dev environment for new apps
+    allowPromotion: true  # Allow promoting from dev → prod
+    requireConfirmation: true  # Require confirmation for data copy
+    maxPerApp: 10  # Maximum environments per app
+  
+  # Two-Factor Authentication
+  twofa:
+    enabled: true
+    issuer: "AuthSome"
+    allowBackupCodes: true
+  
+  # Username authentication
+  username:
+    enabled: true
+    minLength: 3
+    maxLength: 30
+    allowedChars: "alphanumeric_underscore"
+  
+  # Anonymous authentication
+  anonymous:
+    enabled: false
+  
+  # Passkey (WebAuthn)
+  passkey:
+    enabled: false
+    rpName: "AuthSome"
+    rpID: "localhost"
+  
+  # Magic Link
+  magicLink:
+    enabled: false
+    expirationMinutes: 15
+  
+  # Phone authentication
+  phone:
+    enabled: false
+  
+  # API Keys
+  apikey:
+    enabled: true
+    defaultExpiration: 365  # Days
+    allowNeverExpire: true
+  
+  # SSO / OIDC
+  sso:
+    enabled: false
+  
+  # SCIM provisioning
+  scim:
+    enabled: false
+    # SCIM is now organization-scoped
+    # Configuration per organization through admin panel
+  
+  # Dashboard
+  dashboard:
+    enabled: true
+    basePath: "/dashboard"
+    requireAuth: true
+  
+  # Webhooks
+  webhooks:
+    enabled: true
+    maxRetries: 3
+    timeoutSeconds: 30
+
+# Logging configuration
+logging:
+  level: info  # Options: debug, info, warn, error
+  format: json  # Options: json, text
+  output: stdout  # Options: stdout, file path
+  includeTimestamp: true
+  includeCaller: false
+
+# Monitoring & Metrics
+monitoring:
+  metricsEnabled: true
+  metricsPort: 9090
+  healthCheckPath: /health
+  prometheusEnabled: false
+
+# Redis configuration (optional, for distributed caching/rate limiting)
+redis:
+  enabled: false
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+  maxRetries: 3
+
+# Security settings
+security:
+  # Password hashing
+  bcryptCost: 12
+  
+  # Device tracking
+  deviceTracking: true
+  
+  # Geofencing
+  geofencing:
+    enabled: false
+  
+  # Suspicious activity detection
+  suspiciousActivityDetection: true

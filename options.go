@@ -10,13 +10,6 @@ import (
 // Option is a function that configures Auth
 type Option func(*Auth)
 
-// WithMode sets the operation mode
-func WithMode(mode Mode) Option {
-	return func(a *Auth) {
-		a.config.Mode = mode
-	}
-}
-
 // WithForgeApp sets the Forge application instance
 func WithForgeApp(app forge.App) Option {
 	return func(a *Auth) {

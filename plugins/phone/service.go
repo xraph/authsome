@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/interfaces"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 )
@@ -60,6 +62,14 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 		return "", fmt.Errorf("missing phone")
 	}
 
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
+
 	// Generate numeric code
 	rand.Seed(time.Now().UnixNano())
 	max := int64(1)
@@ -72,7 +82,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 	// Calculate expiry
 	expiryDuration := time.Duration(s.config.ExpiryMinutes) * time.Minute
 
-	if err := s.repo.Create(ctx, p, otp, time.Now().Add(expiryDuration)); err != nil {
+	if err := s.repo.Create(ctx, p, otp, appID, userOrgID, time.Now().Add(expiryDuration)); err != nil {
 		return "", err
 	}
 
@@ -101,7 +111,16 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	if p == "" || c == "" {
 		return nil, fmt.Errorf("missing fields")
 	}
-	rec, err := s.repo.FindByPhone(ctx, p, time.Now())
+
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
+
+	rec, err := s.repo.FindByPhone(ctx, p, appID, userOrgID, time.Now())
 	if err != nil {
 		return nil, err
 	}

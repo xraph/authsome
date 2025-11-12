@@ -109,7 +109,7 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 	}
 
 	// Check if impersonator already has an active impersonation session
-	existingSession, err := s.repo.GetActive(ctx, req.ImpersonatorID, req.OrganizationID)
+	existingSession, err := s.repo.GetActive(ctx, req.ImpersonatorID, req.AppID)
 	if err == nil && existingSession != nil {
 		return nil, ErrAlreadyImpersonating
 	}
@@ -131,7 +131,7 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 		// For now, we'll check without roles - this can be enhanced
 		hasPermission := s.rbacSvc.Allowed(rbacCtx)
 		if !hasPermission {
-			s.auditLog(ctx, nil, "impersonation_denied", req.OrganizationID, req.ImpersonatorID, req.IPAddress, req.UserAgent, map[string]string{
+			s.auditLog(ctx, nil, "impersonation_denied", req.AppID, req.ImpersonatorID, req.IPAddress, req.UserAgent, map[string]string{
 				"target_user_id": req.TargetUserID.String(),
 				"reason":         "permission_denied",
 			})
@@ -166,20 +166,21 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 
 	// Create impersonation record
 	impersonationSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
-		OrganizationID: req.OrganizationID,
-		ImpersonatorID: req.ImpersonatorID,
-		TargetUserID:   req.TargetUserID,
-		NewSessionID:   &newSession.ID,
-		SessionToken:   newSession.Token, // Store token for later revocation
-		Reason:         req.Reason,
-		TicketNumber:   req.TicketNumber,
-		IPAddress:      req.IPAddress,
-		UserAgent:      req.UserAgent,
-		Active:         true,
-		ExpiresAt:      time.Now().UTC().Add(time.Duration(duration) * time.Minute),
-		CreatedAt:      time.Now().UTC(),
-		UpdatedAt:      time.Now().UTC(),
+		ID:                 xid.New(),
+		AppID:              req.AppID,
+		UserOrganizationID: req.UserOrganizationID,
+		ImpersonatorID:     req.ImpersonatorID,
+		TargetUserID:       req.TargetUserID,
+		NewSessionID:       &newSession.ID,
+		SessionToken:       newSession.Token, // Store token for later revocation
+		Reason:             req.Reason,
+		TicketNumber:       req.TicketNumber,
+		IPAddress:          req.IPAddress,
+		UserAgent:          req.UserAgent,
+		Active:             true,
+		ExpiresAt:          time.Now().UTC().Add(time.Duration(duration) * time.Minute),
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
 	}
 
 	if err := s.repo.Create(ctx, impersonationSession); err != nil {
@@ -189,7 +190,7 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 	}
 
 	// Log audit event
-	s.auditLog(ctx, &impersonationSession.ID, "impersonation_started", req.OrganizationID, req.ImpersonatorID, req.IPAddress, req.UserAgent, map[string]string{
+	s.auditLog(ctx, &impersonationSession.ID, "impersonation_started", req.AppID, req.ImpersonatorID, req.IPAddress, req.UserAgent, map[string]string{
 		"target_user_id":     req.TargetUserID.String(),
 		"target_user_email":  targetUser.Email,
 		"impersonator_email": impersonator.Email,
@@ -201,12 +202,13 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 
 	// Create detailed audit event in impersonation audit table
 	auditEvent := &schema.ImpersonationAuditEvent{
-		ID:              xid.New(),
-		ImpersonationID: impersonationSession.ID,
-		OrganizationID:  req.OrganizationID,
-		EventType:       "started",
-		IPAddress:       req.IPAddress,
-		UserAgent:       req.UserAgent,
+		ID:                 xid.New(),
+		ImpersonationID:    impersonationSession.ID,
+		AppID:              req.AppID,
+		UserOrganizationID: req.UserOrganizationID,
+		EventType:          "started",
+		IPAddress:          req.IPAddress,
+		UserAgent:          req.UserAgent,
 		Details: map[string]string{
 			"target_user_id":   req.TargetUserID.String(),
 			"impersonator_id":  req.ImpersonatorID.String(),
@@ -234,7 +236,7 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 // End terminates an impersonation session
 func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error) {
 	// Get impersonation session
-	impersonationSession, err := s.repo.Get(ctx, req.ImpersonationID, req.OrganizationID)
+	impersonationSession, err := s.repo.Get(ctx, req.ImpersonationID, req.AppID)
 	if err != nil {
 		return nil, ErrImpersonationNotFound
 	}
@@ -274,7 +276,7 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 	}
 
 	// Log audit event
-	s.auditLog(ctx, &impersonationSession.ID, "impersonation_ended", req.OrganizationID, req.ImpersonatorID, "", "", map[string]string{
+	s.auditLog(ctx, &impersonationSession.ID, "impersonation_ended", req.AppID, req.ImpersonatorID, "", "", map[string]string{
 		"target_user_id": impersonationSession.TargetUserID.String(),
 		"end_reason":     impersonationSession.EndReason,
 		"duration":       time.Since(impersonationSession.CreatedAt).String(),
@@ -282,10 +284,11 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 
 	// Create detailed audit event
 	auditEvent := &schema.ImpersonationAuditEvent{
-		ID:              xid.New(),
-		ImpersonationID: impersonationSession.ID,
-		OrganizationID:  req.OrganizationID,
-		EventType:       "ended",
+		ID:                 xid.New(),
+		ImpersonationID:    impersonationSession.ID,
+		AppID:              req.AppID,
+		UserOrganizationID: req.UserOrganizationID,
+		EventType:          "ended",
 		Details: map[string]string{
 			"end_reason": impersonationSession.EndReason,
 			"duration":   time.Since(impersonationSession.CreatedAt).String(),
@@ -304,7 +307,7 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 
 // Get retrieves an impersonation session
 func (s *Service) Get(ctx context.Context, req *GetRequest) (*SessionInfo, error) {
-	impersonationSession, err := s.repo.Get(ctx, req.ImpersonationID, req.OrganizationID)
+	impersonationSession, err := s.repo.Get(ctx, req.ImpersonationID, req.AppID)
 	if err != nil {
 		return nil, ErrImpersonationNotFound
 	}
@@ -376,16 +379,17 @@ func (s *Service) ListAuditEvents(ctx context.Context, req *AuditListRequest) ([
 	auditEvents := make([]*AuditEvent, len(events))
 	for i, event := range events {
 		auditEvents[i] = &AuditEvent{
-			ID:              event.ID,
-			ImpersonationID: event.ImpersonationID,
-			OrganizationID:  event.OrganizationID,
-			EventType:       event.EventType,
-			Action:          event.Action,
-			Resource:        event.Resource,
-			IPAddress:       event.IPAddress,
-			UserAgent:       event.UserAgent,
-			Details:         event.Details,
-			CreatedAt:       event.CreatedAt,
+			ID:                 event.ID,
+			ImpersonationID:    event.ImpersonationID,
+			AppID:              event.AppID,
+			UserOrganizationID: event.UserOrganizationID,
+			EventType:          event.EventType,
+			Action:             event.Action,
+			Resource:           event.Resource,
+			IPAddress:          event.IPAddress,
+			UserAgent:          event.UserAgent,
+			Details:            event.Details,
+			CreatedAt:          event.CreatedAt,
 		}
 	}
 
@@ -414,18 +418,19 @@ func (s *Service) validateStartRequest(req *StartRequest) error {
 
 func (s *Service) toSessionInfo(ctx context.Context, session *schema.ImpersonationSession) *SessionInfo {
 	info := &SessionInfo{
-		ID:             session.ID,
-		OrganizationID: session.OrganizationID,
-		ImpersonatorID: session.ImpersonatorID,
-		TargetUserID:   session.TargetUserID,
-		Reason:         session.Reason,
-		TicketNumber:   session.TicketNumber,
-		Active:         session.Active,
-		ExpiresAt:      session.ExpiresAt,
-		EndedAt:        session.EndedAt,
-		EndReason:      session.EndReason,
-		CreatedAt:      session.CreatedAt,
-		UpdatedAt:      session.UpdatedAt,
+		ID:                 session.ID,
+		AppID:              session.AppID,
+		UserOrganizationID: session.UserOrganizationID,
+		ImpersonatorID:     session.ImpersonatorID,
+		TargetUserID:       session.TargetUserID,
+		Reason:             session.Reason,
+		TicketNumber:       session.TicketNumber,
+		Active:             session.Active,
+		ExpiresAt:          session.ExpiresAt,
+		EndedAt:            session.EndedAt,
+		EndReason:          session.EndReason,
+		CreatedAt:          session.CreatedAt,
+		UpdatedAt:          session.UpdatedAt,
 	}
 
 	// Enrich with user data (best effort, don't fail if can't fetch)

@@ -69,18 +69,19 @@ func (c *Compiler) Compile(policy *core.Policy) (*CompiledPolicy, error) {
 
 	// Build compiled policy
 	compiled := &CompiledPolicy{
-		PolicyID:     policy.ID,
-		OrgID:        policy.OrgID,
-		NamespaceID:  policy.NamespaceID,
-		Name:         policy.Name,
-		Description:  policy.Description,
-		Program:      prg,
-		AST:          ast,
-		ResourceType: policy.ResourceType,
-		Actions:      policy.Actions,
-		Priority:     policy.Priority,
-		Version:      policy.Version,
-		CompiledAt:   time.Now(),
+		PolicyID:           policy.ID,
+		AppID:              policy.AppID,
+		UserOrganizationID: policy.UserOrganizationID,
+		NamespaceID:        policy.NamespaceID,
+		Name:               policy.Name,
+		Description:        policy.Description,
+		Program:            prg,
+		AST:                ast,
+		ResourceType:       policy.ResourceType,
+		Actions:            policy.Actions,
+		Priority:           policy.Priority,
+		Version:            policy.Version,
+		CompiledAt:         time.Now(),
 	}
 
 	return compiled, nil

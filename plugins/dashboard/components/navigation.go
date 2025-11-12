@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -106,11 +107,12 @@ func DesktopNavigation(data PageData) g.Node {
 		navLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
 		navLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
 		navLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
+		navLink("Plugins", data.BasePath+"/dashboard/plugins", data.ActivePage == "plugins"),
 	}
 
 	// Add Organizations link if in SaaS mode
 	if data.IsSaaSMode {
-		navItems = append(navItems, navLink("Organizations", data.BasePath+"/dashboard/organizations", data.ActivePage == "organizations"))
+		navItems = append(navItems, navLink("Apps", data.BasePath+"/dashboard/apps", data.ActivePage == "organizations"))
 	}
 
 	navItems = append(navItems, navLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"))
@@ -126,11 +128,12 @@ func MobileNavigation(data PageData) g.Node {
 		mobileNavLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
 		mobileNavLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
 		mobileNavLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
+		mobileNavLink("Plugins", data.BasePath+"/dashboard/plugins", data.ActivePage == "plugins"),
 	}
 
 	// Add Organizations link if in SaaS mode
 	if data.IsSaaSMode {
-		navItems = append(navItems, mobileNavLink("Organizations", data.BasePath+"/dashboard/organizations", data.ActivePage == "organizations"))
+		navItems = append(navItems, mobileNavLink("Apps", data.BasePath+"/dashboard/apps", data.ActivePage == "organizations"))
 	}
 
 	navItems = append(navItems, mobileNavLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"))
@@ -149,7 +152,7 @@ func MobileNavigation(data PageData) g.Node {
 func ThemeToggle() g.Node {
 	return Button(
 		g.Attr("@click", "toggleTheme()"),
-		Class("inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm leading-5 font-semibold text-slate-800 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-800 dark:hover:text-violet-400 active:border-slate-200 transition-colors"),
+		Class("inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm leading-5 font-semibold text-slate-800 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-800 dark:hover:text-violet-400 active:border-slate-200 transition-colors btn btn-ghost btn-sm btn-circle"),
 		g.Attr(":title", "isDark ? 'Switch to light mode' : 'Switch to dark mode'"),
 		sunIcon(),
 		moonIcon(),
@@ -162,17 +165,32 @@ func UserDropdown(data PageData) g.Node {
 		userName = data.User.Name
 	}
 
+	initial := "U"
+
+	if len(userName) > 0 {
+		names := strings.Split(userName, " ")
+		initial = string(names[0][0])
+		if len(names) > 1 {
+			initial += string(names[1][0])
+		}
+		initial = strings.ToUpper(initial)
+	}
+
 	return Div(
 		Class("relative inline-block"),
 		Button(
 			g.Attr("@click", "userDropdownOpen = !userDropdownOpen"),
 			g.Attr(":aria-expanded", "userDropdownOpen"),
 			Type("button"),
-			Class("inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm leading-5 font-semibold text-slate-800 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-800 dark:hover:text-violet-400 active:border-slate-200 transition-colors"),
+			Class("avatar avatar-placeholder"),
 			g.Attr("aria-haspopup", "true"),
-			userCircleIcon(),
-			Span(Class("hidden sm:inline"), g.Text(userName)),
-			chevronDownIcon(),
+			// userCircleIcon(),
+			// Span(Class("hidden sm:inline"), g.Text(userName)),
+			// chevronDownIcon(),
+			Div(
+				Class("bg-neutral text-neutral-content w-8 rounded-full"),
+				Span(Class("text-xs text-bold"), g.Text(initial)),
+			),
 		),
 		userDropdownMenu(data),
 	)

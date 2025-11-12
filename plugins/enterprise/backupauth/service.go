@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/interfaces"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -45,11 +46,11 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 		return nil, fmt.Errorf("invalid user ID: %w", err)
 	}
 
-	// Get organization ID from context
-	orgID := s.getOrgIDFromContext(ctx)
+	// Get app and org IDs from context
+	appID, userOrgID := s.getAppAndOrgFromContext(ctx)
 
 	// Check for existing active session
-	existing, err := s.repo.GetActiveRecoverySession(ctx, userID, orgID)
+	existing, err := s.repo.GetActiveRecoverySession(ctx, userID, appID, userOrgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing session: %w", err)
 	}
@@ -58,7 +59,7 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 	}
 
 	// Check rate limits
-	if err := s.checkRateLimit(ctx, userID, orgID); err != nil {
+	if err := s.checkRateLimit(ctx, userID, appID, userOrgID); err != nil {
 		return nil, err
 	}
 
@@ -70,21 +71,22 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 
 	// Create recovery session
 	session := &RecoverySession{
-		UserID:         userID,
-		OrganizationID: orgID,
-		Status:         RecoveryStatusPending,
-		Method:         req.PreferredMethod,
-		RequiredSteps:  convertMethodsToStrings(requiredSteps),
-		CompletedSteps: []string{},
-		CurrentStep:    0,
-		MaxAttempts:    5,
-		Attempts:       0,
-		IPAddress:      s.getIPFromContext(ctx),
-		UserAgent:      s.getUserAgentFromContext(ctx),
-		DeviceID:       req.DeviceID,
-		RiskScore:      riskScore,
-		ExpiresAt:      time.Now().Add(s.config.MultiStepRecovery.SessionExpiry),
-		RequiresReview: riskScore >= s.config.RiskAssessment.RequireReviewAbove,
+		UserID:             userID,
+		AppID:              appID,
+		UserOrganizationID: userOrgID,
+		Status:             RecoveryStatusPending,
+		Method:             req.PreferredMethod,
+		RequiredSteps:      convertMethodsToStrings(requiredSteps),
+		CompletedSteps:     []string{},
+		CurrentStep:        0,
+		MaxAttempts:        5,
+		Attempts:           0,
+		IPAddress:          s.getIPFromContext(ctx),
+		UserAgent:          s.getUserAgentFromContext(ctx),
+		DeviceID:           req.DeviceID,
+		RiskScore:          riskScore,
+		ExpiresAt:          time.Now().Add(s.config.MultiStepRecovery.SessionExpiry),
+		RequiresReview:     riskScore >= s.config.RiskAssessment.RequireReviewAbove,
 	}
 
 	if err := s.repo.CreateRecoverySession(ctx, session); err != nil {
@@ -92,10 +94,10 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 	}
 
 	// Log attempt
-	s.logRecoveryAttempt(ctx, session.ID, userID, orgID, "started", session.Method, true, "")
+	s.logRecoveryAttempt(ctx, session.ID, userID, appID, userOrgID, "started", session.Method, true, "")
 
 	// Get available methods for user
-	availableMethods := s.getAvailableMethods(ctx, userID, orgID)
+	availableMethods := s.getAvailableMethods(ctx, userID, appID, userOrgID)
 
 	return &StartRecoveryResponse{
 		SessionID:        session.ID,
@@ -187,7 +189,7 @@ func (s *Service) CompleteRecovery(ctx context.Context, req *CompleteRecoveryReq
 	}
 
 	// Log completion
-	s.logRecoveryAttempt(ctx, session.ID, session.UserID, session.OrganizationID, "completed", session.Method, true, "")
+	s.logRecoveryAttempt(ctx, session.ID, session.UserID, session.AppID, session.UserOrganizationID, "completed", session.Method, true, "")
 
 	return &CompleteRecoveryResponse{
 		SessionID:   session.ID,
@@ -214,7 +216,7 @@ func (s *Service) CancelRecovery(ctx context.Context, req *CancelRecoveryRequest
 	}
 
 	// Log cancellation
-	s.logRecoveryAttempt(ctx, session.ID, session.UserID, session.OrganizationID, "cancelled", session.Method, true, req.Reason)
+	s.logRecoveryAttempt(ctx, session.ID, session.UserID, session.AppID, session.UserOrganizationID, "cancelled", session.Method, true, req.Reason)
 
 	return nil
 }
@@ -222,7 +224,7 @@ func (s *Service) CancelRecovery(ctx context.Context, req *CancelRecoveryRequest
 // ===== Recovery Codes =====
 
 // GenerateRecoveryCodes generates new recovery codes for a user
-func (s *Service) GenerateRecoveryCodes(ctx context.Context, userID xid.ID, orgID string, req *GenerateRecoveryCodesRequest) (*GenerateRecoveryCodesResponse, error) {
+func (s *Service) GenerateRecoveryCodes(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *GenerateRecoveryCodesRequest) (*GenerateRecoveryCodesResponse, error) {
 	if !s.config.RecoveryCodes.Enabled {
 		return nil, ErrRecoveryMethodNotEnabled
 	}
@@ -272,7 +274,7 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCod
 	codeHash := s.hashCode(req.Code)
 
 	// Check if code was already used
-	usage, err := s.repo.GetRecoveryCodeUsage(ctx, session.UserID, session.OrganizationID, codeHash)
+	usage, err := s.repo.GetRecoveryCodeUsage(ctx, session.UserID, session.AppID, session.UserOrganizationID, codeHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check code usage: %w", err)
 	}
@@ -287,14 +289,15 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCod
 	if valid {
 		// Mark code as used
 		err = s.repo.CreateRecoveryCodeUsage(ctx, &RecoveryCodeUsage{
-			UserID:         session.UserID,
-			OrganizationID: session.OrganizationID,
-			RecoveryID:     session.ID,
-			CodeHash:       codeHash,
-			UsedAt:         time.Now(),
-			IPAddress:      s.getIPFromContext(ctx),
-			UserAgent:      s.getUserAgentFromContext(ctx),
-			DeviceID:       session.DeviceID,
+			UserID:             session.UserID,
+			AppID:              session.AppID,
+			UserOrganizationID: session.UserOrganizationID,
+			RecoveryID:         session.ID,
+			CodeHash:           codeHash,
+			UsedAt:             time.Now(),
+			IPAddress:          s.getIPFromContext(ctx),
+			UserAgent:          s.getUserAgentFromContext(ctx),
+			DeviceID:           session.DeviceID,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to record code usage: %w", err)
@@ -323,7 +326,7 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCod
 // ===== Security Questions =====
 
 // SetupSecurityQuestions sets up security questions for a user
-func (s *Service) SetupSecurityQuestions(ctx context.Context, userID xid.ID, orgID string, req *SetupSecurityQuestionsRequest) (*SetupSecurityQuestionsResponse, error) {
+func (s *Service) SetupSecurityQuestions(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *SetupSecurityQuestionsRequest) (*SetupSecurityQuestionsResponse, error) {
 	if !s.config.SecurityQuestions.Enabled {
 		return nil, ErrRecoveryMethodNotEnabled
 	}
@@ -355,13 +358,14 @@ func (s *Service) SetupSecurityQuestions(ctx context.Context, userID xid.ID, org
 
 		// Create security question
 		question := &SecurityQuestion{
-			UserID:         userID,
-			OrganizationID: orgID,
-			QuestionID:     q.QuestionID,
-			CustomText:     q.CustomText,
-			AnswerHash:     answerHash,
-			Salt:           salt,
-			IsActive:       true,
+			UserID:             userID,
+			AppID:              appID,
+			UserOrganizationID: userOrganizationID,
+			QuestionID:         q.QuestionID,
+			CustomText:         q.CustomText,
+			AnswerHash:         answerHash,
+			Salt:               salt,
+			IsActive:           true,
 		}
 
 		if err := s.repo.CreateSecurityQuestion(ctx, question); err != nil {
@@ -385,7 +389,7 @@ func (s *Service) GetSecurityQuestions(ctx context.Context, req *GetSecurityQues
 	}
 
 	// Get questions
-	questions, err := s.repo.GetSecurityQuestionsByUser(ctx, session.UserID, session.OrganizationID)
+	questions, err := s.repo.GetSecurityQuestionsByUser(ctx, session.UserID, session.AppID, session.UserOrganizationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get security questions: %w", err)
 	}
@@ -429,7 +433,7 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 	}
 
 	// Get questions
-	questions, err := s.repo.GetSecurityQuestionsByUser(ctx, session.UserID, session.OrganizationID)
+	questions, err := s.repo.GetSecurityQuestionsByUser(ctx, session.UserID, session.AppID, session.UserOrganizationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get security questions: %w", err)
 	}
@@ -489,13 +493,13 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 // ===== Trusted Contacts =====
 
 // AddTrustedContact adds a trusted contact for account recovery
-func (s *Service) AddTrustedContact(ctx context.Context, userID xid.ID, orgID string, req *AddTrustedContactRequest) (*AddTrustedContactResponse, error) {
+func (s *Service) AddTrustedContact(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *AddTrustedContactRequest) (*AddTrustedContactResponse, error) {
 	if !s.config.TrustedContacts.Enabled {
 		return nil, ErrRecoveryMethodNotEnabled
 	}
 
 	// Check contact limit
-	count, err := s.repo.CountActiveTrustedContacts(ctx, userID, orgID)
+	count, err := s.repo.CountActiveTrustedContacts(ctx, userID, appID, userOrganizationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count contacts: %w", err)
 	}
@@ -511,16 +515,17 @@ func (s *Service) AddTrustedContact(ctx context.Context, userID xid.ID, orgID st
 
 	// Create trusted contact
 	contact := &TrustedContact{
-		UserID:            userID,
-		OrganizationID:    orgID,
-		ContactName:       req.Name,
-		ContactEmail:      req.Email,
-		ContactPhone:      req.Phone,
-		Relationship:      req.Relationship,
-		VerificationToken: token,
-		IsActive:          true,
-		IPAddress:         s.getIPFromContext(ctx),
-		UserAgent:         s.getUserAgentFromContext(ctx),
+		UserID:             userID,
+		AppID:              appID,
+		UserOrganizationID: userOrganizationID,
+		ContactName:        req.Name,
+		ContactEmail:       req.Email,
+		ContactPhone:       req.Phone,
+		Relationship:       req.Relationship,
+		VerificationToken:  token,
+		IsActive:           true,
+		IPAddress:          s.getIPFromContext(ctx),
+		UserAgent:          s.getUserAgentFromContext(ctx),
 	}
 
 	if err := s.repo.CreateTrustedContact(ctx, contact); err != nil {
@@ -627,8 +632,8 @@ func (s *Service) RequestTrustedContactVerification(ctx context.Context, req *Re
 }
 
 // ListTrustedContacts lists user's trusted contacts
-func (s *Service) ListTrustedContacts(ctx context.Context, userID xid.ID, orgID string) (*ListTrustedContactsResponse, error) {
-	contacts, err := s.repo.GetTrustedContactsByUser(ctx, userID, orgID)
+func (s *Service) ListTrustedContacts(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) (*ListTrustedContactsResponse, error) {
+	contacts, err := s.repo.GetTrustedContactsByUser(ctx, userID, appID, userOrganizationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contacts: %w", err)
 	}
@@ -654,7 +659,7 @@ func (s *Service) ListTrustedContacts(ctx context.Context, userID xid.ID, orgID 
 }
 
 // RemoveTrustedContact removes a trusted contact
-func (s *Service) RemoveTrustedContact(ctx context.Context, userID xid.ID, orgID string, req *RemoveTrustedContactRequest) error {
+func (s *Service) RemoveTrustedContact(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *RemoveTrustedContactRequest) error {
 	// Get contact
 	contact, err := s.repo.GetTrustedContact(ctx, req.ContactID)
 	if err != nil {
@@ -662,7 +667,11 @@ func (s *Service) RemoveTrustedContact(ctx context.Context, userID xid.ID, orgID
 	}
 
 	// Validate ownership
-	if contact.UserID != userID || contact.OrganizationID != orgID {
+	if contact.UserID != userID || contact.AppID != appID {
+		return ErrUnauthorized
+	}
+	if (contact.UserOrganizationID == nil) != (userOrganizationID == nil) ||
+		(contact.UserOrganizationID != nil && userOrganizationID != nil && *contact.UserOrganizationID != *userOrganizationID) {
 		return ErrUnauthorized
 	}
 
@@ -687,14 +696,14 @@ func (s *Service) validateSession(session *RecoverySession) error {
 	return nil
 }
 
-func (s *Service) checkRateLimit(ctx context.Context, userID xid.ID, orgID string) error {
+func (s *Service) checkRateLimit(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) error {
 	if !s.config.RateLimiting.Enabled {
 		return nil
 	}
 
 	// Check hourly limit
 	since := time.Now().Add(-1 * time.Hour)
-	attempts, err := s.repo.GetRecentRecoveryAttempts(ctx, userID, orgID, since)
+	attempts, err := s.repo.GetRecentRecoveryAttempts(ctx, userID, appID, userOrganizationID, since)
 	if err != nil {
 		return fmt.Errorf("failed to check rate limit: %w", err)
 	}
@@ -705,7 +714,7 @@ func (s *Service) checkRateLimit(ctx context.Context, userID xid.ID, orgID strin
 
 	// Check daily limit
 	since = time.Now().Add(-24 * time.Hour)
-	attempts, err = s.repo.GetRecentRecoveryAttempts(ctx, userID, orgID, since)
+	attempts, err = s.repo.GetRecentRecoveryAttempts(ctx, userID, appID, userOrganizationID, since)
 	if err != nil {
 		return fmt.Errorf("failed to check rate limit: %w", err)
 	}
@@ -758,7 +767,7 @@ func (s *Service) determineRequiredSteps(riskScore float64) []RecoveryMethod {
 			RecoveryMethodTrustedContact,
 		}
 		for _, method := range allMethods {
-			if !contains(steps, method) && s.isMethodEnabled(method) {
+			if !containsMethod(steps, method) && s.isMethodEnabled(method) {
 				steps = append(steps, method)
 				if len(steps) >= s.config.MultiStepRecovery.MinimumSteps {
 					break
@@ -770,7 +779,7 @@ func (s *Service) determineRequiredSteps(riskScore float64) []RecoveryMethod {
 	return steps
 }
 
-func (s *Service) getAvailableMethods(ctx context.Context, userID xid.ID, orgID string) []RecoveryMethod {
+func (s *Service) getAvailableMethods(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) []RecoveryMethod {
 	var methods []RecoveryMethod
 
 	if s.config.RecoveryCodes.Enabled {
@@ -778,14 +787,14 @@ func (s *Service) getAvailableMethods(ctx context.Context, userID xid.ID, orgID 
 	}
 	if s.config.SecurityQuestions.Enabled {
 		// Check if user has questions setup
-		questions, _ := s.repo.GetSecurityQuestionsByUser(ctx, userID, orgID)
+		questions, _ := s.repo.GetSecurityQuestionsByUser(ctx, userID, appID, userOrganizationID)
 		if len(questions) >= s.config.SecurityQuestions.MinimumQuestions {
 			methods = append(methods, RecoveryMethodSecurityQ)
 		}
 	}
 	if s.config.TrustedContacts.Enabled {
 		// Check if user has trusted contacts
-		count, _ := s.repo.CountActiveTrustedContacts(ctx, userID, orgID)
+		count, _ := s.repo.CountActiveTrustedContacts(ctx, userID, appID, userOrganizationID)
 		if count >= s.config.TrustedContacts.MinimumContacts {
 			methods = append(methods, RecoveryMethodTrustedContact)
 		}
@@ -860,17 +869,18 @@ func (s *Service) markStepCompleted(ctx context.Context, session *RecoverySessio
 	return nil
 }
 
-func (s *Service) logRecoveryAttempt(ctx context.Context, recoveryID, userID xid.ID, orgID, action string, method RecoveryMethod, success bool, reason string) {
+func (s *Service) logRecoveryAttempt(ctx context.Context, recoveryID, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, action string, method RecoveryMethod, success bool, reason string) {
 	log := &RecoveryAttemptLog{
-		RecoveryID:     recoveryID,
-		UserID:         userID,
-		OrganizationID: orgID,
-		Action:         action,
-		Method:         method,
-		Success:        success,
-		FailureReason:  reason,
-		IPAddress:      s.getIPFromContext(ctx),
-		UserAgent:      s.getUserAgentFromContext(ctx),
+		RecoveryID:         recoveryID,
+		UserID:             userID,
+		AppID:              appID,
+		UserOrganizationID: userOrganizationID,
+		Action:             action,
+		Method:             method,
+		Success:            success,
+		FailureReason:      reason,
+		IPAddress:          s.getIPFromContext(ctx),
+		UserAgent:          s.getUserAgentFromContext(ctx),
 	}
 	s.repo.CreateRecoveryLog(ctx, log)
 }
@@ -967,11 +977,14 @@ func (s *Service) isCommonAnswer(answer string) bool {
 
 // ===== Context Helpers =====
 
-func (s *Service) getOrgIDFromContext(ctx context.Context) string {
-	if orgID, ok := ctx.Value("organization_id").(string); ok {
-		return orgID
+func (s *Service) getAppAndOrgFromContext(ctx context.Context) (xid.ID, *xid.ID) {
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	// Convert to pointer, returning nil if it's NilID
+	if orgID == xid.NilID() {
+		return appID, nil
 	}
-	return "default"
+	return appID, &orgID
 }
 
 func (s *Service) getIPFromContext(ctx context.Context) string {
@@ -996,6 +1009,15 @@ func convertMethodsToStrings(methods []RecoveryMethod) []string {
 		result[i] = string(m)
 	}
 	return result
+}
+
+func containsMethod(slice []RecoveryMethod, item RecoveryMethod) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(slice []string, item string) bool {

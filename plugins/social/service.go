@@ -28,12 +28,13 @@ type Service struct {
 
 // OAuthState stores temporary OAuth state data
 type OAuthState struct {
-	Provider       string
-	OrganizationID xid.ID
-	RedirectURL    string
-	CreatedAt      time.Time
-	ExtraScopes    []string // Additional scopes requested
-	LinkUserID     *xid.ID  // If linking to existing user
+	Provider           string
+	AppID              xid.ID  // Platform app (required)
+	UserOrganizationID *xid.ID // User-created org (optional)
+	RedirectURL        string
+	CreatedAt          time.Time
+	ExtraScopes        []string // Additional scopes requested
+	LinkUserID         *xid.ID  // If linking to existing user
 }
 
 // NewService creates a new social auth service
@@ -132,14 +133,14 @@ func (s *Service) initializeProviders() {
 }
 
 // GetAuthorizationURL generates an OAuth authorization URL
-func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, orgID xid.ID, extraScopes []string) (string, error) {
+func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string) (string, error) {
 	provider, ok := s.providers[providerName]
 	if !ok {
 		return "", fmt.Errorf("provider %s not configured", providerName)
 	}
 
 	// Generate secure state token
-	state, err := s.generateState(providerName, orgID, extraScopes, nil)
+	state, err := s.generateState(providerName, appID, userOrganizationID, extraScopes, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
@@ -158,14 +159,14 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 }
 
 // GetLinkAccountURL generates a URL to link an additional provider to an existing user
-func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, userID xid.ID, orgID xid.ID, extraScopes []string) (string, error) {
+func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string) (string, error) {
 	provider, ok := s.providers[providerName]
 	if !ok {
 		return "", fmt.Errorf("provider %s not configured", providerName)
 	}
 
 	// Generate state with user linking
-	state, err := s.generateState(providerName, orgID, extraScopes, &userID)
+	state, err := s.generateState(providerName, appID, userOrganizationID, extraScopes, &userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
@@ -217,7 +218,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 	}
 
 	// Check if social account already exists
-	existingAccount, err := s.socialRepo.FindByProviderAndProviderID(ctx, providerName, userInfo.ID, state.OrganizationID)
+	existingAccount, err := s.socialRepo.FindByProviderAndProviderID(ctx, providerName, userInfo.ID, state.AppID, state.UserOrganizationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing account: %w", err)
 	}
@@ -246,7 +247,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 			}
 		} else {
 			// Create new social account link
-			if err := s.createSocialAccount(ctx, targetUser.ID, state.OrganizationID, providerName, userInfo, token); err != nil {
+			if err := s.createSocialAccount(ctx, targetUser.ID, state.AppID, state.UserOrganizationID, providerName, userInfo, token); err != nil {
 				return nil, fmt.Errorf("failed to link social account: %w", err)
 			}
 		}
@@ -282,7 +283,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 			if existingUser != nil {
 				// Link to existing user if account linking is allowed
 				if s.config.AllowAccountLinking {
-					if err := s.createSocialAccount(ctx, existingUser.ID, state.OrganizationID, providerName, userInfo, token); err != nil {
+					if err := s.createSocialAccount(ctx, existingUser.ID, state.AppID, state.UserOrganizationID, providerName, userInfo, token); err != nil {
 						return nil, fmt.Errorf("failed to link social account: %w", err)
 					}
 
@@ -321,7 +322,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		}
 
 		// Create social account
-		if err := s.createSocialAccount(ctx, newUser.ID, state.OrganizationID, providerName, userInfo, token); err != nil {
+		if err := s.createSocialAccount(ctx, newUser.ID, state.AppID, state.UserOrganizationID, providerName, userInfo, token); err != nil {
 			return nil, fmt.Errorf("failed to create social account: %w", err)
 		}
 
@@ -336,22 +337,23 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 }
 
 // createSocialAccount creates a new social account record
-func (s *Service) createSocialAccount(ctx context.Context, userID, orgID xid.ID, provider string, userInfo *providers.UserInfo, token *oauth2.Token) error {
+func (s *Service) createSocialAccount(ctx context.Context, userID, appID xid.ID, userOrganizationID *xid.ID, provider string, userInfo *providers.UserInfo, token *oauth2.Token) error {
 	rawJSON, _ := json.Marshal(userInfo.Raw)
 
 	account := &schema.SocialAccount{
-		ID:             xid.New(),
-		UserID:         userID,
-		OrganizationID: orgID,
-		Provider:       provider,
-		ProviderID:     userInfo.ID,
-		Email:          userInfo.Email,
-		Name:           userInfo.Name,
-		Avatar:         userInfo.Avatar,
-		AccessToken:    token.AccessToken,
-		RefreshToken:   token.RefreshToken,
-		TokenType:      token.TokenType,
-		RawUserInfo:    string(rawJSON),
+		ID:                 xid.New(),
+		UserID:             userID,
+		AppID:              appID,
+		UserOrganizationID: userOrganizationID,
+		Provider:           provider,
+		ProviderID:         userInfo.ID,
+		Email:              userInfo.Email,
+		Name:               userInfo.Name,
+		Avatar:             userInfo.Avatar,
+		AccessToken:        token.AccessToken,
+		RefreshToken:       token.RefreshToken,
+		TokenType:          token.TokenType,
+		RawUserInfo:        string(rawJSON),
 	}
 
 	if !token.Expiry.IsZero() {
@@ -366,7 +368,7 @@ func (s *Service) createSocialAccount(ctx context.Context, userID, orgID xid.ID,
 }
 
 // generateState creates a secure state token
-func (s *Service) generateState(provider string, orgID xid.ID, extraScopes []string, linkUserID *xid.ID) (string, error) {
+func (s *Service) generateState(provider string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string, linkUserID *xid.ID) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -374,11 +376,12 @@ func (s *Service) generateState(provider string, orgID xid.ID, extraScopes []str
 	state := base64.URLEncoding.EncodeToString(b)
 
 	s.stateStore[state] = &OAuthState{
-		Provider:       provider,
-		OrganizationID: orgID,
-		CreatedAt:      time.Now(),
-		ExtraScopes:    extraScopes,
-		LinkUserID:     linkUserID,
+		Provider:           provider,
+		AppID:              appID,
+		UserOrganizationID: userOrganizationID,
+		CreatedAt:          time.Now(),
+		ExtraScopes:        extraScopes,
+		LinkUserID:         linkUserID,
 	}
 
 	// TODO: Implement cleanup for old states (use Redis with TTL in production)

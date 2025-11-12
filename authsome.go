@@ -9,13 +9,13 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/app"
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	dev "github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/notification"
-	"github.com/xraph/authsome/core/organization"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	rbac "github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
@@ -42,7 +42,7 @@ const (
 	ServiceUser           = "authsome.user"
 	ServiceSession        = "authsome.session"
 	ServiceAuth           = "authsome.auth"
-	ServiceOrganization   = "authsome.organization"
+	ServiceApp            = "authsome.app"
 	ServiceRateLimit      = "authsome.ratelimit"
 	ServiceDevice         = "authsome.device"
 	ServiceSecurity       = "authsome.security"
@@ -66,7 +66,7 @@ type Auth struct {
 	userService         user.ServiceInterface
 	sessionService      session.ServiceInterface
 	authService         auth.ServiceInterface
-	organizationService *organization.Service
+	organizationService *app.Service
 	rateLimitService    *rl.Service
 	rateLimitStorage    rl.Storage
 	rateLimitConfig     rl.Config
@@ -99,7 +99,6 @@ type Auth struct {
 func New(opts ...Option) *Auth {
 	a := &Auth{
 		config: Config{
-			Mode:     ModeStandalone,
 			BasePath: "/api/auth",
 		},
 		pluginRegistry:  plugins.NewRegistry(),
@@ -146,7 +145,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	userRepo := repo.NewUserRepository(db)
 	sessionRepo := repo.NewSessionRepository(db)
 	a.twofaRepo = repo.NewTwoFARepository(db)
-	orgRepo := repo.NewOrganizationRepository(db)
+	orgRepo := repo.NewAppRepository(db)
 	// Rate limit storage and service
 	if a.rateLimitStorage == nil {
 		a.rateLimitStorage = memstore.NewMemoryStorage()
@@ -176,9 +175,9 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// Seed default policies if storage is empty
 	if exprs, err := a.policyRepo.ListAll(ctx); err == nil && len(exprs) == 0 {
 		defaults := []string{
-			// Organization permissions
-			"role:owner:create,read,update,delete on organization:*",
-			"role:admin:read,update on organization:*",
+			// App permissions (platform tenant)
+			"role:owner:create,read,update,delete on app:*",
+			"role:admin:read,update on app:*",
 			// Member permissions
 			"role:owner:create,read,update,delete on member:*",
 			"role:admin:create,read,update,delete on member:*",
@@ -227,7 +226,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	}, a.webhookService)
 	a.sessionService = session.NewService(sessionRepo, session.Config{}, a.webhookService)
 	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{})
-	a.organizationService = organization.NewService(orgRepo, organization.Config{ModeSaaS: a.config.Mode == ModeSaaS})
+	a.organizationService = app.NewService(orgRepo, app.Config{})
 
 	// Populate service registry BEFORE plugin initialization
 	// This allows plugins to access and decorate services
@@ -346,11 +345,10 @@ func (a *Auth) ensurePlatformOrganization(ctx context.Context) (*schema.Organiza
 	fmt.Println("[AuthSome] Platform organization not found, creating...")
 
 	platformOrg = schema.Organization{
-		ID:         xid.New(),
-		Name:       "Platform Organization",
-		Slug:       "platform",
-		IsPlatform: true,
-		Metadata:   map[string]interface{}{},
+		ID:       xid.New(),
+		Name:     "Platform Organization",
+		Slug:     "platform",
+		Metadata: map[string]interface{}{},
 	}
 	platformOrg.CreatedAt = time.Now()
 	platformOrg.UpdatedAt = time.Now()
@@ -396,7 +394,7 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	}
 	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.twofaRepo)
 	audH := handlers.NewAuditHandler(a.auditService)
-	orgH := handlers.NewOrganizationHandler(a.organizationService, a.rateLimitService, a.sessionService, a.rbacService, a.userRoleRepo, a.roleRepo, a.policyRepo, a.config.RBACEnforce)
+	appH := handlers.NewAppHandler(a.organizationService, a.rateLimitService, a.sessionService, a.rbacService, a.userRoleRepo, a.roleRepo, a.policyRepo, a.config.RBACEnforce)
 
 	// Phase 10 handlers
 	webhookH := handlers.NewWebhookHandler(a.webhookService)
@@ -420,20 +418,20 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 		}
 	}
 
-	// Only register built-in organization routes if multitenancy plugin is NOT enabled
-	// This prevents route duplication and allows the plugin to fully control org routes
+	// Only register built-in app routes if multitenancy plugin is NOT enabled
+	// This prevents route duplication and allows the plugin to fully control app routes
 	if !hasMultitenancyPlugin {
-		// Mount organization routes under basePath (not hardcoded)
-		routes.RegisterOrganization(router, basePath+"/organizations", orgH)
-		fmt.Println("[AuthSome] Registered built-in organization routes (multitenancy plugin not detected)")
+		// Mount app routes under basePath (not hardcoded)
+		routes.RegisterApp(router, basePath+"/apps", appH)
+		fmt.Println("[AuthSome] Registered built-in app routes (multitenancy plugin not detected)")
 	} else {
-		fmt.Println("[AuthSome] Skipping built-in organization routes (multitenancy plugin detected)")
+		fmt.Println("[AuthSome] Skipping built-in app routes (multitenancy plugin detected)")
 
 		// Register RBAC-related routes that the multitenancy plugin doesn't handle
 		// These are still needed even with the multitenancy plugin
-		rbacGroup := router.Group(basePath + "/organizations")
-		routes.RegisterOrganizationRBAC(rbacGroup, orgH)
-		fmt.Println("[AuthSome] Registered organization RBAC routes")
+		rbacGroup := router.Group(basePath + "/apps")
+		routes.RegisterAppRBAC(rbacGroup, appH)
+		fmt.Println("[AuthSome] Registered app RBAC routes")
 	}
 
 	// Phase 10 routes - create a scoped group for these routes
@@ -461,11 +459,6 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 // RegisterPlugin registers a plugin
 func (a *Auth) RegisterPlugin(plugin plugins.Plugin) error {
 	return a.pluginRegistry.Register(plugin)
-}
-
-// GetMode returns the current mode
-func (a *Auth) GetMode() Mode {
-	return a.config.Mode
 }
 
 // GetConfig returns the auth config
@@ -550,10 +543,10 @@ func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
 		return fmt.Errorf("failed to register auth service: %w", err)
 	}
 
-	if err := container.Register(ServiceOrganization, func(c forge.Container) (interface{}, error) {
+	if err := container.Register(ServiceApp, func(c forge.Container) (interface{}, error) {
 		return a.organizationService, nil
 	}); err != nil {
-		return fmt.Errorf("failed to register organization service: %w", err)
+		return fmt.Errorf("failed to register app service: %w", err)
 	}
 
 	if err := container.Register(ServiceRateLimit, func(c forge.Container) (interface{}, error) {

@@ -9,15 +9,18 @@ import (
 )
 
 // APIKey represents an API key for programmatic access
+// Updated for V2 architecture: App → Environment → Organization
 type APIKey struct {
 	bun.BaseModel `bun:"table:api_keys"`
 
 	// Primary key
 	ID xid.ID `bun:"id,pk" json:"id"`
 
-	// Organization and user context
-	OrgID  string `bun:"org_id,notnull" json:"org_id"`
-	UserID string `bun:"user_id,notnull" json:"user_id"`
+	// 3-tier context (V2 architecture)
+	AppID          xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appID"`                     // Platform tenant
+	EnvironmentID  *xid.ID `bun:"environment_id,type:varchar(20)" json:"environmentID,omitempty"`   // Optional: environment-scoped key
+	OrganizationID *xid.ID `bun:"organization_id,type:varchar(20)" json:"organizationID,omitempty"` // Optional: org-scoped key
+	UserID         xid.ID  `bun:"user_id,notnull,type:varchar(20)" json:"userID"`                   // User who created the key
 
 	// Key identification
 	Name        string `bun:"name,notnull" json:"name"`

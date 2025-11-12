@@ -13,6 +13,7 @@ type User struct {
 	bun.BaseModel  `bun:"table:users,alias:u"`
 
 	ID              xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID           *xid.ID    `bun:"app_id,type:varchar(20)"` // Optional app association
 	Email           string     `bun:"email,notnull,unique"`
 	EmailVerified   bool       `bun:"email_verified,notnull,default:false"`
 	EmailVerifiedAt *time.Time `bun:"email_verified_at"`

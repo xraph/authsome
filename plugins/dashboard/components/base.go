@@ -53,6 +53,9 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 				Script(Src(data.BasePath+"/dashboard/static/js/pines-components.js")),
 				Script(Src(data.BasePath+"/dashboard/static/js/dashboard.js")),
 
+				Link(Href("https://cdn.jsdelivr.net/npm/daisyui@5"), Rel("stylesheet"), Type("text/css")),
+				Script(Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
+
 				// Alpine.js - Load LAST
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
 			),

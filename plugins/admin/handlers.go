@@ -6,12 +6,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/xraph/authsome/core/user"
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
 )
 
 // Handler handles admin HTTP requests
+// Updated for V2 architecture: App → Environment → Organization
 type Handler struct {
 	service *Service
 }
@@ -25,27 +27,52 @@ func NewHandler(service *Service) *Handler {
 
 // CreateUser handles POST /admin/users
 func (h *Handler) CreateUser(c forge.Context) error {
-	var req CreateUserRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	userID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context required",
+		})
+	}
+
+	var reqBody struct {
+		Email         string            `json:"email"`
+		Password      string            `json:"password,omitempty"`
+		Name          string            `json:"name,omitempty"`
+		Username      string            `json:"username,omitempty"`
+		Role          string            `json:"role,omitempty"`
+		EmailVerified bool              `json:"email_verified"`
+		Metadata      map[string]string `json:"metadata,omitempty"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+	req := &CreateUserRequest{
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		Email:              reqBody.Email,
+		Password:           reqBody.Password,
+		Name:               reqBody.Name,
+		Username:           reqBody.Username,
+		Role:               reqBody.Role,
+		EmailVerified:      reqBody.EmailVerified,
+		Metadata:           reqBody.Metadata,
+		AdminID:            userID,
 	}
 
-	user, err := h.service.CreateUser(c.Request().Context(), &req)
+	user, err := h.service.CreateUser(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -57,6 +84,17 @@ func (h *Handler) CreateUser(c forge.Context) error {
 
 // ListUsers handles GET /admin/users
 func (h *Handler) ListUsers(c forge.Context) error {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	userID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context required",
+		})
+	}
+
 	// Parse query parameters
 	q := c.Request().URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -72,28 +110,22 @@ func (h *Handler) ListUsers(c forge.Context) error {
 	status := q.Get("status")
 	search := q.Get("search")
 	role := q.Get("role")
-	orgID := q.Get("organization_id")
+
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
 
 	req := &ListUsersRequest{
-		OrganizationID: orgID,
-		Page:           page,
-		Limit:          limit,
-		Search:         search,
-		Role:           role,
-		Status:         status,
-	}
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
-	}
-
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		Page:               page,
+		Limit:              limit,
+		Search:             search,
+		Role:               role,
+		Status:             status,
+		AdminID:            userID,
 	}
 
 	result, err := h.service.ListUsers(c.Request().Context(), req)
@@ -108,27 +140,31 @@ func (h *Handler) ListUsers(c forge.Context) error {
 
 // DeleteUser handles DELETE /admin/users/:id
 func (h *Handler) DeleteUser(c forge.Context) error {
-	userID := c.Param("id")
-	if userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "User ID is required",
-		})
-	}
+	// Extract V2 context
+	userID := interfaces.GetUserID(c.Request().Context())
 
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
+	if userID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Unauthorized",
 		})
 	}
 
-	var adminID string
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		adminID = adminUser.ID.String()
+	// Parse target user ID from URL
+	targetUserIDStr := c.Param("id")
+	if targetUserIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "User ID is required",
+		})
 	}
 
-	err := h.service.DeleteUser(c.Request().Context(), userID, adminID)
+	targetUserID, err := xid.FromString(targetUserIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid user ID",
+		})
+	}
+
+	err = h.service.DeleteUser(c.Request().Context(), targetUserID, userID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -142,36 +178,58 @@ func (h *Handler) DeleteUser(c forge.Context) error {
 
 // BanUser handles POST /admin/users/:id/ban
 func (h *Handler) BanUser(c forge.Context) error {
-	userID := c.Param("id")
-	if userID == "" {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	adminID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() || adminID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context and user required",
+		})
+	}
+
+	// Parse target user ID from URL
+	targetUserIDStr := c.Param("id")
+	if targetUserIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "User ID is required",
 		})
 	}
 
-	var req BanUserRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	targetUserID, err := xid.FromString(targetUserIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid user ID",
+		})
+	}
+
+	var reqBody struct {
+		Reason    string     `json:"reason"`
+		ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	req.UserID = userID
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+	req := &BanUserRequest{
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		UserID:             targetUserID,
+		Reason:             reqBody.Reason,
+		ExpiresAt:          reqBody.ExpiresAt,
+		AdminID:            adminID,
 	}
 
-	err := h.service.BanUser(c.Request().Context(), &req)
+	err = h.service.BanUser(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -185,36 +243,56 @@ func (h *Handler) BanUser(c forge.Context) error {
 
 // UnbanUser handles POST /admin/users/:id/unban
 func (h *Handler) UnbanUser(c forge.Context) error {
-	userID := c.Param("id")
-	if userID == "" {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	adminID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() || adminID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context and user required",
+		})
+	}
+
+	// Parse target user ID from URL
+	targetUserIDStr := c.Param("id")
+	if targetUserIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "User ID is required",
 		})
 	}
 
-	var req UnbanUserRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	targetUserID, err := xid.FromString(targetUserIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid user ID",
+		})
+	}
+
+	var reqBody struct {
+		Reason string `json:"reason,omitempty"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	req.UserID = userID
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+	req := &UnbanUserRequest{
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		UserID:             targetUserID,
+		Reason:             reqBody.Reason,
+		AdminID:            adminID,
 	}
 
-	err := h.service.UnbanUser(c.Request().Context(), &req)
+	err = h.service.UnbanUser(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -228,38 +306,58 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 
 // ImpersonateUser handles POST /admin/users/:id/impersonate
 func (h *Handler) ImpersonateUser(c forge.Context) error {
-	userID := c.Param("id")
-	if userID == "" {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	adminID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() || adminID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context and user required",
+		})
+	}
+
+	// Parse target user ID from URL
+	targetUserIDStr := c.Param("id")
+	if targetUserIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "User ID is required",
 		})
 	}
 
-	var req ImpersonateUserRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	targetUserID, err := xid.FromString(targetUserIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid user ID",
+		})
+	}
+
+	var reqBody struct {
+		Duration time.Duration `json:"duration,omitempty"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	req.UserID = userID
-	req.IPAddress = c.Request().RemoteAddr
-	req.UserAgent = c.Request().UserAgent()
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+	req := &ImpersonateUserRequest{
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		UserID:             targetUserID,
+		Duration:           reqBody.Duration,
+		IPAddress:          c.Request().RemoteAddr,
+		UserAgent:          c.Request().UserAgent(),
+		AdminID:            adminID,
 	}
 
-	session, err := h.service.ImpersonateUser(c.Request().Context(), &req)
+	session, err := h.service.ImpersonateUser(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -271,36 +369,56 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 
 // SetUserRole handles POST /admin/users/:id/role
 func (h *Handler) SetUserRole(c forge.Context) error {
-	userID := c.Param("id")
-	if userID == "" {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	adminID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() || adminID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context and user required",
+		})
+	}
+
+	// Parse target user ID from URL
+	targetUserIDStr := c.Param("id")
+	if targetUserIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "User ID is required",
 		})
 	}
 
-	var req SetUserRoleRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	targetUserID, err := xid.FromString(targetUserIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid user ID",
+		})
+	}
+
+	var reqBody struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	req.UserID = userID
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+	req := &SetUserRoleRequest{
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		UserID:             targetUserID,
+		Role:               reqBody.Role,
+		AdminID:            adminID,
 	}
 
-	err := h.service.SetUserRole(c.Request().Context(), &req)
+	err = h.service.SetUserRole(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -314,6 +432,17 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 
 // ListSessions handles GET /admin/sessions
 func (h *Handler) ListSessions(c forge.Context) error {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	adminID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() || adminID.IsNil() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "App context and user required",
+		})
+	}
+
 	// Parse query parameters
 	q := c.Request().URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -326,27 +455,27 @@ func (h *Handler) ListSessions(c forge.Context) error {
 		limit = 20
 	}
 
-	userID := q.Get("user_id")
-	orgID := q.Get("organization_id")
+	// Optional user ID filter
+	var userIDPtr *xid.ID
+	if userIDStr := q.Get("user_id"); userIDStr != "" {
+		if uid, err := xid.FromString(userIDStr); err == nil {
+			userIDPtr = &uid
+		}
+	}
+
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
 
 	req := &ListSessionsRequest{
-		UserID:         userID,
-		OrganizationID: orgID,
-		Page:           page,
-		Limit:          limit,
-	}
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
-	}
-
-	// Set admin ID from context
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		req.AdminID = adminUser.ID.String()
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		UserID:             userIDPtr,
+		Page:               page,
+		Limit:              limit,
+		AdminID:            adminID,
 	}
 
 	result, err := h.service.ListSessions(c.Request().Context(), req)
@@ -361,27 +490,31 @@ func (h *Handler) ListSessions(c forge.Context) error {
 
 // RevokeSession handles DELETE /admin/sessions/:id
 func (h *Handler) RevokeSession(c forge.Context) error {
-	sessionID := c.Param("id")
-	if sessionID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Session ID is required",
-		})
-	}
+	// Extract V2 context
+	adminID := interfaces.GetUserID(c.Request().Context())
 
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
+	if adminID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Unauthorized",
 		})
 	}
 
-	var adminID string
-	if adminUser, ok := adminUserValue.(*user.User); ok {
-		adminID = adminUser.ID.String()
+	// Parse session ID from URL
+	sessionIDStr := c.Param("id")
+	if sessionIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Session ID is required",
+		})
 	}
 
-	err := h.service.RevokeSession(c.Request().Context(), sessionID, adminID)
+	sessionID, err := xid.FromString(sessionIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid session ID",
+		})
+	}
+
+	err = h.service.RevokeSession(c.Request().Context(), sessionID, adminID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
@@ -396,8 +529,8 @@ func (h *Handler) RevokeSession(c forge.Context) error {
 // GetStats handles GET /admin/stats
 func (h *Handler) GetStats(c forge.Context) error {
 	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
+	adminID := interfaces.GetUserID(c.Request().Context())
+	if adminID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Unauthorized",
 		})
@@ -419,6 +552,14 @@ func (h *Handler) GetStats(c forge.Context) error {
 
 // GetAuditLogs handles GET /admin/audit
 func (h *Handler) GetAuditLogs(c forge.Context) error {
+	// Get admin user from context
+	adminID := interfaces.GetUserID(c.Request().Context())
+	if adminID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, map[string]string{
+			"error": "Unauthorized",
+		})
+	}
+
 	// Parse query parameters
 	q := c.Request().URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -429,14 +570,6 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 	pageSize, _ := strconv.Atoi(q.Get("page_size"))
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
-	}
-
-	// Get admin user from context
-	adminUserValue := c.Request().Context().Value("user")
-	if adminUserValue == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
 	}
 
 	// For now, return empty audit logs

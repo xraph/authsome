@@ -16,9 +16,10 @@ type SocialAccount struct {
 	UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
 
 	// User relationship
-	UserID         xid.ID `bun:",notnull"`
-	User           *User  `bun:"rel:belongs-to,join:user_id=id"`
-	OrganizationID xid.ID `bun:",notnull"` // Multi-tenant scoping
+	UserID             xid.ID  `bun:",notnull"`
+	User               *User   `bun:"rel:belongs-to,join:user_id=id"`
+	AppID              xid.ID  `bun:"app_id,notnull"`                        // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
 
 	// Provider information
 	Provider   string `bun:",notnull"` // google, github, microsoft, etc.

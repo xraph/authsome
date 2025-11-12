@@ -22,6 +22,7 @@ type DashboardStats struct {
 	SessionGrowth  float64
 	RecentActivity []ActivityItem
 	SystemStatus   []StatusItem
+	Plugins        []PluginItem
 }
 
 // ActivityItem represents a recent activity entry
@@ -37,6 +38,16 @@ type StatusItem struct {
 	Name   string
 	Status string // operational, degraded, down
 	Color  string // green, yellow, red
+}
+
+// PluginItem represents a plugin entry
+type PluginItem struct {
+	ID          string
+	Name        string
+	Description string
+	Category    string
+	Status      string // enabled, disabled
+	Icon        string // lucide icon name
 }
 
 // getDashboardStats fetches dashboard statistics
@@ -105,6 +116,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 		SessionGrowth:  sessionGrowth,
 		RecentActivity: h.getRecentActivity(ctx),
 		SystemStatus:   h.getSystemStatus(),
+		Plugins:        h.getPluginInfo(),
 	}
 
 	return stats, nil
@@ -271,4 +283,66 @@ func formatTimeAgo(t time.Time) string {
 	default:
 		return t.Format("Jan 2, 2006")
 	}
+}
+
+// Plugin metadata map
+var pluginMetadata = map[string]struct {
+	Name        string
+	Description string
+	Category    string
+	Icon        string
+}{
+	"dashboard":      {"Admin Dashboard", "Web-based administration interface", "core", "LayoutDashboard"},
+	"username":       {"Username Auth", "Username/password authentication", "authentication", "User"},
+	"twofa":          {"Two-Factor Auth", "TOTP-based two-factor authentication", "security", "ShieldCheck"},
+	"mfa":            {"Multi-Factor Auth", "Advanced multi-factor authentication", "security", "Shield"},
+	"anonymous":      {"Anonymous Auth", "Guest user authentication", "authentication", "UserCircle"},
+	"multitenancy":   {"Multi-Tenancy", "Organization and tenant management", "core", "Building2"},
+	"emailotp":       {"Email OTP", "One-time password via email", "authentication", "Mail"},
+	"magiclink":      {"Magic Link", "Passwordless login via email links", "authentication", "Link"},
+	"phone":          {"Phone Auth", "SMS-based authentication", "authentication", "Phone"},
+	"passkey":        {"Passkeys", "WebAuthn passwordless authentication", "security", "Fingerprint"},
+	"sso":            {"SSO", "Single Sign-On integration", "authentication", "LogIn"},
+	"social":         {"Social Login", "OAuth social providers", "authentication", "Share2"},
+	"multisession":   {"Multi-Session", "Multiple concurrent sessions", "session", "Layers"},
+	"oidcprovider":   {"OIDC Provider", "OpenID Connect provider", "authentication", "Key"},
+	"jwt":            {"JWT", "JSON Web Token authentication", "authentication", "FileJson"},
+	"bearer":         {"Bearer Tokens", "Bearer token authentication", "authentication", "Hash"},
+	"apikey":         {"API Keys", "API key management", "authentication", "KeyRound"},
+	"impersonation":  {"User Impersonation", "Admin user impersonation", "administration", "Users"},
+	"permissions":    {"Permissions", "Advanced permission system", "security", "ShieldAlert"},
+	"notification":   {"Notifications", "Email and SMS notifications", "communication", "Bell"},
+	"mcp":            {"MCP Server", "Model Context Protocol server", "integration", "Server"},
+	"backupauth":     {"Backup Auth", "Backup authentication codes", "security", "Archive"},
+	"compliance":     {"Compliance", "GDPR and compliance tools", "enterprise", "FileCheck"},
+	"consent":        {"Consent Management", "User consent tracking", "enterprise", "ClipboardCheck"},
+	"geofence":       {"Geofencing", "Location-based access control", "enterprise", "MapPin"},
+	"idverification": {"ID Verification", "Identity verification", "enterprise", "BadgeCheck"},
+	"mtls":           {"mTLS", "Mutual TLS authentication", "enterprise", "ShieldCheck"},
+	"scim":           {"SCIM", "System for Cross-domain Identity Management", "enterprise", "Network"},
+	"stepup":         {"Step-Up Auth", "Additional authentication for sensitive operations", "security", "Lock"},
+}
+
+// getPluginInfo returns information about installed plugins
+func (h *Handler) getPluginInfo() []PluginItem {
+	plugins := make([]PluginItem, 0)
+
+	// Iterate through all known plugins
+	for id, meta := range pluginMetadata {
+		status := "disabled"
+		if h.enabledPlugins[id] {
+			status = "enabled"
+		}
+
+		plugins = append(plugins, PluginItem{
+			ID:          id,
+			Name:        meta.Name,
+			Description: meta.Description,
+			Category:    meta.Category,
+			Status:      status,
+			Icon:        meta.Icon,
+		})
+	}
+
+	return plugins
 }

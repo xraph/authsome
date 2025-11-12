@@ -7,14 +7,14 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/interfaces"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/authsome/plugins/multitenancy/app"
 	"github.com/xraph/authsome/types"
 )
 
 // MultiTenantUserService decorates the user service with multi-tenancy support
 type MultiTenantUserService struct {
 	userService user.ServiceInterface
-	orgService  *organization.Service
+	appService  *app.Service
 }
 
 func (s *MultiTenantUserService) Count(ctx context.Context) (int, error) {
@@ -22,24 +22,24 @@ func (s *MultiTenantUserService) Count(ctx context.Context) (int, error) {
 }
 
 // NewMultiTenantUserService creates a new multi-tenant user service decorator
-func NewMultiTenantUserService(userService user.ServiceInterface, orgService *organization.Service) *MultiTenantUserService {
+func NewMultiTenantUserService(userService user.ServiceInterface, appService *app.Service) *MultiTenantUserService {
 	return &MultiTenantUserService{
 		userService: userService,
-		orgService:  orgService,
+		appService:  appService,
 	}
 }
 
-// Create creates a new user within an organization context
+// Create creates a new user within an app context
 func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
+	// Get app context
+	appID := s.getAppFromContext(ctx)
 
 	usersCount, err := s.userService.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("[MultiTenancy] Users count: %d, orgID: %s\n", usersCount, orgID.String())
+	fmt.Printf("[MultiTenancy] Users count: %d, appID: %s\n", usersCount, appID.String())
 
 	if usersCount == 0 {
 		// No users exist yet - this is the first user (system owner)
@@ -52,11 +52,11 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	}
 
 	// Special case: First user creation (system owner)
-	// If no organization context is provided, check if this is the very first user
+	// If no app context is provided, check if this is the very first user
 	// The first user will create the platform organization via hooks
-	if orgID.IsNil() {
+	if appID.IsNil() {
 		// Check if there are any organizations yet
-		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
+		orgs, err := s.appService.ListApps(ctx, 1, 0)
 		if err != nil || len(orgs) == 0 {
 			// No organizations exist yet - this is the first user (system owner)
 			// Create user without organization membership
@@ -71,11 +71,11 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 		}
 
 		// Organizations exist but no context provided - error
-		return nil, fmt.Errorf("organization context required")
+		return nil, fmt.Errorf("app context required")
 	}
 
 	// Validate organization exists
-	_, err = s.orgService.GetOrganization(ctx, orgID)
+	_, err = s.appService.GetApp(ctx, appID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid organization: %w", err)
 	}
@@ -87,7 +87,7 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	}
 
 	// Add user as member of the organization
-	_, err = s.orgService.AddMember(ctx, orgID, newUser.ID, organization.RoleMember)
+	_, err = s.appService.AddMember(ctx, appID, newUser.ID, app.RoleMember)
 	if err != nil {
 		// TODO: Consider rollback strategy
 		return nil, fmt.Errorf("failed to add user to organization: %w", err)
@@ -96,12 +96,12 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	return newUser, nil
 }
 
-// FindByID finds a user by ID within organization context
+// FindByID finds a user by ID within app context
 func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user.User, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
-	if orgID.IsNil() {
-		return nil, fmt.Errorf("organization context required")
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if appID.IsNil() {
+		return nil, fmt.Errorf("app context required")
 	}
 
 	// Find user using original service
@@ -111,7 +111,7 @@ func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID)
+	isMember, err := s.appService.IsUserMember(ctx, appID, foundUser.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -122,14 +122,14 @@ func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user
 	return foundUser, nil
 }
 
-// FindByEmail finds a user by email within organization context
+// FindByEmail finds a user by email within app context
 func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) (*user.User, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
+	// Get app context
+	appID := s.getAppFromContext(ctx)
 
 	// Special case: First user lookup (platform owner login)
-	// If no organization context is provided, check if this user is the platform owner
-	if orgID.IsNil() {
+	// If no app context is provided, check if this user is the platform owner
+	if appID.IsNil() {
 		// Find user using original service
 		foundUser, err := s.userService.FindByEmail(ctx, email)
 		if err != nil {
@@ -138,7 +138,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 
 		// Check if this user is a member of the platform organization
 		// Platform owners can login without explicit org context
-		platformOrg, err := s.orgService.GetOrganizationBySlug(ctx, "platform")
+		platformOrg, err := s.appService.GetAppBySlug(ctx, "platform")
 		if err != nil {
 			// Platform org doesn't exist yet - might be during first user setup
 			fmt.Printf("[MultiTenancy] No platform org found, allowing user lookup: %s\n", email)
@@ -146,10 +146,10 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 		}
 
 		// Check if user is platform member
-		isMember, err := s.orgService.IsMember(ctx, platformOrg.ID, foundUser.ID)
+		isMember, err := s.appService.IsMember(ctx, platformOrg.ID, foundUser.ID)
 		if err != nil || !isMember {
 			// User is not a platform member - require org context
-			return nil, fmt.Errorf("organization context required")
+			return nil, fmt.Errorf("app context required")
 		}
 
 		fmt.Printf("[MultiTenancy] Platform user login without org context: %s\n", email)
@@ -163,7 +163,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID)
+	isMember, err := s.appService.IsUserMember(ctx, appID, foundUser.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -174,12 +174,12 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 	return foundUser, nil
 }
 
-// FindByUsername finds a user by username within organization context
+// FindByUsername finds a user by username within app context
 func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username string) (*user.User, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
-	if orgID.IsNil() {
-		return nil, fmt.Errorf("organization context required")
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if appID.IsNil() {
+		return nil, fmt.Errorf("app context required")
 	}
 
 	// Find user using original service
@@ -189,7 +189,7 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, foundUser.ID)
+	isMember, err := s.appService.IsUserMember(ctx, appID, foundUser.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -200,16 +200,16 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 	return foundUser, nil
 }
 
-// Update updates a user within organization context
+// Update updates a user within app context
 func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *user.UpdateUserRequest) (*user.User, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
+	// Get app context
+	appID := s.getAppFromContext(ctx)
 
 	// Special case: First user update (e.g., email verification during signup)
-	// If no organization context and no organizations exist yet, allow the update
-	if orgID.IsNil() {
+	// If no app context and no organizations exist yet, allow the update
+	if appID.IsNil() {
 		// Check if there are any organizations yet
-		orgs, err := s.orgService.ListOrganizations(ctx, 1, 0)
+		orgs, err := s.appService.ListApps(ctx, 1, 0)
 		if err != nil || len(orgs) == 0 {
 			// No organizations exist yet - this is the first user
 			// Allow update without organization check (e.g., for email verification)
@@ -218,11 +218,11 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 		}
 
 		// Organizations exist but no context provided - error
-		return nil, fmt.Errorf("organization context required")
+		return nil, fmt.Errorf("app context required")
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID)
+	isMember, err := s.appService.IsUserMember(ctx, appID, u.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -234,16 +234,16 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 	return s.userService.Update(ctx, u, req)
 }
 
-// Delete deletes a user within organization context
+// Delete deletes a user within app context
 func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
-	if orgID.IsNil() {
-		return fmt.Errorf("organization context required")
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if appID.IsNil() {
+		return fmt.Errorf("app context required")
 	}
 
 	// Check if user is member of the organization
-	isMember, err := s.orgService.IsUserMember(ctx, orgID, id)
+	isMember, err := s.appService.IsUserMember(ctx, appID, id)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	}
 
 	// Remove user from organization first
-	err = s.orgService.RemoveUserFromAllOrganizations(ctx, id)
+	err = s.appService.RemoveUserFromAllApps(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to remove user from organizations: %w", err)
 	}
@@ -261,19 +261,19 @@ func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	return s.userService.Delete(ctx, id)
 }
 
-// List lists users within organization context
+// List lists users within app context
 func (s *MultiTenantUserService) List(ctx context.Context, opts types.PaginationOptions) ([]*user.User, int, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
-	if orgID.IsNil() {
-		return nil, 0, fmt.Errorf("organization context required")
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if appID.IsNil() {
+		return nil, 0, fmt.Errorf("app context required")
 	}
 
 	// Calculate offset from page and page size
 	offset := (opts.Page - 1) * opts.PageSize
 
 	// Get organization members
-	members, err := s.orgService.ListMembers(ctx, orgID, opts.PageSize, offset)
+	members, err := s.appService.ListMembers(ctx, appID, opts.PageSize, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list organization members: %w", err)
 	}
@@ -297,22 +297,22 @@ func (s *MultiTenantUserService) List(ctx context.Context, opts types.Pagination
 	return users, len(users), nil
 }
 
-// GetOrganizationContext gets the organization ID from context
-func (s *MultiTenantUserService) GetOrganizationContext(ctx context.Context) xid.ID {
-	return s.getOrganizationFromContext(ctx)
+// GetAppContext gets the organization ID from context
+func (s *MultiTenantUserService) GetAppContext(ctx context.Context) xid.ID {
+	return s.getAppFromContext(ctx)
 }
 
 // SetOrganizationContext sets the organization ID in context
-func (s *MultiTenantUserService) SetOrganizationContext(ctx context.Context, orgID string) context.Context {
-	return context.WithValue(ctx, interfaces.OrganizationContextKey, orgID)
+func (s *MultiTenantUserService) SetOrganizationContext(ctx context.Context, appID string) context.Context {
+	return context.WithValue(ctx, interfaces.OrganizationContextKey, appID)
 }
 
-// Search searches for users within organization context
+// Search searches for users within app context
 func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*user.User, int, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
-	if orgID.IsNil() {
-		return nil, 0, fmt.Errorf("organization context required")
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if appID.IsNil() {
+		return nil, 0, fmt.Errorf("app context required")
 	}
 
 	// Search users using original service
@@ -324,7 +324,7 @@ func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts 
 	// Filter users by organization membership
 	filteredUsers := make([]*user.User, 0)
 	for _, u := range users {
-		isMember, err := s.orgService.IsUserMember(ctx, orgID, u.ID)
+		isMember, err := s.appService.IsUserMember(ctx, appID, u.ID)
 		if err != nil {
 			continue // Skip on error
 		}
@@ -336,12 +336,12 @@ func (s *MultiTenantUserService) Search(ctx context.Context, query string, opts 
 	return filteredUsers, len(filteredUsers), nil
 }
 
-// CountCreatedToday counts users created today within organization context
+// CountCreatedToday counts users created today within app context
 func (s *MultiTenantUserService) CountCreatedToday(ctx context.Context) (int, error) {
-	// Get organization context
-	orgID := s.getOrganizationFromContext(ctx)
-	if orgID.IsNil() {
-		return 0, fmt.Errorf("organization context required")
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if appID.IsNil() {
+		return 0, fmt.Errorf("app context required")
 	}
 
 	// For now, delegate to the original service
@@ -349,11 +349,11 @@ func (s *MultiTenantUserService) CountCreatedToday(ctx context.Context) (int, er
 	return s.userService.CountCreatedToday(ctx)
 }
 
-// getOrganizationFromContext extracts organization ID from context
-func (s *MultiTenantUserService) getOrganizationFromContext(ctx context.Context) xid.ID {
-	orgID, err := interfaces.GetOrganizationID(ctx)
+// getAppFromContext extracts organization ID from context
+func (s *MultiTenantUserService) getAppFromContext(ctx context.Context) xid.ID {
+	appID, err := interfaces.GetAppID(ctx)
 	if err != nil {
 		return xid.NilID()
 	}
-	return orgID
+	return appID
 }

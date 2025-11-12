@@ -18,7 +18,20 @@ type contextKey string
 
 const (
 	OrganizationContextKey contextKey = "organization_id"
+	AppContextKey          contextKey = "app_id"
 )
+
+func GetAppID(ctx context.Context) (xid.ID, error) {
+	appID, ok := ctx.Value(AppContextKey).(xid.ID)
+	if !ok {
+		return xid.ID{}, errors.New("app context not found")
+	}
+	return appID, nil
+}
+
+func SetAppID(ctx context.Context, appID xid.ID) context.Context {
+	return context.WithValue(ctx, AppContextKey, appID)
+}
 
 func GetOrganizationID(ctx context.Context) (xid.ID, error) {
 	orgID, ok := ctx.Value(OrganizationContextKey).(xid.ID)

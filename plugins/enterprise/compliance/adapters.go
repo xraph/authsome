@@ -117,9 +117,9 @@ func (a *UserServiceAdapter) GetMFAStatus(ctx context.Context, userID string) (b
 	return false, nil
 }
 
-// OrganizationServiceAdapter adapts the organization service (from multi-tenancy plugin)
+// OrganizationServiceAdapter adapts the app service (from multi-tenancy plugin)
 type OrganizationServiceAdapter struct {
-	svc interface{} // Will be organization.Service when multi-tenancy plugin is loaded
+	svc interface{} // Will be app.Service when multi-tenancy plugin is loaded
 }
 
 // NewOrganizationServiceAdapter creates a new organization service adapter

@@ -5,13 +5,13 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/notification"
-	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/security"
@@ -98,17 +98,17 @@ func ResolveAuthService(container forge.Container) (auth.ServiceInterface, error
 	return authSvc, nil
 }
 
-// ResolveOrganizationService resolves the organization service from the container
-func ResolveOrganizationService(container forge.Container) (*organization.Service, error) {
-	svc, err := container.Resolve(ServiceOrganization)
+// ResolveAppService resolves the app service from the container
+func ResolveAppService(container forge.Container) (*app.Service, error) {
+	svc, err := container.Resolve(ServiceApp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve organization service: %w", err)
+		return nil, fmt.Errorf("failed to resolve app service: %w", err)
 	}
-	orgSvc, ok := svc.(*organization.Service)
+	appSvc, ok := svc.(*app.Service)
 	if !ok {
-		return nil, fmt.Errorf("organization service has invalid type")
+		return nil, fmt.Errorf("app service has invalid type")
 	}
-	return orgSvc, nil
+	return appSvc, nil
 }
 
 // ResolveRateLimitService resolves the rate limit service from the container

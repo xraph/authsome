@@ -14,7 +14,7 @@ type Repository interface {
 	// Security Questions
 	CreateSecurityQuestion(ctx context.Context, q *SecurityQuestion) error
 	GetSecurityQuestion(ctx context.Context, id xid.ID) (*SecurityQuestion, error)
-	GetSecurityQuestionsByUser(ctx context.Context, userID xid.ID, orgID string) ([]*SecurityQuestion, error)
+	GetSecurityQuestionsByUser(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) ([]*SecurityQuestion, error)
 	UpdateSecurityQuestion(ctx context.Context, q *SecurityQuestion) error
 	DeleteSecurityQuestion(ctx context.Context, id xid.ID) error
 	IncrementQuestionFailedAttempts(ctx context.Context, id xid.ID) error
@@ -22,19 +22,19 @@ type Repository interface {
 	// Trusted Contacts
 	CreateTrustedContact(ctx context.Context, tc *TrustedContact) error
 	GetTrustedContact(ctx context.Context, id xid.ID) (*TrustedContact, error)
-	GetTrustedContactsByUser(ctx context.Context, userID xid.ID, orgID string) ([]*TrustedContact, error)
+	GetTrustedContactsByUser(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) ([]*TrustedContact, error)
 	GetTrustedContactByToken(ctx context.Context, token string) (*TrustedContact, error)
 	UpdateTrustedContact(ctx context.Context, tc *TrustedContact) error
 	DeleteTrustedContact(ctx context.Context, id xid.ID) error
-	CountActiveTrustedContacts(ctx context.Context, userID xid.ID, orgID string) (int, error)
+	CountActiveTrustedContacts(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) (int, error)
 
 	// Recovery Sessions
 	CreateRecoverySession(ctx context.Context, rs *RecoverySession) error
 	GetRecoverySession(ctx context.Context, id xid.ID) (*RecoverySession, error)
 	UpdateRecoverySession(ctx context.Context, rs *RecoverySession) error
 	DeleteRecoverySession(ctx context.Context, id xid.ID) error
-	GetActiveRecoverySession(ctx context.Context, userID xid.ID, orgID string) (*RecoverySession, error)
-	ListRecoverySessions(ctx context.Context, orgID string, status RecoveryStatus, requiresReview bool, limit, offset int) ([]*RecoverySession, int, error)
+	GetActiveRecoverySession(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) (*RecoverySession, error)
+	ListRecoverySessions(ctx context.Context, appID xid.ID, userOrganizationID *xid.ID, status RecoveryStatus, requiresReview bool, limit, offset int) ([]*RecoverySession, int, error)
 	ExpireRecoverySessions(ctx context.Context, before time.Time) (int, error)
 	IncrementSessionAttempts(ctx context.Context, id xid.ID) error
 
@@ -55,20 +55,20 @@ type Repository interface {
 	// Recovery Attempt Logs
 	CreateRecoveryLog(ctx context.Context, log *RecoveryAttemptLog) error
 	GetRecoveryLogs(ctx context.Context, recoveryID xid.ID) ([]*RecoveryAttemptLog, error)
-	GetRecoveryLogsByUser(ctx context.Context, userID xid.ID, orgID string, limit int) ([]*RecoveryAttemptLog, error)
+	GetRecoveryLogsByUser(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, limit int) ([]*RecoveryAttemptLog, error)
 
 	// Recovery Configuration
 	CreateRecoveryConfig(ctx context.Context, rc *RecoveryConfiguration) error
-	GetRecoveryConfig(ctx context.Context, orgID string) (*RecoveryConfiguration, error)
+	GetRecoveryConfig(ctx context.Context, appID xid.ID, userOrganizationID *xid.ID) (*RecoveryConfiguration, error)
 	UpdateRecoveryConfig(ctx context.Context, rc *RecoveryConfiguration) error
 
 	// Recovery Code Usage
 	CreateRecoveryCodeUsage(ctx context.Context, rcu *RecoveryCodeUsage) error
-	GetRecoveryCodeUsage(ctx context.Context, userID xid.ID, orgID string, codeHash string) (*RecoveryCodeUsage, error)
-	GetRecentRecoveryAttempts(ctx context.Context, userID xid.ID, orgID string, since time.Time) (int, error)
+	GetRecoveryCodeUsage(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, codeHash string) (*RecoveryCodeUsage, error)
+	GetRecentRecoveryAttempts(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, since time.Time) (int, error)
 
 	// Analytics
-	GetRecoveryStats(ctx context.Context, orgID string, startDate, endDate time.Time) (map[string]interface{}, error)
+	GetRecoveryStats(ctx context.Context, appID xid.ID, userOrganizationID *xid.ID, startDate, endDate time.Time) (map[string]interface{}, error)
 }
 
 // BunRepository implements Repository using Bun ORM
@@ -99,14 +99,20 @@ func (r *BunRepository) GetSecurityQuestion(ctx context.Context, id xid.ID) (*Se
 	return q, err
 }
 
-func (r *BunRepository) GetSecurityQuestionsByUser(ctx context.Context, userID xid.ID, orgID string) ([]*SecurityQuestion, error) {
+func (r *BunRepository) GetSecurityQuestionsByUser(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) ([]*SecurityQuestion, error) {
 	var questions []*SecurityQuestion
-	err := r.db.NewSelect().Model(&questions).
+	q := r.db.NewSelect().Model(&questions).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
-		Where("is_active = ?", true).
-		Order("created_at ASC").
-		Scan(ctx)
+		Where("app_id = ?", appID).
+		Where("is_active = ?", true)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Order("created_at ASC").Scan(ctx)
 	if err == sql.ErrNoRows {
 		return []*SecurityQuestion{}, nil
 	}
@@ -150,14 +156,20 @@ func (r *BunRepository) GetTrustedContact(ctx context.Context, id xid.ID) (*Trus
 	return tc, err
 }
 
-func (r *BunRepository) GetTrustedContactsByUser(ctx context.Context, userID xid.ID, orgID string) ([]*TrustedContact, error) {
+func (r *BunRepository) GetTrustedContactsByUser(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) ([]*TrustedContact, error) {
 	var contacts []*TrustedContact
-	err := r.db.NewSelect().Model(&contacts).
+	q := r.db.NewSelect().Model(&contacts).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
-		Where("is_active = ?", true).
-		Order("created_at DESC").
-		Scan(ctx)
+		Where("app_id = ?", appID).
+		Where("is_active = ?", true)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Order("created_at DESC").Scan(ctx)
 	if err == sql.ErrNoRows {
 		return []*TrustedContact{}, nil
 	}
@@ -186,12 +198,19 @@ func (r *BunRepository) DeleteTrustedContact(ctx context.Context, id xid.ID) err
 	return err
 }
 
-func (r *BunRepository) CountActiveTrustedContacts(ctx context.Context, userID xid.ID, orgID string) (int, error) {
-	count, err := r.db.NewSelect().Model((*TrustedContact)(nil)).
+func (r *BunRepository) CountActiveTrustedContacts(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) (int, error) {
+	q := r.db.NewSelect().Model((*TrustedContact)(nil)).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
-		Where("is_active = ?", true).
-		Count(ctx)
+		Where("app_id = ?", appID).
+		Where("is_active = ?", true)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	count, err := q.Count(ctx)
 	return count, err
 }
 
@@ -223,28 +242,37 @@ func (r *BunRepository) DeleteRecoverySession(ctx context.Context, id xid.ID) er
 	return err
 }
 
-func (r *BunRepository) GetActiveRecoverySession(ctx context.Context, userID xid.ID, orgID string) (*RecoverySession, error) {
+func (r *BunRepository) GetActiveRecoverySession(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) (*RecoverySession, error) {
 	rs := new(RecoverySession)
-	err := r.db.NewSelect().Model(rs).
+	q := r.db.NewSelect().Model(rs).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Where("status IN (?)", bun.In([]RecoveryStatus{RecoveryStatusPending, RecoveryStatusInProgress})).
-		Where("expires_at > ?", time.Now()).
-		Order("created_at DESC").
-		Limit(1).
-		Scan(ctx)
+		Where("expires_at > ?", time.Now())
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Order("created_at DESC").Limit(1).Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	return rs, err
 }
 
-func (r *BunRepository) ListRecoverySessions(ctx context.Context, orgID string, status RecoveryStatus, requiresReview bool, limit, offset int) ([]*RecoverySession, int, error) {
-	query := r.db.NewSelect().Model((*RecoverySession)(nil))
+func (r *BunRepository) ListRecoverySessions(ctx context.Context, appID xid.ID, userOrganizationID *xid.ID, status RecoveryStatus, requiresReview bool, limit, offset int) ([]*RecoverySession, int, error) {
+	query := r.db.NewSelect().Model((*RecoverySession)(nil)).
+		Where("app_id = ?", appID)
 
-	if orgID != "" {
-		query = query.Where("organization_id = ?", orgID)
+	if userOrganizationID != nil {
+		query = query.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		query = query.Where("user_organization_id IS NULL")
 	}
+
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -387,14 +415,19 @@ func (r *BunRepository) GetRecoveryLogs(ctx context.Context, recoveryID xid.ID) 
 	return logs, err
 }
 
-func (r *BunRepository) GetRecoveryLogsByUser(ctx context.Context, userID xid.ID, orgID string, limit int) ([]*RecoveryAttemptLog, error) {
+func (r *BunRepository) GetRecoveryLogsByUser(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, limit int) ([]*RecoveryAttemptLog, error) {
 	var logs []*RecoveryAttemptLog
-	err := r.db.NewSelect().Model(&logs).
+	q := r.db.NewSelect().Model(&logs).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
-		Order("created_at DESC").
-		Limit(limit).
-		Scan(ctx)
+		Where("app_id = ?", appID)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Order("created_at DESC").Limit(limit).Scan(ctx)
 	if err == sql.ErrNoRows {
 		return []*RecoveryAttemptLog{}, nil
 	}
@@ -409,9 +442,17 @@ func (r *BunRepository) CreateRecoveryConfig(ctx context.Context, rc *RecoveryCo
 	return err
 }
 
-func (r *BunRepository) GetRecoveryConfig(ctx context.Context, orgID string) (*RecoveryConfiguration, error) {
+func (r *BunRepository) GetRecoveryConfig(ctx context.Context, appID xid.ID, userOrganizationID *xid.ID) (*RecoveryConfiguration, error) {
 	rc := new(RecoveryConfiguration)
-	err := r.db.NewSelect().Model(rc).Where("organization_id = ?", orgID).Scan(ctx)
+	q := r.db.NewSelect().Model(rc).Where("app_id = ?", appID)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, ErrRecoveryNotConfigured
 	}
@@ -431,46 +472,69 @@ func (r *BunRepository) CreateRecoveryCodeUsage(ctx context.Context, rcu *Recove
 	return err
 }
 
-func (r *BunRepository) GetRecoveryCodeUsage(ctx context.Context, userID xid.ID, orgID string, codeHash string) (*RecoveryCodeUsage, error) {
+func (r *BunRepository) GetRecoveryCodeUsage(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, codeHash string) (*RecoveryCodeUsage, error) {
 	rcu := new(RecoveryCodeUsage)
-	err := r.db.NewSelect().Model(rcu).
+	q := r.db.NewSelect().Model(rcu).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
-		Where("code_hash = ?", codeHash).
-		Scan(ctx)
+		Where("app_id = ?", appID).
+		Where("code_hash = ?", codeHash)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	return rcu, err
 }
 
-func (r *BunRepository) GetRecentRecoveryAttempts(ctx context.Context, userID xid.ID, orgID string, since time.Time) (int, error) {
-	count, err := r.db.NewSelect().Model((*RecoveryAttemptLog)(nil)).
+func (r *BunRepository) GetRecentRecoveryAttempts(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, since time.Time) (int, error) {
+	q := r.db.NewSelect().Model((*RecoveryAttemptLog)(nil)).
 		Where("user_id = ?", userID).
-		Where("organization_id = ?", orgID).
-		Where("created_at > ?", since).
-		Count(ctx)
+		Where("app_id = ?", appID).
+		Where("created_at > ?", since)
+
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	count, err := q.Count(ctx)
 	return count, err
 }
 
 // ===== Analytics =====
 
-func (r *BunRepository) GetRecoveryStats(ctx context.Context, orgID string, startDate, endDate time.Time) (map[string]interface{}, error) {
+func (r *BunRepository) GetRecoveryStats(ctx context.Context, appID xid.ID, userOrganizationID *xid.ID, startDate, endDate time.Time) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
+	// Helper to add app/org filters
+	addOrgFilter := func(q *bun.SelectQuery) *bun.SelectQuery {
+		q = q.Where("app_id = ?", appID)
+		if userOrganizationID != nil {
+			q = q.Where("user_organization_id = ?", *userOrganizationID)
+		} else {
+			q = q.Where("user_organization_id IS NULL")
+		}
+		return q
+	}
+
 	// Total attempts
-	totalAttempts, err := r.db.NewSelect().Model((*RecoverySession)(nil)).
-		Where("organization_id = ?", orgID).
-		Where("created_at BETWEEN ? AND ?", startDate, endDate).
-		Count(ctx)
+	q := addOrgFilter(r.db.NewSelect().Model((*RecoverySession)(nil)))
+	totalAttempts, err := q.Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(ctx)
 	if err != nil {
 		return nil, err
 	}
 	stats["totalAttempts"] = totalAttempts
 
 	// Successful recoveries
-	successfulRecoveries, err := r.db.NewSelect().Model((*RecoverySession)(nil)).
-		Where("organization_id = ?", orgID).
+	q = addOrgFilter(r.db.NewSelect().Model((*RecoverySession)(nil)))
+	successfulRecoveries, err := q.
 		Where("status = ?", RecoveryStatusCompleted).
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Count(ctx)
@@ -480,8 +544,8 @@ func (r *BunRepository) GetRecoveryStats(ctx context.Context, orgID string, star
 	stats["successfulRecoveries"] = successfulRecoveries
 
 	// Failed recoveries
-	failedRecoveries, err := r.db.NewSelect().Model((*RecoverySession)(nil)).
-		Where("organization_id = ?", orgID).
+	q = addOrgFilter(r.db.NewSelect().Model((*RecoverySession)(nil)))
+	failedRecoveries, err := q.
 		Where("status = ?", RecoveryStatusFailed).
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Count(ctx)
@@ -491,8 +555,8 @@ func (r *BunRepository) GetRecoveryStats(ctx context.Context, orgID string, star
 	stats["failedRecoveries"] = failedRecoveries
 
 	// Pending recoveries
-	pendingRecoveries, err := r.db.NewSelect().Model((*RecoverySession)(nil)).
-		Where("organization_id = ?", orgID).
+	q = addOrgFilter(r.db.NewSelect().Model((*RecoverySession)(nil)))
+	pendingRecoveries, err := q.
 		Where("status IN (?)", bun.In([]RecoveryStatus{RecoveryStatusPending, RecoveryStatusInProgress})).
 		Count(ctx)
 	if err != nil {
@@ -501,8 +565,8 @@ func (r *BunRepository) GetRecoveryStats(ctx context.Context, orgID string, star
 	stats["pendingRecoveries"] = pendingRecoveries
 
 	// High risk attempts
-	highRiskAttempts, err := r.db.NewSelect().Model((*RecoverySession)(nil)).
-		Where("organization_id = ?", orgID).
+	q = addOrgFilter(r.db.NewSelect().Model((*RecoverySession)(nil)))
+	highRiskAttempts, err := q.
 		Where("risk_score > ?", 70.0).
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Count(ctx)
@@ -512,8 +576,8 @@ func (r *BunRepository) GetRecoveryStats(ctx context.Context, orgID string, star
 	stats["highRiskAttempts"] = highRiskAttempts
 
 	// Admin reviews required
-	adminReviewsRequired, err := r.db.NewSelect().Model((*RecoverySession)(nil)).
-		Where("organization_id = ?", orgID).
+	q = addOrgFilter(r.db.NewSelect().Model((*RecoverySession)(nil)))
+	adminReviewsRequired, err := q.
 		Where("requires_review = ?", true).
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Count(ctx)

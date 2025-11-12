@@ -6,10 +6,12 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/impersonation"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/forge"
 )
 
 // Handler handles impersonation HTTP requests
+// Updated for V2 architecture: App → Environment → Organization
 type Handler struct {
 	service *impersonation.Service
 	config  Config
@@ -25,23 +27,57 @@ func NewHandler(service *impersonation.Service, config Config) *Handler {
 
 // StartImpersonation handles POST /impersonation/start
 func (h *Handler) StartImpersonation(c forge.Context) error {
-	var req impersonation.StartRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	userID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{
+			"error": "App context required",
+		})
+	}
+
+	var reqBody struct {
+		TargetUserID    string `json:"target_user_id"`
+		Reason          string `json:"reason"`
+		TicketNumber    string `json:"ticket_number,omitempty"`
+		DurationMinutes int    `json:"duration_minutes,omitempty"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(400, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	// Extract IP and User Agent from request
-	if req.IPAddress == "" {
-		req.IPAddress = c.Request().RemoteAddr
+	// Parse target user ID
+	targetUserID, err := xid.FromString(reqBody.TargetUserID)
+	if err != nil {
+		return c.JSON(400, map[string]string{
+			"error": "Invalid target user ID",
+		})
 	}
-	if req.UserAgent == "" {
-		req.UserAgent = c.Request().Header.Get("User-Agent")
+
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	req := &impersonation.StartRequest{
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		ImpersonatorID:     userID,
+		TargetUserID:       targetUserID,
+		Reason:             reqBody.Reason,
+		TicketNumber:       reqBody.TicketNumber,
+		DurationMinutes:    reqBody.DurationMinutes,
+		IPAddress:          c.Request().RemoteAddr,
+		UserAgent:          c.Request().Header.Get("User-Agent"),
 	}
 
 	// Start impersonation
-	resp, err := h.service.Start(c.Request().Context(), &req)
+	resp, err := h.service.Start(c.Request().Context(), req)
 	if err != nil {
 		statusCode := 500
 		if err == impersonation.ErrPermissionDenied {
@@ -64,14 +100,50 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 
 // EndImpersonation handles POST /impersonation/end
 func (h *Handler) EndImpersonation(c forge.Context) error {
-	var req impersonation.EndRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	userID := interfaces.GetUserID(c.Request().Context())
+
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{
+			"error": "App context required",
+		})
+	}
+
+	var reqBody struct {
+		ImpersonationID string `json:"impersonation_id"`
+		Reason          string `json:"reason,omitempty"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
 		return c.JSON(400, map[string]string{
 			"error": "Invalid request body",
 		})
 	}
 
-	resp, err := h.service.End(c.Request().Context(), &req)
+	// Parse impersonation ID
+	impersonationID, err := xid.FromString(reqBody.ImpersonationID)
+	if err != nil {
+		return c.JSON(400, map[string]string{
+			"error": "Invalid impersonation ID",
+		})
+	}
+
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	req := &impersonation.EndRequest{
+		ImpersonationID:    impersonationID,
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		ImpersonatorID:     userID,
+		Reason:             reqBody.Reason,
+	}
+
+	resp, err := h.service.End(c.Request().Context(), req)
 	if err != nil {
 		statusCode := 500
 		if err == impersonation.ErrPermissionDenied {
@@ -90,6 +162,16 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 
 // GetImpersonation handles GET /impersonation/:id
 func (h *Handler) GetImpersonation(c forge.Context) error {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{
+			"error": "App context required",
+		})
+	}
+
 	idParam := c.Param("id")
 	if idParam == "" {
 		return c.JSON(400, map[string]string{
@@ -104,23 +186,16 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 		})
 	}
 
-	orgIDParam := c.Request().URL.Query().Get("org_id")
-	if orgIDParam == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Organization ID is required",
-		})
-	}
-
-	orgID, err := xid.FromString(orgIDParam)
-	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid organization ID",
-		})
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
 	req := &impersonation.GetRequest{
-		ImpersonationID: id,
-		OrganizationID:  orgID,
+		ImpersonationID:    id,
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
 	}
 
 	session, err := h.service.Get(c.Request().Context(), req)
@@ -140,60 +215,58 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 
 // ListImpersonations handles GET /impersonation
 func (h *Handler) ListImpersonations(c forge.Context) error {
-	orgIDParam := c.Request().URL.Query().Get("org_id")
-	if orgIDParam == "" {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+
+	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
-			"error": "Organization ID is required",
+			"error": "App context required",
 		})
 	}
 
-	orgID, err := xid.FromString(orgIDParam)
-	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid organization ID",
-		})
+	// Parse query parameters
+	limit, _ := strconv.Atoi(c.Request().URL.Query().Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+
+	offset, _ := strconv.Atoi(c.Request().URL.Query().Get("offset"))
+
+	activeOnly := c.Request().URL.Query().Get("active_only") == "true"
+
+	// Optional filters from query params
+	var impersonatorID *xid.ID
+	if impersonatorIDStr := c.Request().URL.Query().Get("impersonator_id"); impersonatorIDStr != "" {
+		id, err := xid.FromString(impersonatorIDStr)
+		if err == nil {
+			impersonatorID = &id
+		}
+	}
+
+	var targetUserID *xid.ID
+	if targetUserIDStr := c.Request().URL.Query().Get("target_user_id"); targetUserIDStr != "" {
+		id, err := xid.FromString(targetUserIDStr)
+		if err == nil {
+			targetUserID = &id
+		}
+	}
+
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
 	req := &impersonation.ListRequest{
-		OrganizationID: orgID,
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		ImpersonatorID:     impersonatorID,
+		TargetUserID:       targetUserID,
+		ActiveOnly:         activeOnly,
+		Limit:              limit,
+		Offset:             offset,
 	}
-
-	// Parse optional filters
-	if impersonatorIDParam := c.Request().URL.Query().Get("impersonator_id"); impersonatorIDParam != "" {
-		if impersonatorID, err := xid.FromString(impersonatorIDParam); err == nil {
-			req.ImpersonatorID = &impersonatorID
-		}
-	}
-
-	if targetUserIDParam := c.Request().URL.Query().Get("target_user_id"); targetUserIDParam != "" {
-		if targetUserID, err := xid.FromString(targetUserIDParam); err == nil {
-			req.TargetUserID = &targetUserID
-		}
-	}
-
-	if activeOnlyParam := c.Request().URL.Query().Get("active_only"); activeOnlyParam == "true" {
-		req.ActiveOnly = true
-	}
-
-	// Parse pagination
-	limitStr := c.Request().URL.Query().Get("limit")
-	offsetStr := c.Request().URL.Query().Get("offset")
-
-	limit := 20 // default
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-	req.Limit = limit
-
-	offset := 0 // default
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-	req.Offset = offset
 
 	resp, err := h.service.List(c.Request().Context(), req)
 	if err != nil {
@@ -205,75 +278,49 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// VerifyImpersonation handles POST /impersonation/verify
-func (h *Handler) VerifyImpersonation(c forge.Context) error {
-	var req impersonation.VerifyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid request body",
-		})
-	}
-
-	resp, err := h.service.Verify(c.Request().Context(), &req)
-	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(200, resp)
-}
-
 // ListAuditEvents handles GET /impersonation/audit
 func (h *Handler) ListAuditEvents(c forge.Context) error {
-	orgIDParam := c.Request().URL.Query().Get("org_id")
-	if orgIDParam == "" {
+	// Extract V2 context
+	appID := interfaces.GetAppID(c.Request().Context())
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+
+	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
-			"error": "Organization ID is required",
+			"error": "App context required",
 		})
 	}
 
-	orgID, err := xid.FromString(orgIDParam)
-	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid organization ID",
-		})
+	// Parse query parameters
+	limit, _ := strconv.Atoi(c.Request().URL.Query().Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+
+	offset, _ := strconv.Atoi(c.Request().URL.Query().Get("offset"))
+
+	// Optional filters
+	var impersonationID *xid.ID
+	if impersonationIDStr := c.Request().URL.Query().Get("impersonation_id"); impersonationIDStr != "" {
+		id, err := xid.FromString(impersonationIDStr)
+		if err == nil {
+			impersonationID = &id
+		}
+	}
+
+	// Build service request with V2 context
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
 	}
 
 	req := &impersonation.AuditListRequest{
-		OrganizationID: orgID,
+		AppID:              appID,
+		UserOrganizationID: orgIDPtr,
+		ImpersonationID:    impersonationID,
+		EventType:          c.Request().URL.Query().Get("event_type"),
+		Limit:              limit,
+		Offset:             offset,
 	}
-
-	// Parse optional filters
-	if impersonationIDParam := c.Request().URL.Query().Get("impersonation_id"); impersonationIDParam != "" {
-		if impersonationID, err := xid.FromString(impersonationIDParam); err == nil {
-			req.ImpersonationID = &impersonationID
-		}
-	}
-
-	if eventTypeParam := c.Request().URL.Query().Get("event_type"); eventTypeParam != "" {
-		req.EventType = eventTypeParam
-	}
-
-	// Parse pagination
-	limitStr := c.Request().URL.Query().Get("limit")
-	offsetStr := c.Request().URL.Query().Get("offset")
-
-	limit := 50 // default
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-	req.Limit = limit
-
-	offset := 0 // default
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-	req.Offset = offset
 
 	events, total, err := h.service.ListAuditEvents(c.Request().Context(), req)
 	if err != nil {
@@ -288,4 +335,34 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 		"limit":  limit,
 		"offset": offset,
 	})
+}
+
+// VerifyImpersonation handles GET /impersonation/verify/:sessionId
+func (h *Handler) VerifyImpersonation(c forge.Context) error {
+	sessionIDParam := c.Param("sessionId")
+	if sessionIDParam == "" {
+		return c.JSON(400, map[string]string{
+			"error": "Session ID is required",
+		})
+	}
+
+	sessionID, err := xid.FromString(sessionIDParam)
+	if err != nil {
+		return c.JSON(400, map[string]string{
+			"error": "Invalid session ID",
+		})
+	}
+
+	req := &impersonation.VerifyRequest{
+		SessionID: sessionID,
+	}
+
+	resp, err := h.service.Verify(c.Request().Context(), req)
+	if err != nil {
+		return c.JSON(500, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(200, resp)
 }

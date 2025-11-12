@@ -8,13 +8,15 @@ import (
 )
 
 // CompiledPolicy represents a policy compiled to executable CEL bytecode
+// Updated for V2 architecture: App → Environment → Organization
 type CompiledPolicy struct {
 	// Policy metadata
-	PolicyID    xid.ID
-	OrgID       xid.ID
-	NamespaceID xid.ID
-	Name        string
-	Description string
+	PolicyID           xid.ID
+	AppID              xid.ID  // Platform app (required)
+	UserOrganizationID *xid.ID // User-created org (optional)
+	NamespaceID        xid.ID
+	Name               string
+	Description        string
 
 	// Compiled CEL program
 	Program cel.Program
@@ -71,15 +73,20 @@ type Decision struct {
 }
 
 // IndexKey represents a multi-dimensional index key for fast policy lookup
+// Updated for V2 architecture: App → Environment → Organization
 type IndexKey struct {
-	OrgID        string
-	ResourceType string
-	Action       string
+	AppID              string
+	UserOrganizationID string // Empty string if platform-level
+	ResourceType       string
+	Action             string
 }
 
 // String returns the string representation of the index key
 func (k IndexKey) String() string {
-	return k.OrgID + ":" + k.ResourceType + ":" + k.Action
+	if k.UserOrganizationID != "" {
+		return k.AppID + ":" + k.UserOrganizationID + ":" + k.ResourceType + ":" + k.Action
+	}
+	return k.AppID + "::" + k.ResourceType + ":" + k.Action
 }
 
 // EvaluationStats tracks performance metrics for policies

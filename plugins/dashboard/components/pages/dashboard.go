@@ -20,6 +20,7 @@ type DashboardStats struct {
 	SessionGrowth  float64
 	RecentActivity []ActivityItem
 	SystemStatus   []StatusItem
+	Plugins        []PluginItem
 }
 
 // ActivityItem represents a recent activity entry
@@ -37,6 +38,16 @@ type StatusItem struct {
 	Color  string // green, yellow, red
 }
 
+// PluginItem represents a plugin entry
+type PluginItem struct {
+	ID          string
+	Name        string
+	Description string
+	Category    string
+	Status      string // enabled, disabled
+	Icon        string // lucide icon name
+}
+
 // DashboardPage renders the dashboard stats page content
 func DashboardPage(stats *DashboardStats, basePath string) g.Node {
 	return g.Group([]g.Node{
@@ -49,6 +60,9 @@ func DashboardPage(stats *DashboardStats, basePath string) g.Node {
 			recentActivityCard(stats.RecentActivity),
 			systemStatusCard(stats.SystemStatus),
 		),
+
+		// Plugins Overview
+		pluginsOverviewCard(stats.Plugins, basePath),
 
 		// Quick Actions
 		quickActionsCard(basePath),
@@ -342,4 +356,145 @@ func quickActionButton(title, subtitle, href, colorScheme string, icon g.Node) g
 	}
 
 	return A(Href(href), Class(classes), content)
+}
+
+func pluginsOverviewCard(plugins []PluginItem, basePath string) g.Node {
+	// Count enabled plugins
+	enabledCount := 0
+	for _, p := range plugins {
+		if p.Status == "enabled" {
+			enabledCount++
+		}
+	}
+
+	// Get up to 6 enabled plugins for preview
+	enabledPlugins := make([]PluginItem, 0)
+	for _, p := range plugins {
+		if p.Status == "enabled" && len(enabledPlugins) < 6 {
+			enabledPlugins = append(enabledPlugins, p)
+		}
+	}
+
+	return Div(
+		Class("mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"),
+		Div(
+			Class("px-6 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between"),
+			H3(Class("text-lg font-semibold text-gray-900 dark:text-white"), g.Text("Plugins")),
+			Span(
+				Class("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-violet-100 dark:bg-violet-500/20 text-violet-800 dark:text-violet-400"),
+				g.Textf("%d enabled", enabledCount),
+			),
+		),
+		Div(
+			Class("px-6 py-5"),
+			g.If(len(enabledPlugins) > 0,
+				Div(
+					Class("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"),
+					g.Group(pluginCards(enabledPlugins)),
+				),
+			),
+			g.If(len(enabledPlugins) == 0,
+				Div(
+					Class("text-center py-8"),
+					P(Class("text-sm text-gray-500 dark:text-gray-400"), g.Text("No plugins enabled")),
+				),
+			),
+			Div(
+				Class("mt-4 pt-4 border-t border-gray-200 dark:border-gray-700"),
+				A(
+					Href(basePath+"/dashboard/plugins"),
+					Class("inline-flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"),
+					g.Text("View all plugins"),
+					lucide.ArrowRight(Class("h-4 w-4")),
+				),
+			),
+		),
+	)
+}
+
+func pluginCards(plugins []PluginItem) []g.Node {
+	cards := make([]g.Node, len(plugins))
+	for i, plugin := range plugins {
+		cards[i] = pluginCard(plugin)
+	}
+	return cards
+}
+
+func pluginCard(plugin PluginItem) g.Node {
+	// Map category to color
+	colorClasses := map[string]string{
+		"core":           "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400",
+		"authentication": "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",
+		"security":       "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
+		"session":        "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400",
+		"administration": "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400",
+		"communication":  "bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400",
+		"integration":    "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400",
+		"enterprise":     "bg-slate-50 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400",
+	}
+
+	colorClass := colorClasses[plugin.Category]
+	if colorClass == "" {
+		colorClass = colorClasses["core"]
+	}
+
+	// Get lucide icon
+	icon := getPluginIcon(plugin.Icon)
+
+	return Div(
+		Class("flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-violet-300 dark:hover:border-violet-700 transition-colors"),
+		Div(
+			Class("flex items-start gap-3"),
+			Div(
+				Class("flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center "+colorClass),
+				icon,
+			),
+			Div(
+				Class("flex-1 min-w-0"),
+				H4(Class("text-sm font-semibold text-gray-900 dark:text-white truncate"), g.Text(plugin.Name)),
+				P(Class("text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2"), g.Text(plugin.Description)),
+			),
+		),
+	)
+}
+
+func getPluginIcon(iconName string) g.Node {
+	// Map icon names to lucide components
+	iconMap := map[string]func(children ...g.Node) g.Node{
+		"LayoutDashboard": lucide.LayoutDashboard,
+		"User":            lucide.User,
+		"ShieldCheck":     lucide.ShieldCheck,
+		"Shield":          lucide.Shield,
+		"UserCircle":      lucide.User, // Use User instead
+		"Building2":       lucide.Building2,
+		"Mail":            lucide.Mail,
+		"Link":            lucide.Link,
+		"Phone":           lucide.Phone,
+		"Fingerprint":     lucide.Fingerprint,
+		"LogIn":           lucide.LogIn,
+		"Share2":          lucide.Share2,
+		"Layers":          lucide.Layers,
+		"Key":             lucide.Key,
+		"FileJson":        lucide.FileJson,
+		"Hash":            lucide.Hash,
+		"KeyRound":        lucide.KeyRound,
+		"Users":           lucide.Users,
+		"ShieldAlert":     lucide.ShieldAlert,
+		"Bell":            lucide.Bell,
+		"Server":          lucide.Server,
+		"Archive":         lucide.Archive,
+		"FileCheck":       lucide.FileCheck,
+		"ClipboardCheck":  lucide.ClipboardCheck,
+		"MapPin":          lucide.MapPin,
+		"BadgeCheck":      lucide.BadgeCheck,
+		"Network":         lucide.Network,
+		"Lock":            lucide.Lock,
+	}
+
+	iconFunc, ok := iconMap[iconName]
+	if !ok {
+		iconFunc = lucide.Package // Default icon
+	}
+
+	return iconFunc(Class("h-5 w-5"))
 }

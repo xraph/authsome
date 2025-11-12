@@ -13,10 +13,10 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/interfaces"
-	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -39,7 +39,7 @@ type Handler struct {
 	auditSvc       *audit.Service
 	rbacSvc        *rbac.Service
 	apikeyService  *apikey.Service
-	orgService     *organization.Service
+	orgService     *app.Service
 	mtOrgService   *mtorg.Service // Multitenancy organization service
 	db             *bun.DB
 	isSaaSMode     bool
@@ -56,7 +56,7 @@ func NewHandler(
 	auditSvc *audit.Service,
 	rbacSvc *rbac.Service,
 	apikeyService *apikey.Service,
-	orgService *organization.Service,
+	orgService *app.Service,
 	db *bun.DB,
 	isSaaSMode bool,
 	basePath string,
@@ -136,6 +136,7 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		SessionGrowth:  stats.SessionGrowth,
 		RecentActivity: convertActivityItems(stats.RecentActivity),
 		SystemStatus:   convertStatusItems(stats.SystemStatus),
+		Plugins:        convertPluginItems(stats.Plugins),
 	}
 
 	content := pages.DashboardPage(pageStats, h.basePath)
@@ -163,6 +164,21 @@ func convertStatusItems(items []StatusItem) []pages.StatusItem {
 			Name:   item.Name,
 			Status: item.Status,
 			Color:  item.Color,
+		}
+	}
+	return result
+}
+
+func convertPluginItems(items []PluginItem) []pages.PluginItem {
+	result := make([]pages.PluginItem, len(items))
+	for i, item := range items {
+		result[i] = pages.PluginItem{
+			ID:          item.ID,
+			Name:        item.Name,
+			Description: item.Description,
+			Category:    item.Category,
+			Status:      item.Status,
+			Icon:        item.Icon,
 		}
 	}
 	return result
@@ -497,11 +513,17 @@ func (h *Handler) ServeSessions(c forge.Context) error {
 		}
 	}
 
+	// Calculate statistics from all sessions (not filtered)
+	avgDuration, sessionsToday, sessionsThisWeek := h.calculateSessionStatistics(allSessions)
+
 	sessionsPageData := pages.SessionsPageData{
-		Sessions:  sessionData,
-		Query:     query,
-		BasePath:  h.basePath,
-		CSRFToken: h.getCSRFToken(c),
+		Sessions:         sessionData,
+		Query:            query,
+		BasePath:         h.basePath,
+		CSRFToken:        h.getCSRFToken(c),
+		AvgDuration:      avgDuration,
+		SessionsToday:    sessionsToday,
+		SessionsThisWeek: sessionsThisWeek,
 	}
 
 	content := pages.SessionsPage(sessionsPageData)
@@ -606,6 +628,58 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 	}
 
 	content := pages.SettingsPage(settingsData)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServePlugins serves the plugins management page
+func (h *Handler) ServePlugins(c forge.Context) error {
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Get filter parameters
+	filterStatus := c.Query("status")
+	if filterStatus == "" {
+		filterStatus = "all"
+	}
+
+	filterCategory := c.Query("category")
+
+	// Get plugin information from stats (reuse the getPluginInfo function)
+	statsPlugins := h.getPluginInfo()
+
+	// Convert to pages.PluginItem
+	plugins := make([]pages.PluginItem, len(statsPlugins))
+	for i, p := range statsPlugins {
+		plugins[i] = pages.PluginItem{
+			ID:          p.ID,
+			Name:        p.Name,
+			Description: p.Description,
+			Category:    p.Category,
+			Status:      p.Status,
+			Icon:        p.Icon,
+		}
+	}
+
+	pageData := components.PageData{
+		Title:      "Plugins",
+		User:       currentUser,
+		CSRFToken:  h.getCSRFToken(c),
+		ActivePage: "plugins",
+		BasePath:   h.basePath,
+		IsSaaSMode: h.isSaaSMode,
+	}
+
+	pluginsPageData := pages.PluginsPageData{
+		Plugins:        plugins,
+		FilterStatus:   filterStatus,
+		FilterCategory: filterCategory,
+		BasePath:       h.basePath,
+		CSRFToken:      h.getCSRFToken(c),
+	}
+
+	content := pages.PluginsPage(pluginsPageData)
 	return h.renderWithLayout(c, pageData, content)
 }
 
@@ -1084,12 +1158,12 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 				// Standalone mode: insert member record directly via database
 				now := time.Now()
 				member := &schema.Member{
-					ID:             xid.New(),
-					OrganizationID: orgID,
-					UserID:         newUser.ID,
-					Role:           "owner",
-					Status:         "active",
-					JoinedAt:       now,
+					ID:       xid.New(),
+					AppID:    orgID,
+					UserID:   newUser.ID,
+					Role:     "owner",
+					Status:   "active",
+					JoinedAt: now,
 				}
 				// Set auditable fields on the embedded struct
 				member.AuditableModel.ID = member.ID
@@ -1364,6 +1438,62 @@ func (h *Handler) getCSRFToken(c forge.Context) string {
 	return token
 }
 
+// calculateSessionStatistics computes statistics from session data
+func (h *Handler) calculateSessionStatistics(sessions []*session.Session) (avgDuration string, sessionsToday int, sessionsThisWeek int) {
+	if len(sessions) == 0 {
+		return "N/A", 0, 0
+	}
+
+	now := time.Now()
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	startOfWeek := startOfToday.AddDate(0, 0, -7)
+
+	var totalDuration time.Duration
+	activeSessions := 0
+
+	for _, sess := range sessions {
+		// Count sessions created today
+		if sess.CreatedAt.After(startOfToday) {
+			sessionsToday++
+		}
+
+		// Count sessions created this week
+		if sess.CreatedAt.After(startOfWeek) {
+			sessionsThisWeek++
+		}
+
+		// Calculate average duration for non-expired sessions
+		if now.Before(sess.ExpiresAt) {
+			duration := now.Sub(sess.CreatedAt)
+			totalDuration += duration
+			activeSessions++
+		}
+	}
+
+	// Calculate average duration
+	if activeSessions > 0 {
+		avgDurationVal := totalDuration / time.Duration(activeSessions)
+
+		// Format duration in a human-readable way
+		hours := int(avgDurationVal.Hours())
+		minutes := int(avgDurationVal.Minutes()) % 60
+
+		if hours > 0 {
+			if minutes > 0 {
+				avgDuration = fmt.Sprintf("%dh %dm", hours, minutes)
+			} else {
+				avgDuration = fmt.Sprintf("%dh", hours)
+			}
+		} else {
+			avgDuration = fmt.Sprintf("%dm", minutes)
+		}
+	} else {
+		avgDuration = "N/A"
+	}
+
+	return avgDuration, sessionsToday, sessionsThisWeek
+}
+
 // checkExistingSession checks if there's a valid session without middleware
 // Returns user if authenticated, nil otherwise
 func (h *Handler) checkExistingSession(c forge.Context) *user.User {
@@ -1431,8 +1561,8 @@ func getContentType(ext string) string {
 
 // Organization Management Handlers (only available in SaaS mode)
 
-// ServeOrganizations serves the organizations list page
-func (h *Handler) ServeOrganizations(c forge.Context) error {
+// ServeApps serves the organizations list page
+func (h *Handler) ServeApps(c forge.Context) error {
 	// Organization management requires multitenancy service
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
@@ -1486,8 +1616,8 @@ func (h *Handler) ServeOrganizations(c forge.Context) error {
 	return h.renderWithLayout(c, pageData, content)
 }
 
-// ServeOrganizationDetail serves a single organization detail page
-func (h *Handler) ServeOrganizationDetail(c forge.Context) error {
+// ServeAppDetail serves a single organization detail page
+func (h *Handler) ServeAppDetail(c forge.Context) error {
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
@@ -1538,8 +1668,8 @@ func (h *Handler) ServeOrganizationDetail(c forge.Context) error {
 	return h.renderWithLayout(c, pageData, content)
 }
 
-// ServeOrganizationCreate serves the organization creation form
-func (h *Handler) ServeOrganizationCreate(c forge.Context) error {
+// ServeAppCreate serves the organization creation form
+func (h *Handler) ServeAppCreate(c forge.Context) error {
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
@@ -1562,8 +1692,8 @@ func (h *Handler) ServeOrganizationCreate(c forge.Context) error {
 	return h.renderWithLayout(c, pageData, content)
 }
 
-// HandleOrganizationCreate processes the organization creation form
-func (h *Handler) HandleOrganizationCreate(c forge.Context) error {
+// HandleAppCreate processes the organization creation form
+func (h *Handler) HandleAppCreate(c forge.Context) error {
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
@@ -1608,14 +1738,14 @@ func (h *Handler) HandleOrganizationCreate(c forge.Context) error {
 
 	// Redirect to organization detail page
 	if redirect == "" {
-		redirect = h.basePath + "/dashboard/organizations/" + org.ID.String()
+		redirect = h.basePath + "/dashboard/apps/" + org.ID.String()
 	}
 
 	return c.Redirect(http.StatusFound, redirect)
 }
 
-// ServeOrganizationEdit serves the organization edit form
-func (h *Handler) ServeOrganizationEdit(c forge.Context) error {
+// ServeAppEdit serves the organization edit form
+func (h *Handler) ServeAppEdit(c forge.Context) error {
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
@@ -1658,8 +1788,8 @@ func (h *Handler) ServeOrganizationEdit(c forge.Context) error {
 	return h.renderWithLayout(c, pageData, content)
 }
 
-// HandleOrganizationEdit processes the organization edit form
-func (h *Handler) HandleOrganizationEdit(c forge.Context) error {
+// HandleAppEdit processes the organization edit form
+func (h *Handler) HandleAppEdit(c forge.Context) error {
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
@@ -1708,14 +1838,14 @@ func (h *Handler) HandleOrganizationEdit(c forge.Context) error {
 
 	// Redirect to organization detail page
 	if redirect == "" {
-		redirect = h.basePath + "/dashboard/organizations/" + orgID
+		redirect = h.basePath + "/dashboard/apps/" + orgID
 	}
 
 	return c.Redirect(http.StatusFound, redirect)
 }
 
-// HandleOrganizationDelete processes organization deletion
-func (h *Handler) HandleOrganizationDelete(c forge.Context) error {
+// HandleAppDelete processes organization deletion
+func (h *Handler) HandleAppDelete(c forge.Context) error {
 	if h.mtOrgService == nil {
 		return h.renderError(c, "Organization management is only available in SaaS mode", fmt.Errorf("multitenancy not enabled"))
 	}
@@ -1744,5 +1874,5 @@ func (h *Handler) HandleOrganizationDelete(c forge.Context) error {
 	fmt.Printf("[Dashboard] Organization deleted: %s\n", orgID)
 
 	// Redirect to organizations list
-	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/organizations")
+	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/apps")
 }

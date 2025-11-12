@@ -2,13 +2,15 @@ package passkey
 
 import (
 	"context"
+	"time"
+
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/authsome/schema"
-	"time"
 )
 
 type Config struct {
@@ -29,14 +31,28 @@ func NewService(db *bun.DB, userSvc *user.Service, authSvc *auth.Service, auditS
 }
 
 // BeginRegistration returns a simple challenge payload (stub for WebAuthn options)
-func (s *Service) BeginRegistration(_ context.Context, userID string) (map[string]any, error) {
+func (s *Service) BeginRegistration(_ context.Context, userID xid.ID) (map[string]any, error) {
 	// In a full implementation, generate WebAuthn options and store session
-	return map[string]any{"challenge": time.Now().UnixNano(), "rpId": s.config.RPID, "userId": userID}, nil
+	return map[string]any{"challenge": time.Now().UnixNano(), "rpId": s.config.RPID, "userId": userID.String()}, nil
 }
 
-// FinishRegistration persists a passkey record (stub)
-func (s *Service) FinishRegistration(ctx context.Context, userID string, credentialID string, ip, ua string) error {
-	pk := &schema.Passkey{ID: xid.New(), UserID: userID, CredentialID: credentialID}
+// FinishRegistration persists a passkey record with app and org scoping
+func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credentialID string, ip, ua string) error {
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
+
+	pk := &schema.Passkey{
+		ID:                 xid.New(),
+		UserID:             userID,
+		CredentialID:       credentialID,
+		AppID:              appID,
+		UserOrganizationID: userOrgID,
+	}
 	pk.AuditableModel.CreatedBy = pk.ID
 	pk.AuditableModel.UpdatedBy = pk.ID
 	_, err := s.db.NewInsert().Model(pk).Exec(ctx)
@@ -45,25 +61,20 @@ func (s *Service) FinishRegistration(ctx context.Context, userID string, credent
 	}
 	// Audit: passkey registered
 	if s.audit != nil {
-		uid, _ := xid.FromString(userID)
-		_ = s.audit.Log(ctx, &uid, "passkey_registered", "passkey:"+pk.ID.String(), ip, ua, "")
+		_ = s.audit.Log(ctx, &userID, "passkey_registered", "passkey:"+pk.ID.String(), ip, ua, "")
 	}
 	return nil
 }
 
 // BeginLogin returns a simple challenge payload (stub)
-func (s *Service) BeginLogin(_ context.Context, userID string) (map[string]any, error) {
-	return map[string]any{"challenge": time.Now().UnixNano(), "rpId": s.config.RPID, "userId": userID}, nil
+func (s *Service) BeginLogin(_ context.Context, userID xid.ID) (map[string]any, error) {
+	return map[string]any{"challenge": time.Now().UnixNano(), "rpId": s.config.RPID, "userId": userID.String()}, nil
 }
 
 // FinishLogin returns an auth session for the user (stub)
-func (s *Service) FinishLogin(ctx context.Context, userID string, remember bool, ip, ua string) (*auth.AuthResponse, error) {
+func (s *Service) FinishLogin(ctx context.Context, userID xid.ID, remember bool, ip, ua string) (*auth.AuthResponse, error) {
 	// Lookup user to ensure exists
-	id, err := xid.FromString(userID)
-	if err != nil {
-		return nil, err
-	}
-	u, err := s.userSvc.FindByID(ctx, id)
+	u, err := s.userSvc.FindByID(ctx, userID)
 	if err != nil || u == nil {
 		return nil, err
 	}
@@ -75,34 +86,68 @@ func (s *Service) FinishLogin(ctx context.Context, userID string, remember bool,
 	return resp, err
 }
 
-// List user passkeys
-func (s *Service) List(ctx context.Context, userID string) ([]schema.Passkey, error) {
+// List user passkeys, scoped to app and optional org
+func (s *Service) List(ctx context.Context, userID xid.ID) ([]schema.Passkey, error) {
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
+
 	var out []schema.Passkey
-	err := s.db.NewSelect().Model(&out).Where("user_id = ?", userID).Scan(ctx)
+	q := s.db.NewSelect().Model(&out).
+		Where("user_id = ?", userID).
+		Where("app_id = ?", appID)
+
+	// Scope to org if provided
+	if userOrgID != nil {
+		q = q.Where("user_organization_id = ?", *userOrgID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Scan(ctx)
 	return out, err
 }
 
-// Delete passkey by ID
-func (s *Service) Delete(ctx context.Context, id string, ip, ua string) error {
-	xidVal, err := xid.FromString(id)
-	if err != nil {
-		return err
+// Delete passkey by ID, scoped to app and optional org
+func (s *Service) Delete(ctx context.Context, id xid.ID, ip, ua string) error {
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
 	}
-	// Fetch record to get userID for audit context
+
+	// Fetch record to verify ownership and get userID for audit
 	var existing schema.Passkey
-	_ = s.db.NewSelect().Model(&existing).Where("id = ?", xidVal).Scan(ctx)
-	_, err = s.db.NewDelete().Model((*schema.Passkey)(nil)).Where("id = ?", xidVal).Exec(ctx)
+	q := s.db.NewSelect().Model(&existing).
+		Where("id = ?", id).
+		Where("app_id = ?", appID)
+
+	if userOrgID != nil {
+		q = q.Where("user_organization_id = ?", *userOrgID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Scan(ctx)
 	if err != nil {
 		return err
 	}
+
+	// Delete the passkey
+	_, err = s.db.NewDelete().Model((*schema.Passkey)(nil)).Where("id = ?", id).Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Audit
 	if s.audit != nil {
-		var uidPtr *xid.ID
-		if existing.UserID != "" {
-			if uid, e := xid.FromString(existing.UserID); e == nil {
-				uidPtr = &uid
-			}
-		}
-		_ = s.audit.Log(ctx, uidPtr, "passkey_deleted", "passkey:"+id, ip, ua, "")
+		_ = s.audit.Log(ctx, &existing.UserID, "passkey_deleted", "passkey:"+id.String(), ip, ua, "")
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/forge"
 )
 
@@ -83,7 +84,7 @@ func (h *Handler) CancelRecovery(c forge.Context) error {
 // GenerateRecoveryCodes handles POST /recovery-codes/generate
 func (h *Handler) GenerateRecoveryCodes(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
-	orgID := h.getOrgIDFromContext(c)
+	appID, userOrgID := h.getAppAndOrgFromContext(c)
 
 	if userID == "" {
 		return c.JSON(401, ErrorResponse{Error: "unauthorized", Message: "authentication required"})
@@ -100,7 +101,7 @@ func (h *Handler) GenerateRecoveryCodes(c forge.Context) error {
 		req = GenerateRecoveryCodesRequest{}
 	}
 
-	resp, err := h.service.GenerateRecoveryCodes(c.Request().Context(), uid, orgID, &req)
+	resp, err := h.service.GenerateRecoveryCodes(c.Request().Context(), uid, appID, userOrgID, &req)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -128,7 +129,7 @@ func (h *Handler) VerifyRecoveryCode(c forge.Context) error {
 // SetupSecurityQuestions handles POST /security-questions/setup
 func (h *Handler) SetupSecurityQuestions(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
-	orgID := h.getOrgIDFromContext(c)
+	appID, userOrgID := h.getAppAndOrgFromContext(c)
 
 	if userID == "" {
 		return c.JSON(401, ErrorResponse{Error: "unauthorized", Message: "authentication required"})
@@ -144,7 +145,7 @@ func (h *Handler) SetupSecurityQuestions(c forge.Context) error {
 		return c.JSON(400, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 	}
 
-	resp, err := h.service.SetupSecurityQuestions(c.Request().Context(), uid, orgID, &req)
+	resp, err := h.service.SetupSecurityQuestions(c.Request().Context(), uid, appID, userOrgID, &req)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -187,7 +188,7 @@ func (h *Handler) VerifySecurityAnswers(c forge.Context) error {
 // AddTrustedContact handles POST /trusted-contacts/add
 func (h *Handler) AddTrustedContact(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
-	orgID := h.getOrgIDFromContext(c)
+	appID, userOrgID := h.getAppAndOrgFromContext(c)
 
 	if userID == "" {
 		return c.JSON(401, ErrorResponse{Error: "unauthorized", Message: "authentication required"})
@@ -203,7 +204,7 @@ func (h *Handler) AddTrustedContact(c forge.Context) error {
 		return c.JSON(400, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 	}
 
-	resp, err := h.service.AddTrustedContact(c.Request().Context(), uid, orgID, &req)
+	resp, err := h.service.AddTrustedContact(c.Request().Context(), uid, appID, userOrgID, &req)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -214,7 +215,7 @@ func (h *Handler) AddTrustedContact(c forge.Context) error {
 // ListTrustedContacts handles GET /trusted-contacts
 func (h *Handler) ListTrustedContacts(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
-	orgID := h.getOrgIDFromContext(c)
+	appID, userOrgID := h.getAppAndOrgFromContext(c)
 
 	if userID == "" {
 		return c.JSON(401, ErrorResponse{Error: "unauthorized", Message: "authentication required"})
@@ -225,7 +226,7 @@ func (h *Handler) ListTrustedContacts(c forge.Context) error {
 		return c.JSON(400, ErrorResponse{Error: "invalid_user_id", Message: err.Error()})
 	}
 
-	resp, err := h.service.ListTrustedContacts(c.Request().Context(), uid, orgID)
+	resp, err := h.service.ListTrustedContacts(c.Request().Context(), uid, appID, userOrgID)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -266,7 +267,7 @@ func (h *Handler) RequestTrustedContactVerification(c forge.Context) error {
 // RemoveTrustedContact handles DELETE /trusted-contacts/:id
 func (h *Handler) RemoveTrustedContact(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
-	orgID := h.getOrgIDFromContext(c)
+	appID, userOrgID := h.getAppAndOrgFromContext(c)
 
 	if userID == "" {
 		return c.JSON(401, ErrorResponse{Error: "unauthorized", Message: "authentication required"})
@@ -284,7 +285,7 @@ func (h *Handler) RemoveTrustedContact(c forge.Context) error {
 	}
 
 	req := &RemoveTrustedContactRequest{ContactID: contactID}
-	if err := h.service.RemoveTrustedContact(c.Request().Context(), uid, orgID, req); err != nil {
+	if err := h.service.RemoveTrustedContact(c.Request().Context(), uid, appID, userOrgID, req); err != nil {
 		return h.handleError(c, err)
 	}
 
@@ -578,13 +579,14 @@ func (h *Handler) getUserIDFromContext(c forge.Context) string {
 	return ""
 }
 
-func (h *Handler) getOrgIDFromContext(c forge.Context) string {
-	if orgID := c.Get("organization_id"); orgID != nil {
-		if oid, ok := orgID.(string); ok {
-			return oid
-		}
+func (h *Handler) getAppAndOrgFromContext(c forge.Context) (xid.ID, *xid.ID) {
+	appID := interfaces.GetAppID(c.Context())
+	orgID := interfaces.GetOrganizationID(c.Context())
+	// Convert to pointer, returning nil if it's NilID
+	if orgID == xid.NilID() {
+		return appID, nil
 	}
-	return "default"
+	return appID, &orgID
 }
 
 func (h *Handler) handleError(c forge.Context, err error) error {

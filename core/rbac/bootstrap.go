@@ -267,14 +267,14 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID,
 	if err != nil {
 		// Role doesn't exist - create it
 		newRole := &schema.Role{
-			ID:             xid.New(),
-			OrganizationID: &orgID,
-			Name:           def.Name,
-			Description:    def.Description,
+			ID:          xid.New(),
+			AppID:       &orgID, // Updated from OrganizationID to AppID
+			Name:        def.Name,
+			Description: def.Description,
 		}
 		newRole.CreatedAt = now
 		newRole.UpdatedAt = now
-		newRole.CreatedBy = orgID // Platform org is the creator
+		newRole.CreatedBy = orgID // Platform app is the creator
 		newRole.UpdatedBy = orgID
 		newRole.Version = 1
 

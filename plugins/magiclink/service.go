@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/interfaces"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 )
@@ -52,6 +54,14 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 		return "", fmt.Errorf("missing email")
 	}
 
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
+
 	token, err := crypto.GenerateToken(32)
 	if err != nil {
 		return "", err
@@ -60,7 +70,7 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 	// Calculate expiry
 	expiryDuration := time.Duration(s.config.ExpiryMinutes) * time.Minute
 
-	if err := s.repo.Create(ctx, e, token, time.Now().Add(expiryDuration)); err != nil {
+	if err := s.repo.Create(ctx, e, token, appID, userOrgID, time.Now().Add(expiryDuration)); err != nil {
 		return "", err
 	}
 
@@ -99,7 +109,16 @@ func (s *Service) Verify(ctx context.Context, token string, remember bool, ip, u
 	if t == "" {
 		return nil, fmt.Errorf("missing token")
 	}
-	rec, err := s.repo.FindByToken(ctx, t, time.Now())
+
+	// Get app and org from context
+	appID := interfaces.GetAppID(ctx)
+	orgID := interfaces.GetOrganizationID(ctx)
+	var userOrgID *xid.ID
+	if orgID != xid.NilID() {
+		userOrgID = &orgID
+	}
+
+	rec, err := s.repo.FindByToken(ctx, t, appID, userOrgID, time.Now())
 	if err != nil || rec == nil {
 		if s.audit != nil {
 			_ = s.audit.Log(ctx, nil, "magiclink_verify_failed", "token:"+t, ip, ua, "")

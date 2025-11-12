@@ -5,32 +5,32 @@ import (
 	"strconv"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/plugins/multitenancy/organization"
+	"github.com/xraph/authsome/plugins/multitenancy/app"
 	"github.com/xraph/forge"
 )
 
-// MemberHandler handles organization member-related HTTP requests
+// MemberHandler handles app member-related HTTP requests
 type MemberHandler struct {
-	orgService *organization.Service
+	appService *app.Service
 }
 
 // NewMemberHandler creates a new member handler
-func NewMemberHandler(orgService *organization.Service) *MemberHandler {
+func NewMemberHandler(appService *app.Service) *MemberHandler {
 	return &MemberHandler{
-		orgService: orgService,
+		appService: appService,
 	}
 }
 
 // AddMember handles adding a member to an organization
 func (h *MemberHandler) AddMember(c forge.Context) error {
-	orgIDStr := c.Param("orgId")
-	if orgIDStr == "" {
-		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	appIDStr := c.Param("orgId")
+	if appIDStr == "" {
+		return c.JSON(400, map[string]string{"error": "app ID is required"})
 	}
 
-	orgID, err := xid.FromString(orgIDStr)
+	appID, err := xid.FromString(appIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+		return c.JSON(400, map[string]string{"error": "invalid app ID"})
 	}
 
 	var req struct {
@@ -46,7 +46,7 @@ func (h *MemberHandler) AddMember(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid user ID"})
 	}
 
-	member, err := h.orgService.AddMember(c.Request().Context(), orgID, userID, req.Role)
+	member, err := h.appService.AddMember(c.Request().Context(), appID, userID, req.Role)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -66,7 +66,7 @@ func (h *MemberHandler) RemoveMember(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid member ID"})
 	}
 
-	err = h.orgService.RemoveMember(c.Request().Context(), memberID)
+	err = h.appService.RemoveMember(c.Request().Context(), memberID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -74,15 +74,15 @@ func (h *MemberHandler) RemoveMember(c forge.Context) error {
 	return c.JSON(204, nil)
 }
 
-// ListMembers handles listing organization members
+// ListMembers handles listing app members
 func (h *MemberHandler) ListMembers(c forge.Context) error {
-	orgIDStr := c.Param("orgId")
-	if orgIDStr == "" {
-		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	appIDStr := c.Param("orgId")
+	if appIDStr == "" {
+		return c.JSON(400, map[string]string{"error": "app ID is required"})
 	}
-	orgID, err := xid.FromString(orgIDStr)
+	appID, err := xid.FromString(appIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+		return c.JSON(400, map[string]string{"error": "invalid app ID"})
 	}
 
 	// Parse pagination parameters
@@ -104,7 +104,7 @@ func (h *MemberHandler) ListMembers(c forge.Context) error {
 		}
 	}
 
-	members, err := h.orgService.ListMembers(c.Request().Context(), orgID, limit, offset)
+	members, err := h.appService.ListMembers(c.Request().Context(), appID, limit, offset)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -129,12 +129,12 @@ func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid member ID"})
 	}
 
-	var req organization.UpdateMemberRequest
+	var req app.UpdateMemberRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	member, err := h.orgService.UpdateMember(c.Request().Context(), memberID, &req)
+	member, err := h.appService.UpdateMember(c.Request().Context(), memberID, &req)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -144,17 +144,17 @@ func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 
 // InviteMember handles inviting a member to an organization
 func (h *MemberHandler) InviteMember(c forge.Context) error {
-	orgIDStr := c.Param("orgId")
-	if orgIDStr == "" {
-		return c.JSON(400, map[string]string{"error": "organization ID is required"})
+	appIDStr := c.Param("orgId")
+	if appIDStr == "" {
+		return c.JSON(400, map[string]string{"error": "app ID is required"})
 	}
 
-	orgID, err := xid.FromString(orgIDStr)
+	appID, err := xid.FromString(appIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
+		return c.JSON(400, map[string]string{"error": "invalid app ID"})
 	}
 
-	var req organization.InviteMemberRequest
+	var req app.InviteMemberRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
@@ -172,7 +172,7 @@ func (h *MemberHandler) InviteMember(c forge.Context) error {
 		return c.JSON(401, map[string]string{"error": "unauthorized"})
 	}
 
-	invitation, err := h.orgService.InviteMember(c.Request().Context(), orgID, &req, inviterUserID)
+	invitation, err := h.appService.InviteMember(c.Request().Context(), appID, &req, inviterUserID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -192,12 +192,12 @@ func (h *MemberHandler) UpdateMember(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid member ID"})
 	}
 
-	var req organization.UpdateMemberRequest
+	var req app.UpdateMemberRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	member, err := h.orgService.UpdateMember(c.Request().Context(), memberID, &req)
+	member, err := h.appService.UpdateMember(c.Request().Context(), memberID, &req)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -212,7 +212,7 @@ func (h *MemberHandler) GetInvitation(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invitation token is required"})
 	}
 
-	invitation, err := h.orgService.GetInvitation(c.Request().Context(), token)
+	invitation, err := h.appService.GetInvitation(c.Request().Context(), token)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -238,7 +238,7 @@ func (h *MemberHandler) AcceptInvitation(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid user ID"})
 	}
 
-	member, err := h.orgService.AcceptInvitation(c.Request().Context(), token, userID)
+	member, err := h.appService.AcceptInvitation(c.Request().Context(), token, userID)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -253,7 +253,7 @@ func (h *MemberHandler) DeclineInvitation(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invitation token is required"})
 	}
 
-	err := h.orgService.DeclineInvitation(c.Request().Context(), token)
+	err := h.appService.DeclineInvitation(c.Request().Context(), token)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}

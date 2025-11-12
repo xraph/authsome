@@ -8,43 +8,49 @@ import (
 )
 
 // APIKey represents an API key with its metadata
+// Updated for V2 architecture: App → Environment → Organization
 type APIKey struct {
-	ID          xid.ID            `json:"id"`
-	OrgID       string            `json:"org_id"`
-	UserID      string            `json:"user_id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Prefix      string            `json:"prefix"`
-	Scopes      []string          `json:"scopes"`
-	Permissions map[string]string `json:"permissions"`
-	RateLimit   int               `json:"rate_limit"`
-	AllowedIPs  []string          `json:"allowed_ips,omitempty"`
-	Active      bool              `json:"active"`
-	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
-	UsageCount  int64             `json:"usage_count"`
-	LastUsedAt  *time.Time        `json:"last_used_at,omitempty"`
-	LastUsedIP  string            `json:"last_used_ip,omitempty"`
-	LastUsedUA  string            `json:"last_used_ua,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	ID             xid.ID            `json:"id"`
+	AppID          xid.ID            `json:"appID"`                    // Platform tenant
+	EnvironmentID  *xid.ID           `json:"environmentID,omitempty"`  // Optional: environment-scoped
+	OrganizationID *xid.ID           `json:"organizationID,omitempty"` // Optional: org-scoped
+	UserID         xid.ID            `json:"userID"`                   // User who created the key
+	Name           string            `json:"name"`
+	Description    string            `json:"description,omitempty"`
+	Prefix         string            `json:"prefix"`
+	Scopes         []string          `json:"scopes"`
+	Permissions    map[string]string `json:"permissions"`
+	RateLimit      int               `json:"rate_limit"`
+	AllowedIPs     []string          `json:"allowed_ips,omitempty"`
+	Active         bool              `json:"active"`
+	ExpiresAt      *time.Time        `json:"expires_at,omitempty"`
+	UsageCount     int64             `json:"usage_count"`
+	LastUsedAt     *time.Time        `json:"last_used_at,omitempty"`
+	LastUsedIP     string            `json:"last_used_ip,omitempty"`
+	LastUsedUA     string            `json:"last_used_ua,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
 
 	// Transient field - only populated during creation
 	Key string `json:"key,omitempty"`
 }
 
 // CreateAPIKeyRequest represents a request to create an API key
+// Updated for V2 architecture
 type CreateAPIKeyRequest struct {
-	OrgID       string            `json:"org_id" validate:"required"`
-	UserID      string            `json:"user_id" validate:"required"`
-	Name        string            `json:"name" validate:"required,min=1,max=100"`
-	Description string            `json:"description,omitempty" validate:"max=500"`
-	Scopes      []string          `json:"scopes" validate:"required,min=1"`
-	Permissions map[string]string `json:"permissions,omitempty"`
-	RateLimit   int               `json:"rate_limit,omitempty" validate:"min=0,max=10000"`
-	AllowedIPs  []string          `json:"allowed_ips,omitempty"` // IP whitelist (CIDR notation supported)
-	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	AppID         xid.ID            `json:"appID" validate:"required"`  // Platform tenant
+	EnvironmentID *xid.ID           `json:"environmentID,omitempty"`    // Optional: environment-scoped
+	OrgID         *xid.ID           `json:"orgID,omitempty"`            // Optional: org-scoped
+	UserID        xid.ID            `json:"userID" validate:"required"` // User creating the key
+	Name          string            `json:"name" validate:"required,min=1,max=100"`
+	Description   string            `json:"description,omitempty" validate:"max=500"`
+	Scopes        []string          `json:"scopes" validate:"required,min=1"`
+	Permissions   map[string]string `json:"permissions,omitempty"`
+	RateLimit     int               `json:"rate_limit,omitempty" validate:"min=0,max=10000"`
+	AllowedIPs    []string          `json:"allowed_ips,omitempty"` // IP whitelist (CIDR notation supported)
+	ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
 }
 
 // UpdateAPIKeyRequest represents a request to update an API key
@@ -60,11 +66,14 @@ type UpdateAPIKeyRequest struct {
 }
 
 // ListAPIKeysRequest represents a request to list API keys
+// Updated for V2 architecture
 type ListAPIKeysRequest struct {
-	OrgID  string `json:"org_id,omitempty"`
-	UserID string `json:"user_id,omitempty"`
-	Limit  int    `json:"limit,omitempty" validate:"omitempty,min=1,max=100"`
-	Offset int    `json:"offset,omitempty" validate:"omitempty,min=0"`
+	AppID          *xid.ID `json:"appId,omitempty"`         // Filter by app
+	EnvironmentID  *xid.ID `json:"environmentId,omitempty"` // Filter by environment
+	OrganizationID *xid.ID `json:"orgId,omitempty"`         // Filter by organization
+	UserID         *xid.ID `json:"userId,omitempty"`        // Filter by user
+	Limit          int     `json:"limit,omitempty" validate:"omitempty,min=1,max=100" default:"20"`
+	Offset         int     `json:"offset,omitempty" validate:"omitempty,min=0" default:"0"`
 }
 
 // ListAPIKeysResponse represents a response containing API keys
@@ -76,11 +85,14 @@ type ListAPIKeysResponse struct {
 }
 
 // RotateAPIKeyRequest represents a request to rotate an API key
+// Updated for V2 architecture
 type RotateAPIKeyRequest struct {
-	ID        string     `json:"id" validate:"required"`
-	OrgID     string     `json:"org_id" validate:"required"`
-	UserID    string     `json:"user_id" validate:"required"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	ID             xid.ID     `json:"id" validate:"required"`
+	AppID          xid.ID     `json:"appID" validate:"required"`
+	EnvironmentID  *xid.ID    `json:"environmentID,omitempty"`
+	OrganizationID *xid.ID    `json:"organizationID,omitempty"`
+	UserID         xid.ID     `json:"userID" validate:"required"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 }
 
 // VerifyAPIKeyRequest represents a request to verify an API key
@@ -100,18 +112,30 @@ type VerifyAPIKeyResponse struct {
 }
 
 // Repository defines the interface for API key storage
+// Updated for V2 architecture
 type Repository interface {
 	Create(ctx context.Context, apiKey *APIKey) error
-	FindByID(ctx context.Context, id string) (*APIKey, error)
+	FindByID(ctx context.Context, id xid.ID) (*APIKey, error)
 	FindByPrefix(ctx context.Context, prefix string) (*APIKey, error)
-	FindByUserID(ctx context.Context, userID string, limit, offset int) ([]*APIKey, error)
-	FindByOrgID(ctx context.Context, orgID string, limit, offset int) ([]*APIKey, error)
+
+	// List with flexible filtering
+	FindByApp(ctx context.Context, appID xid.ID, limit, offset int) ([]*APIKey, error)
+	FindByUser(ctx context.Context, appID, userID xid.ID, limit, offset int) ([]*APIKey, error)
+	FindByOrganization(ctx context.Context, appID xid.ID, orgID xid.ID, limit, offset int) ([]*APIKey, error)
+	FindByEnvironment(ctx context.Context, appID, envID xid.ID, limit, offset int) ([]*APIKey, error)
+
+	// Update operations
 	Update(ctx context.Context, apiKey *APIKey) error
-	UpdateUsage(ctx context.Context, id string, ip, userAgent string) error
-	Delete(ctx context.Context, id string) error
-	Deactivate(ctx context.Context, id string) error
-	CountByUserID(ctx context.Context, userID string) (int, error)
-	CountByOrgID(ctx context.Context, orgID string) (int, error)
+	UpdateUsage(ctx context.Context, id xid.ID, ip, userAgent string) error
+	Delete(ctx context.Context, id xid.ID) error
+	Deactivate(ctx context.Context, id xid.ID) error
+
+	// Count operations
+	CountByApp(ctx context.Context, appID xid.ID) (int, error)
+	CountByUser(ctx context.Context, appID, userID xid.ID) (int, error)
+	CountByOrganization(ctx context.Context, appID xid.ID, orgID xid.ID) (int, error)
+
+	// Maintenance
 	CleanupExpired(ctx context.Context) (int, error)
 }
 

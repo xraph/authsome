@@ -62,17 +62,12 @@ if user.Dashboard().CanAccess() {
 }
 ```
 
-See [SECURITY_IMPROVEMENTS.md](./SECURITY_IMPROVEMENTS.md) for detailed documentation.
+See [DASHBOARD_STATUS.md](./DASHBOARD_STATUS.md) for detailed security documentation.
 
 ## Documentation
 
-See [DASHBOARD_PLUGIN.md](./DASHBOARD_PLUGIN.md) for complete documentation including:
-- Configuration
-- Security features
-- Customization
-- Templates
-- API reference
-- Troubleshooting
+- **[DASHBOARD_STATUS.md](./DASHBOARD_STATUS.md)** - Complete current state, architecture, features, and deployment guide
+- **[components/README.md](./components/README.md)** - Component usage and development guide
 
 ## Pages
 

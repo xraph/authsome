@@ -27,6 +27,7 @@ type Config struct {
 }
 
 // Service handles API key operations
+// Updated for V2 architecture: App → Environment → Organization
 type Service struct {
 	repo     *repository.APIKeyRepository
 	auditSvc *audit.Service
@@ -70,7 +71,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	}
 
 	// Check limits
-	if err := s.checkLimits(ctx, req.UserID, req.OrgID); err != nil {
+	if err := s.checkLimits(ctx, req.AppID, req.UserID, req.OrgID); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +83,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	key := base64.URLEncoding.EncodeToString(keyBytes)
 
 	// Generate prefix for identification
-	prefix := s.generatePrefix(req.OrgID)
+	prefix := s.generatePrefix(req.AppID, req.OrgID)
 
 	// Hash the key for storage
 	keyHash := s.hashKey(key)
@@ -104,22 +105,24 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 
 	// Create API key
 	apiKey := &schema.APIKey{
-		ID:          xid.New(),
-		OrgID:       req.OrgID,
-		UserID:      req.UserID,
-		Name:        req.Name,
-		Description: req.Description,
-		Prefix:      prefix,
-		KeyHash:     keyHash,
-		Scopes:      req.Scopes,
-		Permissions: req.Permissions,
-		RateLimit:   rateLimit,
-		AllowedIPs:  req.AllowedIPs,
-		Active:      true,
-		ExpiresAt:   expiresAt,
-		Metadata:    req.Metadata,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:             xid.New(),
+		AppID:          req.AppID,
+		EnvironmentID:  req.EnvironmentID,
+		OrganizationID: req.OrgID,
+		UserID:         req.UserID,
+		Name:           req.Name,
+		Description:    req.Description,
+		Prefix:         prefix,
+		KeyHash:        keyHash,
+		Scopes:         req.Scopes,
+		Permissions:    req.Permissions,
+		RateLimit:      rateLimit,
+		AllowedIPs:     req.AllowedIPs,
+		Active:         true,
+		ExpiresAt:      expiresAt,
+		Metadata:       req.Metadata,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	if err := s.repo.Create(ctx, apiKey); err != nil {
@@ -127,8 +130,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	}
 
 	// Audit log
-	userID, _ := xid.FromString(req.UserID)
-	_ = s.auditSvc.Log(ctx, &userID, "api_key.created", "api_key:"+apiKey.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","scopes":["%s"]}`, req.Name, strings.Join(req.Scopes, `","`)))
+	_ = s.auditSvc.Log(ctx, &req.UserID, "api_key.created", "api_key:"+apiKey.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","scopes":["%s"]}`, req.Name, strings.Join(req.Scopes, `","`)))
 
 	// Convert to domain model and return the full key only once
 	result := s.schemaToAPIKey(apiKey)
@@ -198,8 +200,8 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 		}, nil
 	}
 
-	// Update usage
-	if err := s.repo.UpdateUsage(ctx, apiKey.ID.String(), req.IP, req.UserAgent); err != nil {
+	// Update usage (now using xid.ID)
+	if err := s.repo.UpdateUsage(ctx, apiKey.ID, req.IP, req.UserAgent); err != nil {
 		// Log error but don't fail verification
 		fmt.Printf("Failed to update API key usage: %v\n", err)
 	}
@@ -211,15 +213,27 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 }
 
 // GetAPIKey retrieves an API key by ID
-func (s *Service) GetAPIKey(ctx context.Context, id, userID, orgID string) (*APIKey, error) {
+func (s *Service) GetAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID *xid.ID) (*APIKey, error) {
 	apiKey, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("API key not found: %w", err)
 	}
 
-	// Check ownership
-	if apiKey.UserID != userID || apiKey.OrgID != orgID {
-		return nil, errors.New("access denied")
+	// Check ownership - app context
+	if apiKey.AppID != appID {
+		return nil, errors.New("access denied: wrong app")
+	}
+
+	// Check ownership - user context
+	if apiKey.UserID != userID {
+		return nil, errors.New("access denied: wrong user")
+	}
+
+	// Check ownership - org context (if org-scoped)
+	if orgID != nil && !orgID.IsNil() {
+		if apiKey.OrganizationID == nil || *apiKey.OrganizationID != *orgID {
+			return nil, errors.New("access denied: wrong organization")
+		}
 	}
 
 	return s.schemaToAPIKey(apiKey), nil
@@ -236,20 +250,34 @@ func (s *Service) ListAPIKeys(ctx context.Context, req *ListAPIKeysRequest) (*Li
 	var total int
 	var err error
 
-	if req.UserID != "" {
-		apiKeys, err = s.repo.FindByUserID(ctx, req.UserID, limit, req.Offset)
+	// Filter by organization (most common in SaaS)
+	if req.OrganizationID != nil && !req.OrganizationID.IsNil() {
+		apiKeys, err = s.repo.FindByOrganization(ctx, req.AppID, *req.OrganizationID, limit, req.Offset)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list API keys: %w", err)
 		}
-		total, err = s.repo.CountByUserID(ctx, req.UserID)
-	} else if req.OrgID != "" {
-		apiKeys, err = s.repo.FindByOrgID(ctx, req.OrgID, limit, req.Offset)
+		total, err = s.repo.CountByOrganization(ctx, req.AppID, *req.OrganizationID)
+	} else if req.UserID != nil && !req.UserID.IsNil() {
+		// Filter by user
+		apiKeys, err = s.repo.FindByUser(ctx, req.AppID, *req.UserID, limit, req.Offset)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list API keys: %w", err)
 		}
-		total, err = s.repo.CountByOrgID(ctx, req.OrgID)
+		total, err = s.repo.CountByUser(ctx, req.AppID, *req.UserID)
+	} else if req.EnvironmentID != nil && !req.EnvironmentID.IsNil() {
+		// Filter by environment
+		apiKeys, err = s.repo.FindByEnvironment(ctx, req.AppID, *req.EnvironmentID, limit, req.Offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list API keys: %w", err)
+		}
+		total = len(apiKeys) // Simplified count
 	} else {
-		return nil, errors.New("either user_id or org_id must be provided")
+		// List all for app
+		apiKeys, err = s.repo.FindByApp(ctx, req.AppID, limit, req.Offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list API keys: %w", err)
+		}
+		total, err = s.repo.CountByApp(ctx, req.AppID)
 	}
 
 	if err != nil {
@@ -271,15 +299,23 @@ func (s *Service) ListAPIKeys(ctx context.Context, req *ListAPIKeysRequest) (*Li
 }
 
 // UpdateAPIKey updates an API key
-func (s *Service) UpdateAPIKey(ctx context.Context, id, userID, orgID string, req *UpdateAPIKeyRequest) (*APIKey, error) {
+func (s *Service) UpdateAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID *xid.ID, req *UpdateAPIKeyRequest) (*APIKey, error) {
 	apiKey, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("API key not found: %w", err)
 	}
 
 	// Check ownership
-	if apiKey.UserID != userID || apiKey.OrgID != orgID {
-		return nil, errors.New("access denied")
+	if apiKey.AppID != appID {
+		return nil, errors.New("access denied: wrong app")
+	}
+	if apiKey.UserID != userID {
+		return nil, errors.New("access denied: wrong user")
+	}
+	if orgID != nil && !orgID.IsNil() {
+		if apiKey.OrganizationID == nil || *apiKey.OrganizationID != *orgID {
+			return nil, errors.New("access denied: wrong organization")
+		}
 	}
 
 	// Update fields
@@ -317,22 +353,29 @@ func (s *Service) UpdateAPIKey(ctx context.Context, id, userID, orgID string, re
 	}
 
 	// Audit log
-	uid, _ := xid.FromString(userID)
-	_ = s.auditSvc.Log(ctx, &uid, "api_key.updated", "api_key:"+id, "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
+	_ = s.auditSvc.Log(ctx, &userID, "api_key.updated", "api_key:"+id.String(), "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
 
 	return s.schemaToAPIKey(apiKey), nil
 }
 
 // DeleteAPIKey deletes an API key
-func (s *Service) DeleteAPIKey(ctx context.Context, id, userID, orgID string) error {
+func (s *Service) DeleteAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID *xid.ID) error {
 	apiKey, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("API key not found: %w", err)
 	}
 
 	// Check ownership
-	if apiKey.UserID != userID || apiKey.OrgID != orgID {
-		return errors.New("access denied")
+	if apiKey.AppID != appID {
+		return errors.New("access denied: wrong app")
+	}
+	if apiKey.UserID != userID {
+		return errors.New("access denied: wrong user")
+	}
+	if orgID != nil && !orgID.IsNil() {
+		if apiKey.OrganizationID == nil || *apiKey.OrganizationID != *orgID {
+			return errors.New("access denied: wrong organization")
+		}
 	}
 
 	if err := s.repo.Delete(ctx, id); err != nil {
@@ -340,8 +383,7 @@ func (s *Service) DeleteAPIKey(ctx context.Context, id, userID, orgID string) er
 	}
 
 	// Audit log
-	uid, _ := xid.FromString(userID)
-	_ = s.auditSvc.Log(ctx, &uid, "api_key.deleted", "api_key:"+id, "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
+	_ = s.auditSvc.Log(ctx, &userID, "api_key.deleted", "api_key:"+id.String(), "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
 
 	return nil
 }
@@ -355,21 +397,31 @@ func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*
 	}
 
 	// Check ownership
-	if existingKey.UserID != req.UserID || existingKey.OrgID != req.OrgID {
-		return nil, errors.New("access denied")
+	if existingKey.AppID != req.AppID {
+		return nil, errors.New("access denied: wrong app")
+	}
+	if existingKey.UserID != req.UserID {
+		return nil, errors.New("access denied: wrong user")
+	}
+	if req.OrganizationID != nil && !req.OrganizationID.IsNil() {
+		if existingKey.OrganizationID == nil || *existingKey.OrganizationID != *req.OrganizationID {
+			return nil, errors.New("access denied: wrong organization")
+		}
 	}
 
 	// Create new key with same settings
 	createReq := &CreateAPIKeyRequest{
-		OrgID:       existingKey.OrgID,
-		UserID:      existingKey.UserID,
-		Name:        existingKey.Name,
-		Description: existingKey.Description,
-		Scopes:      existingKey.Scopes,
-		Permissions: existingKey.Permissions,
-		RateLimit:   existingKey.RateLimit,
-		ExpiresAt:   req.ExpiresAt,
-		Metadata:    existingKey.Metadata,
+		AppID:         existingKey.AppID,
+		EnvironmentID: existingKey.EnvironmentID,
+		OrgID:         existingKey.OrganizationID,
+		UserID:        existingKey.UserID,
+		Name:          existingKey.Name,
+		Description:   existingKey.Description,
+		Scopes:        existingKey.Scopes,
+		Permissions:   existingKey.Permissions,
+		RateLimit:     existingKey.RateLimit,
+		ExpiresAt:     req.ExpiresAt,
+		Metadata:      existingKey.Metadata,
 	}
 
 	newKey, err := s.CreateAPIKey(ctx, createReq)
@@ -384,8 +436,7 @@ func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*
 	}
 
 	// Audit log
-	userID, _ := xid.FromString(req.UserID)
-	_ = s.auditSvc.Log(ctx, &userID, "api_key.rotated", "api_key:"+req.ID, "", "", fmt.Sprintf(`{"name":"%s","old_key_id":"%s","new_key_id":"%s"}`, existingKey.Name, req.ID, newKey.ID.String()))
+	_ = s.auditSvc.Log(ctx, &req.UserID, "api_key.rotated", "api_key:"+req.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","old_key_id":"%s","new_key_id":"%s"}`, existingKey.Name, req.ID.String(), newKey.ID.String()))
 
 	return newKey, nil
 }
@@ -398,11 +449,11 @@ func (s *Service) CleanupExpired(ctx context.Context) (int, error) {
 // Helper methods
 
 func (s *Service) validateCreateRequest(ctx context.Context, req *CreateAPIKeyRequest) error {
-	if req.OrgID == "" {
-		return errors.New("org_id is required")
+	if req.AppID.IsNil() {
+		return errors.New("appID is required")
 	}
-	if req.UserID == "" {
-		return errors.New("user_id is required")
+	if req.UserID.IsNil() {
+		return errors.New("userID is required")
 	}
 	if req.Name == "" {
 		return errors.New("name is required")
@@ -413,9 +464,9 @@ func (s *Service) validateCreateRequest(ctx context.Context, req *CreateAPIKeyRe
 	return nil
 }
 
-func (s *Service) checkLimits(ctx context.Context, userID, orgID string) error {
-	// Check user limit
-	userCount, err := s.repo.CountByUserID(ctx, userID)
+func (s *Service) checkLimits(ctx context.Context, appID, userID xid.ID, orgID *xid.ID) error {
+	// Check user limit (per app)
+	userCount, err := s.repo.CountByUser(ctx, appID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to check user limit: %w", err)
 	}
@@ -423,31 +474,42 @@ func (s *Service) checkLimits(ctx context.Context, userID, orgID string) error {
 		return fmt.Errorf("user has reached maximum API key limit (%d)", s.config.MaxKeysPerUser)
 	}
 
-	// Check org limit
-	orgCount, err := s.repo.CountByOrgID(ctx, orgID)
-	if err != nil {
-		return fmt.Errorf("failed to check org limit: %w", err)
-	}
-	if orgCount >= s.config.MaxKeysPerOrg {
-		return fmt.Errorf("organization has reached maximum API key limit (%d)", s.config.MaxKeysPerOrg)
+	// Check org limit (if org-scoped)
+	if orgID != nil && !orgID.IsNil() {
+		orgCount, err := s.repo.CountByOrganization(ctx, appID, *orgID)
+		if err != nil {
+			return fmt.Errorf("failed to check org limit: %w", err)
+		}
+		if orgCount >= s.config.MaxKeysPerOrg {
+			return fmt.Errorf("organization has reached maximum API key limit (%d)", s.config.MaxKeysPerOrg)
+		}
 	}
 
 	return nil
 }
 
-func (s *Service) generatePrefix(orgID string) string {
+func (s *Service) generatePrefix(appID xid.ID, orgID *xid.ID) string {
 	// Generate a short random suffix
 	bytes := make([]byte, 4)
 	rand.Read(bytes)
 	suffix := base64.URLEncoding.EncodeToString(bytes)[:6]
 
-	// Create prefix: ak_<org_short>_<random>
-	orgShort := orgID
-	if len(orgShort) > 8 {
-		orgShort = orgShort[:8]
+	// Create prefix based on scope
+	if orgID != nil && !orgID.IsNil() {
+		// Org-scoped: ak_org_<suffix>
+		orgShort := orgID.String()
+		if len(orgShort) > 8 {
+			orgShort = orgShort[:8]
+		}
+		return fmt.Sprintf("ak_org_%s_%s", orgShort, suffix)
+	} else {
+		// App-scoped: ak_app_<suffix>
+		appShort := appID.String()
+		if len(appShort) > 8 {
+			appShort = appShort[:8]
+		}
+		return fmt.Sprintf("ak_app_%s_%s", appShort, suffix)
 	}
-
-	return fmt.Sprintf("ak_%s_%s", orgShort, suffix)
 }
 
 func (s *Service) hashKey(key string) string {
@@ -461,24 +523,26 @@ func (s *Service) verifyKeyHash(key, hash string) bool {
 
 func (s *Service) schemaToAPIKey(schema *schema.APIKey) *APIKey {
 	return &APIKey{
-		ID:          schema.ID,
-		OrgID:       schema.OrgID,
-		UserID:      schema.UserID,
-		Name:        schema.Name,
-		Description: schema.Description,
-		Prefix:      schema.Prefix,
-		Scopes:      schema.Scopes,
-		Permissions: schema.Permissions,
-		RateLimit:   schema.RateLimit,
-		AllowedIPs:  schema.AllowedIPs,
-		Active:      schema.Active,
-		ExpiresAt:   schema.ExpiresAt,
-		UsageCount:  schema.UsageCount,
-		LastUsedAt:  schema.LastUsedAt,
-		LastUsedIP:  schema.LastUsedIP,
-		LastUsedUA:  schema.LastUsedUA,
-		CreatedAt:   schema.CreatedAt,
-		UpdatedAt:   schema.UpdatedAt,
-		Metadata:    schema.Metadata,
+		ID:             schema.ID,
+		AppID:          schema.AppID,
+		EnvironmentID:  schema.EnvironmentID,
+		OrganizationID: schema.OrganizationID,
+		UserID:         schema.UserID,
+		Name:           schema.Name,
+		Description:    schema.Description,
+		Prefix:         schema.Prefix,
+		Scopes:         schema.Scopes,
+		Permissions:    schema.Permissions,
+		RateLimit:      schema.RateLimit,
+		AllowedIPs:     schema.AllowedIPs,
+		Active:         schema.Active,
+		ExpiresAt:      schema.ExpiresAt,
+		UsageCount:     schema.UsageCount,
+		LastUsedAt:     schema.LastUsedAt,
+		LastUsedIP:     schema.LastUsedIP,
+		LastUsedUA:     schema.LastUsedUA,
+		CreatedAt:      schema.CreatedAt,
+		UpdatedAt:      schema.UpdatedAt,
+		Metadata:       schema.Metadata,
 	}
 }

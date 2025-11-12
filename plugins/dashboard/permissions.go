@@ -459,7 +459,7 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 	if adminRole == nil {
 		adminRole = &schema.Role{
 			ID:             xid.New(),
-			OrganizationID: &orgID,
+			AppID: &orgID,
 			Name:           "admin",
 			Description:    "Dashboard Administrator",
 		}
@@ -507,7 +507,7 @@ func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, user
 		fmt.Printf("[Dashboard] Superadmin role not found, creating new one...\n")
 		superadminRole = &schema.Role{
 			ID:             xid.New(),
-			OrganizationID: &orgID,
+			AppID: &orgID,
 			Name:           "superadmin",
 			Description:    "System Superadministrator (Platform Owner)",
 		}

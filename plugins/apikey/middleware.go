@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
-	"github.com/xraph/authsome/core/interfaces"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/forge"
 )
 
@@ -112,14 +111,11 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 		// Load user information
 		var usr *user.User
 		if m.userSvc != nil {
-			// Convert string UserID to xid.ID
-			userID, parseErr := xid.FromString(apiKey.UserID)
-			if parseErr == nil {
-				usr, err = m.userSvc.FindByID(c.Request().Context(), userID)
-				if err != nil {
-					// User not found, but continue with API key auth
-					// This allows API keys to work even if user service is unavailable
-				}
+			// UserID is already an xid.ID
+			usr, err = m.userSvc.FindByID(c.Request().Context(), apiKey.UserID)
+			if err != nil {
+				// User not found, but continue with API key auth
+				// This allows API keys to work even if user service is unavailable
 			}
 		}
 
@@ -129,8 +125,15 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 		ctx = context.WithValue(ctx, APIKeyAuthenticatedKey, true)
 		ctx = context.WithValue(ctx, APIKeyPermissionsKey, apiKey.Scopes)
 
-		// Inject organization context for multi-tenancy
-		ctx = context.WithValue(ctx, interfaces.OrganizationContextKey, apiKey.OrgID)
+		// Inject V2 architecture context (App, Environment, Organization)
+		ctx = interfaces.SetAppID(ctx, apiKey.AppID)
+		if apiKey.EnvironmentID != nil {
+			ctx = interfaces.SetEnvironmentID(ctx, *apiKey.EnvironmentID)
+		}
+		if apiKey.OrganizationID != nil {
+			ctx = interfaces.SetOrganizationID(ctx, *apiKey.OrganizationID)
+		}
+		ctx = interfaces.SetUserID(ctx, apiKey.UserID)
 
 		if usr != nil {
 			ctx = context.WithValue(ctx, APIKeyUserContextKey, usr)
@@ -279,14 +282,14 @@ func GetUser(c forge.Context) *user.User {
 	return nil
 }
 
-// GetOrgID extracts the organization ID from context
+// GetOrgID extracts the organization ID from context (V2 architecture)
+// Returns the xid.ID, check with IsNil() before use
 func GetOrgID(c forge.Context) string {
-	if orgID := c.Request().Context().Value(interfaces.OrganizationContextKey); orgID != nil {
-		if id, ok := orgID.(string); ok {
-			return id
-		}
+	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	if orgID.IsNil() {
+		return ""
 	}
-	return ""
+	return orgID.String()
 }
 
 // IsAuthenticated checks if the request is authenticated via API key

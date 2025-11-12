@@ -338,62 +338,74 @@ type Attribute struct {
 // Database models for SCIM provisioning
 
 // ProvisioningToken represents a SCIM provisioning token (Bearer token)
+// Updated for 3-tier architecture: App → Environment → Organization
 type ProvisioningToken struct {
-	ID          xid.ID     `bun:"id,pk,type:uuid"`
-	OrgID       xid.ID     `bun:"org_id,type:uuid,notnull"`
-	Name        string     `bun:"name,notnull"`
-	Description string     `bun:"description"`
-	TokenHash   string     `bun:"token_hash,notnull,unique"` // bcrypt hash
-	TokenPrefix string     `bun:"token_prefix,notnull"`      // First 8 chars for identification
-	Scopes      []string   `bun:"scopes,type:text[],notnull"`
-	ExpiresAt   *time.Time `bun:"expires_at"`
-	LastUsedAt  *time.Time `bun:"last_used_at"`
-	CreatedBy   xid.ID     `bun:"created_by,type:uuid"`
-	CreatedAt   time.Time  `bun:"created_at,notnull"`
-	UpdatedAt   time.Time  `bun:"updated_at,notnull"`
-	RevokedAt   *time.Time `bun:"revoked_at"`
+	ID             xid.ID     `bun:"id,pk,type:uuid"`
+	AppID          xid.ID     `bun:"app_id,type:uuid,notnull"`          // Platform app
+	EnvironmentID  xid.ID     `bun:"environment_id,type:uuid,notnull"`  // Target environment (dev, prod, etc.)
+	OrganizationID xid.ID     `bun:"organization_id,type:uuid,notnull"` // User-created organization
+	Name           string     `bun:"name,notnull"`
+	Description    string     `bun:"description"`
+	TokenHash      string     `bun:"token_hash,notnull,unique"` // bcrypt hash
+	TokenPrefix    string     `bun:"token_prefix,notnull"`      // First 8 chars for identification
+	Scopes         []string   `bun:"scopes,type:text[],notnull"`
+	ExpiresAt      *time.Time `bun:"expires_at"`
+	LastUsedAt     *time.Time `bun:"last_used_at"`
+	CreatedBy      xid.ID     `bun:"created_by,type:uuid"`
+	CreatedAt      time.Time  `bun:"created_at,notnull"`
+	UpdatedAt      time.Time  `bun:"updated_at,notnull"`
+	RevokedAt      *time.Time `bun:"revoked_at"`
 }
 
 // ProvisioningLog represents a log entry for provisioning operations
+// Updated for 3-tier architecture: App → Environment → Organization
 type ProvisioningLog struct {
-	ID           xid.ID                 `bun:"id,pk,type:uuid"`
-	OrgID        xid.ID                 `bun:"org_id,type:uuid,notnull"`
-	TokenID      xid.ID                 `bun:"token_id,type:uuid"`
-	Operation    string                 `bun:"operation,notnull"`     // CREATE_USER, UPDATE_USER, DELETE_USER, etc.
-	ResourceType string                 `bun:"resource_type,notnull"` // User, Group
-	ResourceID   string                 `bun:"resource_id"`
-	ExternalID   string                 `bun:"external_id"`
-	Method       string                 `bun:"method,notnull"` // POST, PUT, PATCH, DELETE
-	Path         string                 `bun:"path,notnull"`
-	StatusCode   int                    `bun:"status_code,notnull"`
-	Success      bool                   `bun:"success,notnull"`
-	ErrorMessage string                 `bun:"error_message"`
-	RequestBody  map[string]interface{} `bun:"request_body,type:jsonb"`
-	ResponseBody map[string]interface{} `bun:"response_body,type:jsonb"`
-	IPAddress    string                 `bun:"ip_address"`
-	UserAgent    string                 `bun:"user_agent"`
-	DurationMS   int                    `bun:"duration_ms"`
-	CreatedAt    time.Time              `bun:"created_at,notnull"`
+	ID             xid.ID                 `bun:"id,pk,type:uuid"`
+	AppID          xid.ID                 `bun:"app_id,type:uuid,notnull"`          // Platform app
+	EnvironmentID  xid.ID                 `bun:"environment_id,type:uuid,notnull"`  // Target environment
+	OrganizationID xid.ID                 `bun:"organization_id,type:uuid,notnull"` // User-created organization
+	TokenID        xid.ID                 `bun:"token_id,type:uuid"`
+	Operation      string                 `bun:"operation,notnull"`     // CREATE_USER, UPDATE_USER, DELETE_USER, etc.
+	ResourceType   string                 `bun:"resource_type,notnull"` // User, Group
+	ResourceID     string                 `bun:"resource_id"`
+	ExternalID     string                 `bun:"external_id"`
+	Method         string                 `bun:"method,notnull"` // POST, PUT, PATCH, DELETE
+	Path           string                 `bun:"path,notnull"`
+	StatusCode     int                    `bun:"status_code,notnull"`
+	Success        bool                   `bun:"success,notnull"`
+	ErrorMessage   string                 `bun:"error_message"`
+	RequestBody    map[string]interface{} `bun:"request_body,type:jsonb"`
+	ResponseBody   map[string]interface{} `bun:"response_body,type:jsonb"`
+	IPAddress      string                 `bun:"ip_address"`
+	UserAgent      string                 `bun:"user_agent"`
+	DurationMS     int                    `bun:"duration_ms"`
+	CreatedAt      time.Time              `bun:"created_at,notnull"`
 }
 
 // AttributeMapping represents custom attribute mappings per organization
+// Updated for 3-tier architecture: App → Environment → Organization
 type AttributeMapping struct {
-	ID        xid.ID                 `bun:"id,pk,type:uuid"`
-	OrgID     xid.ID                 `bun:"org_id,type:uuid,notnull,unique"`
-	Mappings  map[string]string      `bun:"mappings,type:jsonb,notnull"` // SCIM attr -> AuthSome field
-	Metadata  map[string]interface{} `bun:"metadata,type:jsonb"`
-	CreatedAt time.Time              `bun:"created_at,notnull"`
-	UpdatedAt time.Time              `bun:"updated_at,notnull"`
+	ID             xid.ID                 `bun:"id,pk,type:uuid"`
+	AppID          xid.ID                 `bun:"app_id,type:uuid,notnull"`                                    // Platform app
+	EnvironmentID  xid.ID                 `bun:"environment_id,type:uuid,notnull"`                            // Target environment
+	OrganizationID xid.ID                 `bun:"organization_id,type:uuid,notnull,unique:org_mapping_unique"` // User-created organization
+	Mappings       map[string]string      `bun:"mappings,type:jsonb,notnull"`                                 // SCIM attr -> AuthSome field
+	Metadata       map[string]interface{} `bun:"metadata,type:jsonb"`
+	CreatedAt      time.Time              `bun:"created_at,notnull"`
+	UpdatedAt      time.Time              `bun:"updated_at,notnull"`
 }
 
-// GroupMapping represents SCIM group to AuthSome team/role mapping
+// GroupMapping represents SCIM group to user-created organization team/role mapping
+// Updated for 3-tier architecture: App → Environment → Organization
 type GroupMapping struct {
-	ID            xid.ID    `bun:"id,pk,type:uuid"`
-	OrgID         xid.ID    `bun:"org_id,type:uuid,notnull"`
-	SCIMGroupID   string    `bun:"scim_group_id,notnull"`
-	SCIMGroupName string    `bun:"scim_group_name,notnull"`
-	MappingType   string    `bun:"mapping_type,notnull"`        // team, role
-	TargetID      xid.ID    `bun:"target_id,type:uuid,notnull"` // Team ID or Role ID
-	CreatedAt     time.Time `bun:"created_at,notnull"`
-	UpdatedAt     time.Time `bun:"updated_at,notnull"`
+	ID             xid.ID    `bun:"id,pk,type:uuid"`
+	AppID          xid.ID    `bun:"app_id,type:uuid,notnull"`          // Platform app
+	EnvironmentID  xid.ID    `bun:"environment_id,type:uuid,notnull"`  // Target environment
+	OrganizationID xid.ID    `bun:"organization_id,type:uuid,notnull"` // User-created organization
+	SCIMGroupID    string    `bun:"scim_group_id,notnull"`
+	SCIMGroupName  string    `bun:"scim_group_name,notnull"`
+	MappingType    string    `bun:"mapping_type,notnull"`        // team, role (in user-created organization)
+	TargetID       xid.ID    `bun:"target_id,type:uuid,notnull"` // Team ID or Role ID in user organization
+	CreatedAt      time.Time `bun:"created_at,notnull"`
+	UpdatedAt      time.Time `bun:"updated_at,notnull"`
 }

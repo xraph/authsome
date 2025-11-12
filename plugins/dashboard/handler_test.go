@@ -2,12 +2,14 @@ package dashboard
 
 import (
 	"embed"
-	"html/template"
 	"testing"
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
@@ -15,23 +17,39 @@ import (
 )
 
 func TestNewHandler(t *testing.T) {
-	tmpl := template.Must(template.New("test").Parse("test"))
 	assets := embed.FS{}
 	userSvc := &user.Service{}
 	sessionSvc := &session.Service{}
 	auditSvc := &audit.Service{}
 	rbacSvc := &rbac.Service{}
+	apikeyService := &apikey.Service{}
+	orgService := &app.Service{}
+	db := &bun.DB{}
+	isSaaSMode := false
 	basePath := "/api/auth"
 
-	handler := NewHandler(tmpl, assets, userSvc, sessionSvc, auditSvc, rbacSvc, basePath)
+	handler := NewHandler(
+		assets,
+		userSvc,
+		sessionSvc,
+		auditSvc,
+		rbacSvc,
+		apikeyService,
+		orgService,
+		db,
+		isSaaSMode,
+		basePath,
+	)
 
 	require.NotNil(t, handler)
-	assert.Equal(t, tmpl, handler.templates)
 	assert.Equal(t, userSvc, handler.userSvc)
 	assert.Equal(t, sessionSvc, handler.sessionSvc)
 	assert.Equal(t, auditSvc, handler.auditSvc)
 	assert.Equal(t, rbacSvc, handler.rbacSvc)
+	assert.Equal(t, apikeyService, handler.apikeyService)
+	assert.Equal(t, orgService, handler.orgService)
 	assert.Equal(t, basePath, handler.basePath)
+	assert.Equal(t, isSaaSMode, handler.isSaaSMode)
 }
 
 func TestGetContentType(t *testing.T) {

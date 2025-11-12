@@ -61,11 +61,14 @@ func (r *Repository) FindProvisioningTokenByID(ctx context.Context, id xid.ID) (
 }
 
 // ListProvisioningTokens lists all provisioning tokens for an organization
-func (r *Repository) ListProvisioningTokens(ctx context.Context, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, error) {
+// Updated for 3-tier architecture: App → Environment → Organization
+func (r *Repository) ListProvisioningTokens(ctx context.Context, appID, envID, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, error) {
 	var tokens []*ProvisioningToken
 	err := r.db.NewSelect().
 		Model(&tokens).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("revoked_at IS NULL").
 		Order("created_at DESC").
 		Limit(limit).
@@ -102,10 +105,13 @@ func (r *Repository) RevokeProvisioningToken(ctx context.Context, id xid.ID) err
 }
 
 // CountProvisioningTokens counts active tokens for an organization
-func (r *Repository) CountProvisioningTokens(ctx context.Context, orgID xid.ID) (int, error) {
+// Updated for 3-tier architecture
+func (r *Repository) CountProvisioningTokens(ctx context.Context, appID, envID, orgID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*ProvisioningToken)(nil)).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("revoked_at IS NULL").
 		Count(ctx)
 
@@ -123,10 +129,13 @@ func (r *Repository) CreateProvisioningLog(ctx context.Context, log *Provisionin
 }
 
 // ListProvisioningLogs lists provisioning logs with filtering
-func (r *Repository) ListProvisioningLogs(ctx context.Context, orgID xid.ID, filters map[string]interface{}, limit, offset int) ([]*ProvisioningLog, error) {
+// Updated for 3-tier architecture
+func (r *Repository) ListProvisioningLogs(ctx context.Context, appID, envID, orgID xid.ID, filters map[string]interface{}, limit, offset int) ([]*ProvisioningLog, error) {
 	query := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
-		Where("org_id = ?", orgID)
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID)
 
 	// Apply filters
 	if operation, ok := filters["operation"].(string); ok && operation != "" {
@@ -156,10 +165,12 @@ func (r *Repository) ListProvisioningLogs(ctx context.Context, orgID xid.ID, fil
 }
 
 // CountProvisioningLogs counts provisioning logs with filtering
-func (r *Repository) CountProvisioningLogs(ctx context.Context, orgID xid.ID, filters map[string]interface{}) (int, error) {
+func (r *Repository) CountProvisioningLogs(ctx context.Context, appID, envID, orgID xid.ID, filters map[string]interface{}) (int, error) {
 	query := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
-		Where("org_id = ?", orgID)
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID)
 
 	// Apply same filters as ListProvisioningLogs
 	if operation, ok := filters["operation"].(string); ok && operation != "" {
@@ -182,13 +193,15 @@ func (r *Repository) CountProvisioningLogs(ctx context.Context, orgID xid.ID, fi
 }
 
 // GetProvisioningStats returns provisioning statistics
-func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, startDate, endDate time.Time) (map[string]interface{}, error) {
+func (r *Repository) GetProvisioningStats(ctx context.Context, appID, envID, orgID xid.ID, startDate, endDate time.Time) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
 	// Total operations
 	totalCount, err := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("created_at >= ?", startDate).
 		Where("created_at <= ?", endDate).
 		Count(ctx)
@@ -201,7 +214,9 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 	// Success rate
 	successCount, err := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("created_at >= ?", startDate).
 		Where("created_at <= ?", endDate).
 		Where("success = ?", true).
@@ -230,7 +245,9 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 		Model((*ProvisioningLog)(nil)).
 		Column("operation").
 		ColumnExpr("COUNT(*) as count").
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("created_at >= ?", startDate).
 		Where("created_at <= ?", endDate).
 		Group("operation").
@@ -251,7 +268,9 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, orgID xid.ID, sta
 	err = r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
 		ColumnExpr("AVG(duration_ms) as avg_duration").
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("created_at >= ?", startDate).
 		Where("created_at <= ?", endDate).
 		Scan(ctx, &avgDuration)
@@ -275,11 +294,13 @@ func (r *Repository) CreateAttributeMapping(ctx context.Context, mapping *Attrib
 }
 
 // GetAttributeMapping gets attribute mapping for an organization
-func (r *Repository) GetAttributeMapping(ctx context.Context, orgID xid.ID) (*AttributeMapping, error) {
+func (r *Repository) GetAttributeMapping(ctx context.Context, appID, envID, orgID xid.ID) (*AttributeMapping, error) {
 	var mapping AttributeMapping
 	err := r.db.NewSelect().
 		Model(&mapping).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Scan(ctx)
 
 	if err != nil {
@@ -312,11 +333,13 @@ func (r *Repository) CreateGroupMapping(ctx context.Context, mapping *GroupMappi
 }
 
 // FindGroupMapping finds a group mapping by SCIM group ID
-func (r *Repository) FindGroupMapping(ctx context.Context, orgID xid.ID, scimGroupID string) (*GroupMapping, error) {
+func (r *Repository) FindGroupMapping(ctx context.Context, appID, envID, orgID xid.ID, scimGroupID string) (*GroupMapping, error) {
 	var mapping GroupMapping
 	err := r.db.NewSelect().
 		Model(&mapping).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("scim_group_id = ?", scimGroupID).
 		Scan(ctx)
 
@@ -328,11 +351,13 @@ func (r *Repository) FindGroupMapping(ctx context.Context, orgID xid.ID, scimGro
 }
 
 // ListGroupMappings lists all group mappings for an organization
-func (r *Repository) ListGroupMappings(ctx context.Context, orgID xid.ID) ([]*GroupMapping, error) {
+func (r *Repository) ListGroupMappings(ctx context.Context, appID, envID, orgID xid.ID) ([]*GroupMapping, error) {
 	var mappings []*GroupMapping
 	err := r.db.NewSelect().
 		Model(&mappings).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Order("created_at DESC").
 		Scan(ctx)
 
@@ -374,7 +399,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	// Create indexes for provisioning_tokens
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningToken)(nil)).
-		Index("idx_provisioning_tokens_org_id").
+		Index("idx_provisioning_tokens_org").
 		Column("org_id").
 		IfNotExists().
 		Exec(ctx); err != nil {
@@ -401,7 +426,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	// Create indexes for provisioning_logs
 	if _, err := r.db.NewCreateIndex().
 		Model((*ProvisioningLog)(nil)).
-		Index("idx_provisioning_logs_org_id").
+		Index("idx_provisioning_logs_org").
 		Column("org_id").
 		IfNotExists().
 		Exec(ctx); err != nil {
@@ -437,7 +462,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	// Create indexes for attribute_mappings
 	if _, err := r.db.NewCreateIndex().
 		Model((*AttributeMapping)(nil)).
-		Index("idx_attribute_mappings_org_id").
+		Index("idx_attribute_mappings_org").
 		Column("org_id").
 		Unique().
 		IfNotExists().
@@ -456,7 +481,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	// Create indexes for group_mappings
 	if _, err := r.db.NewCreateIndex().
 		Model((*GroupMapping)(nil)).
-		Index("idx_group_mappings_org_id").
+		Index("idx_group_mappings_org").
 		Column("org_id").
 		IfNotExists().
 		Exec(ctx); err != nil {
@@ -498,12 +523,15 @@ func (r *Repository) FindGroupMappingByTargetID(ctx context.Context, targetID xi
 }
 
 // FindGroupMappingBySCIMID finds a group mapping by SCIM group ID
-func (r *Repository) FindGroupMappingBySCIMID(ctx context.Context, scimGroupID string, orgID xid.ID) (*GroupMapping, error) {
+// Updated for 3-tier architecture
+func (r *Repository) FindGroupMappingBySCIMID(ctx context.Context, appID, envID, orgID xid.ID, scimGroupID string) (*GroupMapping, error) {
 	var mapping GroupMapping
 	err := r.db.NewSelect().
 		Model(&mapping).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Where("scim_group_id = ?", scimGroupID).
-		Where("org_id = ?", orgID).
 		Scan(ctx)
 
 	if err != nil {
@@ -514,11 +542,13 @@ func (r *Repository) FindGroupMappingBySCIMID(ctx context.Context, scimGroupID s
 }
 
 // FindAttributeMappingByOrgID finds attribute mapping by organization ID
-func (r *Repository) FindAttributeMappingByOrgID(ctx context.Context, orgID xid.ID) (*AttributeMapping, error) {
+func (r *Repository) FindAttributeMappingByOrganization(ctx context.Context, appID, envID, orgID xid.ID) (*AttributeMapping, error) {
 	var mapping AttributeMapping
 	err := r.db.NewSelect().
 		Model(&mapping).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id = ?", orgID).
 		Scan(ctx)
 
 	if err != nil {

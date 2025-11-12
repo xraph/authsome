@@ -2,6 +2,8 @@ package passkey
 
 import (
 	"encoding/json"
+
+	"github.com/rs/xid"
 	"github.com/xraph/forge"
 )
 
@@ -18,7 +20,11 @@ func (h *Handler) BeginRegister(c forge.Context) error {
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	res, err := h.svc.BeginRegistration(c.Request().Context(), body.UserID)
+	userID, err := xid.FromString(body.UserID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user_id format"})
+	}
+	res, err := h.svc.BeginRegistration(c.Request().Context(), userID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
@@ -33,9 +39,13 @@ func (h *Handler) FinishRegister(c forge.Context) error {
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+	userID, err := xid.FromString(body.UserID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user_id format"})
+	}
 	ip := c.Request().RemoteAddr
 	ua := c.Request().UserAgent()
-	if err := h.svc.FinishRegistration(c.Request().Context(), body.UserID, body.CredentialID, ip, ua); err != nil {
+	if err := h.svc.FinishRegistration(c.Request().Context(), userID, body.CredentialID, ip, ua); err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(200, map[string]string{"status": "registered"})
@@ -48,7 +58,11 @@ func (h *Handler) BeginLogin(c forge.Context) error {
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
-	res, err := h.svc.BeginLogin(c.Request().Context(), body.UserID)
+	userID, err := xid.FromString(body.UserID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user_id format"})
+	}
+	res, err := h.svc.BeginLogin(c.Request().Context(), userID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
@@ -63,9 +77,13 @@ func (h *Handler) FinishLogin(c forge.Context) error {
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+	userID, err := xid.FromString(body.UserID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user_id format"})
+	}
 	ip := c.Request().RemoteAddr
 	ua := c.Request().UserAgent()
-	res, err := h.svc.FinishLogin(c.Request().Context(), body.UserID, body.Remember, ip, ua)
+	res, err := h.svc.FinishLogin(c.Request().Context(), userID, body.Remember, ip, ua)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
 	}
@@ -73,7 +91,11 @@ func (h *Handler) FinishLogin(c forge.Context) error {
 }
 
 func (h *Handler) List(c forge.Context) error {
-	userID := c.Request().URL.Query().Get("user_id")
+	userIDStr := c.Request().URL.Query().Get("user_id")
+	userID, err := xid.FromString(userIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user_id format"})
+	}
 	out, err := h.svc.List(c.Request().Context(), userID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": err.Error()})
@@ -82,7 +104,11 @@ func (h *Handler) List(c forge.Context) error {
 }
 
 func (h *Handler) Delete(c forge.Context) error {
-	id := c.Param("id")
+	idStr := c.Param("id")
+	id, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid id format"})
+	}
 	ip := c.Request().RemoteAddr
 	ua := c.Request().UserAgent()
 	if err := h.svc.Delete(c.Request().Context(), id, ip, ua); err != nil {

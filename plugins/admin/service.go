@@ -69,27 +69,31 @@ func NewService(
 }
 
 // CreateUserRequest represents a request to create a user
+// Updated for V2 architecture: App → Environment → Organization
 type CreateUserRequest struct {
-	Email          string            `json:"email"`
-	Password       string            `json:"password,omitempty"`
-	Name           string            `json:"name,omitempty"`
-	Username       string            `json:"username,omitempty"`
-	OrganizationID string            `json:"organization_id"`
-	Role           string            `json:"role,omitempty"`
-	EmailVerified  bool              `json:"email_verified"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
-	AdminID        string            `json:"-"` // Set by handler
+	AppID              xid.ID            `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID           `json:"user_organization_id,omitempty"` // User-created org (optional)
+	Email              string            `json:"email"`
+	Password           string            `json:"password,omitempty"`
+	Name               string            `json:"name,omitempty"`
+	Username           string            `json:"username,omitempty"`
+	Role               string            `json:"role,omitempty"`
+	EmailVerified      bool              `json:"email_verified"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
+	AdminID            xid.ID            `json:"-"` // Set by handler
 }
 
 // ListUsersRequest represents a request to list users
+// Updated for V2 architecture
 type ListUsersRequest struct {
-	OrganizationID string `json:"organization_id"`
-	Page           int    `json:"page"`
-	Limit          int    `json:"limit"`
-	Search         string `json:"search,omitempty"`
-	Role           string `json:"role,omitempty"`
-	Status         string `json:"status,omitempty"` // active, banned, inactive
-	AdminID        string `json:"-"`                // Set by handler
+	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
+	Page               int     `json:"page"`
+	Limit              int     `json:"limit"`
+	Search             string  `json:"search,omitempty"`
+	Role               string  `json:"role,omitempty"`
+	Status             string  `json:"status,omitempty"` // active, banned, inactive
+	AdminID            xid.ID  `json:"-"`                // Set by handler
 }
 
 // ListUsersResponse represents the response for listing users
@@ -102,44 +106,57 @@ type ListUsersResponse struct {
 }
 
 // BanUserRequest represents a request to ban a user
+// Updated for V2 architecture
 type BanUserRequest struct {
-	UserID    string     `json:"user_id"`
-	Reason    string     `json:"reason"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	AdminID   string     `json:"-"` // Set by handler
+	AppID              xid.ID     `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID    `json:"user_organization_id,omitempty"` // User-created org (optional)
+	UserID             xid.ID     `json:"user_id"`
+	Reason             string     `json:"reason"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	AdminID            xid.ID     `json:"-"` // Set by handler
 }
 
 // UnbanUserRequest represents a request to unban a user
+// Updated for V2 architecture
 type UnbanUserRequest struct {
-	UserID  string `json:"user_id"`
-	Reason  string `json:"reason,omitempty"`
-	AdminID string `json:"-"` // Set by handler
+	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
+	UserID             xid.ID  `json:"user_id"`
+	Reason             string  `json:"reason,omitempty"`
+	AdminID            xid.ID  `json:"-"` // Set by handler
 }
 
 // ImpersonateUserRequest represents a request to impersonate a user
+// Updated for V2 architecture
 type ImpersonateUserRequest struct {
-	UserID    string        `json:"user_id"`
-	Duration  time.Duration `json:"duration,omitempty"`
-	IPAddress string        `json:"-"` // Set by handler
-	UserAgent string        `json:"-"` // Set by handler
-	AdminID   string        `json:"-"` // Set by handler
+	AppID              xid.ID        `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID       `json:"user_organization_id,omitempty"` // User-created org (optional)
+	UserID             xid.ID        `json:"user_id"`
+	Duration           time.Duration `json:"duration,omitempty"`
+	IPAddress          string        `json:"-"` // Set by handler
+	UserAgent          string        `json:"-"` // Set by handler
+	AdminID            xid.ID        `json:"-"` // Set by handler
 }
 
 // SetUserRoleRequest represents a request to set a user's role
+// Updated for V2 architecture
 type SetUserRoleRequest struct {
-	UserID         string `json:"user_id"`
-	Role           string `json:"role"`
-	OrganizationID string `json:"organization_id"`
-	AdminID        string `json:"-"` // Set by handler
+	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
+	UserID             xid.ID  `json:"user_id"`
+	Role               string  `json:"role"`
+	AdminID            xid.ID  `json:"-"` // Set by handler
 }
 
 // ListSessionsRequest represents a request to list sessions
+// Updated for V2 architecture
 type ListSessionsRequest struct {
-	UserID         string `json:"user_id,omitempty"`
-	OrganizationID string `json:"organization_id"`
-	Page           int    `json:"page"`
-	Limit          int    `json:"limit"`
-	AdminID        string `json:"-"` // Set by handler
+	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
+	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
+	UserID             *xid.ID `json:"user_id,omitempty"`
+	Page               int     `json:"page"`
+	Limit              int     `json:"limit"`
+	AdminID            xid.ID  `json:"-"` // Set by handler
 }
 
 // ListSessionsResponse represents the response for listing sessions
@@ -183,10 +200,13 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	}
 
 	// Log audit event
-	adminID, _ := xid.FromString(req.AdminID)
-	if err := s.auditService.Log(ctx, &adminID, "user:create", "user",
+	orgIDStr := req.AppID.String()
+	if req.UserOrganizationID != nil {
+		orgIDStr = req.UserOrganizationID.String()
+	}
+	if err := s.auditService.Log(ctx, &req.AdminID, "user:create", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
-		fmt.Sprintf(`{"created_user_id":"%s","email":"%s","name":"%s"}`, newUser.ID.String(), newUser.Email, newUser.Name)); err != nil {
+		fmt.Sprintf(`{"created_user_id":"%s","email":"%s","name":"%s","app_id":"%s","organization_id":"%s"}`, newUser.ID.String(), newUser.Email, newUser.Name, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
@@ -241,32 +261,25 @@ func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUs
 }
 
 // DeleteUser deletes a user
-func (s *Service) DeleteUser(ctx context.Context, userID, adminID string) error {
+func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, adminID, "user:delete"); err != nil {
 		return err
 	}
 
-	// Parse user ID
-	userIDParsed, err := xid.FromString(userID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %w", err)
-	}
-
 	// Get user before deletion for audit
-	targetUser, err := s.userService.FindByID(ctx, userIDParsed)
+	targetUser, err := s.userService.FindByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to find user: %w", err)
 	}
 
 	// Delete user
-	if err := s.userService.Delete(ctx, userIDParsed); err != nil {
+	if err := s.userService.Delete(ctx, userID); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	// Log audit event
-	adminIDParsed, _ := xid.FromString(adminID)
-	if err := s.auditService.Log(ctx, &adminIDParsed, "user:delete", "user",
+	if err := s.auditService.Log(ctx, &adminID, "user:delete", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"deleted_user_id":"%s","email":"%s","name":"%s"}`, targetUser.ID.String(), targetUser.Email, targetUser.Name)); err != nil {
 		// Log error but don't fail the operation
@@ -285,8 +298,8 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 
 	// Create ban request
 	banReq := &user.BanRequest{
-		UserID:    req.UserID,
-		BannedBy:  req.AdminID,
+		UserID:    req.UserID.String(),
+		BannedBy:  req.AdminID.String(),
 		Reason:    req.Reason,
 		ExpiresAt: req.ExpiresAt,
 	}
@@ -298,14 +311,13 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	}
 
 	// Log audit event
-	adminID, _ := xid.FromString(req.AdminID)
 	expiresAtStr := "null"
 	if req.ExpiresAt != nil {
 		expiresAtStr = fmt.Sprintf(`"%s"`, req.ExpiresAt.Format(time.RFC3339))
 	}
-	if err := s.auditService.Log(ctx, &adminID, "user:ban", "user",
+	if err := s.auditService.Log(ctx, &req.AdminID, "user:ban", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
-		fmt.Sprintf(`{"banned_user_id":"%s","reason":"%s","expires_at":%s}`, req.UserID, req.Reason, expiresAtStr)); err != nil {
+		fmt.Sprintf(`{"banned_user_id":"%s","reason":"%s","expires_at":%s}`, req.UserID.String(), req.Reason, expiresAtStr)); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
@@ -322,8 +334,8 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 
 	// Create unban request
 	unbanReq := &user.UnbanRequest{
-		UserID:     req.UserID,
-		UnbannedBy: req.AdminID,
+		UserID:     req.UserID.String(),
+		UnbannedBy: req.AdminID.String(),
 	}
 
 	// Unban user
@@ -332,10 +344,9 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 	}
 
 	// Log audit event
-	adminID, _ := xid.FromString(req.AdminID)
-	if err := s.auditService.Log(ctx, &adminID, "user:unban", "user",
+	if err := s.auditService.Log(ctx, &req.AdminID, "user:unban", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
-		fmt.Sprintf(`{"unbanned_user_id":"%s"}`, req.UserID)); err != nil {
+		fmt.Sprintf(`{"unbanned_user_id":"%s"}`, req.UserID.String())); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
@@ -350,14 +361,8 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 		return nil, err
 	}
 
-	// Parse user ID
-	userID, err := xid.FromString(req.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
-	}
-
 	// Get target user to ensure they exist
-	targetUser, err := s.userService.FindByID(ctx, userID)
+	targetUser, err := s.userService.FindByID(ctx, req.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
@@ -366,7 +371,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	}
 
 	// Check if user is banned
-	if banned, err := s.banService.IsUserBanned(ctx, req.UserID); err != nil {
+	if banned, err := s.banService.IsUserBanned(ctx, req.UserID.String()); err != nil {
 		return nil, fmt.Errorf("failed to check ban status: %w", err)
 	} else if banned {
 		return nil, fmt.Errorf("cannot impersonate banned user")
@@ -380,7 +385,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 
 	// Create impersonation session
 	sessionReq := &session.CreateSessionRequest{
-		UserID:    userID,
+		UserID:    req.UserID,
 		IPAddress: req.IPAddress,
 		UserAgent: req.UserAgent,
 		Remember:  false,
@@ -392,10 +397,9 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	}
 
 	// Log audit event
-	adminID, _ := xid.FromString(req.AdminID)
-	if err := s.auditService.Log(ctx, &adminID, "user:impersonate", "user",
+	if err := s.auditService.Log(ctx, &req.AdminID, "user:impersonate", "user",
 		req.IPAddress, req.UserAgent,
-		fmt.Sprintf(`{"impersonated_user_id":"%s","session_id":"%s","duration":"%s"}`, userID.String(), newSession.ID.String(), duration.String())); err != nil {
+		fmt.Sprintf(`{"impersonated_user_id":"%s","session_id":"%s","duration":"%s"}`, req.UserID.String(), newSession.ID.String(), duration.String())); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
@@ -410,21 +414,19 @@ func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) erro
 		return err
 	}
 
-	// Parse user ID
-	userID, err := xid.FromString(req.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %w", err)
-	}
-
 	// Role assignment through RBAC
 	// TODO: Implement role assignment when role repository is integrated
 	// For now, log the intended role assignment for audit purposes
 
+	orgIDStr := req.AppID.String()
+	if req.UserOrganizationID != nil {
+		orgIDStr = req.UserOrganizationID.String()
+	}
+
 	// Log audit event
-	adminID, _ := xid.FromString(req.AdminID)
-	if err := s.auditService.Log(ctx, &adminID, "role:assign", "user",
+	if err := s.auditService.Log(ctx, &req.AdminID, "role:assign", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
-		fmt.Sprintf(`{"target_user_id":"%s","role":"%s","organization_id":"%s"}`, userID.String(), req.Role, req.OrganizationID)); err != nil {
+		fmt.Sprintf(`{"target_user_id":"%s","role":"%s","app_id":"%s","organization_id":"%s"}`, req.UserID.String(), req.Role, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
@@ -460,30 +462,23 @@ func (s *Service) ListSessions(ctx context.Context, req *ListSessionsRequest) (*
 }
 
 // RevokeSession revokes a session
-func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID string) error {
+func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, adminID, "session:revoke"); err != nil {
 		return err
 	}
 
-	// Parse session ID
-	sessionIDParsed, err := xid.FromString(sessionID)
-	if err != nil {
-		return fmt.Errorf("invalid session ID: %w", err)
-	}
-
 	// Revoke session by ID
 	// Note: Session service uses token for revocation, but we only have ID here
 	// TODO: Add FindByID method to session service or use token-based lookup
-	if err := s.sessionService.Revoke(ctx, sessionIDParsed.String()); err != nil {
+	if err := s.sessionService.Revoke(ctx, sessionID.String()); err != nil {
 		return fmt.Errorf("failed to revoke session: %w", err)
 	}
 
 	// Log audit event
-	adminIDParsed, _ := xid.FromString(adminID)
-	if err := s.auditService.Log(ctx, &adminIDParsed, "session:revoke", "session",
+	if err := s.auditService.Log(ctx, &adminID, "session:revoke", "session",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
-		fmt.Sprintf(`{"revoked_session_id":"%s"}`, sessionIDParsed.String())); err != nil {
+		fmt.Sprintf(`{"revoked_session_id":"%s"}`, sessionID.String())); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
@@ -492,15 +487,9 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID string) 
 }
 
 // checkAdminPermission checks if the admin has the required permission
-func (s *Service) checkAdminPermission(ctx context.Context, userID, permission string) error {
-	// Parse admin ID
-	adminID, err := xid.FromString(userID)
-	if err != nil {
-		return fmt.Errorf("invalid admin ID: %w", err)
-	}
-
+func (s *Service) checkAdminPermission(ctx context.Context, userID xid.ID, permission string) error {
 	// Check if admin exists
-	admin, err := s.userService.FindByID(ctx, adminID)
+	admin, err := s.userService.FindByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("admin not found: %w", err)
 	}

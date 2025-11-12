@@ -36,7 +36,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"

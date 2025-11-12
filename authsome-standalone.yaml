@@ -1,76 +1,185 @@
-# AuthSome Standalone Configuration
-mode: standalone
+# AuthSome V2 Configuration - Standalone Mode
+# This configuration is for single-tenant applications (one default app)
 
-# Database configuration
-database:
-  url: "authsome.db"
-  # For PostgreSQL: "postgres://user:password@localhost/authsome?sslmode=disable"
-  # For MySQL: "mysql://user:password@localhost/authsome"
-
-# Server configuration
 server:
-  host: "localhost"
+  host: localhost
   port: 8080
+  baseUrl: http://localhost:8080
   cors:
     enabled: true
-    origins: ["http://localhost:3000"]
+    origins:
+      - "http://localhost:3000"
+      - "http://localhost:8080"
 
-# Session configuration
-session:
-  secret: "your-session-secret-here"
-  maxAge: 86400 # 24 hours
-  secure: false # Set to true in production with HTTPS
-  sameSite: "lax"
+database:
+  driver: sqlite
+  url: "authsome.db"
+  # For PostgreSQL: postgresql://user:password@localhost:5432/authsome?sslmode=disable
+  # For MySQL: mysql://user:password@localhost:3306/authsome
+  maxOpenConns: 10
+  maxIdleConns: 2
 
-# Rate limiting
-rateLimit:
-  enabled: true
-  requests: 100
-  window: 3600 # 1 hour
+auth:
+  # App configuration
+  app:
+    platform_id: "platform"
+    default_name: "My Application"
+    auto_create: true  # Auto-create default app on startup
+  
+  # Password requirements
+  password:
+    minLength: 8
+    requireLower: true
+    requireUpper: true
+    requireNumbers: true
+    requireSymbols: false
+  
+  # Session configuration
+  session:
+    secret: "your-session-secret-change-in-production"
+    cookieName: authsome-session
+    cookieMaxAge: 86400  # 24 hours
+    cookieSecure: false  # Set to true in production
+    cookieHttpOnly: true
+    cookieSameSite: lax
+  
+  # JWT configuration
+  jwt:
+    secret: "your-jwt-secret-change-in-production"
+    expiresIn: 3600  # 1 hour
+    refreshExpiresIn: 2592000  # 30 days
+    issuer: "authsome"
+    audience: "your-app"
+  
+  # Rate limiting
+  rateLimit:
+    enabled: true
+    requests: 100
+    window: 3600  # 1 hour in seconds
 
 # Email configuration
 email:
-  provider: "smtp"
+  provider: smtp
   smtp:
-    host: "smtp.gmail.com"
+    host: smtp.gmail.com
     port: 587
-    username: "your-email@gmail.com"
-    password: "your-app-password"
-    from: "noreply@yourapp.com"
+    username: your-email@gmail.com
+    password: your-app-password
+    from: noreply@yourapp.com
+    useTLS: true
 
-# Authentication plugins
+# Plugins configuration
 plugins:
+  # Multi-tenancy plugin (disabled in standalone mode)
+  multitenancy:
+    enabled: false  # Only one app in standalone mode
+    enableAppCreation: false
+    autoCreateDefaultApp: true  # Still create the default app
+    defaultAppName: "My Application"
+    defaultEnvironmentName: "Development"
+  
+  # Organization plugin (optional even in standalone)
+  organization:
+    enabled: true  # Users can still create organizations within the single app
+    enableUserCreation: true
+    maxPerUser: 10
+    defaultRole: "owner"
+  
+  # Environment plugin
+  environment:
+    enabled: true
+    autoCreateDev: true  # Auto-create dev environment
+    allowPromotion: false  # Simplified for standalone
+    maxPerApp: 3  # dev, staging, prod
+  
+  # Authentication methods
   username:
     enabled: true
+    minLength: 3
+    maxLength: 30
+  
   twofa:
     enabled: true
     issuer: "YourApp"
-  magiclink:
+    allowBackupCodes: true
+  
+  magicLink:
     enabled: true
-    expiresIn: 900 # 15 minutes
+    expirationMinutes: 15
+  
+  anonymous:
+    enabled: false
+  
+  passkey:
+    enabled: false
+  
+  phone:
+    enabled: false
+  
+  # API Keys
+  apikey:
+    enabled: true
+    defaultExpiration: 365  # Days
+  
+  # OAuth providers
   oauth:
     google:
       enabled: false
       clientId: "your-google-client-id"
       clientSecret: "your-google-client-secret"
+      redirectUri: "http://localhost:8080/api/auth/callback/google"
+    
     github:
       enabled: false
       clientId: "your-github-client-id"
       clientSecret: "your-github-client-secret"
-
-# JWT configuration
-jwt:
-  secret: "your-jwt-secret-here"
-  expiresIn: 3600 # 1 hour
-  issuer: "authsome"
-  audience: "your-app"
-
-# Webhooks
-webhooks:
-  enabled: false
-  endpoints: []
+      redirectUri: "http://localhost:8080/api/auth/callback/github"
+  
+  # SSO (typically not needed in standalone)
+  sso:
+    enabled: false
+  
+  # SCIM (typically not needed in standalone)
+  scim:
+    enabled: false
+  
+  # Dashboard
+  dashboard:
+    enabled: true
+    basePath: "/dashboard"
+    requireAuth: true
+  
+  # Webhooks
+  webhooks:
+    enabled: false
+    endpoints: []
 
 # Audit logging
 audit:
   enabled: true
-  retention: 2160 # 90 days in hours
+  retention: 2160  # 90 days in hours
+  logLevel: info
+
+# Logging configuration
+logging:
+  level: info  # Options: debug, info, warn, error
+  format: text  # Options: json, text
+  output: stdout
+
+# Monitoring
+monitoring:
+  metricsEnabled: false
+  healthCheckPath: /health
+
+# Redis (optional)
+redis:
+  enabled: false
+  addr: "localhost:6379"
+
+# Security settings
+security:
+  bcryptCost: 10  # Lower for development
+  deviceTracking: true
+  geofencing:
+    enabled: false
+  suspiciousActivityDetection: false  # Simplified for standalone

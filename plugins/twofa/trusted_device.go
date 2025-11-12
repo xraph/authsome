@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -53,7 +52,7 @@ func (s *Service) MarkTrustedDevice(ctx context.Context, userID, deviceID string
 		// Update existing trust record
 		existing.ExpiresAt = expiresAt
 		existing.AuditableModel.UpdatedBy = uid
-		existing.AuditableModel.UpdatedAt = bun.NullTime{Time: time.Now().UTC()}
+		existing.AuditableModel.UpdatedAt = time.Now().UTC()
 
 		_, err = s.repo.DB().NewUpdate().
 			Model(&existing).

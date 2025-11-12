@@ -16,22 +16,38 @@ type MagicLinkRepository struct {
 
 func NewMagicLinkRepository(db *bun.DB) *MagicLinkRepository { return &MagicLinkRepository{db: db} }
 
-// Create stores a new magic link record
-func (r *MagicLinkRepository) Create(ctx context.Context, email, token string, expiresAt time.Time) error {
-	rec := &schema.MagicLink{ID: xid.New(), Email: email, Token: token, ExpiresAt: expiresAt}
+// Create stores a new magic link record with app and optional org scoping
+func (r *MagicLinkRepository) Create(ctx context.Context, email, token string, appID xid.ID, userOrganizationID *xid.ID, expiresAt time.Time) error {
+	rec := &schema.MagicLink{
+		ID:                 xid.New(),
+		Email:              email,
+		Token:              token,
+		AppID:              appID,
+		UserOrganizationID: userOrganizationID,
+		ExpiresAt:          expiresAt,
+	}
 	rec.AuditableModel.CreatedBy = rec.ID
 	rec.AuditableModel.UpdatedBy = rec.ID
 	_, err := r.db.NewInsert().Model(rec).Exec(ctx)
 	return err
 }
 
-// FindByToken returns an active magic link by token
-func (r *MagicLinkRepository) FindByToken(ctx context.Context, token string, now time.Time) (*schema.MagicLink, error) {
+// FindByToken returns an active magic link by token, scoped to app and optional org
+func (r *MagicLinkRepository) FindByToken(ctx context.Context, token string, appID xid.ID, userOrganizationID *xid.ID, now time.Time) (*schema.MagicLink, error) {
 	rec := new(schema.MagicLink)
-	err := r.db.NewSelect().Model(rec).
+	q := r.db.NewSelect().Model(rec).
 		Where("token = ?", token).
-		Where("expires_at > ?", now).
-		Scan(ctx)
+		Where("app_id = ?", appID).
+		Where("expires_at > ?", now)
+
+	// Scope to org if provided
+	if userOrganizationID != nil {
+		q = q.Where("user_organization_id = ?", *userOrganizationID)
+	} else {
+		q = q.Where("user_organization_id IS NULL")
+	}
+
+	err := q.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

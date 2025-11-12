@@ -14,7 +14,7 @@ func NewUserRoleRepository(db *bun.DB) *UserRoleRepository { return &UserRoleRep
 
 // Assign links a user to a role within an organization
 func (r *UserRoleRepository) Assign(ctx context.Context, userID, roleID, orgID xid.ID) error {
-	ur := &schema.UserRole{UserID: userID, RoleID: roleID, OrganizationID: orgID}
+	ur := &schema.UserRole{UserID: userID, RoleID: roleID, AppID: orgID}
 	// Populate required auditable fields
 	ur.ID = xid.New()
 	ur.AuditableModel.CreatedBy = xid.New()
