@@ -22,7 +22,7 @@ func NewMiddleware(service *Service, config *Config) *Middleware {
 }
 
 // RequireLevel returns middleware that enforces a specific security level
-func (m *Middleware) RequireLevel(level SecurityLevel) forge.MiddlewareFunc {
+func (m *Middleware) RequireLevel(level SecurityLevel) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			// Extract user context from request

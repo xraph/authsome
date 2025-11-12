@@ -68,12 +68,12 @@ type UpdateAPIKeyRequest struct {
 // ListAPIKeysRequest represents a request to list API keys
 // Updated for V2 architecture
 type ListAPIKeysRequest struct {
-	AppID          *xid.ID `json:"appId,omitempty"`         // Filter by app
-	EnvironmentID  *xid.ID `json:"environmentId,omitempty"` // Filter by environment
-	OrganizationID *xid.ID `json:"orgId,omitempty"`         // Filter by organization
-	UserID         *xid.ID `json:"userId,omitempty"`        // Filter by user
-	Limit          int     `json:"limit,omitempty" validate:"omitempty,min=1,max=100" default:"20"`
-	Offset         int     `json:"offset,omitempty" validate:"omitempty,min=0" default:"0"`
+	AppID          xid.ID  `json:"appId,omitempty" validate:"required" query:"appId"` // Filter by app
+	EnvironmentID  *xid.ID `json:"environmentId,omitempty" query:"environmentId"`     // Filter by environment
+	OrganizationID *xid.ID `json:"orgId,omitempty" query:"orgId"`                     // Filter by organization
+	UserID         *xid.ID `json:"userId,omitempty" query:"userId"`                   // Filter by user
+	Limit          int     `json:"limit,omitempty" validate:"omitempty,min=1,max=100" default:"20" query:"limit"`
+	Offset         int     `json:"offset,omitempty" validate:"omitempty,min=0" default:"0" query:"offset"`
 }
 
 // ListAPIKeysResponse represents a response containing API keys

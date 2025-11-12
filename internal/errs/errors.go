@@ -140,6 +140,7 @@ const (
 	CodeConfigError    = "CONFIG_ERROR"
 	CodeBadRequest     = "BAD_REQUEST"
 	CodeNotFound       = "NOT_FOUND"
+	CodeUnauthorized   = "UNAUTHORIZED"
 )
 
 // =============================================================================
@@ -754,6 +755,14 @@ func InternalServerError(msg string) *AuthsomeError {
 
 func NotFound(msg string) *AuthsomeError {
 	return New(CodeNotFound, msg, http.StatusNotFound)
+}
+
+func Unauthorized() *AuthsomeError {
+	return New(CodeUnauthorized, "Unauthorized", http.StatusUnauthorized)
+}
+
+func UnauthorizedWithMessage(msg string) *AuthsomeError {
+	return New(CodeUnauthorized, msg, http.StatusUnauthorized)
 }
 
 // =============================================================================

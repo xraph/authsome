@@ -60,7 +60,6 @@ func (e *Extension) Register(app forge.App) error {
 	// Build AuthSome options
 	opts := []authsome.Option{
 		authsome.WithForgeApp(app),
-		authsome.WithMode(e.config.Mode),
 		authsome.WithBasePath(e.config.BasePath),
 	}
 
@@ -144,7 +143,6 @@ func (e *Extension) Start(ctx context.Context) error {
 
 	e.MarkStarted()
 	e.Logger().Info("authsome extension started successfully",
-		forge.F("mode", e.config.Mode),
 		forge.F("basePath", e.config.BasePath),
 		forge.F("plugins", len(e.config.Plugins)),
 	)

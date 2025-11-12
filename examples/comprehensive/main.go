@@ -55,7 +55,6 @@ func setupViper() *viper.Viper {
 
 // Config holds application configuration
 type Config struct {
-	Mode        authsome.Mode
 	DatabaseURL string
 	Port        string
 	EnableDebug bool
@@ -66,7 +65,6 @@ func main() {
 
 	// Load configuration
 	config := &Config{
-		Mode:        authsome.ModeSaaS,
 		DatabaseURL: getEnv("DATABASE_URL", "file:authsome_comprehensive.db?cache=shared&_fk=1"),
 		Port:        getEnv("PORT", "8081"),
 		EnableDebug: getEnv("DEBUG", "true") == "true",
@@ -136,7 +134,6 @@ func (app *ComprehensiveApp) initAuthSome(config *Config) error {
 	log.Println("🔐 Initializing AuthSome...")
 
 	app.auth = authsome.New(
-		authsome.WithMode(config.Mode),
 		authsome.WithDatabase(app.db),
 		authsome.WithForgeApp(app.app),
 	)

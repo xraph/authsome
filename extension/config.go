@@ -2,7 +2,6 @@ package extension
 
 import (
 	"github.com/uptrace/bun"
-	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/plugins"
@@ -10,9 +9,6 @@ import (
 
 // Config holds the configuration for the AuthSome extension
 type Config struct {
-	// Mode is the operation mode (Standalone or SaaS)
-	Mode authsome.Mode `yaml:"mode" json:"mode"`
-
 	// BasePath is the base path where auth routes are mounted
 	BasePath string `yaml:"basePath" json:"basePath"`
 
@@ -53,7 +49,6 @@ type Config struct {
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	return Config{
-		Mode:          authsome.ModeStandalone,
 		BasePath:      "/api/auth",
 		RBACEnforce:   false,
 		RequireConfig: false,
@@ -62,13 +57,6 @@ func DefaultConfig() Config {
 
 // ConfigOption is a functional option for configuring the extension
 type ConfigOption func(*Config)
-
-// WithMode sets the operation mode
-func WithMode(mode authsome.Mode) ConfigOption {
-	return func(c *Config) {
-		c.Mode = mode
-	}
-}
 
 // WithBasePath sets the base path for routes
 func WithBasePath(path string) ConfigOption {
