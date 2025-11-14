@@ -10,7 +10,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -32,7 +31,7 @@ func TestMiddleware_Handle_WithImpersonation(t *testing.T) {
 
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,
@@ -453,7 +452,7 @@ func TestMiddleware_IndicatorMessage_Custom(t *testing.T) {
 
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,

@@ -9,10 +9,10 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
-	"github.com/xraph/authsome/types"
 )
 
 // MockUserService is a mock implementation of user.ServiceInterface
@@ -65,24 +65,24 @@ func (m *MockUserService) Delete(ctx context.Context, id xid.ID) error {
 	return args.Error(0)
 }
 
-func (m *MockUserService) List(ctx context.Context, opts types.PaginationOptions) ([]*user.User, int, error) {
-	args := m.Called(ctx, opts)
+func (m *MockUserService) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*user.User, error) {
+	args := m.Called(ctx, appID, email)
 	if args.Get(0) == nil {
-		return nil, args.Int(1), args.Error(2)
+		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*user.User), args.Int(1), args.Error(2)
+	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*user.User, int, error) {
-	args := m.Called(ctx, query, opts)
+func (m *MockUserService) ListUsers(ctx context.Context, filter *user.ListUsersFilter) (*pagination.PageResponse[*user.User], error) {
+	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
-		return nil, args.Int(1), args.Error(2)
+		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*user.User), args.Int(1), args.Error(2)
+	return args.Get(0).(*pagination.PageResponse[*user.User]), args.Error(1)
 }
 
-func (m *MockUserService) CountCreatedToday(ctx context.Context) (int, error) {
-	args := m.Called(ctx)
+func (m *MockUserService) CountUsers(ctx context.Context, filter *user.CountUsersFilter) (int, error) {
+	args := m.Called(ctx, filter)
 	return args.Int(0), args.Error(1)
 }
 
@@ -107,25 +107,25 @@ func (m *MockSessionService) FindByToken(ctx context.Context, token string) (*se
 	return args.Get(0).(*session.Session), args.Error(1)
 }
 
+func (m *MockSessionService) FindByID(ctx context.Context, id xid.ID) (*session.Session, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*session.Session), args.Error(1)
+}
+
+func (m *MockSessionService) ListSessions(ctx context.Context, filter *session.ListSessionsFilter) (*session.ListSessionsResponse, error) {
+	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*session.ListSessionsResponse), args.Error(1)
+}
+
 func (m *MockSessionService) Revoke(ctx context.Context, token string) error {
 	args := m.Called(ctx, token)
 	return args.Error(0)
-}
-
-func (m *MockSessionService) ListAll(ctx context.Context, limit, offset int) ([]*session.Session, error) {
-	args := m.Called(ctx, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*session.Session), args.Error(1)
-}
-
-func (m *MockSessionService) ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*session.Session, error) {
-	args := m.Called(ctx, userID, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*session.Session), args.Error(1)
 }
 
 func (m *MockSessionService) RevokeByID(ctx context.Context, id xid.ID) error {

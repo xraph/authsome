@@ -2,17 +2,30 @@ package session
 
 import (
 	"context"
+
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/schema"
 )
 
 // Repository defines session persistence operations
+// Following ISP - works with schema types
 type Repository interface {
-	Create(ctx context.Context, s *Session) error
-	FindByToken(ctx context.Context, token string) (*Session, error)
-	Revoke(ctx context.Context, token string) error
-	// Multi-session operations
-	FindByID(ctx context.Context, id xid.ID) (*Session, error)
-	ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*Session, error)
-	ListAll(ctx context.Context, limit, offset int) ([]*Session, error)
-	RevokeByID(ctx context.Context, id xid.ID) error
+	// Create/Read operations
+	CreateSession(ctx context.Context, s *schema.Session) error
+	FindSessionByID(ctx context.Context, id xid.ID) (*schema.Session, error)
+	FindSessionByToken(ctx context.Context, token string) (*schema.Session, error)
+
+	// List with pagination
+	ListSessions(ctx context.Context, filter *ListSessionsFilter) (*pagination.PageResponse[*schema.Session], error)
+
+	// Update/Delete operations
+	RevokeSession(ctx context.Context, token string) error
+	RevokeSessionByID(ctx context.Context, id xid.ID) error
+
+	// Count operations
+	CountSessions(ctx context.Context, appID xid.ID, userID *xid.ID) (int, error)
+
+	// Maintenance
+	CleanupExpiredSessions(ctx context.Context) (int, error)
 }

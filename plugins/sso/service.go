@@ -3,13 +3,14 @@ package sso
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/rs/xid"
 	oidcsvc "github.com/xraph/authsome/plugins/sso/oidc"
 	samsvc "github.com/xraph/authsome/plugins/sso/saml"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
-	"sync"
-	"time"
 )
 
 // Service provides SSO operations (registration, callbacks, metadata)

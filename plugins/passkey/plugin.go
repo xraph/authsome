@@ -16,6 +16,7 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	audit2 "github.com/xraph/authsome/core/audit"
 	auth2 "github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
@@ -28,36 +29,124 @@ import (
 )
 
 type Plugin struct {
-	db      *bun.DB
-	service *Service
+	db            *bun.DB
+	service       *Service
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// PluginOption is a functional option for configuring the passkey plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithRPID sets the Relying Party ID
+func WithRPID(rpID string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RPID = rpID
+	}
+}
+
+// WithRPName sets the Relying Party Name
+func WithRPName(rpName string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RPName = rpName
+	}
+}
+
+// WithTimeout sets the WebAuthn timeout
+func WithTimeout(timeout int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.Timeout = timeout
+	}
+}
+
+// WithUserVerification sets the user verification requirement
+func WithUserVerification(requirement string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.UserVerification = requirement
+	}
+}
+
+// WithAttestationType sets the attestation conveyance preference
+func WithAttestationType(attestation string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AttestationType = attestation
+	}
+}
+
+// NewPlugin creates a new passkey plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: Config{
+			RPID:             "localhost",
+			RPName:           "AuthSome",
+			Timeout:          60000,
+			UserVerification: "preferred",
+			AttestationType:  "none",
+		},
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "passkey" }
 
-func (p *Plugin) Init(dep interface{}) error {
-	// Type assert to auth instance with GetDB method
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("passkey plugin requires auth instance")
 	}
 
-	auth, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("passkey plugin requires auth instance with GetDB method")
-	}
-
-	db := auth.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for passkey plugin")
 	}
 
-	p.db = db
-	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
-	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for passkey plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "passkey"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.passkey", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind passkey config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models
+	p.db.RegisterModel((*schema.Passkey)(nil))
+
+	// Wire services
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
+	sessSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
 	authSvc := auth2.NewService(userSvc, sessSvc, auth2.Config{})
-	auditSvc := audit2.NewService(repo.NewAuditRepository(db))
-	p.service = NewService(db, userSvc, authSvc, auditSvc, Config{RPID: "localhost", RPName: "Authsome"})
+	auditSvc := audit2.NewService(repo.NewAuditRepository(p.db))
+	p.service = NewService(p.db, userSvc, authSvc, auditSvc, p.config)
+
+	p.logger.Info("passkey plugin initialized (BETA)",
+		forge.F("rp_id", p.config.RPID),
+		forge.F("rp_name", p.config.RPName),
+		forge.F("timeout", p.config.Timeout))
+
 	return nil
 }
 

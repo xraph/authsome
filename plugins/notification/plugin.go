@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/notification"
@@ -53,9 +54,9 @@ func WithDefaultLanguage(lang string) PluginOption {
 }
 
 // WithAllowOrgOverrides sets whether to allow organization overrides
-func WithAllowOrgOverrides(allow bool) PluginOption {
+func WithAllowAppOverrides(allow bool) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.AllowOrgOverrides = allow
+		p.defaultConfig.AllowAppOverrides = allow
 	}
 }
 
@@ -112,15 +113,9 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
-		GetForgeApp() forge.App
-	}
-
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("notification plugin requires auth instance with GetDB and GetForgeApp methods")
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("notification plugin requires auth instance")
 	}
 
 	db := authInst.GetDB()
@@ -233,6 +228,28 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 		)
+		templates.POST("/:id/reset", handler.ResetTemplate,
+			forge.WithName("notification.templates.reset"),
+			forge.WithSummary("Reset template to default"),
+			forge.WithDescription("Resets a notification template to its default values"),
+			forge.WithResponseSchema(200, "Template reset", NotificationStatusResponse{}),
+			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
+			forge.WithTags("Notification", "Templates"),
+		)
+		templates.POST("/reset-all", handler.ResetAllTemplates,
+			forge.WithName("notification.templates.reset_all"),
+			forge.WithSummary("Reset all templates to defaults"),
+			forge.WithDescription("Resets all notification templates for the app to their default values"),
+			forge.WithResponseSchema(200, "All templates reset", NotificationStatusResponse{}),
+			forge.WithTags("Notification", "Templates"),
+		)
+		templates.GET("/defaults", handler.GetTemplateDefaults,
+			forge.WithName("notification.templates.defaults"),
+			forge.WithSummary("Get default template metadata"),
+			forge.WithDescription("Returns metadata for all default notification templates including variables and default content"),
+			forge.WithResponseSchema(200, "Default templates retrieved", NotificationTemplateListResponse{}),
+			forge.WithTags("Notification", "Templates"),
+		)
 		templates.POST("/:id/preview", handler.PreviewTemplate,
 			forge.WithName("notification.templates.preview"),
 			forge.WithSummary("Preview notification template"),
@@ -311,13 +328,38 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		return nil
 	}
 
+	// Register app creation hook to auto-populate default templates
+	if p.config.AutoPopulateTemplates {
+		hookRegistry.RegisterAfterAppCreate(func(ctx context.Context, app interface{}) error {
+			// Type assert to get app details
+			if appData, ok := app.(*schema.App); ok && !appData.IsPlatform {
+				// Initialize default templates for new app
+				if err := p.service.InitializeDefaultTemplates(ctx, appData.ID); err != nil {
+					// Log error but don't fail app creation
+					fmt.Printf("Failed to initialize default templates for app %s: %v\n", appData.ID, err)
+				}
+			}
+			return nil
+		})
+	}
+
 	// Register after user create hook to send welcome email
 	if p.config.AutoSendWelcome {
 		hookRegistry.RegisterAfterUserCreate(func(ctx context.Context, createdUser *user.User) error {
 			// Send welcome email to new user
 			if p.service != nil && p.templateSvc != nil && createdUser != nil && createdUser.Email != "" {
-				// Use "default" organization
-				orgID := "default"
+				// Get platform app ID
+				var platformApp schema.App
+				err := p.db.NewSelect().
+					Model(&platformApp).
+					Where("is_platform = ?", true).
+					Limit(1).
+					Scan(ctx)
+				if err != nil {
+					// Log error but don't fail user creation
+					fmt.Printf("Failed to find platform app for welcome email: %v\n", err)
+					return nil
+				}
 
 				// Create adapter for sending
 				adapter := NewAdapter(p.templateSvc)
@@ -328,7 +370,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 					userName = createdUser.Email
 				}
 
-				err := adapter.SendWelcomeEmail(ctx, orgID, createdUser.Email, userName, "")
+				err = adapter.SendWelcomeEmail(ctx, platformApp.ID, createdUser.Email, userName, "")
 				if err != nil {
 					// Log error but don't fail user creation
 					fmt.Printf("Failed to send welcome email: %v\n", err)
@@ -378,8 +420,8 @@ func (p *Plugin) Migrate() error {
 	// Create indexes
 	_, err = p.db.NewCreateIndex().
 		Model((*schema.NotificationTemplate)(nil)).
-		Index("idx_notification_templates_org_key").
-		Column("organization_id", "template_key", "type", "language").
+		Index("idx_notification_templates_app_key").
+		Column("app_id", "template_key", "type", "language").
 		Unique().
 		IfNotExists().
 		Exec(ctx)
@@ -389,8 +431,8 @@ func (p *Plugin) Migrate() error {
 
 	_, err = p.db.NewCreateIndex().
 		Model((*schema.Notification)(nil)).
-		Index("idx_notifications_org_status").
-		Column("organization_id", "status").
+		Index("idx_notifications_app_status").
+		Column("app_id", "status").
 		IfNotExists().
 		Exec(ctx)
 	if err != nil {
@@ -410,36 +452,20 @@ func (p *Plugin) Migrate() error {
 
 // addDefaultTemplates adds default notification templates
 func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
-	templates := DefaultTemplates()
+	// Get platform app ID
+	var platformApp schema.App
+	err := p.db.NewSelect().
+		Model(&platformApp).
+		Where("is_platform = ?", true).
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to find platform app: %w", err)
+	}
 
-	for _, tmpl := range templates {
-		// Check if template already exists
-		existing, err := p.service.CreateTemplate(ctx, &notification.CreateTemplateRequest{
-			OrganizationID: "default",
-			TemplateKey:    tmpl.TemplateKey,
-			Name:           tmpl.TemplateKey,
-			Type:           notification.NotificationType(tmpl.Type),
-			Language:       "en",
-			Subject:        tmpl.Subject,
-			Body:           tmpl.BodyText,
-			Variables:      tmpl.Variables,
-			Metadata: map[string]interface{}{
-				"default":     true,
-				"description": tmpl.Description,
-			},
-		})
-
-		if err != nil {
-			// Template might already exist, continue
-			continue
-		}
-
-		// Store HTML version if available
-		if tmpl.BodyHTML != "" && existing != nil {
-			_ = p.service.UpdateTemplate(ctx, existing.ID, &notification.UpdateTemplateRequest{
-				Body: &tmpl.BodyHTML,
-			})
-		}
+	// Use the new InitializeDefaultTemplates method that uses template key constants
+	if err := p.service.InitializeDefaultTemplates(ctx, platformApp.ID); err != nil {
+		return fmt.Errorf("failed to initialize default templates: %w", err)
 	}
 
 	return nil

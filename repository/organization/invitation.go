@@ -8,126 +8,105 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
-// organizationInvitationRepository implements OrganizationInvitationRepository using Bun
+// organizationInvitationRepository implements organization.InvitationRepository using Bun
 type organizationInvitationRepository struct {
 	db *bun.DB
 }
 
 // NewOrganizationInvitationRepository creates a new organization invitation repository
-func NewOrganizationInvitationRepository(db *bun.DB) *organizationInvitationRepository {
+func NewOrganizationInvitationRepository(db *bun.DB) organization.InvitationRepository {
 	return &organizationInvitationRepository{db: db}
 }
 
 // Create creates a new invitation
-func (r *organizationInvitationRepository) Create(ctx context.Context, invitation *schema.OrganizationInvitation) error {
+func (r *organizationInvitationRepository) Create(ctx context.Context, invitation *organization.Invitation) error {
+	schemaInvitation := invitation.ToSchema()
 	_, err := r.db.NewInsert().
-		Model(invitation).
+		Model(schemaInvitation).
 		Exec(ctx)
 	return err
 }
 
 // FindByID retrieves an invitation by ID
-func (r *organizationInvitationRepository) FindByID(ctx context.Context, id xid.ID) (*schema.OrganizationInvitation, error) {
-	invitation := new(schema.OrganizationInvitation)
+func (r *organizationInvitationRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Invitation, error) {
+	schemaInvitation := new(schema.OrganizationInvitation)
 	err := r.db.NewSelect().
-		Model(invitation).
-		Relation("Organization").
+		Model(schemaInvitation).
 		Where("uoi.id = ?", id).
 		Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("invitation not found")
 	}
-	return invitation, err
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaInvitation(schemaInvitation), nil
 }
 
 // FindByToken retrieves an invitation by token
-func (r *organizationInvitationRepository) FindByToken(ctx context.Context, token string) (*schema.OrganizationInvitation, error) {
-	invitation := new(schema.OrganizationInvitation)
+func (r *organizationInvitationRepository) FindByToken(ctx context.Context, token string) (*organization.Invitation, error) {
+	schemaInvitation := new(schema.OrganizationInvitation)
 	err := r.db.NewSelect().
-		Model(invitation).
-		Relation("Organization").
+		Model(schemaInvitation).
 		Where("token = ?", token).
 		Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("invitation not found")
 	}
-	return invitation, err
-}
-
-// FindByEmail retrieves an invitation by email and organization
-func (r *organizationInvitationRepository) FindByEmail(ctx context.Context, orgID xid.ID, email string) (*schema.OrganizationInvitation, error) {
-	invitation := new(schema.OrganizationInvitation)
-	err := r.db.NewSelect().
-		Model(invitation).
-		Where("organization_id = ? AND email = ? AND status = ?", orgID, email, "pending").
-		Scan(ctx)
-
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("invitation not found")
+	if err != nil {
+		return nil, err
 	}
-	return invitation, err
+
+	return organization.FromSchemaInvitation(schemaInvitation), nil
 }
 
-// ListByOrganization lists all invitations for an organization
-func (r *organizationInvitationRepository) ListByOrganization(ctx context.Context, orgID xid.ID, status string, limit, offset int) ([]*schema.OrganizationInvitation, error) {
-	var invitations []*schema.OrganizationInvitation
-	
-	query := r.db.NewSelect().
-		Model(&invitations).
-		Where("organization_id = ?", orgID)
+// ListByOrganization lists invitations for an organization with pagination and filtering
+func (r *organizationInvitationRepository) ListByOrganization(ctx context.Context, filter *organization.ListInvitationsFilter) (*pagination.PageResponse[*organization.Invitation], error) {
+	var schemaInvitations []*schema.OrganizationInvitation
 
-	if status != "" {
-		query = query.Where("status = ?", status)
+	query := r.db.NewSelect().
+		Model(&schemaInvitations).
+		Where("organization_id = ?", filter.OrganizationID)
+
+	// Apply status filter if provided
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
 	}
 
 	query = query.Order("created_at DESC")
 
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-
-	err := query.Scan(ctx)
-	return invitations, err
-}
-
-// ListByEmail lists all invitations for an email address
-func (r *organizationInvitationRepository) ListByEmail(ctx context.Context, email string, status string, limit, offset int) ([]*schema.OrganizationInvitation, error) {
-	var invitations []*schema.OrganizationInvitation
-	
-	query := r.db.NewSelect().
-		Model(&invitations).
-		Relation("Organization").
-		Where("email = ?", email)
-
-	if status != "" {
-		query = query.Where("status = ?", status)
+	// Get total count
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	query = query.Order("created_at DESC")
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
 
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	err := query.Scan(ctx)
-	return invitations, err
+	// Convert to DTOs
+	invitations := organization.FromSchemaInvitations(schemaInvitations)
+
+	return pagination.NewPageResponse(invitations, int64(total), &filter.PaginationParams), nil
 }
 
 // Update updates an invitation
-func (r *organizationInvitationRepository) Update(ctx context.Context, invitation *schema.OrganizationInvitation) error {
+func (r *organizationInvitationRepository) Update(ctx context.Context, invitation *organization.Invitation) error {
+	schemaInvitation := invitation.ToSchema()
 	_, err := r.db.NewUpdate().
-		Model(invitation).
+		Model(schemaInvitation).
 		WherePK().
 		Exec(ctx)
 	return err
@@ -146,42 +125,16 @@ func (r *organizationInvitationRepository) Delete(ctx context.Context, id xid.ID
 func (r *organizationInvitationRepository) DeleteExpired(ctx context.Context) (int, error) {
 	result, err := r.db.NewDelete().
 		Model((*schema.OrganizationInvitation)(nil)).
-		Where("expires_at < ? AND status = ?", time.Now(), "pending").
+		Where("expires_at < ? AND status = ?", time.Now(), organization.InvitationStatusPending).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return 0, err
 	}
 
-	rows, err := result.RowsAffected()
-	return int(rows), err
+	rowsAffected, err := result.RowsAffected()
+	return int(rowsAffected), err
 }
 
-// CountByOrganization counts invitations for an organization
-func (r *organizationInvitationRepository) CountByOrganization(ctx context.Context, orgID xid.ID, status string) (int, error) {
-	query := r.db.NewSelect().
-		Model((*schema.OrganizationInvitation)(nil)).
-		Where("organization_id = ?", orgID)
-
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	count, err := query.Count(ctx)
-	return count, err
-}
-
-// CountByEmail counts invitations for an email address
-func (r *organizationInvitationRepository) CountByEmail(ctx context.Context, email string, status string) (int, error) {
-	query := r.db.NewSelect().
-		Model((*schema.OrganizationInvitation)(nil)).
-		Where("email = ?", email)
-
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	count, err := query.Count(ctx)
-	return count, err
-}
-
+// Type assertion to ensure organizationInvitationRepository implements organization.InvitationRepository
+var _ organization.InvitationRepository = (*organizationInvitationRepository)(nil)

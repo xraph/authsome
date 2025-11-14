@@ -6,6 +6,7 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/registry"
 	orgrepo "github.com/xraph/authsome/repository/organization"
 	"github.com/xraph/authsome/schema"
@@ -15,7 +16,7 @@ import (
 // Plugin implements the user-created organizations plugin
 type Plugin struct {
 	// Core services
-	orgService *Service
+	orgService *organization.Service
 
 	// Handlers
 	orgHandler *OrganizationHandler
@@ -124,10 +125,16 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.db = authInstance.GetDB()
 	forgeApp := authInstance.GetForgeApp()
 	configManager := forgeApp.Config()
-	// serviceRegistry := authInstance.GetServiceRegistry() // For future use
+	serviceRegistry := authInstance.GetServiceRegistry()
 
 	// Get logger from Forge app
 	p.logger = forgeApp.Logger().With(forge.F("plugin", "organization"))
+
+	// Get RBAC service from registry
+	rbacSvc := serviceRegistry.RBACService()
+	if rbacSvc == nil {
+		p.logger.Warn("RBAC service not available, authorization checks may not work properly")
+	}
 
 	// Register schema models with Bun for relationships to work
 	// Register OrganizationTeamMember first as it's the join table for m2m relationships
@@ -175,14 +182,20 @@ func (p *Plugin) Init(auth interface{}) error {
 		InvitationExpiryHours:     p.config.InvitationExpiryHours,
 	}
 
-	// Create services with actual repositories
-	p.orgService = NewService(orgConfig, orgRepo, memberRepo, teamRepo, invitationRepo)
+	// Create services with actual repositories and RBAC service
+	p.orgService = NewService(
+		orgRepo,
+		memberRepo,
+		teamRepo,
+		invitationRepo,
+		orgConfig,
+		rbacSvc,
+	)
 
 	// Create handlers
-	p.orgHandler = NewOrganizationHandler(p.orgService)
-
-	// Register organization service in the registry (optional - for other plugins to access)
-	// serviceRegistry can be extended to include organization service if needed
+	p.orgHandler = &OrganizationHandler{
+		orgService: p.orgService,
+	}
 
 	p.logger.Info("organization plugin initialized",
 		forge.F("max_orgs_per_user", p.config.MaxOrganizationsPerUser),

@@ -2,169 +2,159 @@ package repository
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 
+	"github.com/xraph/authsome/core/pagination"
 	core "github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"
 )
+
+// =============================================================================
+// USER REPOSITORY IMPLEMENTATION
+// =============================================================================
 
 // UserRepository is a Bun-backed implementation of core user repository
 type UserRepository struct {
 	db *bun.DB
 }
 
+// NewUserRepository creates a new user repository
 func NewUserRepository(db *bun.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) toSchema(u *core.User) *schema.User {
-	return &schema.User{
-		ID:              u.ID,
-		Email:           u.Email,
-		EmailVerified:   u.EmailVerified,
-		EmailVerifiedAt: u.EmailVerifiedAt,
-		Name:            u.Name,
-		Image:           u.Image,
-		PasswordHash:    u.PasswordHash,
-		Username:        u.Username,
-		DisplayUsername: u.DisplayUsername,
-		// Auditable fields: default to self for dev/standalone creates
-		AuditableModel: schema.AuditableModel{
-			CreatedAt: u.CreatedAt,
-			UpdatedAt: u.UpdatedAt,
-			CreatedBy: u.ID,
-			UpdatedBy: u.ID,
-		},
-	}
-}
-
-func (r *UserRepository) fromSchema(su *schema.User) *core.User {
-	if su == nil {
-		return nil
-	}
-	return &core.User{
-		ID:              su.ID,
-		Email:           su.Email,
-		EmailVerified:   su.EmailVerified,
-		EmailVerifiedAt: su.EmailVerifiedAt,
-		Name:            su.Name,
-		Image:           su.Image,
-		PasswordHash:    su.PasswordHash,
-		Username:        su.Username,
-		DisplayUsername: su.DisplayUsername,
-		CreatedAt:       su.CreatedAt,
-		UpdatedAt:       su.UpdatedAt,
-	}
-}
-
 // Create inserts a new user
-func (r *UserRepository) Create(ctx context.Context, u *core.User) error {
-	su := r.toSchema(u)
-	_, err := r.db.NewInsert().Model(su).Exec(ctx)
+func (r *UserRepository) Create(ctx context.Context, user *schema.User) error {
+	_, err := r.db.NewInsert().Model(user).Exec(ctx)
 	return err
 }
 
-// FindByID finds a user by id
-func (r *UserRepository) FindByID(ctx context.Context, id xid.ID) (*core.User, error) {
-	su := new(schema.User)
-	err := r.db.NewSelect().Model(su).Where("id = ?", id).Scan(ctx)
+// FindByID finds a user by ID
+func (r *UserRepository) FindByID(ctx context.Context, id xid.ID) (*schema.User, error) {
+	user := new(schema.User)
+	err := r.db.NewSelect().
+		Model(user).
+		Where("id = ?", id).
+		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromSchema(su), nil
+	return user, nil
 }
 
-// FindByEmail finds a user by email
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*core.User, error) {
-	su := new(schema.User)
-	err := r.db.NewSelect().Model(su).Where("email = ?", email).Scan(ctx)
+// FindByEmail finds a user by email (global search, not app-scoped)
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*schema.User, error) {
+	user := new(schema.User)
+	err := r.db.NewSelect().
+		Model(user).
+		Where("email = ?", email).
+		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromSchema(su), nil
+	return user, nil
+}
+
+// FindByAppAndEmail finds a user by app ID and email (app-scoped search)
+func (r *UserRepository) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*schema.User, error) {
+	user := new(schema.User)
+	err := r.db.NewSelect().
+		Model(user).
+		Where("app_id = ?", appID).
+		Where("email = ?", email).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 // FindByUsername finds a user by username
-func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*core.User, error) {
-	su := new(schema.User)
-	err := r.db.NewSelect().Model(su).Where("username = ?", username).Scan(ctx)
+func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*schema.User, error) {
+	user := new(schema.User)
+	err := r.db.NewSelect().
+		Model(user).
+		Where("username = ?", username).
+		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromSchema(su), nil
+	return user, nil
 }
 
 // Update updates a user
-func (r *UserRepository) Update(ctx context.Context, u *core.User) error {
-	su := r.toSchema(u)
-	_, err := r.db.NewUpdate().Model(su).WherePK().Exec(ctx)
+func (r *UserRepository) Update(ctx context.Context, user *schema.User) error {
+	_, err := r.db.NewUpdate().
+		Model(user).
+		WherePK().
+		Exec(ctx)
 	return err
 }
 
 // Delete deletes a user by ID
 func (r *UserRepository) Delete(ctx context.Context, id xid.ID) error {
-	_, err := r.db.NewDelete().Model((*schema.User)(nil)).Where("id = ?", id).Exec(ctx)
+	_, err := r.db.NewDelete().
+		Model((*schema.User)(nil)).
+		Where("id = ?", id).
+		Exec(ctx)
 	return err
 }
 
-// List returns a list of users
-func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*core.User, error) {
-	var sus []schema.User
-	err := r.db.NewSelect().Model(&sus).OrderExpr("created_at DESC").Limit(limit).Offset(offset).Scan(ctx)
+// ListUsers lists users with pagination and filtering
+func (r *UserRepository) ListUsers(ctx context.Context, filter *core.ListUsersFilter) (*pagination.PageResponse[*schema.User], error) {
+	var users []*schema.User
+
+	query := r.db.NewSelect().Model(&users)
+
+	// Filter by app ID (required)
+	query = query.Where("app_id = ?", filter.AppID)
+
+	// Filter by email verified status
+	if filter.EmailVerified != nil {
+		query = query.Where("email_verified = ?", *filter.EmailVerified)
+	}
+
+	// Search by email or name
+	if filter.Search != nil && *filter.Search != "" {
+		searchPattern := "%" + *filter.Search + "%"
+		query = query.Where("(LOWER(email) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?))", searchPattern, searchPattern)
+	}
+
+	// Apply ordering
+	query = query.Order(filter.GetOrderClause())
+
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+
+	// Execute query and get total count
+	total, err := query.ScanAndCount(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
-	res := make([]*core.User, 0, len(sus))
-	for i := range sus {
-		res = append(res, r.fromSchema(&sus[i]))
-	}
-	return res, nil
+
+	// Return paginated response
+	return pagination.NewPageResponse(users, int64(total), &filter.PaginationParams), nil
 }
 
-// Count returns total users
-func (r *UserRepository) Count(ctx context.Context) (int, error) {
-	count, err := r.db.NewSelect().Model((*schema.User)(nil)).Count(ctx)
-	return count, err
-}
+// CountUsers counts users with filtering
+func (r *UserRepository) CountUsers(ctx context.Context, filter *core.CountUsersFilter) (int, error) {
+	query := r.db.NewSelect().Model((*schema.User)(nil))
 
-// Search searches users by name or email
-func (r *UserRepository) Search(ctx context.Context, query string, limit, offset int) ([]*core.User, error) {
-	var sus []schema.User
-	q := r.db.NewSelect().Model(&sus).
-		Where("LOWER(email) LIKE LOWER(?)", "%"+query+"%").
-		WhereOr("LOWER(name) LIKE LOWER(?)", "%"+query+"%").
-		OrderExpr("created_at DESC").
-		Limit(limit).
-		Offset(offset)
+	// Filter by app ID (required)
+	query = query.Where("app_id = ?", filter.AppID)
 
-	if err := q.Scan(ctx); err != nil {
-		return nil, err
+	// Filter by creation date
+	if filter.CreatedSince != nil {
+		query = query.Where("created_at >= ?", *filter.CreatedSince)
 	}
-	res := make([]*core.User, 0, len(sus))
-	for i := range sus {
-		res = append(res, r.fromSchema(&sus[i]))
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count users: %w", err)
 	}
-	return res, nil
-}
 
-// CountSearch returns count of users matching the search query
-func (r *UserRepository) CountSearch(ctx context.Context, query string) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*schema.User)(nil)).
-		Where("LOWER(email) LIKE LOWER(?)", "%"+query+"%").
-		WhereOr("LOWER(name) LIKE LOWER(?)", "%"+query+"%").
-		Count(ctx)
-	return count, err
-}
-
-// CountCreatedSince returns count of users created since the given time
-func (r *UserRepository) CountCreatedSince(ctx context.Context, since time.Time) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*schema.User)(nil)).
-		Where("created_at >= ?", since).
-		Count(ctx)
-	return count, err
+	return count, nil
 }

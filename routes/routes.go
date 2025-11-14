@@ -5,7 +5,6 @@ import (
 	"github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/handlers"
-	"github.com/xraph/authsome/plugins/jwt"
 	"github.com/xraph/forge"
 )
 
@@ -475,16 +474,16 @@ type RoleResponse struct{}
 type RolesResponse []interface{}
 type UserRolesResponse []interface{}
 
-// RegisterAPIKey registers API key routes under a base path
-func RegisterAPIKey(router forge.Router, basePath string, h *handlers.APIKeyHandler) {
-	grp := router.Group(basePath)
-	RegisterAPIKeyRoutes(grp, h)
-}
+// RegisterAPIKey is DEPRECATED and removed.
+// API key routes are now handled by the apikey plugin.
+// Use: auth.RegisterPlugin(apikey.NewPlugin())
 
-// RegisterJWT registers JWT routes under a base path
-func RegisterJWT(router forge.Router, basePath string, h *jwt.Handler) {
-	grp := router.Group(basePath)
-	RegisterJWTRoutes(grp, h)
+// RegisterJWT is DEPRECATED - JWT routes are now handled by the JWT plugin.
+// The JWT plugin registers its own routes via plugin.RegisterRoutes().
+// Use: auth.RegisterPlugin(jwt.NewPlugin())
+func RegisterJWT(router forge.Router, basePath string, h interface{}) {
+	// DEPRECATED: This function is kept for backwards compatibility but does nothing.
+	// JWT routes are now registered by the JWT plugin itself.
 }
 
 // RegisterWebhook registers webhook routes under a base path
@@ -493,8 +492,6 @@ func RegisterWebhook(router forge.Router, basePath string, h *handlers.WebhookHa
 	RegisterWebhookRoutes(grp, h)
 }
 
-// RegisterNotification registers notification routes under a base path
-func RegisterNotification(router forge.Router, basePath string, h *handlers.NotificationHandler) {
-	grp := router.Group(basePath)
-	RegisterNotificationRoutes(grp, h)
-}
+// RegisterNotification is DEPRECATED and removed.
+// Notification routes are now handled by the notification plugin.
+// Use: auth.RegisterPlugin(notification.NewPlugin())

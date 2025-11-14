@@ -5,10 +5,11 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/repository"
+	"github.com/xraph/authsome/plugins/social/providers"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
@@ -19,6 +20,7 @@ type Plugin struct {
 	service       *Service
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // PluginOption is a functional option for configuring the social plugin
@@ -35,9 +37,9 @@ func WithDefaultConfig(cfg Config) PluginOption {
 func WithProvider(name string, clientID, clientSecret, callbackURL string, scopes []string) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig.Providers == nil {
-			p.defaultConfig.Providers = make(map[string]ProviderConfig)
+			p.defaultConfig.Providers = make(map[string]providers.ProviderConfig)
 		}
-		p.defaultConfig.Providers[name] = ProviderConfig{
+		p.defaultConfig.Providers[name] = providers.ProviderConfig{
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
 			CallbackURL:  callbackURL,
@@ -57,7 +59,7 @@ func WithAutoCreateUser(auto bool) PluginOption {
 // WithAllowLinking sets whether to allow account linking
 func WithAllowLinking(allow bool) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.AllowLinking = allow
+		p.defaultConfig.AllowAccountLinking = allow
 	}
 }
 
@@ -92,14 +94,8 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
-		GetForgeApp() forge.App
-	}
-
-	authInst, ok := dep.(authInstance)
-	if !ok {
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
 		return fmt.Errorf("social plugin requires auth instance with GetDB and GetForgeApp methods")
 	}
 
@@ -109,6 +105,7 @@ func (p *Plugin) Init(dep interface{}) error {
 	}
 
 	p.db = db
+	p.authInst = authInst
 
 	// Get Forge app and config manager
 	forgeApp := authInst.GetForgeApp()
@@ -127,14 +124,12 @@ func (p *Plugin) Init(dep interface{}) error {
 	}
 
 	// Create repositories
-	socialRepo := repository.NewSocialAccountRepository(db)
-	userRepo := repository.NewUserRepository(db)
 
 	// Create user service (simplified - in production, get from registry)
-	userSvc := user.NewService(userRepo, user.Config{}, nil)
+	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil)
 
 	// Create social service
-	p.service = NewService(p.config, socialRepo, userSvc)
+	p.service = NewService(p.config, authInst.Repository().SocialAccount(), userSvc)
 
 	return nil
 }
@@ -144,10 +139,8 @@ func (p *Plugin) SetConfig(config Config) {
 	p.config = config
 	if p.service != nil {
 		// Reinitialize service with new config
-		socialRepo := repository.NewSocialAccountRepository(p.db)
-		userRepo := repository.NewUserRepository(p.db)
-		userSvc := user.NewService(userRepo, user.Config{}, nil)
-		p.service = NewService(config, socialRepo, userSvc)
+		userSvc := user.NewService(p.authInst.Repository().User(), user.Config{}, nil)
+		p.service = NewService(config, p.authInst.Repository().SocialAccount(), userSvc)
 	}
 }
 

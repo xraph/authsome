@@ -110,7 +110,7 @@ func (m *Mock) RequireOrgRole(ctx context.Context, orgID, requiredRole string) (
 		return nil, err
 	}
 
-	if member.Role != requiredRole {
+	if string(member.Role) != requiredRole {
 		return nil, ErrInsufficientPermissions
 	}
 

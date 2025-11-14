@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
-	"github.com/xraph/authsome/plugins/multitenancy/app"
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -45,7 +45,7 @@ type ServiceConfig struct {
 	Config         *Config
 	Repository     *Repository
 	UserService    user.ServiceInterface // Use interface to support decorated services
-	OrgService     interface{}           // Can be *app.Service or *orgplugin.Service
+	OrgService     interface{}           // Can be *app.ServiceImpl or *orgplugin.ServiceImpl
 	AuditService   *audit.Service
 	WebhookService *webhook.Service
 }
@@ -55,7 +55,7 @@ type Service struct {
 	config         *Config
 	repo           *Repository
 	userService    user.ServiceInterface // Use interface to support decorated services
-	orgService     interface{}           // Can be *app.Service or *orgplugin.Service
+	orgService     interface{}           // Can be *app.ServiceImpl or *orgplugin.ServiceImpl
 	scimOrgService SCIMOrgService        // Unified interface adapter
 	auditService   *audit.Service
 	webhookService *webhook.Service
@@ -76,7 +76,7 @@ func NewService(cfg ServiceConfig) *Service {
 	}
 
 	// Detect mode and create appropriate adapter
-	if appSvc, ok := cfg.OrgService.(*app.Service); ok {
+	if appSvc, ok := cfg.OrgService.(*app.ServiceImpl); ok {
 		service.scimOrgService = &appServiceAdapter{service: appSvc}
 		service.mode = "app"
 	} else if orgSvc, ok := cfg.OrgService.(*orgplugin.Service); ok {
@@ -85,8 +85,7 @@ func NewService(cfg ServiceConfig) *Service {
 	} else {
 		// Fallback: try to use as app service
 		if cfg.OrgService != nil {
-			fmt.Println("Using app service as fallback for SCIM organization service", service)
-			service.scimOrgService = &appServiceAdapter{service: cfg.OrgService.(*app.Service)}
+			service.scimOrgService = &appServiceAdapter{service: cfg.OrgService.(*app.ServiceImpl)}
 			service.mode = "app"
 		}
 	}
@@ -1697,7 +1696,7 @@ func extractUserIDFromMember(member interface{}) xid.ID {
 
 // appServiceAdapter adapts multitenancy app service to SCIMOrgService interface
 type appServiceAdapter struct {
-	service *app.Service
+	service *app.ServiceImpl
 }
 
 func (a *appServiceAdapter) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (interface{}, error) {

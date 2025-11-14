@@ -23,7 +23,7 @@ func TestNewHandler(t *testing.T) {
 	auditSvc := &audit.Service{}
 	rbacSvc := &rbac.Service{}
 	apikeyService := &apikey.Service{}
-	orgService := &app.Service{}
+	orgService := &app.ServiceImpl{}
 	db := &bun.DB{}
 	isSaaSMode := false
 	basePath := "/api/auth"

@@ -2,28 +2,16 @@ package impersonation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"
-)
-
-var (
-	ErrPermissionDenied      = errors.New("impersonation: permission denied")
-	ErrUserNotFound          = errors.New("impersonation: user not found")
-	ErrSessionNotFound       = errors.New("impersonation: session not found")
-	ErrImpersonationNotFound = errors.New("impersonation: impersonation session not found")
-	ErrAlreadyImpersonating  = errors.New("impersonation: already impersonating another user")
-	ErrCannotImpersonateSelf = errors.New("impersonation: cannot impersonate yourself")
-	ErrSessionExpired        = errors.New("impersonation: session expired")
-	ErrInvalidReason         = errors.New("impersonation: reason must be at least 10 characters")
-	ErrInvalidDuration       = errors.New("impersonation: duration must be between 1 minute and max allowed")
 )
 
 // Config holds impersonation service configuration
@@ -105,19 +93,19 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 
 	// Check if impersonator and target are the same
 	if req.ImpersonatorID == req.TargetUserID {
-		return nil, ErrCannotImpersonateSelf
+		return nil, CannotImpersonateSelf()
 	}
 
 	// Check if impersonator already has an active impersonation session
 	existingSession, err := s.repo.GetActive(ctx, req.ImpersonatorID, req.AppID)
 	if err == nil && existingSession != nil {
-		return nil, ErrAlreadyImpersonating
+		return nil, AlreadyImpersonating(req.ImpersonatorID.String())
 	}
 
 	// Verify impersonator exists and has permission
 	impersonator, err := s.userSvc.FindByID(ctx, req.ImpersonatorID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get impersonator: %w", err)
+		return nil, ImpersonatorNotFound(req.ImpersonatorID.String())
 	}
 
 	// Check RBAC permission if enabled
@@ -135,21 +123,21 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 				"target_user_id": req.TargetUserID.String(),
 				"reason":         "permission_denied",
 			})
-			return nil, ErrPermissionDenied
+			return nil, PermissionDenied("RBAC permission check failed")
 		}
 	}
 
 	// Verify target user exists
 	targetUser, err := s.userSvc.FindByID(ctx, req.TargetUserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get target user: %w", err)
+		return nil, TargetUserNotFound(req.TargetUserID.String())
 	}
 
 	// Determine duration
 	duration := s.config.DefaultDurationMinutes
 	if req.DurationMinutes > 0 {
 		if req.DurationMinutes < s.config.MinDurationMinutes || req.DurationMinutes > s.config.MaxDurationMinutes {
-			return nil, ErrInvalidDuration
+			return nil, InvalidDuration(s.config.MinDurationMinutes, s.config.MaxDurationMinutes)
 		}
 		duration = req.DurationMinutes
 	}
@@ -161,11 +149,12 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 		UserAgent: req.UserAgent,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create impersonation session: %w", err)
+		return nil, FailedToCreateSession(err)
 	}
 
-	// Create impersonation record
-	impersonationSession := &schema.ImpersonationSession{
+	// Create impersonation session DTO
+	now := time.Now().UTC()
+	impersonationSession := &ImpersonationSession{
 		ID:                 xid.New(),
 		AppID:              req.AppID,
 		UserOrganizationID: req.UserOrganizationID,
@@ -178,15 +167,16 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 		IPAddress:          req.IPAddress,
 		UserAgent:          req.UserAgent,
 		Active:             true,
-		ExpiresAt:          time.Now().UTC().Add(time.Duration(duration) * time.Minute),
-		CreatedAt:          time.Now().UTC(),
-		UpdatedAt:          time.Now().UTC(),
+		ExpiresAt:          now.Add(time.Duration(duration) * time.Minute),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
-	if err := s.repo.Create(ctx, impersonationSession); err != nil {
+	// Save to database using schema conversion
+	if err := s.repo.Create(ctx, impersonationSession.ToSchema()); err != nil {
 		// Cleanup: revoke the created session
 		_ = s.sessionSvc.Revoke(ctx, newSession.Token)
-		return nil, fmt.Errorf("failed to create impersonation record: %w", err)
+		return nil, err
 	}
 
 	// Log audit event
@@ -201,7 +191,7 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 	})
 
 	// Create detailed audit event in impersonation audit table
-	auditEvent := &schema.ImpersonationAuditEvent{
+	auditEvent := &AuditEvent{
 		ID:                 xid.New(),
 		ImpersonationID:    impersonationSession.ID,
 		AppID:              req.AppID,
@@ -216,9 +206,9 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 			"ticket_number":    req.TicketNumber,
 			"duration_minutes": fmt.Sprintf("%d", duration),
 		},
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: now,
 	}
-	_ = s.repo.CreateAuditEvent(ctx, auditEvent)
+	_ = s.repo.CreateAuditEvent(ctx, auditEvent.ToSchema())
 
 	// Get session token (implementation depends on session service)
 	// For now, we'll return the session ID as the token
@@ -236,14 +226,17 @@ func (s *Service) Start(ctx context.Context, req *StartRequest) (*StartResponse,
 // End terminates an impersonation session
 func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error) {
 	// Get impersonation session
-	impersonationSession, err := s.repo.Get(ctx, req.ImpersonationID, req.AppID)
+	schemaSession, err := s.repo.Get(ctx, req.ImpersonationID, req.AppID)
 	if err != nil {
-		return nil, ErrImpersonationNotFound
+		return nil, ImpersonationNotFound(req.ImpersonationID.String())
 	}
+
+	// Convert to DTO
+	impersonationSession := FromSchemaImpersonationSession(schemaSession)
 
 	// Verify the requester is the impersonator
 	if impersonationSession.ImpersonatorID != req.ImpersonatorID {
-		return nil, ErrPermissionDenied
+		return nil, PermissionDenied("Requester is not the impersonator")
 	}
 
 	// Check if already ended
@@ -266,8 +259,9 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 	}
 	impersonationSession.UpdatedAt = now
 
-	if err := s.repo.Update(ctx, impersonationSession); err != nil {
-		return nil, fmt.Errorf("failed to end impersonation: %w", err)
+	// Save using schema conversion
+	if err := s.repo.Update(ctx, impersonationSession.ToSchema()); err != nil {
+		return nil, err
 	}
 
 	// Revoke the impersonated session
@@ -283,7 +277,7 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 	})
 
 	// Create detailed audit event
-	auditEvent := &schema.ImpersonationAuditEvent{
+	auditEvent := &AuditEvent{
 		ID:                 xid.New(),
 		ImpersonationID:    impersonationSession.ID,
 		AppID:              req.AppID,
@@ -295,7 +289,7 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 		},
 		CreatedAt: time.Now().UTC(),
 	}
-	_ = s.repo.CreateAuditEvent(ctx, auditEvent)
+	_ = s.repo.CreateAuditEvent(ctx, auditEvent.ToSchema())
 
 	return &EndResponse{
 		Success:         true,
@@ -307,36 +301,30 @@ func (s *Service) End(ctx context.Context, req *EndRequest) (*EndResponse, error
 
 // Get retrieves an impersonation session
 func (s *Service) Get(ctx context.Context, req *GetRequest) (*SessionInfo, error) {
-	impersonationSession, err := s.repo.Get(ctx, req.ImpersonationID, req.AppID)
+	schemaSession, err := s.repo.Get(ctx, req.ImpersonationID, req.AppID)
 	if err != nil {
-		return nil, ErrImpersonationNotFound
+		return nil, ImpersonationNotFound(req.ImpersonationID.String())
 	}
 
-	return s.toSessionInfo(ctx, impersonationSession), nil
+	return s.toSessionInfo(ctx, schemaSession), nil
 }
 
-// List retrieves impersonation sessions with filters
-func (s *Service) List(ctx context.Context, req *ListRequest) (*ListResponse, error) {
-	sessions, err := s.repo.List(ctx, req)
+// List retrieves impersonation sessions with pagination and filtering
+func (s *Service) List(ctx context.Context, filter *ListSessionsFilter) (*ListSessionsResponse, error) {
+	// Get paginated results from repository
+	pageResp, err := s.repo.ListSessions(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list impersonation sessions: %w", err)
+		return nil, err
 	}
 
-	total, err := s.repo.Count(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to count impersonation sessions: %w", err)
-	}
+	// Convert schema sessions to DTOs
+	dtoSessions := FromSchemaImpersonationSessions(pageResp.Data)
 
-	infos := make([]*SessionInfo, len(sessions))
-	for i, session := range sessions {
-		infos[i] = s.toSessionInfo(ctx, session)
-	}
-
-	return &ListResponse{
-		Sessions: infos,
-		Total:    total,
-		Limit:    req.Limit,
-		Offset:   req.Offset,
+	// Return paginated response with DTOs
+	return &pagination.PageResponse[*ImpersonationSession]{
+		Data:       dtoSessions,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
 	}, nil
 }
 
@@ -364,36 +352,23 @@ func (s *Service) Verify(ctx context.Context, req *VerifyRequest) (*VerifyRespon
 	}, nil
 }
 
-// ListAuditEvents retrieves audit events
-func (s *Service) ListAuditEvents(ctx context.Context, req *AuditListRequest) ([]*AuditEvent, int, error) {
-	events, err := s.repo.ListAuditEvents(ctx, req)
+// ListAuditEvents retrieves audit events with pagination and filtering
+func (s *Service) ListAuditEvents(ctx context.Context, filter *ListAuditEventsFilter) (*ListAuditEventsResponse, error) {
+	// Get paginated results from repository
+	pageResp, err := s.repo.ListAuditEvents(ctx, filter)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to list audit events: %w", err)
+		return nil, err
 	}
 
-	total, err := s.repo.CountAuditEvents(ctx, req)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to count audit events: %w", err)
-	}
+	// Convert schema events to DTOs
+	dtoEvents := FromSchemaAuditEvents(pageResp.Data)
 
-	auditEvents := make([]*AuditEvent, len(events))
-	for i, event := range events {
-		auditEvents[i] = &AuditEvent{
-			ID:                 event.ID,
-			ImpersonationID:    event.ImpersonationID,
-			AppID:              event.AppID,
-			UserOrganizationID: event.UserOrganizationID,
-			EventType:          event.EventType,
-			Action:             event.Action,
-			Resource:           event.Resource,
-			IPAddress:          event.IPAddress,
-			UserAgent:          event.UserAgent,
-			Details:            event.Details,
-			CreatedAt:          event.CreatedAt,
-		}
-	}
-
-	return auditEvents, total, nil
+	// Return paginated response with DTOs
+	return &pagination.PageResponse[*AuditEvent]{
+		Data:       dtoEvents,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
+	}, nil
 }
 
 // ExpireSessions expires old impersonation sessions (run as cron job)
@@ -405,13 +380,13 @@ func (s *Service) ExpireSessions(ctx context.Context) (int, error) {
 
 func (s *Service) validateStartRequest(req *StartRequest) error {
 	if req.Reason == "" && s.config.RequireReason {
-		return ErrInvalidReason
+		return InvalidReason(s.config.MinReasonLength)
 	}
 	if len(req.Reason) < s.config.MinReasonLength && s.config.RequireReason {
-		return ErrInvalidReason
+		return InvalidReason(s.config.MinReasonLength)
 	}
 	if req.TicketNumber == "" && s.config.RequireTicket {
-		return errors.New("impersonation: ticket number is required")
+		return RequireTicket()
 	}
 	return nil
 }

@@ -71,10 +71,56 @@ See [DASHBOARD_STATUS.md](./DASHBOARD_STATUS.md) for detailed security documenta
 
 ## Pages
 
-- `/dashboard/` - Statistics and quick actions
-- `/dashboard/users` - User management
-- `/dashboard/users/:id` - User details
-- `/dashboard/sessions` - Active sessions
+### App-Based Route Structure (Breaking Change v2.0)
+
+All dashboard routes are now app-scoped. You must select an app before accessing dashboard features.
+
+**Dashboard Index:**
+- `/dashboard/` - App selection (multiapp mode) or auto-redirect to default app (standalone mode)
+
+**App-Scoped Routes:**
+- `/dashboard/app/:appId/` - Statistics and quick actions for the app
+- `/dashboard/app/:appId/users` - User management within the app
+- `/dashboard/app/:appId/users/:id` - User details
+- `/dashboard/app/:appId/sessions` - Active sessions in the app
+- `/dashboard/app/:appId/settings` - App-specific settings
+- `/dashboard/app/:appId/plugins` - Plugin management for the app
+
+**App Switcher:**
+In multiapp mode, a dropdown appears in the header allowing quick switching between apps you belong to.
+
+### Breaking Changes from v1.x
+
+**⚠️ IMPORTANT:** This release introduces breaking changes to the URL structure.
+
+1. **Old routes removed:**
+   - `/dashboard/users` → `/dashboard/app/{appId}/users`
+   - `/dashboard/sessions` → `/dashboard/app/{appId}/sessions`
+   - All routes now require an `appId` in the URL path
+
+2. **Organization management moved:**
+   - Dashboard no longer provides UI for creating/editing apps
+   - Use the `multiapp` plugin API endpoints for app management
+   - The dashboard `/` now displays app cards for navigation
+
+3. **Context requirement:**
+   - All dashboard features now operate within an app context
+   - Users must be members of an app to access its dashboard
+   - Data is automatically scoped to the selected app
+
+### Migration Guide
+
+**If you have bookmarks or hardcoded links:**
+- Update `/dashboard/users` to `/dashboard/app/{appId}/users`
+- Pattern: `/dashboard/{page}` → `/dashboard/app/{appId}/{page}`
+
+**For multiapp mode:**
+- Visit `/dashboard/` to see all your apps
+- Click on an app card to enter its dashboard
+
+**For standalone mode:**
+- `/dashboard/` will auto-redirect to the default app
+- URLs will automatically include the app ID
 
 ## Dark Mode
 

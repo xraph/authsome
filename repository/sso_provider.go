@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/schema"
 )

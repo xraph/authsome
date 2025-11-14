@@ -10,10 +10,13 @@ import (
 
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/device"
 	dev "github.com/xraph/authsome/core/device"
+	"github.com/xraph/authsome/core/pagination"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	sec "github.com/xraph/authsome/core/security"
 	coreuser "github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
@@ -36,7 +39,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	// Parse IP without port and enforce security rules
@@ -44,23 +47,23 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 	if h.sec != nil {
 		if allowed := h.sec.CheckIPAllowed(c.Request().Context(), ip); !allowed {
 			_ = h.sec.LogEvent(c.Request().Context(), "ip_blocked_signup", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(403, map[string]string{"error": "ip not allowed"})
+			return c.JSON(http.StatusForbidden, errs.New("IP_NOT_ALLOWED", "IP address not allowed", http.StatusForbidden))
 		}
 		// Geo-based restrictions if configured
 		if ok := h.sec.CheckCountryAllowed(c.Request().Context(), ip); !ok {
 			_ = h.sec.LogEvent(c.Request().Context(), "country_blocked_signup", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(403, map[string]string{"error": "geo restriction"})
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "geo restriction"})
 		}
 	}
 	var req auth.SignUpRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 	req.IPAddress = ip
 	req.UserAgent = c.Request().UserAgent()
 	res, err := h.auth.SignUp(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
 	if h.sec != nil && res.User != nil {
 		uid := res.User.ID
@@ -72,7 +75,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 			log.Printf("audit log signup error: %v", err)
 		}
 	}
-	return c.JSON(200, res)
+	return c.JSON(http.StatusOK, res)
 }
 
 func (h *AuthHandler) SignIn(c forge.Context) error {
@@ -80,23 +83,23 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	ip := clientIPFromRequest(c.Request(), h.sec)
 	if h.sec != nil {
 		if allowed := h.sec.CheckIPAllowed(c.Request().Context(), ip); !allowed {
 			_ = h.sec.LogEvent(c.Request().Context(), "ip_blocked_signin", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(403, map[string]string{"error": "ip not allowed"})
+			return c.JSON(http.StatusForbidden, errs.New("IP_NOT_ALLOWED", "IP address not allowed", http.StatusForbidden))
 		}
 		if ok := h.sec.CheckCountryAllowed(c.Request().Context(), ip); !ok {
 			_ = h.sec.LogEvent(c.Request().Context(), "country_blocked_signin", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(403, map[string]string{"error": "geo restriction"})
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "geo restriction"})
 		}
 	}
 	var req auth.SignInRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 	// Lockout check now that we have email
 	if h.sec != nil {
@@ -125,7 +128,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		if h.aud != nil {
 			_ = h.aud.Log(c.Request().Context(), nil, "signin_failed", "auth:signin", ip, req.UserAgent, "")
 		}
-		return c.JSON(401, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusUnauthorized, errs.Wrap(err, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized))
 	}
 	// Determine device fingerprint
 	fp := req.UserAgent + "|" + req.IPAddress
@@ -157,12 +160,12 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			uid := u.ID
 			_ = h.aud.Log(c.Request().Context(), &uid, "signin_twofa_required", "user:"+uid.String(), ip, req.UserAgent, "")
 		}
-		return c.JSON(200, map[string]interface{}{"user": u, "require_twofa": true, "device_id": fp})
+		return c.JSON(http.StatusOK, map[string]interface{}{"user": u, "require_twofa": true, "device_id": fp})
 	}
 	// Otherwise, create session and return normal auth response
 	res, err := h.auth.CreateSessionForUser(c.Request().Context(), u, req.Remember || req.RememberMe, req.IPAddress, req.UserAgent)
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
 	// Track device on successful login
 	if h.dev != nil && res.User != nil {
@@ -184,7 +187,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			log.Printf("audit log signin error: %v", err)
 		}
 	}
-	return c.JSON(200, res)
+	return c.JSON(http.StatusOK, res)
 }
 
 // UpdateUser updates the authenticated user's profile (name, image, username)
@@ -193,18 +196,18 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	// Require authentication via session cookie
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(401, map[string]string{"error": "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
-		return c.JSON(401, map[string]string{"error": "invalid session"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid session"})
 	}
 	// Parse request
 	var body struct {
@@ -214,7 +217,7 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 		DisplayUsername *string `json:"display_username"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 	// Update via auth service
 	updated, err := h.auth.UpdateUser(c.Request().Context(), res.User.ID, &coreuser.UpdateUserRequest{
@@ -224,7 +227,7 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 		DisplayUsername: body.DisplayUsername,
 	})
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
 	// Audit event
 	if h.aud != nil {
@@ -232,7 +235,7 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		_ = h.aud.Log(c.Request().Context(), &uid, "user_updated", "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
-	return c.JSON(200, updated)
+	return c.JSON(http.StatusOK, updated)
 }
 
 // clientIPFromRequest attempts to extract the original client IP.
@@ -295,23 +298,23 @@ func (h *AuthHandler) SignOut(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	var body struct {
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil || body.Token == "" {
-		return c.JSON(400, map[string]string{"error": "missing token"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing token"})
 	}
 	if err := h.auth.SignOut(c.Request().Context(), &auth.SignOutRequest{Token: body.Token}); err != nil {
-		return c.JSON(400, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		_ = h.aud.Log(c.Request().Context(), nil, "signout", "auth:session", ip, c.Request().UserAgent(), "")
 	}
-	return c.JSON(200, map[string]string{"status": "signed_out"})
+	return c.JSON(http.StatusOK, map[string]string{"status": "signed_out"})
 }
 
 func (h *AuthHandler) GetSession(c forge.Context) error {
@@ -319,24 +322,24 @@ func (h *AuthHandler) GetSession(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(401, map[string]string{"error": "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil {
-		return c.JSON(401, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusUnauthorized, errs.Wrap(err, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized))
 	}
 	if h.aud != nil && res.User != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
 		_ = h.aud.Log(c.Request().Context(), &uid, "session_checked", "session:"+res.Session.ID.String(), ip, c.Request().UserAgent(), "")
 	}
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]interface{}{
 		"user":    res.User,
 		"session": res.Session,
 	})
@@ -348,28 +351,34 @@ func (h *AuthHandler) ListDevices(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(401, map[string]string{"error": "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
-		return c.JSON(401, map[string]string{"error": "invalid session"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid session"})
 	}
-	list, err := h.dev.ListDevices(c.Request().Context(), res.User.ID, 50, 0)
+	list, err := h.dev.ListDevices(c.Request().Context(), &device.ListDevicesFilter{
+		UserID: res.User.ID,
+		PaginationParams: pagination.PaginationParams{
+			Limit:  50,
+			Offset: 0,
+		},
+	})
 	if err != nil {
-		return c.JSON(400, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
 		_ = h.aud.Log(c.Request().Context(), &uid, "devices_listed", "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
-	return c.JSON(200, list)
+	return c.JSON(http.StatusOK, list)
 }
 
 // RevokeDevice deletes a device by fingerprint for the authenticated user
@@ -378,31 +387,31 @@ func (h *AuthHandler) RevokeDevice(c forge.Context) error {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
-			return c.JSON(429, map[string]string{"error": "rate limit exceeded"})
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(401, map[string]string{"error": "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
-		return c.JSON(401, map[string]string{"error": "invalid session"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid session"})
 	}
 	var body struct {
 		Fingerprint string `json:"fingerprint"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil || body.Fingerprint == "" {
-		return c.JSON(400, map[string]string{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 	if err := h.dev.RevokeDevice(c.Request().Context(), res.User.ID, body.Fingerprint); err != nil {
-		return c.JSON(400, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
 		_ = h.aud.Log(c.Request().Context(), &uid, "device_revoked", "user:"+uid.String(), ip, c.Request().UserAgent(), "fingerprint="+body.Fingerprint)
 	}
-	return c.JSON(200, map[string]string{"status": "device_revoked"})
+	return c.JSON(http.StatusOK, map[string]string{"status": "device_revoked"})
 }

@@ -2,23 +2,29 @@ package audit
 
 import (
 	"context"
-	"github.com/rs/xid"
 	"time"
+
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/schema"
 )
 
 // Repository defines persistence for audit events
 type Repository interface {
-	Create(ctx context.Context, e *Event) error
-	List(ctx context.Context, limit, offset int) ([]*Event, error)
-	Search(ctx context.Context, params ListParams) ([]*Event, error)
-	Count(ctx context.Context) (int, error)
-	SearchCount(ctx context.Context, params ListParams) (int, error)
+	Create(ctx context.Context, e *schema.AuditEvent) error
+	Get(ctx context.Context, id xid.ID) (*schema.AuditEvent, error)
+	List(ctx context.Context, filter *ListEventsFilter) (*pagination.PageResponse[*schema.AuditEvent], error)
 }
 
 // Service handles audit logging
-type Service struct{ repo Repository }
+type Service struct {
+	repo Repository
+}
 
-func NewService(repo Repository) *Service { return &Service{repo: repo} }
+// NewService creates a new audit service
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
+}
 
 // Log creates an audit event with timestamps
 func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip, ua, metadata string) error {
@@ -33,75 +39,93 @@ func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip,
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}
-	return s.repo.Create(ctx, e)
+
+	// Convert to schema and create
+	if err := s.repo.Create(ctx, e.ToSchema()); err != nil {
+		return AuditEventCreateFailed(err)
+	}
+
+	return nil
 }
 
-// List returns recent audit events ordered by CreatedAt desc
-func (s *Service) List(ctx context.Context, limit, offset int) ([]*Event, error) {
-	if limit <= 0 {
-		limit = 50
+// Create creates a new audit event from a request
+func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, error) {
+	// Validate required fields
+	if req.Action == "" {
+		return nil, InvalidFilter("action", "action is required")
 	}
-	if offset < 0 {
-		offset = 0
+	if req.Resource == "" {
+		return nil, InvalidFilter("resource", "resource is required")
 	}
-	return s.repo.List(ctx, limit, offset)
+
+	now := time.Now().UTC()
+	event := &Event{
+		ID:        xid.New(),
+		UserID:    req.UserID,
+		Action:    req.Action,
+		Resource:  req.Resource,
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+		Metadata:  req.Metadata,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Convert to schema and create
+	if err := s.repo.Create(ctx, event.ToSchema()); err != nil {
+		return nil, AuditEventCreateFailed(err)
+	}
+
+	return event, nil
 }
 
-// ListWithTotal returns events and total count for pagination
-func (s *Service) ListWithTotal(ctx context.Context, limit, offset int) ([]*Event, int, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	events, err := s.repo.List(ctx, limit, offset)
+// Get retrieves an audit event by ID
+func (s *Service) Get(ctx context.Context, req *GetEventRequest) (*Event, error) {
+	schemaEvent, err := s.repo.Get(ctx, req.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, QueryFailed("get", err)
 	}
-	total, err := s.repo.Count(ctx)
-	if err != nil {
-		return nil, 0, err
+
+	if schemaEvent == nil {
+		return nil, AuditEventNotFound(req.ID.String())
 	}
-	return events, total, nil
+
+	return FromSchemaEvent(schemaEvent), nil
 }
 
-// ListParams defines filters for searching audit events
-type ListParams struct {
-	UserID *xid.ID
-	Action string
-	Since  *time.Time
-	Until  *time.Time
-	Limit  int
-	Offset int
-}
+// List returns paginated audit events with optional filters
+func (s *Service) List(ctx context.Context, filter *ListEventsFilter) (*ListEventsResponse, error) {
+	// Validate pagination
+	if filter.Limit < 0 {
+		return nil, InvalidPagination("limit cannot be negative")
+	}
+	if filter.Offset < 0 {
+		return nil, InvalidPagination("offset cannot be negative")
+	}
 
-// Search returns events matching provided filters
-func (s *Service) Search(ctx context.Context, params ListParams) ([]*Event, error) {
-	if params.Limit <= 0 {
-		params.Limit = 50
+	// Validate time range
+	if filter.Since != nil && filter.Until != nil && filter.Since.After(*filter.Until) {
+		return nil, InvalidTimeRange("since must be before until")
 	}
-	if params.Offset < 0 {
-		params.Offset = 0
-	}
-	return s.repo.Search(ctx, params)
-}
 
-// SearchWithTotal returns filtered events and total count for pagination
-func (s *Service) SearchWithTotal(ctx context.Context, params ListParams) ([]*Event, int, error) {
-	if params.Limit <= 0 {
-		params.Limit = 50
+	// Set defaults
+	if filter.Limit == 0 {
+		filter.Limit = 50
 	}
-	if params.Offset < 0 {
-		params.Offset = 0
-	}
-	events, err := s.repo.Search(ctx, params)
+
+	// Query repository
+	pageResp, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, 0, err
+		return nil, QueryFailed("list", err)
 	}
-	total, err := s.repo.SearchCount(ctx, params)
-	if err != nil {
-		return nil, 0, err
-	}
-	return events, total, nil
+
+	// Convert schema events to DTOs
+	events := FromSchemaEvents(pageResp.Data)
+
+	// Return paginated response with DTOs
+	return &pagination.PageResponse[*Event]{
+		Data:       events,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
+	}, nil
 }

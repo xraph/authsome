@@ -13,12 +13,78 @@ import (
 
 // Service provides username-based auth operations backed by core services
 type Service struct {
-	users *user.Service
-	auth  *auth.Service
+	users  *user.Service
+	auth   *auth.Service
+	config Config
 }
 
-func NewService(users *user.Service, authSvc *auth.Service) *Service {
-	return &Service{users: users, auth: authSvc}
+func NewService(users *user.Service, authSvc *auth.Service, config Config) *Service {
+	return &Service{users: users, auth: authSvc, config: config}
+}
+
+// ValidatePassword validates password against configured requirements
+func (s *Service) ValidatePassword(password string) error {
+	if len(password) < s.config.MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", s.config.MinPasswordLength)
+	}
+	if len(password) > s.config.MaxPasswordLength {
+		return fmt.Errorf("password must be at most %d characters", s.config.MaxPasswordLength)
+	}
+
+	if s.config.RequireUppercase {
+		hasUpper := false
+		for _, c := range password {
+			if c >= 'A' && c <= 'Z' {
+				hasUpper = true
+				break
+			}
+		}
+		if !hasUpper {
+			return fmt.Errorf("password must contain at least one uppercase letter")
+		}
+	}
+
+	if s.config.RequireLowercase {
+		hasLower := false
+		for _, c := range password {
+			if c >= 'a' && c <= 'z' {
+				hasLower = true
+				break
+			}
+		}
+		if !hasLower {
+			return fmt.Errorf("password must contain at least one lowercase letter")
+		}
+	}
+
+	if s.config.RequireNumber {
+		hasNumber := false
+		for _, c := range password {
+			if c >= '0' && c <= '9' {
+				hasNumber = true
+				break
+			}
+		}
+		if !hasNumber {
+			return fmt.Errorf("password must contain at least one number")
+		}
+	}
+
+	if s.config.RequireSpecialChar {
+		hasSpecial := false
+		specialChars := "!@#$%^&*()_+-=[]{}|;:',.<>?/~`"
+		for _, c := range password {
+			if strings.ContainsRune(specialChars, c) {
+				hasSpecial = true
+				break
+			}
+		}
+		if !hasSpecial {
+			return fmt.Errorf("password must contain at least one special character")
+		}
+	}
+
+	return nil
 }
 
 // SignUpWithUsername is not supported due to email non-null constraint
@@ -28,6 +94,12 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password str
 	if disp == "" || strings.TrimSpace(password) == "" {
 		return fmt.Errorf("missing fields")
 	}
+
+	// Validate password against configured requirements
+	if err := s.ValidatePassword(password); err != nil {
+		return err
+	}
+
 	canonical := strings.ToLower(disp)
 	// Generate a temporary, unique email to satisfy non-null/unique constraints
 	id := xid.New()

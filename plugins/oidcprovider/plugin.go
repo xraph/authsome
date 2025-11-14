@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
@@ -16,54 +17,140 @@ import (
 
 // Plugin wires the OIDC Provider service and registers routes
 type Plugin struct {
-	db      *bun.DB
-	service *Service
+	db            *bun.DB
+	service       *Service
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// PluginOption is a functional option for configuring the OIDC provider plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithIssuer sets the OIDC issuer URL
+func WithIssuer(issuer string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.Issuer = issuer
+	}
+}
+
+// WithAccessTokenTTL sets the access token TTL in seconds
+func WithAccessTokenTTL(ttl int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AccessTokenTTL = ttl
+	}
+}
+
+// WithRefreshTokenTTL sets the refresh token TTL in seconds
+func WithRefreshTokenTTL(ttl int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RefreshTokenTTL = ttl
+	}
+}
+
+// WithAuthCodeTTL sets the authorization code TTL in seconds
+func WithAuthCodeTTL(ttl int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AuthCodeTTL = ttl
+	}
+}
+
+// WithIDTokenTTL sets the ID token TTL in seconds
+func WithIDTokenTTL(ttl int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.IDTokenTTL = ttl
+	}
+}
+
+// WithAllowPKCE sets whether PKCE is allowed
+func WithAllowPKCE(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowPKCE = allow
+	}
+}
+
+// WithRequirePKCE sets whether PKCE is required
+func WithRequirePKCE(require bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequirePKCE = require
+	}
+}
+
+// NewPlugin creates a new OIDC provider plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "oidcprovider" }
 
 // Init accepts auth instance with GetDB method
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("oidcprovider plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("oidcprovider plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for oidcprovider plugin")
 	}
 
-	p.db = db
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for oidcprovider plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "oidcprovider"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.oidcprovider", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind OIDC provider config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models
+	p.db.RegisterModel((*schema.OAuthClient)(nil))
+	p.db.RegisterModel((*schema.AuthorizationCode)(nil))
+	p.db.RegisterModel((*schema.OAuthToken)(nil))
 
 	// Create repositories
-	clientRepo := repo.NewOAuthClientRepository(db)
-	codeRepo := repo.NewAuthorizationCodeRepository(db)
-	tokenRepo := repo.NewOAuthTokenRepository(db)
-	userRepo := repo.NewUserRepository(db)
+	clientRepo := repo.NewOAuthClientRepository(p.db)
+	codeRepo := repo.NewAuthorizationCodeRepository(p.db)
+	tokenRepo := repo.NewOAuthTokenRepository(p.db)
+	userRepo := repo.NewUserRepository(p.db)
 
 	// Create core services
-	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
 	userSvc := user.NewService(userRepo, user.Config{}, nil)
 
-	// Create default config (TODO: integrate with ConfigManager)
-	config := Config{
-		Issuer: "http://localhost:3001", // Default issuer
-	}
-	config.Keys.RotationInterval = "24h"
-	config.Keys.KeyLifetime = "168h" // 7 days
-	config.Tokens.AccessTokenExpiry = "1h"
-	config.Tokens.IDTokenExpiry = "1h"
-	config.Tokens.RefreshTokenExpiry = "720h" // 30 days
+	// Create OIDC Provider service with all dependencies and config
+	p.service = NewServiceWithRepo(clientRepo, p.config)
 
-	// Create OIDC Provider service with all dependencies
-	p.service = NewServiceWithRepo(clientRepo, config)
+	p.logger.Info("OIDC provider plugin initialized",
+		forge.F("issuer", p.config.Issuer),
+		forge.F("access_token_ttl", p.config.AccessTokenTTL),
+		forge.F("allow_pkce", p.config.AllowPKCE))
 	p.service.SetRepositories(clientRepo, codeRepo, tokenRepo)
 	p.service.SetSessionService(sessionSvc)
 	p.service.SetUserService(userSvc)

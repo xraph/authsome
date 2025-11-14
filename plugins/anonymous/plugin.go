@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
@@ -12,34 +13,130 @@ import (
 )
 
 type Plugin struct {
-	service *Service
-	db      *bun.DB
+	service       *Service
+	db            *bun.DB
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the anonymous plugin configuration
+type Config struct {
+	// EnableAnonymous enables anonymous user creation
+	EnableAnonymous bool `json:"enableAnonymous"`
+	// SessionExpiryHours is the anonymous session expiry time in hours
+	SessionExpiryHours int `json:"sessionExpiryHours"`
+	// CleanupIntervalHours is how often to clean up expired anonymous users
+	CleanupIntervalHours int `json:"cleanupIntervalHours"`
+	// AutoConvert allows converting anonymous users to registered users
+	AutoConvert bool `json:"autoConvert"`
+}
+
+// DefaultConfig returns the default anonymous plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		EnableAnonymous:      true,
+		SessionExpiryHours:   72, // 3 days
+		CleanupIntervalHours: 24,
+		AutoConvert:          true,
+	}
+}
+
+// PluginOption is a functional option for configuring the anonymous plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithEnableAnonymous sets whether anonymous users are enabled
+func WithEnableAnonymous(enable bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.EnableAnonymous = enable
+	}
+}
+
+// WithSessionExpiryHours sets the session expiry time
+func WithSessionExpiryHours(hours int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SessionExpiryHours = hours
+	}
+}
+
+// WithCleanupIntervalHours sets the cleanup interval
+func WithCleanupIntervalHours(hours int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.CleanupIntervalHours = hours
+	}
+}
+
+// WithAutoConvert sets whether auto-conversion is enabled
+func WithAutoConvert(enable bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AutoConvert = enable
+	}
+}
+
+// NewPlugin creates a new anonymous plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "anonymous" }
 
 // Init accepts auth instance with GetDB method
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("anonymous plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("anonymous plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for anonymous plugin")
 	}
 
-	p.db = db
-	users := repo.NewUserRepository(db)
-	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
-	p.service = NewService(users, sessionSvc)
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for anonymous plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "anonymous"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.anonymous", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind anonymous config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// No specific Bun models for anonymous (uses core User and Session models)
+
+	users := repo.NewUserRepository(p.db)
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
+	p.service = NewService(users, sessionSvc, p.config)
+
+	p.logger.Info("anonymous plugin initialized",
+		forge.F("enable_anonymous", p.config.EnableAnonymous),
+		forge.F("session_expiry_hours", p.config.SessionExpiryHours),
+		forge.F("auto_convert", p.config.AutoConvert))
+
 	return nil
 }
 

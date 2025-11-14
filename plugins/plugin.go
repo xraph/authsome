@@ -3,10 +3,7 @@ package plugins
 import (
 	"fmt"
 
-	"github.com/xraph/authsome/core/hooks"
-	"github.com/xraph/authsome/core/rbac"
-	"github.com/xraph/authsome/core/registry"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/core"
 )
 
 // Plugin defines the interface for authentication plugins
@@ -19,40 +16,7 @@ import (
 //
 // Plugins can resolve services from the DI container using the helper functions
 // in the authsome package (e.g., authsome.ResolveUserService, authsome.ResolveAuditService)
-type Plugin interface {
-	// ID returns the unique plugin identifier
-	ID() string
-
-	// Init initializes the plugin with the auth instance
-	// The auth parameter will be an *authsome.Auth instance
-	// Use type assertion: auth.(*authsome.Auth) or use interface methods
-	Init(auth interface{}) error
-
-	// RegisterRoutes registers plugin routes with the router
-	// Routes are scoped to the auth base path (e.g., /api/auth)
-	RegisterRoutes(router forge.Router) error
-
-	// RegisterHooks registers plugin hooks with the hook registry
-	// Hooks allow plugins to intercept auth lifecycle events
-	RegisterHooks(hooks *hooks.HookRegistry) error
-
-	// RegisterServiceDecorators allows plugins to replace core services with decorated versions
-	// This enables plugins to enhance or modify core functionality
-	RegisterServiceDecorators(services *registry.ServiceRegistry) error
-
-	// Migrate runs plugin migrations
-	// Create database tables and indexes needed by the plugin
-	Migrate() error
-}
-
-// AuthInterface defines the interface that plugins can use to access Auth instance features
-// This avoids direct coupling to the authsome package in plugin code
-type AuthInterface interface {
-	GetDB() interface{}                            // Returns *bun.DB
-	GetForgeApp() interface{}                      // Returns forge.App
-	GetServiceRegistry() *registry.ServiceRegistry // Returns service registry
-	GetHookRegistry() *hooks.HookRegistry          // Returns hook registry
-}
+type Plugin = core.Plugin
 
 // Optional Plugin Interfaces
 // Plugins can optionally implement these interfaces to enable additional functionality
@@ -70,18 +34,17 @@ type AuthInterface interface {
 //	        Permissions: []string{"view on custom_resource"},
 //	    })
 //	}
-type PluginWithRoles interface {
-	Plugin
-	RegisterRoles(registry rbac.RoleRegistryInterface) error // registry is *rbac.RoleRegistry
-}
+type PluginWithRoles = core.PluginWithRoles
 
 // Registry manages registered plugins
 type Registry struct {
 	plugins map[string]Plugin
 }
 
+type PluginRegistry = core.PluginRegistry
+
 // NewRegistry creates a new plugin registry
-func NewRegistry() *Registry {
+func NewRegistry() PluginRegistry {
 	return &Registry{
 		plugins: make(map[string]Plugin),
 	}

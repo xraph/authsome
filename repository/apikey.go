@@ -6,6 +6,8 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -20,14 +22,14 @@ func NewAPIKeyRepository(db *bun.DB) *APIKeyRepository {
 	return &APIKeyRepository{db: db}
 }
 
-// Create creates a new API key
-func (r *APIKeyRepository) Create(ctx context.Context, apiKey *schema.APIKey) error {
+// CreateAPIKey creates a new API key
+func (r *APIKeyRepository) CreateAPIKey(ctx context.Context, apiKey *schema.APIKey) error {
 	_, err := r.db.NewInsert().Model(apiKey).Exec(ctx)
 	return err
 }
 
-// FindByID finds an API key by ID
-func (r *APIKeyRepository) FindByID(ctx context.Context, id xid.ID) (*schema.APIKey, error) {
+// FindAPIKeyByID finds an API key by ID
+func (r *APIKeyRepository) FindAPIKeyByID(ctx context.Context, id xid.ID) (*schema.APIKey, error) {
 	apiKey := &schema.APIKey{}
 	err := r.db.NewSelect().
 		Model(apiKey).
@@ -40,8 +42,8 @@ func (r *APIKeyRepository) FindByID(ctx context.Context, id xid.ID) (*schema.API
 	return apiKey, nil
 }
 
-// FindByPrefix finds an API key by prefix
-func (r *APIKeyRepository) FindByPrefix(ctx context.Context, prefix string) (*schema.APIKey, error) {
+// FindAPIKeyByPrefix finds an API key by prefix
+func (r *APIKeyRepository) FindAPIKeyByPrefix(ctx context.Context, prefix string) (*schema.APIKey, error) {
 	apiKey := &schema.APIKey{}
 	err := r.db.NewSelect().
 		Model(apiKey).
@@ -55,91 +57,62 @@ func (r *APIKeyRepository) FindByPrefix(ctx context.Context, prefix string) (*sc
 	return apiKey, nil
 }
 
-// FindByApp finds all API keys for an app
-func (r *APIKeyRepository) FindByApp(ctx context.Context, appID xid.ID, limit, offset int) ([]*schema.APIKey, error) {
-	var apiKeys []*schema.APIKey
-	query := r.db.NewSelect().
-		Model(&apiKeys).
-		Where("app_id = ?", appID).
-		Where("deleted_at IS NULL").
-		Order("created_at DESC")
+// ListAPIKeys lists API keys with filtering and pagination
+func (r *APIKeyRepository) ListAPIKeys(ctx context.Context, filter *apikey.ListAPIKeysFilter) (*pagination.PageResponse[*schema.APIKey], error) {
+	var keys []*schema.APIKey
 
-	if limit > 0 {
-		query = query.Limit(limit)
+	// Build query with filters
+	query := r.db.NewSelect().Model(&keys).Where("deleted_at IS NULL")
+	query = query.Where("app_id = ?", filter.AppID)
+
+	if filter.EnvironmentID != nil {
+		query = query.Where("environment_id = ?", *filter.EnvironmentID)
 	}
-	if offset > 0 {
-		query = query.Offset(offset)
+	if filter.OrganizationID != nil {
+		query = query.Where("organization_id = ?", *filter.OrganizationID)
+	}
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.Active != nil {
+		query = query.Where("active = ?", *filter.Active)
 	}
 
-	err := query.Scan(ctx)
-	return apiKeys, err
+	// Count query with same filters
+	countQuery := r.db.NewSelect().Model((*schema.APIKey)(nil)).Where("deleted_at IS NULL")
+	countQuery = countQuery.Where("app_id = ?", filter.AppID)
+
+	if filter.EnvironmentID != nil {
+		countQuery = countQuery.Where("environment_id = ?", *filter.EnvironmentID)
+	}
+	if filter.OrganizationID != nil {
+		countQuery = countQuery.Where("organization_id = ?", *filter.OrganizationID)
+	}
+	if filter.UserID != nil {
+		countQuery = countQuery.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.Active != nil {
+		countQuery = countQuery.Where("active = ?", *filter.Active)
+	}
+
+	total, err := countQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination and ordering
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+	query = query.Order("created_at DESC")
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	return pagination.NewPageResponse(keys, int64(total), &filter.PaginationParams), nil
 }
 
-// FindByUser finds all API keys for a user within an app
-func (r *APIKeyRepository) FindByUser(ctx context.Context, appID, userID xid.ID, limit, offset int) ([]*schema.APIKey, error) {
-	var apiKeys []*schema.APIKey
-	query := r.db.NewSelect().
-		Model(&apiKeys).
-		Where("app_id = ?", appID).
-		Where("user_id = ?", userID).
-		Where("deleted_at IS NULL").
-		Order("created_at DESC")
-
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-
-	err := query.Scan(ctx)
-	return apiKeys, err
-}
-
-// FindByOrganization finds all API keys for an organization
-func (r *APIKeyRepository) FindByOrganization(ctx context.Context, appID xid.ID, orgID xid.ID, limit, offset int) ([]*schema.APIKey, error) {
-	var apiKeys []*schema.APIKey
-	query := r.db.NewSelect().
-		Model(&apiKeys).
-		Where("app_id = ?", appID).
-		Where("organization_id = ?", orgID).
-		Where("deleted_at IS NULL").
-		Order("created_at DESC")
-
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-
-	err := query.Scan(ctx)
-	return apiKeys, err
-}
-
-// FindByEnvironment finds all API keys for an environment
-func (r *APIKeyRepository) FindByEnvironment(ctx context.Context, appID, envID xid.ID, limit, offset int) ([]*schema.APIKey, error) {
-	var apiKeys []*schema.APIKey
-	query := r.db.NewSelect().
-		Model(&apiKeys).
-		Where("app_id = ?", appID).
-		Where("environment_id = ?", envID).
-		Where("deleted_at IS NULL").
-		Order("created_at DESC")
-
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-
-	err := query.Scan(ctx)
-	return apiKeys, err
-}
-
-// Update updates an API key
-func (r *APIKeyRepository) Update(ctx context.Context, apiKey *schema.APIKey) error {
+// UpdateAPIKey updates an API key
+func (r *APIKeyRepository) UpdateAPIKey(ctx context.Context, apiKey *schema.APIKey) error {
 	apiKey.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
 		Model(apiKey).
@@ -149,8 +122,8 @@ func (r *APIKeyRepository) Update(ctx context.Context, apiKey *schema.APIKey) er
 	return err
 }
 
-// UpdateUsage updates the usage statistics for an API key
-func (r *APIKeyRepository) UpdateUsage(ctx context.Context, id xid.ID, ip, userAgent string) error {
+// UpdateAPIKeyUsage updates the usage statistics for an API key
+func (r *APIKeyRepository) UpdateAPIKeyUsage(ctx context.Context, id xid.ID, ip, userAgent string) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
 		Model((*schema.APIKey)(nil)).
@@ -165,8 +138,8 @@ func (r *APIKeyRepository) UpdateUsage(ctx context.Context, id xid.ID, ip, userA
 	return err
 }
 
-// Delete soft deletes an API key
-func (r *APIKeyRepository) Delete(ctx context.Context, id xid.ID) error {
+// DeleteAPIKey soft deletes an API key
+func (r *APIKeyRepository) DeleteAPIKey(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
 		Model((*schema.APIKey)(nil)).
@@ -178,8 +151,8 @@ func (r *APIKeyRepository) Delete(ctx context.Context, id xid.ID) error {
 	return err
 }
 
-// Deactivate deactivates an API key without deleting it
-func (r *APIKeyRepository) Deactivate(ctx context.Context, id xid.ID) error {
+// DeactivateAPIKey deactivates an API key without deleting it
+func (r *APIKeyRepository) DeactivateAPIKey(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
 		Model((*schema.APIKey)(nil)).
@@ -191,40 +164,29 @@ func (r *APIKeyRepository) Deactivate(ctx context.Context, id xid.ID) error {
 	return err
 }
 
-// CountByApp counts API keys for an app
-func (r *APIKeyRepository) CountByApp(ctx context.Context, appID xid.ID) (int, error) {
-	count, err := r.db.NewSelect().
+// CountAPIKeys counts API keys with flexible filtering
+func (r *APIKeyRepository) CountAPIKeys(ctx context.Context, appID xid.ID, envID *xid.ID, orgID *xid.ID, userID *xid.ID) (int, error) {
+	query := r.db.NewSelect().
 		Model((*schema.APIKey)(nil)).
 		Where("app_id = ?", appID).
-		Where("deleted_at IS NULL").
-		Count(ctx)
+		Where("deleted_at IS NULL")
+
+	if envID != nil {
+		query = query.Where("environment_id = ?", *envID)
+	}
+	if orgID != nil {
+		query = query.Where("organization_id = ?", *orgID)
+	}
+	if userID != nil {
+		query = query.Where("user_id = ?", *userID)
+	}
+
+	count, err := query.Count(ctx)
 	return count, err
 }
 
-// CountByUser counts API keys for a user within an app
-func (r *APIKeyRepository) CountByUser(ctx context.Context, appID, userID xid.ID) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*schema.APIKey)(nil)).
-		Where("app_id = ?", appID).
-		Where("user_id = ?", userID).
-		Where("deleted_at IS NULL").
-		Count(ctx)
-	return count, err
-}
-
-// CountByOrganization counts API keys for an organization
-func (r *APIKeyRepository) CountByOrganization(ctx context.Context, appID xid.ID, orgID xid.ID) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*schema.APIKey)(nil)).
-		Where("app_id = ?", appID).
-		Where("organization_id = ?", orgID).
-		Where("deleted_at IS NULL").
-		Count(ctx)
-	return count, err
-}
-
-// CleanupExpired removes expired API keys
-func (r *APIKeyRepository) CleanupExpired(ctx context.Context) (int, error) {
+// CleanupExpiredAPIKeys removes expired API keys
+func (r *APIKeyRepository) CleanupExpiredAPIKeys(ctx context.Context) (int, error) {
 	now := time.Now()
 	result, err := r.db.NewUpdate().
 		Model((*schema.APIKey)(nil)).

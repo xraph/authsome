@@ -11,9 +11,14 @@ import (
 )
 
 // Service provides Two-Factor Authentication operations
-type Service struct{ repo *repo.TwoFARepository }
+type Service struct {
+	repo   *repo.TwoFARepository
+	config Config
+}
 
-func NewService(r *repo.TwoFARepository) *Service { return &Service{repo: r} }
+func NewService(r *repo.TwoFARepository, config Config) *Service {
+	return &Service{repo: r, config: config}
+}
 
 type EnableRequest struct {
 	Method string // "totp" or "otp"
@@ -135,13 +140,18 @@ func (s *Service) GenerateBackupCodes(ctx context.Context, userID string, count 
 		return nil, err
 	}
 	if count <= 0 {
-		count = 10
+		count = s.config.BackupCodeCount
 	}
 	// Generate codes and store hashed versions
 	hashes := make([]string, 0, count)
 	codes := make([]string, 0, count)
 	for i := 0; i < count; i++ {
-		c := "backup-" + xid.New().String()
+		// Generate code with configured length
+		codeLen := s.config.BackupCodeLength
+		if codeLen < 8 {
+			codeLen = 8 // Minimum length for security
+		}
+		c := fmt.Sprintf("backup-%s", xid.New().String()[:codeLen])
 		codes = append(codes, c)
 		hashes = append(hashes, hashCode(c))
 	}
@@ -170,6 +180,10 @@ func (s *Service) MarkTrusted(ctx context.Context, userID, deviceID string, days
 	uid, err := xid.FromString(userID)
 	if err != nil {
 		return err
+	}
+	// Use configured days if not explicitly specified
+	if days <= 0 {
+		days = s.config.TrustedDeviceDays
 	}
 	return s.repo.MarkTrustedDevice(ctx, uid, deviceID, time.Now().Add(time.Duration(days)*24*time.Hour))
 }

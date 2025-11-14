@@ -2,9 +2,13 @@ package notification
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -24,25 +28,32 @@ func NewHandler(service *notification.Service, templateSvc *TemplateService, con
 	}
 }
 
+// =============================================================================
+// TEMPLATE HANDLERS
+// =============================================================================
+
 // CreateTemplate creates a new notification template
 func (h *Handler) CreateTemplate(c forge.Context) error {
-	var req notification.CreateTemplateRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request",
-		})
+	// Extract app ID from context
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
 	}
 
-	// Set default organization if not provided
-	if req.OrganizationID == "" {
-		req.OrganizationID = "default"
+	var req notification.CreateTemplateRequest
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
+
+	// Set app ID from context
+	req.AppID = appID
 
 	template, err := h.service.CreateTemplate(c.Context(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusCreated, template)
@@ -53,50 +64,82 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid template ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID format"))
 	}
 
 	template, err := h.service.GetTemplate(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "template not found",
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusOK, template)
 }
 
-// ListTemplates lists all templates
+// ListTemplates lists all templates with pagination
 func (h *Handler) ListTemplates(c forge.Context) error {
-	orgID := c.Query("organization_id")
-	if orgID == "" {
-		orgID = "default"
-	}
-
-	notifType := c.Query("type")
-	language := c.Query("language")
-
-	req := &notification.ListTemplatesRequest{
-		OrganizationID: orgID,
-		Type:           notification.NotificationType(notifType),
-		Language:       language,
-		Limit:          50,
-		Offset:         0,
-	}
-
-	templates, total, err := h.service.ListTemplates(c.Context(), req)
+	// Extract app ID from context
+	appID, err := contexts.RequireAppID(c.Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"templates": templates,
-		"total":     total,
-	})
+	// Parse pagination parameters
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	limit := 50
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	// Parse filter parameters
+	var notifType *notification.NotificationType
+	if typeStr := c.Query("type"); typeStr != "" {
+		t := notification.NotificationType(typeStr)
+		notifType = &t
+	}
+
+	var language *string
+	if lang := c.Query("language"); lang != "" {
+		language = &lang
+	}
+
+	var active *bool
+	if activeStr := c.Query("active"); activeStr != "" {
+		if a, err := strconv.ParseBool(activeStr); err == nil {
+			active = &a
+		}
+	}
+
+	filter := &notification.ListTemplatesFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  page,
+			Limit: limit,
+		},
+		AppID:    appID,
+		Type:     notifType,
+		Language: language,
+		Active:   active,
+	}
+
+	response, err := h.service.ListTemplates(c.Context(), filter)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 // UpdateTemplate updates a template
@@ -104,22 +147,19 @@ func (h *Handler) UpdateTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid template ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID format"))
 	}
 
 	var req notification.UpdateTemplateRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
 
 	if err := h.service.UpdateTemplate(c.Context(), id, &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -132,15 +172,14 @@ func (h *Handler) DeleteTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid template ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID format"))
 	}
 
 	if err := h.service.DeleteTemplate(c.Context(), id); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -148,30 +187,98 @@ func (h *Handler) DeleteTemplate(c forge.Context) error {
 	})
 }
 
-// PreviewTemplate previews a template with test variables
+// ResetTemplate resets a template to default values
+func (h *Handler) ResetTemplate(c forge.Context) error {
+	idStr := c.Param("id")
+	id, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID format"))
+	}
+
+	if err := h.service.ResetTemplate(c.Context(), id); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "template reset to default successfully",
+	})
+}
+
+// ResetAllTemplates resets all templates for an app to defaults
+func (h *Handler) ResetAllTemplates(c forge.Context) error {
+	// Extract app ID from context
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	if err := h.service.ResetAllTemplates(c.Context(), appID); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "all templates reset to defaults successfully",
+	})
+}
+
+// GetTemplateDefaults returns default template metadata
+func (h *Handler) GetTemplateDefaults(c forge.Context) error {
+	// Get default template metadata
+	defaults := notification.GetDefaultTemplateMetadata()
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"templates": defaults,
+		"count":     len(defaults),
+	})
+}
+
+// PreviewTemplate renders a template with provided variables
 func (h *Handler) PreviewTemplate(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid template ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID format"))
 	}
 
 	var req struct {
 		Variables map[string]interface{} `json:"variables"`
 	}
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
 
-	subject, body, err := h.templateSvc.RenderTemplate(c.Context(), id, req.Variables)
+	template, err := h.service.GetTemplate(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	// Create template engine for rendering
+	engine := NewTemplateEngine()
+
+	// Render body
+	body, err := engine.Render(template.Body, req.Variables)
+	if err != nil {
+		renderErr := notification.TemplateRenderFailed(err)
+		return c.JSON(renderErr.HTTPStatus, renderErr)
+	}
+
+	// Render subject if present
+	subject := ""
+	if template.Subject != "" {
+		subject, err = engine.Render(template.Subject, req.Variables)
+		if err != nil {
+			renderErr := notification.TemplateRenderFailed(err)
+			return c.JSON(renderErr.HTTPStatus, renderErr)
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -180,90 +287,57 @@ func (h *Handler) PreviewTemplate(c forge.Context) error {
 	})
 }
 
-// RenderTemplate renders a template without sending
+// RenderTemplate renders a template string with variables (no template ID required)
 func (h *Handler) RenderTemplate(c forge.Context) error {
 	var req struct {
-		TemplateKey    string                 `json:"template_key"`
-		OrganizationID string                 `json:"organization_id"`
-		Type           string                 `json:"type"`
-		Language       string                 `json:"language"`
-		Variables      map[string]interface{} `json:"variables"`
+		Template  string                 `json:"template"`
+		Variables map[string]interface{} `json:"variables"`
 	}
-
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
 
-	if req.OrganizationID == "" {
-		req.OrganizationID = "default"
-	}
-
-	// Find template
-	template, err := h.templateSvc.findTemplate(c.Context(), req.OrganizationID, req.TemplateKey, req.Type, req.Language)
-	if err != nil || template == nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "template not found",
-		})
-	}
-
-	subject, body, err := h.templateSvc.RenderTemplate(c.Context(), template.ID, req.Variables)
+	engine := NewTemplateEngine()
+	rendered, err := engine.Render(req.Template, req.Variables)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		renderErr := notification.TemplateRenderFailed(err)
+		return c.JSON(renderErr.HTTPStatus, renderErr)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"subject": subject,
-		"body":    body,
+		"rendered": rendered,
 	})
 }
+
+// =============================================================================
+// NOTIFICATION HANDLERS
+// =============================================================================
 
 // SendNotification sends a notification
 func (h *Handler) SendNotification(c forge.Context) error {
-	var req SendWithTemplateRequest
+	// Extract app ID from context
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	var req notification.SendRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
 
-	notification, err := h.templateSvc.SendWithTemplate(c.Context(), &req)
+	// Set app ID from context
+	req.AppID = appID
+
+	notif, err := h.service.Send(c.Context(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusCreated, notification)
-}
-
-// ListNotifications lists notifications
-func (h *Handler) ListNotifications(c forge.Context) error {
-	orgID := c.Query("organization_id")
-	if orgID == "" {
-		orgID = "default"
-	}
-
-	req := &notification.ListNotificationsRequest{
-		OrganizationID: orgID,
-		Limit:          50,
-		Offset:         0,
-	}
-
-	notifications, total, err := h.service.ListNotifications(c.Context(), req)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"notifications": notifications,
-		"total":         total,
-	})
+	return c.JSON(http.StatusOK, notif)
 }
 
 // GetNotification retrieves a notification by ID
@@ -271,75 +345,142 @@ func (h *Handler) GetNotification(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid notification ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid notification ID format"))
 	}
 
-	notification, err := h.service.GetNotification(c.Context(), id)
+	notif, err := h.service.GetNotification(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "notification not found",
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, notification)
+	return c.JSON(http.StatusOK, notif)
 }
 
-// ResendNotification resends a failed notification
+// ListNotifications lists all notifications with pagination
+func (h *Handler) ListNotifications(c forge.Context) error {
+	// Extract app ID from context
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	// Parse pagination parameters
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	limit := 50
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	// Parse filter parameters
+	var notifType *notification.NotificationType
+	if typeStr := c.Query("type"); typeStr != "" {
+		t := notification.NotificationType(typeStr)
+		notifType = &t
+	}
+
+	var status *notification.NotificationStatus
+	if statusStr := c.Query("status"); statusStr != "" {
+		s := notification.NotificationStatus(statusStr)
+		status = &s
+	}
+
+	var recipient *string
+	if rec := c.Query("recipient"); rec != "" {
+		recipient = &rec
+	}
+
+	filter := &notification.ListNotificationsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  page,
+			Limit: limit,
+		},
+		AppID:     appID,
+		Type:      notifType,
+		Status:    status,
+		Recipient: recipient,
+	}
+
+	response, err := h.service.ListNotifications(c.Context(), filter)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// ResendNotification resends a notification
 func (h *Handler) ResendNotification(c forge.Context) error {
+	// Extract app ID from context
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid notification ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid notification ID format"))
 	}
 
-	// Get the notification
-	notif, err := h.service.GetNotification(c.Context(), id)
+	// Get original notification
+	originalNotif, err := h.service.GetNotification(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "notification not found",
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	// Resend
+	// Send new notification with same details
 	newNotif, err := h.service.Send(c.Context(), &notification.SendRequest{
-		OrganizationID: notif.OrganizationID,
-		Type:           notif.Type,
-		Recipient:      notif.Recipient,
-		Subject:        notif.Subject,
-		Body:           notif.Body,
-		Metadata:       notif.Metadata,
+		AppID:     appID,
+		Type:      originalNotif.Type,
+		Recipient: originalNotif.Recipient,
+		Subject:   originalNotif.Subject,
+		Body:      originalNotif.Body,
+		Metadata:  originalNotif.Metadata,
 	})
-
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusCreated, newNotif)
+	return c.JSON(http.StatusOK, newNotif)
 }
 
-// HandleWebhook handles provider webhooks for delivery status
+// HandleWebhook handles provider webhook callbacks
 func (h *Handler) HandleWebhook(c forge.Context) error {
-	provider := c.Param("provider")
-
-	// Parse webhook payload based on provider
-	var payload map[string]interface{}
-	if err := c.BindJSON(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid payload",
-		})
+	providerID := c.Param("provider")
+	if providerID == "" {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("provider ID required"))
 	}
 
-	// TODO: Implement provider-specific webhook handling
-	// For now, just acknowledge receipt
+	// Parse webhook payload based on provider
+	// This is a placeholder - actual implementation would depend on provider specs
+	var payload map[string]interface{}
+	if err := c.BindJSON(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid webhook payload"))
+	}
 
+	// Process webhook based on provider
+	// For now, just acknowledge receipt
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message":  "webhook received",
-		"provider": provider,
+		"status": "processed",
 	})
 }

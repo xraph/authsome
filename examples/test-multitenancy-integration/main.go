@@ -17,7 +17,6 @@ import (
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 
 	"github.com/xraph/authsome"
-	"github.com/xraph/authsome/plugins/multitenancy"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )

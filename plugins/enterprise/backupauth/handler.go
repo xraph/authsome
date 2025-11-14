@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/forge"
 )
 
@@ -580,8 +580,8 @@ func (h *Handler) getUserIDFromContext(c forge.Context) string {
 }
 
 func (h *Handler) getAppAndOrgFromContext(c forge.Context) (xid.ID, *xid.ID) {
-	appID := interfaces.GetAppID(c.Context())
-	orgID := interfaces.GetOrganizationID(c.Context())
+	appID := contexts.GetAppID(c.Context())
+	orgID := contexts.GetOrganizationID(c.Context())
 	// Convert to pointer, returning nil if it's NilID
 	if orgID == xid.NilID() {
 		return appID, nil

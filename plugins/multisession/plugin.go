@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	dev "github.com/xraph/authsome/core/device"
@@ -18,39 +19,135 @@ import (
 
 // Plugin wires the multi-session service and registers routes
 type Plugin struct {
-	db      *bun.DB
-	service *Service
+	db            *bun.DB
+	service       *Service
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the multisession plugin configuration
+type Config struct {
+	// MaxSessionsPerUser is the maximum concurrent sessions per user
+	MaxSessionsPerUser int `json:"maxSessionsPerUser"`
+	// EnableDeviceTracking enables device fingerprinting
+	EnableDeviceTracking bool `json:"enableDeviceTracking"`
+	// SessionExpiry is the session expiry time in hours
+	SessionExpiryHours int `json:"sessionExpiryHours"`
+	// AllowCrossPlatform allows sessions across different platforms
+	AllowCrossPlatform bool `json:"allowCrossPlatform"`
+}
+
+// DefaultConfig returns the default multisession plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		MaxSessionsPerUser:   10,
+		EnableDeviceTracking: true,
+		SessionExpiryHours:   720, // 30 days
+		AllowCrossPlatform:   true,
+	}
+}
+
+// PluginOption is a functional option for configuring the multisession plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithMaxSessionsPerUser sets the maximum concurrent sessions per user
+func WithMaxSessionsPerUser(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxSessionsPerUser = max
+	}
+}
+
+// WithEnableDeviceTracking sets whether device tracking is enabled
+func WithEnableDeviceTracking(enable bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.EnableDeviceTracking = enable
+	}
+}
+
+// WithSessionExpiryHours sets the session expiry time
+func WithSessionExpiryHours(hours int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SessionExpiryHours = hours
+	}
+}
+
+// WithAllowCrossPlatform sets whether cross-platform sessions are allowed
+func WithAllowCrossPlatform(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowCrossPlatform = allow
+	}
+}
+
+// NewPlugin creates a new multisession plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "multisession" }
 
 // Init accepts auth instance with GetDB method
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("multisession plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("multisession plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for multisession plugin")
 	}
 
-	p.db = db
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for multisession plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "multisession"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.multisession", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind multisession config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// No specific Bun models for multisession (uses core Session and Device models)
+
 	// Core services used for auth context
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(db), auditSvc)
-	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, webhookSvc)
-	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{AllowMultiple: true}, webhookSvc)
+	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
+	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(p.db), auditSvc)
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, webhookSvc)
+	sessSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{AllowMultiple: true}, webhookSvc)
 	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
-	devSvc := dev.NewService(repo.NewDeviceRepository(db))
-	p.service = NewService(repo.NewSessionRepository(db), repo.NewDeviceRepository(db), authSvc, devSvc)
+	devSvc := dev.NewService(repo.NewDeviceRepository(p.db))
+	p.service = NewService(repo.NewSessionRepository(p.db), repo.NewDeviceRepository(p.db), authSvc, devSvc, p.config)
+
+	p.logger.Info("multisession plugin initialized",
+		forge.F("max_sessions_per_user", p.config.MaxSessionsPerUser),
+		forge.F("enable_device_tracking", p.config.EnableDeviceTracking),
+		forge.F("session_expiry_hours", p.config.SessionExpiryHours))
+
 	return nil
 }
 

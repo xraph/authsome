@@ -12,8 +12,14 @@ type Config struct {
 	// DefaultLanguage is the default language for templates
 	DefaultLanguage string `json:"default_language" yaml:"default_language"`
 
-	// AllowOrgOverrides allows organizations to override default templates in SaaS mode
-	AllowOrgOverrides bool `json:"allow_org_overrides" yaml:"allow_org_overrides"`
+	// AllowAppOverrides allows apps to override default templates in SaaS mode
+	AllowAppOverrides bool `json:"allow_app_overrides" yaml:"allow_app_overrides"`
+
+	// AutoPopulateTemplates creates default templates for new apps
+	AutoPopulateTemplates bool `json:"auto_populate_templates" yaml:"auto_populate_templates"`
+
+	// AllowTemplateReset enables template reset functionality
+	AllowTemplateReset bool `json:"allow_template_reset" yaml:"allow_template_reset"`
 
 	// AutoSendWelcome automatically sends welcome email on user signup
 	AutoSendWelcome bool `json:"auto_send_welcome" yaml:"auto_send_welcome"`
@@ -65,13 +71,15 @@ type SMSProviderConfig struct {
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	return Config{
-		AddDefaultTemplates: true,
-		DefaultLanguage:     "en",
-		AllowOrgOverrides:   false,
-		AutoSendWelcome:     true,
-		RetryAttempts:       3,
-		RetryDelay:          5 * time.Minute,
-		CleanupAfter:        30 * 24 * time.Hour, // 30 days
+		AddDefaultTemplates:   true,
+		DefaultLanguage:       "en",
+		AllowAppOverrides:     false,
+		AutoPopulateTemplates: true,
+		AllowTemplateReset:    true,
+		AutoSendWelcome:       true,
+		RetryAttempts:         3,
+		RetryDelay:            5 * time.Minute,
+		CleanupAfter:          30 * 24 * time.Hour, // 30 days
 		RateLimits: map[string]RateLimit{
 			"email": {
 				MaxRequests: 100,

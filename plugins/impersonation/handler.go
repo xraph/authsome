@@ -5,8 +5,10 @@ import (
 	"strconv"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/impersonation"
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -28,9 +30,9 @@ func NewHandler(service *impersonation.Service, config Config) *Handler {
 // StartImpersonation handles POST /impersonation/start
 func (h *Handler) StartImpersonation(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
@@ -79,18 +81,16 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	// Start impersonation
 	resp, err := h.service.Start(c.Request().Context(), req)
 	if err != nil {
-		statusCode := 500
-		if err == impersonation.ErrPermissionDenied {
-			statusCode = 403
-		} else if err == impersonation.ErrCannotImpersonateSelf {
-			statusCode = 400
-		} else if err == impersonation.ErrAlreadyImpersonating {
-			statusCode = 409
-		} else if err == impersonation.ErrInvalidReason || err == impersonation.ErrInvalidDuration {
-			statusCode = 400
+		// Handle structured errors
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
+				"error": authErr.Message,
+				"code":  authErr.Code,
+			})
 		}
 
-		return c.JSON(statusCode, map[string]string{
+		// Fallback for unexpected errors
+		return c.JSON(500, map[string]string{
 			"error": err.Error(),
 		})
 	}
@@ -101,9 +101,9 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 // EndImpersonation handles POST /impersonation/end
 func (h *Handler) EndImpersonation(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
@@ -145,14 +145,16 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 
 	resp, err := h.service.End(c.Request().Context(), req)
 	if err != nil {
-		statusCode := 500
-		if err == impersonation.ErrPermissionDenied {
-			statusCode = 403
-		} else if err == impersonation.ErrImpersonationNotFound {
-			statusCode = 404
+		// Handle structured errors
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
+				"error": authErr.Message,
+				"code":  authErr.Code,
+			})
 		}
 
-		return c.JSON(statusCode, map[string]string{
+		// Fallback for unexpected errors
+		return c.JSON(500, map[string]string{
 			"error": err.Error(),
 		})
 	}
@@ -163,8 +165,8 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 // GetImpersonation handles GET /impersonation/:id
 func (h *Handler) GetImpersonation(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
@@ -200,12 +202,16 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 
 	session, err := h.service.Get(c.Request().Context(), req)
 	if err != nil {
-		statusCode := 500
-		if err == impersonation.ErrImpersonationNotFound {
-			statusCode = 404
+		// Handle structured errors
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
+				"error": authErr.Message,
+				"code":  authErr.Code,
+			})
 		}
 
-		return c.JSON(statusCode, map[string]string{
+		// Fallback for unexpected errors
+		return c.JSON(500, map[string]string{
 			"error": err.Error(),
 		})
 	}
@@ -216,8 +222,8 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 // ListImpersonations handles GET /impersonation
 func (h *Handler) ListImpersonations(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
@@ -233,7 +239,12 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 
 	offset, _ := strconv.Atoi(c.Request().URL.Query().Get("offset"))
 
-	activeOnly := c.Request().URL.Query().Get("active_only") == "true"
+	activeOnlyStr := c.Request().URL.Query().Get("active_only")
+	var activeOnly *bool
+	if activeOnlyStr != "" {
+		val := activeOnlyStr == "true"
+		activeOnly = &val
+	}
 
 	// Optional filters from query params
 	var impersonatorID *xid.ID
@@ -252,23 +263,25 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 		}
 	}
 
-	// Build service request with V2 context
+	// Build service filter with V2 context
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
 	}
 
-	req := &impersonation.ListRequest{
+	filter := &impersonation.ListSessionsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 		AppID:              appID,
 		UserOrganizationID: orgIDPtr,
 		ImpersonatorID:     impersonatorID,
 		TargetUserID:       targetUserID,
 		ActiveOnly:         activeOnly,
-		Limit:              limit,
-		Offset:             offset,
 	}
 
-	resp, err := h.service.List(c.Request().Context(), req)
+	resp, err := h.service.List(c.Request().Context(), filter)
 	if err != nil {
 		return c.JSON(500, map[string]string{
 			"error": err.Error(),
@@ -281,8 +294,8 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 // ListAuditEvents handles GET /impersonation/audit
 func (h *Handler) ListAuditEvents(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(400, map[string]string{
@@ -307,34 +320,37 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 		}
 	}
 
-	// Build service request with V2 context
+	eventType := c.Request().URL.Query().Get("event_type")
+	var eventTypePtr *string
+	if eventType != "" {
+		eventTypePtr = &eventType
+	}
+
+	// Build service filter with V2 context
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
 	}
 
-	req := &impersonation.AuditListRequest{
+	filter := &impersonation.ListAuditEventsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 		AppID:              appID,
 		UserOrganizationID: orgIDPtr,
 		ImpersonationID:    impersonationID,
-		EventType:          c.Request().URL.Query().Get("event_type"),
-		Limit:              limit,
-		Offset:             offset,
+		EventType:          eventTypePtr,
 	}
 
-	events, total, err := h.service.ListAuditEvents(c.Request().Context(), req)
+	resp, err := h.service.ListAuditEvents(c.Request().Context(), filter)
 	if err != nil {
 		return c.JSON(500, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	return c.JSON(200, map[string]interface{}{
-		"events": events,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
-	})
+	return c.JSON(200, resp)
 }
 
 // VerifyImpersonation handles GET /impersonation/verify/:sessionId

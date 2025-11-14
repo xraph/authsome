@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/internal/crypto"
 )
 
@@ -45,7 +46,7 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 	// Generate key pair based on algorithm
 	privateKeyBytes, publicKeyBytes, err := s.generateKeyPair(req.Algorithm, req.KeyType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate key pair: %w", err)
+		return nil, JWTKeyGenerationFailed(err)
 	}
 
 	// Generate IDs
@@ -55,7 +56,7 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 	// Encrypt private key for storage
 	encryptedPrivateKey, err := crypto.Encrypt(string(privateKeyBytes), s.config.EncryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt private key: %w", err)
+		return nil, JWTKeyEncryptionFailed(err)
 	}
 
 	// Parse default TTL
@@ -67,35 +68,38 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 	// Set expiration if not provided
 	expiresAt := req.ExpiresAt
 	if expiresAt == nil {
-		expiry := time.Now().Add(defaultTTL)
+		expiry := time.Now().UTC().Add(defaultTTL)
 		expiresAt = &expiry
 	}
 
-	// Create JWT key record
+	now := time.Now().UTC()
+
+	// Create JWT key DTO
 	jwtKey := &JWTKey{
-		ID:         id,
-		OrgID:      req.OrgID,
-		KeyID:      keyID,
-		Algorithm:  req.Algorithm,
-		KeyType:    req.KeyType,
-		PrivateKey: encryptedPrivateKey,
-		PublicKey:  string(publicKeyBytes),
-		IsActive:   true,
-		ExpiresAt:  expiresAt,
-		Metadata:   req.Metadata,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:            id,
+		AppID:         req.AppID,
+		IsPlatformKey: req.IsPlatformKey,
+		KeyID:         keyID,
+		Algorithm:     req.Algorithm,
+		KeyType:       req.KeyType,
+		PrivateKey:    encryptedPrivateKey,
+		PublicKey:     string(publicKeyBytes),
+		IsActive:      true,
+		ExpiresAt:     expiresAt,
+		Metadata:      req.Metadata,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
-	// Save to database
-	if err := s.repo.Create(ctx, jwtKey); err != nil {
-		return nil, fmt.Errorf("failed to create JWT key: %w", err)
+	// Save to database using schema conversion
+	if err := s.repo.CreateJWTKey(ctx, jwtKey.ToSchema()); err != nil {
+		return nil, err
 	}
 
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, "jwt_key", "create", fmt.Sprintf(`{"key_id":"%s","algorithm":"%s"}`, keyID, req.Algorithm), req.OrgID, "")
+		s.auditSvc.Log(ctx, &userID, "jwt_key", "create", fmt.Sprintf(`{"key_id":"%s","algorithm":"%s"}`, keyID, req.Algorithm), req.AppID.String(), "")
 	}
 
 	return jwtKey, nil
@@ -103,33 +107,44 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 
 // GenerateToken creates a new JWT token
 func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) (*GenerateTokenResponse, error) {
-	// Find an active signing key for the organization
-	keys, _, err := s.repo.FindByOrgID(ctx, req.OrgID, &[]bool{true}[0], 0, 1)
+	// Find an active signing key for the app
+	active := true
+	filter := &ListJWTKeysFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 1,
+		},
+		AppID:  req.AppID,
+		Active: &active,
+	}
+
+	pageResp, err := s.repo.ListJWTKeys(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find signing key: %w", err)
+		return nil, err
 	}
 
-	if len(keys) == 0 {
-		return nil, fmt.Errorf("no active signing key found for organization")
+	if len(pageResp.Data) == 0 {
+		return nil, NoActiveSigningKey(req.AppID.String())
 	}
 
-	signingKey := keys[0]
+	// Convert to DTO
+	signingKey := FromSchemaJWTKey(pageResp.Data[0])
 
 	// Check if key is active and not expired
 	if !signingKey.IsActive || signingKey.IsExpired() {
-		return nil, fmt.Errorf("signing key is not active or expired")
+		return nil, JWTKeyExpired(signingKey.KeyID)
 	}
 
 	// Decrypt private key
 	decryptedPrivateKey, err := crypto.Decrypt(signingKey.PrivateKey, s.config.EncryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
+		return nil, JWTKeyDecryptionFailed(err)
 	}
 
 	// Parse private key
 	privateKey, err := s.parsePrivateKey(decryptedPrivateKey, signingKey.Algorithm)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
+		return nil, JWTParsingFailed(err)
 	}
 
 	// Calculate expiration
@@ -153,14 +168,14 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 	// Create claims
 	claims := &TokenClaims{
 		UserID:      req.UserID,
-		OrgID:       req.OrgID,
+		AppID:       req.AppID.String(),
 		SessionID:   req.SessionID,
 		TokenType:   req.TokenType,
 		Scopes:      req.Scopes,
 		Permissions: req.Permissions,
 		Audience:    req.Audience,
 		Subject:     req.UserID,
-		Issuer:      fmt.Sprintf("authsome:%s", req.OrgID),
+		Issuer:      fmt.Sprintf("authsome:app:%s", req.AppID.String()),
 		IssuedAt:    jwt.NewNumericDate(now),
 		ExpiresAt:   jwt.NewNumericDate(expiresAt),
 		JwtID:       xid.New().String(),
@@ -168,7 +183,7 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 		Metadata:    req.Metadata,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   req.UserID,
-			Issuer:    fmt.Sprintf("authsome:%s", req.OrgID),
+			Issuer:    fmt.Sprintf("authsome:app:%s", req.AppID.String()),
 			Audience:  req.Audience,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -183,11 +198,11 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 	// Sign token
 	tokenString, err := token.SignedString(privateKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign token: %w", err)
+		return nil, JWTSigningFailed(err)
 	}
 
 	// Update usage statistics
-	if err := s.repo.UpdateUsage(ctx, signingKey.KeyID); err != nil {
+	if err := s.repo.UpdateJWTKeyUsage(ctx, signingKey.KeyID); err != nil {
 		// Log error but don't fail the request
 		fmt.Printf("failed to update key usage: %v\n", err)
 	}
@@ -207,22 +222,33 @@ func (s *Service) VerifyToken(ctx context.Context, req *VerifyTokenRequest) (*Ve
 		// Get kid from header
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
-			return nil, fmt.Errorf("missing kid in token header")
+			return nil, MissingKIDHeader()
 		}
 
 		// Find verification key
-		verificationKey, err := s.repo.FindByKeyID(ctx, kid, req.OrgID)
+		schemaKey, err := s.repo.FindJWTKeyByKeyID(ctx, kid, req.AppID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find verification key: %w", err)
+			return nil, err
 		}
 
+		// Convert to DTO
+		verificationKey := FromSchemaJWTKey(schemaKey)
+
 		// Check if key is active and not expired
-		if !verificationKey.IsActive || verificationKey.IsExpired() {
-			return nil, fmt.Errorf("verification key is not active or expired")
+		if !verificationKey.IsActive {
+			return nil, JWTKeyInactive(kid)
+		}
+
+		if verificationKey.IsExpired() {
+			return nil, JWTKeyExpired(kid)
 		}
 
 		// Parse public key
-		return s.parsePublicKey(verificationKey.PublicKey, verificationKey.Algorithm)
+		publicKey, err := s.parsePublicKey(verificationKey.PublicKey, verificationKey.Algorithm)
+		if err != nil {
+			return nil, JWTParsingFailed(err)
+		}
+		return publicKey, nil
 	})
 
 	if err != nil {
@@ -274,14 +300,14 @@ func (s *Service) VerifyToken(ctx context.Context, req *VerifyTokenRequest) (*Ve
 	response := &VerifyTokenResponse{
 		Valid:       true,
 		UserID:      getStringClaim(claims, "user_id"),
-		OrgID:       getStringClaim(claims, "org_id"),
+		AppID:       getStringClaim(claims, "app_id"),
 		SessionID:   getStringClaim(claims, "session_id"),
 		Scopes:      getStringSliceClaim(claims, "scopes"),
 		Permissions: getStringSliceClaim(claims, "permissions"),
 		ExpiresAt:   getTimeClaim(claims, "exp"),
 		Claims: &TokenClaims{
 			UserID:      getStringClaim(claims, "user_id"),
-			OrgID:       getStringClaim(claims, "org_id"),
+			AppID:       getStringClaim(claims, "app_id"),
 			SessionID:   getStringClaim(claims, "session_id"),
 			TokenType:   getStringClaim(claims, "token_type"),
 			Scopes:      getStringSliceClaim(claims, "scopes"),
@@ -297,56 +323,66 @@ func (s *Service) VerifyToken(ctx context.Context, req *VerifyTokenRequest) (*Ve
 	return response, nil
 }
 
-// GetJWKS returns the JSON Web Key Set for an organization
-func (s *Service) GetJWKS(ctx context.Context, orgID string) (*JWKSResponse, error) {
-	// Find all active keys for the organization
-	keys, _, err := s.repo.FindByOrgID(ctx, orgID, &[]bool{true}[0], 0, 100)
+// GetJWKS returns the JSON Web Key Set for an app
+func (s *Service) GetJWKS(ctx context.Context, appID xid.ID) (*JWKSResponse, error) {
+	// Find all active keys for the app
+	active := true
+	filter := &ListJWTKeysFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 100,
+		},
+		AppID:  appID,
+		Active: &active,
+	}
+
+	pageResp, err := s.repo.ListJWTKeys(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find keys: %w", err)
+		return nil, err
 	}
 
 	jwks := &JWKSResponse{
-		Keys: make([]JWK, 0, len(keys)),
+		Data:       make([]JWK, 0, len(pageResp.Data)),
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
 	}
 
-	for _, key := range keys {
+	for _, schemaKey := range pageResp.Data {
+		key := FromSchemaJWTKey(schemaKey)
 		if key.IsActive && !key.IsExpired() {
 			jwk, err := s.convertToJWK(key)
 			if err != nil {
 				continue // Skip invalid keys
 			}
-			jwks.Keys = append(jwks.Keys, *jwk)
+			jwks.Data = append(jwks.Data, *jwk)
 		}
 	}
 
 	return jwks, nil
 }
 
-// ListJWTKeys lists JWT keys for an organization
-func (s *Service) ListJWTKeys(ctx context.Context, req *ListJWTKeysRequest) (*ListJWTKeysResponse, error) {
-	offset := (req.Page - 1) * req.PageSize
-	keys, total, err := s.repo.FindByOrgID(ctx, req.OrgID, req.Active, offset, req.PageSize)
+// ListJWTKeys lists JWT keys for an organization with pagination
+func (s *Service) ListJWTKeys(ctx context.Context, filter *ListJWTKeysFilter) (*ListJWTKeysResponse, error) {
+	// Get paginated results from repository
+	pageResp, err := s.repo.ListJWTKeys(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find keys: %w", err)
+		return nil, err
 	}
 
-	totalPages := int(total) / req.PageSize
-	if int(total)%req.PageSize > 0 {
-		totalPages++
-	}
+	// Convert schema keys to DTOs
+	dtoKeys := FromSchemaJWTKeys(pageResp.Data)
 
-	return &ListJWTKeysResponse{
-		Keys:       keys,
-		Total:      total,
-		Page:       req.Page,
-		PageSize:   req.PageSize,
-		TotalPages: totalPages,
+	// Return paginated response with DTOs
+	return &pagination.PageResponse[*JWTKey]{
+		Data:       dtoKeys,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
 	}, nil
 }
 
 // CleanupExpired removes expired JWT keys
 func (s *Service) CleanupExpired(ctx context.Context) (int64, error) {
-	return s.repo.CleanupExpired(ctx)
+	return s.repo.CleanupExpiredJWTKeys(ctx)
 }
 
 // generateKeyPair generates a key pair based on algorithm and key type

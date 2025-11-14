@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/rs/xid"
@@ -42,39 +44,55 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service) *Servi
 
 // Create creates a new session for a user
 func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Session, error) {
+	// Validate app context
+	if req.AppID.IsNil() {
+		return nil, MissingAppContext()
+	}
+
 	token, err := crypto.GenerateToken(32)
 	if err != nil {
-		return nil, err
+		return nil, SessionCreationFailed(err)
 	}
+
 	id := xid.New()
 	ttl := s.config.DefaultTTL
 	if req.Remember {
 		ttl = s.config.RememberTTL
 	}
+
 	now := time.Now().UTC()
 	sess := &Session{
-		ID:        id,
-		Token:     token,
-		UserID:    req.UserID,
-		ExpiresAt: now.Add(ttl),
-		IPAddress: req.IPAddress,
-		UserAgent: req.UserAgent,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:             id,
+		Token:          token,
+		AppID:          req.AppID,
+		EnvironmentID:  req.EnvironmentID,
+		OrganizationID: req.OrganizationID,
+		UserID:         req.UserID,
+		ExpiresAt:      now.Add(ttl),
+		IPAddress:      req.IPAddress,
+		UserAgent:      req.UserAgent,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
-	if err := s.repo.Create(ctx, sess); err != nil {
-		return nil, err
+
+	if err := s.repo.CreateSession(ctx, sess.ToSchema()); err != nil {
+		return nil, SessionCreationFailed(err)
 	}
 
 	// Emit webhook event for user login
 	if s.webhookSvc != nil {
+		envID := xid.ID{}
+		if sess.EnvironmentID != nil {
+			envID = *sess.EnvironmentID
+		}
 		data := map[string]interface{}{
 			"session_id": sess.ID.String(),
 			"user_id":    sess.UserID.String(),
+			"app_id":     sess.AppID.String(),
 			"ip_address": sess.IPAddress,
 			"user_agent": sess.UserAgent,
 		}
-		go s.webhookSvc.EmitEvent(ctx, "user.login", "default", data) // TODO: Get orgID from context
+		go s.webhookSvc.EmitEvent(ctx, sess.AppID, envID, "user.login", data)
 	}
 
 	return sess, nil
@@ -82,45 +100,80 @@ func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Sessi
 
 // FindByToken retrieves a session by token
 func (s *Service) FindByToken(ctx context.Context, token string) (*Session, error) {
-	return s.repo.FindByToken(ctx, token)
+	schemaSession, err := s.repo.FindSessionByToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, SessionNotFound()
+		}
+		return nil, err
+	}
+
+	// Check if session is expired
+	if time.Now().After(schemaSession.ExpiresAt) {
+		return nil, SessionExpired()
+	}
+
+	return FromSchemaSession(schemaSession), nil
 }
 
 // FindByID retrieves a session by ID
 func (s *Service) FindByID(ctx context.Context, id xid.ID) (*Session, error) {
-	return s.repo.FindByID(ctx, id)
+	schemaSession, err := s.repo.FindSessionByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, SessionNotFound()
+		}
+		return nil, err
+	}
+
+	return FromSchemaSession(schemaSession), nil
 }
 
-// ListAll retrieves all sessions (for admin dashboard)
-func (s *Service) ListAll(ctx context.Context, limit, offset int) ([]*Session, error) {
-	return s.repo.ListAll(ctx, limit, offset)
-}
+// ListSessions retrieves sessions with filtering and pagination
+func (s *Service) ListSessions(ctx context.Context, filter *ListSessionsFilter) (*ListSessionsResponse, error) {
+	pageResp, err := s.repo.ListSessions(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
 
-// ListByUser retrieves sessions for a specific user
-func (s *Service) ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*Session, error) {
-	return s.repo.ListByUser(ctx, userID, limit, offset)
+	// Convert schema sessions to DTOs
+	dtoSessions := FromSchemaSessions(pageResp.Data)
+
+	return &ListSessionsResponse{
+		Data:       dtoSessions,
+		Pagination: pageResp.Pagination,
+	}, nil
 }
 
 // RevokeByID revokes a session by ID
 func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 	// Get session before revocation for webhook event
-	session, err := s.repo.FindByID(ctx, id)
+	schemaSession, err := s.repo.FindSessionByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SessionNotFound()
+		}
 		return err
 	}
 
-	if err := s.repo.RevokeByID(ctx, id); err != nil {
-		return err
+	if err := s.repo.RevokeSessionByID(ctx, id); err != nil {
+		return SessionRevocationFailed(err)
 	}
 
 	// Emit webhook event for session revocation
-	if s.webhookSvc != nil && session != nil {
-		data := map[string]interface{}{
-			"session_id": session.ID.String(),
-			"user_id":    session.UserID.String(),
-			"ip_address": session.IPAddress,
-			"user_agent": session.UserAgent,
+	if s.webhookSvc != nil && schemaSession != nil {
+		envID := xid.ID{}
+		if schemaSession.EnvironmentID != nil {
+			envID = *schemaSession.EnvironmentID
 		}
-		go s.webhookSvc.EmitEvent(ctx, "session.revoked", "default", data) // TODO: Get orgID from context
+		data := map[string]interface{}{
+			"session_id": schemaSession.ID.String(),
+			"user_id":    schemaSession.UserID.String(),
+			"app_id":     schemaSession.AppID.String(),
+			"ip_address": schemaSession.IPAddress,
+			"user_agent": schemaSession.UserAgent,
+		}
+		go s.webhookSvc.EmitEvent(ctx, schemaSession.AppID, envID, "session.revoked", data)
 	}
 
 	return nil
@@ -129,24 +182,32 @@ func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 // Revoke revokes a session by token
 func (s *Service) Revoke(ctx context.Context, token string) error {
 	// Get session before revocation for webhook event
-	session, err := s.repo.FindByToken(ctx, token)
+	schemaSession, err := s.repo.FindSessionByToken(ctx, token)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SessionNotFound()
+		}
 		return err
 	}
 
-	if err := s.repo.Revoke(ctx, token); err != nil {
-		return err
+	if err := s.repo.RevokeSession(ctx, token); err != nil {
+		return SessionRevocationFailed(err)
 	}
 
 	// Emit webhook event for user logout
-	if s.webhookSvc != nil && session != nil {
-		data := map[string]interface{}{
-			"session_id": session.ID.String(),
-			"user_id":    session.UserID.String(),
-			"ip_address": session.IPAddress,
-			"user_agent": session.UserAgent,
+	if s.webhookSvc != nil && schemaSession != nil {
+		envID := xid.ID{}
+		if schemaSession.EnvironmentID != nil {
+			envID = *schemaSession.EnvironmentID
 		}
-		go s.webhookSvc.EmitEvent(ctx, "user.logout", "default", data) // TODO: Get orgID from context
+		data := map[string]interface{}{
+			"session_id": schemaSession.ID.String(),
+			"user_id":    schemaSession.UserID.String(),
+			"app_id":     schemaSession.AppID.String(),
+			"ip_address": schemaSession.IPAddress,
+			"user_agent": schemaSession.UserAgent,
+		}
+		go s.webhookSvc.EmitEvent(ctx, schemaSession.AppID, envID, "user.logout", data)
 	}
 
 	return nil

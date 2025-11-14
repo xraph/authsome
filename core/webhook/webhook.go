@@ -1,62 +1,211 @@
 package webhook
 
 import (
-	"context"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/schema"
 )
 
-// Webhook represents a webhook subscription
+// Webhook represents a webhook subscription (DTO)
 type Webhook struct {
-	ID             xid.ID            `json:"id"`
-	OrganizationID string            `json:"organization_id"`
-	URL            string            `json:"url"`
-	Events         []string          `json:"events"`
-	Secret         string            `json:"-"` // Never expose in JSON
-	Enabled        bool              `json:"enabled"`
-	MaxRetries     int               `json:"max_retries"`
-	RetryBackoff   string            `json:"retry_backoff"` // "exponential" or "linear"
-	Headers        map[string]string `json:"headers,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-	LastDelivery   *time.Time        `json:"last_delivery,omitempty"`
-	FailureCount   int               `json:"failure_count"`
+	ID            xid.ID            `json:"id"`
+	AppID         xid.ID            `json:"appID"`
+	EnvironmentID xid.ID            `json:"environmentID"`
+	URL           string            `json:"url"`
+	Events        []string          `json:"events"`
+	Secret        string            `json:"-"` // Never expose in JSON
+	Enabled       bool              `json:"enabled"`
+	MaxRetries    int               `json:"maxRetries"`
+	RetryBackoff  string            `json:"retryBackoff"` // "exponential" or "linear"
+	Headers       map[string]string `json:"headers,omitempty"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	UpdatedAt     time.Time         `json:"updatedAt"`
+	LastDelivery  *time.Time        `json:"lastDelivery,omitempty"`
+	FailureCount  int               `json:"failureCount"`
 }
 
-// Event represents a webhook event
+// ToSchema converts Webhook DTO to schema.Webhook
+func (w *Webhook) ToSchema() *schema.Webhook {
+	return &schema.Webhook{
+		ID:            w.ID,
+		AppID:         w.AppID,
+		EnvironmentID: w.EnvironmentID,
+		URL:           w.URL,
+		Events:        w.Events,
+		Secret:        w.Secret,
+		Enabled:       w.Enabled,
+		MaxRetries:    w.MaxRetries,
+		RetryBackoff:  w.RetryBackoff,
+		Headers:       w.Headers,
+		LastDelivery:  w.LastDelivery,
+		FailureCount:  w.FailureCount,
+		CreatedAt:     w.CreatedAt,
+		UpdatedAt:     w.UpdatedAt,
+	}
+}
+
+// FromSchemaWebhook converts schema.Webhook to Webhook DTO
+func FromSchemaWebhook(w *schema.Webhook) *Webhook {
+	if w == nil {
+		return nil
+	}
+	return &Webhook{
+		ID:            w.ID,
+		AppID:         w.AppID,
+		EnvironmentID: w.EnvironmentID,
+		URL:           w.URL,
+		Events:        w.Events,
+		Secret:        w.Secret,
+		Enabled:       w.Enabled,
+		MaxRetries:    w.MaxRetries,
+		RetryBackoff:  w.RetryBackoff,
+		Headers:       w.Headers,
+		LastDelivery:  w.LastDelivery,
+		FailureCount:  w.FailureCount,
+		CreatedAt:     w.CreatedAt,
+		UpdatedAt:     w.UpdatedAt,
+	}
+}
+
+// FromSchemaWebhooks converts multiple schema.Webhook to Webhook DTOs
+func FromSchemaWebhooks(webhooks []*schema.Webhook) []*Webhook {
+	result := make([]*Webhook, len(webhooks))
+	for i, w := range webhooks {
+		result[i] = FromSchemaWebhook(w)
+	}
+	return result
+}
+
+// Event represents a webhook event (DTO)
 type Event struct {
-	ID             xid.ID                 `json:"id"`
-	Type           string                 `json:"type"`
-	OrganizationID string                 `json:"organization_id"`
-	Data           map[string]interface{} `json:"data"`
-	OccurredAt     time.Time              `json:"occurred_at"`
-	CreatedAt      time.Time              `json:"created_at"`
+	ID            xid.ID                 `json:"id"`
+	AppID         xid.ID                 `json:"appID"`
+	EnvironmentID xid.ID                 `json:"environmentID"`
+	Type          string                 `json:"type"`
+	Data          map[string]interface{} `json:"data"`
+	OccurredAt    time.Time              `json:"occurredAt"`
+	CreatedAt     time.Time              `json:"createdAt"`
 }
 
-// Delivery represents a webhook delivery attempt
+// ToSchema converts Event DTO to schema.Event
+func (e *Event) ToSchema() *schema.Event {
+	return &schema.Event{
+		ID:            e.ID,
+		AppID:         e.AppID,
+		EnvironmentID: e.EnvironmentID,
+		Type:          e.Type,
+		Data:          e.Data,
+		OccurredAt:    e.OccurredAt,
+		CreatedAt:     e.CreatedAt,
+	}
+}
+
+// FromSchemaEvent converts schema.Event to Event DTO
+func FromSchemaEvent(e *schema.Event) *Event {
+	if e == nil {
+		return nil
+	}
+	return &Event{
+		ID:            e.ID,
+		AppID:         e.AppID,
+		EnvironmentID: e.EnvironmentID,
+		Type:          e.Type,
+		Data:          e.Data,
+		OccurredAt:    e.OccurredAt,
+		CreatedAt:     e.CreatedAt,
+	}
+}
+
+// FromSchemaEvents converts multiple schema.Event to Event DTOs
+func FromSchemaEvents(events []*schema.Event) []*Event {
+	result := make([]*Event, len(events))
+	for i, e := range events {
+		result[i] = FromSchemaEvent(e)
+	}
+	return result
+}
+
+// Delivery represents a webhook delivery attempt (DTO)
 type Delivery struct {
 	ID          xid.ID     `json:"id"`
-	WebhookID   xid.ID     `json:"webhook_id"`
-	EventID     xid.ID     `json:"event_id"`
+	WebhookID   xid.ID     `json:"webhookID"`
+	EventID     xid.ID     `json:"eventID"`
 	Attempt     int        `json:"attempt"`
 	Status      string     `json:"status"` // "pending", "delivered", "failed", "retrying"
-	StatusCode  int        `json:"status_code,omitempty"`
+	StatusCode  int        `json:"statusCode,omitempty"`
 	Response    string     `json:"response,omitempty"`
 	Error       string     `json:"error,omitempty"`
-	DeliveredAt *time.Time `json:"delivered_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	DeliveredAt *time.Time `json:"deliveredAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+// ToSchema converts Delivery DTO to schema.Delivery
+func (d *Delivery) ToSchema() *schema.Delivery {
+	statusCode := d.StatusCode
+	errorStr := d.Error
+	return &schema.Delivery{
+		ID:            d.ID,
+		WebhookID:     d.WebhookID,
+		EventID:       d.EventID,
+		AttemptNumber: d.Attempt,
+		Status:        d.Status,
+		StatusCode:    &statusCode,
+		ResponseBody:  []byte(d.Response),
+		Error:         &errorStr,
+		DeliveredAt:   d.DeliveredAt,
+		CreatedAt:     d.CreatedAt,
+		UpdatedAt:     d.UpdatedAt,
+	}
+}
+
+// FromSchemaDelivery converts schema.Delivery to Delivery DTO
+func FromSchemaDelivery(d *schema.Delivery) *Delivery {
+	if d == nil {
+		return nil
+	}
+	delivery := &Delivery{
+		ID:          d.ID,
+		WebhookID:   d.WebhookID,
+		EventID:     d.EventID,
+		Attempt:     d.AttemptNumber,
+		Status:      d.Status,
+		DeliveredAt: d.DeliveredAt,
+		CreatedAt:   d.CreatedAt,
+		UpdatedAt:   d.UpdatedAt,
+	}
+	if d.StatusCode != nil {
+		delivery.StatusCode = *d.StatusCode
+	}
+	if d.ResponseBody != nil {
+		delivery.Response = string(d.ResponseBody)
+	}
+	if d.Error != nil {
+		delivery.Error = *d.Error
+	}
+	return delivery
+}
+
+// FromSchemaDeliveries converts multiple schema.Delivery to Delivery DTOs
+func FromSchemaDeliveries(deliveries []*schema.Delivery) []*Delivery {
+	result := make([]*Delivery, len(deliveries))
+	for i, d := range deliveries {
+		result[i] = FromSchemaDelivery(d)
+	}
+	return result
 }
 
 // CreateWebhookRequest represents a request to create a webhook
 type CreateWebhookRequest struct {
-	OrganizationID string            `json:"organization_id" validate:"required"`
-	URL            string            `json:"url" validate:"required,url"`
-	Events         []string          `json:"events" validate:"required,min=1"`
-	MaxRetries     int               `json:"max_retries" validate:"min=0,max=10"`
-	RetryBackoff   string            `json:"retry_backoff" validate:"oneof=exponential linear"`
-	Headers        map[string]string `json:"headers,omitempty"`
+	AppID         xid.ID            `json:"appID" validate:"required"`
+	EnvironmentID xid.ID            `json:"environmentID" validate:"required"`
+	URL           string            `json:"url" validate:"required,url"`
+	Events        []string          `json:"events" validate:"required,min=1"`
+	MaxRetries    int               `json:"maxRetries" validate:"min=0,max=10"`
+	RetryBackoff  string            `json:"retryBackoff" validate:"oneof=exponential linear"`
+	Headers       map[string]string `json:"headers,omitempty"`
 }
 
 // UpdateWebhookRequest represents a request to update a webhook
@@ -64,69 +213,19 @@ type UpdateWebhookRequest struct {
 	URL          *string           `json:"url,omitempty" validate:"omitempty,url"`
 	Events       []string          `json:"events,omitempty" validate:"omitempty,min=1"`
 	Enabled      *bool             `json:"enabled,omitempty"`
-	MaxRetries   *int              `json:"max_retries,omitempty" validate:"omitempty,min=0,max=10"`
-	RetryBackoff *string           `json:"retry_backoff,omitempty" validate:"omitempty,oneof=exponential linear"`
+	MaxRetries   *int              `json:"maxRetries,omitempty" validate:"omitempty,min=0,max=10"`
+	RetryBackoff *string           `json:"retryBackoff,omitempty" validate:"omitempty,oneof=exponential linear"`
 	Headers      map[string]string `json:"headers,omitempty"`
 }
 
-// ListWebhooksRequest represents a request to list webhooks
-type ListWebhooksRequest struct {
-	OrganizationID string `json:"organization_id" validate:"required"`
-	Page           int    `json:"page" validate:"min=1"`
-	PageSize       int    `json:"page_size" validate:"min=1,max=100"`
-	Enabled        *bool  `json:"enabled,omitempty"`
-}
+// ListWebhooksResponse is a type alias for paginated response
+type ListWebhooksResponse = pagination.PageResponse[*Webhook]
 
-// ListWebhooksResponse represents the response from listing webhooks
-type ListWebhooksResponse struct {
-	Webhooks   []*Webhook `json:"webhooks"`
-	Total      int64      `json:"total"`
-	Page       int        `json:"page"`
-	PageSize   int        `json:"page_size"`
-	TotalPages int        `json:"total_pages"`
-}
+// ListEventsResponse is a type alias for paginated response
+type ListEventsResponse = pagination.PageResponse[*Event]
 
-// ListDeliveriesRequest represents a request to list webhook deliveries
-type ListDeliveriesRequest struct {
-	WebhookID xid.ID `json:"webhook_id" validate:"required"`
-	Page      int    `json:"page" validate:"min=1"`
-	PageSize  int    `json:"page_size" validate:"min=1,max=100"`
-	Status    string `json:"status,omitempty" validate:"omitempty,oneof=pending delivered failed retrying"`
-}
-
-// ListDeliveriesResponse represents the response from listing deliveries
-type ListDeliveriesResponse struct {
-	Deliveries []*Delivery `json:"deliveries"`
-	Total      int64       `json:"total"`
-	Page       int         `json:"page"`
-	PageSize   int         `json:"page_size"`
-	TotalPages int         `json:"total_pages"`
-}
-
-// Repository defines the interface for webhook storage operations
-type Repository interface {
-	// Webhook operations
-	Create(ctx context.Context, webhook *Webhook) error
-	FindByID(ctx context.Context, id xid.ID) (*Webhook, error)
-	FindByOrgID(ctx context.Context, orgID string, enabled *bool, offset, limit int) ([]*Webhook, int64, error)
-	FindByOrgAndEvent(ctx context.Context, orgID, eventType string) ([]*Webhook, error)
-	Update(ctx context.Context, webhook *Webhook) error
-	Delete(ctx context.Context, id xid.ID) error
-	UpdateFailureCount(ctx context.Context, id xid.ID, count int) error
-	UpdateLastDelivery(ctx context.Context, id xid.ID, timestamp time.Time) error
-
-	// Event operations
-	CreateEvent(ctx context.Context, event *Event) error
-	FindEventByID(ctx context.Context, id xid.ID) (*Event, error)
-	ListEvents(ctx context.Context, orgID string, offset, limit int) ([]*Event, int64, error)
-
-	// Delivery operations
-	CreateDelivery(ctx context.Context, delivery *Delivery) error
-	FindDeliveryByID(ctx context.Context, id xid.ID) (*Delivery, error)
-	FindDeliveriesByWebhook(ctx context.Context, webhookID xid.ID, status string, offset, limit int) ([]*Delivery, int64, error)
-	UpdateDelivery(ctx context.Context, delivery *Delivery) error
-	FindPendingDeliveries(ctx context.Context, limit int) ([]*Delivery, error)
-}
+// ListDeliveriesResponse is a type alias for paginated response
+type ListDeliveriesResponse = pagination.PageResponse[*Delivery]
 
 // EventType constants for webhook events
 const (

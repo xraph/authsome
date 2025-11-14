@@ -7,6 +7,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/impersonation"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -70,78 +71,80 @@ func (r *ImpersonationRepository) Update(ctx context.Context, session *schema.Im
 	return err
 }
 
-// List retrieves impersonation sessions with filters
-// Note: req.AppID maps to column organization_id (V2 architecture)
-func (r *ImpersonationRepository) List(ctx context.Context, req *impersonation.ListRequest) ([]*schema.ImpersonationSession, error) {
+// ListSessions retrieves impersonation sessions with pagination and filtering
+// Note: filter.AppID maps to column organization_id (V2 architecture)
+func (r *ImpersonationRepository) ListSessions(ctx context.Context, filter *impersonation.ListSessionsFilter) (*pagination.PageResponse[*schema.ImpersonationSession], error) {
 	var sessions []*schema.ImpersonationSession
 
+	// Build base query
 	query := r.db.NewSelect().
 		Model(&sessions).
-		Where("organization_id = ?", req.AppID)
+		Where("organization_id = ?", filter.AppID)
 
-	// Optional filter by user-created organization
-	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
-		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	// Apply filters
+	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *filter.UserOrganizationID)
 	}
 
-	if req.ImpersonatorID != nil {
-		query = query.Where("impersonator_id = ?", *req.ImpersonatorID)
+	if filter.ImpersonatorID != nil {
+		query = query.Where("impersonator_id = ?", *filter.ImpersonatorID)
 	}
 
-	if req.TargetUserID != nil {
-		query = query.Where("target_user_id = ?", *req.TargetUserID)
+	if filter.TargetUserID != nil {
+		query = query.Where("target_user_id = ?", *filter.TargetUserID)
 	}
 
-	if req.ActiveOnly {
+	if filter.ActiveOnly != nil && *filter.ActiveOnly {
 		query = query.Where("active = ?", true).
 			Where("expires_at > ?", time.Now().UTC()).
 			Where("ended_at IS NULL")
 	}
 
-	// Pagination
-	if req.Limit > 0 {
-		query = query.Limit(req.Limit)
-	}
-	if req.Offset > 0 {
-		query = query.Offset(req.Offset)
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().
+		Model((*schema.ImpersonationSession)(nil)).
+		Where("organization_id = ?", filter.AppID)
+
+	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
+		countQuery = countQuery.Where("user_organization_id = ?", *filter.UserOrganizationID)
 	}
 
-	// Order by most recent first
+	if filter.ImpersonatorID != nil {
+		countQuery = countQuery.Where("impersonator_id = ?", *filter.ImpersonatorID)
+	}
+
+	if filter.TargetUserID != nil {
+		countQuery = countQuery.Where("target_user_id = ?", *filter.TargetUserID)
+	}
+
+	if filter.ActiveOnly != nil && *filter.ActiveOnly {
+		countQuery = countQuery.Where("active = ?", true).
+			Where("expires_at > ?", time.Now().UTC()).
+			Where("ended_at IS NULL")
+	}
+
+	total, err := countQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	offset := filter.GetOffset()
+	limit := filter.GetLimit()
+	query = query.Limit(limit).Offset(offset)
+
+	// Apply ordering
 	query = query.Order("created_at DESC")
 
 	// Load relations
 	query = query.Relation("Impersonator").Relation("TargetUser")
 
-	err := query.Scan(ctx)
-	return sessions, err
-}
-
-// Count counts impersonation sessions with filters
-func (r *ImpersonationRepository) Count(ctx context.Context, req *impersonation.ListRequest) (int, error) {
-	query := r.db.NewSelect().
-		Model((*schema.ImpersonationSession)(nil)).
-		Where("organization_id = ?", req.AppID)
-
-	// Optional filter by user-created organization
-	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
-		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	// Execute query
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	if req.ImpersonatorID != nil {
-		query = query.Where("impersonator_id = ?", *req.ImpersonatorID)
-	}
-
-	if req.TargetUserID != nil {
-		query = query.Where("target_user_id = ?", *req.TargetUserID)
-	}
-
-	if req.ActiveOnly {
-		query = query.Where("active = ?", true).
-			Where("expires_at > ?", time.Now().UTC()).
-			Where("ended_at IS NULL")
-	}
-
-	return query.Count(ctx)
+	return pagination.NewPageResponse(sessions, int64(total), &filter.PaginationParams), nil
 }
 
 // GetActive retrieves the active impersonation session for an impersonator
@@ -194,80 +197,98 @@ func (r *ImpersonationRepository) CreateAuditEvent(ctx context.Context, event *s
 	return err
 }
 
-// ListAuditEvents retrieves audit events with filters
-// Note: req.AppID maps to column organization_id (V2 architecture)
-func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) ([]*schema.ImpersonationAuditEvent, error) {
+// ListAuditEvents retrieves audit events with pagination and filtering
+// Note: filter.AppID maps to column organization_id (V2 architecture)
+func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, filter *impersonation.ListAuditEventsFilter) (*pagination.PageResponse[*schema.ImpersonationAuditEvent], error) {
 	var events []*schema.ImpersonationAuditEvent
 
+	// Build base query
 	query := r.db.NewSelect().
 		Model(&events).
-		Where("organization_id = ?", req.AppID)
+		Where("organization_id = ?", filter.AppID)
 
-	// Optional filter by user-created organization
-	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
-		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	// Apply filters
+	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *filter.UserOrganizationID)
 	}
 
-	if req.ImpersonationID != nil {
-		query = query.Where("impersonation_id = ?", *req.ImpersonationID)
+	if filter.ImpersonationID != nil {
+		query = query.Where("impersonation_id = ?", *filter.ImpersonationID)
 	}
 
-	if req.EventType != "" {
-		query = query.Where("event_type = ?", req.EventType)
+	if filter.ImpersonatorID != nil {
+		query = query.Where("impersonator_id = ?", *filter.ImpersonatorID)
 	}
 
-	if req.Since != nil {
-		query = query.Where("created_at >= ?", *req.Since)
+	if filter.TargetUserID != nil {
+		query = query.Where("target_user_id = ?", *filter.TargetUserID)
 	}
 
-	if req.Until != nil {
-		query = query.Where("created_at <= ?", *req.Until)
+	if filter.EventType != nil && *filter.EventType != "" {
+		query = query.Where("event_type = ?", *filter.EventType)
 	}
 
-	// Pagination
-	if req.Limit > 0 {
-		query = query.Limit(req.Limit)
-	}
-	if req.Offset > 0 {
-		query = query.Offset(req.Offset)
+	if filter.Since != nil {
+		query = query.Where("created_at >= ?", *filter.Since)
 	}
 
-	// Order by most recent first
+	if filter.Until != nil {
+		query = query.Where("created_at <= ?", *filter.Until)
+	}
+
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().
+		Model((*schema.ImpersonationAuditEvent)(nil)).
+		Where("organization_id = ?", filter.AppID)
+
+	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
+		countQuery = countQuery.Where("user_organization_id = ?", *filter.UserOrganizationID)
+	}
+
+	if filter.ImpersonationID != nil {
+		countQuery = countQuery.Where("impersonation_id = ?", *filter.ImpersonationID)
+	}
+
+	if filter.ImpersonatorID != nil {
+		countQuery = countQuery.Where("impersonator_id = ?", *filter.ImpersonatorID)
+	}
+
+	if filter.TargetUserID != nil {
+		countQuery = countQuery.Where("target_user_id = ?", *filter.TargetUserID)
+	}
+
+	if filter.EventType != nil && *filter.EventType != "" {
+		countQuery = countQuery.Where("event_type = ?", *filter.EventType)
+	}
+
+	if filter.Since != nil {
+		countQuery = countQuery.Where("created_at >= ?", *filter.Since)
+	}
+
+	if filter.Until != nil {
+		countQuery = countQuery.Where("created_at <= ?", *filter.Until)
+	}
+
+	total, err := countQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	offset := filter.GetOffset()
+	limit := filter.GetLimit()
+	query = query.Limit(limit).Offset(offset)
+
+	// Apply ordering
 	query = query.Order("created_at DESC")
 
 	// Load relations
 	query = query.Relation("ImpersonationSession")
 
-	err := query.Scan(ctx)
-	return events, err
-}
-
-// CountAuditEvents counts audit events with filters
-func (r *ImpersonationRepository) CountAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) (int, error) {
-	query := r.db.NewSelect().
-		Model((*schema.ImpersonationAuditEvent)(nil)).
-		Where("organization_id = ?", req.AppID)
-
-	// Optional filter by user-created organization
-	if req.UserOrganizationID != nil && !req.UserOrganizationID.IsNil() {
-		query = query.Where("user_organization_id = ?", *req.UserOrganizationID)
+	// Execute query
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	if req.ImpersonationID != nil {
-		query = query.Where("impersonation_id = ?", *req.ImpersonationID)
-	}
-
-	if req.EventType != "" {
-		query = query.Where("event_type = ?", req.EventType)
-	}
-
-	if req.Since != nil {
-		query = query.Where("created_at >= ?", *req.Since)
-	}
-
-	if req.Until != nil {
-		query = query.Where("created_at <= ?", *req.Until)
-	}
-
-	return query.Count(ctx)
+	return pagination.NewPageResponse(events, int64(total), &filter.PaginationParams), nil
 }

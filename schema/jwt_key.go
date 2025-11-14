@@ -15,14 +15,15 @@ type JWTKey struct {
 	// Primary key
 	ID xid.ID `bun:"id,pk" json:"id"`
 
-	// Organization context
-	OrgID string `bun:"org_id,notnull" json:"org_id"`
+	// App context
+	AppID         xid.ID `bun:"app_id,notnull" json:"app_id"`
+	IsPlatformKey bool   `bun:"is_platform_key,notnull,default:false" json:"is_platform_key"`
 
 	// Key identification
-	KeyID     string `bun:"key_id,notnull,unique" json:"key_id"` // Kid for JWKS
-	Algorithm string `bun:"algorithm,notnull" json:"algorithm"`  // EdDSA, RS256, etc.
-	KeyType   string `bun:"key_type,notnull" json:"key_type"`    // OKP, RSA
-	Curve     string `bun:"curve" json:"curve,omitempty"`        // Ed25519, P-256, etc.
+	KeyID     string `bun:"key_id,notnull" json:"key_id"`       // Kid for JWKS (unique per app)
+	Algorithm string `bun:"algorithm,notnull" json:"algorithm"` // EdDSA, RS256, etc.
+	KeyType   string `bun:"key_type,notnull" json:"key_type"`   // OKP, RSA
+	Curve     string `bun:"curve" json:"curve,omitempty"`       // Ed25519, P-256, etc.
 
 	// Key material (encrypted)
 	PrivateKey []byte `bun:"private_key,notnull" json:"-"`         // Encrypted private key

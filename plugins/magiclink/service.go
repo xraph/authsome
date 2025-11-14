@@ -10,9 +10,9 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
-	"github.com/xraph/authsome/internal/interfaces"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 )
@@ -55,8 +55,8 @@ func (s *Service) Send(ctx context.Context, email, ip, ua string) (string, error
 	}
 
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -111,8 +111,8 @@ func (s *Service) Verify(ctx context.Context, token string, remember bool, ip, u
 	}
 
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID

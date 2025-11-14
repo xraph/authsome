@@ -1,9 +1,10 @@
 package schema
 
 import (
+	"time"
+
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
-	"time"
 )
 
 // TwoFASecret stores per-user 2FA secret data

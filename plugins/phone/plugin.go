@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
@@ -14,54 +15,175 @@ import (
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
-	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/authsome/storage"
 	"github.com/xraph/forge"
 )
 
 type Plugin struct {
-	db           *bun.DB
-	service      *Service
-	notifAdapter *notificationPlugin.Adapter
+	db            *bun.DB
+	service       *Service
+	notifAdapter  *notificationPlugin.Adapter
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the phone plugin configuration
+type Config struct {
+	// CodeLength is the length of the verification code
+	CodeLength int `json:"codeLength"`
+	// ExpiryMinutes is the code expiry time in minutes
+	ExpiryMinutes int `json:"expiryMinutes"`
+	// MaxAttempts is the maximum verification attempts
+	MaxAttempts int `json:"maxAttempts"`
+	// RateLimitPerHour is the max SMS requests per hour
+	RateLimitPerHour int `json:"rateLimitPerHour"`
+	// AllowImplicitSignup allows creating users if they don't exist
+	AllowImplicitSignup bool `json:"allowImplicitSignup"`
+	// SMSProvider is the SMS provider to use (twilio, etc.)
+	SMSProvider string `json:"smsProvider"`
+	// DevExposeCode exposes the code in dev mode (for testing)
+	DevExposeCode bool `json:"devExposeCode"`
+}
+
+// DefaultConfig returns the default phone plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		CodeLength:          6,
+		ExpiryMinutes:       10,
+		MaxAttempts:         5,
+		RateLimitPerHour:    10,
+		AllowImplicitSignup: true,
+		SMSProvider:         "twilio",
+		DevExposeCode:       false,
+	}
+}
+
+// PluginOption is a functional option for configuring the phone plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithCodeLength sets the verification code length
+func WithCodeLength(length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.CodeLength = length
+	}
+}
+
+// WithExpiryMinutes sets the code expiry time
+func WithExpiryMinutes(minutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.ExpiryMinutes = minutes
+	}
+}
+
+// WithMaxAttempts sets the maximum verification attempts
+func WithMaxAttempts(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxAttempts = max
+	}
+}
+
+// WithRateLimitPerHour sets the rate limit per hour
+func WithRateLimitPerHour(limit int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RateLimitPerHour = limit
+	}
+}
+
+// WithSMSProvider sets the SMS provider
+func WithSMSProvider(provider string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SMSProvider = provider
+	}
+}
+
+// WithAllowImplicitSignup sets whether implicit signup is allowed
+func WithAllowImplicitSignup(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowImplicitSignup = allow
+	}
+}
+
+// WithDevExposeCode sets whether to expose codes in dev mode
+func WithDevExposeCode(expose bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.DevExposeCode = expose
+	}
+}
+
+// NewPlugin creates a new phone plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "phone" }
 
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("phone plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("phone plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for phone plugin")
 	}
 
-	p.db = db
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for phone plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "phone"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.phone", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind phone config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models
+	p.db.RegisterModel((*schema.PhoneVerification)(nil))
 
 	// TODO: Get notification adapter from service registry when available
 	// For now, plugins will work without notification adapter (graceful degradation)
 	// The notification plugin should be registered first and will set up its services
+	p.notifAdapter = authInst.GetServiceRegistry().Get("notification").(*notificationPlugin.Adapter)
 
-	pr := repo.NewPhoneRepository(db)
-	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
-	sessSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	pr := authInst.Repository().Phone()
+	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil)
+	sessSvc := session.NewService(authInst.Repository().Session(), session.Config{}, nil)
 	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	p.service = NewService(pr, userSvc, authSvc, auditSvc, p.notifAdapter, Config{
-		CodeLength:          6,
-		ExpiryMinutes:       10,
-		DevExposeCode:       true,
-		AllowImplicitSignup: true,
-	})
+	auditSvc := audit.NewService(authInst.Repository().Audit())
+	p.service = NewService(pr, userSvc, authSvc, auditSvc, p.notifAdapter, p.config)
+
+	p.logger.Info("phone plugin initialized",
+		forge.F("code_length", p.config.CodeLength),
+		forge.F("expiry_minutes", p.config.ExpiryMinutes),
+		forge.F("sms_provider", p.config.SMSProvider))
+
 	return nil
 }
 

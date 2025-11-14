@@ -141,6 +141,7 @@ const (
 	CodeBadRequest     = "BAD_REQUEST"
 	CodeNotFound       = "NOT_FOUND"
 	CodeUnauthorized   = "UNAUTHORIZED"
+	CodeConflict       = "CONFLICT"
 )
 
 // =============================================================================
@@ -767,6 +768,10 @@ func Unauthorized() *AuthsomeError {
 
 func UnauthorizedWithMessage(msg string) *AuthsomeError {
 	return New(CodeUnauthorized, msg, http.StatusUnauthorized)
+}
+
+func Conflict(msg string) *AuthsomeError {
+	return New(CodeConflict, msg, http.StatusConflict)
 }
 
 // =============================================================================

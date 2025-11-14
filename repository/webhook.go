@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/authsome/schema"
 )
@@ -21,152 +22,103 @@ func NewWebhookRepository(db *bun.DB) webhook.Repository {
 	return &webhookRepository{db: db}
 }
 
-// Create creates a new webhook
-func (r *webhookRepository) Create(ctx context.Context, wh *webhook.Webhook) error {
-	schemaWebhook := &schema.Webhook{
-		ID:             wh.ID,
-		OrganizationID: wh.OrganizationID,
-		URL:            wh.URL,
-		Events:         wh.Events,
-		Secret:         wh.Secret,
-		Active:         wh.Enabled,
-		Headers:        wh.Headers,
-		CreatedAt:      wh.CreatedAt,
-		UpdatedAt:      wh.UpdatedAt,
-	}
-	_, err := r.db.NewInsert().Model(schemaWebhook).Exec(ctx)
+// ===========================================================================
+// WEBHOOK OPERATIONS
+// ===========================================================================
+
+// CreateWebhook creates a new webhook
+func (r *webhookRepository) CreateWebhook(ctx context.Context, wh *schema.Webhook) error {
+	_, err := r.db.NewInsert().Model(wh).Exec(ctx)
 	return err
 }
 
-// FindByID finds a webhook by ID
-func (r *webhookRepository) FindByID(ctx context.Context, id xid.ID) (*webhook.Webhook, error) {
-	schemaWebhook := &schema.Webhook{}
+// FindWebhookByID finds a webhook by ID
+func (r *webhookRepository) FindWebhookByID(ctx context.Context, id xid.ID) (*schema.Webhook, error) {
+	var wh schema.Webhook
 	err := r.db.NewSelect().
-		Model(schemaWebhook).
+		Model(&wh).
 		Where("id = ? AND deleted_at IS NULL", id).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, err
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &webhook.Webhook{
-		ID:             schemaWebhook.ID,
-		OrganizationID: schemaWebhook.OrganizationID,
-		URL:            schemaWebhook.URL,
-		Events:         schemaWebhook.Events,
-		Secret:         schemaWebhook.Secret,
-		Enabled:        schemaWebhook.Active,
-		Headers:        schemaWebhook.Headers,
-		CreatedAt:      schemaWebhook.CreatedAt,
-		UpdatedAt:      schemaWebhook.UpdatedAt,
-	}, nil
+	return &wh, nil
 }
 
-// FindByOrgID finds webhooks by organization ID
-func (r *webhookRepository) FindByOrgID(ctx context.Context, orgID string, enabled *bool, offset, limit int) ([]*webhook.Webhook, int64, error) {
-	var schemaWebhooks []*schema.Webhook
-	query := r.db.NewSelect().
-		Model(&schemaWebhooks).
-		Where("organization_id = ? AND deleted_at IS NULL", orgID)
+// ListWebhooks lists webhooks with filtering and pagination
+func (r *webhookRepository) ListWebhooks(ctx context.Context, filter *webhook.ListWebhooksFilter) (*pagination.PageResponse[*schema.Webhook], error) {
+	var webhooks []*schema.Webhook
 
-	if enabled != nil {
-		query = query.Where("active = ?", *enabled)
+	query := r.db.NewSelect().Model(&webhooks).Where("deleted_at IS NULL")
+
+	// Apply filters
+	query = query.Where("app_id = ?", filter.AppID)
+	query = query.Where("environment_id = ?", filter.EnvironmentID)
+
+	if filter.Enabled != nil {
+		query = query.Where("enabled = ?", *filter.Enabled)
 	}
 
-	err := query.Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Scan(ctx)
-	if err != nil {
-		return nil, 0, err
+	if filter.Event != nil {
+		query = query.Where("? = ANY(events)", *filter.Event)
 	}
 
 	// Count total
-	countQuery := r.db.NewSelect().
-		Model((*schema.Webhook)(nil)).
-		Where("organization_id = ? AND deleted_at IS NULL", orgID)
-	if enabled != nil {
-		countQuery = countQuery.Where("active = ?", *enabled)
+	countQuery := r.db.NewSelect().Model((*schema.Webhook)(nil)).Where("deleted_at IS NULL")
+	countQuery = countQuery.Where("app_id = ?", filter.AppID)
+	countQuery = countQuery.Where("environment_id = ?", filter.EnvironmentID)
+	if filter.Enabled != nil {
+		countQuery = countQuery.Where("enabled = ?", *filter.Enabled)
+	}
+	if filter.Event != nil {
+		countQuery = countQuery.Where("? = ANY(events)", *filter.Event)
 	}
 	total, err := countQuery.Count(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	// Convert to core types
-	webhooks := make([]*webhook.Webhook, len(schemaWebhooks))
-	for i, sw := range schemaWebhooks {
-		webhooks[i] = &webhook.Webhook{
-			ID:             sw.ID,
-			OrganizationID: sw.OrganizationID,
-			URL:            sw.URL,
-			Events:         sw.Events,
-			Secret:         sw.Secret,
-			Enabled:        sw.Active,
-			Headers:        sw.Headers,
-			CreatedAt:      sw.CreatedAt,
-			UpdatedAt:      sw.UpdatedAt,
-		}
+	// Apply pagination and ordering
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+	query = query.Order("created_at DESC")
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	return webhooks, int64(total), nil
+	return pagination.NewPageResponse(webhooks, int64(total), &filter.PaginationParams), nil
 }
 
-// FindByOrgAndEvent finds webhooks by organization and event type
-func (r *webhookRepository) FindByOrgAndEvent(ctx context.Context, orgID, eventType string) ([]*webhook.Webhook, error) {
-	var schemaWebhooks []*schema.Webhook
+// FindWebhooksByAppAndEvent finds all enabled webhooks subscribed to an event
+func (r *webhookRepository) FindWebhooksByAppAndEvent(ctx context.Context, appID xid.ID, envID xid.ID, eventType string) ([]*schema.Webhook, error) {
+	var webhooks []*schema.Webhook
 	err := r.db.NewSelect().
-		Model(&schemaWebhooks).
-		Where("organization_id = ? AND active = true AND deleted_at IS NULL", orgID).
+		Model(&webhooks).
+		Where("app_id = ? AND environment_id = ? AND enabled = true AND deleted_at IS NULL", appID, envID).
 		Where("? = ANY(events)", eventType).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// Convert to core types
-	webhooks := make([]*webhook.Webhook, len(schemaWebhooks))
-	for i, sw := range schemaWebhooks {
-		webhooks[i] = &webhook.Webhook{
-			ID:             sw.ID,
-			OrganizationID: sw.OrganizationID,
-			URL:            sw.URL,
-			Events:         sw.Events,
-			Secret:         sw.Secret,
-			Enabled:        sw.Active,
-			Headers:        sw.Headers,
-			CreatedAt:      sw.CreatedAt,
-			UpdatedAt:      sw.UpdatedAt,
-		}
-	}
-
 	return webhooks, nil
 }
 
-// Update updates a webhook
-func (r *webhookRepository) Update(ctx context.Context, wh *webhook.Webhook) error {
-	schemaWebhook := &schema.Webhook{
-		ID:             wh.ID,
-		OrganizationID: wh.OrganizationID,
-		URL:            wh.URL,
-		Events:         wh.Events,
-		Secret:         wh.Secret,
-		Active:         wh.Enabled,
-		Headers:        wh.Headers,
-		UpdatedAt:      time.Now(),
-	}
+// UpdateWebhook updates a webhook
+func (r *webhookRepository) UpdateWebhook(ctx context.Context, wh *schema.Webhook) error {
+	wh.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
-		Model(schemaWebhook).
-		Where("id = ? AND deleted_at IS NULL", wh.ID).
+		Model(wh).
+		WherePK().
+		Where("deleted_at IS NULL").
 		Exec(ctx)
 	return err
 }
 
-// Delete soft deletes a webhook
-func (r *webhookRepository) Delete(ctx context.Context, id xid.ID) error {
+// DeleteWebhook soft deletes a webhook
+func (r *webhookRepository) DeleteWebhook(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.Webhook)(nil)).
 		Set("deleted_at = ?", time.Now()).
@@ -180,6 +132,7 @@ func (r *webhookRepository) UpdateFailureCount(ctx context.Context, id xid.ID, c
 	_, err := r.db.NewUpdate().
 		Model((*schema.Webhook)(nil)).
 		Set("failure_count = ?", count).
+		Set("updated_at = ?", time.Now()).
 		Where("id = ?", id).
 		Exec(ctx)
 	return err
@@ -190,229 +143,151 @@ func (r *webhookRepository) UpdateLastDelivery(ctx context.Context, id xid.ID, t
 	_, err := r.db.NewUpdate().
 		Model((*schema.Webhook)(nil)).
 		Set("last_delivery = ?", timestamp).
+		Set("updated_at = ?", time.Now()).
 		Where("id = ?", id).
 		Exec(ctx)
 	return err
 }
 
+// ===========================================================================
+// EVENT OPERATIONS
+// ===========================================================================
+
 // CreateEvent creates a new webhook event
-func (r *webhookRepository) CreateEvent(ctx context.Context, event *webhook.Event) error {
-	schemaEvent := &schema.Event{
-		ID:             event.ID,
-		OrganizationID: event.OrganizationID,
-		Type:           event.Type,
-		Data:           event.Data,
-		CreatedAt:      event.CreatedAt,
-	}
-	_, err := r.db.NewInsert().Model(schemaEvent).Exec(ctx)
+func (r *webhookRepository) CreateEvent(ctx context.Context, event *schema.Event) error {
+	_, err := r.db.NewInsert().Model(event).Exec(ctx)
 	return err
 }
 
 // FindEventByID finds an event by ID
-func (r *webhookRepository) FindEventByID(ctx context.Context, id xid.ID) (*webhook.Event, error) {
-	schemaEvent := &schema.Event{}
+func (r *webhookRepository) FindEventByID(ctx context.Context, id xid.ID) (*schema.Event, error) {
+	var event schema.Event
 	err := r.db.NewSelect().
-		Model(schemaEvent).
+		Model(&event).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, err
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &webhook.Event{
-		ID:             schemaEvent.ID,
-		Type:           schemaEvent.Type,
-		OrganizationID: schemaEvent.OrganizationID,
-		Data:           schemaEvent.Data,
-		OccurredAt:     schemaEvent.CreatedAt,
-		CreatedAt:      schemaEvent.CreatedAt,
-	}, nil
+	return &event, nil
 }
 
-// ListEvents lists events for an organization
-func (r *webhookRepository) ListEvents(ctx context.Context, orgID string, offset, limit int) ([]*webhook.Event, int64, error) {
-	var schemaEvents []*schema.Event
-	err := r.db.NewSelect().
-		Model(&schemaEvents).
-		Where("organization_id = ?", orgID).
-		Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Scan(ctx)
-	if err != nil {
-		return nil, 0, err
+// ListEvents lists events with filtering and pagination
+func (r *webhookRepository) ListEvents(ctx context.Context, filter *webhook.ListEventsFilter) (*pagination.PageResponse[*schema.Event], error) {
+	var events []*schema.Event
+
+	query := r.db.NewSelect().Model(&events)
+
+	// Apply filters
+	query = query.Where("app_id = ?", filter.AppID)
+	query = query.Where("environment_id = ?", filter.EnvironmentID)
+
+	if filter.Type != nil {
+		query = query.Where("type = ?", *filter.Type)
 	}
 
 	// Count total
-	total, err := r.db.NewSelect().
-		Model((*schema.Event)(nil)).
-		Where("organization_id = ?", orgID).
-		Count(ctx)
+	countQuery := r.db.NewSelect().Model((*schema.Event)(nil))
+	countQuery = countQuery.Where("app_id = ?", filter.AppID)
+	countQuery = countQuery.Where("environment_id = ?", filter.EnvironmentID)
+	if filter.Type != nil {
+		countQuery = countQuery.Where("type = ?", *filter.Type)
+	}
+	total, err := countQuery.Count(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	// Convert to core types
-	events := make([]*webhook.Event, len(schemaEvents))
-	for i, se := range schemaEvents {
-		events[i] = &webhook.Event{
-			ID:             se.ID,
-			Type:           se.Type,
-			OrganizationID: se.OrganizationID,
-			Data:           se.Data,
-			OccurredAt:     se.CreatedAt,
-			CreatedAt:      se.CreatedAt,
-		}
+	// Apply pagination and ordering
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+	query = query.Order("occurred_at DESC")
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	return events, int64(total), nil
+	return pagination.NewPageResponse(events, int64(total), &filter.PaginationParams), nil
 }
 
+// ===========================================================================
+// DELIVERY OPERATIONS
+// ===========================================================================
+
 // CreateDelivery creates a new webhook delivery
-func (r *webhookRepository) CreateDelivery(ctx context.Context, delivery *webhook.Delivery) error {
-	schemaDelivery := &schema.Delivery{
-		ID:           delivery.ID,
-		WebhookID:    delivery.WebhookID,
-		EventID:      delivery.EventID,
-		Status:       delivery.Status,
-		StatusCode:   &delivery.StatusCode,
-		ResponseBody: []byte(delivery.Response),
-		Error:        &delivery.Error,
-		DeliveredAt:  delivery.DeliveredAt,
-		CreatedAt:    delivery.CreatedAt,
-		UpdatedAt:    delivery.UpdatedAt,
-	}
-	_, err := r.db.NewInsert().Model(schemaDelivery).Exec(ctx)
+func (r *webhookRepository) CreateDelivery(ctx context.Context, delivery *schema.Delivery) error {
+	_, err := r.db.NewInsert().Model(delivery).Exec(ctx)
 	return err
 }
 
 // FindDeliveryByID finds a delivery by ID
-func (r *webhookRepository) FindDeliveryByID(ctx context.Context, id xid.ID) (*webhook.Delivery, error) {
-	schemaDelivery := &schema.Delivery{}
+func (r *webhookRepository) FindDeliveryByID(ctx context.Context, id xid.ID) (*schema.Delivery, error) {
+	var delivery schema.Delivery
 	err := r.db.NewSelect().
-		Model(schemaDelivery).
+		Model(&delivery).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, err
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	delivery := &webhook.Delivery{
-		ID:          schemaDelivery.ID,
-		WebhookID:   schemaDelivery.WebhookID,
-		EventID:     schemaDelivery.EventID,
-		Attempt:     schemaDelivery.AttemptNumber,
-		Status:      schemaDelivery.Status,
-		DeliveredAt: schemaDelivery.DeliveredAt,
-		CreatedAt:   schemaDelivery.CreatedAt,
-		UpdatedAt:   schemaDelivery.UpdatedAt,
-	}
-
-	if schemaDelivery.StatusCode != nil {
-		delivery.StatusCode = *schemaDelivery.StatusCode
-	}
-	if schemaDelivery.ResponseBody != nil {
-		delivery.Response = string(schemaDelivery.ResponseBody)
-	}
-	if schemaDelivery.Error != nil {
-		delivery.Error = *schemaDelivery.Error
-	}
-
-	return delivery, nil
+	return &delivery, nil
 }
 
-// FindDeliveriesByWebhook finds deliveries by webhook ID
-func (r *webhookRepository) FindDeliveriesByWebhook(ctx context.Context, webhookID xid.ID, status string, offset, limit int) ([]*webhook.Delivery, int64, error) {
-	var schemaDeliveries []*schema.Delivery
-	query := r.db.NewSelect().
-		Model(&schemaDeliveries).
-		Where("webhook_id = ?", webhookID)
+// ListDeliveries lists deliveries with filtering and pagination
+func (r *webhookRepository) ListDeliveries(ctx context.Context, filter *webhook.ListDeliveriesFilter) (*pagination.PageResponse[*schema.Delivery], error) {
+	var deliveries []*schema.Delivery
 
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
+	query := r.db.NewSelect().Model(&deliveries)
 
-	err := query.Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Scan(ctx)
-	if err != nil {
-		return nil, 0, err
+	// Apply filters
+	query = query.Where("webhook_id = ?", filter.WebhookID)
+
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
 	}
 
 	// Count total
-	countQuery := r.db.NewSelect().
-		Model((*schema.Delivery)(nil)).
-		Where("webhook_id = ?", webhookID)
-	if status != "" {
-		countQuery = countQuery.Where("status = ?", status)
+	countQuery := r.db.NewSelect().Model((*schema.Delivery)(nil))
+	countQuery = countQuery.Where("webhook_id = ?", filter.WebhookID)
+	if filter.Status != nil {
+		countQuery = countQuery.Where("status = ?", *filter.Status)
 	}
 	total, err := countQuery.Count(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	// Convert to core types
-	deliveries := make([]*webhook.Delivery, len(schemaDeliveries))
-	for i, sd := range schemaDeliveries {
-		delivery := &webhook.Delivery{
-			ID:          sd.ID,
-			WebhookID:   sd.WebhookID,
-			EventID:     sd.EventID,
-			Attempt:     sd.AttemptNumber,
-			Status:      sd.Status,
-			DeliveredAt: sd.DeliveredAt,
-			CreatedAt:   sd.CreatedAt,
-			UpdatedAt:   sd.UpdatedAt,
-		}
+	// Apply pagination and ordering
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+	query = query.Order("created_at DESC")
 
-		if sd.StatusCode != nil {
-			delivery.StatusCode = *sd.StatusCode
-		}
-		if sd.ResponseBody != nil {
-			delivery.Response = string(sd.ResponseBody)
-		}
-		if sd.Error != nil {
-			delivery.Error = *sd.Error
-		}
-
-		deliveries[i] = delivery
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	return deliveries, int64(total), nil
+	return pagination.NewPageResponse(deliveries, int64(total), &filter.PaginationParams), nil
 }
 
 // UpdateDelivery updates a delivery
-func (r *webhookRepository) UpdateDelivery(ctx context.Context, delivery *webhook.Delivery) error {
-	schemaDelivery := &schema.Delivery{
-		ID:           delivery.ID,
-		WebhookID:    delivery.WebhookID,
-		EventID:      delivery.EventID,
-		Status:       delivery.Status,
-		StatusCode:   &delivery.StatusCode,
-		ResponseBody: []byte(delivery.Response),
-		Error:        &delivery.Error,
-		DeliveredAt:  delivery.DeliveredAt,
-		UpdatedAt:    time.Now(),
-	}
+func (r *webhookRepository) UpdateDelivery(ctx context.Context, delivery *schema.Delivery) error {
+	delivery.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
-		Model(schemaDelivery).
-		Where("id = ?", delivery.ID).
+		Model(delivery).
+		WherePK().
 		Exec(ctx)
 	return err
 }
 
 // FindPendingDeliveries finds deliveries that need retry
-func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int) ([]*webhook.Delivery, error) {
-	var schemaDeliveries []*schema.Delivery
+func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int) ([]*schema.Delivery, error) {
+	var deliveries []*schema.Delivery
 	err := r.db.NewSelect().
-		Model(&schemaDeliveries).
+		Model(&deliveries).
 		Where("status IN (?, ?) AND (next_retry_at IS NULL OR next_retry_at <= ?)",
 			webhook.DeliveryStatusPending, webhook.DeliveryStatusRetrying, time.Now()).
 		Order("created_at ASC").
@@ -421,33 +296,5 @@ func (r *webhookRepository) FindPendingDeliveries(ctx context.Context, limit int
 	if err != nil {
 		return nil, err
 	}
-
-	// Convert to core types
-	deliveries := make([]*webhook.Delivery, len(schemaDeliveries))
-	for i, sd := range schemaDeliveries {
-		delivery := &webhook.Delivery{
-			ID:          sd.ID,
-			WebhookID:   sd.WebhookID,
-			EventID:     sd.EventID,
-			Attempt:     sd.AttemptNumber,
-			Status:      sd.Status,
-			DeliveredAt: sd.DeliveredAt,
-			CreatedAt:   sd.CreatedAt,
-			UpdatedAt:   sd.UpdatedAt,
-		}
-
-		if sd.StatusCode != nil {
-			delivery.StatusCode = *sd.StatusCode
-		}
-		if sd.ResponseBody != nil {
-			delivery.Response = string(sd.ResponseBody)
-		}
-		if sd.Error != nil {
-			delivery.Error = *sd.Error
-		}
-
-		deliveries[i] = delivery
-	}
-
 	return deliveries, nil
 }

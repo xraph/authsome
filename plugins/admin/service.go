@@ -1,3 +1,19 @@
+// Package admin provides cross-cutting administrative operations for the AuthSome platform.
+//
+// This service handles platform-level operations that span multiple core services:
+//   - User lifecycle management (create, list, delete users)
+//   - Security operations (ban, unban, impersonate users)
+//   - Session oversight (list and revoke sessions across all users)
+//   - Platform statistics (aggregated metrics)
+//   - Centralized audit log access
+//
+// Plugin-specific administrative operations should be implemented in the respective plugins.
+// See docs/PLUGIN_ADMIN_ENDPOINTS.md for guidelines on adding plugin admin endpoints.
+//
+// Architecture Decision: Based on decisions 1b, 2a, 3a:
+//   - This service handles cross-cutting operations only
+//   - Individual plugins expose their own admin endpoints for plugin-specific features
+//   - Impersonation remains centralized here (security-sensitive)
 package admin
 
 import (
@@ -8,10 +24,10 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/types"
 )
 
 // Config holds the admin plugin configuration
@@ -42,21 +58,53 @@ func DefaultConfig() Config {
 // Service provides admin functionality for user management
 type Service struct {
 	config         Config
-	userService    *user.Service
-	sessionService *session.Service
+	userService    interface{} // user.ServiceInterface
+	sessionService interface{} // session.ServiceInterface
 	rbacService    *rbac.Service
-	auditService   *audit.Service
-	banService     *user.BanService
+	auditService   interface{} // audit.ServiceInterface
+	banService     interface{} // user.BanServiceInterface
+}
+
+// getUserService returns the user service with proper type
+func (s *Service) getUserService() user.ServiceInterface {
+	if svc, ok := s.userService.(user.ServiceInterface); ok {
+		return svc
+	}
+	return nil
+}
+
+// getSessionService returns the session service with proper type
+func (s *Service) getSessionService() session.ServiceInterface {
+	if svc, ok := s.sessionService.(session.ServiceInterface); ok {
+		return svc
+	}
+	return nil
+}
+
+// getAuditService returns the audit service with proper type
+func (s *Service) getAuditService() *audit.Service {
+	if svc, ok := s.auditService.(*audit.Service); ok {
+		return svc
+	}
+	return nil
+}
+
+// getBanService returns the ban service with proper type
+func (s *Service) getBanService() *user.BanService {
+	if svc, ok := s.banService.(*user.BanService); ok {
+		return svc
+	}
+	return nil
 }
 
 // NewService creates a new admin service
 func NewService(
 	config Config,
-	userService *user.Service,
-	sessionService *session.Service,
+	userService interface{}, // user.ServiceInterface
+	sessionService interface{}, // session.ServiceInterface
 	rbacService *rbac.Service,
-	auditService *audit.Service,
-	banService *user.BanService,
+	auditService interface{}, // audit.ServiceInterface
+	banService interface{}, // user.BanServiceInterface
 ) *Service {
 	return &Service{
 		config:         config,
@@ -171,7 +219,7 @@ type ListSessionsResponse struct {
 // CreateUser creates a new user with admin privileges
 func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user.User, error) {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, req.AdminID, "user:create"); err != nil {
+	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserCreate); err != nil {
 		return nil, err
 	}
 
@@ -194,7 +242,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	}
 
 	// Create user
-	newUser, err := s.userService.Create(ctx, createReq)
+	newUser, err := s.getUserService().Create(ctx, createReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -204,7 +252,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	if req.UserOrganizationID != nil {
 		orgIDStr = req.UserOrganizationID.String()
 	}
-	if err := s.auditService.Log(ctx, &req.AdminID, "user:create", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:create", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"created_user_id":"%s","email":"%s","name":"%s","app_id":"%s","organization_id":"%s"}`, newUser.ID.String(), newUser.Email, newUser.Name, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
@@ -217,7 +265,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 // ListUsers lists users with filtering and pagination
 func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUsersResponse, error) {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, req.AdminID, "user:read"); err != nil {
+	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserRead); err != nil {
 		return nil, err
 	}
 
@@ -229,19 +277,32 @@ func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUs
 		req.Page = 1
 	}
 
-	// Create pagination options
-	opts := types.PaginationOptions{
-		Page:     req.Page,
-		PageSize: req.Limit,
-		OrderBy:  "created_at",
-		OrderDir: "desc",
+	// Create filter with pagination
+	filter := &user.ListUsersFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  req.Page,
+			Limit: req.Limit,
+		},
+		AppID: req.AppID,
+	}
+
+	// Set sorting (these are in the embedded BaseRequestParams)
+	filter.SortBy = "created_at"
+	filter.Order = pagination.SortOrderDesc
+
+	// Add search if provided
+	if req.Search != "" {
+		filter.Search = &req.Search
 	}
 
 	// Get users
-	users, total, err := s.userService.List(ctx, opts)
+	result, err := s.getUserService().ListUsers(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
+
+	users := result.Data
+	total := int(result.Pagination.Total)
 
 	// Filter by status if specified
 	if req.Status != "" {
@@ -263,23 +324,23 @@ func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUs
 // DeleteUser deletes a user
 func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, adminID, "user:delete"); err != nil {
+	if err := s.checkAdminPermission(ctx, adminID, PermUserDelete); err != nil {
 		return err
 	}
 
 	// Get user before deletion for audit
-	targetUser, err := s.userService.FindByID(ctx, userID)
+	targetUser, err := s.getUserService().FindByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to find user: %w", err)
 	}
 
 	// Delete user
-	if err := s.userService.Delete(ctx, userID); err != nil {
+	if err := s.getUserService().Delete(ctx, userID); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	// Log audit event
-	if err := s.auditService.Log(ctx, &adminID, "user:delete", "user",
+	if err := s.getAuditService().Log(ctx, &adminID, "user:delete", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"deleted_user_id":"%s","email":"%s","name":"%s"}`, targetUser.ID.String(), targetUser.Email, targetUser.Name)); err != nil {
 		// Log error but don't fail the operation
@@ -292,7 +353,7 @@ func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error 
 // BanUser bans a user
 func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, req.AdminID, "user:ban"); err != nil {
+	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserBan); err != nil {
 		return err
 	}
 
@@ -305,7 +366,7 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	}
 
 	// Ban user
-	_, err := s.banService.BanUser(ctx, banReq)
+	_, err := s.getBanService().BanUser(ctx, banReq)
 	if err != nil {
 		return fmt.Errorf("failed to ban user: %w", err)
 	}
@@ -315,7 +376,7 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	if req.ExpiresAt != nil {
 		expiresAtStr = fmt.Sprintf(`"%s"`, req.ExpiresAt.Format(time.RFC3339))
 	}
-	if err := s.auditService.Log(ctx, &req.AdminID, "user:ban", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:ban", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"banned_user_id":"%s","reason":"%s","expires_at":%s}`, req.UserID.String(), req.Reason, expiresAtStr)); err != nil {
 		// Log error but don't fail the operation
@@ -328,7 +389,7 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 // UnbanUser unbans a user
 func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, req.AdminID, "user:unban"); err != nil {
+	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserBan); err != nil { // Same permission for ban/unban
 		return err
 	}
 
@@ -339,12 +400,12 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 	}
 
 	// Unban user
-	if err := s.banService.UnbanUser(ctx, unbanReq); err != nil {
+	if err := s.getBanService().UnbanUser(ctx, unbanReq); err != nil {
 		return fmt.Errorf("failed to unban user: %w", err)
 	}
 
 	// Log audit event
-	if err := s.auditService.Log(ctx, &req.AdminID, "user:unban", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:unban", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"unbanned_user_id":"%s"}`, req.UserID.String())); err != nil {
 		// Log error but don't fail the operation
@@ -362,7 +423,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	}
 
 	// Get target user to ensure they exist
-	targetUser, err := s.userService.FindByID(ctx, req.UserID)
+	targetUser, err := s.getUserService().FindByID(ctx, req.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
@@ -371,7 +432,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	}
 
 	// Check if user is banned
-	if banned, err := s.banService.IsUserBanned(ctx, req.UserID.String()); err != nil {
+	if banned, err := s.getBanService().IsUserBanned(ctx, req.UserID.String()); err != nil {
 		return nil, fmt.Errorf("failed to check ban status: %w", err)
 	} else if banned {
 		return nil, fmt.Errorf("cannot impersonate banned user")
@@ -391,13 +452,13 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 		Remember:  false,
 	}
 
-	newSession, err := s.sessionService.Create(ctx, sessionReq)
+	newSession, err := s.getSessionService().Create(ctx, sessionReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create impersonation session: %w", err)
 	}
 
 	// Log audit event
-	if err := s.auditService.Log(ctx, &req.AdminID, "user:impersonate", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:impersonate", "user",
 		req.IPAddress, req.UserAgent,
 		fmt.Sprintf(`{"impersonated_user_id":"%s","session_id":"%s","duration":"%s"}`, req.UserID.String(), newSession.ID.String(), duration.String())); err != nil {
 		// Log error but don't fail the operation
@@ -410,7 +471,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 // SetUserRole sets a user's role
 func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) error {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, req.AdminID, "role:assign"); err != nil {
+	if err := s.checkAdminPermission(ctx, req.AdminID, PermRoleAssign); err != nil {
 		return err
 	}
 
@@ -424,7 +485,7 @@ func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) erro
 	}
 
 	// Log audit event
-	if err := s.auditService.Log(ctx, &req.AdminID, "role:assign", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, "role:assign", "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"target_user_id":"%s","role":"%s","app_id":"%s","organization_id":"%s"}`, req.UserID.String(), req.Role, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
@@ -464,19 +525,19 @@ func (s *Service) ListSessions(ctx context.Context, req *ListSessionsRequest) (*
 // RevokeSession revokes a session
 func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) error {
 	// Check admin permissions
-	if err := s.checkAdminPermission(ctx, adminID, "session:revoke"); err != nil {
+	if err := s.checkAdminPermission(ctx, adminID, PermSessionRevoke); err != nil {
 		return err
 	}
 
 	// Revoke session by ID
 	// Note: Session service uses token for revocation, but we only have ID here
 	// TODO: Add FindByID method to session service or use token-based lookup
-	if err := s.sessionService.Revoke(ctx, sessionID.String()); err != nil {
+	if err := s.getSessionService().Revoke(ctx, sessionID.String()); err != nil {
 		return fmt.Errorf("failed to revoke session: %w", err)
 	}
 
 	// Log audit event
-	if err := s.auditService.Log(ctx, &adminID, "session:revoke", "session",
+	if err := s.getAuditService().Log(ctx, &adminID, "session:revoke", "session",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"revoked_session_id":"%s"}`, sessionID.String())); err != nil {
 		// Log error but don't fail the operation
@@ -489,7 +550,7 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) 
 // checkAdminPermission checks if the admin has the required permission
 func (s *Service) checkAdminPermission(ctx context.Context, userID xid.ID, permission string) error {
 	// Check if admin exists
-	admin, err := s.userService.FindByID(ctx, userID)
+	admin, err := s.getUserService().FindByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("admin not found: %w", err)
 	}
@@ -497,14 +558,22 @@ func (s *Service) checkAdminPermission(ctx context.Context, userID xid.ID, permi
 		return fmt.Errorf("admin not found")
 	}
 
-	// RBAC permission check
-	// For now, check if user is in admin role or has required role from config
-	// Full RBAC integration can be added when role repository is available
-	// TODO: Integrate with role repository when available for granular permissions
+	// Get user roles from registry
+	// Note: In production, this would come from a UserRoleRepository
+	// For now, we check against the permission directly using RBAC
 
-	// Placeholder: Assume users calling admin endpoints have been authenticated
-	// and authorized at the route level. Production deployments should implement
-	// proper RBAC checks here using a role repository.
+	// Check if the permission is allowed using RBAC
+	// The permission string (e.g., "admin:user:create") is used as the action
+	allowed := s.rbacService.AllowedWithRoles(&rbac.Context{
+		Subject:  userID.String(),
+		Action:   permission,
+		Resource: "admin:*",
+		Vars:     make(map[string]string),
+	}, []string{"admin", "superadmin"}) // Check both admin and superadmin roles
+
+	if !allowed {
+		return fmt.Errorf("permission denied: %s", permission)
+	}
 
 	return nil
 }

@@ -1,18 +1,19 @@
 package apikey
 
 import (
-	"context"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/schema"
 )
 
-// APIKey represents an API key with its metadata
+// APIKey represents an API key with its metadata (DTO)
 // Updated for V2 architecture: App → Environment → Organization
 type APIKey struct {
 	ID             xid.ID            `json:"id"`
 	AppID          xid.ID            `json:"appID"`                    // Platform tenant
-	EnvironmentID  *xid.ID           `json:"environmentID,omitempty"`  // Optional: environment-scoped
+	EnvironmentID  xid.ID            `json:"environmentID"`            // Required: environment-scoped
 	OrganizationID *xid.ID           `json:"organizationID,omitempty"` // Optional: org-scoped
 	UserID         xid.ID            `json:"userID"`                   // User who created the key
 	Name           string            `json:"name"`
@@ -36,13 +37,80 @@ type APIKey struct {
 	Key string `json:"key,omitempty"`
 }
 
+// ToSchema converts the APIKey DTO to schema.APIKey
+func (a *APIKey) ToSchema() *schema.APIKey {
+	return &schema.APIKey{
+		ID:             a.ID,
+		AppID:          a.AppID,
+		EnvironmentID:  a.EnvironmentID,
+		OrganizationID: a.OrganizationID,
+		UserID:         a.UserID,
+		Name:           a.Name,
+		Description:    a.Description,
+		Prefix:         a.Prefix,
+		KeyHash:        "", // Hash is never sent back
+		Scopes:         a.Scopes,
+		Permissions:    a.Permissions,
+		RateLimit:      a.RateLimit,
+		AllowedIPs:     a.AllowedIPs,
+		Active:         a.Active,
+		ExpiresAt:      a.ExpiresAt,
+		UsageCount:     a.UsageCount,
+		LastUsedAt:     a.LastUsedAt,
+		LastUsedIP:     a.LastUsedIP,
+		LastUsedUA:     a.LastUsedUA,
+		CreatedAt:      a.CreatedAt,
+		UpdatedAt:      a.UpdatedAt,
+		DeletedAt:      nil,
+		Metadata:       a.Metadata,
+		Key:            a.Key,
+	}
+}
+
+// FromSchemaAPIKey converts a schema.APIKey to APIKey DTO
+func FromSchemaAPIKey(s *schema.APIKey) *APIKey {
+	return &APIKey{
+		ID:             s.ID,
+		AppID:          s.AppID,
+		EnvironmentID:  s.EnvironmentID,
+		OrganizationID: s.OrganizationID,
+		UserID:         s.UserID,
+		Name:           s.Name,
+		Description:    s.Description,
+		Prefix:         s.Prefix,
+		Scopes:         s.Scopes,
+		Permissions:    s.Permissions,
+		RateLimit:      s.RateLimit,
+		AllowedIPs:     s.AllowedIPs,
+		Active:         s.Active,
+		ExpiresAt:      s.ExpiresAt,
+		UsageCount:     s.UsageCount,
+		LastUsedAt:     s.LastUsedAt,
+		LastUsedIP:     s.LastUsedIP,
+		LastUsedUA:     s.LastUsedUA,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+		Metadata:       s.Metadata,
+		Key:            s.Key,
+	}
+}
+
+// FromSchemaAPIKeys converts multiple schema.APIKey to APIKey DTOs
+func FromSchemaAPIKeys(keys []*schema.APIKey) []*APIKey {
+	result := make([]*APIKey, len(keys))
+	for i, key := range keys {
+		result[i] = FromSchemaAPIKey(key)
+	}
+	return result
+}
+
 // CreateAPIKeyRequest represents a request to create an API key
 // Updated for V2 architecture
 type CreateAPIKeyRequest struct {
-	AppID         xid.ID            `json:"appID" validate:"required"`  // Platform tenant
-	EnvironmentID *xid.ID           `json:"environmentID,omitempty"`    // Optional: environment-scoped
-	OrgID         *xid.ID           `json:"orgID,omitempty"`            // Optional: org-scoped
-	UserID        xid.ID            `json:"userID" validate:"required"` // User creating the key
+	AppID         xid.ID            `json:"appID" validate:"required"`         // Platform tenant
+	EnvironmentID xid.ID            `json:"environmentID" validate:"required"` // Required: environment-scoped
+	OrgID         *xid.ID           `json:"orgID,omitempty"`                   // Optional: org-scoped
+	UserID        xid.ID            `json:"userID" validate:"required"`        // User creating the key
 	Name          string            `json:"name" validate:"required,min=1,max=100"`
 	Description   string            `json:"description,omitempty" validate:"max=500"`
 	Scopes        []string          `json:"scopes" validate:"required,min=1"`
@@ -65,31 +133,15 @@ type UpdateAPIKeyRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
-// ListAPIKeysRequest represents a request to list API keys
-// Updated for V2 architecture
-type ListAPIKeysRequest struct {
-	AppID          xid.ID  `json:"appId,omitempty" validate:"required" query:"appId"` // Filter by app
-	EnvironmentID  *xid.ID `json:"environmentId,omitempty" query:"environmentId"`     // Filter by environment
-	OrganizationID *xid.ID `json:"orgId,omitempty" query:"orgId"`                     // Filter by organization
-	UserID         *xid.ID `json:"userId,omitempty" query:"userId"`                   // Filter by user
-	Limit          int     `json:"limit,omitempty" validate:"omitempty,min=1,max=100" default:"20" query:"limit"`
-	Offset         int     `json:"offset,omitempty" validate:"omitempty,min=0" default:"0" query:"offset"`
-}
-
-// ListAPIKeysResponse represents a response containing API keys
-type ListAPIKeysResponse struct {
-	APIKeys []*APIKey `json:"api_keys"`
-	Total   int       `json:"total"`
-	Limit   int       `json:"limit"`
-	Offset  int       `json:"offset"`
-}
+// ListAPIKeysResponse is a type alias for the paginated response
+type ListAPIKeysResponse = pagination.PageResponse[*APIKey]
 
 // RotateAPIKeyRequest represents a request to rotate an API key
 // Updated for V2 architecture
 type RotateAPIKeyRequest struct {
 	ID             xid.ID     `json:"id" validate:"required"`
 	AppID          xid.ID     `json:"appID" validate:"required"`
-	EnvironmentID  *xid.ID    `json:"environmentID,omitempty"`
+	EnvironmentID  xid.ID     `json:"environmentID" validate:"required"`
 	OrganizationID *xid.ID    `json:"organizationID,omitempty"`
 	UserID         xid.ID     `json:"userID" validate:"required"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
@@ -109,34 +161,6 @@ type VerifyAPIKeyResponse struct {
 	Valid  bool    `json:"valid"`
 	APIKey *APIKey `json:"api_key,omitempty"`
 	Error  string  `json:"error,omitempty"`
-}
-
-// Repository defines the interface for API key storage
-// Updated for V2 architecture
-type Repository interface {
-	Create(ctx context.Context, apiKey *APIKey) error
-	FindByID(ctx context.Context, id xid.ID) (*APIKey, error)
-	FindByPrefix(ctx context.Context, prefix string) (*APIKey, error)
-
-	// List with flexible filtering
-	FindByApp(ctx context.Context, appID xid.ID, limit, offset int) ([]*APIKey, error)
-	FindByUser(ctx context.Context, appID, userID xid.ID, limit, offset int) ([]*APIKey, error)
-	FindByOrganization(ctx context.Context, appID xid.ID, orgID xid.ID, limit, offset int) ([]*APIKey, error)
-	FindByEnvironment(ctx context.Context, appID, envID xid.ID, limit, offset int) ([]*APIKey, error)
-
-	// Update operations
-	Update(ctx context.Context, apiKey *APIKey) error
-	UpdateUsage(ctx context.Context, id xid.ID, ip, userAgent string) error
-	Delete(ctx context.Context, id xid.ID) error
-	Deactivate(ctx context.Context, id xid.ID) error
-
-	// Count operations
-	CountByApp(ctx context.Context, appID xid.ID) (int, error)
-	CountByUser(ctx context.Context, appID, userID xid.ID) (int, error)
-	CountByOrganization(ctx context.Context, appID xid.ID, orgID xid.ID) (int, error)
-
-	// Maintenance
-	CleanupExpired(ctx context.Context) (int, error)
 }
 
 // IsExpired checks if the API key has expired

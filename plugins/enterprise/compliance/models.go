@@ -16,13 +16,13 @@ const (
 	StandardCCPA     ComplianceStandard = "CCPA"
 )
 
-// ComplianceProfile defines compliance requirements for an organization
+// ComplianceProfile defines compliance requirements for an app
 type ComplianceProfile struct {
-	ID             string               `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	OrganizationID string               `json:"organizationId" bun:"organization_id,notnull"`
-	Name           string               `json:"name" bun:"name,notnull"`
-	Standards      []ComplianceStandard `json:"standards" bun:"standards,array"`
-	Status         string               `json:"status" bun:"status,notnull"` // active, suspended, audit
+	ID        string               `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	AppID     string               `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	Name      string               `json:"name" bun:"name,notnull"`
+	Standards []ComplianceStandard `json:"standards" bun:"standards,array"`
+	Status    string               `json:"status" bun:"status,notnull"` // active, suspended, audit
 
 	// Security Requirements
 	MFARequired           bool `json:"mfaRequired" bun:"mfa_required"`
@@ -65,118 +65,118 @@ type ComplianceProfile struct {
 
 // ComplianceCheck represents an automated compliance check
 type ComplianceCheck struct {
-	ID             string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID      string                 `json:"profileId" bun:"profile_id,notnull"`
-	OrganizationID string                 `json:"organizationId" bun:"organization_id,notnull"`
-	CheckType      string                 `json:"checkType" bun:"check_type,notnull"` // mfa_coverage, password_policy, etc.
-	Status         string                 `json:"status" bun:"status,notnull"`        // passed, failed, warning
-	Result         map[string]interface{} `json:"result" bun:"result,type:jsonb"`
-	Evidence       []string               `json:"evidence" bun:"evidence,array"`
-	LastCheckedAt  time.Time              `json:"lastCheckedAt" bun:"last_checked_at,notnull"`
-	NextCheckAt    time.Time              `json:"nextCheckAt" bun:"next_check_at,notnull"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
+	AppID         string                 `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	CheckType     string                 `json:"checkType" bun:"check_type,notnull"`  // mfa_coverage, password_policy, etc.
+	Status        string                 `json:"status" bun:"status,notnull"`         // passed, failed, warning
+	Result        map[string]interface{} `json:"result" bun:"result,type:jsonb"`
+	Evidence      []string               `json:"evidence" bun:"evidence,array"`
+	LastCheckedAt time.Time              `json:"lastCheckedAt" bun:"last_checked_at,notnull"`
+	NextCheckAt   time.Time              `json:"nextCheckAt" bun:"next_check_at,notnull"`
+	CreatedAt     time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
 }
 
 // ComplianceViolation represents a policy violation
 type ComplianceViolation struct {
-	ID             string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID      string                 `json:"profileId" bun:"profile_id,notnull"`
-	OrganizationID string                 `json:"organizationId" bun:"organization_id,notnull"`
-	UserID         string                 `json:"userId" bun:"user_id"`
-	ViolationType  string                 `json:"violationType" bun:"violation_type,notnull"` // mfa_not_enabled, weak_password, etc.
-	Severity       string                 `json:"severity" bun:"severity,notnull"`            // low, medium, high, critical
-	Description    string                 `json:"description" bun:"description,notnull"`
-	Status         string                 `json:"status" bun:"status,notnull"` // open, resolved, acknowledged
-	ResolvedAt     *time.Time             `json:"resolvedAt" bun:"resolved_at"`
-	ResolvedBy     string                 `json:"resolvedBy" bun:"resolved_by"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
+	AppID         string                 `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	UserID        string                 `json:"userId" bun:"user_id"`
+	ViolationType string                 `json:"violationType" bun:"violation_type,notnull"` // mfa_not_enabled, weak_password, etc.
+	Severity      string                 `json:"severity" bun:"severity,notnull"`            // low, medium, high, critical
+	Description   string                 `json:"description" bun:"description,notnull"`
+	Status        string                 `json:"status" bun:"status,notnull"` // open, resolved, acknowledged
+	ResolvedAt    *time.Time             `json:"resolvedAt" bun:"resolved_at"`
+	ResolvedBy    string                 `json:"resolvedBy" bun:"resolved_by"`
+	Metadata      map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt     time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
 }
 
 // ComplianceReport represents a generated compliance report
 type ComplianceReport struct {
-	ID             string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID      string                 `json:"profileId" bun:"profile_id,notnull"`
-	OrganizationID string                 `json:"organizationId" bun:"organization_id,notnull"`
-	ReportType     string                 `json:"reportType" bun:"report_type,notnull"` // soc2, hipaa, audit_export
-	Standard       ComplianceStandard     `json:"standard" bun:"standard"`
-	Period         string                 `json:"period" bun:"period,notnull"` // 2025-Q1, 2025-11
-	Format         string                 `json:"format" bun:"format,notnull"` // pdf, json, csv
-	Status         string                 `json:"status" bun:"status,notnull"` // generating, ready, failed
-	FileURL        string                 `json:"fileUrl" bun:"file_url"`
-	FileSize       int64                  `json:"fileSize" bun:"file_size"`
-	Summary        map[string]interface{} `json:"summary" bun:"summary,type:jsonb"`
-	GeneratedBy    string                 `json:"generatedBy" bun:"generated_by"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
-	ExpiresAt      time.Time              `json:"expiresAt" bun:"expires_at"`
+	ID          string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID   string                 `json:"profileId" bun:"profile_id,notnull"`
+	AppID       string                 `json:"appId" bun:"organization_id,notnull"`  // Maps to organization_id column in DB
+	ReportType  string                 `json:"reportType" bun:"report_type,notnull"` // soc2, hipaa, audit_export
+	Standard    ComplianceStandard     `json:"standard" bun:"standard"`
+	Period      string                 `json:"period" bun:"period,notnull"` // 2025-Q1, 2025-11
+	Format      string                 `json:"format" bun:"format,notnull"` // pdf, json, csv
+	Status      string                 `json:"status" bun:"status,notnull"` // generating, ready, failed
+	FileURL     string                 `json:"fileUrl" bun:"file_url"`
+	FileSize    int64                  `json:"fileSize" bun:"file_size"`
+	Summary     map[string]interface{} `json:"summary" bun:"summary,type:jsonb"`
+	GeneratedBy string                 `json:"generatedBy" bun:"generated_by"`
+	CreatedAt   time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	ExpiresAt   time.Time              `json:"expiresAt" bun:"expires_at"`
 }
 
 // ComplianceEvidence stores evidence for compliance audits
 type ComplianceEvidence struct {
-	ID             string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID      string                 `json:"profileId" bun:"profile_id,notnull"`
-	OrganizationID string                 `json:"organizationId" bun:"organization_id,notnull"`
-	EvidenceType   string                 `json:"evidenceType" bun:"evidence_type,notnull"` // audit_log, policy_doc, etc.
-	Standard       ComplianceStandard     `json:"standard" bun:"standard"`
-	ControlID      string                 `json:"controlId" bun:"control_id"` // e.g., SOC2-CC6.1
-	Title          string                 `json:"title" bun:"title,notnull"`
-	Description    string                 `json:"description" bun:"description"`
-	FileURL        string                 `json:"fileUrl" bun:"file_url"`
-	FileHash       string                 `json:"fileHash" bun:"file_hash"` // SHA256 for integrity
-	CollectedBy    string                 `json:"collectedBy" bun:"collected_by"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	ID           string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID    string                 `json:"profileId" bun:"profile_id,notnull"`
+	AppID        string                 `json:"appId" bun:"organization_id,notnull"`      // Maps to organization_id column in DB
+	EvidenceType string                 `json:"evidenceType" bun:"evidence_type,notnull"` // audit_log, policy_doc, etc.
+	Standard     ComplianceStandard     `json:"standard" bun:"standard"`
+	ControlID    string                 `json:"controlId" bun:"control_id"` // e.g., SOC2-CC6.1
+	Title        string                 `json:"title" bun:"title,notnull"`
+	Description  string                 `json:"description" bun:"description"`
+	FileURL      string                 `json:"fileUrl" bun:"file_url"`
+	FileHash     string                 `json:"fileHash" bun:"file_hash"` // SHA256 for integrity
+	CollectedBy  string                 `json:"collectedBy" bun:"collected_by"`
+	Metadata     map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt    time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
 }
 
 // CompliancePolicy represents a policy document
 type CompliancePolicy struct {
-	ID             string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID      string                 `json:"profileId" bun:"profile_id,notnull"`
-	OrganizationID string                 `json:"organizationId" bun:"organization_id,notnull"`
-	PolicyType     string                 `json:"policyType" bun:"policy_type,notnull"` // password, access, data_retention
-	Standard       ComplianceStandard     `json:"standard" bun:"standard"`
-	Title          string                 `json:"title" bun:"title,notnull"`
-	Version        string                 `json:"version" bun:"version,notnull"`
-	Content        string                 `json:"content" bun:"content,notnull"`
-	Status         string                 `json:"status" bun:"status,notnull"` // draft, active, deprecated
-	ApprovedBy     string                 `json:"approvedBy" bun:"approved_by"`
-	ApprovedAt     *time.Time             `json:"approvedAt" bun:"approved_at"`
-	EffectiveDate  time.Time              `json:"effectiveDate" bun:"effective_date,notnull"`
-	ReviewDate     time.Time              `json:"reviewDate" bun:"review_date,notnull"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
-	UpdatedAt      time.Time              `json:"updatedAt" bun:"updated_at,notnull,default:now()"`
+	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
+	AppID         string                 `json:"appId" bun:"organization_id,notnull"`  // Maps to organization_id column in DB
+	PolicyType    string                 `json:"policyType" bun:"policy_type,notnull"` // password, access, data_retention
+	Standard      ComplianceStandard     `json:"standard" bun:"standard"`
+	Title         string                 `json:"title" bun:"title,notnull"`
+	Version       string                 `json:"version" bun:"version,notnull"`
+	Content       string                 `json:"content" bun:"content,notnull"`
+	Status        string                 `json:"status" bun:"status,notnull"` // draft, active, deprecated
+	ApprovedBy    string                 `json:"approvedBy" bun:"approved_by"`
+	ApprovedAt    *time.Time             `json:"approvedAt" bun:"approved_at"`
+	EffectiveDate time.Time              `json:"effectiveDate" bun:"effective_date,notnull"`
+	ReviewDate    time.Time              `json:"reviewDate" bun:"review_date,notnull"`
+	Metadata      map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt     time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	UpdatedAt     time.Time              `json:"updatedAt" bun:"updated_at,notnull,default:now()"`
 }
 
 // ComplianceTraining tracks compliance training completion
 type ComplianceTraining struct {
-	ID             string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID      string                 `json:"profileId" bun:"profile_id,notnull"`
-	OrganizationID string                 `json:"organizationId" bun:"organization_id,notnull"`
-	UserID         string                 `json:"userId" bun:"user_id,notnull"`
-	TrainingType   string                 `json:"trainingType" bun:"training_type,notnull"` // security_awareness, hipaa_basics
-	Standard       ComplianceStandard     `json:"standard" bun:"standard"`
-	Status         string                 `json:"status" bun:"status,notnull"` // required, in_progress, completed
-	CompletedAt    *time.Time             `json:"completedAt" bun:"completed_at"`
-	ExpiresAt      *time.Time             `json:"expiresAt" bun:"expires_at"`
-	Score          int                    `json:"score" bun:"score"` // percentage
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	ID           string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID    string                 `json:"profileId" bun:"profile_id,notnull"`
+	AppID        string                 `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	UserID       string                 `json:"userId" bun:"user_id,notnull"`
+	TrainingType string                 `json:"trainingType" bun:"training_type,notnull"` // security_awareness, hipaa_basics
+	Standard     ComplianceStandard     `json:"standard" bun:"standard"`
+	Status       string                 `json:"status" bun:"status,notnull"` // required, in_progress, completed
+	CompletedAt  *time.Time             `json:"completedAt" bun:"completed_at"`
+	ExpiresAt    *time.Time             `json:"expiresAt" bun:"expires_at"`
+	Score        int                    `json:"score" bun:"score"` // percentage
+	Metadata     map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt    time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
 }
 
 // ComplianceStatus represents overall compliance status
 type ComplianceStatus struct {
-	ProfileID      string             `json:"profileId"`
-	OrganizationID string             `json:"organizationId"`
-	Standard       ComplianceStandard `json:"standard"`
-	OverallStatus  string             `json:"overallStatus"` // compliant, non_compliant, in_progress
-	Score          int                `json:"score"`         // 0-100
-	ChecksPassed   int                `json:"checksPassed"`
-	ChecksFailed   int                `json:"checksFailed"`
-	ChecksWarning  int                `json:"checksWarning"`
-	Violations     int                `json:"violations"`
-	LastChecked    time.Time          `json:"lastChecked"`
-	NextAudit      time.Time          `json:"nextAudit"`
+	ProfileID     string             `json:"profileId"`
+	AppID         string             `json:"appId"`
+	Standard      ComplianceStandard `json:"standard"`
+	OverallStatus string             `json:"overallStatus"` // compliant, non_compliant, in_progress
+	Score         int                `json:"score"`         // 0-100
+	ChecksPassed  int                `json:"checksPassed"`
+	ChecksFailed  int                `json:"checksFailed"`
+	ChecksWarning int                `json:"checksWarning"`
+	Violations    int                `json:"violations"`
+	LastChecked   time.Time          `json:"lastChecked"`
+	NextAudit     time.Time          `json:"nextAudit"`
 }
 
 // ComplianceTemplate represents a predefined compliance template

@@ -1,9 +1,10 @@
 package schema
 
 import (
+	"time"
+
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
-	"time"
 )
 
 // SSOProvider stores per-organization SSO provider configuration

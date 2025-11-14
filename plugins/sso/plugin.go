@@ -5,41 +5,168 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
-	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
 // Plugin wires the SSO service and registers routes
 type Plugin struct {
-	db      *bun.DB
-	service *Service
+	db            *bun.DB
+	service       *Service
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the SSO plugin configuration
+type Config struct {
+	// AllowSAML enables SAML authentication
+	AllowSAML bool `json:"allowSAML"`
+	// AllowOIDC enables OIDC authentication
+	AllowOIDC bool `json:"allowOIDC"`
+	// SAMLMetadataURL is the SP metadata URL
+	SAMLMetadataURL string `json:"samlMetadataURL"`
+	// SAMLACS is the assertion consumer service URL
+	SAMLACS string `json:"samlACS"`
+	// OIDCRedirectURL is the OIDC redirect URL
+	OIDCRedirectURL string `json:"oidcRedirectURL"`
+	// RequireEncryption requires encrypted SAML assertions
+	RequireEncryption bool `json:"requireEncryption"`
+	// AutoProvision automatically provisions users from SSO
+	AutoProvision bool `json:"autoProvision"`
+}
+
+// DefaultConfig returns the default SSO plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		AllowSAML:         true,
+		AllowOIDC:         true,
+		SAMLMetadataURL:   "",
+		SAMLACS:           "",
+		OIDCRedirectURL:   "",
+		RequireEncryption: false,
+		AutoProvision:     true,
+	}
+}
+
+// PluginOption is a functional option for configuring the SSO plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithAllowSAML sets whether SAML is enabled
+func WithAllowSAML(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowSAML = allow
+	}
+}
+
+// WithAllowOIDC sets whether OIDC is enabled
+func WithAllowOIDC(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowOIDC = allow
+	}
+}
+
+// WithSAMLMetadataURL sets the SAML metadata URL
+func WithSAMLMetadataURL(url string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SAMLMetadataURL = url
+	}
+}
+
+// WithSAMLACS sets the SAML assertion consumer service URL
+func WithSAMLACS(acs string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.SAMLACS = acs
+	}
+}
+
+// WithOIDCRedirectURL sets the OIDC redirect URL
+func WithOIDCRedirectURL(url string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.OIDCRedirectURL = url
+	}
+}
+
+// WithRequireEncryption sets whether encrypted assertions are required
+func WithRequireEncryption(require bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireEncryption = require
+	}
+}
+
+// WithAutoProvision sets whether auto-provisioning is enabled
+func WithAutoProvision(enable bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AutoProvision = enable
+	}
+}
+
+// NewPlugin creates a new SSO plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "sso" }
 
 // Init accepts auth instance with GetDB method
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("sso plugin requires auth instance")
 	}
 
-	auth, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("sso plugin requires auth instance with GetDB method")
-	}
-
-	db := auth.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for sso plugin")
 	}
 
-	p.db = db
-	p.service = NewService(repo.NewSSOProviderRepository(db))
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for sso plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "sso"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.sso", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind SSO config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models
+	p.db.RegisterModel((*schema.SSOProvider)(nil))
+
+	p.service = NewService(authInst.Repository().SSOProvider(), p.config)
+
+	p.logger.Info("SSO plugin initialized",
+		forge.F("allow_saml", p.config.AllowSAML),
+		forge.F("allow_oidc", p.config.AllowOIDC),
+		forge.F("auto_provision", p.config.AutoProvision))
+
 	return nil
 }
 

@@ -2,24 +2,23 @@ package user
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/internal/validator"
-	"github.com/xraph/authsome/types"
 )
 
-// Service provides user-related operations
-type Service struct {
-	repo       Repository
-	config     Config
-	webhookSvc *webhook.Service
-}
+// =============================================================================
+// SERVICE CONFIGURATION
+// =============================================================================
 
 // Config represents user service configuration
 type Config struct {
@@ -36,6 +35,17 @@ type Config struct {
 	}
 }
 
+// =============================================================================
+// SERVICE IMPLEMENTATION
+// =============================================================================
+
+// Service provides user-related operations
+type Service struct {
+	repo       Repository
+	config     Config
+	webhookSvc *webhook.Service
+}
+
 // NewService creates a new user service
 func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service) *Service {
 	return &Service{
@@ -45,70 +55,120 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service) *Servi
 	}
 }
 
-// Create creates a new user
+// =============================================================================
+// SERVICE METHODS
+// =============================================================================
+
+// Create creates a new user in the specified app
 func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, error) {
-	fmt.Printf("[User Service] Create: Request: %+v\n", req)
+	// Validate email
 	if !validator.ValidateEmail(req.Email) {
-		return nil, types.NewValidationError("email", "invalid email")
+		return nil, InvalidEmail(req.Email)
 	}
+
+	// Validate password
 	ok, msg := validator.ValidatePassword(req.Password, s.config.PasswordRequirements)
 	if !ok {
-		return nil, types.NewValidationError("password", msg)
+		return nil, WeakPassword(msg)
 	}
 
-	existing, err := s.repo.FindByEmail(ctx, req.Email)
+	// Check if email already exists in this app
+	existing, err := s.repo.FindByAppAndEmail(ctx, req.AppID, req.Email)
 	if err == nil && existing != nil {
-		return nil, types.ErrEmailAlreadyExists
+		return nil, EmailAlreadyExists(req.Email)
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, UserCreationFailed(err)
 	}
 
+	// Generate ID and hash password
 	id := xid.New()
-
 	hash, err := crypto.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
+		return nil, UserCreationFailed(fmt.Errorf("failed to hash password: %w", err))
 	}
 
 	now := time.Now().UTC()
-	u := &User{
+
+	// Create DTO
+	user := &User{
 		ID:              id,
+		AppID:           req.AppID,
 		Email:           req.Email,
 		Name:            req.Name,
 		PasswordHash:    hash,
 		Username:        id.String(),
 		DisplayUsername: "",
+		EmailVerified:   false,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
-	if err := s.repo.Create(ctx, u); err != nil {
-		return nil, err
+
+	// Convert to schema and save
+	if err := s.repo.Create(ctx, user.ToSchema()); err != nil {
+		return nil, UserCreationFailed(err)
 	}
 
 	// Emit webhook event
 	if s.webhookSvc != nil {
 		data := map[string]interface{}{
-			"user_id": u.ID.String(),
-			"email":   u.Email,
-			"name":    u.Name,
+			"user_id": user.ID.String(),
+			"app_id":  user.AppID.String(),
+			"email":   user.Email,
+			"name":    user.Name,
 		}
-		go s.webhookSvc.EmitEvent(ctx, "user.created", "default", data) // TODO: Get orgID from context
+		go s.webhookSvc.EmitEvent(ctx, req.AppID, xid.NilID(), "user.created", data)
 	}
 
-	return u, nil
+	return user, nil
 }
 
 // FindByID finds a user by ID
 func (s *Service) FindByID(ctx context.Context, id xid.ID) (*User, error) {
-	return s.repo.FindByID(ctx, id)
+	schemaUser, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, UserNotFound(id.String())
+		}
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
+	return FromSchemaUser(schemaUser), nil
 }
 
-// FindByEmail finds a user by email
+// FindByEmail finds a user by email (global search, not app-scoped)
 func (s *Service) FindByEmail(ctx context.Context, email string) (*User, error) {
-	return s.repo.FindByEmail(ctx, email)
+	schemaUser, err := s.repo.FindByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, UserNotFound(email)
+		}
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
+	return FromSchemaUser(schemaUser), nil
+}
+
+// FindByAppAndEmail finds a user by app ID and email (app-scoped search)
+func (s *Service) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*User, error) {
+	schemaUser, err := s.repo.FindByAppAndEmail(ctx, appID, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, UserNotFound(email)
+		}
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
+	return FromSchemaUser(schemaUser), nil
 }
 
 // FindByUsername finds a user by username
 func (s *Service) FindByUsername(ctx context.Context, username string) (*User, error) {
-	return s.repo.FindByUsername(ctx, username)
+	schemaUser, err := s.repo.FindByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, UserNotFound(username)
+		}
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
+	return FromSchemaUser(schemaUser), nil
 }
 
 // Update updates a user
@@ -116,16 +176,25 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 	if req.Name != nil {
 		u.Name = *req.Name
 	}
+
 	if req.Email != nil {
-		// Check if email is changing and if new email is already taken
+		// Check if email is changing and if new email is already taken in this app
 		newEmail := *req.Email
 		if newEmail != u.Email {
-			if existing, err := s.repo.FindByEmail(ctx, newEmail); err == nil && existing != nil && existing.ID != u.ID {
-				return nil, fmt.Errorf("email already taken")
+			if !validator.ValidateEmail(newEmail) {
+				return nil, InvalidEmail(newEmail)
+			}
+			existing, err := s.repo.FindByAppAndEmail(ctx, u.AppID, newEmail)
+			if err == nil && existing != nil && existing.ID != u.ID {
+				return nil, EmailTaken(newEmail)
+			}
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return nil, UserUpdateFailed(err)
 			}
 			u.Email = newEmail
 		}
 	}
+
 	if req.EmailVerified != nil {
 		u.EmailVerified = *req.EmailVerified
 		if *req.EmailVerified {
@@ -133,25 +202,31 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			u.EmailVerifiedAt = &now
 		}
 	}
+
 	if req.Image != nil {
 		u.Image = *req.Image
 	}
+
 	// Handle username update with validation and uniqueness check
 	if req.Username != nil {
 		raw := strings.TrimSpace(*req.Username)
 		if raw == "" {
-			return nil, fmt.Errorf("username cannot be empty")
+			return nil, InvalidUsername("", "username cannot be empty")
 		}
 		// Normalize: lowercase canonical username
 		canonical := strings.ToLower(raw)
 		// Allowed characters: a-z, 0-9, underscore, dot; length 3-32
 		re := regexp.MustCompile(`^[a-z0-9_\.]{3,32}$`)
 		if !re.MatchString(canonical) {
-			return nil, fmt.Errorf("invalid username: use 3-32 chars [a-z0-9_.]")
+			return nil, InvalidUsername(canonical, "use 3-32 chars [a-z0-9_.]")
 		}
 		// Check uniqueness
-		if existing, err := s.repo.FindByUsername(ctx, canonical); err == nil && existing != nil && existing.ID != u.ID {
-			return nil, fmt.Errorf("username already taken")
+		existing, err := s.repo.FindByUsername(ctx, canonical)
+		if err == nil && existing != nil && existing.ID != u.ID {
+			return nil, UsernameTaken(canonical)
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, UserUpdateFailed(err)
 		}
 		u.Username = canonical
 		// Set display username if provided; else preserve original casing
@@ -165,19 +240,21 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			u.DisplayUsername = raw
 		}
 	}
+
 	u.UpdatedAt = time.Now().UTC()
-	if err := s.repo.Update(ctx, u); err != nil {
-		return nil, err
+	if err := s.repo.Update(ctx, u.ToSchema()); err != nil {
+		return nil, UserUpdateFailed(err)
 	}
 
 	// Emit webhook event
 	if s.webhookSvc != nil {
 		data := map[string]interface{}{
 			"user_id": u.ID.String(),
+			"app_id":  u.AppID.String(),
 			"email":   u.Email,
 			"name":    u.Name,
 		}
-		go s.webhookSvc.EmitEvent(ctx, "user.updated", "default", data) // TODO: Get orgID from context
+		go s.webhookSvc.EmitEvent(ctx, u.AppID, xid.NilID(), "user.updated", data)
 	}
 
 	return u, nil
@@ -186,77 +263,62 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 // Delete deletes a user by ID
 func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	// Get user before deletion for webhook event
-	user, err := s.repo.FindByID(ctx, id)
+	schemaUser, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return err
+		if errors.Is(err, sql.ErrNoRows) {
+			return UserNotFound(id.String())
+		}
+		return UserDeletionFailed(err)
 	}
 
 	if err := s.repo.Delete(ctx, id); err != nil {
-		return err
+		return UserDeletionFailed(err)
 	}
 
 	// Emit webhook event
-	if s.webhookSvc != nil && user != nil {
+	if s.webhookSvc != nil && schemaUser != nil {
+		user := FromSchemaUser(schemaUser)
 		data := map[string]interface{}{
 			"user_id": user.ID.String(),
+			"app_id":  user.AppID.String(),
 			"email":   user.Email,
 			"name":    user.Name,
 		}
-		go s.webhookSvc.EmitEvent(ctx, "user.deleted", "default", data) // TODO: Get orgID from context
+		go s.webhookSvc.EmitEvent(ctx, user.AppID, xid.NilID(), "user.deleted", data)
 	}
 
 	return nil
 }
 
-// List lists users with pagination
-func (s *Service) List(ctx context.Context, opts types.PaginationOptions) ([]*User, int, error) {
-	if opts.Page <= 0 {
-		opts.Page = 1
+// ListUsers lists users with pagination and filtering
+func (s *Service) ListUsers(ctx context.Context, filter *ListUsersFilter) (*pagination.PageResponse[*User], error) {
+	// Validate pagination params
+	if err := filter.Validate(); err != nil {
+		return nil, InvalidUserData("pagination", err.Error())
 	}
-	if opts.PageSize <= 0 {
-		opts.PageSize = 20
-	}
-	offset := (opts.Page - 1) * opts.PageSize
-	list, err := s.repo.List(ctx, opts.PageSize, offset)
+
+	// Get paginated results from repository
+	pageResp, err := s.repo.ListUsers(ctx, filter)
 	if err != nil {
-		return nil, 0, err
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
-	total, err := s.repo.Count(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
+
+	// Convert schema users to DTOs
+	dtoUsers := FromSchemaUsers(pageResp.Data)
+
+	// Return paginated response with DTOs
+	return &pagination.PageResponse[*User]{
+		Data:       dtoUsers,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
+	}, nil
 }
 
-// Search searches users by name or email with pagination
-func (s *Service) Search(ctx context.Context, query string, opts types.PaginationOptions) ([]*User, int, error) {
-	if opts.Page <= 0 {
-		opts.Page = 1
-	}
-	if opts.PageSize <= 0 {
-		opts.PageSize = 20
-	}
-	offset := (opts.Page - 1) * opts.PageSize
-	list, err := s.repo.Search(ctx, query, opts.PageSize, offset)
+// CountUsers counts users with filtering
+func (s *Service) CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error) {
+	count, err := s.repo.CountUsers(ctx, filter)
 	if err != nil {
-		return nil, 0, err
+		return 0, fmt.Errorf("failed to count users: %w", err)
 	}
-	total, err := s.repo.CountSearch(ctx, query)
-	if err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
-}
-
-// Count implements ServiceInterface.
-func (s *Service) Count(ctx context.Context) (int, error) {
-	return s.repo.Count(ctx)
-}
-
-// CountCreatedToday returns the count of users created today
-func (s *Service) CountCreatedToday(ctx context.Context) (int, error) {
-	// Get start of today in UTC
-	now := time.Now().UTC()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	return s.repo.CountCreatedSince(ctx, startOfDay)
+	return count, nil
 }

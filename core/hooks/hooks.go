@@ -38,6 +38,10 @@ type HookRegistry struct {
 	afterOrganizationCreate  []AfterOrganizationCreateHook
 	beforeMemberAdd          []BeforeMemberAddHook
 	afterMemberAdd           []AfterMemberAddHook
+
+	// App hooks (for multi-app support)
+	beforeAppCreate []BeforeAppCreateHook
+	afterAppCreate  []AfterAppCreateHook
 }
 
 // Hook function types
@@ -69,6 +73,10 @@ type BeforeOrganizationCreateHook func(ctx context.Context, req interface{}) err
 type AfterOrganizationCreateHook func(ctx context.Context, org interface{}) error
 type BeforeMemberAddHook func(ctx context.Context, orgID string, userID xid.ID) error
 type AfterMemberAddHook func(ctx context.Context, member interface{}) error
+
+// App hooks (for multi-app support)
+type BeforeAppCreateHook func(ctx context.Context, req interface{}) error
+type AfterAppCreateHook func(ctx context.Context, app interface{}) error
 
 // NewHookRegistry creates a new hook registry
 func NewHookRegistry() *HookRegistry {
@@ -157,6 +165,15 @@ func (h *HookRegistry) RegisterBeforeMemberAdd(hook BeforeMemberAddHook) {
 
 func (h *HookRegistry) RegisterAfterMemberAdd(hook AfterMemberAddHook) {
 	h.afterMemberAdd = append(h.afterMemberAdd, hook)
+}
+
+// App hook registration methods (for multi-app support)
+func (h *HookRegistry) RegisterBeforeAppCreate(hook BeforeAppCreateHook) {
+	h.beforeAppCreate = append(h.beforeAppCreate, hook)
+}
+
+func (h *HookRegistry) RegisterAfterAppCreate(hook AfterAppCreateHook) {
+	h.afterAppCreate = append(h.afterAppCreate, hook)
 }
 
 // Hook execution methods
@@ -355,6 +372,26 @@ func (h *HookRegistry) ExecuteBeforeMemberAdd(ctx context.Context, orgID string,
 func (h *HookRegistry) ExecuteAfterMemberAdd(ctx context.Context, member interface{}) error {
 	for _, hook := range h.afterMemberAdd {
 		if err := hook(ctx, member); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteBeforeAppCreate executes all before app create hooks
+func (h *HookRegistry) ExecuteBeforeAppCreate(ctx context.Context, req interface{}) error {
+	for _, hook := range h.beforeAppCreate {
+		if err := hook(ctx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteAfterAppCreate executes all after app create hooks
+func (h *HookRegistry) ExecuteAfterAppCreate(ctx context.Context, app interface{}) error {
+	for _, hook := range h.afterAppCreate {
+		if err := hook(ctx, app); err != nil {
 			return err
 		}
 	}

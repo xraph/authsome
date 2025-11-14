@@ -16,8 +16,9 @@ import (
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/organization"
 	rl "github.com/xraph/authsome/core/ratelimit"
-	rbac "github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	sec "github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/core/session"
@@ -28,7 +29,6 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/internal/validator"
 	"github.com/xraph/authsome/plugins"
-	jwtplugin "github.com/xraph/authsome/plugins/jwt"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/routes"
 	"github.com/xraph/authsome/schema"
@@ -37,13 +37,14 @@ import (
 	"github.com/xraph/forge/extensions/database"
 )
 
-// Service name constants for DI container
+// ServiceImpl name constants for DI container
 const (
 	ServiceDatabase       = "authsome.database"
 	ServiceUser           = "authsome.user"
 	ServiceSession        = "authsome.session"
 	ServiceAuth           = "authsome.auth"
 	ServiceApp            = "authsome.app"
+	ServiceOrganization   = "authsome.organization"
 	ServiceRateLimit      = "authsome.ratelimit"
 	ServiceDevice         = "authsome.device"
 	ServiceSecurity       = "authsome.security"
@@ -65,23 +66,21 @@ type Auth struct {
 	logger   forge.Logger
 
 	// Core services (using interfaces to allow plugin decoration)
-	userService         user.ServiceInterface
-	sessionService      session.ServiceInterface
-	authService         auth.ServiceInterface
-	organizationService *app.Service
-	rateLimitService    *rl.Service
-	rateLimitStorage    rl.Storage
-	rateLimitConfig     rl.Config
-	deviceService       *dev.Service
-	securityService     *sec.Service
-	securityConfig      sec.Config
-	geoipProvider       sec.GeoIPProvider
-	auditService        *aud.Service
-	rbacService         *rbac.Service
-	userRoleRepo        *repo.UserRoleRepository
-	roleRepo            *repo.RoleRepository
-	policyRepo          *repo.PolicyRepository
-	twofaRepo           *repo.TwoFARepository
+	userService      user.ServiceInterface
+	sessionService   session.ServiceInterface
+	authService      auth.ServiceInterface
+	appService       *app.ServiceImpl
+	orgService       *organization.Service
+	rateLimitService *rl.Service
+	rateLimitStorage rl.Storage
+	rateLimitConfig  rl.Config
+	deviceService    *dev.Service
+	securityService  *sec.Service
+	securityConfig   sec.Config
+	geoipProvider    sec.GeoIPProvider
+	auditService     *aud.Service
+	rbacService      *rbac.Service
+	repo             repo.Repository
 
 	// Phase 10 services
 	webhookService      *webhook.Service
@@ -90,9 +89,9 @@ type Auth struct {
 	apikeyService       *apikey.Service
 
 	// Plugin registry
-	pluginRegistry *plugins.Registry
+	pluginRegistry plugins.PluginRegistry
 
-	// Service registry for plugin decorator pattern
+	// ServiceImpl registry for plugin decorator pattern
 	serviceRegistry *registry.ServiceRegistry
 	hookRegistry    *hooks.HookRegistry
 }
@@ -147,38 +146,42 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	}
 
 	// Initialize repositories
-	userRepo := repo.NewUserRepository(db)
-	sessionRepo := repo.NewSessionRepository(db)
-	a.twofaRepo = repo.NewTwoFARepository(db)
-	orgRepo := repo.NewAppRepository(db)
+	a.repo = repo.NewRepo(db)
+
+	// Register m2m models for Bun ORM
+	// These models are used as join tables for many-to-many relationships
+	// and must be explicitly registered with Bun
+	db.RegisterModel((*schema.TeamMember)(nil))
+	db.RegisterModel((*schema.OrganizationTeamMember)(nil))
+
 	// Rate limit storage and service
 	if a.rateLimitStorage == nil {
 		a.rateLimitStorage = memstore.NewMemoryStorage()
 	}
+
 	a.rateLimitService = rl.NewService(a.rateLimitStorage, a.rateLimitConfig)
+
 	// Device service
-	deviceRepo := repo.NewDeviceRepository(db)
-	a.deviceService = dev.NewService(deviceRepo)
+	a.deviceService = dev.NewService(a.repo.Device())
+
 	// Security service
-	secRepo := repo.NewSecurityRepository(db)
 	// Default enable if not explicitly set
 	if !a.securityConfig.Enabled && len(a.securityConfig.IPWhitelist) == 0 && len(a.securityConfig.IPBlacklist) == 0 && len(a.securityConfig.AllowedCountries) == 0 && len(a.securityConfig.BlockedCountries) == 0 {
 		a.securityConfig.Enabled = true
 	}
-	a.securityService = sec.NewService(secRepo, a.securityConfig)
+	a.securityService = sec.NewService(a.repo.Security(), a.securityConfig)
 	if a.geoipProvider != nil {
 		a.securityService.SetGeoIPProvider(a.geoipProvider)
 	}
+
 	// Audit service
-	auditRepo := repo.NewAuditRepository(db)
-	a.auditService = aud.NewService(auditRepo)
+	a.auditService = aud.NewService(a.repo.Audit())
 
 	// RBAC service: load policies from storage
 	a.rbacService = rbac.NewService()
-	a.policyRepo = repo.NewPolicyRepository(db)
-	_ = a.rbacService.LoadPolicies(ctx, a.policyRepo)
+	_ = a.rbacService.LoadPolicies(ctx, a.repo.Policy())
 	// Seed default policies if storage is empty
-	if exprs, err := a.policyRepo.ListAll(ctx); err == nil && len(exprs) == 0 {
+	if exprs, err := a.repo.Policy().ListAll(ctx); err == nil && len(exprs) == 0 {
 		defaults := []string{
 			// App permissions (platform tenant)
 			"role:owner:create,read,update,delete on app:*",
@@ -200,41 +203,55 @@ func (a *Auth) Initialize(ctx context.Context) error {
 			"role:admin:read on policy:*",
 		}
 		for _, ex := range defaults {
-			_ = a.policyRepo.Create(ctx, ex)
+			_ = a.repo.Policy().Create(ctx, ex)
 		}
-		_ = a.rbacService.LoadPolicies(ctx, a.policyRepo)
+		_ = a.rbacService.LoadPolicies(ctx, a.repo.Policy())
 	}
-	// User role repository for RBAC role assignments
-	a.userRoleRepo = repo.NewUserRoleRepository(db)
-	// Role repository for role management
-	a.roleRepo = repo.NewRoleRepository(db)
 
 	// Initialize Phase 10 services first (webhook is a dependency for user/session services)
-	webhookRepo := repo.NewWebhookRepository(db)
-	a.webhookService = webhook.NewService(webhook.Config{}, webhookRepo, a.auditService)
+	a.webhookService = webhook.NewService(webhook.Config{}, a.repo.Webhook(), a.auditService)
 
-	notificationRepo := repo.NewNotificationRepository(db)
 	// TODO: Add template engine when available
-	a.notificationService = notification.NewService(notificationRepo, nil, a.auditService, notification.Config{})
+	a.notificationService = notification.NewService(a.repo.Notification(), nil, a.auditService, notification.Config{})
 
 	// JWT service uses a wrapper around the JWT key repository
-	jwtKeyRepo := repo.NewJWTKeyRepository(db)
-	jwtRepo := jwt.NewRepositoryWrapper(jwtKeyRepo)
-	a.jwtService = jwt.NewService(jwt.Config{}, jwtRepo, a.auditService)
+	a.jwtService = jwt.NewService(jwt.Config{}, a.repo.JWTKey(), a.auditService)
 
-	apikeyRepo := repo.NewAPIKeyRepository(db)
-	a.apikeyService = apikey.NewService(apikeyRepo, a.auditService, apikey.Config{})
+	a.apikeyService = apikey.NewService(a.repo.APIKey(), a.auditService, apikey.Config{})
 
 	// Initialize services (now with webhook service dependency)
-	a.userService = user.NewService(userRepo, user.Config{
+	a.userService = user.NewService(a.repo.User(), user.Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
 	}, a.webhookService)
-	a.sessionService = session.NewService(sessionRepo, session.Config{}, a.webhookService)
+	a.sessionService = session.NewService(a.repo.Session(), session.Config{}, a.webhookService)
 	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{})
-	a.organizationService = app.NewService(orgRepo, app.Config{})
+
+	// App service (platform tenant management)
+	a.appService = app.NewService(
+		a.repo.App(),
+		a.repo.App(),
+		a.repo.App(),
+		a.repo.App(),
+		app.Config{},
+		a.rbacService,
+	)
+
+	// Set hook registry on app service for app creation hooks
+	a.appService.App.SetHookRegistry(a.hookRegistry)
+
+	// Organization service (end-user workspace management)
+	a.orgService = organization.NewService(
+		a.repo.Organization(),
+		a.repo.OrganizationMember(),
+		a.repo.OrganizationTeam(),
+		a.repo.OrganizationInvitation(),
+		organization.Config{},
+		a.rbacService,
+	)
 
 	// Populate service registry BEFORE plugin initialization
 	// This allows plugins to access and decorate services
+	a.serviceRegistry.SetAppService(a.appService)
 	a.serviceRegistry.SetUserService(a.userService)
 	a.serviceRegistry.SetSessionService(a.sessionService)
 	a.serviceRegistry.SetAuthService(a.authService)
@@ -246,7 +263,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	a.serviceRegistry.SetDeviceService(a.deviceService)
 	a.serviceRegistry.SetRBACService(a.rbacService)
 	a.serviceRegistry.SetRateLimitService(a.rateLimitService)
-	a.serviceRegistry.SetOrganizationService(a.organizationService)
+	a.serviceRegistry.SetOrganizationService(a.orgService)
 
 	// Register services into Forge DI container
 	if err := a.registerServicesIntoContainer(db); err != nil {
@@ -257,7 +274,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// This is needed for role bootstrap later
 	platformOrg, err := a.ensurePlatformApp(ctx)
 	if err != nil {
-		return errs.InternalServerError("failed to ensure platform organization", err)
+		return errs.InternalServerError("failed to ensure platform app", err)
 	}
 
 	// Register default platform roles before plugins initialize
@@ -395,16 +412,18 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	if basePath == "" {
 		basePath = a.config.BasePath
 	}
-	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.twofaRepo)
+	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA())
 	audH := handlers.NewAuditHandler(a.auditService)
-	appH := handlers.NewAppHandler(a.organizationService, a.rateLimitService, a.sessionService, a.rbacService, a.userRoleRepo, a.roleRepo, a.policyRepo, a.config.RBACEnforce)
+	appH := handlers.NewAppHandler(a.appService, a.rateLimitService, a.sessionService, a.rbacService, a.repo.UserRole(), a.repo.Role(), a.repo.Policy(), a.config.RBACEnforce)
 
-	// Phase 10 handlers
+	// Phase 10 handlers (infrastructure only)
 	webhookH := handlers.NewWebhookHandler(a.webhookService)
-	notificationH := handlers.NewNotificationHandler(a.notificationService)
-	jwtH := jwtplugin.NewHandler(a.jwtService)
-	// Note: API key routes are now handled by the apikey plugin
-	// The core apikey.Service is still available for internal use
+
+	// NOTE: These features are now plugin-based (use RegisterPlugin):
+	// - JWT: Register plugins/jwt.NewPlugin() for JWT token management
+	// - API Keys: Register plugins/apikey.NewPlugin() for API key authentication
+	// - Notifications: Register plugins/notification.NewPlugin() for notification templates
+	// The core services remain available for internal use by other features
 
 	// Register core auth routes
 	routes.Register(router, basePath, h)
@@ -437,12 +456,10 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 		a.logger.Info("registered app RBAC routes")
 	}
 
-	// Phase 10 routes - create a scoped group for these routes
+	// Phase 10 routes - webhook management (infrastructure)
 	authGroup := router.Group(basePath)
 	routes.RegisterWebhookRoutes(authGroup, webhookH)
-	routes.RegisterNotificationRoutes(authGroup, notificationH)
-	routes.RegisterJWTRoutes(authGroup, jwtH)
-	// API key routes removed - handled by apikey plugin with middleware support
+	// NOTE: JWT, API Keys, and Notifications are now plugin-based - handled by plugins via RegisterRoutes()
 
 	// Register plugin routes (scoped to basePath)
 	if a.pluginRegistry != nil {
@@ -487,6 +504,11 @@ func (a *Auth) GetServiceRegistry() *registry.ServiceRegistry {
 	return a.serviceRegistry
 }
 
+// Repository implements core.Authsome.
+func (a *Auth) Repository() repo.Repository {
+	return a.repo
+}
+
 // GetHookRegistry returns the hook registry for plugins
 func (a *Auth) GetHookRegistry() *hooks.HookRegistry {
 	return a.hookRegistry
@@ -498,7 +520,7 @@ func (a *Auth) GetBasePath() string {
 }
 
 // GetPluginRegistry returns the plugin registry
-func (a *Auth) GetPluginRegistry() *plugins.Registry {
+func (a *Auth) GetPluginRegistry() plugins.PluginRegistry {
 	return a.pluginRegistry
 }
 
@@ -547,9 +569,15 @@ func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
 	}
 
 	if err := container.Register(ServiceApp, func(c forge.Container) (interface{}, error) {
-		return a.organizationService, nil
+		return a.appService, nil
 	}); err != nil {
 		return errs.InternalServerError("failed to register app service", err)
+	}
+
+	if err := container.Register(ServiceOrganization, func(c forge.Container) (interface{}, error) {
+		return a.orgService, nil
+	}); err != nil {
+		return errs.InternalServerError("failed to register organization service", err)
 	}
 
 	if err := container.Register(ServiceRateLimit, func(c forge.Container) (interface{}, error) {

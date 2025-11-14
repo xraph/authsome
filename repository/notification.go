@@ -8,6 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -17,43 +18,32 @@ type notificationRepository struct {
 }
 
 // NewNotificationRepository creates a new notification repository
-func NewNotificationRepository(db *bun.DB) *notificationRepository {
+func NewNotificationRepository(db *bun.DB) notification.Repository {
 	return &notificationRepository{db: db}
 }
 
+// =============================================================================
+// TEMPLATE OPERATIONS
+// =============================================================================
+
 // CreateTemplate creates a new notification template
-func (r *notificationRepository) CreateTemplate(ctx context.Context, template *notification.Template) error {
+func (r *notificationRepository) CreateTemplate(ctx context.Context, template *schema.NotificationTemplate) error {
 	// Set default language if not provided
-	language := template.Language
-	if language == "" {
-		language = "en"
+	if template.Language == "" {
+		template.Language = "en"
 	}
 
-	schemaTemplate := &schema.NotificationTemplate{
-		ID:             template.ID,
-		OrganizationID: template.OrganizationID,
-		TemplateKey:    template.TemplateKey,
-		Name:           template.Name,
-		Type:           string(template.Type),
-		Language:       language,
-		Subject:        template.Subject,
-		Body:           template.Body,
-		Variables:      template.Variables,
-		Metadata:       template.Metadata,
-		Active:         template.Active,
-		CreatedAt:      template.CreatedAt,
-		UpdatedAt:      template.UpdatedAt,
-	}
-	_, err := r.db.NewInsert().Model(schemaTemplate).Exec(ctx)
+	_, err := r.db.NewInsert().Model(template).Exec(ctx)
 	return err
 }
 
 // FindTemplateByID finds a template by ID
-func (r *notificationRepository) FindTemplateByID(ctx context.Context, id xid.ID) (*notification.Template, error) {
-	schemaTemplate := &schema.NotificationTemplate{}
+func (r *notificationRepository) FindTemplateByID(ctx context.Context, id xid.ID) (*schema.NotificationTemplate, error) {
+	template := &schema.NotificationTemplate{}
 	err := r.db.NewSelect().
-		Model(schemaTemplate).
+		Model(template).
 		Where("id = ?", id).
+		Where("deleted_at IS NULL").
 		Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -61,28 +51,16 @@ func (r *notificationRepository) FindTemplateByID(ctx context.Context, id xid.ID
 	if err != nil {
 		return nil, err
 	}
-
-	return &notification.Template{
-		ID:             schemaTemplate.ID,
-		OrganizationID: schemaTemplate.OrganizationID,
-		Name:           schemaTemplate.Name,
-		Type:           notification.NotificationType(schemaTemplate.Type),
-		Subject:        schemaTemplate.Subject,
-		Body:           schemaTemplate.Body,
-		Variables:      schemaTemplate.Variables,
-		Metadata:       schemaTemplate.Metadata,
-		Active:         schemaTemplate.Active,
-		CreatedAt:      schemaTemplate.CreatedAt,
-		UpdatedAt:      schemaTemplate.UpdatedAt,
-	}, nil
+	return template, nil
 }
 
-// FindTemplateByName finds a template by organization ID and name
-func (r *notificationRepository) FindTemplateByName(ctx context.Context, orgID, name string) (*notification.Template, error) {
-	schemaTemplate := &schema.NotificationTemplate{}
+// FindTemplateByName finds a template by app ID and name
+func (r *notificationRepository) FindTemplateByName(ctx context.Context, appID xid.ID, name string) (*schema.NotificationTemplate, error) {
+	template := &schema.NotificationTemplate{}
 	err := r.db.NewSelect().
-		Model(schemaTemplate).
-		Where("organization_id = ? AND name = ? AND active = true", orgID, name).
+		Model(template).
+		Where("app_id = ? AND name = ? AND active = true", appID, name).
+		Where("deleted_at IS NULL").
 		Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -90,31 +68,17 @@ func (r *notificationRepository) FindTemplateByName(ctx context.Context, orgID, 
 	if err != nil {
 		return nil, err
 	}
-
-	return &notification.Template{
-		ID:             schemaTemplate.ID,
-		OrganizationID: schemaTemplate.OrganizationID,
-		TemplateKey:    schemaTemplate.TemplateKey,
-		Name:           schemaTemplate.Name,
-		Type:           notification.NotificationType(schemaTemplate.Type),
-		Language:       schemaTemplate.Language,
-		Subject:        schemaTemplate.Subject,
-		Body:           schemaTemplate.Body,
-		Variables:      schemaTemplate.Variables,
-		Metadata:       schemaTemplate.Metadata,
-		Active:         schemaTemplate.Active,
-		CreatedAt:      schemaTemplate.CreatedAt,
-		UpdatedAt:      schemaTemplate.UpdatedAt,
-	}, nil
+	return template, nil
 }
 
-// FindTemplateByKey finds a template by organization, key, type, and language
-func (r *notificationRepository) FindTemplateByKey(ctx context.Context, orgID, templateKey, notifType, language string) (*notification.Template, error) {
-	schemaTemplate := &schema.NotificationTemplate{}
+// FindTemplateByKey finds a template by app, key, type, and language
+func (r *notificationRepository) FindTemplateByKey(ctx context.Context, appID xid.ID, templateKey, notifType, language string) (*schema.NotificationTemplate, error) {
+	template := &schema.NotificationTemplate{}
 
 	query := r.db.NewSelect().
-		Model(schemaTemplate).
-		Where("organization_id = ? AND template_key = ? AND active = true", orgID, templateKey)
+		Model(template).
+		Where("app_id = ? AND template_key = ? AND active = true", appID, templateKey).
+		Where("deleted_at IS NULL")
 
 	if notifType != "" {
 		query = query.Where("type = ?", notifType)
@@ -130,8 +94,9 @@ func (r *notificationRepository) FindTemplateByKey(ctx context.Context, orgID, t
 		// If exact language not found and language was specified, try default "en"
 		if language != "" && language != "en" {
 			query = r.db.NewSelect().
-				Model(schemaTemplate).
-				Where("organization_id = ? AND template_key = ? AND language = ? AND active = true", orgID, templateKey, "en")
+				Model(template).
+				Where("app_id = ? AND template_key = ? AND language = ? AND active = true", appID, templateKey, "en").
+				Where("deleted_at IS NULL")
 
 			if notifType != "" {
 				query = query.Where("type = ?", notifType)
@@ -149,84 +114,44 @@ func (r *notificationRepository) FindTemplateByKey(ctx context.Context, orgID, t
 		return nil, err
 	}
 
-	return &notification.Template{
-		ID:             schemaTemplate.ID,
-		OrganizationID: schemaTemplate.OrganizationID,
-		TemplateKey:    schemaTemplate.TemplateKey,
-		Name:           schemaTemplate.Name,
-		Type:           notification.NotificationType(schemaTemplate.Type),
-		Language:       schemaTemplate.Language,
-		Subject:        schemaTemplate.Subject,
-		Body:           schemaTemplate.Body,
-		Variables:      schemaTemplate.Variables,
-		Metadata:       schemaTemplate.Metadata,
-		Active:         schemaTemplate.Active,
-		CreatedAt:      schemaTemplate.CreatedAt,
-		UpdatedAt:      schemaTemplate.UpdatedAt,
-	}, nil
+	return template, nil
 }
 
 // ListTemplates lists templates with pagination
-func (r *notificationRepository) ListTemplates(ctx context.Context, req *notification.ListTemplatesRequest) ([]*notification.Template, int64, error) {
-	var schemaTemplates []*schema.NotificationTemplate
+func (r *notificationRepository) ListTemplates(ctx context.Context, filter *notification.ListTemplatesFilter) (*pagination.PageResponse[*schema.NotificationTemplate], error) {
+	var templates []*schema.NotificationTemplate
+
 	query := r.db.NewSelect().
-		Model(&schemaTemplates).
-		Where("organization_id = ?", req.OrganizationID)
+		Model(&templates).
+		Where("app_id = ?", filter.AppID).
+		Where("deleted_at IS NULL")
 
-	if req.Type != "" {
-		query = query.Where("type = ?", string(req.Type))
+	if filter.Type != nil {
+		query = query.Where("type = ?", string(*filter.Type))
 	}
-	if req.Language != "" {
-		query = query.Where("language = ?", req.Language)
+	if filter.Language != nil {
+		query = query.Where("language = ?", *filter.Language)
 	}
-	if req.Active != nil {
-		query = query.Where("active = ?", *req.Active)
+	if filter.Active != nil {
+		query = query.Where("active = ?", *filter.Active)
 	}
 
-	err := query.Order("created_at DESC").
-		Limit(req.Limit).
-		Offset(req.Offset).
+	// Apply pagination
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = query.
+		Order("created_at DESC").
+		Limit(filter.GetLimit()).
+		Offset(filter.GetOffset()).
 		Scan(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	// Count total
-	countQuery := r.db.NewSelect().
-		Model((*schema.NotificationTemplate)(nil)).
-		Where("organization_id = ?", req.OrganizationID)
-	if req.Type != "" {
-		countQuery = countQuery.Where("type = ?", string(req.Type))
-	}
-	if req.Active != nil {
-		countQuery = countQuery.Where("active = ?", *req.Active)
-	}
-	total, err := countQuery.Count(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Convert to core types
-	templates := make([]*notification.Template, len(schemaTemplates))
-	for i, st := range schemaTemplates {
-		templates[i] = &notification.Template{
-			ID:             st.ID,
-			OrganizationID: st.OrganizationID,
-			TemplateKey:    st.TemplateKey,
-			Name:           st.Name,
-			Type:           notification.NotificationType(st.Type),
-			Language:       st.Language,
-			Subject:        st.Subject,
-			Body:           st.Body,
-			Variables:      st.Variables,
-			Metadata:       st.Metadata,
-			Active:         st.Active,
-			CreatedAt:      st.CreatedAt,
-			UpdatedAt:      st.UpdatedAt,
-		}
-	}
-
-	return templates, int64(total), nil
+	return pagination.NewPageResponse(templates, int64(total), &filter.PaginationParams), nil
 }
 
 // UpdateTemplate updates a template
@@ -234,8 +159,12 @@ func (r *notificationRepository) UpdateTemplate(ctx context.Context, id xid.ID, 
 	query := r.db.NewUpdate().
 		Model((*schema.NotificationTemplate)(nil)).
 		Where("id = ?", id).
+		Where("deleted_at IS NULL").
 		Set("updated_at = ?", time.Now())
 
+	if req.Name != nil {
+		query = query.Set("name = ?", *req.Name)
+	}
 	if req.Subject != nil {
 		query = query.Set("subject = ?", *req.Subject)
 	}
@@ -256,6 +185,20 @@ func (r *notificationRepository) UpdateTemplate(ctx context.Context, id xid.ID, 
 	return err
 }
 
+// UpdateTemplateMetadata updates template metadata fields (isDefault, isModified, defaultHash)
+func (r *notificationRepository) UpdateTemplateMetadata(ctx context.Context, id xid.ID, isDefault, isModified bool, defaultHash string) error {
+	_, err := r.db.NewUpdate().
+		Model((*schema.NotificationTemplate)(nil)).
+		Where("id = ?", id).
+		Where("deleted_at IS NULL").
+		Set("is_default = ?", isDefault).
+		Set("is_modified = ?", isModified).
+		Set("default_hash = ?", defaultHash).
+		Set("updated_at = ?", time.Now()).
+		Exec(ctx)
+	return err
+}
+
 // DeleteTemplate deletes a template (soft delete)
 func (r *notificationRepository) DeleteTemplate(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewUpdate().
@@ -266,34 +209,21 @@ func (r *notificationRepository) DeleteTemplate(ctx context.Context, id xid.ID) 
 	return err
 }
 
+// =============================================================================
+// NOTIFICATION OPERATIONS
+// =============================================================================
+
 // CreateNotification creates a new notification
-func (r *notificationRepository) CreateNotification(ctx context.Context, notification *notification.Notification) error {
-	schemaNotification := &schema.Notification{
-		ID:             notification.ID,
-		OrganizationID: notification.OrganizationID,
-		TemplateID:     notification.TemplateID,
-		Type:           string(notification.Type),
-		Recipient:      notification.Recipient,
-		Subject:        notification.Subject,
-		Body:           notification.Body,
-		Status:         string(notification.Status),
-		Error:          notification.Error,
-		ProviderID:     notification.ProviderID,
-		Metadata:       notification.Metadata,
-		SentAt:         notification.SentAt,
-		DeliveredAt:    notification.DeliveredAt,
-		CreatedAt:      notification.CreatedAt,
-		UpdatedAt:      notification.UpdatedAt,
-	}
-	_, err := r.db.NewInsert().Model(schemaNotification).Exec(ctx)
+func (r *notificationRepository) CreateNotification(ctx context.Context, notif *schema.Notification) error {
+	_, err := r.db.NewInsert().Model(notif).Exec(ctx)
 	return err
 }
 
 // FindNotificationByID finds a notification by ID
-func (r *notificationRepository) FindNotificationByID(ctx context.Context, id xid.ID) (*notification.Notification, error) {
-	schemaNotification := &schema.Notification{}
+func (r *notificationRepository) FindNotificationByID(ctx context.Context, id xid.ID) (*schema.Notification, error) {
+	notif := &schema.Notification{}
 	err := r.db.NewSelect().
-		Model(schemaNotification).
+		Model(notif).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
@@ -302,92 +232,43 @@ func (r *notificationRepository) FindNotificationByID(ctx context.Context, id xi
 	if err != nil {
 		return nil, err
 	}
-
-	return &notification.Notification{
-		ID:             schemaNotification.ID,
-		OrganizationID: schemaNotification.OrganizationID,
-		TemplateID:     schemaNotification.TemplateID,
-		Type:           notification.NotificationType(schemaNotification.Type),
-		Recipient:      schemaNotification.Recipient,
-		Subject:        schemaNotification.Subject,
-		Body:           schemaNotification.Body,
-		Status:         notification.NotificationStatus(schemaNotification.Status),
-		Error:          schemaNotification.Error,
-		ProviderID:     schemaNotification.ProviderID,
-		Metadata:       schemaNotification.Metadata,
-		SentAt:         schemaNotification.SentAt,
-		DeliveredAt:    schemaNotification.DeliveredAt,
-		CreatedAt:      schemaNotification.CreatedAt,
-		UpdatedAt:      schemaNotification.UpdatedAt,
-	}, nil
+	return notif, nil
 }
 
 // ListNotifications lists notifications with pagination
-func (r *notificationRepository) ListNotifications(ctx context.Context, req *notification.ListNotificationsRequest) ([]*notification.Notification, int64, error) {
-	var schemaNotifications []*schema.Notification
+func (r *notificationRepository) ListNotifications(ctx context.Context, filter *notification.ListNotificationsFilter) (*pagination.PageResponse[*schema.Notification], error) {
+	var notifications []*schema.Notification
+
 	query := r.db.NewSelect().
-		Model(&schemaNotifications).
-		Where("organization_id = ?", req.OrganizationID)
+		Model(&notifications).
+		Where("app_id = ?", filter.AppID)
 
-	if req.Type != "" {
-		query = query.Where("type = ?", string(req.Type))
+	if filter.Type != nil {
+		query = query.Where("type = ?", string(*filter.Type))
 	}
-	if req.Status != "" {
-		query = query.Where("status = ?", string(req.Status))
+	if filter.Status != nil {
+		query = query.Where("status = ?", string(*filter.Status))
 	}
-	if req.Recipient != "" {
-		query = query.Where("recipient = ?", req.Recipient)
+	if filter.Recipient != nil {
+		query = query.Where("recipient = ?", *filter.Recipient)
 	}
 
-	err := query.Order("created_at DESC").
-		Limit(req.Limit).
-		Offset(req.Offset).
+	// Apply pagination
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = query.
+		Order("created_at DESC").
+		Limit(filter.GetLimit()).
+		Offset(filter.GetOffset()).
 		Scan(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	// Count total
-	countQuery := r.db.NewSelect().
-		Model((*schema.Notification)(nil)).
-		Where("organization_id = ?", req.OrganizationID)
-	if req.Type != "" {
-		countQuery = countQuery.Where("type = ?", string(req.Type))
-	}
-	if req.Status != "" {
-		countQuery = countQuery.Where("status = ?", string(req.Status))
-	}
-	if req.Recipient != "" {
-		countQuery = countQuery.Where("recipient = ?", req.Recipient)
-	}
-	total, err := countQuery.Count(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Convert to core types
-	notifications := make([]*notification.Notification, len(schemaNotifications))
-	for i, sn := range schemaNotifications {
-		notifications[i] = &notification.Notification{
-			ID:             sn.ID,
-			OrganizationID: sn.OrganizationID,
-			TemplateID:     sn.TemplateID,
-			Type:           notification.NotificationType(sn.Type),
-			Recipient:      sn.Recipient,
-			Subject:        sn.Subject,
-			Body:           sn.Body,
-			Status:         notification.NotificationStatus(sn.Status),
-			Error:          sn.Error,
-			ProviderID:     sn.ProviderID,
-			Metadata:       sn.Metadata,
-			SentAt:         sn.SentAt,
-			DeliveredAt:    sn.DeliveredAt,
-			CreatedAt:      sn.CreatedAt,
-			UpdatedAt:      sn.UpdatedAt,
-		}
-	}
-
-	return notifications, int64(total), nil
+	return pagination.NewPageResponse(notifications, int64(total), &filter.PaginationParams), nil
 }
 
 // UpdateNotificationStatus updates the status of a notification
@@ -420,6 +301,10 @@ func (r *notificationRepository) UpdateNotificationDelivery(ctx context.Context,
 		Exec(ctx)
 	return err
 }
+
+// =============================================================================
+// CLEANUP OPERATIONS
+// =============================================================================
 
 // CleanupOldNotifications removes old notifications
 func (r *notificationRepository) CleanupOldNotifications(ctx context.Context, olderThan time.Time) error {

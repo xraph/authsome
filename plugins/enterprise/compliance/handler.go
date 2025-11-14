@@ -2,7 +2,12 @@ package compliance
 
 import (
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/forge"
 )
 
 // Handler handles HTTP requests for compliance endpoints
@@ -23,12 +28,11 @@ func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 
 // CreateProfile creates a new compliance profile
 // POST /auth/compliance/profiles
-func (h *Handler) CreateProfile(c Context) error {
+func (h *Handler) CreateProfile(c forge.Context) error {
 	var req CreateProfileRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
-			Error:   err.Error(),
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
@@ -42,19 +46,19 @@ func (h *Handler) CreateProfile(c Context) error {
 
 // CreateProfileFromTemplate creates a profile from a template
 // POST /auth/compliance/profiles/from-template
-func (h *Handler) CreateProfileFromTemplate(c Context) error {
+func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
 	var req struct {
-		OrganizationID string             `json:"organizationId" validate:"required"`
-		Standard       ComplianceStandard `json:"standard" validate:"required"`
+		AppID    string             `json:"appId" validate:"required"`
+		Standard ComplianceStandard `json:"standard" validate:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
-	profile, err := h.service.CreateProfileFromTemplate(c.Request().Context(), req.OrganizationID, req.Standard)
+	profile, err := h.service.CreateProfileFromTemplate(c.Request().Context(), req.AppID, req.Standard)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -64,7 +68,7 @@ func (h *Handler) CreateProfileFromTemplate(c Context) error {
 
 // GetProfile retrieves a compliance profile
 // GET /auth/compliance/profiles/:id
-func (h *Handler) GetProfile(c Context) error {
+func (h *Handler) GetProfile(c forge.Context) error {
 	id := c.Param("id")
 
 	profile, err := h.service.GetProfile(c.Request().Context(), id)
@@ -75,12 +79,12 @@ func (h *Handler) GetProfile(c Context) error {
 	return c.JSON(http.StatusOK, profile)
 }
 
-// GetOrganizationProfile retrieves the compliance profile for an organization
-// GET /auth/compliance/organizations/:orgId/profile
-func (h *Handler) GetOrganizationProfile(c Context) error {
-	orgID := c.Param("orgId")
+// GetAppProfile retrieves the compliance profile for an app
+// GET /auth/compliance/apps/:appId/profile
+func (h *Handler) GetAppProfile(c forge.Context) error {
+	appID := c.Param("appId")
 
-	profile, err := h.service.GetProfileByOrganization(c.Request().Context(), orgID)
+	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -90,13 +94,13 @@ func (h *Handler) GetOrganizationProfile(c Context) error {
 
 // UpdateProfile updates a compliance profile
 // PUT /auth/compliance/profiles/:id
-func (h *Handler) UpdateProfile(c Context) error {
+func (h *Handler) UpdateProfile(c forge.Context) error {
 	id := c.Param("id")
 
 	var req UpdateProfileRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
@@ -110,7 +114,7 @@ func (h *Handler) UpdateProfile(c Context) error {
 
 // DeleteProfile deletes a compliance profile
 // DELETE /auth/compliance/profiles/:id
-func (h *Handler) DeleteProfile(c Context) error {
+func (h *Handler) DeleteProfile(c forge.Context) error {
 	id := c.Param("id")
 
 	if err := h.service.repo.DeleteProfile(c.Request().Context(), id); err != nil {
@@ -122,12 +126,12 @@ func (h *Handler) DeleteProfile(c Context) error {
 
 // ===== Status & Dashboard Handlers =====
 
-// GetComplianceStatus gets overall compliance status for an organization
-// GET /auth/compliance/organizations/:orgId/status
-func (h *Handler) GetComplianceStatus(c Context) error {
-	orgID := c.Param("orgId")
+// GetComplianceStatus gets overall compliance status for an app
+// GET /auth/compliance/apps/:appId/status
+func (h *Handler) GetComplianceStatus(c forge.Context) error {
+	appID := c.Param("appId")
 
-	status, err := h.service.GetComplianceStatus(c.Request().Context(), orgID)
+	status, err := h.service.GetComplianceStatus(c.Request().Context(), appID)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -136,37 +140,46 @@ func (h *Handler) GetComplianceStatus(c Context) error {
 }
 
 // GetDashboard gets compliance dashboard data
-// GET /auth/compliance/organizations/:orgId/dashboard
-func (h *Handler) GetDashboard(c Context) error {
-	orgID := c.Param("orgId")
+// GET /auth/compliance/apps/:appId/dashboard
+func (h *Handler) GetDashboard(c forge.Context) error {
+	appID := c.Param("appId")
 	ctx := c.Request().Context()
 
 	// Get profile
-	profile, err := h.service.GetProfileByOrganization(ctx, orgID)
+	profile, err := h.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	// Get status
-	status, _ := h.service.GetComplianceStatus(ctx, orgID)
+	status, _ := h.service.GetComplianceStatus(ctx, appID)
 
 	// Get recent checks
-	checks, _ := h.service.repo.ListChecks(ctx, profile.ID, CheckFilters{
-		Limit: 10,
-	})
+	profileIDFilter := profile.ID
+	statusOpen := "open"
+	checksFilter := &ListChecksFilter{
+		PaginationParams: pagination.PaginationParams{Limit: 10, Offset: 0},
+		ProfileID:        &profileIDFilter,
+	}
+	checksResp, _ := h.service.ListChecks(ctx, checksFilter)
+	checks := checksResp.Data
 
 	// Get open violations
-	violations, _ := h.service.repo.ListViolations(ctx, ViolationFilters{
-		OrganizationID: orgID,
-		Status:         "open",
-		Limit:          10,
-	})
+	violationsFilter := &ListViolationsFilter{
+		PaginationParams: pagination.PaginationParams{Limit: 10, Offset: 0},
+		AppID:            &appID,
+		Status:           &statusOpen,
+	}
+	violationsResp, _ := h.service.ListViolations(ctx, violationsFilter)
+	violations := violationsResp.Data
 
 	// Get recent reports
-	reports, _ := h.service.repo.ListReports(ctx, ReportFilters{
-		OrganizationID: orgID,
-		Limit:          5,
-	})
+	reportsFilter := &ListReportsFilter{
+		PaginationParams: pagination.PaginationParams{Limit: 5, Offset: 0},
+		AppID:            &appID,
+	}
+	reportsResp, _ := h.service.ListReports(ctx, reportsFilter)
+	reports := reportsResp.Data
 
 	dashboard := map[string]interface{}{
 		"profile":    profile,
@@ -183,7 +196,7 @@ func (h *Handler) GetDashboard(c Context) error {
 
 // RunCheck executes a compliance check
 // POST /auth/compliance/profiles/:profileId/checks
-func (h *Handler) RunCheck(c Context) error {
+func (h *Handler) RunCheck(c forge.Context) error {
 	profileID := c.Param("profileId")
 
 	var req struct {
@@ -191,8 +204,8 @@ func (h *Handler) RunCheck(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
@@ -206,28 +219,49 @@ func (h *Handler) RunCheck(c Context) error {
 
 // ListChecks lists compliance checks
 // GET /auth/compliance/profiles/:profileId/checks
-func (h *Handler) ListChecks(c Context) error {
-	profileID := c.Param("profileId")
+func (h *Handler) ListChecks(c forge.Context) error {
+	q := c.Request().URL.Query()
 
-	filters := CheckFilters{
-		ProfileID: profileID,
-		CheckType: c.Query("checkType"),
-		Status:    c.Query("status"),
-		Limit:     c.QueryInt("limit", 20),
-		Offset:    c.QueryInt("offset", 0),
+	// Parse pagination
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	// Build filter
+	filter := &ListChecksFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 	}
 
-	checks, err := h.service.repo.ListChecks(c.Request().Context(), profileID, filters)
+	// Parse optional filters
+	if profileID := c.Param("profileId"); profileID != "" {
+		filter.ProfileID = &profileID
+	}
+	if appID := q.Get("appId"); appID != "" {
+		filter.AppID = &appID
+	}
+	if checkType := q.Get("checkType"); checkType != "" {
+		filter.CheckType = &checkType
+	}
+	if status := q.Get("status"); status != "" {
+		filter.Status = &status
+	}
+
+	resp, err := h.service.ListChecks(c.Request().Context(), filter)
 	if err != nil {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, checks)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetCheck retrieves a compliance check
 // GET /auth/compliance/checks/:id
-func (h *Handler) GetCheck(c Context) error {
+func (h *Handler) GetCheck(c forge.Context) error {
 	id := c.Param("id")
 
 	check, err := h.service.repo.GetCheck(c.Request().Context(), id)
@@ -241,31 +275,56 @@ func (h *Handler) GetCheck(c Context) error {
 // ===== Violation Handlers =====
 
 // ListViolations lists compliance violations
-// GET /auth/compliance/organizations/:orgId/violations
-func (h *Handler) ListViolations(c Context) error {
-	orgID := c.Param("orgId")
+// GET /auth/compliance/apps/:appId/violations
+func (h *Handler) ListViolations(c forge.Context) error {
+	q := c.Request().URL.Query()
 
-	filters := ViolationFilters{
-		OrganizationID: orgID,
-		UserID:         c.Query("userId"),
-		ViolationType:  c.Query("violationType"),
-		Severity:       c.Query("severity"),
-		Status:         c.Query("status"),
-		Limit:          c.QueryInt("limit", 20),
-		Offset:         c.QueryInt("offset", 0),
+	// Parse pagination
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	// Build filter
+	filter := &ListViolationsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 	}
 
-	violations, err := h.service.repo.ListViolations(c.Request().Context(), filters)
+	// Parse optional filters
+	if appID := c.Param("appId"); appID != "" {
+		filter.AppID = &appID
+	}
+	if profileID := q.Get("profileId"); profileID != "" {
+		filter.ProfileID = &profileID
+	}
+	if userID := q.Get("userId"); userID != "" {
+		filter.UserID = &userID
+	}
+	if violationType := q.Get("violationType"); violationType != "" {
+		filter.ViolationType = &violationType
+	}
+	if severity := q.Get("severity"); severity != "" {
+		filter.Severity = &severity
+	}
+	if status := q.Get("status"); status != "" {
+		filter.Status = &status
+	}
+
+	resp, err := h.service.ListViolations(c.Request().Context(), filter)
 	if err != nil {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, violations)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetViolation retrieves a compliance violation
 // GET /auth/compliance/violations/:id
-func (h *Handler) GetViolation(c Context) error {
+func (h *Handler) GetViolation(c forge.Context) error {
 	id := c.Param("id")
 
 	violation, err := h.service.repo.GetViolation(c.Request().Context(), id)
@@ -278,7 +337,7 @@ func (h *Handler) GetViolation(c Context) error {
 
 // ResolveViolation resolves a compliance violation
 // PUT /auth/compliance/violations/:id/resolve
-func (h *Handler) ResolveViolation(c Context) error {
+func (h *Handler) ResolveViolation(c forge.Context) error {
 	id := c.Param("id")
 	resolvedBy := c.Get("user_id").(string) // From auth middleware
 
@@ -294,9 +353,9 @@ func (h *Handler) ResolveViolation(c Context) error {
 // ===== Report Handlers =====
 
 // GenerateReport generates a compliance report
-// POST /auth/compliance/organizations/:orgId/reports
-func (h *Handler) GenerateReport(c Context) error {
-	orgID := c.Param("orgId")
+// POST /auth/compliance/apps/:appId/reports
+func (h *Handler) GenerateReport(c forge.Context) error {
+	appID := c.Param("appId")
 
 	var req struct {
 		ReportType string             `json:"reportType" validate:"required"`
@@ -306,20 +365,20 @@ func (h *Handler) GenerateReport(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
 	// Create report record
 	report := &ComplianceReport{
-		OrganizationID: orgID,
-		ReportType:     req.ReportType,
-		Standard:       req.Standard,
-		Period:         req.Period,
-		Format:         req.Format,
-		Status:         "generating",
-		GeneratedBy:    c.Get("user_id").(string),
+		AppID:       appID,
+		ReportType:  req.ReportType,
+		Standard:    req.Standard,
+		Period:      req.Period,
+		Format:      req.Format,
+		Status:      "generating",
+		GeneratedBy: c.Get("user_id").(string),
 	}
 
 	if err := h.service.repo.CreateReport(c.Request().Context(), report); err != nil {
@@ -333,29 +392,53 @@ func (h *Handler) GenerateReport(c Context) error {
 }
 
 // ListReports lists compliance reports
-// GET /auth/compliance/organizations/:orgId/reports
-func (h *Handler) ListReports(c Context) error {
-	orgID := c.Param("orgId")
+// GET /auth/compliance/apps/:appId/reports
+func (h *Handler) ListReports(c forge.Context) error {
+	q := c.Request().URL.Query()
 
-	filters := ReportFilters{
-		OrganizationID: orgID,
-		ReportType:     c.Query("reportType"),
-		Status:         c.Query("status"),
-		Limit:          c.QueryInt("limit", 20),
-		Offset:         c.QueryInt("offset", 0),
+	// Parse pagination
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	// Build filter
+	filter := &ListReportsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 	}
 
-	reports, err := h.service.repo.ListReports(c.Request().Context(), filters)
+	// Parse optional filters
+	if appID := c.Param("appId"); appID != "" {
+		filter.AppID = &appID
+	}
+	if profileID := q.Get("profileId"); profileID != "" {
+		filter.ProfileID = &profileID
+	}
+	if reportType := q.Get("reportType"); reportType != "" {
+		filter.ReportType = &reportType
+	}
+	if status := q.Get("status"); status != "" {
+		filter.Status = &status
+	}
+	if format := q.Get("format"); format != "" {
+		filter.Format = &format
+	}
+
+	resp, err := h.service.ListReports(c.Request().Context(), filter)
 	if err != nil {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, reports)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetReport retrieves a compliance report
 // GET /auth/compliance/reports/:id
-func (h *Handler) GetReport(c Context) error {
+func (h *Handler) GetReport(c forge.Context) error {
 	id := c.Param("id")
 
 	report, err := h.service.repo.GetReport(c.Request().Context(), id)
@@ -368,7 +451,7 @@ func (h *Handler) GetReport(c Context) error {
 
 // DownloadReport downloads a compliance report file
 // GET /auth/compliance/reports/:id/download
-func (h *Handler) DownloadReport(c Context) error {
+func (h *Handler) DownloadReport(c forge.Context) error {
 	id := c.Param("id")
 
 	report, err := h.service.repo.GetReport(c.Request().Context(), id)
@@ -377,8 +460,8 @@ func (h *Handler) DownloadReport(c Context) error {
 	}
 
 	if report.Status != "ready" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Report is not ready for download",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Report is not ready for download",
 		})
 	}
 
@@ -395,9 +478,9 @@ func (h *Handler) generateReportAsync(report *ComplianceReport) {
 // ===== Evidence Handlers =====
 
 // CreateEvidence creates compliance evidence
-// POST /auth/compliance/organizations/:orgId/evidence
-func (h *Handler) CreateEvidence(c Context) error {
-	orgID := c.Param("orgId")
+// POST /auth/compliance/apps/:appId/evidence
+func (h *Handler) CreateEvidence(c forge.Context) error {
+	appID := c.Param("appId")
 
 	var req struct {
 		EvidenceType string             `json:"evidenceType" validate:"required"`
@@ -409,27 +492,27 @@ func (h *Handler) CreateEvidence(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
 	// Get profile
-	profile, err := h.service.GetProfileByOrganization(c.Request().Context(), orgID)
+	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	evidence := &ComplianceEvidence{
-		ProfileID:      profile.ID,
-		OrganizationID: orgID,
-		EvidenceType:   req.EvidenceType,
-		Standard:       req.Standard,
-		ControlID:      req.ControlID,
-		Title:          req.Title,
-		Description:    req.Description,
-		FileURL:        req.FileURL,
-		CollectedBy:    c.Get("user_id").(string),
+		ProfileID:    profile.ID,
+		AppID:        appID,
+		EvidenceType: req.EvidenceType,
+		Standard:     req.Standard,
+		ControlID:    req.ControlID,
+		Title:        req.Title,
+		Description:  req.Description,
+		FileURL:      req.FileURL,
+		CollectedBy:  c.Get("user_id").(string),
 	}
 
 	if err := h.service.repo.CreateEvidence(c.Request().Context(), evidence); err != nil {
@@ -440,29 +523,50 @@ func (h *Handler) CreateEvidence(c Context) error {
 }
 
 // ListEvidence lists compliance evidence
-// GET /auth/compliance/organizations/:orgId/evidence
-func (h *Handler) ListEvidence(c Context) error {
-	orgID := c.Param("orgId")
+// GET /auth/compliance/apps/:appId/evidence
+func (h *Handler) ListEvidence(c forge.Context) error {
+	q := c.Request().URL.Query()
 
-	filters := EvidenceFilters{
-		OrganizationID: orgID,
-		EvidenceType:   c.Query("evidenceType"),
-		ControlID:      c.Query("controlId"),
-		Limit:          c.QueryInt("limit", 20),
-		Offset:         c.QueryInt("offset", 0),
+	// Parse pagination
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	// Build filter
+	filter := &ListEvidenceFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 	}
 
-	evidence, err := h.service.repo.ListEvidence(c.Request().Context(), filters)
+	// Parse optional filters
+	if appID := c.Param("appId"); appID != "" {
+		filter.AppID = &appID
+	}
+	if profileID := q.Get("profileId"); profileID != "" {
+		filter.ProfileID = &profileID
+	}
+	if evidenceType := q.Get("evidenceType"); evidenceType != "" {
+		filter.EvidenceType = &evidenceType
+	}
+	if controlID := q.Get("controlId"); controlID != "" {
+		filter.ControlID = &controlID
+	}
+
+	resp, err := h.service.ListEvidence(c.Request().Context(), filter)
 	if err != nil {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, evidence)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetEvidence retrieves compliance evidence
 // GET /auth/compliance/evidence/:id
-func (h *Handler) GetEvidence(c Context) error {
+func (h *Handler) GetEvidence(c forge.Context) error {
 	id := c.Param("id")
 
 	evidence, err := h.service.repo.GetEvidence(c.Request().Context(), id)
@@ -475,7 +579,7 @@ func (h *Handler) GetEvidence(c Context) error {
 
 // DeleteEvidence deletes compliance evidence
 // DELETE /auth/compliance/evidence/:id
-func (h *Handler) DeleteEvidence(c Context) error {
+func (h *Handler) DeleteEvidence(c forge.Context) error {
 	id := c.Param("id")
 
 	if err := h.service.repo.DeleteEvidence(c.Request().Context(), id); err != nil {
@@ -488,9 +592,9 @@ func (h *Handler) DeleteEvidence(c Context) error {
 // ===== Policy Handlers =====
 
 // CreatePolicy creates a compliance policy
-// POST /auth/compliance/organizations/:orgId/policies
-func (h *Handler) CreatePolicy(c Context) error {
-	orgID := c.Param("orgId")
+// POST /auth/compliance/apps/:appId/policies
+func (h *Handler) CreatePolicy(c forge.Context) error {
+	appID := c.Param("appId")
 
 	var req struct {
 		PolicyType string             `json:"policyType" validate:"required"`
@@ -501,26 +605,26 @@ func (h *Handler) CreatePolicy(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
 	// Get profile
-	profile, err := h.service.GetProfileByOrganization(c.Request().Context(), orgID)
+	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	policy := &CompliancePolicy{
-		ProfileID:      profile.ID,
-		OrganizationID: orgID,
-		PolicyType:     req.PolicyType,
-		Standard:       req.Standard,
-		Title:          req.Title,
-		Version:        req.Version,
-		Content:        req.Content,
-		Status:         "draft",
+		ProfileID:  profile.ID,
+		AppID:      appID,
+		PolicyType: req.PolicyType,
+		Standard:   req.Standard,
+		Title:      req.Title,
+		Version:    req.Version,
+		Content:    req.Content,
+		Status:     "draft",
 	}
 
 	if err := h.service.repo.CreatePolicy(c.Request().Context(), policy); err != nil {
@@ -531,29 +635,50 @@ func (h *Handler) CreatePolicy(c Context) error {
 }
 
 // ListPolicies lists compliance policies
-// GET /auth/compliance/organizations/:orgId/policies
-func (h *Handler) ListPolicies(c Context) error {
-	orgID := c.Param("orgId")
+// GET /auth/compliance/apps/:appId/policies
+func (h *Handler) ListPolicies(c forge.Context) error {
+	q := c.Request().URL.Query()
 
-	filters := PolicyFilters{
-		OrganizationID: orgID,
-		PolicyType:     c.Query("policyType"),
-		Status:         c.Query("status"),
-		Limit:          c.QueryInt("limit", 20),
-		Offset:         c.QueryInt("offset", 0),
+	// Parse pagination
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	// Build filter
+	filter := &ListPoliciesFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 	}
 
-	policies, err := h.service.repo.ListPolicies(c.Request().Context(), filters)
+	// Parse optional filters
+	if appID := c.Param("appId"); appID != "" {
+		filter.AppID = &appID
+	}
+	if profileID := q.Get("profileId"); profileID != "" {
+		filter.ProfileID = &profileID
+	}
+	if policyType := q.Get("policyType"); policyType != "" {
+		filter.PolicyType = &policyType
+	}
+	if status := q.Get("status"); status != "" {
+		filter.Status = &status
+	}
+
+	resp, err := h.service.ListPolicies(c.Request().Context(), filter)
 	if err != nil {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, policies)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetPolicy retrieves a compliance policy
 // GET /auth/compliance/policies/:id
-func (h *Handler) GetPolicy(c Context) error {
+func (h *Handler) GetPolicy(c forge.Context) error {
 	id := c.Param("id")
 
 	policy, err := h.service.repo.GetPolicy(c.Request().Context(), id)
@@ -566,7 +691,7 @@ func (h *Handler) GetPolicy(c Context) error {
 
 // UpdatePolicy updates a compliance policy
 // PUT /auth/compliance/policies/:id
-func (h *Handler) UpdatePolicy(c Context) error {
+func (h *Handler) UpdatePolicy(c forge.Context) error {
 	id := c.Param("id")
 
 	var req struct {
@@ -577,8 +702,8 @@ func (h *Handler) UpdatePolicy(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
@@ -610,7 +735,7 @@ func (h *Handler) UpdatePolicy(c Context) error {
 
 // DeletePolicy deletes a compliance policy
 // DELETE /auth/compliance/policies/:id
-func (h *Handler) DeletePolicy(c Context) error {
+func (h *Handler) DeletePolicy(c forge.Context) error {
 	id := c.Param("id")
 
 	if err := h.service.repo.DeletePolicy(c.Request().Context(), id); err != nil {
@@ -623,9 +748,9 @@ func (h *Handler) DeletePolicy(c Context) error {
 // ===== Training Handlers =====
 
 // CreateTraining creates a training record
-// POST /auth/compliance/organizations/:orgId/training
-func (h *Handler) CreateTraining(c Context) error {
-	orgID := c.Param("orgId")
+// POST /auth/compliance/apps/:appId/training
+func (h *Handler) CreateTraining(c forge.Context) error {
+	appID := c.Param("appId")
 
 	var req struct {
 		UserID       string             `json:"userId" validate:"required"`
@@ -634,24 +759,24 @@ func (h *Handler) CreateTraining(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
 	// Get profile
-	profile, err := h.service.GetProfileByOrganization(c.Request().Context(), orgID)
+	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	training := &ComplianceTraining{
-		ProfileID:      profile.ID,
-		OrganizationID: orgID,
-		UserID:         req.UserID,
-		TrainingType:   req.TrainingType,
-		Standard:       req.Standard,
-		Status:         "required",
+		ProfileID:    profile.ID,
+		AppID:        appID,
+		UserID:       req.UserID,
+		TrainingType: req.TrainingType,
+		Standard:     req.Standard,
+		Status:       "required",
 	}
 
 	if err := h.service.repo.CreateTraining(c.Request().Context(), training); err != nil {
@@ -662,30 +787,53 @@ func (h *Handler) CreateTraining(c Context) error {
 }
 
 // ListTraining lists training records
-// GET /auth/compliance/organizations/:orgId/training
-func (h *Handler) ListTraining(c Context) error {
-	orgID := c.Param("orgId")
+// GET /auth/compliance/apps/:appId/training
+func (h *Handler) ListTraining(c forge.Context) error {
+	q := c.Request().URL.Query()
 
-	filters := TrainingFilters{
-		OrganizationID: orgID,
-		UserID:         c.Query("userId"),
-		TrainingType:   c.Query("trainingType"),
-		Status:         c.Query("status"),
-		Limit:          c.QueryInt("limit", 20),
-		Offset:         c.QueryInt("offset", 0),
+	// Parse pagination
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit == 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	// Build filter
+	filter := &ListTrainingFilter{
+		PaginationParams: pagination.PaginationParams{
+			Limit:  limit,
+			Offset: offset,
+		},
 	}
 
-	training, err := h.service.repo.ListTraining(c.Request().Context(), filters)
+	// Parse optional filters
+	if appID := c.Param("appId"); appID != "" {
+		filter.AppID = &appID
+	}
+	if profileID := q.Get("profileId"); profileID != "" {
+		filter.ProfileID = &profileID
+	}
+	if userID := q.Get("userId"); userID != "" {
+		filter.UserID = &userID
+	}
+	if trainingType := q.Get("trainingType"); trainingType != "" {
+		filter.TrainingType = &trainingType
+	}
+	if status := q.Get("status"); status != "" {
+		filter.Status = &status
+	}
+
+	resp, err := h.service.ListTraining(c.Request().Context(), filter)
 	if err != nil {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, training)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetUserTraining gets training status for a user
 // GET /auth/compliance/users/:userId/training
-func (h *Handler) GetUserTraining(c Context) error {
+func (h *Handler) GetUserTraining(c forge.Context) error {
 	userID := c.Param("userId")
 
 	training, err := h.service.repo.GetUserTrainingStatus(c.Request().Context(), userID)
@@ -698,7 +846,7 @@ func (h *Handler) GetUserTraining(c Context) error {
 
 // CompleteTraining marks training as completed
 // PUT /auth/compliance/training/:id/complete
-func (h *Handler) CompleteTraining(c Context) error {
+func (h *Handler) CompleteTraining(c forge.Context) error {
 	id := c.Param("id")
 
 	var req struct {
@@ -706,8 +854,8 @@ func (h *Handler) CompleteTraining(c Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: "Invalid request body",
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
 		})
 	}
 
@@ -736,7 +884,7 @@ func (h *Handler) CompleteTraining(c Context) error {
 
 // ListTemplates lists available compliance templates
 // GET /auth/compliance/templates
-func (h *Handler) ListTemplates(c Context) error {
+func (h *Handler) ListTemplates(c forge.Context) error {
 	templates := make([]map[string]interface{}, 0)
 
 	for standard, template := range ComplianceTemplates {
@@ -752,13 +900,13 @@ func (h *Handler) ListTemplates(c Context) error {
 
 // GetTemplate retrieves a compliance template
 // GET /auth/compliance/templates/:standard
-func (h *Handler) GetTemplate(c Context) error {
+func (h *Handler) GetTemplate(c forge.Context) error {
 	standard := ComplianceStandard(c.Param("standard"))
 
 	template, ok := GetTemplate(standard)
 	if !ok {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Message: "Template not found",
+		return c.JSON(http.StatusNotFound, map[string]string{
+			"error": "Template not found",
 		})
 	}
 
@@ -767,44 +915,17 @@ func (h *Handler) GetTemplate(c Context) error {
 
 // Helper functions
 
-func handleError(c Context, err error) error {
-	switch err {
-	case ErrProfileNotFound, ErrCheckNotFound, ErrViolationNotFound,
-		ErrReportNotFound, ErrEvidenceNotFound, ErrPolicyNotFound, ErrTrainingNotFound:
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Message: err.Error(),
-		})
-	case ErrProfileExists, ErrViolationExists, ErrPolicyExists:
-		return c.JSON(http.StatusConflict, ErrorResponse{
-			Message: err.Error(),
-		})
-	case ErrMFARequired, ErrWeakPassword, ErrSessionExpired, ErrAccessDenied, ErrTrainingRequired:
-		return c.JSON(http.StatusForbidden, ErrorResponse{
-			Message: err.Error(),
-		})
-	default:
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Message: "Internal server error",
-			Error:   err.Error(),
+func handleError(c forge.Context, err error) error {
+	// Handle structured AuthsomeError
+	if authErr, ok := err.(*errs.AuthsomeError); ok {
+		return c.JSON(authErr.HTTPStatus, map[string]interface{}{
+			"error": authErr.Message,
+			"code":  authErr.Code,
 		})
 	}
-}
 
-// Context interface for HTTP handlers
-type Context interface {
-	Request() *http.Request
-	BindJSON(v interface{}) error
-	Param(key string) string
-	Query(key string) string
-	QueryInt(key string, defaultValue int) int
-	Get(key string) interface{}
-	JSON(code int, v interface{}) error
-	NoContent(code int) error
-	Redirect(code int, url string) error
-}
-
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Message string `json:"message"`
-	Error   string `json:"error,omitempty"`
+	// Fallback for unexpected errors
+	return c.JSON(http.StatusInternalServerError, map[string]string{
+		"error": "Internal server error",
+	})
 }

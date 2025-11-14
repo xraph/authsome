@@ -2,43 +2,127 @@ package organization
 
 import (
 	"context"
+
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
 )
 
-// Repository defines the organization repository interface
-type Repository interface {
-	// Organization
-	CreateOrganization(ctx context.Context, org *Organization) error
-	FindOrganizationByID(ctx context.Context, id xid.ID) (*Organization, error)
-	FindOrganizationBySlug(ctx context.Context, slug string) (*Organization, error)
-	UpdateOrganization(ctx context.Context, org *Organization) error
-	DeleteOrganization(ctx context.Context, id xid.ID) error
-	ListOrganizations(ctx context.Context, limit, offset int) ([]*Organization, error)
-	CountOrganizations(ctx context.Context) (int, error)
+// OrganizationRepository defines the interface for organization data access
+type OrganizationRepository interface {
+	// Create creates a new organization
+	Create(ctx context.Context, org *Organization) error
 
-	// Member
-	CreateMember(ctx context.Context, member *Member) error
-	FindMemberByID(ctx context.Context, id xid.ID) (*Member, error)
-	FindMember(ctx context.Context, orgID, userID xid.ID) (*Member, error)
-	ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Member, error)
-	CountMembers(ctx context.Context, orgID xid.ID) (int, error)
-	UpdateMember(ctx context.Context, member *Member) error
-	DeleteMember(ctx context.Context, id xid.ID) error
+	// FindByID retrieves an organization by its ID
+	FindByID(ctx context.Context, id xid.ID) (*Organization, error)
 
-	// Team
-	CreateTeam(ctx context.Context, team *Team) error
-	FindTeamByID(ctx context.Context, id xid.ID) (*Team, error)
-	ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Team, error)
-	CountTeams(ctx context.Context, orgID xid.ID) (int, error)
-	UpdateTeam(ctx context.Context, team *Team) error
-	DeleteTeam(ctx context.Context, id xid.ID) error
+	// FindBySlug retrieves an organization by its slug within an app and environment
+	FindBySlug(ctx context.Context, appID, envID xid.ID, slug string) (*Organization, error)
 
-	// Team Member
-	AddTeamMember(ctx context.Context, tm *TeamMember) error
-	RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error
-	ListTeamMembers(ctx context.Context, teamID xid.ID, limit, offset int) ([]*TeamMember, error)
-	CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error)
+	// ListByApp retrieves a paginated list of organizations within an app and environment
+	ListByApp(ctx context.Context, filter *ListOrganizationsFilter) (*pagination.PageResponse[*Organization], error)
 
-	// Invitation
-	CreateInvitation(ctx context.Context, inv *Invitation) error
+	// ListByUser retrieves a paginated list of organizations a user is a member of
+	ListByUser(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Organization], error)
+
+	// Update updates an existing organization
+	Update(ctx context.Context, org *Organization) error
+
+	// Delete deletes an organization by ID
+	Delete(ctx context.Context, id xid.ID) error
+
+	// CountByUser counts the number of organizations a user has created or is a member of
+	CountByUser(ctx context.Context, userID xid.ID) (int, error)
+}
+
+// MemberRepository defines the interface for organization member data access
+type MemberRepository interface {
+	// Create creates a new organization member
+	Create(ctx context.Context, member *Member) error
+
+	// FindByID retrieves a member by their ID
+	FindByID(ctx context.Context, id xid.ID) (*Member, error)
+
+	// FindByUserAndOrg retrieves a member by user ID and organization ID
+	FindByUserAndOrg(ctx context.Context, userID, orgID xid.ID) (*Member, error)
+
+	// ListByOrganization retrieves a paginated list of members in an organization
+	ListByOrganization(ctx context.Context, filter *ListMembersFilter) (*pagination.PageResponse[*Member], error)
+
+	// ListByUser retrieves a paginated list of organization memberships for a user
+	ListByUser(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Member], error)
+
+	// Update updates an existing member
+	Update(ctx context.Context, member *Member) error
+
+	// Delete deletes a member by ID
+	Delete(ctx context.Context, id xid.ID) error
+
+	// DeleteByUserAndOrg deletes a member by user ID and organization ID
+	DeleteByUserAndOrg(ctx context.Context, userID, orgID xid.ID) error
+
+	// CountByOrganization counts the number of members in an organization
+	CountByOrganization(ctx context.Context, orgID xid.ID) (int, error)
+}
+
+// TeamRepository defines the interface for organization team data access
+type TeamRepository interface {
+	// Create creates a new team
+	Create(ctx context.Context, team *Team) error
+
+	// FindByID retrieves a team by its ID
+	FindByID(ctx context.Context, id xid.ID) (*Team, error)
+
+	// FindByName retrieves a team by name within an organization
+	FindByName(ctx context.Context, orgID xid.ID, name string) (*Team, error)
+
+	// ListByOrganization retrieves a paginated list of teams in an organization
+	ListByOrganization(ctx context.Context, filter *ListTeamsFilter) (*pagination.PageResponse[*Team], error)
+
+	// Update updates an existing team
+	Update(ctx context.Context, team *Team) error
+
+	// Delete deletes a team by ID
+	Delete(ctx context.Context, id xid.ID) error
+
+	// CountByOrganization counts the number of teams in an organization
+	CountByOrganization(ctx context.Context, orgID xid.ID) (int, error)
+
+	// AddMember adds a member to a team (part of team aggregate)
+	AddMember(ctx context.Context, tm *TeamMember) error
+
+	// RemoveMember removes a member from a team
+	RemoveMember(ctx context.Context, teamID, memberID xid.ID) error
+
+	// ListMembers retrieves a paginated list of team members
+	ListMembers(ctx context.Context, filter *ListTeamMembersFilter) (*pagination.PageResponse[*TeamMember], error)
+
+	// CountMembers counts the number of members in a team
+	CountMembers(ctx context.Context, teamID xid.ID) (int, error)
+
+	// IsTeamMember checks if a member belongs to a team
+	IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error)
+}
+
+// InvitationRepository defines the interface for organization invitation data access
+type InvitationRepository interface {
+	// Create creates a new invitation
+	Create(ctx context.Context, inv *Invitation) error
+
+	// FindByID retrieves an invitation by its ID
+	FindByID(ctx context.Context, id xid.ID) (*Invitation, error)
+
+	// FindByToken retrieves an invitation by its token
+	FindByToken(ctx context.Context, token string) (*Invitation, error)
+
+	// ListByOrganization retrieves a paginated list of invitations for an organization
+	ListByOrganization(ctx context.Context, filter *ListInvitationsFilter) (*pagination.PageResponse[*Invitation], error)
+
+	// Update updates an existing invitation
+	Update(ctx context.Context, inv *Invitation) error
+
+	// Delete deletes an invitation by ID
+	Delete(ctx context.Context, id xid.ID) error
+
+	// DeleteExpired deletes all expired invitations and returns the count
+	DeleteExpired(ctx context.Context) (int, error)
 }

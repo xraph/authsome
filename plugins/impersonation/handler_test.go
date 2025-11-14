@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/schema"
-	"github.com/xraph/forge"
 )
 
 // mockForgeContext implements forge.Context for testing
@@ -87,7 +86,7 @@ func TestHandler_StartImpersonation_Success(t *testing.T) {
 	orgID := xid.New()
 
 	reqBody := impersonation.StartRequest{
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  admin.ID,
 		TargetUserID:    target.ID,
 		Reason:          "Customer support ticket #12345 - investigating login issue",
@@ -139,7 +138,7 @@ func TestHandler_StartImpersonation_CannotImpersonateSelf(t *testing.T) {
 	orgID := xid.New()
 
 	reqBody := impersonation.StartRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   admin.ID, // Same as impersonator
 		Reason:         "Testing self impersonation",
@@ -164,7 +163,7 @@ func TestHandler_StartImpersonation_AlreadyImpersonating(t *testing.T) {
 	// Create existing active impersonation
 	existingSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -174,7 +173,7 @@ func TestHandler_StartImpersonation_AlreadyImpersonating(t *testing.T) {
 	repo.sessions[existingSession.ID.String()] = existingSession
 
 	reqBody := impersonation.StartRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Reason:         "Testing concurrent impersonations",
@@ -199,7 +198,7 @@ func TestHandler_EndImpersonation_Success(t *testing.T) {
 	// Create active impersonation
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -211,7 +210,7 @@ func TestHandler_EndImpersonation_Success(t *testing.T) {
 
 	reqBody := impersonation.EndRequest{
 		ImpersonationID: impSession.ID,
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  admin.ID,
 		Reason:          "manual",
 	}
@@ -236,7 +235,7 @@ func TestHandler_GetImpersonation_Success(t *testing.T) {
 	// Create impersonation
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -306,7 +305,7 @@ func TestHandler_ListImpersonations_Success(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
 			ID:             xid.New(),
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         true,
@@ -353,7 +352,7 @@ func TestHandler_ListImpersonations_WithFilters(t *testing.T) {
 
 		session := &schema.ImpersonationSession{
 			ID:             xid.New(),
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   targetID,
 			Active:         true,
@@ -389,7 +388,7 @@ func TestHandler_VerifyImpersonation_Active(t *testing.T) {
 	sessionID := xid.New()
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,
@@ -447,7 +446,7 @@ func TestHandler_ListAuditEvents_Success(t *testing.T) {
 		event := &schema.ImpersonationAuditEvent{
 			ID:              xid.New(),
 			ImpersonationID: impID,
-			OrganizationID:  orgID,
+			AppID:           orgID,
 			EventType:       "test_event",
 			IPAddress:       "192.168.1.1",
 			UserAgent:       "Test Agent",
@@ -490,7 +489,7 @@ func TestHandler_ListAuditEvents_FilterByImpersonationID(t *testing.T) {
 		event := &schema.ImpersonationAuditEvent{
 			ID:              xid.New(),
 			ImpersonationID: impID,
-			OrganizationID:  orgID,
+			AppID:           orgID,
 			EventType:       "test_event",
 			CreatedAt:       time.Now(),
 		}

@@ -74,33 +74,41 @@ func NewService(config Config, repo Repository, auditSvc *audit.Service) *Servic
 
 // CreateWebhook creates a new webhook subscription
 func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*Webhook, error) {
+	// Validate app and environment context
+	if req.AppID.IsNil() {
+		return nil, MissingAppContext()
+	}
+	if req.EnvironmentID.IsNil() {
+		return nil, MissingEnvironmentContext()
+	}
 
 	// Validate event types
 	for _, eventType := range req.Events {
 		if !IsValidEventType(eventType) {
-			return nil, fmt.Errorf("invalid event type: %s", eventType)
+			return nil, InvalidEventType(eventType)
 		}
 	}
 
 	// Generate webhook secret
 	secret, err := crypto.GenerateToken(32)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate secret: %w", err)
+		return nil, WebhookCreationFailed(err)
 	}
 
 	webhook := &Webhook{
-		ID:             xid.New(),
-		OrganizationID: req.OrganizationID,
-		URL:            req.URL,
-		Events:         req.Events,
-		Secret:         secret,
-		Enabled:        true,
-		MaxRetries:     req.MaxRetries,
-		RetryBackoff:   req.RetryBackoff,
-		Headers:        req.Headers,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-		FailureCount:   0,
+		ID:            xid.New(),
+		AppID:         req.AppID,
+		EnvironmentID: req.EnvironmentID,
+		URL:           req.URL,
+		Events:        req.Events,
+		Secret:        secret,
+		Enabled:       true,
+		MaxRetries:    req.MaxRetries,
+		RetryBackoff:  req.RetryBackoff,
+		Headers:       req.Headers,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+		FailureCount:  0,
 	}
 
 	if webhook.MaxRetries == 0 {
@@ -110,25 +118,28 @@ func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) 
 		webhook.RetryBackoff = RetryBackoffExponential
 	}
 
-	if err := s.repo.Create(ctx, webhook); err != nil {
-		return nil, fmt.Errorf("failed to create webhook: %w", err)
+	if err := s.repo.CreateWebhook(ctx, webhook.ToSchema()); err != nil {
+		return nil, WebhookCreationFailed(err)
 	}
 
 	// Audit log
-	s.auditSvc.Log(ctx, nil, req.OrganizationID, "webhook", "create", "",
-		fmt.Sprintf(`{"webhook_id":"%s","url":"%s","events":%s}`,
-			webhook.ID.String(), webhook.URL, mustMarshal(webhook.Events)))
+	if s.auditSvc != nil {
+		s.auditSvc.Log(ctx, nil, req.AppID.String(), "webhook", "create", "",
+			fmt.Sprintf(`{"webhook_id":"%s","app_id":"%s","environment_id":"%s","url":"%s","events":%s}`,
+				webhook.ID.String(), webhook.AppID.String(), webhook.EnvironmentID.String(), webhook.URL, mustMarshal(webhook.Events)))
+	}
 
 	return webhook, nil
 }
 
 // UpdateWebhook updates an existing webhook
 func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebhookRequest) (*Webhook, error) {
-
-	webhook, err := s.repo.FindByID(ctx, id)
+	schemaWebhook, err := s.repo.FindWebhookByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("webhook not found: %w", err)
+		return nil, WebhookNotFound()
 	}
+
+	webhook := FromSchemaWebhook(schemaWebhook)
 
 	// Update fields
 	if req.URL != nil {
@@ -138,7 +149,7 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 		// Validate event types
 		for _, eventType := range req.Events {
 			if !IsValidEventType(eventType) {
-				return nil, fmt.Errorf("invalid event type: %s", eventType)
+				return nil, InvalidEventType(eventType)
 			}
 		}
 		webhook.Events = req.Events
@@ -158,89 +169,101 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 
 	webhook.UpdatedAt = time.Now()
 
-	if err := s.repo.Update(ctx, webhook); err != nil {
-		return nil, fmt.Errorf("failed to update webhook: %w", err)
+	if err := s.repo.UpdateWebhook(ctx, webhook.ToSchema()); err != nil {
+		return nil, WebhookUpdateFailed(err)
 	}
 
 	// Audit log
-	s.auditSvc.Log(ctx, nil, webhook.OrganizationID, "webhook", "update", "",
-		fmt.Sprintf(`{"webhook_id":"%s"}`, webhook.ID.String()))
+	if s.auditSvc != nil {
+		s.auditSvc.Log(ctx, nil, webhook.AppID.String(), "webhook", "update", "",
+			fmt.Sprintf(`{"webhook_id":"%s"}`, webhook.ID.String()))
+	}
 
 	return webhook, nil
 }
 
 // DeleteWebhook deletes a webhook
 func (s *Service) DeleteWebhook(ctx context.Context, id xid.ID) error {
-	webhook, err := s.repo.FindByID(ctx, id)
+	schemaWebhook, err := s.repo.FindWebhookByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("webhook not found: %w", err)
+		return WebhookNotFound()
 	}
 
-	if err := s.repo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete webhook: %w", err)
+	if err := s.repo.DeleteWebhook(ctx, id); err != nil {
+		return WebhookDeletionFailed(err)
 	}
 
 	// Audit log
-	s.auditSvc.Log(ctx, nil, webhook.OrganizationID, "webhook", "delete", "",
-		fmt.Sprintf(`{"webhook_id":"%s"}`, webhook.ID.String()))
+	if s.auditSvc != nil {
+		s.auditSvc.Log(ctx, nil, schemaWebhook.AppID.String(), "webhook", "delete", "",
+			fmt.Sprintf(`{"webhook_id":"%s"}`, schemaWebhook.ID.String()))
+	}
 
 	return nil
 }
 
 // GetWebhook retrieves a webhook by ID
 func (s *Service) GetWebhook(ctx context.Context, id xid.ID) (*Webhook, error) {
-	return s.repo.FindByID(ctx, id)
+	schemaWebhook, err := s.repo.FindWebhookByID(ctx, id)
+	if err != nil {
+		return nil, WebhookNotFound()
+	}
+	return FromSchemaWebhook(schemaWebhook), nil
 }
 
-// ListWebhooks lists webhooks for an organization
-func (s *Service) ListWebhooks(ctx context.Context, req *ListWebhooksRequest) (*ListWebhooksResponse, error) {
-
-	offset := (req.Page - 1) * req.PageSize
-	webhooks, total, err := s.repo.FindByOrgID(ctx, req.OrganizationID, req.Enabled, offset, req.PageSize)
+// ListWebhooks lists webhooks with filtering and pagination
+func (s *Service) ListWebhooks(ctx context.Context, filter *ListWebhooksFilter) (*ListWebhooksResponse, error) {
+	pageResp, err := s.repo.ListWebhooks(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list webhooks: %w", err)
+		return nil, err
 	}
 
-	totalPages := int(math.Ceil(float64(total) / float64(req.PageSize)))
+	// Convert schema webhooks to DTOs
+	dtoWebhooks := FromSchemaWebhooks(pageResp.Data)
 
 	return &ListWebhooksResponse{
-		Webhooks:   webhooks,
-		Total:      total,
-		Page:       req.Page,
-		PageSize:   req.PageSize,
-		TotalPages: totalPages,
+		Data:       dtoWebhooks,
+		Pagination: pageResp.Pagination,
 	}, nil
 }
 
 // EmitEvent emits an event to all subscribed webhooks
-func (s *Service) EmitEvent(ctx context.Context, eventType, orgID string, data map[string]interface{}) error {
+func (s *Service) EmitEvent(ctx context.Context, appID, envID xid.ID, eventType string, data map[string]interface{}) error {
+	if appID.IsNil() {
+		return MissingAppContext()
+	}
+	if envID.IsNil() {
+		return MissingEnvironmentContext()
+	}
 	if !IsValidEventType(eventType) {
-		return fmt.Errorf("invalid event type: %s", eventType)
+		return InvalidEventType(eventType)
 	}
 
 	event := &Event{
-		ID:             xid.New(),
-		Type:           eventType,
-		OrganizationID: orgID,
-		Data:           data,
-		OccurredAt:     time.Now(),
-		CreatedAt:      time.Now(),
+		ID:            xid.New(),
+		AppID:         appID,
+		EnvironmentID: envID,
+		Type:          eventType,
+		Data:          data,
+		OccurredAt:    time.Now(),
+		CreatedAt:     time.Now(),
 	}
 
 	// Store the event
-	if err := s.repo.CreateEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store event: %w", err)
+	if err := s.repo.CreateEvent(ctx, event.ToSchema()); err != nil {
+		return EventCreationFailed(err)
 	}
 
 	// Find webhooks subscribed to this event
-	webhooks, err := s.repo.FindByOrgAndEvent(ctx, orgID, eventType)
+	schemaWebhooks, err := s.repo.FindWebhooksByAppAndEvent(ctx, appID, envID, eventType)
 	if err != nil {
-		return fmt.Errorf("failed to find webhooks: %w", err)
+		return err
 	}
 
 	// Deliver to each webhook asynchronously
-	for _, webhook := range webhooks {
-		if webhook.Enabled {
+	for _, schemaWebhook := range schemaWebhooks {
+		if schemaWebhook.Enabled {
+			webhook := FromSchemaWebhook(schemaWebhook)
 			go s.deliverToWebhook(ctx, webhook, event)
 		}
 	}
@@ -265,7 +288,7 @@ func (s *Service) deliverToWebhook(ctx context.Context, webhook *Webhook, event 
 	}
 
 	// Store delivery record
-	if err := s.repo.CreateDelivery(ctx, delivery); err != nil {
+	if err := s.repo.CreateDelivery(ctx, delivery.ToSchema()); err != nil {
 		return
 	}
 
@@ -280,7 +303,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		delivery.Status = DeliveryStatusFailed
 		delivery.Error = fmt.Sprintf("failed to marshal event: %v", err)
 		delivery.UpdatedAt = time.Now()
-		s.repo.UpdateDelivery(ctx, delivery)
+		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 		return
 	}
 
@@ -293,7 +316,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		delivery.Status = DeliveryStatusFailed
 		delivery.Error = fmt.Sprintf("failed to create request: %v", err)
 		delivery.UpdatedAt = time.Now()
-		s.repo.UpdateDelivery(ctx, delivery)
+		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 		return
 	}
 
@@ -344,7 +367,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		return
 	}
 
-	s.repo.UpdateDelivery(ctx, delivery)
+	s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 }
 
 // handleDeliveryFailure handles a failed delivery attempt
@@ -356,7 +379,7 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 	if delivery.Attempt >= webhook.MaxRetries {
 		// Max retries reached
 		delivery.Status = DeliveryStatusFailed
-		s.repo.UpdateDelivery(ctx, delivery)
+		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 
 		// Increment webhook failure count
 		s.repo.UpdateFailureCount(ctx, webhook.ID, webhook.FailureCount+1)
@@ -365,7 +388,7 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 
 	// Schedule retry
 	delivery.Status = DeliveryStatusRetrying
-	s.repo.UpdateDelivery(ctx, delivery)
+	s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 
 	// Calculate delay
 	delay := s.calculateRetryDelay(webhook.RetryBackoff, delivery.Attempt)
@@ -385,7 +408,7 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 			UpdatedAt: time.Now(),
 		}
 
-		s.repo.CreateDelivery(ctx, newDelivery)
+		s.repo.CreateDelivery(ctx, newDelivery.ToSchema())
 		s.attemptDelivery(ctx, webhook, event, newDelivery)
 	}()
 }
@@ -424,23 +447,19 @@ func (s *Service) VerifySignature(payload []byte, signature, secret string) bool
 	return hmac.Equal([]byte(signature), []byte("sha256="+expectedSignature))
 }
 
-// ListDeliveries lists deliveries for a webhook
-func (s *Service) ListDeliveries(ctx context.Context, req *ListDeliveriesRequest) (*ListDeliveriesResponse, error) {
-
-	offset := (req.Page - 1) * req.PageSize
-	deliveries, total, err := s.repo.FindDeliveriesByWebhook(ctx, req.WebhookID, req.Status, offset, req.PageSize)
+// ListDeliveries lists deliveries with filtering and pagination
+func (s *Service) ListDeliveries(ctx context.Context, filter *ListDeliveriesFilter) (*ListDeliveriesResponse, error) {
+	pageResp, err := s.repo.ListDeliveries(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list deliveries: %w", err)
+		return nil, err
 	}
 
-	totalPages := int(math.Ceil(float64(total) / float64(req.PageSize)))
+	// Convert schema deliveries to DTOs
+	dtoDeliveries := FromSchemaDeliveries(pageResp.Data)
 
 	return &ListDeliveriesResponse{
-		Deliveries: deliveries,
-		Total:      total,
-		Page:       req.Page,
-		PageSize:   req.PageSize,
-		TotalPages: totalPages,
+		Data:       dtoDeliveries,
+		Pagination: pageResp.Pagination,
 	}, nil
 }
 
@@ -458,21 +477,25 @@ func (s *Service) startDeliveryWorkers() {
 func (s *Service) processFailedDeliveries() {
 	ctx := context.Background()
 
-	deliveries, err := s.repo.FindPendingDeliveries(ctx, s.config.BatchSize)
+	schemaDeliveries, err := s.repo.FindPendingDeliveries(ctx, s.config.BatchSize)
 	if err != nil {
 		return
 	}
 
-	for _, delivery := range deliveries {
-		webhook, err := s.repo.FindByID(ctx, delivery.WebhookID)
-		if err != nil || !webhook.Enabled {
+	for _, schemaDelivery := range schemaDeliveries {
+		schemaWebhook, err := s.repo.FindWebhookByID(ctx, schemaDelivery.WebhookID)
+		if err != nil || !schemaWebhook.Enabled {
 			continue
 		}
 
-		event, err := s.repo.FindEventByID(ctx, delivery.EventID)
+		schemaEvent, err := s.repo.FindEventByID(ctx, schemaDelivery.EventID)
 		if err != nil {
 			continue
 		}
+
+		webhook := FromSchemaWebhook(schemaWebhook)
+		event := FromSchemaEvent(schemaEvent)
+		delivery := FromSchemaDelivery(schemaDelivery)
 
 		go s.attemptDelivery(ctx, webhook, event, delivery)
 	}

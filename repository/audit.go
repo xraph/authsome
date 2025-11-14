@@ -2,127 +2,114 @@ package repository
 
 import (
 	"context"
+
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
-	core "github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
 // AuditRepository implements core audit repository using Bun
-type AuditRepository struct{ db *bun.DB }
-
-func NewAuditRepository(db *bun.DB) *AuditRepository { return &AuditRepository{db: db} }
-
-func (r *AuditRepository) toSchema(e *core.Event) *schema.AuditEvent {
-	// Ensure auditable fields satisfy NOT NULL constraints
-	createdBy := e.ID
-	if e.UserID != nil {
-		createdBy = *e.UserID
-	}
-	return &schema.AuditEvent{
-		AuditableModel: schema.AuditableModel{
-			CreatedBy: createdBy,
-			UpdatedBy: createdBy,
-		},
-		ID:        e.ID,
-		UserID:    e.UserID,
-		Action:    e.Action,
-		Resource:  e.Resource,
-		IPAddress: e.IPAddress,
-		UserAgent: e.UserAgent,
-		Metadata:  e.Metadata,
-	}
+type AuditRepository struct {
+	db *bun.DB
 }
 
-func (r *AuditRepository) fromSchema(ae *schema.AuditEvent) *core.Event {
-	if ae == nil {
-		return nil
-	}
-	return &core.Event{
-		ID:        ae.ID,
-		UserID:    ae.UserID,
-		Action:    ae.Action,
-		Resource:  ae.Resource,
-		IPAddress: ae.IPAddress,
-		UserAgent: ae.UserAgent,
-		Metadata:  ae.Metadata,
-		CreatedAt: ae.CreatedAt,
-		UpdatedAt: ae.UpdatedAt,
-	}
+// NewAuditRepository creates a new audit repository
+func NewAuditRepository(db *bun.DB) *AuditRepository {
+	return &AuditRepository{db: db}
 }
 
-func (r *AuditRepository) Create(ctx context.Context, e *core.Event) error {
-	ae := r.toSchema(e)
-	_, err := r.db.NewInsert().Model(ae).Exec(ctx)
+// Create creates a new audit event
+func (r *AuditRepository) Create(ctx context.Context, e *schema.AuditEvent) error {
+	_, err := r.db.NewInsert().Model(e).Exec(ctx)
 	return err
 }
 
-// List returns recent audit events ordered by created_at desc
-func (r *AuditRepository) List(ctx context.Context, limit, offset int) ([]*core.Event, error) {
-	var rows []schema.AuditEvent
-	q := r.db.NewSelect().Model(&rows).OrderExpr("created_at DESC").Limit(limit).Offset(offset)
-	if err := q.Scan(ctx); err != nil {
+// Get retrieves an audit event by ID
+func (r *AuditRepository) Get(ctx context.Context, id xid.ID) (*schema.AuditEvent, error) {
+	var event schema.AuditEvent
+	err := r.db.NewSelect().
+		Model(&event).
+		Where("id = ?", id.String()).
+		Scan(ctx)
+
+	if err != nil {
 		return nil, err
 	}
-	out := make([]*core.Event, 0, len(rows))
-	for i := range rows {
-		out = append(out, r.fromSchema(&rows[i]))
-	}
-	return out, nil
+
+	return &event, nil
 }
 
-// Search returns events matching optional filters with pagination
-// Filters: userId, action, since, until
-func (r *AuditRepository) Search(ctx context.Context, params core.ListParams) ([]*core.Event, error) {
-	var rows []schema.AuditEvent
-	if params.Limit <= 0 {
-		params.Limit = 50
-	}
-	if params.Offset < 0 {
-		params.Offset = 0
-	}
-	q := r.db.NewSelect().Model(&rows).OrderExpr("created_at DESC").Limit(params.Limit).Offset(params.Offset)
-	if params.UserID != nil {
-		q = q.Where("user_id = ?", params.UserID.String())
-	}
-	if params.Action != "" {
-		q = q.Where("action = ?", params.Action)
-	}
-	if params.Since != nil {
-		q = q.Where("created_at >= ?", params.Since)
-	}
-	if params.Until != nil {
-		q = q.Where("created_at <= ?", params.Until)
-	}
-	if err := q.Scan(ctx); err != nil {
+// List returns paginated audit events with optional filters
+func (r *AuditRepository) List(ctx context.Context, filter *audit.ListEventsFilter) (*pagination.PageResponse[*schema.AuditEvent], error) {
+	// Build base query
+	baseQuery := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
+
+	// Apply filters
+	baseQuery = r.applyFilters(baseQuery, filter)
+
+	// Count total matching records
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
 		return nil, err
 	}
-	out := make([]*core.Event, 0, len(rows))
-	for i := range rows {
-		out = append(out, r.fromSchema(&rows[i]))
+
+	// Apply sorting
+	sortBy := "created_at"
+	sortOrder := "DESC"
+	if filter.SortBy != nil {
+		sortBy = *filter.SortBy
 	}
-	return out, nil
+	if filter.SortOrder != nil {
+		sortOrder = *filter.SortOrder
+	}
+	baseQuery = baseQuery.OrderExpr("? ?", bun.Ident(sortBy), bun.Safe(sortOrder))
+
+	// Apply pagination
+	baseQuery = baseQuery.Limit(filter.Limit).Offset(filter.Offset)
+
+	// Execute query
+	var events []*schema.AuditEvent
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	// Create pagination params for NewPageResponse
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	// Return paginated response
+	return pagination.NewPageResponse(events, int64(total), params), nil
 }
 
-// Count returns total number of audit events
-func (r *AuditRepository) Count(ctx context.Context) (int, error) {
-	q := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
-	return q.Count(ctx)
-}
+// applyFilters applies filter conditions to the query
+func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEventsFilter) *bun.SelectQuery {
+	if filter.UserID != nil {
+		q = q.Where("user_id = ?", filter.UserID.String())
+	}
 
-// SearchCount returns total number of events matching provided filters
-func (r *AuditRepository) SearchCount(ctx context.Context, params core.ListParams) (int, error) {
-	q := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
-	if params.UserID != nil {
-		q = q.Where("user_id = ?", params.UserID.String())
+	if filter.Action != nil {
+		q = q.Where("action = ?", *filter.Action)
 	}
-	if params.Action != "" {
-		q = q.Where("action = ?", params.Action)
+
+	if filter.Resource != nil {
+		q = q.Where("resource = ?", *filter.Resource)
 	}
-	if params.Since != nil {
-		q = q.Where("created_at >= ?", params.Since)
+
+	if filter.IPAddress != nil {
+		q = q.Where("ip_address = ?", *filter.IPAddress)
 	}
-	if params.Until != nil {
-		q = q.Where("created_at <= ?", params.Until)
+
+	if filter.Since != nil {
+		q = q.Where("created_at >= ?", *filter.Since)
 	}
-	return q.Count(ctx)
+
+	if filter.Until != nil {
+		q = q.Where("created_at <= ?", *filter.Until)
+	}
+
+	return q
 }

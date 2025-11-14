@@ -10,6 +10,12 @@ import (
 
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
+		// Register m2m models before any table operations
+		// These models are used as join tables for many-to-many relationships
+		// and must be explicitly registered with Bun before creating tables with m2m relations
+		db.RegisterModel((*schema.TeamMember)(nil))
+		db.RegisterModel((*schema.OrganizationTeamMember)(nil))
+
 		// Drop existing tables to allow a clean reset (ignoring backward compatibility)
 		drop := []string{
 			"identity_verification_documents",
@@ -139,6 +145,9 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.JWTKey)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+		if _, err := db.NewCreateTable().Model((*schema.APIKey)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
 		if _, err := db.NewCreateTable().Model((*schema.SSOProvider)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -245,7 +254,8 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_org_user").Column("organization_id", "user_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
-		if _, err := db.NewCreateIndex().Model((*schema.Event)(nil)).Index("idx_webhook_events_org").Column("organization_id").IfNotExists().Exec(ctx); err != nil {
+		// Event (webhook_events) now uses app_id instead of organization_id after app-scoped refactoring
+		if _, err := db.NewCreateIndex().Model((*schema.Event)(nil)).Index("idx_webhook_events_app").Column("app_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
 		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_webhook_id").Column("webhook_id").IfNotExists().Exec(ctx); err != nil {
@@ -306,6 +316,203 @@ func init() {
 			return err
 		}
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_feature").Column("feature").IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// JWT Keys indexes (app-scoped architecture)
+		if _, err := db.NewCreateIndex().
+			Model((*schema.JWTKey)(nil)).
+			Index("idx_jwt_keys_app_id").
+			Column("app_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.JWTKey)(nil)).
+			Index("idx_jwt_keys_platform").
+			Column("is_platform_key").
+			Where("is_platform_key = true AND deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.JWTKey)(nil)).
+			Index("idx_jwt_keys_key_id_app").
+			Column("key_id", "app_id").
+			Where("deleted_at IS NULL").
+			Unique().
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.JWTKey)(nil)).
+			Index("idx_jwt_keys_active").
+			Column("active", "app_id").
+			Where("active = true AND deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.JWTKey)(nil)).
+			Index("idx_jwt_keys_expires_at").
+			Column("expires_at").
+			Where("expires_at IS NOT NULL AND deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// API Keys indexes (environment-scoped)
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_app_id").
+			Column("app_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_environment_id").
+			Column("environment_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_app_env").
+			Column("app_id", "environment_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_active").
+			Column("active").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_user_id").
+			Column("user_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// Session indexes (app-scoped with environment and organization)
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Session)(nil)).
+			Index("idx_sessions_app_id").
+			Column("app_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Session)(nil)).
+			Index("idx_sessions_app_user").
+			Column("app_id", "user_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Session)(nil)).
+			Index("idx_sessions_expires_at").
+			Column("expires_at").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Session)(nil)).
+			Index("idx_sessions_environment_id").
+			Column("environment_id").
+			Where("deleted_at IS NULL AND environment_id IS NOT NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Session)(nil)).
+			Index("idx_sessions_organization_id").
+			Column("organization_id").
+			Where("deleted_at IS NULL AND organization_id IS NOT NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// Webhook indexes (app-scoped with environment)
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Webhook)(nil)).
+			Index("idx_webhooks_app_id").
+			Column("app_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Webhook)(nil)).
+			Index("idx_webhooks_app_env").
+			Column("app_id", "environment_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Webhook)(nil)).
+			Index("idx_webhooks_enabled").
+			Column("enabled").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// Webhook Events indexes (app-scoped with environment)
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Event)(nil)).
+			Index("idx_webhook_events_app_env").
+			Column("app_id", "environment_id").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Event)(nil)).
+			Index("idx_webhook_events_type").
+			Column("type").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.Event)(nil)).
+			Index("idx_webhook_events_occurred_at").
+			Column("occurred_at").
+			IfNotExists().
+			Exec(ctx); err != nil {
 			return err
 		}
 

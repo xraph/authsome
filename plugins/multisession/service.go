@@ -3,6 +3,7 @@ package multisession
 import (
 	"context"
 	"errors"
+
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/auth"
 	dev "github.com/xraph/authsome/core/device"

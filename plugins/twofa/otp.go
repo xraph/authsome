@@ -5,9 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/rs/xid"
 	"math/rand"
 	"time"
+
+	"github.com/rs/xid"
 )
 
 // SendOTP generates and stores a one-time password; returns the code for delivery

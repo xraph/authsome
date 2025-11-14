@@ -20,7 +20,6 @@ import (
 	"github.com/xraph/authsome/plugins/emailotp"
 	"github.com/xraph/authsome/plugins/magiclink"
 	"github.com/xraph/authsome/plugins/multisession"
-	"github.com/xraph/authsome/plugins/multitenancy"
 	"github.com/xraph/authsome/plugins/oidcprovider"
 	"github.com/xraph/authsome/plugins/passkey"
 	"github.com/xraph/authsome/plugins/phone"

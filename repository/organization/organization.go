@@ -7,100 +7,128 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
-// organizationRepository implements OrganizationRepository using Bun
+// organizationRepository implements organization.OrganizationRepository using Bun
 type organizationRepository struct {
 	db *bun.DB
 }
 
 // NewOrganizationRepository creates a new organization repository
-func NewOrganizationRepository(db *bun.DB) *organizationRepository {
+func NewOrganizationRepository(db *bun.DB) organization.OrganizationRepository {
 	return &organizationRepository{db: db}
 }
 
 // Create creates a new organization
-func (r *organizationRepository) Create(ctx context.Context, org *schema.Organization) error {
+func (r *organizationRepository) Create(ctx context.Context, org *organization.Organization) error {
+	schemaOrg := org.ToSchema()
 	_, err := r.db.NewInsert().
-		Model(org).
+		Model(schemaOrg).
 		Exec(ctx)
 	return err
 }
 
 // FindByID retrieves an organization by ID
-func (r *organizationRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Organization, error) {
-	org := new(schema.Organization)
+func (r *organizationRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Organization, error) {
+	schemaOrg := new(schema.Organization)
 	err := r.db.NewSelect().
-		Model(org).
+		Model(schemaOrg).
 		Where("id = ?", id).
 		Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("organization not found")
 	}
-	return org, err
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaOrganization(schemaOrg), nil
 }
 
 // FindBySlug retrieves an organization by slug within an app and environment
-func (r *organizationRepository) FindBySlug(ctx context.Context, appID, environmentID xid.ID, slug string) (*schema.Organization, error) {
-	org := new(schema.Organization)
+func (r *organizationRepository) FindBySlug(ctx context.Context, appID, envID xid.ID, slug string) (*organization.Organization, error) {
+	schemaOrg := new(schema.Organization)
 	err := r.db.NewSelect().
-		Model(org).
-		Where("app_id = ? AND environment_id = ? AND slug = ?", appID, environmentID, slug).
+		Model(schemaOrg).
+		Where("app_id = ? AND environment_id = ? AND slug = ?", appID, envID, slug).
 		Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("organization not found")
 	}
-	return org, err
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaOrganization(schemaOrg), nil
 }
 
-// ListByUser lists all organizations a user is a member of
-func (r *organizationRepository) ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*schema.Organization, error) {
-	var orgs []*schema.Organization
+// ListByApp retrieves a paginated list of organizations within an app and environment
+func (r *organizationRepository) ListByApp(ctx context.Context, filter *organization.ListOrganizationsFilter) (*pagination.PageResponse[*organization.Organization], error) {
+	var schemaOrgs []*schema.Organization
 
 	query := r.db.NewSelect().
-		Model(&orgs).
+		Model(&schemaOrgs).
+		Where("app_id = ? AND environment_id = ?", filter.AppID, filter.EnvironmentID).
+		Order("created_at DESC")
+
+	// Get total count
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	orgs := organization.FromSchemaOrganizations(schemaOrgs)
+
+	return pagination.NewPageResponse(orgs, int64(total), &filter.PaginationParams), nil
+}
+
+// ListByUser retrieves a paginated list of organizations a user is a member of
+func (r *organizationRepository) ListByUser(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Organization], error) {
+	var schemaOrgs []*schema.Organization
+
+	query := r.db.NewSelect().
+		Model(&schemaOrgs).
 		Join("INNER JOIN organization_members AS m ON m.organization_id = uo.id").
 		Where("m.user_id = ?", userID).
 		Order("uo.created_at DESC")
 
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-
-	err := query.Scan(ctx)
-	return orgs, err
-}
-
-// ListByApp lists all organizations within an app and environment
-func (r *organizationRepository) ListByApp(ctx context.Context, appID, environmentID xid.ID, limit, offset int) ([]*schema.Organization, error) {
-	var orgs []*schema.Organization
-
-	query := r.db.NewSelect().
-		Model(&orgs).
-		Where("app_id = ? AND environment_id = ?", appID, environmentID).
-		Order("created_at DESC")
-
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
+	// Get total count
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	err := query.Scan(ctx)
-	return orgs, err
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	orgs := organization.FromSchemaOrganizations(schemaOrgs)
+
+	return pagination.NewPageResponse(orgs, int64(total), filter), nil
 }
 
 // Update updates an organization
-func (r *organizationRepository) Update(ctx context.Context, org *schema.Organization) error {
+func (r *organizationRepository) Update(ctx context.Context, org *organization.Organization) error {
+	schemaOrg := org.ToSchema()
 	_, err := r.db.NewUpdate().
-		Model(org).
+		Model(schemaOrg).
 		WherePK().
 		Exec(ctx)
 	return err
@@ -115,21 +143,17 @@ func (r *organizationRepository) Delete(ctx context.Context, id xid.ID) error {
 	return err
 }
 
-// CountByUser counts organizations a user is a member of
+// CountByUser counts organizations a user is a member of or has created
 func (r *organizationRepository) CountByUser(ctx context.Context, userID xid.ID) (int, error) {
+	// Count organizations where user is either the creator or a member
 	count, err := r.db.NewSelect().
 		Model((*schema.Organization)(nil)).
-		Join("INNER JOIN organization_members AS m ON m.organization_id = organizations.id").
-		Where("m.user_id = ?", userID).
+		Join("LEFT JOIN organization_members AS m ON m.organization_id = uo.id").
+		Where("uo.created_by = ? OR m.user_id = ?", userID, userID).
 		Count(ctx)
+
 	return count, err
 }
 
-// CountByApp counts organizations within an app and environment
-func (r *organizationRepository) CountByApp(ctx context.Context, appID, environmentID xid.ID) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*schema.Organization)(nil)).
-		Where("app_id = ? AND environment_id = ?", appID, environmentID).
-		Count(ctx)
-	return count, err
-}
+// Type assertion to ensure organizationRepository implements organization.OrganizationRepository
+var _ organization.OrganizationRepository = (*organizationRepository)(nil)

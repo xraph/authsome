@@ -36,7 +36,6 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"
@@ -47,9 +46,8 @@ type Mock struct {
 	t *testing.T
 
 	// Core services
-	UserService         *MockUserService
-	SessionService      *MockSessionService
-	OrganizationService *MockOrganizationService
+	UserService    *MockUserService
+	SessionService *MockSessionService
 
 	// Storage
 	users    map[string]*schema.User
@@ -87,7 +85,6 @@ func NewMock(t *testing.T) *Mock {
 	// Initialize mock services
 	m.UserService = &MockUserService{mock: m}
 	m.SessionService = &MockSessionService{mock: m}
-	m.OrganizationService = &MockOrganizationService{mock: m}
 
 	return m
 }
@@ -110,10 +107,10 @@ func (m *Mock) CreateUser(email, name string) *schema.User {
 
 	// Add to default org
 	member := &schema.Member{
-		ID:             xid.New(),
-		OrganizationID: m.defaultOrg.ID,
-		UserID:         user.ID,
-		Role:           "member",
+		ID:     xid.New(),
+		AppID:  m.defaultOrg.ID,
+		UserID: user.ID,
+		Role:   schema.MemberRoleMember,
 	}
 	m.members[m.defaultOrg.ID.String()] = append(m.members[m.defaultOrg.ID.String()], member)
 
@@ -137,10 +134,10 @@ func (m *Mock) CreateUserWithRole(email, name, role string) *schema.User {
 
 	// Add to default org with specified role
 	member := &schema.Member{
-		ID:             xid.New(),
-		OrganizationID: m.defaultOrg.ID,
-		UserID:         user.ID,
-		Role:           role,
+		ID:     xid.New(),
+		AppID:  m.defaultOrg.ID,
+		UserID: user.ID,
+		Role:   schema.MemberRole(role),
 	}
 	m.members[m.defaultOrg.ID.String()] = append(m.members[m.defaultOrg.ID.String()], member)
 
@@ -175,10 +172,10 @@ func (m *Mock) AddUserToOrg(userID, orgID, role string) *schema.Member {
 	oid, _ := xid.FromString(orgID)
 
 	member := &schema.Member{
-		ID:             xid.New(),
-		OrganizationID: oid,
-		UserID:         uid,
-		Role:           role,
+		ID:     xid.New(),
+		AppID:  oid,
+		UserID: uid,
+		Role:   schema.MemberRole(role),
 	}
 
 	m.members[orgID] = append(m.members[orgID], member)
@@ -478,44 +475,4 @@ func (s *MockSessionService) Validate(ctx context.Context, token string) (*schem
 	}
 
 	return session, nil
-}
-
-// MockOrganizationService implements core organization service methods for testing.
-type MockOrganizationService struct {
-	mock *Mock
-}
-
-func (s *MockOrganizationService) Create(ctx context.Context, req *organization.CreateOrganizationRequest) (*schema.Organization, error) {
-	return s.mock.CreateOrganization(req.Name, req.Slug), nil
-}
-
-func (s *MockOrganizationService) GetByID(ctx context.Context, orgID string) (*schema.Organization, error) {
-	return s.mock.GetOrganization(orgID)
-}
-
-func (s *MockOrganizationService) GetBySlug(ctx context.Context, slug string) (*schema.Organization, error) {
-	s.mock.mu.RLock()
-	defer s.mock.mu.RUnlock()
-
-	for _, org := range s.mock.orgs {
-		if org.Slug == slug {
-			return org, nil
-		}
-	}
-	return nil, fmt.Errorf("organization not found with slug: %s", slug)
-}
-
-func (s *MockOrganizationService) AddMember(ctx context.Context, userID xid.ID, orgID xid.ID, role string) (*schema.Member, error) {
-	return s.mock.AddUserToOrg(userID.String(), orgID.String(), role), nil
-}
-
-func (s *MockOrganizationService) GetMembers(ctx context.Context, orgID string) ([]*schema.Member, error) {
-	s.mock.mu.RLock()
-	defer s.mock.mu.RUnlock()
-
-	return s.mock.members[orgID], nil
-}
-
-func (s *MockOrganizationService) GetUserOrganizations(ctx context.Context, userID string) ([]*schema.Organization, error) {
-	return s.mock.GetUserOrgs(userID)
 }

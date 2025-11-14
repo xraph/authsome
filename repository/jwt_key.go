@@ -4,7 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/jwt"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -18,14 +21,14 @@ func NewJWTKeyRepository(db *bun.DB) *JWTKeyRepository {
 	return &JWTKeyRepository{db: db}
 }
 
-// Create creates a new JWT key
-func (r *JWTKeyRepository) Create(ctx context.Context, key *schema.JWTKey) error {
+// CreateJWTKey creates a new JWT key
+func (r *JWTKeyRepository) CreateJWTKey(ctx context.Context, key *schema.JWTKey) error {
 	_, err := r.db.NewInsert().Model(key).Exec(ctx)
 	return err
 }
 
-// FindByID finds a JWT key by ID
-func (r *JWTKeyRepository) FindByID(ctx context.Context, id string) (*schema.JWTKey, error) {
+// FindJWTKeyByID finds a JWT key by ID
+func (r *JWTKeyRepository) FindJWTKeyByID(ctx context.Context, id xid.ID) (*schema.JWTKey, error) {
 	key := &schema.JWTKey{}
 	err := r.db.NewSelect().
 		Model(key).
@@ -38,12 +41,13 @@ func (r *JWTKeyRepository) FindByID(ctx context.Context, id string) (*schema.JWT
 	return key, nil
 }
 
-// FindByKeyID finds a JWT key by key ID (kid)
-func (r *JWTKeyRepository) FindByKeyID(ctx context.Context, keyID string) (*schema.JWTKey, error) {
+// FindJWTKeyByKeyID finds a JWT key by key ID and app ID
+func (r *JWTKeyRepository) FindJWTKeyByKeyID(ctx context.Context, keyID string, appID xid.ID) (*schema.JWTKey, error) {
 	key := &schema.JWTKey{}
 	err := r.db.NewSelect().
 		Model(key).
 		Where("key_id = ?", keyID).
+		Where("app_id = ?", appID).
 		Where("deleted_at IS NULL").
 		Where("active = ?", true).
 		Scan(ctx)
@@ -53,42 +57,122 @@ func (r *JWTKeyRepository) FindByKeyID(ctx context.Context, keyID string) (*sche
 	return key, nil
 }
 
-// FindActiveByOrgID finds all active JWT keys for an organization
-func (r *JWTKeyRepository) FindActiveByOrgID(ctx context.Context, orgID string) ([]*schema.JWTKey, error) {
-	var keys []*schema.JWTKey
+// FindPlatformJWTKeyByKeyID finds a platform JWT key by key ID
+func (r *JWTKeyRepository) FindPlatformJWTKeyByKeyID(ctx context.Context, keyID string) (*schema.JWTKey, error) {
+	key := &schema.JWTKey{}
 	err := r.db.NewSelect().
-		Model(&keys).
-		Where("org_id = ?", orgID).
+		Model(key).
+		Where("key_id = ?", keyID).
+		Where("is_platform_key = ?", true).
 		Where("deleted_at IS NULL").
 		Where("active = ?", true).
-		Where("(expires_at IS NULL OR expires_at > ?)", time.Now()).
-		Order("created_at DESC").
 		Scan(ctx)
-	return keys, err
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
-// FindByOrgID finds all JWT keys for an organization
-func (r *JWTKeyRepository) FindByOrgID(ctx context.Context, orgID string, limit, offset int) ([]*schema.JWTKey, error) {
+// ListJWTKeys lists JWT keys with pagination and filtering
+func (r *JWTKeyRepository) ListJWTKeys(ctx context.Context, filter *jwt.ListJWTKeysFilter) (*pagination.PageResponse[*schema.JWTKey], error) {
 	var keys []*schema.JWTKey
+
+	// Build base query with filters
+	query := r.db.NewSelect().Model(&keys).Where("deleted_at IS NULL")
+
+	// Apply app ID filter
+	if !filter.AppID.IsNil() {
+		query = query.Where("app_id = ?", filter.AppID)
+	}
+
+	// Apply platform key filter
+	if filter.IsPlatformKey != nil {
+		query = query.Where("is_platform_key = ?", *filter.IsPlatformKey)
+	}
+
+	// Apply active filter
+	if filter.Active != nil {
+		query = query.Where("active = ?", *filter.Active)
+	}
+
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().Model((*schema.JWTKey)(nil)).Where("deleted_at IS NULL")
+	if !filter.AppID.IsNil() {
+		countQuery = countQuery.Where("app_id = ?", filter.AppID)
+	}
+	if filter.IsPlatformKey != nil {
+		countQuery = countQuery.Where("is_platform_key = ?", *filter.IsPlatformKey)
+	}
+	if filter.Active != nil {
+		countQuery = countQuery.Where("active = ?", *filter.Active)
+	}
+	total, err := countQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	offset := filter.GetOffset()
+	limit := filter.GetLimit()
+	query = query.Limit(limit).Offset(offset)
+
+	// Apply ordering
+	query = query.Order("created_at DESC")
+
+	// Execute query
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	return pagination.NewPageResponse(keys, int64(total), &filter.PaginationParams), nil
+}
+
+// ListPlatformJWTKeys lists platform JWT keys with pagination
+func (r *JWTKeyRepository) ListPlatformJWTKeys(ctx context.Context, filter *jwt.ListJWTKeysFilter) (*pagination.PageResponse[*schema.JWTKey], error) {
+	var keys []*schema.JWTKey
+
+	// Build base query
 	query := r.db.NewSelect().
 		Model(&keys).
-		Where("org_id = ?", orgID).
 		Where("deleted_at IS NULL").
-		Order("created_at DESC")
+		Where("is_platform_key = ?", true)
 
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
+	// Apply active filter
+	if filter.Active != nil {
+		query = query.Where("active = ?", *filter.Active)
 	}
 
-	err := query.Scan(ctx)
-	return keys, err
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().
+		Model((*schema.JWTKey)(nil)).
+		Where("deleted_at IS NULL").
+		Where("is_platform_key = ?", true)
+	if filter.Active != nil {
+		countQuery = countQuery.Where("active = ?", *filter.Active)
+	}
+	total, err := countQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	offset := filter.GetOffset()
+	limit := filter.GetLimit()
+	query = query.Limit(limit).Offset(offset)
+
+	// Apply ordering
+	query = query.Order("created_at DESC")
+
+	// Execute query
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	return pagination.NewPageResponse(keys, int64(total), &filter.PaginationParams), nil
 }
 
-// Update updates a JWT key
-func (r *JWTKeyRepository) Update(ctx context.Context, key *schema.JWTKey) error {
+// UpdateJWTKey updates a JWT key
+func (r *JWTKeyRepository) UpdateJWTKey(ctx context.Context, key *schema.JWTKey) error {
 	key.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
 		Model(key).
@@ -98,35 +182,33 @@ func (r *JWTKeyRepository) Update(ctx context.Context, key *schema.JWTKey) error
 	return err
 }
 
-// UpdateUsage updates the usage statistics for a JWT key
-func (r *JWTKeyRepository) UpdateUsage(ctx context.Context, keyID string) error {
+// UpdateJWTKeyUsage updates the usage statistics for a JWT key
+func (r *JWTKeyRepository) UpdateJWTKeyUsage(ctx context.Context, keyID string) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
 		Model((*schema.JWTKey)(nil)).
 		Set("usage_count = usage_count + 1").
 		Set("last_used_at = ?", now).
-		Set("updated_at = ?", now).
 		Where("key_id = ?", keyID).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
 	return err
 }
 
-// Deactivate deactivates a JWT key
-func (r *JWTKeyRepository) Deactivate(ctx context.Context, id string) error {
-	now := time.Now()
+// DeactivateJWTKey deactivates a JWT key
+func (r *JWTKeyRepository) DeactivateJWTKey(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.JWTKey)(nil)).
 		Set("active = ?", false).
-		Set("updated_at = ?", now).
+		Set("updated_at = ?", time.Now()).
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
 	return err
 }
 
-// Delete soft deletes a JWT key
-func (r *JWTKeyRepository) Delete(ctx context.Context, id string) error {
+// DeleteJWTKey soft deletes a JWT key
+func (r *JWTKeyRepository) DeleteJWTKey(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
 		Model((*schema.JWTKey)(nil)).
@@ -138,13 +220,11 @@ func (r *JWTKeyRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-// CleanupExpired removes expired JWT keys
-func (r *JWTKeyRepository) CleanupExpired(ctx context.Context) (int, error) {
+// CleanupExpiredJWTKeys removes expired JWT keys
+func (r *JWTKeyRepository) CleanupExpiredJWTKeys(ctx context.Context) (int64, error) {
 	now := time.Now()
-	result, err := r.db.NewUpdate().
+	result, err := r.db.NewDelete().
 		Model((*schema.JWTKey)(nil)).
-		Set("deleted_at = ?", now).
-		Set("updated_at = ?", now).
 		Where("expires_at IS NOT NULL").
 		Where("expires_at < ?", now).
 		Where("deleted_at IS NULL").
@@ -152,16 +232,15 @@ func (r *JWTKeyRepository) CleanupExpired(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	rowsAffected, err := result.RowsAffected()
-	return int(rowsAffected), err
+	count, err := result.RowsAffected()
+	return count, err
 }
 
-// CountByOrgID counts JWT keys for an organization
-func (r *JWTKeyRepository) CountByOrgID(ctx context.Context, orgID string) (int, error) {
+// CountJWTKeys counts JWT keys for an app
+func (r *JWTKeyRepository) CountJWTKeys(ctx context.Context, appID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.JWTKey)(nil)).
-		Where("org_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Where("deleted_at IS NULL").
 		Count(ctx)
 	return count, err

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/schema"
 )

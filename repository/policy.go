@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	rbac "github.com/xraph/authsome/core/rbac"

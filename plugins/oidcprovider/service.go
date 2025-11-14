@@ -6,14 +6,15 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
-	"log"
-	"strings"
-	"time"
 )
 
 // Config represents the OIDC Provider configuration

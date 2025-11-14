@@ -11,9 +11,9 @@ import (
 type ServiceInterface interface {
 	Create(ctx context.Context, req *CreateSessionRequest) (*Session, error)
 	FindByToken(ctx context.Context, token string) (*Session, error)
+	FindByID(ctx context.Context, id xid.ID) (*Session, error)
+	ListSessions(ctx context.Context, filter *ListSessionsFilter) (*ListSessionsResponse, error)
 	Revoke(ctx context.Context, token string) error
-	ListAll(ctx context.Context, limit, offset int) ([]*Session, error)
-	ListByUser(ctx context.Context, userID xid.ID, limit, offset int) ([]*Session, error)
 	RevokeByID(ctx context.Context, id xid.ID) error
 }
 

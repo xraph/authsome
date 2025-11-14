@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/contexts"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -978,8 +978,8 @@ func (s *Service) isCommonAnswer(answer string) bool {
 // ===== Context Helpers =====
 
 func (s *Service) getAppAndOrgFromContext(ctx context.Context) (xid.ID, *xid.ID) {
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	// Convert to pointer, returning nil if it's NilID
 	if orgID == xid.NilID() {
 		return appID, nil

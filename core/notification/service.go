@@ -56,23 +56,27 @@ func NewService(
 // RegisterProvider registers a notification provider
 func (s *Service) RegisterProvider(provider Provider) error {
 	if err := provider.ValidateConfig(); err != nil {
-		return fmt.Errorf("invalid provider config: %w", err)
+		return ProviderValidationFailed(err)
 	}
 
 	s.providers[provider.ID()] = provider
 	return nil
 }
 
+// =============================================================================
+// TEMPLATE OPERATIONS
+// =============================================================================
+
 // CreateTemplate creates a new notification template
 func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest) (*Template, error) {
 	// Validate template syntax
 	if err := s.engine.ValidateTemplate(req.Body); err != nil {
-		return nil, fmt.Errorf("invalid template body: %w", err)
+		return nil, TemplateRenderFailed(err)
 	}
 
 	if req.Subject != "" {
 		if err := s.engine.ValidateTemplate(req.Subject); err != nil {
-			return nil, fmt.Errorf("invalid template subject: %w", err)
+			return nil, TemplateRenderFailed(err)
 		}
 	}
 
@@ -80,14 +84,14 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 	if len(req.Variables) == 0 {
 		vars, err := s.engine.ExtractVariables(req.Body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract variables: %w", err)
+			return nil, TemplateRenderFailed(err)
 		}
 		req.Variables = vars
 
 		if req.Subject != "" {
 			subjectVars, err := s.engine.ExtractVariables(req.Subject)
 			if err != nil {
-				return nil, fmt.Errorf("failed to extract subject variables: %w", err)
+				return nil, TemplateRenderFailed(err)
 			}
 			// Merge variables
 			varMap := make(map[string]bool)
@@ -108,30 +112,31 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 		language = "en"
 	}
 
+	now := time.Now().UTC()
 	template := &Template{
-		ID:             xid.New(),
-		OrganizationID: req.OrganizationID,
-		TemplateKey:    req.TemplateKey,
-		Name:           req.Name,
-		Type:           req.Type,
-		Language:       language,
-		Subject:        req.Subject,
-		Body:           req.Body,
-		Variables:      req.Variables,
-		Metadata:       req.Metadata,
-		Active:         true,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:          xid.New(),
+		AppID:       req.AppID,
+		TemplateKey: req.TemplateKey,
+		Name:        req.Name,
+		Type:        req.Type,
+		Language:    language,
+		Subject:     req.Subject,
+		Body:        req.Body,
+		Variables:   req.Variables,
+		Metadata:    req.Metadata,
+		Active:      true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
-	if err := s.repo.CreateTemplate(ctx, template); err != nil {
-		return nil, fmt.Errorf("failed to create template: %w", err)
+	if err := s.repo.CreateTemplate(ctx, template.ToSchema()); err != nil {
+		return nil, err
 	}
 
 	// Audit log
-	if err := s.auditSvc.Log(ctx, nil, "template.create", "template", "", "", fmt.Sprintf("template_id=%s,name=%s", template.ID, template.Name)); err != nil {
-		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit: %v\n", err)
+	if s.auditSvc != nil {
+		userID := xid.NilID()
+		s.auditSvc.Log(ctx, &userID, "notification_template", "create", fmt.Sprintf(`{"template_id":"%s","name":"%s"}`, template.ID, template.Name), req.AppID.String(), "")
 	}
 
 	return template, nil
@@ -139,7 +144,14 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 
 // GetTemplate gets a template by ID
 func (s *Service) GetTemplate(ctx context.Context, id xid.ID) (*Template, error) {
-	return s.repo.FindTemplateByID(ctx, id)
+	schemaTemplate, err := s.repo.FindTemplateByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if schemaTemplate == nil {
+		return nil, TemplateNotFound()
+	}
+	return FromSchemaTemplate(schemaTemplate), nil
 }
 
 // UpdateTemplate updates a template
@@ -147,24 +159,24 @@ func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemp
 	// Validate template syntax if body is being updated
 	if req.Body != nil {
 		if err := s.engine.ValidateTemplate(*req.Body); err != nil {
-			return fmt.Errorf("invalid template body: %w", err)
+			return TemplateRenderFailed(err)
 		}
 	}
 
 	if req.Subject != nil && *req.Subject != "" {
 		if err := s.engine.ValidateTemplate(*req.Subject); err != nil {
-			return fmt.Errorf("invalid template subject: %w", err)
+			return TemplateRenderFailed(err)
 		}
 	}
 
 	if err := s.repo.UpdateTemplate(ctx, id, req); err != nil {
-		return fmt.Errorf("failed to update template: %w", err)
+		return err
 	}
 
 	// Audit log
-	if err := s.auditSvc.Log(ctx, nil, "template.update", "template", "", "", fmt.Sprintf("template_id=%s", id)); err != nil {
-		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit: %v\n", err)
+	if s.auditSvc != nil {
+		userID := xid.NilID()
+		s.auditSvc.Log(ctx, &userID, "notification_template", "update", fmt.Sprintf(`{"template_id":"%s"}`, id), "", "")
 	}
 
 	return nil
@@ -173,62 +185,81 @@ func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemp
 // DeleteTemplate deletes a template
 func (s *Service) DeleteTemplate(ctx context.Context, id xid.ID) error {
 	if err := s.repo.DeleteTemplate(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete template: %w", err)
+		return err
 	}
 
 	// Audit log
-	if err := s.auditSvc.Log(ctx, nil, "template.delete", "template", "", "", fmt.Sprintf("template_id=%s", id)); err != nil {
-		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit: %v\n", err)
+	if s.auditSvc != nil {
+		userID := xid.NilID()
+		s.auditSvc.Log(ctx, &userID, "notification_template", "delete", fmt.Sprintf(`{"template_id":"%s"}`, id), "", "")
 	}
 
 	return nil
 }
 
-// ListTemplates lists templates
-func (s *Service) ListTemplates(ctx context.Context, req *ListTemplatesRequest) ([]*Template, int64, error) {
-	return s.repo.ListTemplates(ctx, req)
+// ListTemplates lists templates with pagination
+func (s *Service) ListTemplates(ctx context.Context, filter *ListTemplatesFilter) (*ListTemplatesResponse, error) {
+	// Get paginated results from repository
+	pageResp, err := s.repo.ListTemplates(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert schema templates to DTOs
+	dtoTemplates := FromSchemaTemplates(pageResp.Data)
+
+	// Return paginated response with DTOs
+	return &ListTemplatesResponse{
+		Data:       dtoTemplates,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
+	}, nil
 }
+
+// =============================================================================
+// NOTIFICATION OPERATIONS
+// =============================================================================
 
 // Send sends a notification
 func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, error) {
+	now := time.Now().UTC()
 	notification := &Notification{
-		ID:             xid.New(),
-		OrganizationID: req.OrganizationID,
-		Type:           req.Type,
-		Recipient:      req.Recipient,
-		Status:         NotificationStatusPending,
-		Metadata:       req.Metadata,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:        xid.New(),
+		AppID:     req.AppID,
+		Type:      req.Type,
+		Recipient: req.Recipient,
+		Status:    NotificationStatusPending,
+		Metadata:  req.Metadata,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	// Use template if specified
 	if req.TemplateName != "" {
-		template, err := s.repo.FindTemplateByName(ctx, req.OrganizationID, req.TemplateName)
+		schemaTemplate, err := s.repo.FindTemplateByName(ctx, req.AppID, req.TemplateName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find template: %w", err)
+			return nil, err
 		}
-		if template == nil {
-			return nil, fmt.Errorf("template not found: %s", req.TemplateName)
+		if schemaTemplate == nil {
+			return nil, TemplateNotFound()
 		}
-		if !template.Active {
-			return nil, fmt.Errorf("template is inactive: %s", req.TemplateName)
+		if !schemaTemplate.Active {
+			return nil, TemplateInactive(req.TemplateName)
 		}
 
-		notification.TemplateID = &template.ID
+		notification.TemplateID = &schemaTemplate.ID
 
 		// Render template
-		body, err := s.engine.Render(template.Body, req.Variables)
+		body, err := s.engine.Render(schemaTemplate.Body, req.Variables)
 		if err != nil {
-			return nil, fmt.Errorf("failed to render template body: %w", err)
+			return nil, TemplateRenderFailed(err)
 		}
 		notification.Body = body
 
-		if template.Subject != "" {
-			subject, err := s.engine.Render(template.Subject, req.Variables)
+		if schemaTemplate.Subject != "" {
+			subject, err := s.engine.Render(schemaTemplate.Subject, req.Variables)
 			if err != nil {
-				return nil, fmt.Errorf("failed to render template subject: %w", err)
+				return nil, TemplateRenderFailed(err)
 			}
 			notification.Subject = subject
 		}
@@ -247,15 +278,15 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 	}
 
 	// Save notification
-	if err := s.repo.CreateNotification(ctx, notification); err != nil {
-		return nil, fmt.Errorf("failed to create notification: %w", err)
+	if err := s.repo.CreateNotification(ctx, notification.ToSchema()); err != nil {
+		return nil, err
 	}
 
 	// Send notification
 	if err := s.sendNotification(ctx, notification); err != nil {
 		// Update status to failed
 		s.repo.UpdateNotificationStatus(ctx, notification.ID, NotificationStatusFailed, err.Error(), "")
-		return notification, fmt.Errorf("failed to send notification: %w", err)
+		return notification, NotificationSendFailed(err)
 	}
 
 	return notification, nil
@@ -263,12 +294,33 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 
 // GetNotification gets a notification by ID
 func (s *Service) GetNotification(ctx context.Context, id xid.ID) (*Notification, error) {
-	return s.repo.FindNotificationByID(ctx, id)
+	schemaNotification, err := s.repo.FindNotificationByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if schemaNotification == nil {
+		return nil, NotificationNotFound()
+	}
+	return FromSchemaNotification(schemaNotification), nil
 }
 
-// ListNotifications lists notifications
-func (s *Service) ListNotifications(ctx context.Context, req *ListNotificationsRequest) ([]*Notification, int64, error) {
-	return s.repo.ListNotifications(ctx, req)
+// ListNotifications lists notifications with pagination
+func (s *Service) ListNotifications(ctx context.Context, filter *ListNotificationsFilter) (*ListNotificationsResponse, error) {
+	// Get paginated results from repository
+	pageResp, err := s.repo.ListNotifications(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert schema notifications to DTOs
+	dtoNotifications := FromSchemaNotifications(pageResp.Data)
+
+	// Return paginated response with DTOs
+	return &ListNotificationsResponse{
+		Data:       dtoNotifications,
+		Pagination: pageResp.Pagination,
+		Cursor:     pageResp.Cursor,
+	}, nil
 }
 
 // sendNotification sends a notification using the appropriate provider
@@ -294,7 +346,7 @@ func (s *Service) sendNotification(ctx context.Context, notification *Notificati
 	}
 
 	if provider == nil {
-		return fmt.Errorf("no provider found for notification type: %s", notification.Type)
+		return ProviderNotConfigured(notification.Type)
 	}
 
 	// Send notification
@@ -313,12 +365,12 @@ func (s *Service) sendNotification(ctx context.Context, notification *Notificati
 
 // UpdateDeliveryStatus updates the delivery status of a notification
 func (s *Service) UpdateDeliveryStatus(ctx context.Context, id xid.ID, status NotificationStatus) error {
-	notification, err := s.repo.FindNotificationByID(ctx, id)
+	schemaNotification, err := s.repo.FindNotificationByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to find notification: %w", err)
+		return err
 	}
-	if notification == nil {
-		return fmt.Errorf("notification not found")
+	if schemaNotification == nil {
+		return NotificationNotFound()
 	}
 
 	if status == NotificationStatusDelivered {

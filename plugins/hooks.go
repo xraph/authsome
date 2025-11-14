@@ -2,10 +2,12 @@ package plugins
 
 import (
 	"context"
+
+	"github.com/xraph/authsome/core"
 )
 
 // HookFunc is a function that runs before/after an operation
-type HookFunc func(ctx context.Context, data interface{}) error
+type HookFunc = core.HookFunc
 
 // HookRegistry manages hooks for various operations
 type HookRegistry struct {

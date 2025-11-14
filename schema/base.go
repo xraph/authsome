@@ -13,12 +13,13 @@ type IDModel struct {
 }
 
 type AuditableModel struct {
-    ID        xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-    CreatedAt time.Time `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
-    CreatedBy xid.ID    `json:"createdBy" bun:"created_by,nullzero"`
-    UpdatedAt time.Time `json:"updatedAt" bun:"updated_at,nullzero,notnull,default:current_timestamp"`
-    UpdatedBy xid.ID    `json:"updatedBy" bun:"updated_by,notnull"`
-    Version   int       `json:"version" bun:"version,default:1"`
+	ID        xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
+	CreatedAt time.Time  `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	CreatedBy xid.ID     `json:"createdBy" bun:"created_by,nullzero"`
+	UpdatedAt time.Time  `json:"updatedAt" bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	UpdatedBy xid.ID     `json:"updatedBy" bun:"updated_by,notnull"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty" bun:"deleted_at,nullzero"`
+	Version   int        `json:"version" bun:"version,default:1"`
 }
 
 func (u *AuditableModel) BeforeAppendModel(ctx context.Context, query bun.Query) error {
@@ -31,6 +32,9 @@ func (u *AuditableModel) BeforeAppendModel(ctx context.Context, query bun.Query)
 		}
 	case *bun.UpdateQuery:
 		u.UpdatedAt = time.Now()
+	case *bun.DeleteQuery:
+		now := time.Now()
+		u.DeletedAt = &now
 	}
 	return nil
 }

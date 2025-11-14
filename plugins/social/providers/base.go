@@ -160,6 +160,7 @@ type ProviderConfig struct {
 	ClientID     string   `json:"clientId" yaml:"clientId"`
 	ClientSecret string   `json:"clientSecret" yaml:"clientSecret"`
 	RedirectURL  string   `json:"redirectUrl" yaml:"redirectUrl"`
+	CallbackURL  string   `json:"callbackUrl" yaml:"callbackUrl"`
 	Scopes       []string `json:"scopes" yaml:"scopes"`
 	Enabled      bool     `json:"enabled" yaml:"enabled"`
 

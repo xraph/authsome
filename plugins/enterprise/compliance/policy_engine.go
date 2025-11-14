@@ -21,8 +21,8 @@ func NewPolicyEngine(service *Service) *PolicyEngine {
 }
 
 // EnforcePasswordPolicy validates password against compliance requirements
-func (e *PolicyEngine) EnforcePasswordPolicy(ctx context.Context, orgID, password string) error {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) EnforcePasswordPolicy(ctx context.Context, appID, password string) error {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		// No profile means no enforcement
 		return nil
@@ -30,41 +30,40 @@ func (e *PolicyEngine) EnforcePasswordPolicy(ctx context.Context, orgID, passwor
 
 	// Check minimum length
 	if len(password) < profile.PasswordMinLength {
-		return fmt.Errorf("%w: password must be at least %d characters",
-			ErrWeakPassword, profile.PasswordMinLength)
+		return WeakPassword(fmt.Sprintf("password must be at least %d characters", profile.PasswordMinLength))
 	}
 
 	// Check uppercase requirement
 	if profile.PasswordRequireUpper && !containsUppercase(password) {
-		return fmt.Errorf("%w: password must contain at least one uppercase letter", ErrWeakPassword)
+		return WeakPassword("password must contain at least one uppercase letter")
 	}
 
 	// Check lowercase requirement
 	if profile.PasswordRequireLower && !containsLowercase(password) {
-		return fmt.Errorf("%w: password must contain at least one lowercase letter", ErrWeakPassword)
+		return WeakPassword("password must contain at least one lowercase letter")
 	}
 
 	// Check number requirement
 	if profile.PasswordRequireNumber && !containsNumber(password) {
-		return fmt.Errorf("%w: password must contain at least one number", ErrWeakPassword)
+		return WeakPassword("password must contain at least one number")
 	}
 
 	// Check symbol requirement
 	if profile.PasswordRequireSymbol && !containsSymbol(password) {
-		return fmt.Errorf("%w: password must contain at least one special character", ErrWeakPassword)
+		return WeakPassword("password must contain at least one special character")
 	}
 
 	// Check against common weak passwords
 	if isCommonPassword(password) {
-		return fmt.Errorf("%w: password is too common", ErrWeakPassword)
+		return WeakPassword("password is too common")
 	}
 
 	return nil
 }
 
 // EnforceMFA checks if MFA is required and enabled
-func (e *PolicyEngine) EnforceMFA(ctx context.Context, orgID, userID string, mfaEnabled bool) error {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) EnforceMFA(ctx context.Context, appID, userID string, mfaEnabled bool) error {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil
 	}
@@ -72,25 +71,25 @@ func (e *PolicyEngine) EnforceMFA(ctx context.Context, orgID, userID string, mfa
 	if profile.MFARequired && !mfaEnabled {
 		// Create violation
 		violation := &ComplianceViolation{
-			ProfileID:      profile.ID,
-			OrganizationID: orgID,
-			UserID:         userID,
-			ViolationType:  "mfa_not_enabled",
-			Severity:       "high",
-			Description:    "User does not have MFA enabled despite organization requirement",
-			Status:         "open",
+			ProfileID:     profile.ID,
+			AppID:         appID,
+			UserID:        userID,
+			ViolationType: "mfa_not_enabled",
+			Severity:      "high",
+			Description:   "User does not have MFA enabled despite app requirement",
+			Status:        "open",
 		}
 		e.service.repo.CreateViolation(ctx, violation)
 
-		return ErrMFARequired
+		return MFARequired()
 	}
 
 	return nil
 }
 
 // EnforceSessionPolicy validates session against compliance requirements
-func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, orgID string, session *Session) error {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, appID string, session *Session) error {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil
 	}
@@ -100,7 +99,7 @@ func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, orgID string, s
 	maxAge := time.Duration(profile.SessionMaxAge) * time.Second
 
 	if sessionAge > maxAge {
-		return ErrSessionExpired
+		return SessionExpired("session has exceeded maximum age")
 	}
 
 	// Check idle timeout
@@ -108,20 +107,20 @@ func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, orgID string, s
 	idleTimeout := time.Duration(profile.SessionIdleTimeout) * time.Second
 
 	if idleTime > idleTimeout {
-		return ErrSessionExpired
+		return SessionExpired("session has been idle for too long")
 	}
 
 	// Check IP binding
 	if profile.SessionIPBinding && session.CreatedIP != session.CurrentIP {
 		// Create violation
 		violation := &ComplianceViolation{
-			ProfileID:      profile.ID,
-			OrganizationID: orgID,
-			UserID:         session.UserID,
-			ViolationType:  "session_ip_mismatch",
-			Severity:       "critical",
-			Description:    fmt.Sprintf("Session IP changed from %s to %s", session.CreatedIP, session.CurrentIP),
-			Status:         "open",
+			ProfileID:     profile.ID,
+			AppID:         appID,
+			UserID:        session.UserID,
+			ViolationType: "session_ip_mismatch",
+			Severity:      "critical",
+			Description:   fmt.Sprintf("Session IP changed from %s to %s", session.CreatedIP, session.CurrentIP),
+			Status:        "open",
 			Metadata: map[string]interface{}{
 				"session_id": session.ID,
 				"created_ip": session.CreatedIP,
@@ -130,15 +129,15 @@ func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, orgID string, s
 		}
 		e.service.repo.CreateViolation(ctx, violation)
 
-		return ErrAccessDenied
+		return AccessDenied("session IP mismatch detected")
 	}
 
 	return nil
 }
 
 // EnforceAccessControl checks if user has proper access
-func (e *PolicyEngine) EnforceAccessControl(ctx context.Context, orgID, userID string, resource string, action string) error {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) EnforceAccessControl(ctx context.Context, appID, userID string, resource string, action string) error {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil
 	}
@@ -158,8 +157,8 @@ func (e *PolicyEngine) EnforceAccessControl(ctx context.Context, orgID, userID s
 }
 
 // EnforceTraining checks if user has completed required training
-func (e *PolicyEngine) EnforceTraining(ctx context.Context, orgID, userID string) error {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string) error {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil
 	}
@@ -195,44 +194,43 @@ func (e *PolicyEngine) EnforceTraining(ctx context.Context, orgID, userID string
 	if len(missingTraining) > 0 {
 		// Create violation
 		violation := &ComplianceViolation{
-			ProfileID:      profile.ID,
-			OrganizationID: orgID,
-			UserID:         userID,
-			ViolationType:  "training_incomplete",
-			Severity:       "medium",
-			Description:    fmt.Sprintf("User has not completed required training: %v", missingTraining),
-			Status:         "open",
+			ProfileID:     profile.ID,
+			AppID:         appID,
+			UserID:        userID,
+			ViolationType: "training_incomplete",
+			Severity:      "medium",
+			Description:   fmt.Sprintf("User has not completed required training: %v", missingTraining),
+			Status:        "open",
 			Metadata: map[string]interface{}{
 				"missing_training": missingTraining,
 			},
 		}
 		e.service.repo.CreateViolation(ctx, violation)
 
-		return ErrTrainingRequired
+		return TrainingRequired(fmt.Sprintf("%v", missingTraining))
 	}
 
 	return nil
 }
 
 // EnforceDataResidency checks if data access complies with residency requirements
-func (e *PolicyEngine) EnforceDataResidency(ctx context.Context, orgID, region string) error {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) EnforceDataResidency(ctx context.Context, appID, region string) error {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil
 	}
 
 	// If data residency is specified, verify it matches
 	if profile.DataResidency != "" && profile.DataResidency != region {
-		return fmt.Errorf("%w: data access from region %s not allowed (required: %s)",
-			ErrAccessDenied, region, profile.DataResidency)
+		return AccessDenied(fmt.Sprintf("data access from region %s not allowed (required: %s)", region, profile.DataResidency))
 	}
 
 	return nil
 }
 
 // CheckPasswordExpiry checks if user's password has expired
-func (e *PolicyEngine) CheckPasswordExpiry(ctx context.Context, orgID string, passwordChangedAt time.Time) (bool, error) {
-	profile, err := e.service.GetProfileByOrganization(ctx, orgID)
+func (e *PolicyEngine) CheckPasswordExpiry(ctx context.Context, appID string, passwordChangedAt time.Time) (bool, error) {
+	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return false, nil
 	}

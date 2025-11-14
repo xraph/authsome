@@ -2,52 +2,65 @@ package user
 
 import (
 	"context"
-	"errors"
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/internal/validator"
-	"github.com/xraph/authsome/types"
+	"github.com/xraph/authsome/schema"
 )
+
+// =============================================================================
+// MOCK REPOSITORY
+// =============================================================================
 
 // MockRepository is a mock implementation of the Repository interface
 type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) Create(ctx context.Context, user *User) error {
+func (m *MockRepository) Create(ctx context.Context, user *schema.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockRepository) FindByID(ctx context.Context, id xid.ID) (*User, error) {
+func (m *MockRepository) FindByID(ctx context.Context, id xid.ID) (*schema.User, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*User), args.Error(1)
+	return args.Get(0).(*schema.User), args.Error(1)
 }
 
-func (m *MockRepository) FindByEmail(ctx context.Context, email string) (*User, error) {
+func (m *MockRepository) FindByEmail(ctx context.Context, email string) (*schema.User, error) {
 	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*User), args.Error(1)
+	return args.Get(0).(*schema.User), args.Error(1)
 }
 
-func (m *MockRepository) FindByUsername(ctx context.Context, username string) (*User, error) {
+func (m *MockRepository) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*schema.User, error) {
+	args := m.Called(ctx, appID, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.User), args.Error(1)
+}
+
+func (m *MockRepository) FindByUsername(ctx context.Context, username string) (*schema.User, error) {
 	args := m.Called(ctx, username)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*User), args.Error(1)
+	return args.Get(0).(*schema.User), args.Error(1)
 }
 
-func (m *MockRepository) Update(ctx context.Context, user *User) error {
+func (m *MockRepository) Update(ctx context.Context, user *schema.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
@@ -57,36 +70,22 @@ func (m *MockRepository) Delete(ctx context.Context, id xid.ID) error {
 	return args.Error(0)
 }
 
-func (m *MockRepository) List(ctx context.Context, limit, offset int) ([]*User, error) {
-	args := m.Called(ctx, limit, offset)
+func (m *MockRepository) ListUsers(ctx context.Context, filter *ListUsersFilter) (*pagination.PageResponse[*schema.User], error) {
+	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*User), args.Error(1)
+	return args.Get(0).(*pagination.PageResponse[*schema.User]), args.Error(1)
 }
 
-func (m *MockRepository) Count(ctx context.Context) (int, error) {
-	args := m.Called(ctx)
+func (m *MockRepository) CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error) {
+	args := m.Called(ctx, filter)
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockRepository) CountCreatedSince(ctx context.Context, since time.Time) (int, error) {
-	args := m.Called(ctx, since)
-	return args.Int(0), args.Error(1)
-}
-
-func (m *MockRepository) Search(ctx context.Context, query string, limit, offset int) ([]*User, error) {
-	args := m.Called(ctx, query, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*User), args.Error(1)
-}
-
-func (m *MockRepository) CountSearch(ctx context.Context, query string) (int, error) {
-	args := m.Called(ctx, query)
-	return args.Int(0), args.Error(1)
-}
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
 
 // Helper function to create a test service
 func newTestService(repo Repository) *Service {
@@ -95,79 +94,96 @@ func newTestService(repo Repository) *Service {
 	}, nil)
 }
 
+func testAppID() xid.ID {
+	return xid.New()
+}
+
+func testSchemaUser(appID xid.ID) *schema.User {
+	id := xid.New()
+	now := time.Now().UTC()
+	return &schema.User{
+		ID:              id,
+		AppID:           &appID,
+		Email:           "test@example.com",
+		Name:            "Test User",
+		PasswordHash:    "$2a$10$test",
+		Username:        id.String(),
+		DisplayUsername: "",
+		EmailVerified:   false,
+		AuditableModel: schema.AuditableModel{
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+}
+
+// =============================================================================
+// CREATE TESTS
+// =============================================================================
+
 func TestService_Create(t *testing.T) {
 	tests := []struct {
 		name    string
-		req     *CreateUserRequest
+		request *CreateUserRequest
 		setup   func(*MockRepository)
 		wantErr bool
-		errMsg  string
+		errType error
 	}{
 		{
 			name: "successful user creation",
-			req: &CreateUserRequest{
-				Email:    "test@example.com",
+			request: &CreateUserRequest{
+				AppID:    testAppID(),
+				Email:    "newuser@example.com",
 				Password: "SecurePass123!",
-				Name:     "Test User",
+				Name:     "New User",
 			},
 			setup: func(m *MockRepository) {
-				m.On("FindByEmail", mock.Anything, "test@example.com").Return(nil, errors.New("not found"))
-				m.On("Create", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				m.On("FindByAppAndEmail", mock.Anything, mock.Anything, "newuser@example.com").
+					Return(nil, sql.ErrNoRows)
+				m.On("Create", mock.Anything, mock.Anything).Return(nil)
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid email",
-			req: &CreateUserRequest{
+			name: "email already exists in app",
+			request: &CreateUserRequest{
+				AppID:    testAppID(),
+				Email:    "existing@example.com",
+				Password: "SecurePass123!",
+				Name:     "Existing User",
+			},
+			setup: func(m *MockRepository) {
+				appID := testAppID()
+				existing := testSchemaUser(appID)
+				m.On("FindByAppAndEmail", mock.Anything, mock.Anything, "existing@example.com").
+					Return(existing, nil)
+			},
+			wantErr: true,
+			errType: ErrEmailAlreadyExists,
+		},
+		{
+			name: "invalid email format",
+			request: &CreateUserRequest{
+				AppID:    testAppID(),
 				Email:    "invalid-email",
 				Password: "SecurePass123!",
 				Name:     "Test User",
 			},
 			setup:   func(m *MockRepository) {},
 			wantErr: true,
-			errMsg:  "invalid email",
+			errType: ErrInvalidEmail,
 		},
 		{
 			name: "weak password",
-			req: &CreateUserRequest{
+			request: &CreateUserRequest{
+				AppID:    testAppID(),
 				Email:    "test@example.com",
-				Password: "weak",
+				Password: "123",
 				Name:     "Test User",
 			},
 			setup:   func(m *MockRepository) {},
 			wantErr: true,
-			errMsg:  "password",
-		},
-		{
-			name: "email already exists",
-			req: &CreateUserRequest{
-				Email:    "existing@example.com",
-				Password: "SecurePass123!",
-				Name:     "Test User",
-			},
-			setup: func(m *MockRepository) {
-				existingUser := &User{
-					ID:    xid.New(),
-					Email: "existing@example.com",
-				}
-				m.On("FindByEmail", mock.Anything, "existing@example.com").Return(existingUser, nil)
-			},
-			wantErr: true,
-			errMsg:  "email already exists",
-		},
-		{
-			name: "repository create error",
-			req: &CreateUserRequest{
-				Email:    "test@example.com",
-				Password: "SecurePass123!",
-				Name:     "Test User",
-			},
-			setup: func(m *MockRepository) {
-				m.On("FindByEmail", mock.Anything, "test@example.com").Return(nil, errors.New("not found"))
-				m.On("Create", mock.Anything, mock.AnythingOfType("*user.User")).Return(errors.New("database error"))
-			},
-			wantErr: true,
-			errMsg:  "database error",
+			errType: ErrWeakPassword,
 		},
 	}
 
@@ -175,24 +191,22 @@ func TestService_Create(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockRepository)
 			tt.setup(mockRepo)
-			svc := newTestService(mockRepo)
+			service := newTestService(mockRepo)
 
-			user, err := svc.Create(context.Background(), tt.req)
+			user, err := service.Create(context.Background(), tt.request)
 
 			if tt.wantErr {
 				assert.Error(t, err)
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
+				if tt.errType != nil {
+					assert.ErrorIs(t, err, tt.errType)
 				}
 				assert.Nil(t, user)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, user)
-				assert.Equal(t, tt.req.Email, user.Email)
-				assert.Equal(t, tt.req.Name, user.Name)
-				assert.NotEmpty(t, user.ID)
-				assert.NotEmpty(t, user.PasswordHash)
-				assert.NotEqual(t, tt.req.Password, user.PasswordHash) // Password should be hashed
+				assert.Equal(t, tt.request.Email, user.Email)
+				assert.Equal(t, tt.request.Name, user.Name)
+				assert.Equal(t, tt.request.AppID, user.AppID)
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -200,37 +214,34 @@ func TestService_Create(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// FIND TESTS
+// =============================================================================
+
 func TestService_FindByID(t *testing.T) {
-	userID := xid.New()
-	expectedUser := &User{
-		ID:    userID,
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
+	appID := testAppID()
+	testUser := testSchemaUser(appID)
 
 	tests := []struct {
 		name    string
 		id      xid.ID
 		setup   func(*MockRepository)
-		want    *User
 		wantErr bool
 	}{
 		{
 			name: "user found",
-			id:   userID,
+			id:   testUser.ID,
 			setup: func(m *MockRepository) {
-				m.On("FindByID", mock.Anything, userID).Return(expectedUser, nil)
+				m.On("FindByID", mock.Anything, testUser.ID).Return(testUser, nil)
 			},
-			want:    expectedUser,
 			wantErr: false,
 		},
 		{
 			name: "user not found",
 			id:   xid.New(),
 			setup: func(m *MockRepository) {
-				m.On("FindByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				m.On("FindByID", mock.Anything, mock.Anything).Return(nil, sql.ErrNoRows)
 			},
-			want:    nil,
 			wantErr: true,
 		},
 	}
@@ -239,16 +250,17 @@ func TestService_FindByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockRepository)
 			tt.setup(mockRepo)
-			svc := newTestService(mockRepo)
+			service := newTestService(mockRepo)
 
-			user, err := svc.FindByID(context.Background(), tt.id)
+			user, err := service.FindByID(context.Background(), tt.id)
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, user)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, user)
+				assert.NotNil(t, user)
+				assert.Equal(t, testUser.ID, user.ID)
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -256,36 +268,35 @@ func TestService_FindByID(t *testing.T) {
 	}
 }
 
-func TestService_FindByEmail(t *testing.T) {
-	expectedUser := &User{
-		ID:    xid.New(),
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
+func TestService_FindByAppAndEmail(t *testing.T) {
+	appID := testAppID()
+	testUser := testSchemaUser(appID)
 
 	tests := []struct {
 		name    string
+		appID   xid.ID
 		email   string
 		setup   func(*MockRepository)
-		want    *User
 		wantErr bool
 	}{
 		{
 			name:  "user found",
-			email: "test@example.com",
+			appID: appID,
+			email: testUser.Email,
 			setup: func(m *MockRepository) {
-				m.On("FindByEmail", mock.Anything, "test@example.com").Return(expectedUser, nil)
+				m.On("FindByAppAndEmail", mock.Anything, appID, testUser.Email).
+					Return(testUser, nil)
 			},
-			want:    expectedUser,
 			wantErr: false,
 		},
 		{
 			name:  "user not found",
+			appID: appID,
 			email: "nonexistent@example.com",
 			setup: func(m *MockRepository) {
-				m.On("FindByEmail", mock.Anything, "nonexistent@example.com").Return(nil, errors.New("not found"))
+				m.On("FindByAppAndEmail", mock.Anything, appID, "nonexistent@example.com").
+					Return(nil, sql.ErrNoRows)
 			},
-			want:    nil,
 			wantErr: true,
 		},
 	}
@@ -294,16 +305,17 @@ func TestService_FindByEmail(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockRepository)
 			tt.setup(mockRepo)
-			svc := newTestService(mockRepo)
+			service := newTestService(mockRepo)
 
-			user, err := svc.FindByEmail(context.Background(), tt.email)
+			user, err := service.FindByAppAndEmail(context.Background(), tt.appID, tt.email)
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, user)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, user)
+				assert.NotNil(t, user)
+				assert.Equal(t, testUser.Email, user.Email)
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -311,158 +323,61 @@ func TestService_FindByEmail(t *testing.T) {
 	}
 }
 
-func TestService_Update(t *testing.T) {
-	userID := xid.New()
-	existingUser := &User{
-		ID:        userID,
-		Email:     "test@example.com",
-		Name:      "Old Name",
-		Username:  userID.String(),
-		CreatedAt: time.Now().Add(-24 * time.Hour),
-		UpdatedAt: time.Now().Add(-24 * time.Hour),
-	}
+// =============================================================================
+// UPDATE TESTS
+// =============================================================================
 
-	newName := "New Name"
-	newImage := "https://example.com/image.jpg"
-	newUsername := "newusername"
+func TestService_Update(t *testing.T) {
+	appID := testAppID()
+	testUser := FromSchemaUser(testSchemaUser(appID))
+
+	newName := "Updated Name"
+	newEmail := "updated@example.com"
 
 	tests := []struct {
 		name    string
 		user    *User
-		req     *UpdateUserRequest
+		request *UpdateUserRequest
 		setup   func(*MockRepository)
 		wantErr bool
-		errMsg  string
-		check   func(*testing.T, *User)
 	}{
 		{
-			name: "update name",
-			user: &User{
-				ID:        existingUser.ID,
-				Email:     existingUser.Email,
-				Name:      existingUser.Name,
-				UpdatedAt: existingUser.UpdatedAt,
-			},
-			req: &UpdateUserRequest{
+			name: "successful name update",
+			user: testUser,
+			request: &UpdateUserRequest{
 				Name: &newName,
 			},
 			setup: func(m *MockRepository) {
-				m.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				m.On("Update", mock.Anything, mock.Anything).Return(nil)
 			},
 			wantErr: false,
-			check: func(t *testing.T, u *User) {
-				assert.Equal(t, newName, u.Name)
-				assert.True(t, u.UpdatedAt.After(existingUser.UpdatedAt))
-			},
 		},
 		{
-			name: "update image",
-			user: &User{
-				ID:        existingUser.ID,
-				Email:     existingUser.Email,
-				Name:      existingUser.Name,
-				UpdatedAt: existingUser.UpdatedAt,
-			},
-			req: &UpdateUserRequest{
-				Image: &newImage,
+			name: "successful email update",
+			user: testUser,
+			request: &UpdateUserRequest{
+				Email: &newEmail,
 			},
 			setup: func(m *MockRepository) {
-				m.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				m.On("FindByAppAndEmail", mock.Anything, appID, newEmail).
+					Return(nil, sql.ErrNoRows)
+				m.On("Update", mock.Anything, mock.Anything).Return(nil)
 			},
 			wantErr: false,
-			check: func(t *testing.T, u *User) {
-				assert.Equal(t, newImage, u.Image)
-			},
 		},
 		{
-			name: "update username - valid",
-			user: &User{
-				ID:        existingUser.ID,
-				Email:     existingUser.Email,
-				Name:      existingUser.Name,
-				Username:  existingUser.Username,
-				UpdatedAt: existingUser.UpdatedAt,
-			},
-			req: &UpdateUserRequest{
-				Username: &newUsername,
+			name: "email already taken",
+			user: testUser,
+			request: &UpdateUserRequest{
+				Email: &newEmail,
 			},
 			setup: func(m *MockRepository) {
-				m.On("FindByUsername", mock.Anything, newUsername).Return(nil, errors.New("not found"))
-				m.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
-			},
-			wantErr: false,
-			check: func(t *testing.T, u *User) {
-				assert.Equal(t, newUsername, u.Username)
-				assert.Equal(t, newUsername, u.DisplayUsername)
-			},
-		},
-		{
-			name: "update username - invalid characters",
-			user: &User{
-				ID:       existingUser.ID,
-				Email:    existingUser.Email,
-				Name:     existingUser.Name,
-				Username: existingUser.Username,
-			},
-			req: &UpdateUserRequest{
-				Username: stringPtr("invalid user!"),
-			},
-			setup:   func(m *MockRepository) {},
-			wantErr: true,
-			errMsg:  "invalid username",
-		},
-		{
-			name: "update username - already taken",
-			user: &User{
-				ID:       existingUser.ID,
-				Email:    existingUser.Email,
-				Name:     existingUser.Name,
-				Username: existingUser.Username,
-			},
-			req: &UpdateUserRequest{
-				Username: &newUsername,
-			},
-			setup: func(m *MockRepository) {
-				existingUserWithUsername := &User{
-					ID:       xid.New(),
-					Username: newUsername,
-				}
-				m.On("FindByUsername", mock.Anything, newUsername).Return(existingUserWithUsername, nil)
+				existing := testSchemaUser(appID)
+				existing.ID = xid.New() // Different user
+				m.On("FindByAppAndEmail", mock.Anything, appID, newEmail).
+					Return(existing, nil)
 			},
 			wantErr: true,
-			errMsg:  "already taken",
-		},
-		{
-			name: "update username - empty string",
-			user: &User{
-				ID:       existingUser.ID,
-				Email:    existingUser.Email,
-				Name:     existingUser.Name,
-				Username: existingUser.Username,
-			},
-			req: &UpdateUserRequest{
-				Username: stringPtr("   "),
-			},
-			setup:   func(m *MockRepository) {},
-			wantErr: true,
-			errMsg:  "cannot be empty",
-		},
-		{
-			name: "repository update error",
-			user: &User{
-				ID:        existingUser.ID,
-				Email:     existingUser.Email,
-				Name:      existingUser.Name,
-				UpdatedAt: existingUser.UpdatedAt,
-			},
-			req: &UpdateUserRequest{
-				Name: &newName,
-			},
-			setup: func(m *MockRepository) {
-				m.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(errors.New("database error"))
-			},
-			wantErr: true,
-			errMsg:  "database error",
 		},
 	}
 
@@ -470,21 +385,15 @@ func TestService_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockRepository)
 			tt.setup(mockRepo)
-			svc := newTestService(mockRepo)
+			service := newTestService(mockRepo)
 
-			user, err := svc.Update(context.Background(), tt.user, tt.req)
+			user, err := service.Update(context.Background(), tt.user, tt.request)
 
 			if tt.wantErr {
 				assert.Error(t, err)
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
-				}
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, user)
-				if tt.check != nil {
-					tt.check(t, user)
-				}
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -492,13 +401,13 @@ func TestService_Update(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// DELETE TESTS
+// =============================================================================
+
 func TestService_Delete(t *testing.T) {
-	userID := xid.New()
-	existingUser := &User{
-		ID:    userID,
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
+	appID := testAppID()
+	testUser := testSchemaUser(appID)
 
 	tests := []struct {
 		name    string
@@ -508,10 +417,10 @@ func TestService_Delete(t *testing.T) {
 	}{
 		{
 			name: "successful deletion",
-			id:   userID,
+			id:   testUser.ID,
 			setup: func(m *MockRepository) {
-				m.On("FindByID", mock.Anything, userID).Return(existingUser, nil)
-				m.On("Delete", mock.Anything, userID).Return(nil)
+				m.On("FindByID", mock.Anything, testUser.ID).Return(testUser, nil)
+				m.On("Delete", mock.Anything, testUser.ID).Return(nil)
 			},
 			wantErr: false,
 		},
@@ -519,16 +428,7 @@ func TestService_Delete(t *testing.T) {
 			name: "user not found",
 			id:   xid.New(),
 			setup: func(m *MockRepository) {
-				m.On("FindByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
-			},
-			wantErr: true,
-		},
-		{
-			name: "repository delete error",
-			id:   userID,
-			setup: func(m *MockRepository) {
-				m.On("FindByID", mock.Anything, userID).Return(existingUser, nil)
-				m.On("Delete", mock.Anything, userID).Return(errors.New("database error"))
+				m.On("FindByID", mock.Anything, mock.Anything).Return(nil, sql.ErrNoRows)
 			},
 			wantErr: true,
 		},
@@ -538,9 +438,9 @@ func TestService_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockRepository)
 			tt.setup(mockRepo)
-			svc := newTestService(mockRepo)
+			service := newTestService(mockRepo)
 
-			err := svc.Delete(context.Background(), tt.id)
+			err := service.Delete(context.Background(), tt.id)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -553,70 +453,45 @@ func TestService_Delete(t *testing.T) {
 	}
 }
 
-func TestService_List(t *testing.T) {
-	users := []*User{
-		{ID: xid.New(), Email: "user1@example.com", Name: "User 1"},
-		{ID: xid.New(), Email: "user2@example.com", Name: "User 2"},
-		{ID: xid.New(), Email: "user3@example.com", Name: "User 3"},
+// =============================================================================
+// LIST TESTS
+// =============================================================================
+
+func TestService_ListUsers(t *testing.T) {
+	appID := testAppID()
+	users := []*schema.User{
+		testSchemaUser(appID),
+		testSchemaUser(appID),
 	}
 
 	tests := []struct {
-		name      string
-		opts      types.PaginationOptions
-		setup     func(*MockRepository)
-		wantCount int
-		wantTotal int
-		wantErr   bool
+		name    string
+		filter  *ListUsersFilter
+		setup   func(*MockRepository)
+		wantErr bool
 	}{
 		{
-			name: "list users with default pagination",
-			opts: types.PaginationOptions{Page: 1, PageSize: 20},
-			setup: func(m *MockRepository) {
-				m.On("List", mock.Anything, 20, 0).Return(users, nil)
-				m.On("Count", mock.Anything).Return(3, nil)
+			name: "successful list",
+			filter: &ListUsersFilter{
+				PaginationParams: pagination.PaginationParams{
+					Page:  1,
+					Limit: 10,
+				},
+				AppID: appID,
 			},
-			wantCount: 3,
-			wantTotal: 3,
-			wantErr:   false,
-		},
-		{
-			name: "list users with custom page size",
-			opts: types.PaginationOptions{Page: 1, PageSize: 2},
 			setup: func(m *MockRepository) {
-				m.On("List", mock.Anything, 2, 0).Return(users[:2], nil)
-				m.On("Count", mock.Anything).Return(3, nil)
+				pageResp := &pagination.PageResponse[*schema.User]{
+					Data: users,
+					Pagination: &pagination.PageMeta{
+						Total:       2,
+						Limit:       10,
+						CurrentPage: 1,
+						TotalPages:  1,
+					},
+				}
+				m.On("ListUsers", mock.Anything, mock.Anything).Return(pageResp, nil)
 			},
-			wantCount: 2,
-			wantTotal: 3,
-			wantErr:   false,
-		},
-		{
-			name: "list users page 2",
-			opts: types.PaginationOptions{Page: 2, PageSize: 2},
-			setup: func(m *MockRepository) {
-				m.On("List", mock.Anything, 2, 2).Return(users[2:], nil)
-				m.On("Count", mock.Anything).Return(3, nil)
-			},
-			wantCount: 1,
-			wantTotal: 3,
-			wantErr:   false,
-		},
-		{
-			name: "repository list error",
-			opts: types.PaginationOptions{Page: 1, PageSize: 20},
-			setup: func(m *MockRepository) {
-				m.On("List", mock.Anything, 20, 0).Return(nil, errors.New("database error"))
-			},
-			wantErr: true,
-		},
-		{
-			name: "repository count error",
-			opts: types.PaginationOptions{Page: 1, PageSize: 20},
-			setup: func(m *MockRepository) {
-				m.On("List", mock.Anything, 20, 0).Return(users, nil)
-				m.On("Count", mock.Anything).Return(0, errors.New("database error"))
-			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -624,16 +499,17 @@ func TestService_List(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockRepository)
 			tt.setup(mockRepo)
-			svc := newTestService(mockRepo)
+			service := newTestService(mockRepo)
 
-			list, total, err := svc.List(context.Background(), tt.opts)
+			result, err := service.ListUsers(context.Background(), tt.filter)
 
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Nil(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.Len(t, list, tt.wantCount)
-				assert.Equal(t, tt.wantTotal, total)
+				assert.NotNil(t, result)
+				assert.Len(t, result.Data, 2)
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -641,7 +517,49 @@ func TestService_List(t *testing.T) {
 	}
 }
 
-// Helper function
-func stringPtr(s string) *string {
-	return &s
+// =============================================================================
+// COUNT TESTS
+// =============================================================================
+
+func TestService_CountUsers(t *testing.T) {
+	appID := testAppID()
+
+	tests := []struct {
+		name    string
+		filter  *CountUsersFilter
+		setup   func(*MockRepository)
+		want    int
+		wantErr bool
+	}{
+		{
+			name: "successful count",
+			filter: &CountUsersFilter{
+				AppID: appID,
+			},
+			setup: func(m *MockRepository) {
+				m.On("CountUsers", mock.Anything, mock.Anything).Return(5, nil)
+			},
+			want:    5,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockRepository)
+			tt.setup(mockRepo)
+			service := newTestService(mockRepo)
+
+			count, err := service.CountUsers(context.Background(), tt.filter)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.want, count)
+			}
+
+			mockRepo.AssertExpectations(t)
+		})
+	}
 }

@@ -7,80 +7,99 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
-// organizationTeamRepository implements OrganizationTeamRepository using Bun
+// organizationTeamRepository implements organization.TeamRepository using Bun
 type organizationTeamRepository struct {
 	db *bun.DB
 }
 
 // NewOrganizationTeamRepository creates a new organization team repository
-func NewOrganizationTeamRepository(db *bun.DB) *organizationTeamRepository {
+func NewOrganizationTeamRepository(db *bun.DB) organization.TeamRepository {
 	return &organizationTeamRepository{db: db}
 }
 
 // Create creates a new team
-func (r *organizationTeamRepository) Create(ctx context.Context, team *schema.OrganizationTeam) error {
+func (r *organizationTeamRepository) Create(ctx context.Context, team *organization.Team) error {
+	schemaTeam := team.ToSchema()
 	_, err := r.db.NewInsert().
-		Model(team).
+		Model(schemaTeam).
 		Exec(ctx)
 	return err
 }
 
 // FindByID retrieves a team by ID
-func (r *organizationTeamRepository) FindByID(ctx context.Context, id xid.ID) (*schema.OrganizationTeam, error) {
-	team := new(schema.OrganizationTeam)
+func (r *organizationTeamRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Team, error) {
+	schemaTeam := new(schema.OrganizationTeam)
 	err := r.db.NewSelect().
-		Model(team).
-		Relation("Organization").
+		Model(schemaTeam).
 		Where("uot.id = ?", id).
 		Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("team not found")
 	}
-	return team, err
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaTeam(schemaTeam), nil
 }
 
 // FindByName retrieves a team by name within an organization
-func (r *organizationTeamRepository) FindByName(ctx context.Context, orgID xid.ID, name string) (*schema.OrganizationTeam, error) {
-	team := new(schema.OrganizationTeam)
+func (r *organizationTeamRepository) FindByName(ctx context.Context, orgID xid.ID, name string) (*organization.Team, error) {
+	schemaTeam := new(schema.OrganizationTeam)
 	err := r.db.NewSelect().
-		Model(team).
+		Model(schemaTeam).
 		Where("organization_id = ? AND name = ?", orgID, name).
 		Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("team not found")
 	}
-	return team, err
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaTeam(schemaTeam), nil
 }
 
-// ListByOrganization lists all teams in an organization
-func (r *organizationTeamRepository) ListByOrganization(ctx context.Context, orgID xid.ID, limit, offset int) ([]*schema.OrganizationTeam, error) {
-	var teams []*schema.OrganizationTeam
-	
+// ListByOrganization lists all teams in an organization with pagination
+func (r *organizationTeamRepository) ListByOrganization(ctx context.Context, filter *organization.ListTeamsFilter) (*pagination.PageResponse[*organization.Team], error) {
+	var schemaTeams []*schema.OrganizationTeam
+
 	query := r.db.NewSelect().
-		Model(&teams).
-		Where("organization_id = ?", orgID).
+		Model(&schemaTeams).
+		Where("organization_id = ?", filter.OrganizationID).
 		Order("created_at ASC")
 
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
+	// Get total count
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	err := query.Scan(ctx)
-	return teams, err
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	teams := organization.FromSchemaTeams(schemaTeams)
+
+	return pagination.NewPageResponse(teams, int64(total), &filter.PaginationParams), nil
 }
 
 // Update updates a team
-func (r *organizationTeamRepository) Update(ctx context.Context, team *schema.OrganizationTeam) error {
+func (r *organizationTeamRepository) Update(ctx context.Context, team *organization.Team) error {
+	schemaTeam := team.ToSchema()
 	_, err := r.db.NewUpdate().
-		Model(team).
+		Model(schemaTeam).
 		WherePK().
 		Exec(ctx)
 	return err
@@ -105,9 +124,10 @@ func (r *organizationTeamRepository) CountByOrganization(ctx context.Context, or
 }
 
 // AddMember adds a member to a team
-func (r *organizationTeamRepository) AddMember(ctx context.Context, teamMember *schema.OrganizationTeamMember) error {
+func (r *organizationTeamRepository) AddMember(ctx context.Context, tm *organization.TeamMember) error {
+	schemaTeamMember := tm.ToSchema()
 	_, err := r.db.NewInsert().
-		Model(teamMember).
+		Model(schemaTeamMember).
 		Exec(ctx)
 	return err
 }
@@ -121,26 +141,32 @@ func (r *organizationTeamRepository) RemoveMember(ctx context.Context, teamID, m
 	return err
 }
 
-// ListMembers lists all members of a team
-func (r *organizationTeamRepository) ListMembers(ctx context.Context, teamID xid.ID, limit, offset int) ([]*schema.OrganizationTeamMember, error) {
-	var members []*schema.OrganizationTeamMember
-	
+// ListMembers lists all members of a team with pagination
+func (r *organizationTeamRepository) ListMembers(ctx context.Context, filter *organization.ListTeamMembersFilter) (*pagination.PageResponse[*organization.TeamMember], error) {
+	var schemaTeamMembers []*schema.OrganizationTeamMember
+
 	query := r.db.NewSelect().
-		Model(&members).
-		Relation("Member").
-		Relation("Member.User").
-		Where("team_id = ?", teamID).
+		Model(&schemaTeamMembers).
+		Where("team_id = ?", filter.TeamID).
 		Order("joined_at ASC")
 
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
+	// Get total count
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	err := query.Scan(ctx)
-	return members, err
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	teamMembers := organization.FromSchemaTeamMembers(schemaTeamMembers)
+
+	return pagination.NewPageResponse(teamMembers, int64(total), &filter.PaginationParams), nil
 }
 
 // CountMembers counts members in a team
@@ -152,3 +178,17 @@ func (r *organizationTeamRepository) CountMembers(ctx context.Context, teamID xi
 	return count, err
 }
 
+// IsTeamMember checks if a member belongs to a team
+func (r *organizationTeamRepository) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
+	count, err := r.db.NewSelect().
+		Model((*schema.OrganizationTeamMember)(nil)).
+		Where("team_id = ? AND member_id = ?", teamID, memberID).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// Type assertion to ensure organizationTeamRepository implements organization.TeamRepository
+var _ organization.TeamRepository = (*organizationTeamRepository)(nil)

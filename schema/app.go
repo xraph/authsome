@@ -16,4 +16,8 @@ type App struct {
 	Logo       string                 `json:"logo" bun:"logo"`
 	Metadata   map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
 	IsPlatform bool                   `json:"isPlatform" bun:"is_platform,default:false"` // Identifies the single platform app
+
+	// Relations
+	Members []Member `json:"members,omitempty" bun:"rel:has-many,join:id=organization_id"`
+	Teams   []Team   `json:"teams,omitempty" bun:"rel:has-many,join:id=organization_id"`
 }

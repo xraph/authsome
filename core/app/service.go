@@ -2,187 +2,268 @@ package app
 
 import (
 	"context"
-	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/rbac"
 )
 
-// Config represents app service configuration
-type Config struct {
-	// PlatformAppID is the ID of the platform app (super admin)
-	PlatformAppID xid.ID
+// ServiceImpl provides access to all app-related services
+// Internally delegates to focused services for better separation of concerns
+type ServiceImpl struct {
+	App        *AppService
+	Member     *MemberService
+	Team       *TeamService
+	Invitation *InvitationService
 }
 
-// Service provides app management operations
-type Service struct {
-	repo   Repository
-	config Config
-}
-
-// NewService creates a new app service
-func NewService(repo Repository, cfg Config) *Service {
-	return &Service{repo: repo, config: cfg}
-}
-
-// CreateApp creates a new app
-func (s *Service) CreateApp(ctx context.Context, req *CreateAppRequest) (*App, error) {
-	id := xid.New()
-	now := time.Now().UTC()
-	app := &App{
-		ID:        id,
-		Name:      req.Name,
-		Slug:      req.Slug,
-		Logo:      req.Logo,
-		Metadata:  req.Metadata,
-		CreatedAt: now,
-		UpdatedAt: now,
+// NewService creates a new service with all focused services
+func NewService(
+	appRepo AppRepository,
+	memberRepo MemberRepository,
+	teamRepo TeamRepository,
+	invitationRepo InvitationRepository,
+	cfg Config,
+	rbacSvc *rbac.Service,
+) *ServiceImpl {
+	return &ServiceImpl{
+		App:        NewAppService(appRepo, cfg, rbacSvc),
+		Member:     NewMemberService(memberRepo, appRepo, cfg, rbacSvc),
+		Team:       NewTeamService(teamRepo, memberRepo, cfg, rbacSvc),
+		Invitation: NewInvitationService(invitationRepo, memberRepo, appRepo, cfg, rbacSvc),
 	}
-	if err := s.repo.CreateApp(ctx, app); err != nil {
-		return nil, err
-	}
-	return app, nil
 }
 
-// FindAppByID returns an app by ID
-func (s *Service) FindAppByID(ctx context.Context, id xid.ID) (*App, error) {
-	return s.repo.FindAppByID(ctx, id)
+// =============================================================================
+// App Operations Delegation
+// =============================================================================
+
+func (s *ServiceImpl) UpdateConfig(cfg Config) {
+	s.App.UpdateConfig(cfg)
+	// Note: You may want to update config for other services too
 }
 
-// FindAppBySlug returns an app by slug
-func (s *Service) FindAppBySlug(ctx context.Context, slug string) (*App, error) {
-	return s.repo.FindAppBySlug(ctx, slug)
+func (s *ServiceImpl) CreateApp(ctx context.Context, req *CreateAppRequest) (*App, error) {
+	return s.App.CreateApp(ctx, req)
 }
 
-// UpdateApp updates an app
-func (s *Service) UpdateApp(ctx context.Context, id xid.ID, req *UpdateAppRequest) (*App, error) {
-	app, err := s.repo.FindAppByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if req.Name != nil {
-		app.Name = *req.Name
-	}
-	if req.Logo != nil {
-		app.Logo = *req.Logo
-	}
-	if req.Metadata != nil {
-		app.Metadata = req.Metadata
-	}
-	app.UpdatedAt = time.Now()
-	if err := s.repo.UpdateApp(ctx, app); err != nil {
-		return nil, err
-	}
-	return app, nil
+func (s *ServiceImpl) GetPlatformApp(ctx context.Context) (*App, error) {
+	return s.App.GetPlatformApp(ctx)
 }
 
-// DeleteApp deletes an app by ID
-func (s *Service) DeleteApp(ctx context.Context, id xid.ID) error {
-	return s.repo.DeleteApp(ctx, id)
+func (s *ServiceImpl) FindAppByID(ctx context.Context, id xid.ID) (*App, error) {
+	return s.App.FindAppByID(ctx, id)
 }
 
-// ListApps returns a paginated list of apps
-func (s *Service) ListApps(ctx context.Context, limit, offset int) ([]*App, error) {
-	return s.repo.ListApps(ctx, limit, offset)
+func (s *ServiceImpl) FindAppBySlug(ctx context.Context, slug string) (*App, error) {
+	return s.App.FindAppBySlug(ctx, slug)
 }
 
-// CountApps returns total number of apps
-func (s *Service) CountApps(ctx context.Context) (int, error) {
-	return s.repo.CountApps(ctx)
+func (s *ServiceImpl) UpdateApp(ctx context.Context, id xid.ID, req *UpdateAppRequest) (*App, error) {
+	return s.App.UpdateApp(ctx, id, req)
 }
 
-// CreateMember adds a new member to an app
-func (s *Service) CreateMember(ctx context.Context, member *Member) error {
-	member.CreatedAt = time.Now()
-	member.UpdatedAt = time.Now()
-	return s.repo.CreateMember(ctx, member)
+func (s *ServiceImpl) DeleteApp(ctx context.Context, id xid.ID) error {
+	return s.App.DeleteApp(ctx, id)
 }
 
-// FindMemberByID finds a member by ID
-func (s *Service) FindMemberByID(ctx context.Context, id xid.ID) (*Member, error) {
-	return s.repo.FindMemberByID(ctx, id)
+func (s *ServiceImpl) ListApps(ctx context.Context, filter *ListAppsFilter) (*pagination.PageResponse[*App], error) {
+	return s.App.ListApps(ctx, filter)
 }
 
-// FindMember finds a member by appID and userID
-func (s *Service) FindMember(ctx context.Context, appID, userID xid.ID) (*Member, error) {
-	return s.repo.FindMember(ctx, appID, userID)
+func (s *ServiceImpl) CountApps(ctx context.Context) (int, error) {
+	return s.App.CountApps(ctx)
 }
 
-// ListMembers lists members in an app
-func (s *Service) ListMembers(ctx context.Context, appID xid.ID, limit, offset int) ([]*Member, error) {
-	return s.repo.ListMembers(ctx, appID, limit, offset)
+func (s *ServiceImpl) SetPlatformApp(ctx context.Context, newPlatformAppID xid.ID) error {
+	return s.App.SetPlatformApp(ctx, newPlatformAppID)
 }
 
-// CountMembers returns total number of members in an app
-func (s *Service) CountMembers(ctx context.Context, appID xid.ID) (int, error) {
-	return s.repo.CountMembers(ctx, appID)
+func (s *ServiceImpl) IsPlatformApp(ctx context.Context, appID xid.ID) (bool, error) {
+	return s.App.IsPlatformApp(ctx, appID)
 }
 
-// UpdateMember updates a member
-func (s *Service) UpdateMember(ctx context.Context, member *Member) error {
-	member.UpdatedAt = time.Now()
-	return s.repo.UpdateMember(ctx, member)
+// =============================================================================
+// Member Operations Delegation
+// =============================================================================
+
+func (s *ServiceImpl) CreateMember(ctx context.Context, member *Member) (*Member, error) {
+	return s.Member.CreateMember(ctx, member)
 }
 
-// DeleteMember deletes a member by ID
-func (s *Service) DeleteMember(ctx context.Context, id xid.ID) error {
-	return s.repo.DeleteMember(ctx, id)
+func (s *ServiceImpl) FindMemberByID(ctx context.Context, id xid.ID) (*Member, error) {
+	return s.Member.FindMemberByID(ctx, id)
 }
 
-// CreateTeam creates a new team
-func (s *Service) CreateTeam(ctx context.Context, team *Team) error {
-	team.CreatedAt = time.Now()
-	team.UpdatedAt = time.Now()
-	return s.repo.CreateTeam(ctx, team)
+func (s *ServiceImpl) FindMember(ctx context.Context, appID, userID xid.ID) (*Member, error) {
+	return s.Member.FindMember(ctx, appID, userID)
 }
 
-// FindTeamByID finds a team by ID
-func (s *Service) FindTeamByID(ctx context.Context, id xid.ID) (*Team, error) {
-	return s.repo.FindTeamByID(ctx, id)
+func (s *ServiceImpl) ListMembers(ctx context.Context, filter *ListMembersFilter) (*pagination.PageResponse[*Member], error) {
+	return s.Member.ListMembers(ctx, filter)
 }
 
-// ListTeams lists teams in an app with pagination
-func (s *Service) ListTeams(ctx context.Context, appID xid.ID, limit, offset int) ([]*Team, error) {
-	return s.repo.ListTeams(ctx, appID, limit, offset)
+func (s *ServiceImpl) GetUserMemberships(ctx context.Context, userID xid.ID) ([]*Member, error) {
+	return s.Member.GetUserMemberships(ctx, userID)
 }
 
-// CountTeams returns total number of teams in an app
-func (s *Service) CountTeams(ctx context.Context, appID xid.ID) (int, error) {
-	return s.repo.CountTeams(ctx, appID)
+func (s *ServiceImpl) UpdateMember(ctx context.Context, member *Member) error {
+	return s.Member.UpdateMember(ctx, member)
 }
 
-// UpdateTeam updates a team
-func (s *Service) UpdateTeam(ctx context.Context, team *Team) error {
-	team.UpdatedAt = time.Now()
-	return s.repo.UpdateTeam(ctx, team)
+func (s *ServiceImpl) DeleteMember(ctx context.Context, id xid.ID) error {
+	return s.Member.DeleteMember(ctx, id)
 }
 
-// DeleteTeam deletes a team by ID
-func (s *Service) DeleteTeam(ctx context.Context, id xid.ID) error {
-	return s.repo.DeleteTeam(ctx, id)
+func (s *ServiceImpl) CountMembers(ctx context.Context, appID xid.ID) (int, error) {
+	return s.Member.CountMembers(ctx, appID)
 }
 
-// AddTeamMember adds a member to a team
-func (s *Service) AddTeamMember(ctx context.Context, tm *TeamMember) error {
-	return s.repo.AddTeamMember(ctx, tm)
+func (s *ServiceImpl) IsUserMember(ctx context.Context, appID, userID xid.ID) (bool, error) {
+	return s.Member.IsUserMember(ctx, appID, userID)
 }
 
-// RemoveTeamMember removes a member from a team
-func (s *Service) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
-	return s.repo.RemoveTeamMember(ctx, teamID, memberID)
+func (s *ServiceImpl) IsOwner(ctx context.Context, appID, userID xid.ID) (bool, error) {
+	return s.Member.IsOwner(ctx, appID, userID)
 }
 
-// ListTeamMembers lists members of a team with pagination
-func (s *Service) ListTeamMembers(ctx context.Context, teamID xid.ID, limit, offset int) ([]*TeamMember, error) {
-	return s.repo.ListTeamMembers(ctx, teamID, limit, offset)
+func (s *ServiceImpl) IsAdmin(ctx context.Context, appID, userID xid.ID) (bool, error) {
+	return s.Member.IsAdmin(ctx, appID, userID)
 }
 
-// CountTeamMembers returns total number of members in a team
-func (s *Service) CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error) {
-	return s.repo.CountTeamMembers(ctx, teamID)
+func (s *ServiceImpl) RequireOwner(ctx context.Context, appID, userID xid.ID) error {
+	return s.Member.RequireOwner(ctx, appID, userID)
 }
 
-// CreateInvitation creates an app invitation
-func (s *Service) CreateInvitation(ctx context.Context, inv *Invitation) error {
-	inv.CreatedAt = time.Now()
-	return s.repo.CreateInvitation(ctx, inv)
+func (s *ServiceImpl) RequireAdmin(ctx context.Context, appID, userID xid.ID) error {
+	return s.Member.RequireAdmin(ctx, appID, userID)
 }
+
+// =============================================================================
+// Team Operations Delegation
+// =============================================================================
+
+func (s *ServiceImpl) CreateTeam(ctx context.Context, team *Team) error {
+	return s.Team.CreateTeam(ctx, team)
+}
+
+func (s *ServiceImpl) FindTeamByID(ctx context.Context, id xid.ID) (*Team, error) {
+	return s.Team.FindTeamByID(ctx, id)
+}
+
+func (s *ServiceImpl) FindTeamByName(ctx context.Context, appID xid.ID, name string) (*Team, error) {
+	return s.Team.FindTeamByName(ctx, appID, name)
+}
+
+func (s *ServiceImpl) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*pagination.PageResponse[*Team], error) {
+	return s.Team.ListTeams(ctx, filter)
+}
+
+func (s *ServiceImpl) UpdateTeam(ctx context.Context, team *Team) error {
+	return s.Team.UpdateTeam(ctx, team)
+}
+
+func (s *ServiceImpl) DeleteTeam(ctx context.Context, id xid.ID) error {
+	return s.Team.DeleteTeam(ctx, id)
+}
+
+func (s *ServiceImpl) CountTeams(ctx context.Context, appID xid.ID) (int, error) {
+	return s.Team.CountTeams(ctx, appID)
+}
+
+func (s *ServiceImpl) AddTeamMember(ctx context.Context, tm *TeamMember) (*TeamMember, error) {
+	return s.Team.AddTeamMember(ctx, tm)
+}
+
+func (s *ServiceImpl) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
+	return s.Team.RemoveTeamMember(ctx, teamID, memberID)
+}
+
+func (s *ServiceImpl) ListTeamMembers(ctx context.Context, filter *ListTeamMembersFilter) (*pagination.PageResponse[*TeamMember], error) {
+	return s.Team.ListTeamMembers(ctx, filter)
+}
+
+func (s *ServiceImpl) CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error) {
+	return s.Team.CountTeamMembers(ctx, teamID)
+}
+
+func (s *ServiceImpl) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
+	return s.Team.IsTeamMember(ctx, teamID, memberID)
+}
+
+func (s *ServiceImpl) ListMemberTeams(ctx context.Context, filter *ListMemberTeamsFilter) (*pagination.PageResponse[*Team], error) {
+	return s.Team.ListMemberTeams(ctx, filter)
+}
+
+// =============================================================================
+// Invitation Operations Delegation
+// =============================================================================
+
+func (s *ServiceImpl) CreateInvitation(ctx context.Context, inv *Invitation) error {
+	return s.Invitation.CreateInvitation(ctx, inv)
+}
+
+func (s *ServiceImpl) FindInvitationByID(ctx context.Context, id xid.ID) (*Invitation, error) {
+	return s.Invitation.FindInvitationByID(ctx, id)
+}
+
+func (s *ServiceImpl) FindInvitationByToken(ctx context.Context, token string) (*Invitation, error) {
+	return s.Invitation.FindInvitationByToken(ctx, token)
+}
+
+func (s *ServiceImpl) ListInvitations(ctx context.Context, filter *ListInvitationsFilter) (*pagination.PageResponse[*Invitation], error) {
+	return s.Invitation.ListInvitations(ctx, filter)
+}
+
+func (s *ServiceImpl) AcceptInvitation(ctx context.Context, token string, userID xid.ID) (*Member, error) {
+	return s.Invitation.AcceptInvitation(ctx, token, userID)
+}
+
+func (s *ServiceImpl) DeclineInvitation(ctx context.Context, token string) error {
+	return s.Invitation.DeclineInvitation(ctx, token)
+}
+
+func (s *ServiceImpl) CancelInvitation(ctx context.Context, id, cancellerUserID xid.ID) error {
+	return s.Invitation.CancelInvitation(ctx, id, cancellerUserID)
+}
+
+func (s *ServiceImpl) ResendInvitation(ctx context.Context, id, resenderUserID xid.ID) (*Invitation, error) {
+	return s.Invitation.ResendInvitation(ctx, id, resenderUserID)
+}
+
+func (s *ServiceImpl) CleanupExpiredInvitations(ctx context.Context) (int, error) {
+	return s.Invitation.CleanupExpiredInvitations(ctx)
+}
+
+// =============================================================================
+// RBAC Operations (from rbac.go - these methods will need to be added)
+// =============================================================================
+
+// CheckPermission checks if a user has permission to perform an action on a resource.
+// This would typically be implemented in a shared RBAC helper or in the MemberService
+func (s *ServiceImpl) CheckPermission(ctx context.Context, userID, appID xid.ID, action, resourceType, resourceID string) (bool, error) {
+	// TODO: Implement RBAC check - likely needs to be in a shared location
+	// For now, delegate to member service if it has RBAC methods
+	return false, nil
+}
+
+// CheckPermissionWithContext checks permission with additional context variables for conditional permissions.
+func (s *ServiceImpl) CheckPermissionWithContext(ctx context.Context, userID, appID xid.ID, action, resourceType, resourceID string, contextVars map[string]string) (bool, error) {
+	// TODO: Implement RBAC check with context
+	return false, nil
+}
+
+// RequirePermission checks if a user has permission and returns an error if denied.
+func (s *ServiceImpl) RequirePermission(ctx context.Context, userID, appID xid.ID, action, resourceType, resourceID string) error {
+	// TODO: Implement RBAC requirement check
+	return nil
+}
+
+// RequirePermissionWithContext checks permission with context variables and returns error if denied.
+func (s *ServiceImpl) RequirePermissionWithContext(ctx context.Context, userID, appID xid.ID, action, resourceType, resourceID string, contextVars map[string]string) error {
+	// TODO: Implement RBAC requirement check with context
+	return nil
+}
+
+// Type assertion to ensure ServiceImpl implements Service
+var _ Service = (*ServiceImpl)(nil)

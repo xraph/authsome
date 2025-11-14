@@ -4,54 +4,184 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
-	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
 
 // Plugin implements the plugins.Plugin interface for Username auth
 type Plugin struct {
-	service *Service
-	db      *bun.DB
+	service       *Service
+	db            *bun.DB
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
+	authInst      core.Authsome
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the username plugin configuration
+type Config struct {
+	// MinPasswordLength is the minimum password length
+	MinPasswordLength int `json:"minPasswordLength"`
+	// MaxPasswordLength is the maximum password length
+	MaxPasswordLength int `json:"maxPasswordLength"`
+	// RequireUppercase requires at least one uppercase letter
+	RequireUppercase bool `json:"requireUppercase"`
+	// RequireLowercase requires at least one lowercase letter
+	RequireLowercase bool `json:"requireLowercase"`
+	// RequireNumber requires at least one number
+	RequireNumber bool `json:"requireNumber"`
+	// RequireSpecialChar requires at least one special character
+	RequireSpecialChar bool `json:"requireSpecialChar"`
+	// AllowUsernameLogin allows login with username instead of email
+	AllowUsernameLogin bool `json:"allowUsernameLogin"`
+}
+
+// DefaultConfig returns the default username plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		MinPasswordLength:  8,
+		MaxPasswordLength:  128,
+		RequireUppercase:   false,
+		RequireLowercase:   false,
+		RequireNumber:      false,
+		RequireSpecialChar: false,
+		AllowUsernameLogin: true,
+	}
+}
+
+// PluginOption is a functional option for configuring the username plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithMinPasswordLength sets the minimum password length
+func WithMinPasswordLength(length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MinPasswordLength = length
+	}
+}
+
+// WithMaxPasswordLength sets the maximum password length
+func WithMaxPasswordLength(length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxPasswordLength = length
+	}
+}
+
+// WithRequireUppercase sets whether uppercase letters are required
+func WithRequireUppercase(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireUppercase = required
+	}
+}
+
+// WithRequireLowercase sets whether lowercase letters are required
+func WithRequireLowercase(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireLowercase = required
+	}
+}
+
+// WithRequireNumber sets whether numbers are required
+func WithRequireNumber(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireNumber = required
+	}
+}
+
+// WithRequireSpecialChar sets whether special characters are required
+func WithRequireSpecialChar(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireSpecialChar = required
+	}
+}
+
+// WithAllowUsernameLogin sets whether username login is allowed
+func WithAllowUsernameLogin(allowed bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowUsernameLogin = allowed
+	}
+}
+
+// NewPlugin creates a new username plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "username" }
 
 // Init accepts auth instance with GetDB method
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("username plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("username plugin requires auth instance with GetDB method")
-	}
+	p.authInst = authInst
 
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for username plugin")
 	}
 
-	p.db = db
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for username plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "username"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.username", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind username config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models (no specific models for username plugin currently)
+	// Username auth uses core User schema
+
 	// Construct local core services
-	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
-	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil)
+	sessionSvc := session.NewService(authInst.Repository().Session(), session.Config{}, nil)
 	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
-	p.service = NewService(userSvc, authSvc)
+	p.service = NewService(userSvc, authSvc, p.config)
+
+	p.logger.Info("username plugin initialized",
+		forge.F("min_password_length", p.config.MinPasswordLength),
+		forge.F("allow_username_login", p.config.AllowUsernameLogin))
+
 	return nil
 }
 
 // RegisterRoutes registers Username plugin routes
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the correct basePath
-	h := NewHandler(p.service, repo.NewTwoFARepository(p.db))
+	h := NewHandler(p.service, p.authInst.Repository().TwoFA())
+
 	router.POST("/username/signup", h.SignUp,
 		forge.WithName("username.signup"),
 		forge.WithSummary("Sign up with username"),

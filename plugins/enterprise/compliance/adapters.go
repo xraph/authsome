@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/user"
 )
 
@@ -48,26 +49,29 @@ func (a *AuditServiceAdapter) LogEvent(ctx context.Context, event *AuditEvent) e
 }
 
 // GetOldestLog retrieves the oldest audit log for data retention checks
-func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, orgID string) (*AuditLog, error) {
+func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, appID string) (*AuditLog, error) {
 	if a.svc == nil {
 		return nil, fmt.Errorf("audit service not available")
 	}
 
 	// Query oldest audit event
-	// AuthSome's audit service doesn't have org filtering yet
+	// AuthSome's audit service doesn't have app filtering yet
 	// TODO: Update when multi-tenancy is fully integrated
-	events, err := a.svc.List(ctx, 1, 0)
+	filter := &audit.ListEventsFilter{
+		PaginationParams: pagination.PaginationParams{Limit: 1, Offset: 0},
+	}
+	eventsResp, err := a.svc.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(events) == 0 {
+	if len(eventsResp.Data) == 0 {
 		return nil, nil
 	}
 
 	// Convert to compliance AuditLog
 	return &AuditLog{
-		CreatedAt: events[0].CreatedAt,
+		CreatedAt: eventsResp.Data[0].CreatedAt,
 	}, nil
 }
 
@@ -81,13 +85,13 @@ func NewUserServiceAdapter(svc user.ServiceInterface) *UserServiceAdapter {
 	return &UserServiceAdapter{svc: svc}
 }
 
-// ListByOrganization retrieves all users in an organization
-func (a *UserServiceAdapter) ListByOrganization(ctx context.Context, orgID string) ([]*User, error) {
+// ListByApp retrieves all users in an app
+func (a *UserServiceAdapter) ListByApp(ctx context.Context, appID string) ([]*User, error) {
 	if a.svc == nil {
 		return nil, fmt.Errorf("user service not available")
 	}
 
-	// TODO: Update when multi-tenancy plugin provides org-scoped user listing
+	// TODO: Update when multi-tenancy plugin provides app-scoped user listing
 	// For now, return empty list
 	return []*User{}, nil
 }
@@ -117,42 +121,32 @@ func (a *UserServiceAdapter) GetMFAStatus(ctx context.Context, userID string) (b
 	return false, nil
 }
 
-// OrganizationServiceAdapter adapts the app service (from multi-tenancy plugin)
-type OrganizationServiceAdapter struct {
+// AppServiceAdapter adapts the app service (from multi-tenancy plugin)
+type AppServiceAdapter struct {
 	svc interface{} // Will be app.Service when multi-tenancy plugin is loaded
 }
 
-// NewOrganizationServiceAdapter creates a new organization service adapter
-func NewOrganizationServiceAdapter(svc interface{}) *OrganizationServiceAdapter {
-	return &OrganizationServiceAdapter{svc: svc}
+// NewAppServiceAdapter creates a new app service adapter
+func NewAppServiceAdapter(svc interface{}) *AppServiceAdapter {
+	return &AppServiceAdapter{svc: svc}
 }
 
-// Get retrieves an organization by ID
-func (a *OrganizationServiceAdapter) Get(ctx context.Context, id string) (*Organization, error) {
+// Get retrieves an app by ID
+func (a *AppServiceAdapter) Get(ctx context.Context, id string) (*App, error) {
 	if a.svc == nil {
-		// Multi-tenancy plugin not loaded - return default organization
-		return &Organization{
+		// Multi-tenancy plugin not loaded - return default app
+		return &App{
 			ID:   "platform",
 			Name: "Platform",
 		}, nil
 	}
 
-	// TODO: Cast to actual organization service and call Get
+	// TODO: Cast to actual app service and call Get
 	// This requires the multi-tenancy plugin to be implemented
-	return &Organization{
+	return &App{
 		ID:   id,
-		Name: "Organization",
+		Name: "App",
 	}, nil
-}
-
-// ListMembers retrieves all members of an organization
-func (a *OrganizationServiceAdapter) ListMembers(ctx context.Context, orgID string) ([]string, error) {
-	if a.svc == nil {
-		return []string{}, nil
-	}
-
-	// TODO: Cast to actual organization service and call ListMembers
-	return []string{}, nil
 }
 
 // EmailServiceAdapter adapts the notification service for email sending

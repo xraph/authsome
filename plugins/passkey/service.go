@@ -8,8 +8,8 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -39,8 +39,8 @@ func (s *Service) BeginRegistration(_ context.Context, userID xid.ID) (map[strin
 // FinishRegistration persists a passkey record with app and org scoping
 func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credentialID string, ip, ua string) error {
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -89,8 +89,8 @@ func (s *Service) FinishLogin(ctx context.Context, userID xid.ID, remember bool,
 // List user passkeys, scoped to app and optional org
 func (s *Service) List(ctx context.Context, userID xid.ID) ([]schema.Passkey, error) {
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -115,8 +115,8 @@ func (s *Service) List(ctx context.Context, userID xid.ID) ([]schema.Passkey, er
 // Delete passkey by ID, scoped to app and optional org
 func (s *Service) Delete(ctx context.Context, id xid.ID, ip, ua string) error {
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID

@@ -6,7 +6,8 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -28,20 +29,22 @@ func NewHandler(service *apikey.Service, config Config) *Handler {
 // CreateAPIKey handles POST /api-keys
 func (h *Handler) CreateAPIKey(c forge.Context) error {
 	// Extract context (set by auth middleware)
-	appID := interfaces.GetAppID(c.Request().Context())
-	envID := interfaces.GetEnvironmentID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		err := errs.New("MISSING_APP_ID", "App context required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+	if envID.IsNil() {
+		err := errs.New("MISSING_ENV_ID", "Environment context required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 	if userID.IsNil() {
-		return c.JSON(401, map[string]string{
-			"error": "Authentication required",
-		})
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Parse request body (only for mutable fields)
@@ -56,28 +59,21 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 	}
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid request body",
-		})
+		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	// Validate required fields
 	if reqBody.Name == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Name is required",
-		})
+		err := errs.New("NAME_REQUIRED", "Name is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 	if len(reqBody.Scopes) == 0 {
-		return c.JSON(400, map[string]string{
-			"error": "At least one scope is required",
-		})
+		err := errs.New("SCOPES_REQUIRED", "At least one scope is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Build request with context
-	var envIDPtr *xid.ID
-	if !envID.IsNil() {
-		envIDPtr = &envID
-	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -85,7 +81,7 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 
 	req := &apikey.CreateAPIKeyRequest{
 		AppID:         appID,
-		EnvironmentID: envIDPtr,
+		EnvironmentID: envID,
 		OrgID:         orgIDPtr,
 		UserID:        userID,
 		Name:          reqBody.Name,
@@ -99,9 +95,11 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 
 	key, err := h.service.CreateAPIKey(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(201, map[string]interface{}{
@@ -113,63 +111,65 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 // ListAPIKeys handles GET /api-keys
 func (h *Handler) ListAPIKeys(c forge.Context) error {
 	// Extract context
-	appID := interfaces.GetAppID(c.Request().Context())
-	envID := interfaces.GetEnvironmentID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		err := errs.New("MISSING_APP_ID", "App context required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse pagination parameters
-	limitStr := c.Request().URL.Query().Get("limit")
-	offsetStr := c.Request().URL.Query().Get("offset")
+	// Parse pagination and filter parameters
+	query := c.Request().URL.Query()
+
+	page := 1 // default
+	if pageStr := query.Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
 
 	limit := 20 // default
-	if limitStr != "" {
+	if limitStr := query.Get("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
 	}
 
-	offset := 0 // default
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
+	// Build filter with optional parameters
+	filter := &apikey.ListAPIKeysFilter{
+		AppID: appID,
+	}
+	filter.Page = page
+	filter.Limit = limit
+
+	// Optional filters
+	if !envID.IsNil() {
+		filter.EnvironmentID = &envID
+	}
+	if !orgID.IsNil() {
+		filter.OrganizationID = &orgID
+	}
+	if !userID.IsNil() {
+		filter.UserID = &userID
+	}
+
+	// Parse active filter
+	if activeStr := query.Get("active"); activeStr != "" {
+		if active, err := strconv.ParseBool(activeStr); err == nil {
+			filter.Active = &active
 		}
 	}
 
-	// Build request with context
-	var envIDPtr *xid.ID
-	if !envID.IsNil() {
-		envIDPtr = &envID
-	}
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-	var userIDPtr *xid.ID
-	if !userID.IsNil() {
-		userIDPtr = &userID
-	}
-
-	req := &apikey.ListAPIKeysRequest{
-		AppID:          appID,
-		EnvironmentID:  envIDPtr,
-		OrganizationID: orgIDPtr,
-		UserID:         userIDPtr,
-		Limit:          limit,
-		Offset:         offset,
-	}
-
-	response, err := h.service.ListAPIKeys(c.Request().Context(), req)
+	response, err := h.service.ListAPIKeys(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, response)
@@ -178,29 +178,26 @@ func (h *Handler) ListAPIKeys(c forge.Context) error {
 // GetAPIKey handles GET /api-keys/:id
 func (h *Handler) GetAPIKey(c forge.Context) error {
 	// Extract context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || userID.IsNil() {
-		return c.JSON(401, map[string]string{
-			"error": "Authentication required",
-		})
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Parse key ID
 	keyIDStr := c.Param("id")
 	if keyIDStr == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Key ID is required",
-		})
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	keyID, err := xid.FromString(keyIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid key ID format",
-		})
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	var orgIDPtr *xid.ID
@@ -210,9 +207,11 @@ func (h *Handler) GetAPIKey(c forge.Context) error {
 
 	key, err := h.service.GetAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr)
 	if err != nil {
-		return c.JSON(404, map[string]string{
-			"error": "API key not found",
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, key)
@@ -221,36 +220,32 @@ func (h *Handler) GetAPIKey(c forge.Context) error {
 // UpdateAPIKey handles PATCH /api-keys/:id
 func (h *Handler) UpdateAPIKey(c forge.Context) error {
 	// Extract context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || userID.IsNil() {
-		return c.JSON(401, map[string]string{
-			"error": "Authentication required",
-		})
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Parse key ID
 	keyIDStr := c.Param("id")
 	if keyIDStr == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Key ID is required",
-		})
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	keyID, err := xid.FromString(keyIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid key ID format",
-		})
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	var req apikey.UpdateAPIKeyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid request body",
-		})
+		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	var orgIDPtr *xid.ID
@@ -260,9 +255,11 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 
 	key, err := h.service.UpdateAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr, &req)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, key)
@@ -271,29 +268,26 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 // DeleteAPIKey handles DELETE /api-keys/:id
 func (h *Handler) DeleteAPIKey(c forge.Context) error {
 	// Extract context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || userID.IsNil() {
-		return c.JSON(401, map[string]string{
-			"error": "Authentication required",
-		})
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Parse key ID
 	keyIDStr := c.Param("id")
 	if keyIDStr == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Key ID is required",
-		})
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	keyID, err := xid.FromString(keyIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid key ID format",
-		})
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	var orgIDPtr *xid.ID
@@ -303,9 +297,11 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 
 	err = h.service.DeleteAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, map[string]string{
@@ -316,36 +312,29 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 // RotateAPIKey handles POST /api-keys/:id/rotate
 func (h *Handler) RotateAPIKey(c forge.Context) error {
 	// Extract context
-	appID := interfaces.GetAppID(c.Request().Context())
-	envID := interfaces.GetEnvironmentID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
-	if appID.IsNil() || userID.IsNil() {
-		return c.JSON(401, map[string]string{
-			"error": "Authentication required",
-		})
+	if appID.IsNil() || envID.IsNil() || userID.IsNil() {
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication and environment context required", 401)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Parse key ID
 	keyIDStr := c.Param("id")
 	if keyIDStr == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Key ID is required",
-		})
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	keyID, err := xid.FromString(keyIDStr)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid key ID format",
-		})
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
-	var envIDPtr *xid.ID
-	if !envID.IsNil() {
-		envIDPtr = &envID
-	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -354,16 +343,18 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 	rotateReq := &apikey.RotateAPIKeyRequest{
 		ID:             keyID,
 		AppID:          appID,
-		EnvironmentID:  envIDPtr,
+		EnvironmentID:  envID,
 		OrganizationID: orgIDPtr,
 		UserID:         userID,
 	}
 
 	newKey, err := h.service.RotateAPIKey(c.Request().Context(), rotateReq)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -377,15 +368,13 @@ func (h *Handler) VerifyAPIKey(c forge.Context) error {
 	var req apikey.VerifyAPIKeyRequest
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid request body",
-		})
+		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	if req.Key == "" {
-		return c.JSON(400, map[string]string{
-			"error": "API key is required",
-		})
+		err := errs.New("KEY_REQUIRED", "API key is required", 400)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	// Set IP and User Agent from request
@@ -394,15 +383,16 @@ func (h *Handler) VerifyAPIKey(c forge.Context) error {
 
 	response, err := h.service.VerifyAPIKey(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	if !response.Valid {
-		return c.JSON(401, map[string]string{
-			"error": response.Error,
-		})
+		err := errs.New("INVALID_KEY", response.Error, 401)
+		return c.JSON(err.HTTPStatus, err)
 	}
 
 	return c.JSON(200, response)

@@ -2,6 +2,7 @@ package components
 
 import (
 	lucide "github.com/eduardolat/gomponents-lucide"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/user"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -9,17 +10,20 @@ import (
 
 // PageData represents common data for all pages
 type PageData struct {
-	Title          string
-	User           *user.User
-	CSRFToken      string
-	ActivePage     string
-	BasePath       string
-	Data           interface{}
-	Error          string
-	Success        string
-	Year           int
-	EnabledPlugins map[string]bool
-	IsSaaSMode     bool // Whether multitenancy is enabled
+	Title           string
+	User            *user.User
+	CSRFToken       string
+	ActivePage      string
+	BasePath        string
+	Data            interface{}
+	Error           string
+	Success         string
+	Year            int
+	EnabledPlugins  map[string]bool
+	IsSaaSMode      bool      // Whether multitenancy is enabled (deprecated - use ShowAppSwitcher)
+	CurrentApp      *app.App  // Current app in context
+	UserApps        []*app.App // Apps user has access to
+	ShowAppSwitcher bool       // Whether to show app switcher in header
 }
 
 // BaseLayout renders the main HTML structure

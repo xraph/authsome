@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
@@ -22,48 +23,151 @@ import (
 
 // Plugin implements the plugins.Plugin interface for Email OTP
 type Plugin struct {
-	service      *Service
-	notifAdapter *notificationPlugin.Adapter
-	db           *bun.DB
+	service       *Service
+	notifAdapter  *notificationPlugin.Adapter
+	db            *bun.DB
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the email OTP plugin configuration
+type Config struct {
+	// OTPLength is the length of the OTP code
+	OTPLength int `json:"otpLength"`
+	// ExpiryMinutes is the OTP expiry time in minutes
+	ExpiryMinutes int `json:"expiryMinutes"`
+	// MaxAttempts is the maximum verification attempts
+	MaxAttempts int `json:"maxAttempts"`
+	// RateLimitPerHour is the max OTP requests per hour
+	RateLimitPerHour int `json:"rateLimitPerHour"`
+	// AllowImplicitSignup allows creating users if they don't exist
+	AllowImplicitSignup bool `json:"allowImplicitSignup"`
+	// DevExposeOTP exposes the OTP in dev mode (for testing)
+	DevExposeOTP bool `json:"devExposeOTP"`
+}
+
+// DefaultConfig returns the default email OTP plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		OTPLength:           6,
+		ExpiryMinutes:       10,
+		MaxAttempts:         5,
+		RateLimitPerHour:    10,
+		AllowImplicitSignup: true,
+	}
+}
+
+// PluginOption is a functional option for configuring the email OTP plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithOTPLength sets the OTP code length
+func WithOTPLength(length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.OTPLength = length
+	}
+}
+
+// WithExpiryMinutes sets the OTP expiry time
+func WithExpiryMinutes(minutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.ExpiryMinutes = minutes
+	}
+}
+
+// WithMaxAttempts sets the maximum verification attempts
+func WithMaxAttempts(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxAttempts = max
+	}
+}
+
+// WithRateLimitPerHour sets the rate limit per hour
+func WithRateLimitPerHour(limit int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RateLimitPerHour = limit
+	}
+}
+
+// WithAllowImplicitSignup sets whether implicit signup is allowed
+func WithAllowImplicitSignup(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowImplicitSignup = allow
+	}
+}
+
+// NewPlugin creates a new email OTP plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "emailotp" }
 
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("emailotp plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("emailotp plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for emailotp plugin")
 	}
 
-	p.db = db
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for emailotp plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "emailotp"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.emailotp", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind email OTP config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models
+	p.db.RegisterModel((*schema.EmailOTP)(nil))
 
 	// TODO: Get notification adapter from service registry when available
 	// For now, plugins will work without notification adapter (graceful degradation)
 	// The notification plugin should be registered first and will set up its services
 
 	// wire repo and services
-	eotpr := repo.NewEmailOTPRepository(db)
-	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
-	sessionSvc := session.NewService(repo.NewSessionRepository(db), session.Config{}, nil)
+	eotpr := repo.NewEmailOTPRepository(p.db)
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
 	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	p.service = NewService(eotpr, userSvc, authSvc, auditSvc, p.notifAdapter, Config{
-		OTPLength:           6,
-		ExpiryMinutes:       10,
-		DevExposeOTP:        true,
-		AllowImplicitSignup: true,
-	})
+	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
+	p.service = NewService(eotpr, userSvc, authSvc, auditSvc, p.notifAdapter, p.config)
+
+	p.logger.Info("email OTP plugin initialized",
+		forge.F("otp_length", p.config.OTPLength),
+		forge.F("expiry_minutes", p.config.ExpiryMinutes),
+		forge.F("max_attempts", p.config.MaxAttempts))
+
 	return nil
 }
 

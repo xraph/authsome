@@ -6,8 +6,7 @@ import (
 	"strings"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/internal/interfaces"
-	"github.com/xraph/authsome/schema"
+	"github.com/xraph/authsome/core/contexts"
 )
 
 // MiddlewareConfig holds configuration for environment middleware
@@ -50,8 +49,8 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		ctx := r.Context()
 
 		// Get app ID from context (set by multitenancy middleware)
-		appID := interfaces.GetAppID(ctx)
-		if appID.IsNil() {
+		appID, ok := contexts.GetAppID(ctx)
+		if !ok {
 			// No app in context, skip environment extraction
 			next.ServeHTTP(w, r)
 			return
@@ -61,7 +60,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		envSlug := m.extractEnvironmentSlug(r)
 
 		// Get environment from database
-		var env interface{}
+		var env *Environment
 		var err error
 
 		if envSlug != "" {
@@ -73,10 +72,9 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 
 		// If environment found, add to context
 		if err == nil && env != nil {
-			// Type assert to schema.Environment to get the ID
-			if e, ok := env.(*schema.Environment); ok {
-				ctx = interfaces.SetEnvironmentID(ctx, e.ID)
-			}
+			ctx = contexts.SetEnvironmentID(ctx, env.ID)
+			// Also store full environment in context for additional metadata access
+			ctx = SetEnvironment(ctx, env)
 		}
 
 		// Continue with updated context
@@ -139,20 +137,18 @@ func (m *Middleware) extractFromSubdomain(host string) string {
 type ContextKey string
 
 const (
-	// EnvironmentIDKey is the context key for environment ID
-	EnvironmentIDKey ContextKey = "environment_id"
 	// EnvironmentKey is the context key for full environment object
 	EnvironmentKey ContextKey = "environment"
 )
 
 // GetEnvironmentID retrieves environment ID from context
-func GetEnvironmentID(ctx context.Context) xid.ID {
-	return interfaces.GetEnvironmentID(ctx)
+func GetEnvironmentID(ctx context.Context) (xid.ID, bool) {
+	return contexts.GetEnvironmentID(ctx)
 }
 
 // SetEnvironmentID sets environment ID in context
 func SetEnvironmentID(ctx context.Context, envID xid.ID) context.Context {
-	return interfaces.SetEnvironmentID(ctx, envID)
+	return contexts.SetEnvironmentID(ctx, envID)
 }
 
 // GetEnvironment retrieves full environment from context

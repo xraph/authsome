@@ -2,25 +2,34 @@ package user
 
 import (
 	"context"
-	"errors"
+	"database/sql"
 	"testing"
 
 	"github.com/rs/xid"
+	"github.com/stretchr/testify/mock"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/internal/validator"
-	"github.com/xraph/authsome/types"
+	"github.com/xraph/authsome/schema"
 )
+
+// =============================================================================
+// BENCHMARK TESTS
+// =============================================================================
 
 // BenchmarkService_Create benchmarks user creation
 func BenchmarkService_Create(b *testing.B) {
+	appID := testAppID()
 	mockRepo := new(MockRepository)
-	mockRepo.On("FindByEmail", MatchAny(), MatchAny()).Return(nil, errors.New("not found"))
-	mockRepo.On("Create", MatchAny(), MatchAny()).Return(nil)
+	mockRepo.On("FindByAppAndEmail", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, sql.ErrNoRows)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	svc := NewService(mockRepo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
 	}, nil)
 
 	req := &CreateUserRequest{
+		AppID:    appID,
 		Email:    "benchmark@example.com",
 		Password: "SecurePass123!",
 		Name:     "Benchmark User",
@@ -36,15 +45,13 @@ func BenchmarkService_Create(b *testing.B) {
 
 // BenchmarkService_FindByID benchmarks finding a user by ID
 func BenchmarkService_FindByID(b *testing.B) {
+	appID := testAppID()
 	userID := xid.New()
-	existingUser := &User{
-		ID:    userID,
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
+	existingUser := testSchemaUser(appID)
+	existingUser.ID = userID
 
 	mockRepo := new(MockRepository)
-	mockRepo.On("FindByID", MatchAny(), userID).Return(existingUser, nil)
+	mockRepo.On("FindByID", mock.Anything, userID).Return(existingUser, nil)
 
 	svc := NewService(mockRepo, Config{}, nil)
 
@@ -56,16 +63,14 @@ func BenchmarkService_FindByID(b *testing.B) {
 	}
 }
 
-// BenchmarkService_FindByEmail benchmarks finding a user by email
-func BenchmarkService_FindByEmail(b *testing.B) {
-	existingUser := &User{
-		ID:    xid.New(),
-		Email: "test@example.com",
-		Name:  "Test User",
-	}
+// BenchmarkService_FindByAppAndEmail benchmarks finding a user by app and email
+func BenchmarkService_FindByAppAndEmail(b *testing.B) {
+	appID := testAppID()
+	existingUser := testSchemaUser(appID)
 
 	mockRepo := new(MockRepository)
-	mockRepo.On("FindByEmail", MatchAny(), "test@example.com").Return(existingUser, nil)
+	mockRepo.On("FindByAppAndEmail", mock.Anything, appID, "test@example.com").
+		Return(existingUser, nil)
 
 	svc := NewService(mockRepo, Config{}, nil)
 
@@ -73,19 +78,16 @@ func BenchmarkService_FindByEmail(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = svc.FindByEmail(context.Background(), "test@example.com")
+		_, _ = svc.FindByAppAndEmail(context.Background(), appID, "test@example.com")
 	}
 }
 
 // BenchmarkService_Update benchmarks user updates
 func BenchmarkService_Update(b *testing.B) {
+	appID := testAppID()
 	userID := xid.New()
-	user := &User{
-		ID:       userID,
-		Email:    "test@example.com",
-		Name:     "Old Name",
-		Username: userID.String(),
-	}
+	user := FromSchemaUser(testSchemaUser(appID))
+	user.ID = userID
 
 	newName := "New Name"
 	req := &UpdateUserRequest{
@@ -93,7 +95,7 @@ func BenchmarkService_Update(b *testing.B) {
 	}
 
 	mockRepo := new(MockRepository)
-	mockRepo.On("Update", MatchAny(), MatchAny()).Return(nil)
+	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
 
 	svc := NewService(mockRepo, Config{}, nil)
 
@@ -106,36 +108,72 @@ func BenchmarkService_Update(b *testing.B) {
 	}
 }
 
-// BenchmarkService_List benchmarks listing users with pagination
-func BenchmarkService_List(b *testing.B) {
-	users := make([]*User, 20)
+// BenchmarkService_ListUsers benchmarks listing users with pagination
+func BenchmarkService_ListUsers(b *testing.B) {
+	appID := testAppID()
+	users := make([]*schema.User, 20)
 	for i := 0; i < 20; i++ {
-		users[i] = &User{
-			ID:    xid.New(),
-			Email: "user@example.com",
-			Name:  "User",
-		}
+		users[i] = testSchemaUser(appID)
+	}
+
+	pageResp := &pagination.PageResponse[*schema.User]{
+		Data: users,
+		Pagination: &pagination.PageMeta{
+			Total:       100,
+			Limit:       20,
+			CurrentPage: 1,
+			TotalPages:  5,
+		},
 	}
 
 	mockRepo := new(MockRepository)
-	mockRepo.On("List", MatchAny(), 20, 0).Return(users, nil)
-	mockRepo.On("Count", MatchAny()).Return(100, nil)
+	mockRepo.On("ListUsers", mock.Anything, mock.Anything).Return(pageResp, nil)
 
 	svc := NewService(mockRepo, Config{}, nil)
+
+	filter := &ListUsersFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 20,
+		},
+		AppID: appID,
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, _, _ = svc.List(context.Background(), types.PaginationOptions{Page: 1, PageSize: 20})
+		_, _ = svc.ListUsers(context.Background(), filter)
+	}
+}
+
+// BenchmarkService_CountUsers benchmarks counting users
+func BenchmarkService_CountUsers(b *testing.B) {
+	appID := testAppID()
+	mockRepo := new(MockRepository)
+	mockRepo.On("CountUsers", mock.Anything, mock.Anything).Return(100, nil)
+
+	svc := NewService(mockRepo, Config{}, nil)
+
+	filter := &CountUsersFilter{
+		AppID: appID,
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = svc.CountUsers(context.Background(), filter)
 	}
 }
 
 // BenchmarkService_Create_Parallel benchmarks concurrent user creation
 func BenchmarkService_Create_Parallel(b *testing.B) {
+	appID := testAppID()
 	mockRepo := new(MockRepository)
-	mockRepo.On("FindByEmail", MatchAny(), MatchAny()).Return(nil, errors.New("not found"))
-	mockRepo.On("Create", MatchAny(), MatchAny()).Return(nil)
+	mockRepo.On("FindByAppAndEmail", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, sql.ErrNoRows)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	svc := NewService(mockRepo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
@@ -146,6 +184,7 @@ func BenchmarkService_Create_Parallel(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		req := &CreateUserRequest{
+			AppID:    appID,
 			Email:    "benchmark@example.com",
 			Password: "SecurePass123!",
 			Name:     "Benchmark User",
@@ -157,13 +196,28 @@ func BenchmarkService_Create_Parallel(b *testing.B) {
 	})
 }
 
-// Helper types for benchmarks
-type PaginationOptions struct {
-	Page     int
-	PageSize int
+// BenchmarkFromSchemaUser benchmarks DTO conversion
+func BenchmarkFromSchemaUser(b *testing.B) {
+	appID := testAppID()
+	schemaUser := testSchemaUser(appID)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_ = FromSchemaUser(schemaUser)
+	}
 }
 
-// MatchAny is a helper for matching any argument in mocks
-func MatchAny() interface{} {
-	return interface{}(nil)
+// BenchmarkToSchema benchmarks schema conversion
+func BenchmarkToSchema(b *testing.B) {
+	appID := testAppID()
+	user := FromSchemaUser(testSchemaUser(appID))
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_ = user.ToSchema()
+	}
 }

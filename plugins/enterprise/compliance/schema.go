@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/pagination"
 )
 
 // RegisterModels registers compliance models with Bun
@@ -158,16 +159,16 @@ func (r *BunRepository) GetProfile(ctx context.Context, id string) (*ComplianceP
 	profile := new(ComplianceProfile)
 	err := r.db.NewSelect().Model(profile).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrProfileNotFound
+		return nil, nil
 	}
 	return profile, err
 }
 
-func (r *BunRepository) GetProfileByOrganization(ctx context.Context, orgID string) (*ComplianceProfile, error) {
+func (r *BunRepository) GetProfileByApp(ctx context.Context, appID string) (*ComplianceProfile, error) {
 	profile := new(ComplianceProfile)
-	err := r.db.NewSelect().Model(profile).Where("organization_id = ?", orgID).Scan(ctx)
+	err := r.db.NewSelect().Model(profile).Where("organization_id = ?", appID).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrProfileNotFound
+		return nil, nil
 	}
 	return profile, err
 }
@@ -182,23 +183,37 @@ func (r *BunRepository) DeleteProfile(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *BunRepository) ListProfiles(ctx context.Context, filters ProfileFilters) ([]*ComplianceProfile, error) {
+func (r *BunRepository) ListProfiles(ctx context.Context, filter *ListProfilesFilter) (*pagination.PageResponse[*ComplianceProfile], error) {
+	baseQuery := r.db.NewSelect().Model((*ComplianceProfile)(nil))
+
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.Status != nil {
+		baseQuery = baseQuery.Where("status = ?", *filter.Status)
+	}
+	if filter.Standard != nil {
+		baseQuery = baseQuery.Where("? = ANY(standards)", *filter.Standard)
+	}
+
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Limit(filter.Limit).Offset(filter.Offset)
+
 	var profiles []*ComplianceProfile
-	query := r.db.NewSelect().Model(&profiles)
-
-	if filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", filters.OrganizationID)
-	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
-	}
-	if filters.Standard != "" {
-		query = query.Where("? = ANY(standards)", filters.Standard)
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	query = query.Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return profiles, err
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(profiles, int64(total), params), nil
 }
 
 func (r *BunRepository) CreateCheck(ctx context.Context, check *ComplianceCheck) error {
@@ -210,25 +225,48 @@ func (r *BunRepository) GetCheck(ctx context.Context, id string) (*ComplianceChe
 	check := new(ComplianceCheck)
 	err := r.db.NewSelect().Model(check).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrCheckNotFound
+		return nil, nil
 	}
 	return check, err
 }
 
-func (r *BunRepository) ListChecks(ctx context.Context, profileID string, filters CheckFilters) ([]*ComplianceCheck, error) {
+func (r *BunRepository) ListChecks(ctx context.Context, filter *ListChecksFilter) (*pagination.PageResponse[*ComplianceCheck], error) {
+	baseQuery := r.db.NewSelect().Model((*ComplianceCheck)(nil))
+
+	if filter.ProfileID != nil {
+		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
+	}
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.CheckType != nil {
+		baseQuery = baseQuery.Where("check_type = ?", *filter.CheckType)
+	}
+	if filter.Status != nil {
+		baseQuery = baseQuery.Where("status = ?", *filter.Status)
+	}
+	if filter.SinceBefore != nil {
+		baseQuery = baseQuery.Where("last_checked_at >= ?", *filter.SinceBefore)
+	}
+
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Order("last_checked_at DESC").Limit(filter.Limit).Offset(filter.Offset)
+
 	var checks []*ComplianceCheck
-	query := r.db.NewSelect().Model(&checks).Where("profile_id = ?", profileID)
-
-	if filters.CheckType != "" {
-		query = query.Where("check_type = ?", filters.CheckType)
-	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	query = query.Order("last_checked_at DESC").Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return checks, err
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(checks, int64(total), params), nil
 }
 
 func (r *BunRepository) UpdateCheck(ctx context.Context, check *ComplianceCheck) error {
@@ -253,34 +291,51 @@ func (r *BunRepository) GetViolation(ctx context.Context, id string) (*Complianc
 	violation := new(ComplianceViolation)
 	err := r.db.NewSelect().Model(violation).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrViolationNotFound
+		return nil, nil
 	}
 	return violation, err
 }
 
-func (r *BunRepository) ListViolations(ctx context.Context, filters ViolationFilters) ([]*ComplianceViolation, error) {
+func (r *BunRepository) ListViolations(ctx context.Context, filter *ListViolationsFilter) (*pagination.PageResponse[*ComplianceViolation], error) {
+	baseQuery := r.db.NewSelect().Model((*ComplianceViolation)(nil))
+
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.ProfileID != nil {
+		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
+	}
+	if filter.UserID != nil {
+		baseQuery = baseQuery.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.Status != nil {
+		baseQuery = baseQuery.Where("status = ?", *filter.Status)
+	}
+	if filter.Severity != nil {
+		baseQuery = baseQuery.Where("severity = ?", *filter.Severity)
+	}
+	if filter.ViolationType != nil {
+		baseQuery = baseQuery.Where("violation_type = ?", *filter.ViolationType)
+	}
+
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
+
 	var violations []*ComplianceViolation
-	query := r.db.NewSelect().Model(&violations)
-
-	if filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", filters.OrganizationID)
-	}
-	if filters.UserID != "" {
-		query = query.Where("user_id = ?", filters.UserID)
-	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
-	}
-	if filters.Severity != "" {
-		query = query.Where("severity = ?", filters.Severity)
-	}
-	if filters.ViolationType != "" {
-		query = query.Where("violation_type = ?", filters.ViolationType)
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return violations, err
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(violations, int64(total), params), nil
 }
 
 func (r *BunRepository) UpdateViolation(ctx context.Context, violation *ComplianceViolation) error {
@@ -299,10 +354,10 @@ func (r *BunRepository) ResolveViolation(ctx context.Context, id, resolvedBy str
 	return err
 }
 
-func (r *BunRepository) CountViolations(ctx context.Context, orgID string, status string) (int, error) {
+func (r *BunRepository) CountViolations(ctx context.Context, appID string, status string) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*ComplianceViolation)(nil)).
-		Where("organization_id = ?", orgID).
+		Where("organization_id = ?", appID).
 		Where("status = ?", status).
 		Count(ctx)
 	return count, err
@@ -320,25 +375,51 @@ func (r *BunRepository) GetReport(ctx context.Context, id string) (*ComplianceRe
 	report := new(ComplianceReport)
 	err := r.db.NewSelect().Model(report).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrReportNotFound
+		return nil, nil
 	}
 	return report, err
 }
 
-func (r *BunRepository) ListReports(ctx context.Context, filters ReportFilters) ([]*ComplianceReport, error) {
+func (r *BunRepository) ListReports(ctx context.Context, filter *ListReportsFilter) (*pagination.PageResponse[*ComplianceReport], error) {
+	baseQuery := r.db.NewSelect().Model((*ComplianceReport)(nil))
+
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.ProfileID != nil {
+		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
+	}
+	if filter.ReportType != nil {
+		baseQuery = baseQuery.Where("report_type = ?", *filter.ReportType)
+	}
+	if filter.Standard != nil {
+		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
+	}
+	if filter.Status != nil {
+		baseQuery = baseQuery.Where("status = ?", *filter.Status)
+	}
+	if filter.Format != nil {
+		baseQuery = baseQuery.Where("format = ?", *filter.Format)
+	}
+
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
+
 	var reports []*ComplianceReport
-	query := r.db.NewSelect().Model(&reports)
-
-	if filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", filters.OrganizationID)
-	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return reports, err
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(reports, int64(total), params), nil
 }
 
 func (r *BunRepository) UpdateReport(ctx context.Context, report *ComplianceReport) error {
@@ -360,22 +441,48 @@ func (r *BunRepository) GetEvidence(ctx context.Context, id string) (*Compliance
 	evidence := new(ComplianceEvidence)
 	err := r.db.NewSelect().Model(evidence).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrEvidenceNotFound
+		return nil, nil
 	}
 	return evidence, err
 }
 
-func (r *BunRepository) ListEvidence(ctx context.Context, filters EvidenceFilters) ([]*ComplianceEvidence, error) {
-	var evidence []*ComplianceEvidence
-	query := r.db.NewSelect().Model(&evidence)
+func (r *BunRepository) ListEvidence(ctx context.Context, filter *ListEvidenceFilter) (*pagination.PageResponse[*ComplianceEvidence], error) {
+	baseQuery := r.db.NewSelect().Model((*ComplianceEvidence)(nil))
 
-	if filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", filters.OrganizationID)
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.ProfileID != nil {
+		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
+	}
+	if filter.EvidenceType != nil {
+		baseQuery = baseQuery.Where("evidence_type = ?", *filter.EvidenceType)
+	}
+	if filter.Standard != nil {
+		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
+	}
+	if filter.ControlID != nil {
+		baseQuery = baseQuery.Where("control_id = ?", *filter.ControlID)
 	}
 
-	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return evidence, err
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
+
+	var evidence []*ComplianceEvidence
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(evidence, int64(total), params), nil
 }
 
 func (r *BunRepository) DeleteEvidence(ctx context.Context, id string) error {
@@ -392,34 +499,57 @@ func (r *BunRepository) GetPolicy(ctx context.Context, id string) (*CompliancePo
 	policy := new(CompliancePolicy)
 	err := r.db.NewSelect().Model(policy).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrPolicyNotFound
+		return nil, nil
 	}
 	return policy, err
 }
 
-func (r *BunRepository) GetActivePolicies(ctx context.Context, orgID string) ([]*CompliancePolicy, error) {
+func (r *BunRepository) GetActivePolicies(ctx context.Context, appID string) ([]*CompliancePolicy, error) {
 	var policies []*CompliancePolicy
 	err := r.db.NewSelect().Model(&policies).
-		Where("organization_id = ?", orgID).
+		Where("organization_id = ?", appID).
 		Where("status = ?", "active").
 		Scan(ctx)
 	return policies, err
 }
 
-func (r *BunRepository) ListPolicies(ctx context.Context, filters PolicyFilters) ([]*CompliancePolicy, error) {
+func (r *BunRepository) ListPolicies(ctx context.Context, filter *ListPoliciesFilter) (*pagination.PageResponse[*CompliancePolicy], error) {
+	baseQuery := r.db.NewSelect().Model((*CompliancePolicy)(nil))
+
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.ProfileID != nil {
+		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
+	}
+	if filter.PolicyType != nil {
+		baseQuery = baseQuery.Where("policy_type = ?", *filter.PolicyType)
+	}
+	if filter.Standard != nil {
+		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
+	}
+	if filter.Status != nil {
+		baseQuery = baseQuery.Where("status = ?", *filter.Status)
+	}
+
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
+
 	var policies []*CompliancePolicy
-	query := r.db.NewSelect().Model(&policies)
-
-	if filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", filters.OrganizationID)
-	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return policies, err
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(policies, int64(total), params), nil
 }
 
 func (r *BunRepository) UpdatePolicy(ctx context.Context, policy *CompliancePolicy) error {
@@ -441,28 +571,51 @@ func (r *BunRepository) GetTraining(ctx context.Context, id string) (*Compliance
 	training := new(ComplianceTraining)
 	err := r.db.NewSelect().Model(training).Where("id = ?", id).Scan(ctx)
 	if err == sql.ErrNoRows {
-		return nil, ErrTrainingNotFound
+		return nil, nil
 	}
 	return training, err
 }
 
-func (r *BunRepository) ListTraining(ctx context.Context, filters TrainingFilters) ([]*ComplianceTraining, error) {
+func (r *BunRepository) ListTraining(ctx context.Context, filter *ListTrainingFilter) (*pagination.PageResponse[*ComplianceTraining], error) {
+	baseQuery := r.db.NewSelect().Model((*ComplianceTraining)(nil))
+
+	if filter.AppID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", *filter.AppID)
+	}
+	if filter.ProfileID != nil {
+		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
+	}
+	if filter.UserID != nil {
+		baseQuery = baseQuery.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.TrainingType != nil {
+		baseQuery = baseQuery.Where("training_type = ?", *filter.TrainingType)
+	}
+	if filter.Standard != nil {
+		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
+	}
+	if filter.Status != nil {
+		baseQuery = baseQuery.Where("status = ?", *filter.Status)
+	}
+
+	total, err := baseQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
+
 	var training []*ComplianceTraining
-	query := r.db.NewSelect().Model(&training)
-
-	if filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", filters.OrganizationID)
-	}
-	if filters.UserID != "" {
-		query = query.Where("user_id = ?", filters.UserID)
-	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
+	if err := baseQuery.Scan(ctx); err != nil {
+		return nil, err
 	}
 
-	query = query.Order("created_at DESC").Limit(filters.Limit).Offset(filters.Offset)
-	err := query.Scan(ctx)
-	return training, err
+	params := &pagination.PaginationParams{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
+
+	return pagination.NewPageResponse(training, int64(total), params), nil
 }
 
 func (r *BunRepository) UpdateTraining(ctx context.Context, training *ComplianceTraining) error {
@@ -479,10 +632,10 @@ func (r *BunRepository) GetUserTrainingStatus(ctx context.Context, userID string
 	return training, err
 }
 
-func (r *BunRepository) GetOverdueTraining(ctx context.Context, orgID string) ([]*ComplianceTraining, error) {
+func (r *BunRepository) GetOverdueTraining(ctx context.Context, appID string) ([]*ComplianceTraining, error) {
 	var training []*ComplianceTraining
 	err := r.db.NewSelect().Model(&training).
-		Where("organization_id = ?", orgID).
+		Where("organization_id = ?", appID).
 		Where("status != ?", "completed").
 		Where("expires_at < NOW()").
 		Scan(ctx)

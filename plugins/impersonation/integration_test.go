@@ -22,7 +22,7 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	// Step 1: Start impersonation
 	t.Run("Start", func(t *testing.T) {
 		startReq := &impersonation.StartRequest{
-			OrganizationID:  orgID,
+			AppID:           orgID,
 			ImpersonatorID:  admin.ID,
 			TargetUserID:    target.ID,
 			Reason:          "Customer reported dashboard issue - investigating TICKET-12345",
@@ -55,9 +55,9 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	t.Run("Verify", func(t *testing.T) {
 		// Get the impersonation session
 		listReq := &impersonation.ListRequest{
-			OrganizationID: orgID,
-			ActiveOnly:     true,
-			Limit:          10,
+			AppID:      orgID,
+			ActiveOnly: true,
+			Limit:      10,
 		}
 
 		listResp, err := service.List(ctx, listReq)
@@ -83,9 +83,9 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	// Step 3: List active impersonations
 	t.Run("List", func(t *testing.T) {
 		listReq := &impersonation.ListRequest{
-			OrganizationID: orgID,
-			ActiveOnly:     true,
-			Limit:          10,
+			AppID:      orgID,
+			ActiveOnly: true,
+			Limit:      10,
 		}
 
 		listResp, err := service.List(ctx, listReq)
@@ -104,16 +104,16 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
 		// Get ID from list
 		listReq := &impersonation.ListRequest{
-			OrganizationID: orgID,
-			ActiveOnly:     true,
-			Limit:          1,
+			AppID:      orgID,
+			ActiveOnly: true,
+			Limit:      1,
 		}
 		listResp, _ := service.List(ctx, listReq)
 		impID := listResp.Sessions[0].ID
 
 		getReq := &impersonation.GetRequest{
 			ImpersonationID: impID,
-			OrganizationID:  orgID,
+			AppID:           orgID,
 		}
 
 		getResp, err := service.Get(ctx, getReq)
@@ -128,16 +128,16 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	t.Run("End", func(t *testing.T) {
 		// Get ID from list
 		listReq := &impersonation.ListRequest{
-			OrganizationID: orgID,
-			ActiveOnly:     true,
-			Limit:          1,
+			AppID:      orgID,
+			ActiveOnly: true,
+			Limit:      1,
 		}
 		listResp, _ := service.List(ctx, listReq)
 		impID := listResp.Sessions[0].ID
 
 		endReq := &impersonation.EndRequest{
 			ImpersonationID: impID,
-			OrganizationID:  orgID,
+			AppID:           orgID,
 			ImpersonatorID:  admin.ID,
 			Reason:          "manual",
 		}
@@ -158,8 +158,8 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	// Step 6: Verify audit trail exists
 	t.Run("Audit", func(t *testing.T) {
 		auditReq := &impersonation.AuditListRequest{
-			OrganizationID: orgID,
-			Limit:          10,
+			AppID: orgID,
+			Limit: 10,
 		}
 
 		events, total, err := service.ListAuditEvents(ctx, auditReq)
@@ -203,7 +203,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 
 	// Start impersonation in org1
 	startReq1 := &impersonation.StartRequest{
-		OrganizationID: org1,
+		AppID:          org1,
 		ImpersonatorID: admin1.ID,
 		TargetUserID:   target1.ID,
 		Reason:         "Testing org1 impersonation",
@@ -213,7 +213,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 
 	// Start impersonation in org2
 	startReq2 := &impersonation.StartRequest{
-		OrganizationID: org2,
+		AppID:          org2,
 		ImpersonatorID: admin2.ID,
 		TargetUserID:   target2.ID,
 		Reason:         "Testing org2 impersonation",
@@ -223,32 +223,32 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 
 	// List org1 sessions - should only see org1
 	listReq1 := &impersonation.ListRequest{
-		OrganizationID: org1,
-		ActiveOnly:     true,
-		Limit:          10,
+		AppID:      org1,
+		ActiveOnly: true,
+		Limit:      10,
 	}
 	listResp1, err := service.List(ctx, listReq1)
 	require.NoError(t, err)
 	assert.Len(t, listResp1.Sessions, 1)
-	assert.Equal(t, org1, listResp1.Sessions[0].OrganizationID)
+	assert.Equal(t, org1, listResp1.Sessions[0].AppID)
 	assert.Equal(t, admin1.ID, listResp1.Sessions[0].ImpersonatorID)
 
 	// List org2 sessions - should only see org2
 	listReq2 := &impersonation.ListRequest{
-		OrganizationID: org2,
-		ActiveOnly:     true,
-		Limit:          10,
+		AppID:      org2,
+		ActiveOnly: true,
+		Limit:      10,
 	}
 	listResp2, err := service.List(ctx, listReq2)
 	require.NoError(t, err)
 	assert.Len(t, listResp2.Sessions, 1)
-	assert.Equal(t, org2, listResp2.Sessions[0].OrganizationID)
+	assert.Equal(t, org2, listResp2.Sessions[0].AppID)
 	assert.Equal(t, admin2.ID, listResp2.Sessions[0].ImpersonatorID)
 
 	// Try to get org1 session with org2 context - should fail
 	getReq := &impersonation.GetRequest{
 		ImpersonationID: startResp1.ImpersonationID,
-		OrganizationID:  org2, // Wrong org
+		AppID:           org2, // Wrong org
 	}
 	_, err = service.Get(ctx, getReq)
 	assert.Error(t, err)
@@ -257,7 +257,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 	// Try to end org1 session with org2 admin - should fail
 	endReq := &impersonation.EndRequest{
 		ImpersonationID: startResp1.ImpersonationID,
-		OrganizationID:  org1,
+		AppID:           org1,
 		ImpersonatorID:  admin2.ID, // Admin from different org
 	}
 	_, err = service.End(ctx, endReq)
@@ -294,7 +294,7 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	// Start impersonations for all admins
 	for i := 0; i < 3; i++ {
 		startReq := &impersonation.StartRequest{
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: admins[i].ID,
 			TargetUserID:   targets[i].ID,
 			Reason:         "Concurrent testing impersonation " + string(rune('A'+i)),
@@ -305,9 +305,9 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 
 	// List all active sessions
 	listReq := &impersonation.ListRequest{
-		OrganizationID: orgID,
-		ActiveOnly:     true,
-		Limit:          10,
+		AppID:      orgID,
+		ActiveOnly: true,
+		Limit:      10,
 	}
 	listResp, err := service.List(ctx, listReq)
 	require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 		wrongAdmin := admins[(i+1)%3]
 		endReq := &impersonation.EndRequest{
 			ImpersonationID: sessionID,
-			OrganizationID:  orgID,
+			AppID:           orgID,
 			ImpersonatorID:  wrongAdmin.ID,
 		}
 		_, err := service.End(ctx, endReq)
@@ -357,7 +357,7 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
 			ID:             xid.New(),
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         true,
@@ -371,7 +371,7 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	// Create active non-expired session
 	activeSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -383,9 +383,9 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 
 	// Before cleanup - should see 4 sessions (3 expired + 1 active)
 	listReq := &impersonation.ListRequest{
-		OrganizationID: orgID,
-		ActiveOnly:     false,
-		Limit:          10,
+		AppID:      orgID,
+		ActiveOnly: false,
+		Limit:      10,
 	}
 	listResp, _ := service.List(ctx, listReq)
 	assert.Len(t, listResp.Sessions, 4)
@@ -442,7 +442,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 
 	for _, combo := range combinations {
 		startReq := &impersonation.StartRequest{
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: combo.admin.ID,
 			TargetUserID:   combo.target.ID,
 			Reason:         "Testing filter combinations",
@@ -453,7 +453,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 
 	// Filter by impersonator (admin1)
 	listReq := &impersonation.ListRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: &admin1.ID,
 		ActiveOnly:     true,
 		Limit:          10,
@@ -464,10 +464,10 @@ func TestIntegration_FilterByUser(t *testing.T) {
 
 	// Filter by target (target1)
 	listReq = &impersonation.ListRequest{
-		OrganizationID: orgID,
-		TargetUserID:   &target1.ID,
-		ActiveOnly:     true,
-		Limit:          10,
+		AppID:        orgID,
+		TargetUserID: &target1.ID,
+		ActiveOnly:   true,
+		Limit:        10,
 	}
 	listResp, err = service.List(ctx, listReq)
 	require.NoError(t, err)
@@ -475,7 +475,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 
 	// Filter by both impersonator and target
 	listReq = &impersonation.ListRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: &admin1.ID,
 		TargetUserID:   &target1.ID,
 		ActiveOnly:     true,

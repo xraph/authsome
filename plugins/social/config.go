@@ -16,6 +16,7 @@ type Config struct {
 	AllowAccountLinking  bool `json:"allowAccountLinking" yaml:"allowAccountLinking"`   // Allow linking multiple providers to one user
 	AutoCreateUser       bool `json:"autoCreateUser" yaml:"autoCreateUser"`             // Auto-create user on OAuth sign-in
 	RequireEmailVerified bool `json:"requireEmailVerified" yaml:"requireEmailVerified"` // Require email verification from provider
+	TrustEmailVerified   bool `json:"trustEmailVerified" yaml:"trustEmailVerified"`     // Trust email verification from provider
 }
 
 // ProvidersConfig holds configuration for each provider

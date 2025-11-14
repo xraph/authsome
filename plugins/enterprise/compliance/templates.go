@@ -235,17 +235,17 @@ func GetTemplateNames() []string {
 }
 
 // CreateProfileFromTemplate creates a compliance profile from a template
-func CreateProfileFromTemplate(orgID string, standard ComplianceStandard) (*ComplianceProfile, error) {
+func CreateProfileFromTemplate(appID string, standard ComplianceStandard) (*ComplianceProfile, error) {
 	template, ok := GetTemplate(standard)
 	if !ok {
-		return nil, ErrTemplateNotFound
+		return nil, TemplateNotFound(string(standard))
 	}
 
 	profile := &ComplianceProfile{
-		OrganizationID: orgID,
-		Name:           template.Name,
-		Standards:      []ComplianceStandard{standard},
-		Status:         "active",
+		AppID:     appID,
+		Name:      template.Name,
+		Standards: []ComplianceStandard{standard},
+		Status:    "active",
 
 		// Security Requirements from template
 		MFARequired:           template.MFARequired,

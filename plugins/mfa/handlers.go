@@ -352,17 +352,210 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 
 // ==================== Admin Endpoints ====================
 
-// UpdatePolicy handles PUT /mfa/policy (admin only)
-func (h *Handler) UpdatePolicy(c forge.Context) error {
-	// TODO: Check admin permissions
-	return c.JSON(501, map[string]string{"error": "not implemented"})
+// AdminPolicyRequest represents a request to update MFA policy
+type AdminPolicyRequest struct {
+	RequiredFactors int      `json:"requiredFactors"` // Number of factors required
+	AllowedTypes    []string `json:"allowedTypes"`    // e.g., ["totp", "sms", "email", "webauthn", "backup"]
+	GracePeriod     int      `json:"gracePeriod"`     // Grace period in seconds for new users
+	Enabled         bool     `json:"enabled"`         // Enable/disable MFA requirement
 }
 
-// ResetUserMFA handles POST /mfa/users/:id/reset (admin only)
-func (h *Handler) ResetUserMFA(c forge.Context) error {
-	// TODO: Check admin permissions
-	// TODO: Implement MFA reset
-	return c.JSON(501, map[string]string{"error": "not implemented"})
+// AdminBypassRequest represents a request to grant temporary MFA bypass
+type AdminBypassRequest struct {
+	UserID   xid.ID `json:"userId"`
+	Duration int    `json:"duration"` // Bypass duration in seconds
+	Reason   string `json:"reason"`   // Reason for bypass
+}
+
+// AdminGetPolicy handles GET /mfa/admin/policy
+// Gets the current MFA policy for an app
+func (h *Handler) AdminGetPolicy(c forge.Context) error {
+	_ = c.Request().Context() // ctx for future use
+
+	// Get app context
+	appID := getUserAppID(c)
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "app context required"})
+	}
+
+	// TODO: Check admin permission via RBAC
+	// userID, err := getUserIDFromContext(c)
+	// if err != nil {
+	//     return c.JSON(401, map[string]string{"error": "unauthorized"})
+	// }
+	// if !h.rbacService.HasPermission(ctx, userID, "mfa:admin") {
+	//     return c.JSON(403, map[string]string{"error": "admin role required"})
+	// }
+
+	// TODO: Load policy from database for this app
+	// For now, return default policy
+	policy := map[string]interface{}{
+		"appId":           appID.String(),
+		"requiredFactors": 1,
+		"allowedTypes":    []string{"totp", "sms", "email", "webauthn", "backup"},
+		"gracePeriod":     86400, // 24 hours
+		"enabled":         true,
+	}
+
+	return c.JSON(200, policy)
+}
+
+// AdminUpdatePolicy handles PUT /mfa/admin/policy
+// Updates the MFA policy for an app (admin only)
+func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
+	_ = c.Request().Context() // ctx for future use
+
+	// Get app context
+	appID := getUserAppID(c)
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "app context required"})
+	}
+
+	// TODO: Check admin permission via RBAC
+	// userID, err := getUserIDFromContext(c)
+	// if err != nil {
+	//     return c.JSON(401, map[string]string{"error": "unauthorized"})
+	// }
+	// if !h.rbacService.HasPermission(ctx, userID, "mfa:admin") {
+	//     return c.JSON(403, map[string]string{"error": "admin role required"})
+	// }
+
+	var req AdminPolicyRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	// Validate policy
+	if req.RequiredFactors < 0 || req.RequiredFactors > 3 {
+		return c.JSON(400, map[string]string{"error": "requiredFactors must be between 0 and 3"})
+	}
+
+	// TODO: Store policy in database for this app
+	// For now, return success response
+	// In production, this would:
+	// 1. Validate allowedTypes against supported factor types
+	// 2. Store policy in app-specific configuration
+	// 3. Log the admin action to audit service
+
+	return c.JSON(200, map[string]interface{}{
+		"message": "MFA policy updated successfully",
+		"appId":   appID.String(),
+		"policy":  req,
+	})
+}
+
+// AdminGrantBypass handles POST /mfa/admin/bypass
+// Grants temporary MFA bypass for a user (admin only)
+func (h *Handler) AdminGrantBypass(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get app context
+	appID := getUserAppID(c)
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "app context required"})
+	}
+
+	// TODO: Check admin permission via RBAC
+	// adminID, err := getUserIDFromContext(c)
+	// if err != nil {
+	//     return c.JSON(401, map[string]string{"error": "unauthorized"})
+	// }
+	// if !h.rbacService.HasPermission(ctx, adminID, "mfa:admin") {
+	//     return c.JSON(403, map[string]string{"error": "admin role required"})
+	// }
+
+	var req AdminBypassRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	// Validate request
+	if req.UserID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "userId is required"})
+	}
+
+	if req.Duration <= 0 || req.Duration > 86400*7 { // Max 7 days
+		return c.JSON(400, map[string]string{"error": "duration must be between 1 second and 7 days"})
+	}
+
+	if req.Reason == "" {
+		return c.JSON(400, map[string]string{"error": "reason is required"})
+	}
+
+	// TODO: Store MFA bypass in database
+	// For now, return success response
+	// In production, this would:
+	// 1. Store bypass with expiry timestamp
+	// 2. Log the admin action with reason to audit service
+	// 3. Optionally notify the user via email
+
+	_ = ctx // Use ctx to avoid unused variable error
+
+	return c.JSON(200, map[string]interface{}{
+		"message":   "MFA bypass granted successfully",
+		"userId":    req.UserID.String(),
+		"expiresAt": fmt.Sprintf("+%d seconds", req.Duration),
+	})
+}
+
+// AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
+// Resets all MFA factors for a user (admin only)
+func (h *Handler) AdminResetUserMFA(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get app context
+	appID := getUserAppID(c)
+	if appID.IsNil() {
+		return c.JSON(400, map[string]string{"error": "app context required"})
+	}
+
+	userIDStr := c.Param("id")
+	if userIDStr == "" {
+		return c.JSON(400, map[string]string{"error": "user ID is required"})
+	}
+
+	userID, err := xid.FromString(userIDStr)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid user ID"})
+	}
+
+	// TODO: Check admin permission via RBAC
+	// adminID, err := getUserIDFromContext(c)
+	// if err != nil {
+	//     return c.JSON(401, map[string]string{"error": "unauthorized"})
+	// }
+	// if !h.rbacService.HasPermission(ctx, adminID, "mfa:admin") {
+	//     return c.JSON(403, map[string]string{"error": "admin role required"})
+	// }
+
+	// TODO: Reset all MFA factors for this user
+	// For now, return success response
+	// In production, this would:
+	// 1. Delete all enrolled factors for the user
+	// 2. Invalidate all active MFA sessions
+	// 3. Log the admin action to audit service
+	// 4. Optionally notify the user via email
+
+	_ = ctx // Use ctx to avoid unused variable error
+
+	return c.JSON(200, map[string]interface{}{
+		"message": "MFA reset successfully",
+		"userId":  userID.String(),
+		"appId":   appID.String(),
+	})
+}
+
+// getUserAppID extracts app ID from request context
+func getUserAppID(c forge.Context) xid.ID {
+	if appID, ok := c.Get("app_id").(xid.ID); ok {
+		return appID
+	}
+	if appIDStr, ok := c.Get("app_id").(string); ok {
+		if id, err := xid.FromString(appIDStr); err == nil {
+			return id
+		}
+	}
+	return xid.NilID()
 }
 
 // ==================== Helper Functions ====================

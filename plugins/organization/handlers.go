@@ -5,16 +5,18 @@ import (
 	"strconv"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/forge"
 )
 
 // OrganizationHandler handles organization-related HTTP requests
 type OrganizationHandler struct {
-	orgService *Service
+	orgService *organization.Service
 }
 
 // NewOrganizationHandler creates a new organization handler
-func NewOrganizationHandler(orgService *Service) *OrganizationHandler {
+func NewOrganizationHandler(orgService *organization.Service) *OrganizationHandler {
 	return &OrganizationHandler{
 		orgService: orgService,
 	}
@@ -56,7 +58,7 @@ func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid organization ID"})
 	}
 
-	org, err := h.orgService.GetOrganization(c.Request().Context(), orgID)
+	org, err := h.orgService.FindOrganizationByID(c.Request().Context(), orgID)
 	if err != nil {
 		return c.JSON(404, map[string]string{"error": "organization not found"})
 	}
@@ -74,12 +76,17 @@ func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 	if limit <= 0 {
 		limit = 10
 	}
-	offset, _ := strconv.Atoi(c.Query("offset"))
-	if offset < 0 {
-		offset = 0
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page <= 0 {
+		page = 1
 	}
 
-	orgs, err := h.orgService.ListUserOrganizations(c.Request().Context(), userID, limit, offset)
+	filter := &pagination.PaginationParams{
+		Page:  page,
+		Limit: limit,
+	}
+
+	orgs, err := h.orgService.ListUserOrganizations(c.Request().Context(), userID, filter)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
@@ -150,7 +157,7 @@ func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 	// TODO: Get environment ID from context/middleware
 	environmentID := xid.New() // Placeholder
 
-	org, err := h.orgService.GetOrganizationBySlug(c.Request().Context(), appID, environmentID, slug)
+	org, err := h.orgService.FindOrganizationBySlug(c.Request().Context(), appID, environmentID, slug)
 	if err != nil {
 		return c.JSON(404, map[string]string{"error": "organization not found"})
 	}
@@ -171,10 +178,10 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 
 	// Parse pagination parameters
 	limitStr := c.Request().URL.Query().Get("limit")
-	offsetStr := c.Request().URL.Query().Get("offset")
+	pageStr := c.Request().URL.Query().Get("page")
 
 	limit := 10 // default
-	offset := 0 // default
+	page := 1   // default
 
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
@@ -182,22 +189,26 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 		}
 	}
 
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
 		}
 	}
 
-	members, err := h.orgService.ListMembers(c.Request().Context(), orgID, limit, offset)
+	filter := &organization.ListMembersFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  page,
+			Limit: limit,
+		},
+		OrganizationID: orgID,
+	}
+
+	members, err := h.orgService.ListMembers(c.Request().Context(), filter)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(200, map[string]interface{}{
-		"members": members,
-		"limit":   limit,
-		"offset":  offset,
-	})
+	return c.JSON(200, members)
 }
 
 // InviteMember handles member invitation requests
@@ -322,10 +333,10 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 
 	// Parse pagination parameters
 	limitStr := c.Request().URL.Query().Get("limit")
-	offsetStr := c.Request().URL.Query().Get("offset")
+	pageStr := c.Request().URL.Query().Get("page")
 
 	limit := 10 // default
-	offset := 0 // default
+	page := 1   // default
 
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
@@ -333,22 +344,26 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 		}
 	}
 
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
 		}
 	}
 
-	teams, err := h.orgService.ListTeams(c.Request().Context(), orgID, limit, offset)
+	filter := &organization.ListTeamsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  page,
+			Limit: limit,
+		},
+		OrganizationID: orgID,
+	}
+
+	teams, err := h.orgService.ListTeams(c.Request().Context(), filter)
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(200, map[string]interface{}{
-		"teams":  teams,
-		"limit":  limit,
-		"offset": offset,
-	})
+	return c.JSON(200, teams)
 }
 
 // CreateTeam handles team creation requests

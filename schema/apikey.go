@@ -18,7 +18,7 @@ type APIKey struct {
 
 	// 3-tier context (V2 architecture)
 	AppID          xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appID"`                     // Platform tenant
-	EnvironmentID  *xid.ID `bun:"environment_id,type:varchar(20)" json:"environmentID,omitempty"`   // Optional: environment-scoped key
+	EnvironmentID  xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentID"`     // Required: environment-scoped key
 	OrganizationID *xid.ID `bun:"organization_id,type:varchar(20)" json:"organizationID,omitempty"` // Optional: org-scoped key
 	UserID         xid.ID  `bun:"user_id,notnull,type:varchar(20)" json:"userID"`                   // User who created the key
 

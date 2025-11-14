@@ -207,6 +207,95 @@ GET /auth/notifications/:id
 POST /auth/notifications/:id/resend
 ```
 
+### Admin Endpoints
+
+Requires admin role and `notification:admin` permission.
+
+```bash
+# List templates (admin)
+GET /notification/admin/templates?appId=app_123&type=email
+Authorization: Bearer <admin-token>
+
+# Response:
+{
+  "templates": [...],
+  "total": 15,
+  "appId": "app_123"
+}
+
+# Get specific template (admin)
+GET /notification/admin/templates/:id
+Authorization: Bearer <admin-token>
+
+# Update template (admin)
+PUT /notification/admin/templates/:id
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "subject": "Updated {{.user_name}}!",
+  "body": "New template body...",
+  "active": true
+}
+
+# Send test notification (admin)
+POST /notification/admin/templates/:id/test
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "recipient": "admin@example.com",
+  "variables": {
+    "user_name": "Test User",
+    "code": "123456",
+    "expiry_minutes": 10
+  }
+}
+
+# Response:
+{
+  "message": "test notification sent successfully",
+  "notification": {
+    "id": "notif_123",
+    "status": "sent",
+    ...
+  }
+}
+
+# Get notification statistics (admin)
+GET /notification/admin/stats?appId=app_123
+Authorization: Bearer <admin-token>
+
+# Response:
+{
+  "appId": "app_123",
+  "total": {
+    "sent": 1250,
+    "delivered": 1180,
+    "failed": 45,
+    "pending": 25
+  },
+  "byType": {
+    "email": 800,
+    "sms": 350,
+    "push": 100
+  },
+  "last24h": {
+    "sent": 85,
+    "delivered": 82,
+    "failed": 3
+  }
+}
+```
+
+**Note:** Admin endpoints are currently placeholders. Full implementation requires:
+- RBAC integration for permission checks
+- Audit logging for administrative actions
+- Real-time statistics from database
+- Template version control
+
+See [Plugin Admin Endpoint Guidelines](../../docs/PLUGIN_ADMIN_ENDPOINTS.md) for implementation details.
+
 ## Template Syntax
 
 Templates use Go's `text/template` syntax:

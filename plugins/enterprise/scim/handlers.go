@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/forge"
 )
 
@@ -225,7 +225,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 	}
 
 	// Get organization ID from context (set by middleware)
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	orgID := contexts.GetOrganizationID(c.Request().Context())
 
 	createdUser, err := h.service.CreateUser(c.Request().Context(), &scimUser, orgID)
 	if err != nil {
@@ -559,9 +559,9 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 
 	// Get 3-tier architecture context
 	ctx := c.Request().Context()
-	appIDVal := interfaces.GetAppID(ctx)
-	envIDVal := interfaces.GetEnvironmentID(ctx)
-	orgIDVal := interfaces.GetOrganizationID(ctx)
+	appIDVal := contexts.GetAppID(ctx)
+	envIDVal := contexts.GetEnvironmentID(ctx)
+	orgIDVal := contexts.GetOrganizationID(ctx)
 
 	// If orgID is not set, this is an error
 	if orgIDVal.IsNil() {
@@ -662,9 +662,9 @@ func (h *Handler) RevokeProvisioningToken(c forge.Context) error {
 func (h *Handler) GetAttributeMappings(c forge.Context) error {
 	// Get 3-tier architecture context
 	ctx := c.Request().Context()
-	appID := interfaces.GetAppID(ctx)
-	envID := interfaces.GetEnvironmentID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	envID := contexts.GetEnvironmentID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 
 	mappings, err := h.service.GetAttributeMappings(c.Request().Context(), appID, envID, orgID)
 	if err != nil {
@@ -682,9 +682,9 @@ func (h *Handler) GetAttributeMappings(c forge.Context) error {
 func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
 	// Get 3-tier architecture context
 	ctx := c.Request().Context()
-	appID := interfaces.GetAppID(ctx)
-	envID := interfaces.GetEnvironmentID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	envID := contexts.GetEnvironmentID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 
 	var req struct {
 		Mappings map[string]string `json:"mappings"`

@@ -6,11 +6,12 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 
-	core "github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
 
-// AppRepository is a Bun-backed implementation of core organization repository
+// AppRepository is a Bun-backed implementation of app repository
 type AppRepository struct {
 	db *bun.DB
 }
@@ -19,342 +20,476 @@ func NewAppRepository(db *bun.DB) *AppRepository {
 	return &AppRepository{db: db}
 }
 
-// ===== Organization =====
+// ===== App Operations =====
 
-func (r *AppRepository) toAppSchema(o *core.App) *schema.Organization {
-	return &schema.Organization{
-		ID:       o.ID,
-		Name:     o.Name,
-		Slug:     o.Slug,
-		Logo:     o.Logo,
-		Metadata: o.Metadata,
-	}
-}
-
-func (r *AppRepository) fromAppSchema(so *schema.Organization) *core.App {
-	if so == nil {
-		return nil
-	}
-	return &core.App{
-		ID:        so.ID,
-		Name:      so.Name,
-		Slug:      so.Slug,
-		Logo:      so.Logo,
-		Metadata:  so.Metadata,
-		CreatedAt: so.CreatedAt,
-		UpdatedAt: so.UpdatedAt,
-	}
-}
-
-func (r *AppRepository) CreateApp(ctx context.Context, org *core.App) error {
-	so := r.toAppSchema(org)
-	_, err := r.db.NewInsert().Model(so).Exec(ctx)
+func (r *AppRepository) CreateApp(ctx context.Context, app *schema.App) error {
+	_, err := r.db.NewInsert().Model(app).Exec(ctx)
 	return err
 }
 
-func (r *AppRepository) FindAppByID(ctx context.Context, id xid.ID) (*core.App, error) {
-	so := new(schema.Organization)
-	err := r.db.NewSelect().Model(so).Where("id = ?", id).Scan(ctx)
+func (r *AppRepository) GetPlatformApp(ctx context.Context) (*schema.App, error) {
+	app := new(schema.App)
+	err := r.db.NewSelect().Model(app).
+		Where("is_platform = ?", true).
+		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromAppSchema(so), nil
+	return app, nil
 }
 
-func (r *AppRepository) FindAppBySlug(ctx context.Context, slug string) (*core.App, error) {
-	so := new(schema.Organization)
-	err := r.db.NewSelect().Model(so).Where("slug = ?", slug).Scan(ctx)
+func (r *AppRepository) FindAppByID(ctx context.Context, id xid.ID) (*schema.App, error) {
+	app := new(schema.App)
+	err := r.db.NewSelect().Model(app).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromAppSchema(so), nil
+	return app, nil
 }
 
-func (r *AppRepository) UpdateApp(ctx context.Context, org *core.App) error {
-	so := r.toAppSchema(org)
-	_, err := r.db.NewUpdate().Model(so).WherePK().Exec(ctx)
+func (r *AppRepository) FindAppBySlug(ctx context.Context, slug string) (*schema.App, error) {
+	app := new(schema.App)
+	err := r.db.NewSelect().Model(app).Where("slug = ?", slug).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return app, nil
+}
+
+func (r *AppRepository) UpdateApp(ctx context.Context, app *schema.App) error {
+	_, err := r.db.NewUpdate().Model(app).WherePK().Exec(ctx)
 	return err
 }
 
 func (r *AppRepository) DeleteApp(ctx context.Context, id xid.ID) error {
-	_, err := r.db.NewDelete().Model((*schema.Organization)(nil)).Where("id = ?", id).Exec(ctx)
+	_, err := r.db.NewDelete().Model((*schema.App)(nil)).Where("id = ?", id).Exec(ctx)
 	return err
 }
 
-func (r *AppRepository) ListApps(ctx context.Context, limit, offset int) ([]*core.App, error) {
-	var sos []schema.Organization
-	err := r.db.NewSelect().Model(&sos).OrderExpr("created_at DESC").Limit(limit).Offset(offset).Scan(ctx)
+func (r *AppRepository) ListApps(ctx context.Context, filter *app.ListAppsFilter) (*pagination.PageResponse[*schema.App], error) {
+	var apps []*schema.App
+
+	// Build base query with filters
+	query := r.db.NewSelect().Model(&apps)
+	if filter.IsPlatform != nil {
+		query = query.Where("is_platform = ?", *filter.IsPlatform)
+	}
+
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().Model((*schema.App)(nil))
+	if filter.IsPlatform != nil {
+		countQuery = countQuery.Where("is_platform = ?", *filter.IsPlatform)
+	}
+	total, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*core.App, 0, len(sos))
-	for i := range sos {
-		res = append(res, r.fromAppSchema(&sos[i]))
+
+	// Apply pagination using helper
+	qb := pagination.NewQueryBuilder(&filter.PaginationParams)
+	query = qb.ApplyToQuery(query)
+
+	// Execute query
+	err = query.Scan(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return res, nil
+
+	return pagination.NewPageResponse(apps, int64(total), &filter.PaginationParams), nil
 }
 
 // CountApps returns total number of apps
 func (r *AppRepository) CountApps(ctx context.Context) (int, error) {
-	q := r.db.NewSelect().Model((*schema.Organization)(nil))
+	q := r.db.NewSelect().Model((*schema.App)(nil))
 	return q.Count(ctx)
 }
 
-// ===== Member =====
+// ===== Member Operations =====
+// Note: Most member operations have been moved to repository/member.go
+// These wrapper methods exist for backward compatibility with core/app.Repository interface
 
-func (r *AppRepository) toMemberSchema(m *core.Member) *schema.Member {
-	return &schema.Member{
-		ID:     m.ID,
-		AppID:  m.AppID,
-		UserID: m.UserID,
-		Role:   m.Role,
-	}
-}
-
-func (r *AppRepository) fromMemberSchema(sm *schema.Member) *core.Member {
-	if sm == nil {
-		return nil
-	}
-	return &core.Member{
-		ID:        sm.ID,
-		AppID:     sm.AppID,
-		UserID:    sm.UserID,
-		Role:      sm.Role,
-		CreatedAt: sm.CreatedAt,
-		UpdatedAt: sm.UpdatedAt,
-	}
-}
-
-func (r *AppRepository) CreateMember(ctx context.Context, member *core.Member) error {
-	sm := r.toMemberSchema(member)
-	_, err := r.db.NewInsert().Model(sm).Exec(ctx)
+// CreateMember creates a new member
+func (r *AppRepository) CreateMember(ctx context.Context, member *schema.Member) error {
+	_, err := r.db.NewInsert().Model(member).Exec(ctx)
 	return err
 }
 
-func (r *AppRepository) FindMemberByID(ctx context.Context, id xid.ID) (*core.Member, error) {
-	sm := new(schema.Member)
-	err := r.db.NewSelect().Model(sm).Where("id = ?", id).Scan(ctx)
+// FindMemberByID finds a member by ID
+func (r *AppRepository) FindMemberByID(ctx context.Context, id xid.ID) (*schema.Member, error) {
+	member := new(schema.Member)
+	err := r.db.NewSelect().Model(member).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromMemberSchema(sm), nil
+	return member, nil
 }
 
-func (r *AppRepository) FindMember(ctx context.Context, orgID, userID xid.ID) (*core.Member, error) {
-	sm := new(schema.Member)
-	err := r.db.NewSelect().Model(sm).Where("organization_id = ?", orgID).Where("user_id = ?", userID).Scan(ctx)
+// FindMember finds a member by app ID and user ID (for IsUserMember)
+func (r *AppRepository) FindMember(ctx context.Context, appID, userID xid.ID) (*schema.Member, error) {
+	member := new(schema.Member)
+	err := r.db.NewSelect().Model(member).
+		Where("organization_id = ? AND user_id = ?", appID, userID).
+		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromMemberSchema(sm), nil
+	return member, nil
 }
 
-func (r *AppRepository) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]*core.Member, error) {
-	var sms []schema.Member
-	q := r.db.NewSelect().Model(&sms).Where("organization_id = ?", orgID).OrderExpr("created_at DESC")
-	if limit > 0 {
-		q = q.Limit(limit)
+// ListMembers lists members by app with optional filters and pagination
+func (r *AppRepository) ListMembers(ctx context.Context, filter *app.ListMembersFilter) (*pagination.PageResponse[*schema.Member], error) {
+	var members []*schema.Member
+
+	// Build base query with filters
+	query := r.db.NewSelect().Model(&members).Where("organization_id = ?", filter.AppID)
+	if filter.Role != nil {
+		query = query.Where("role = ?", *filter.Role)
 	}
-	if offset > 0 {
-		q = q.Offset(offset)
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
 	}
-	if err := q.Scan(ctx); err != nil {
+
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().Model((*schema.Member)(nil)).Where("organization_id = ?", filter.AppID)
+	if filter.Role != nil {
+		countQuery = countQuery.Where("role = ?", *filter.Role)
+	}
+	if filter.Status != nil {
+		countQuery = countQuery.Where("status = ?", *filter.Status)
+	}
+	total, err := countQuery.Count(ctx)
+	if err != nil {
 		return nil, err
 	}
-	res := make([]*core.Member, 0, len(sms))
-	for i := range sms {
-		res = append(res, r.fromMemberSchema(&sms[i]))
+
+	// Apply pagination using helper
+	qb := pagination.NewQueryBuilder(&filter.PaginationParams)
+	query = qb.ApplyToQuery(query)
+
+	// Execute query
+	err = query.Scan(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return res, nil
+
+	return pagination.NewPageResponse(members, int64(total), &filter.PaginationParams), nil
 }
 
-// CountMembers returns total number of members in an organization
-func (r *AppRepository) CountMembers(ctx context.Context, orgID xid.ID) (int, error) {
-	q := r.db.NewSelect().Model((*schema.Member)(nil)).Where("organization_id = ?", orgID)
-	return q.Count(ctx)
-}
-
-func (r *AppRepository) UpdateMember(ctx context.Context, member *core.Member) error {
-	sm := r.toMemberSchema(member)
-	_, err := r.db.NewUpdate().Model(sm).WherePK().Exec(ctx)
+// UpdateMember updates a member
+func (r *AppRepository) UpdateMember(ctx context.Context, member *schema.Member) error {
+	_, err := r.db.NewUpdate().Model(member).WherePK().Exec(ctx)
 	return err
 }
 
+// DeleteMember deletes a member
 func (r *AppRepository) DeleteMember(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*schema.Member)(nil)).Where("id = ?", id).Exec(ctx)
 	return err
 }
 
-// ===== Team =====
-
-func (r *AppRepository) toTeamSchema(t *core.Team) *schema.Team {
-	return &schema.Team{
-		ID:          t.ID,
-		AppID:       t.AppID,
-		Name:        t.Name,
-		Description: t.Description,
-	}
+// CountMembers returns the total number of members in an app
+func (r *AppRepository) CountMembers(ctx context.Context, appID xid.ID) (int, error) {
+	count, err := r.db.NewSelect().
+		Model((*schema.Member)(nil)).
+		Where("organization_id = ?", appID).
+		Count(ctx)
+	return count, err
 }
 
-func (r *AppRepository) fromTeamSchema(st *schema.Team) *core.Team {
-	if st == nil {
-		return nil
-	}
-	return &core.Team{
-		ID:          st.ID,
-		AppID:       st.AppID,
-		Name:        st.Name,
-		Description: st.Description,
-		CreatedAt:   st.CreatedAt,
-		UpdatedAt:   st.UpdatedAt,
-	}
+// ListMembersByUser lists all memberships for a user across all apps
+func (r *AppRepository) ListMembersByUser(ctx context.Context, userID xid.ID) ([]*schema.Member, error) {
+	var members []*schema.Member
+	err := r.db.NewSelect().Model(&members).
+		Where("user_id = ?", userID).
+		Where("deleted_at IS NULL").
+		Relation("App").
+		Scan(ctx)
+	return members, err
 }
 
-func (r *AppRepository) CreateTeam(ctx context.Context, team *core.Team) error {
-	st := r.toTeamSchema(team)
-	_, err := r.db.NewInsert().Model(st).Exec(ctx)
+// ===== Team Operations =====
+// Note: Most team operations have been moved to repository/team.go
+
+// CreateTeam creates a new team
+func (r *AppRepository) CreateTeam(ctx context.Context, team *schema.Team) error {
+	_, err := r.db.NewInsert().Model(team).Exec(ctx)
 	return err
 }
 
-func (r *AppRepository) FindTeamByID(ctx context.Context, id xid.ID) (*core.Team, error) {
-	st := new(schema.Team)
-	err := r.db.NewSelect().Model(st).Where("id = ?", id).Scan(ctx)
+// FindTeamByID finds a team by ID
+func (r *AppRepository) FindTeamByID(ctx context.Context, id xid.ID) (*schema.Team, error) {
+	team := new(schema.Team)
+	err := r.db.NewSelect().Model(team).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.fromTeamSchema(st), nil
+	return team, nil
 }
 
-func (r *AppRepository) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]*core.Team, error) {
-	var sts []schema.Team
-	q := r.db.NewSelect().Model(&sts).Where("organization_id = ?", orgID).OrderExpr("created_at DESC")
-	if limit > 0 {
-		q = q.Limit(limit)
-	}
-	if offset > 0 {
-		q = q.Offset(offset)
-	}
-	if err := q.Scan(ctx); err != nil {
+// ListTeams lists teams by app with pagination
+func (r *AppRepository) ListTeams(ctx context.Context, filter *app.ListTeamsFilter) (*pagination.PageResponse[*schema.Team], error) {
+	var teams []*schema.Team
+
+	// Build base query
+	query := r.db.NewSelect().Model(&teams).Where("organization_id = ?", filter.AppID)
+
+	// Get total count before pagination
+	total, err := r.db.NewSelect().
+		Model((*schema.Team)(nil)).
+		Where("organization_id = ?", filter.AppID).
+		Count(ctx)
+	if err != nil {
 		return nil, err
 	}
-	res := make([]*core.Team, 0, len(sts))
-	for i := range sts {
-		res = append(res, r.fromTeamSchema(&sts[i]))
+
+	// Apply pagination using helper
+	qb := pagination.NewQueryBuilder(&filter.PaginationParams)
+	query = qb.ApplyToQuery(query)
+
+	// Execute query
+	err = query.Scan(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return res, nil
+
+	return pagination.NewPageResponse(teams, int64(total), &filter.PaginationParams), nil
 }
 
-// CountTeams returns total number of teams in an organization
-func (r *AppRepository) CountTeams(ctx context.Context, orgID xid.ID) (int, error) {
-	q := r.db.NewSelect().Model((*schema.Team)(nil)).Where("organization_id = ?", orgID)
-	return q.Count(ctx)
-}
-
-func (r *AppRepository) UpdateTeam(ctx context.Context, team *core.Team) error {
-	st := r.toTeamSchema(team)
-	_, err := r.db.NewUpdate().Model(st).WherePK().Exec(ctx)
+// UpdateTeam updates a team
+func (r *AppRepository) UpdateTeam(ctx context.Context, team *schema.Team) error {
+	_, err := r.db.NewUpdate().Model(team).WherePK().Exec(ctx)
 	return err
 }
 
+// DeleteTeam deletes a team
 func (r *AppRepository) DeleteTeam(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*schema.Team)(nil)).Where("id = ?", id).Exec(ctx)
 	return err
 }
 
-// ===== Team Member =====
-
-func (r *AppRepository) toTeamMemberSchema(tm *core.TeamMember) *schema.TeamMember {
-	return &schema.TeamMember{
-		ID:       tm.ID,
-		TeamID:   tm.TeamID,
-		MemberID: tm.MemberID,
-	}
+// CountTeams returns the total number of teams in an app
+func (r *AppRepository) CountTeams(ctx context.Context, appID xid.ID) (int, error) {
+	count, err := r.db.NewSelect().
+		Model((*schema.Team)(nil)).
+		Where("organization_id = ?", appID).
+		Count(ctx)
+	return count, err
 }
 
-func (r *AppRepository) fromTeamMemberSchema(stm *schema.TeamMember) *core.TeamMember {
-	if stm == nil {
-		return nil
-	}
-	return &core.TeamMember{
-		ID:        stm.ID,
-		TeamID:    stm.TeamID,
-		MemberID:  stm.MemberID,
-		CreatedAt: stm.CreatedAt,
-	}
-}
+// ===== Team Member Operations =====
+// Note: Most team member operations have been moved to repository/team.go
+// These wrapper methods exist for backward compatibility with core/app.Repository interface
 
-func (r *AppRepository) AddTeamMember(ctx context.Context, tm *core.TeamMember) error {
-	stm := r.toTeamMemberSchema(tm)
-	_, err := r.db.NewInsert().Model(stm).Exec(ctx)
+// AddTeamMember adds a member to a team
+func (r *AppRepository) AddTeamMember(ctx context.Context, tm *schema.TeamMember) error {
+	_, err := r.db.NewInsert().Model(tm).Exec(ctx)
 	return err
 }
 
+// RemoveTeamMember removes a member from a team
 func (r *AppRepository) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
-	_, err := r.db.NewDelete().Model((*schema.TeamMember)(nil)).Where("team_id = ?", teamID).Where("member_id = ?", memberID).Exec(ctx)
+	_, err := r.db.NewDelete().
+		Model((*schema.TeamMember)(nil)).
+		Where("team_id = ? AND member_id = ?", teamID, memberID).
+		Exec(ctx)
 	return err
 }
 
-func (r *AppRepository) ListTeamMembers(ctx context.Context, teamID xid.ID, limit, offset int) ([]*core.TeamMember, error) {
-	var stms []schema.TeamMember
-	q := r.db.NewSelect().Model(&stms).Where("team_id = ?", teamID).OrderExpr("created_at DESC")
-	if limit > 0 {
-		q = q.Limit(limit)
-	}
-	if offset > 0 {
-		q = q.Offset(offset)
-	}
-	if err := q.Scan(ctx); err != nil {
+// ListTeamMembers lists members of a team
+func (r *AppRepository) ListTeamMembers(ctx context.Context, filter *app.ListTeamMembersFilter) (*pagination.PageResponse[*schema.TeamMember], error) {
+	var teamMembers []*schema.TeamMember
+
+	// Build base query
+	query := r.db.NewSelect().Model(&teamMembers).Where("team_id = ?", filter.TeamID)
+
+	// Get total count before pagination
+	total, err := r.db.NewSelect().
+		Model((*schema.TeamMember)(nil)).
+		Where("team_id = ?", filter.TeamID).
+		Count(ctx)
+	if err != nil {
 		return nil, err
 	}
-	res := make([]*core.TeamMember, 0, len(stms))
-	for i := range stms {
-		res = append(res, r.fromTeamMemberSchema(&stms[i]))
+
+	// Apply pagination using helper
+	qb := pagination.NewQueryBuilder(&filter.PaginationParams)
+	query = qb.ApplyToQuery(query)
+
+	// Execute query
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
 	}
-	return res, nil
+
+	return pagination.NewPageResponse(teamMembers, int64(total), &filter.PaginationParams), nil
 }
 
-// CountTeamMembers returns total number of members in a team
+// CountTeamMembers returns the total number of members in a team
 func (r *AppRepository) CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error) {
-	q := r.db.NewSelect().Model((*schema.TeamMember)(nil)).Where("team_id = ?", teamID)
-	return q.Count(ctx)
+	count, err := r.db.NewSelect().
+		Model((*schema.TeamMember)(nil)).
+		Where("team_id = ?", teamID).
+		Count(ctx)
+	return count, err
 }
 
-// ===== Invitation =====
+// ===== Invitation Operations =====
+// Note: Most invitation operations have been moved to repository/invitation.go
+// These wrapper methods exist for backward compatibility with core/app.Repository interface
 
-func (r *AppRepository) toInvitationSchema(inv *core.Invitation) *schema.Invitation {
-	return &schema.Invitation{
-		ID:         inv.ID,
-		AppID:      inv.AppID,
-		Email:      inv.Email,
-		Role:       inv.Role,
-		InviterID:  inv.InviterID,
-		Token:      inv.Token,
-		ExpiresAt:  inv.ExpiresAt,
-		AcceptedAt: inv.AcceptedAt,
-		Status:     inv.Status,
-	}
-}
-
-func (r *AppRepository) fromInvitationSchema(si *schema.Invitation) *core.Invitation {
-	if si == nil {
-		return nil
-	}
-	return &core.Invitation{
-		ID:         si.ID,
-		AppID:      si.AppID,
-		Email:      si.Email,
-		Role:       si.Role,
-		InviterID:  si.InviterID,
-		Token:      si.Token,
-		ExpiresAt:  si.ExpiresAt,
-		AcceptedAt: si.AcceptedAt,
-		Status:     si.Status,
-		CreatedAt:  si.CreatedAt,
-	}
-}
-
-func (r *AppRepository) CreateInvitation(ctx context.Context, inv *core.Invitation) error {
-	si := r.toInvitationSchema(inv)
-	_, err := r.db.NewInsert().Model(si).Exec(ctx)
+// CreateInvitation creates an invitation
+func (r *AppRepository) CreateInvitation(ctx context.Context, inv *schema.Invitation) error {
+	_, err := r.db.NewInsert().Model(inv).Exec(ctx)
 	return err
 }
+
+// FindInvitationByID finds an invitation by ID
+func (r *AppRepository) FindInvitationByID(ctx context.Context, id xid.ID) (*schema.Invitation, error) {
+	invitation := new(schema.Invitation)
+	err := r.db.NewSelect().Model(invitation).Where("id = ?", id).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return invitation, nil
+}
+
+// FindInvitationByToken finds an invitation by token
+func (r *AppRepository) FindInvitationByToken(ctx context.Context, token string) (*schema.Invitation, error) {
+	invitation := new(schema.Invitation)
+	err := r.db.NewSelect().Model(invitation).Where("token = ?", token).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return invitation, nil
+}
+
+// ListInvitations lists invitations by app with optional status filter and pagination
+func (r *AppRepository) ListInvitations(ctx context.Context, filter *app.ListInvitationsFilter) (*pagination.PageResponse[*schema.Invitation], error) {
+	var invitations []*schema.Invitation
+
+	// Build base query with filters
+	query := r.db.NewSelect().Model(&invitations).Where("organization_id = ?", filter.AppID)
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
+	}
+	if filter.Email != nil {
+		query = query.Where("email = ?", *filter.Email)
+	}
+
+	// Get total count before pagination
+	countQuery := r.db.NewSelect().Model((*schema.Invitation)(nil)).Where("organization_id = ?", filter.AppID)
+	if filter.Status != nil {
+		countQuery = countQuery.Where("status = ?", *filter.Status)
+	}
+	if filter.Email != nil {
+		countQuery = countQuery.Where("email = ?", *filter.Email)
+	}
+	total, err := countQuery.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination using helper
+	qb := pagination.NewQueryBuilder(&filter.PaginationParams)
+	query = qb.ApplyToQuery(query)
+
+	// Execute query
+	err = query.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return pagination.NewPageResponse(invitations, int64(total), &filter.PaginationParams), nil
+}
+
+// UpdateInvitation updates an invitation
+func (r *AppRepository) UpdateInvitation(ctx context.Context, inv *schema.Invitation) error {
+	_, err := r.db.NewUpdate().Model(inv).WherePK().Exec(ctx)
+	return err
+}
+
+// DeleteInvitation deletes an invitation
+func (r *AppRepository) DeleteInvitation(ctx context.Context, id xid.ID) error {
+	_, err := r.db.NewDelete().Model((*schema.Invitation)(nil)).Where("id = ?", id).Exec(ctx)
+	return err
+}
+
+// DeleteExpiredInvitations deletes expired invitations
+func (r *AppRepository) DeleteExpiredInvitations(ctx context.Context) (int, error) {
+	result, err := r.db.NewDelete().
+		Model((*schema.Invitation)(nil)).
+		Where("expires_at < CURRENT_TIMESTAMP").
+		Where("status = ?", schema.InvitationStatusPending).
+		Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	return int(rowsAffected), nil
+}
+
+// ===== Team Query Operations =====
+
+// FindTeamByName finds a team by name within an app
+func (r *AppRepository) FindTeamByName(ctx context.Context, appID xid.ID, name string) (*schema.Team, error) {
+	team := new(schema.Team)
+	err := r.db.NewSelect().Model(team).
+		Where("organization_id = ?", appID).
+		Where("name = ?", name).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return team, nil
+}
+
+// IsTeamMember checks if a member is part of a team
+func (r *AppRepository) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
+	count, err := r.db.NewSelect().
+		Model((*schema.TeamMember)(nil)).
+		Where("team_id = ?", teamID).
+		Where("member_id = ?", memberID).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// ListMemberTeams lists all teams a member belongs to with pagination
+func (r *AppRepository) ListMemberTeams(ctx context.Context, filter *app.ListMemberTeamsFilter) (*pagination.PageResponse[*schema.Team], error) {
+	var teams []*schema.Team
+
+	// Build base query
+	query := r.db.NewSelect().
+		Model(&teams).
+		Join("JOIN team_members tm ON tm.team_id = team.id").
+		Where("tm.member_id = ?", filter.MemberID)
+
+	// Get total count before pagination
+	total, err := r.db.NewSelect().
+		Model((*schema.Team)(nil)).
+		Join("JOIN team_members tm ON tm.team_id = team.id").
+		Where("tm.member_id = ?", filter.MemberID).
+		Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination using helper
+	qb := pagination.NewQueryBuilder(&filter.PaginationParams)
+	query = qb.ApplyToQuery(query)
+
+	// Execute query
+	err = query.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return pagination.NewPageResponse(teams, int64(total), &filter.PaginationParams), nil
+}
+
+// Type assertion to ensure AppRepository implements all focused repository interfaces
+var _ app.AppRepository = (*AppRepository)(nil)
+var _ app.MemberRepository = (*AppRepository)(nil)
+var _ app.TeamRepository = (*AppRepository)(nil)
+var _ app.InvitationRepository = (*AppRepository)(nil)

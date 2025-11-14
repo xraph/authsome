@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
@@ -21,49 +22,140 @@ import (
 )
 
 type Plugin struct {
-	db           *bun.DB
-	service      *Service
-	notifAdapter *notificationPlugin.Adapter
+	db            *bun.DB
+	service       *Service
+	notifAdapter  *notificationPlugin.Adapter
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the magic link plugin configuration
+type Config struct {
+	// ExpiryMinutes is the magic link expiry time in minutes
+	ExpiryMinutes int `json:"expiryMinutes"`
+	// BaseURL is the base URL for magic link generation
+	BaseURL string `json:"baseURL"`
+	// AllowImplicitSignup allows creating users if they don't exist
+	AllowImplicitSignup bool `json:"allowImplicitSignup"`
+	// RateLimitPerHour is the max requests per hour per user
+	RateLimitPerHour int `json:"rateLimitPerHour"`
+}
+
+// DefaultConfig returns the default magic link plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		ExpiryMinutes:       15,
+		BaseURL:             "http://localhost:8080",
+		AllowImplicitSignup: true,
+		RateLimitPerHour:    10,
+	}
+}
+
+// PluginOption is a functional option for configuring the magic link plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithExpiryMinutes sets the magic link expiry time
+func WithExpiryMinutes(minutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.ExpiryMinutes = minutes
+	}
+}
+
+// WithBaseURL sets the base URL for magic links
+func WithBaseURL(url string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.BaseURL = url
+	}
+}
+
+// WithAllowImplicitSignup sets whether implicit signup is allowed
+func WithAllowImplicitSignup(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowImplicitSignup = allow
+	}
+}
+
+// WithRateLimitPerHour sets the rate limit per hour
+func WithRateLimitPerHour(limit int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RateLimitPerHour = limit
+	}
+}
+
+// NewPlugin creates a new magic link plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "magiclink" }
 
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("magiclink plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("magiclink plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for magiclink plugin")
 	}
 
-	p.db = db
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for magiclink plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "magiclink"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.magiclink", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind magic link config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models
+	p.db.RegisterModel((*schema.MagicLink)(nil))
 
 	// TODO: Get notification adapter from service registry when available
 	// For now, plugins will work without notification adapter (graceful degradation)
 	// The notification plugin should be registered first and will set up its services
 
-	mr := repo.NewMagicLinkRepository(db)
-	userSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, nil)
+	mr := repo.NewMagicLinkRepository(p.db)
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
 	// Build full auth service with session
-	sessRepo := repo.NewSessionRepository(db)
+	sessRepo := repo.NewSessionRepository(p.db)
 	sessionSvc := session.NewService(sessRepo, session.Config{}, nil)
 	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	p.service = NewService(mr, userSvc, authSvc, auditSvc, p.notifAdapter, Config{
-		BaseURL:             "",
-		ExpiryMinutes:       15,
-		DevExposeURL:        true,
-		AllowImplicitSignup: true,
-	})
+	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
+	p.service = NewService(mr, userSvc, authSvc, auditSvc, p.notifAdapter, p.config)
+
+	p.logger.Info("magic link plugin initialized",
+		forge.F("expiry_minutes", p.config.ExpiryMinutes),
+		forge.F("base_url", p.config.BaseURL),
+		forge.F("allow_implicit_signup", p.config.AllowImplicitSignup))
+
 	return nil
 }
 

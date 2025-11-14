@@ -317,6 +317,102 @@ GET /api/auth/providers
 }
 ```
 
+## Admin Endpoints
+
+Requires admin role and `social:admin` permission.
+
+### List Configured Providers
+
+**Request:**
+```http
+GET /social/admin/providers
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "providers": ["google", "github", "microsoft", "discord"],
+  "appId": "app_123"
+}
+```
+
+### Add/Configure Provider
+
+**Request:**
+```http
+POST /social/admin/providers
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "appId": "app_123",
+  "provider": "google",
+  "clientId": "your-client-id",
+  "clientSecret": "your-client-secret",
+  "scopes": ["openid", "email", "profile"],
+  "enabled": true
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Provider configured successfully",
+  "provider": "google",
+  "appId": "app_123"
+}
+```
+
+### Update Provider Configuration
+
+**Request:**
+```http
+PUT /social/admin/providers/google
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "clientId": "new-client-id",
+  "clientSecret": "new-client-secret",
+  "enabled": true
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Provider updated successfully",
+  "provider": "google",
+  "appId": "app_123"
+}
+```
+
+### Remove Provider Configuration
+
+**Request:**
+```http
+DELETE /social/admin/providers/google
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "message": "Provider removed successfully",
+  "provider": "google",
+  "appId": "app_123"
+}
+```
+
+**Note:** Admin endpoints are currently placeholders. Full implementation requires:
+- Database schema for app-specific provider configurations
+- RBAC integration for permission checks
+- Credential encryption for secure storage
+- Audit logging for administrative actions
+
+See [Plugin Admin Endpoint Guidelines](../../docs/PLUGIN_ADMIN_ENDPOINTS.md) for implementation details.
+
 ## Usage Examples
 
 ### Client-Side (React/Next.js)

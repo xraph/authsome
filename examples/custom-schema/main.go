@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/xraph/authsome"
-	"github.com/xraph/authsome/plugins/multitenancy"
 	"github.com/xraph/forge"
 	"github.com/xraph/forge/extensions/database"
 )

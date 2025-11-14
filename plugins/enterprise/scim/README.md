@@ -93,7 +93,7 @@ package main
 
 import (
     "github.com/xraph/authsome"
-    "github.com/xraph/authsome/plugins/multitenancy"
+    "github.com/xraph/authsome/plugins/multiapp"
     "github.com/xraph/authsome/plugins/enterprise/scim"
 )
 
@@ -133,7 +133,7 @@ package main
 
 import (
     "github.com/xraph/authsome"
-    "github.com/xraph/authsome/plugins/multitenancy"
+    "github.com/xraph/authsome/plugins/multiapp"
     "github.com/xraph/authsome/plugins/organization"
     "github.com/xraph/authsome/plugins/enterprise/scim"
 )

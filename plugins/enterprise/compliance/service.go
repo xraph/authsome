@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/xraph/authsome/core/pagination"
 )
 
 // Service handles compliance business logic
@@ -12,7 +14,7 @@ type Service struct {
 	config   *Config
 	auditSvc AuditService
 	userSvc  UserService
-	orgSvc   OrganizationService
+	appSvc   AppService
 	emailSvc EmailService
 }
 
@@ -22,7 +24,7 @@ func NewService(
 	config *Config,
 	auditSvc AuditService,
 	userSvc UserService,
-	orgSvc OrganizationService,
+	appSvc AppService,
 	emailSvc EmailService,
 ) *Service {
 	return &Service{
@@ -30,7 +32,7 @@ func NewService(
 		config:   config,
 		auditSvc: auditSvc,
 		userSvc:  userSvc,
-		orgSvc:   orgSvc,
+		appSvc:   appSvc,
 		emailSvc: emailSvc,
 	}
 }
@@ -40,16 +42,19 @@ func NewService(
 // CreateProfile creates a new compliance profile
 func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) (*ComplianceProfile, error) {
 	// Check if profile already exists
-	existing, _ := s.repo.GetProfileByOrganization(ctx, req.OrganizationID)
+	existing, err := s.repo.GetProfileByApp(ctx, req.AppID)
+	if err != nil {
+		return nil, InternalError("check_existing_profile", err)
+	}
 	if existing != nil {
-		return nil, ErrProfileExists
+		return nil, ProfileExists(req.AppID)
 	}
 
 	profile := &ComplianceProfile{
-		OrganizationID: req.OrganizationID,
-		Name:           req.Name,
-		Standards:      req.Standards,
-		Status:         "active",
+		AppID:     req.AppID,
+		Name:      req.Name,
+		Standards: req.Standards,
+		Status:    "active",
 
 		// Security
 		MFARequired:           req.MFARequired,
@@ -88,14 +93,14 @@ func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) 
 	}
 
 	if err := s.repo.CreateProfile(ctx, profile); err != nil {
-		return nil, fmt.Errorf("failed to create profile: %w", err)
+		return nil, InternalError("create_profile", err)
 	}
 
 	// Audit the creation
 	s.auditSvc.LogEvent(ctx, &AuditEvent{
-		Action:         "compliance.profile.created",
-		OrganizationID: req.OrganizationID,
-		ResourceID:     profile.ID,
+		Action:     "compliance.profile.created",
+		AppID:      req.AppID,
+		ResourceID: profile.ID,
 		Metadata: map[string]interface{}{
 			"standards": profile.Standards,
 		},
@@ -110,21 +115,21 @@ func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) 
 }
 
 // CreateProfileFromTemplate creates a profile from a compliance template
-func (s *Service) CreateProfileFromTemplate(ctx context.Context, orgID string, standard ComplianceStandard) (*ComplianceProfile, error) {
-	profile, err := CreateProfileFromTemplate(orgID, standard)
+func (s *Service) CreateProfileFromTemplate(ctx context.Context, appID string, standard ComplianceStandard) (*ComplianceProfile, error) {
+	profile, err := CreateProfileFromTemplate(appID, standard)
 	if err != nil {
-		return nil, err
+		return nil, TemplateNotFound(string(standard))
 	}
 
 	if err := s.repo.CreateProfile(ctx, profile); err != nil {
-		return nil, fmt.Errorf("failed to create profile from template: %w", err)
+		return nil, InternalError("create_profile_from_template", err)
 	}
 
 	// Audit
 	s.auditSvc.LogEvent(ctx, &AuditEvent{
-		Action:         "compliance.profile.created_from_template",
-		OrganizationID: orgID,
-		ResourceID:     profile.ID,
+		Action:     "compliance.profile.created_from_template",
+		AppID:      appID,
+		ResourceID: profile.ID,
 		Metadata: map[string]interface{}{
 			"template": standard,
 		},
@@ -135,19 +140,36 @@ func (s *Service) CreateProfileFromTemplate(ctx context.Context, orgID string, s
 
 // GetProfile retrieves a compliance profile
 func (s *Service) GetProfile(ctx context.Context, id string) (*ComplianceProfile, error) {
-	return s.repo.GetProfile(ctx, id)
+	profile, err := s.repo.GetProfile(ctx, id)
+	if err != nil {
+		return nil, QueryFailed("get_profile", err)
+	}
+	if profile == nil {
+		return nil, ProfileNotFound(id)
+	}
+	return profile, nil
 }
 
-// GetProfileByOrganization retrieves a profile by organization ID
-func (s *Service) GetProfileByOrganization(ctx context.Context, orgID string) (*ComplianceProfile, error) {
-	return s.repo.GetProfileByOrganization(ctx, orgID)
+// GetProfileByApp retrieves a profile by app ID
+func (s *Service) GetProfileByApp(ctx context.Context, appID string) (*ComplianceProfile, error) {
+	profile, err := s.repo.GetProfileByApp(ctx, appID)
+	if err != nil {
+		return nil, QueryFailed("get_profile_by_app", err)
+	}
+	if profile == nil {
+		return nil, ProfileNotFound(appID)
+	}
+	return profile, nil
 }
 
 // UpdateProfile updates a compliance profile
 func (s *Service) UpdateProfile(ctx context.Context, id string, req *UpdateProfileRequest) (*ComplianceProfile, error) {
 	profile, err := s.repo.GetProfile(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, QueryFailed("get_profile", err)
+	}
+	if profile == nil {
+		return nil, ProfileNotFound(id)
 	}
 
 	// Apply updates
@@ -168,14 +190,14 @@ func (s *Service) UpdateProfile(ctx context.Context, id string, req *UpdateProfi
 	profile.UpdatedAt = time.Now()
 
 	if err := s.repo.UpdateProfile(ctx, profile); err != nil {
-		return nil, fmt.Errorf("failed to update profile: %w", err)
+		return nil, InternalError("update_profile", err)
 	}
 
 	// Audit
 	s.auditSvc.LogEvent(ctx, &AuditEvent{
-		Action:         "compliance.profile.updated",
-		OrganizationID: profile.OrganizationID,
-		ResourceID:     profile.ID,
+		Action:     "compliance.profile.updated",
+		AppID:      profile.AppID,
+		ResourceID: profile.ID,
 	})
 
 	return profile, nil
@@ -208,22 +230,22 @@ func (s *Service) RunCheck(ctx context.Context, profileID, checkType string) (*C
 	case "data_retention":
 		result, status, evidence = s.checkDataRetention(ctx, profile)
 	default:
-		return nil, ErrInvalidCheckType
+		return nil, InvalidCheckType(checkType)
 	}
 
 	check := &ComplianceCheck{
-		ProfileID:      profileID,
-		OrganizationID: profile.OrganizationID,
-		CheckType:      checkType,
-		Status:         status,
-		Result:         result,
-		Evidence:       evidence,
-		LastCheckedAt:  time.Now(),
-		NextCheckAt:    time.Now().Add(s.config.AutomatedChecks.CheckInterval),
+		ProfileID:     profileID,
+		AppID:         profile.AppID,
+		CheckType:     checkType,
+		Status:        status,
+		Result:        result,
+		Evidence:      evidence,
+		LastCheckedAt: time.Now(),
+		NextCheckAt:   time.Now().Add(s.config.AutomatedChecks.CheckInterval),
 	}
 
 	if err := s.repo.CreateCheck(ctx, check); err != nil {
-		return nil, fmt.Errorf("failed to save check: %w", err)
+		return nil, InternalError("create_check", err)
 	}
 
 	// If check failed, create violations
@@ -241,8 +263,8 @@ func (s *Service) RunCheck(ctx context.Context, profileID, checkType string) (*C
 
 // checkMFACoverage checks MFA adoption rate
 func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
-	// Get all users in organization
-	users, err := s.userSvc.ListByOrganization(ctx, profile.OrganizationID)
+	// Get all users in app
+	users, err := s.userSvc.ListByApp(ctx, profile.AppID)
 	if err != nil {
 		return nil, "failed", nil
 	}
@@ -289,7 +311,7 @@ func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfi
 // checkPasswordPolicy verifies password compliance
 func (s *Service) checkPasswordPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// Get users with weak passwords or expired passwords
-	users, _ := s.userSvc.ListByOrganization(ctx, profile.OrganizationID)
+	users, _ := s.userSvc.ListByApp(ctx, profile.AppID)
 
 	weakPasswords := 0
 	expiredPasswords := 0
@@ -355,7 +377,7 @@ func (s *Service) checkAccessReview(ctx context.Context, profile *ComplianceProf
 
 // checkInactiveUsers identifies inactive users
 func (s *Service) checkInactiveUsers(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
-	users, _ := s.userSvc.ListByOrganization(ctx, profile.OrganizationID)
+	users, _ := s.userSvc.ListByApp(ctx, profile.AppID)
 
 	inactiveThreshold := 90 * 24 * time.Hour // 90 days
 	inactiveUsers := []string{}
@@ -387,7 +409,7 @@ func (s *Service) checkInactiveUsers(ctx context.Context, profile *CompliancePro
 // checkDataRetention verifies data retention compliance
 func (s *Service) checkDataRetention(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// Check audit logs retention
-	oldestLog, _ := s.auditSvc.GetOldestLog(ctx, profile.OrganizationID)
+	oldestLog, _ := s.auditSvc.GetOldestLog(ctx, profile.AppID)
 
 	retentionDays := 0
 	if oldestLog != nil {
@@ -439,13 +461,13 @@ func (s *Service) createViolationsFromCheck(ctx context.Context, check *Complian
 	// This is simplified - real implementation would be more detailed
 
 	violation := &ComplianceViolation{
-		ProfileID:      check.ProfileID,
-		OrganizationID: check.OrganizationID,
-		ViolationType:  check.CheckType + "_failed",
-		Severity:       "high",
-		Description:    fmt.Sprintf("Compliance check '%s' failed", check.CheckType),
-		Status:         "open",
-		Metadata:       check.Result,
+		ProfileID:     check.ProfileID,
+		AppID:         check.AppID,
+		ViolationType: check.CheckType + "_failed",
+		Severity:      "high",
+		Description:   fmt.Sprintf("Compliance check '%s' failed", check.CheckType),
+		Status:        "open",
+		Metadata:      check.Result,
 	}
 
 	s.repo.CreateViolation(ctx, violation)
@@ -479,26 +501,33 @@ func (s *Service) notifyViolation(ctx context.Context, profile *ComplianceProfil
 	}
 }
 
-// GetComplianceStatus returns overall compliance status for an organization
-func (s *Service) GetComplianceStatus(ctx context.Context, orgID string) (*ComplianceStatus, error) {
-	profile, err := s.repo.GetProfileByOrganization(ctx, orgID)
+// GetComplianceStatus returns overall compliance status for an app
+func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*ComplianceStatus, error) {
+	profile, err := s.repo.GetProfileByApp(ctx, appID)
 	if err != nil {
-		return nil, err
+		return nil, QueryFailed("get_profile_by_app", err)
+	}
+	if profile == nil {
+		return nil, ProfileNotFound(appID)
 	}
 
 	// Get recent checks
-	checks, _ := s.repo.ListChecks(ctx, profile.ID, CheckFilters{
-		Limit: 100,
-	})
+	profileID := profile.ID
+	filter := &ListChecksFilter{
+		PaginationParams: pagination.PaginationParams{Limit: 100},
+		ProfileID:        &profileID,
+	}
+	checksResp, _ := s.repo.ListChecks(ctx, filter)
 
 	// Count violations
-	violations, _ := s.repo.CountViolations(ctx, orgID, "open")
+	violations, _ := s.repo.CountViolations(ctx, appID, "open")
 
 	// Calculate metrics
 	checksPassed := 0
 	checksFailed := 0
 	checksWarning := 0
 
+	checks := checksResp.Data
 	for _, check := range checks {
 		switch check.Status {
 		case "passed":
@@ -524,16 +553,16 @@ func (s *Service) GetComplianceStatus(ctx context.Context, orgID string) (*Compl
 	}
 
 	status := &ComplianceStatus{
-		ProfileID:      profile.ID,
-		OrganizationID: orgID,
-		OverallStatus:  overallStatus,
-		Score:          score,
-		ChecksPassed:   checksPassed,
-		ChecksFailed:   checksFailed,
-		ChecksWarning:  checksWarning,
-		Violations:     violations,
-		LastChecked:    time.Now(),
-		NextAudit:      time.Now().Add(90 * 24 * time.Hour), // 90 days
+		ProfileID:     profile.ID,
+		AppID:         appID,
+		OverallStatus: overallStatus,
+		Score:         score,
+		ChecksPassed:  checksPassed,
+		ChecksFailed:  checksFailed,
+		ChecksWarning: checksWarning,
+		Violations:    violations,
+		LastChecked:   time.Now(),
+		NextAudit:     time.Now().Add(90 * 24 * time.Hour), // 90 days
 	}
 
 	return status, nil
@@ -541,7 +570,7 @@ func (s *Service) GetComplianceStatus(ctx context.Context, orgID string) (*Compl
 
 // Helper structs and interfaces
 type CreateProfileRequest struct {
-	OrganizationID        string
+	AppID                 string
 	Name                  string
 	Standards             []ComplianceStandard
 	MFARequired           bool
@@ -579,15 +608,15 @@ type UpdateProfileRequest struct {
 // External service interfaces
 type AuditService interface {
 	LogEvent(ctx context.Context, event *AuditEvent) error
-	GetOldestLog(ctx context.Context, orgID string) (*AuditLog, error)
+	GetOldestLog(ctx context.Context, appID string) (*AuditLog, error)
 }
 
 type UserService interface {
-	ListByOrganization(ctx context.Context, orgID string) ([]*User, error)
+	ListByApp(ctx context.Context, appID string) ([]*User, error)
 }
 
-type OrganizationService interface {
-	Get(ctx context.Context, id string) (*Organization, error)
+type AppService interface {
+	Get(ctx context.Context, id string) (*App, error)
 }
 
 type EmailService interface {
@@ -596,15 +625,138 @@ type EmailService interface {
 
 // Helper types
 type AuditEvent struct {
-	Action         string
-	OrganizationID string
-	ResourceID     string
-	Metadata       map[string]interface{}
+	Action     string
+	AppID      string
+	ResourceID string
+	Metadata   map[string]interface{}
 }
 
 type AuditLog struct {
 	CreatedAt time.Time
 }
+
+// ===== List Methods =====
+
+// ListProfiles lists compliance profiles with pagination
+func (s *Service) ListProfiles(ctx context.Context, filter *ListProfilesFilter) (*pagination.PageResponse[*ComplianceProfile], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListProfiles(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_profiles", err)
+	}
+
+	return resp, nil
+}
+
+// ListChecks lists compliance checks with pagination
+func (s *Service) ListChecks(ctx context.Context, filter *ListChecksFilter) (*pagination.PageResponse[*ComplianceCheck], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListChecks(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_checks", err)
+	}
+
+	return resp, nil
+}
+
+// ListViolations lists compliance violations with pagination
+func (s *Service) ListViolations(ctx context.Context, filter *ListViolationsFilter) (*pagination.PageResponse[*ComplianceViolation], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListViolations(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_violations", err)
+	}
+
+	return resp, nil
+}
+
+// ListReports lists compliance reports with pagination
+func (s *Service) ListReports(ctx context.Context, filter *ListReportsFilter) (*pagination.PageResponse[*ComplianceReport], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListReports(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_reports", err)
+	}
+
+	return resp, nil
+}
+
+// ListEvidence lists compliance evidence with pagination
+func (s *Service) ListEvidence(ctx context.Context, filter *ListEvidenceFilter) (*pagination.PageResponse[*ComplianceEvidence], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListEvidence(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_evidence", err)
+	}
+
+	return resp, nil
+}
+
+// ListPolicies lists compliance policies with pagination
+func (s *Service) ListPolicies(ctx context.Context, filter *ListPoliciesFilter) (*pagination.PageResponse[*CompliancePolicy], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListPolicies(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_policies", err)
+	}
+
+	return resp, nil
+}
+
+// ListTraining lists compliance training with pagination
+func (s *Service) ListTraining(ctx context.Context, filter *ListTrainingFilter) (*pagination.PageResponse[*ComplianceTraining], error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	resp, err := s.repo.ListTraining(ctx, filter)
+	if err != nil {
+		return nil, InternalError("list_training", err)
+	}
+
+	return resp, nil
+}
+
+// ===== Helper Types =====
 
 type User struct {
 	ID                string
@@ -613,7 +765,7 @@ type User struct {
 	LastLoginAt       time.Time
 }
 
-type Organization struct {
+type App struct {
 	ID   string
 	Name string
 }

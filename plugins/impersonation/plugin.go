@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/core/registry"
@@ -60,24 +60,17 @@ func (p *Plugin) Description() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(dep interface{}) error {
-	// Type assert to get the Auth instance
-	type authInstance interface {
-		GetDB() *bun.DB
-		GetServiceRegistry() *registry.ServiceRegistry
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("impersonation plugin requires Auth instance")
 	}
 
-	auth, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("impersonation plugin requires Auth instance with GetDB and GetServiceRegistry")
-	}
-
-	db := auth.GetDB()
+	db := authInst.GetDB()
 	if db == nil {
 		return fmt.Errorf("database not available")
 	}
 
-	serviceRegistry := auth.GetServiceRegistry()
+	serviceRegistry := authInst.GetServiceRegistry()
 	if serviceRegistry == nil {
 		return fmt.Errorf("service registry not available")
 	}
@@ -313,18 +306,16 @@ func (p *Plugin) Health(ctx context.Context) error {
 	}
 
 	// Check if we can query the database
-	// We'll do a simple count query
-	req := &impersonation.ListRequest{
-		AppID: xid.NilID(), // dummy org ID
-		Limit:          1,
+	// We'll do a simple list query with a dummy app ID
+	filter := &impersonation.ListSessionsFilter{
+		AppID: xid.NilID(), // dummy app ID for health check
 	}
-	_, err := p.service.List(ctx, req)
-	// It's ok if we get "not found" or similar - as long as we can query
-	if err != nil && err.Error() != "impersonation: impersonation session not found" {
-		return fmt.Errorf("health check failed: %w", err)
-	}
+	filter.Limit = 1
 
-	return nil
+	_, err := p.service.List(ctx, filter)
+	// It's ok if we get errors - as long as we can query the DB
+	// (empty results or permission errors are fine for health check)
+	return err
 }
 
 // GetService returns the impersonation service for programmatic access

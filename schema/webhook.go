@@ -11,32 +11,39 @@ import (
 type Webhook struct {
 	bun.BaseModel `bun:"table:webhooks,alias:w"`
 
-	ID             xid.ID            `bun:"id,pk,type:varchar(20)" json:"id"`
-	OrganizationID string            `bun:"organization_id,notnull" json:"organization_id"`
-	URL            string            `bun:"url,notnull" json:"url"`
-	Events         []string          `bun:"events,array" json:"events"`
-	Secret         string            `bun:"secret,notnull" json:"-"`
-	Active         bool              `bun:"active,notnull,default:true" json:"active"`
-	Headers        map[string]string `bun:"headers,type:jsonb" json:"headers,omitempty"`
-	Metadata       map[string]string `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
-	CreatedAt      time.Time         `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt      time.Time         `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt      *time.Time        `bun:"deleted_at,soft_delete,nullzero" json:"-"`
+	ID            xid.ID            `bun:"id,pk,type:varchar(20)" json:"id"`
+	AppID         xid.ID            `bun:"app_id,notnull,type:varchar(20)" json:"app_id"`
+	EnvironmentID xid.ID            `bun:"environment_id,notnull,type:varchar(20)" json:"environment_id"`
+	URL           string            `bun:"url,notnull" json:"url"`
+	Events        []string          `bun:"events,array" json:"events"`
+	Secret        string            `bun:"secret,notnull" json:"-"`
+	Enabled       bool              `bun:"enabled,notnull,default:true" json:"enabled"`
+	MaxRetries    int               `bun:"max_retries,notnull,default:3" json:"max_retries"`
+	RetryBackoff  string            `bun:"retry_backoff,notnull,default:'exponential'" json:"retry_backoff"`
+	Headers       map[string]string `bun:"headers,type:jsonb" json:"headers,omitempty"`
+	Metadata      map[string]string `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
+	LastDelivery  *time.Time        `bun:"last_delivery" json:"last_delivery,omitempty"`
+	FailureCount  int               `bun:"failure_count,notnull,default:0" json:"failure_count"`
+	CreatedAt     time.Time         `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt     time.Time         `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt     *time.Time        `bun:"deleted_at,soft_delete,nullzero" json:"-"`
 }
 
 // Event represents a webhook event
 type Event struct {
 	bun.BaseModel `bun:"table:webhook_events,alias:we"`
 
-	ID             xid.ID                 `bun:"id,pk,type:varchar(20)" json:"id"`
-	OrganizationID string                 `bun:"organization_id,notnull" json:"organization_id"`
-	Type           string                 `bun:"type,notnull" json:"type"`
-	Data           map[string]interface{} `bun:"data,type:jsonb" json:"data"`
-	UserID         *xid.ID                `bun:"user_id,type:varchar(20)" json:"user_id,omitempty"`
-	SessionID      *xid.ID                `bun:"session_id,type:varchar(20)" json:"session_id,omitempty"`
-	IPAddress      string                 `bun:"ip_address" json:"ip_address,omitempty"`
-	UserAgent      string                 `bun:"user_agent" json:"user_agent,omitempty"`
-	CreatedAt      time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	ID            xid.ID                 `bun:"id,pk,type:varchar(20)" json:"id"`
+	AppID         xid.ID                 `bun:"app_id,notnull,type:varchar(20)" json:"app_id"`
+	EnvironmentID xid.ID                 `bun:"environment_id,notnull,type:varchar(20)" json:"environment_id"`
+	Type          string                 `bun:"type,notnull" json:"type"`
+	Data          map[string]interface{} `bun:"data,type:jsonb" json:"data"`
+	UserID        *xid.ID                `bun:"user_id,type:varchar(20)" json:"user_id,omitempty"`
+	SessionID     *xid.ID                `bun:"session_id,type:varchar(20)" json:"session_id,omitempty"`
+	IPAddress     string                 `bun:"ip_address" json:"ip_address,omitempty"`
+	UserAgent     string                 `bun:"user_agent" json:"user_agent,omitempty"`
+	OccurredAt    time.Time              `bun:"occurred_at,nullzero,notnull,default:current_timestamp" json:"occurred_at"`
+	CreatedAt     time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // Delivery represents a webhook delivery attempt

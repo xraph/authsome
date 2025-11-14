@@ -2,189 +2,213 @@ package organization
 
 import (
 	"context"
-	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/rbac"
 )
 
-// Config represents organization service configuration
-type Config struct {
-	// ModeSaaS controls multi-tenant behavior when true
-	ModeSaaS bool
-	// PlatformOrganizationID is the ID of the platform org (super admin)
-	PlatformOrganizationID xid.ID
-}
-
-// Service provides organization management operations
+// Service provides access to all organization-related services
+// Internally delegates to focused services for better separation of concerns
 type Service struct {
-	repo   Repository
-	config Config
+	Organization *OrganizationService
+	Member       *MemberService
+	Team         *TeamService
+	Invitation   *InvitationService
 }
 
-// NewService creates a new organization service
-func NewService(repo Repository, cfg Config) *Service {
-	return &Service{repo: repo, config: cfg}
-}
-
-// CreateOrganization creates a new organization
-func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest) (*Organization, error) {
-	id := xid.New()
-	now := time.Now().UTC()
-	org := &Organization{
-		ID:        id,
-		Name:      req.Name,
-		Slug:      req.Slug,
-		Logo:      req.Logo,
-		Metadata:  req.Metadata,
-		CreatedAt: now,
-		UpdatedAt: now,
+// NewService creates a new service with all focused services
+func NewService(
+	orgRepo OrganizationRepository,
+	memberRepo MemberRepository,
+	teamRepo TeamRepository,
+	invitationRepo InvitationRepository,
+	cfg Config,
+	rbacSvc *rbac.Service,
+) *Service {
+	return &Service{
+		Organization: NewOrganizationService(orgRepo, cfg, rbacSvc),
+		Member:       NewMemberService(memberRepo, orgRepo, cfg, rbacSvc),
+		Team:         NewTeamService(teamRepo, memberRepo, cfg, rbacSvc),
+		Invitation:   NewInvitationService(invitationRepo, memberRepo, orgRepo, cfg, rbacSvc),
 	}
-	if err := s.repo.CreateOrganization(ctx, org); err != nil {
-		return nil, err
-	}
-	return org, nil
 }
 
-// FindOrganizationByID returns an organization by ID
+// =============================================================================
+// Organization Operations Delegation
+// =============================================================================
+
+func (s *Service) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest, creatorUserID, appID, environmentID xid.ID) (*Organization, error) {
+	return s.Organization.CreateOrganization(ctx, req, creatorUserID, appID, environmentID)
+}
+
 func (s *Service) FindOrganizationByID(ctx context.Context, id xid.ID) (*Organization, error) {
-	return s.repo.FindOrganizationByID(ctx, id)
+	return s.Organization.FindOrganizationByID(ctx, id)
 }
 
-// FindOrganizationBySlug returns an organization by slug
-func (s *Service) FindOrganizationBySlug(ctx context.Context, slug string) (*Organization, error) {
-	return s.repo.FindOrganizationBySlug(ctx, slug)
+func (s *Service) FindOrganizationBySlug(ctx context.Context, appID, environmentID xid.ID, slug string) (*Organization, error) {
+	return s.Organization.FindOrganizationBySlug(ctx, appID, environmentID, slug)
 }
 
-// UpdateOrganization updates an organization
+func (s *Service) ListOrganizations(ctx context.Context, filter *ListOrganizationsFilter) (*pagination.PageResponse[*Organization], error) {
+	return s.Organization.ListOrganizations(ctx, filter)
+}
+
+func (s *Service) ListUserOrganizations(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Organization], error) {
+	return s.Organization.ListUserOrganizations(ctx, userID, filter)
+}
+
 func (s *Service) UpdateOrganization(ctx context.Context, id xid.ID, req *UpdateOrganizationRequest) (*Organization, error) {
-	org, err := s.repo.FindOrganizationByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if req.Name != nil {
-		org.Name = *req.Name
-	}
-	if req.Logo != nil {
-		org.Logo = *req.Logo
-	}
-	if req.Metadata != nil {
-		org.Metadata = req.Metadata
-	}
-	org.UpdatedAt = time.Now()
-	if err := s.repo.UpdateOrganization(ctx, org); err != nil {
-		return nil, err
-	}
-	return org, nil
+	return s.Organization.UpdateOrganization(ctx, id, req)
 }
 
-// DeleteOrganization deletes an organization by ID
-func (s *Service) DeleteOrganization(ctx context.Context, id xid.ID) error {
-	return s.repo.DeleteOrganization(ctx, id)
+func (s *Service) DeleteOrganization(ctx context.Context, id, userID xid.ID) error {
+	// Check authorization before deletion
+	if err := s.Member.RequireOwner(ctx, id, userID); err != nil {
+		return err
+	}
+	return s.Organization.DeleteOrganization(ctx, id, userID)
 }
 
-// ListOrganizations returns a paginated list of organizations
-func (s *Service) ListOrganizations(ctx context.Context, limit, offset int) ([]*Organization, error) {
-	return s.repo.ListOrganizations(ctx, limit, offset)
+// =============================================================================
+// Member Operations Delegation
+// =============================================================================
+
+func (s *Service) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*Member, error) {
+	return s.Member.AddMember(ctx, orgID, userID, role)
 }
 
-// CountOrganizations returns total number of organizations
-func (s *Service) CountOrganizations(ctx context.Context) (int, error) {
-	return s.repo.CountOrganizations(ctx)
-}
-
-// CreateMember adds a new member to an organization
-func (s *Service) CreateMember(ctx context.Context, member *Member) error {
-	member.CreatedAt = time.Now()
-	member.UpdatedAt = time.Now()
-	return s.repo.CreateMember(ctx, member)
-}
-
-// FindMemberByID finds a member by ID
 func (s *Service) FindMemberByID(ctx context.Context, id xid.ID) (*Member, error) {
-	return s.repo.FindMemberByID(ctx, id)
+	return s.Member.FindMemberByID(ctx, id)
 }
 
-// FindMember finds a member by orgID and userID
 func (s *Service) FindMember(ctx context.Context, orgID, userID xid.ID) (*Member, error) {
-	return s.repo.FindMember(ctx, orgID, userID)
+	return s.Member.FindMember(ctx, orgID, userID)
 }
 
-// ListMembers lists members in an organization
-func (s *Service) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Member, error) {
-	return s.repo.ListMembers(ctx, orgID, limit, offset)
+func (s *Service) ListMembers(ctx context.Context, filter *ListMembersFilter) (*pagination.PageResponse[*Member], error) {
+	return s.Member.ListMembers(ctx, filter)
 }
 
-// CountMembers returns total number of members in an organization
-func (s *Service) CountMembers(ctx context.Context, orgID xid.ID) (int, error) {
-	return s.repo.CountMembers(ctx, orgID)
+func (s *Service) UpdateMember(ctx context.Context, id xid.ID, req *UpdateMemberRequest, updaterUserID xid.ID) (*Member, error) {
+	return s.Member.UpdateMember(ctx, id, req, updaterUserID)
 }
 
-// UpdateMember updates a member
-func (s *Service) UpdateMember(ctx context.Context, member *Member) error {
-	member.UpdatedAt = time.Now()
-	return s.repo.UpdateMember(ctx, member)
+func (s *Service) RemoveMember(ctx context.Context, id, removerUserID xid.ID) error {
+	return s.Member.RemoveMember(ctx, id, removerUserID)
 }
 
-// DeleteMember deletes a member by ID
-func (s *Service) DeleteMember(ctx context.Context, id xid.ID) error {
-	return s.repo.DeleteMember(ctx, id)
+func (s *Service) GetUserMemberships(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Member], error) {
+	return s.Member.GetUserMemberships(ctx, userID, filter)
 }
 
-// CreateTeam creates a new team
-func (s *Service) CreateTeam(ctx context.Context, team *Team) error {
-	team.CreatedAt = time.Now()
-	team.UpdatedAt = time.Now()
-	return s.repo.CreateTeam(ctx, team)
+func (s *Service) RemoveUserFromAllOrganizations(ctx context.Context, userID xid.ID) error {
+	return s.Member.RemoveUserFromAllOrganizations(ctx, userID)
 }
 
-// FindTeamByID finds a team by ID
+func (s *Service) IsMember(ctx context.Context, orgID, userID xid.ID) (bool, error) {
+	return s.Member.IsMember(ctx, orgID, userID)
+}
+
+func (s *Service) IsOwner(ctx context.Context, orgID, userID xid.ID) (bool, error) {
+	return s.Member.IsOwner(ctx, orgID, userID)
+}
+
+func (s *Service) IsAdmin(ctx context.Context, orgID, userID xid.ID) (bool, error) {
+	return s.Member.IsAdmin(ctx, orgID, userID)
+}
+
+func (s *Service) RequireOwner(ctx context.Context, orgID, userID xid.ID) error {
+	return s.Member.RequireOwner(ctx, orgID, userID)
+}
+
+func (s *Service) RequireAdmin(ctx context.Context, orgID, userID xid.ID) error {
+	return s.Member.RequireAdmin(ctx, orgID, userID)
+}
+
+// =============================================================================
+// Team Operations Delegation
+// =============================================================================
+
+func (s *Service) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateTeamRequest, creatorUserID xid.ID) (*Team, error) {
+	return s.Team.CreateTeam(ctx, orgID, req, creatorUserID)
+}
+
 func (s *Service) FindTeamByID(ctx context.Context, id xid.ID) (*Team, error) {
-	return s.repo.FindTeamByID(ctx, id)
+	return s.Team.FindTeamByID(ctx, id)
 }
 
-// ListTeams lists teams in an organization with pagination
-func (s *Service) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]*Team, error) {
-	return s.repo.ListTeams(ctx, orgID, limit, offset)
+func (s *Service) FindTeamByName(ctx context.Context, orgID xid.ID, name string) (*Team, error) {
+	return s.Team.FindTeamByName(ctx, orgID, name)
 }
 
-// CountTeams returns total number of teams in an organization
-func (s *Service) CountTeams(ctx context.Context, orgID xid.ID) (int, error) {
-	return s.repo.CountTeams(ctx, orgID)
+func (s *Service) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*pagination.PageResponse[*Team], error) {
+	return s.Team.ListTeams(ctx, filter)
 }
 
-// UpdateTeam updates a team
-func (s *Service) UpdateTeam(ctx context.Context, team *Team) error {
-	team.UpdatedAt = time.Now()
-	return s.repo.UpdateTeam(ctx, team)
+func (s *Service) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeamRequest, updaterUserID xid.ID) (*Team, error) {
+	return s.Team.UpdateTeam(ctx, id, req, updaterUserID)
 }
 
-// DeleteTeam deletes a team by ID
-func (s *Service) DeleteTeam(ctx context.Context, id xid.ID) error {
-	return s.repo.DeleteTeam(ctx, id)
+func (s *Service) DeleteTeam(ctx context.Context, id, deleterUserID xid.ID) error {
+	return s.Team.DeleteTeam(ctx, id, deleterUserID)
 }
 
-// AddTeamMember adds a member to a team
-func (s *Service) AddTeamMember(ctx context.Context, tm *TeamMember) error {
-	return s.repo.AddTeamMember(ctx, tm)
+func (s *Service) AddTeamMember(ctx context.Context, teamID, memberID, adderUserID xid.ID) error {
+	return s.Team.AddTeamMember(ctx, teamID, memberID, adderUserID)
 }
 
-// RemoveTeamMember removes a member from a team
-func (s *Service) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
-	return s.repo.RemoveTeamMember(ctx, teamID, memberID)
+func (s *Service) RemoveTeamMember(ctx context.Context, teamID, memberID, removerUserID xid.ID) error {
+	return s.Team.RemoveTeamMember(ctx, teamID, memberID, removerUserID)
 }
 
-// ListTeamMembers lists members of a team with pagination
-func (s *Service) ListTeamMembers(ctx context.Context, teamID xid.ID, limit, offset int) ([]*TeamMember, error) {
-	return s.repo.ListTeamMembers(ctx, teamID, limit, offset)
+func (s *Service) ListTeamMembers(ctx context.Context, filter *ListTeamMembersFilter) (*pagination.PageResponse[*TeamMember], error) {
+	return s.Team.ListTeamMembers(ctx, filter)
 }
 
-// CountTeamMembers returns total number of members in a team
-func (s *Service) CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error) {
-	return s.repo.CountTeamMembers(ctx, teamID)
+func (s *Service) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
+	return s.Team.IsTeamMember(ctx, teamID, memberID)
 }
 
-// CreateInvitation creates an organization invitation
-func (s *Service) CreateInvitation(ctx context.Context, inv *Invitation) error {
-	inv.CreatedAt = time.Now()
-	return s.repo.CreateInvitation(ctx, inv)
+// =============================================================================
+// Invitation Operations Delegation
+// =============================================================================
+
+func (s *Service) InviteMember(ctx context.Context, orgID xid.ID, req *InviteMemberRequest, inviterUserID xid.ID) (*Invitation, error) {
+	return s.Invitation.InviteMember(ctx, orgID, req, inviterUserID)
 }
+
+func (s *Service) FindInvitationByID(ctx context.Context, id xid.ID) (*Invitation, error) {
+	return s.Invitation.FindInvitationByID(ctx, id)
+}
+
+func (s *Service) FindInvitationByToken(ctx context.Context, token string) (*Invitation, error) {
+	return s.Invitation.FindInvitationByToken(ctx, token)
+}
+
+func (s *Service) ListInvitations(ctx context.Context, filter *ListInvitationsFilter) (*pagination.PageResponse[*Invitation], error) {
+	return s.Invitation.ListInvitations(ctx, filter)
+}
+
+func (s *Service) AcceptInvitation(ctx context.Context, token string, userID xid.ID) (*Member, error) {
+	return s.Invitation.AcceptInvitation(ctx, token, userID)
+}
+
+func (s *Service) DeclineInvitation(ctx context.Context, token string) error {
+	return s.Invitation.DeclineInvitation(ctx, token)
+}
+
+func (s *Service) CancelInvitation(ctx context.Context, id, cancellerUserID xid.ID) error {
+	return s.Invitation.CancelInvitation(ctx, id, cancellerUserID)
+}
+
+func (s *Service) ResendInvitation(ctx context.Context, id, resenderUserID xid.ID) (*Invitation, error) {
+	return s.Invitation.ResendInvitation(ctx, id, resenderUserID)
+}
+
+func (s *Service) CleanupExpiredInvitations(ctx context.Context) (int, error) {
+	return s.Invitation.CleanupExpiredInvitations(ctx)
+}
+
+// Type assertion to ensure Service implements CompositeOrganizationService
+var _ CompositeOrganizationService = (*Service)(nil)

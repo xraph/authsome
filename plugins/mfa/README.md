@@ -210,6 +210,97 @@ const { success, session_complete, token: mfaToken } = await verifyResp.json();
 | GET | `/auth/mfa/status` | Get user's MFA status |
 | GET | `/auth/mfa/policy` | Get organization policy |
 
+### Admin Endpoints
+
+Requires admin role and `mfa:admin` permission.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/mfa/admin/policy` | Get MFA policy for app |
+| PUT | `/mfa/admin/policy` | Update MFA policy |
+| POST | `/mfa/admin/bypass` | Grant temporary MFA bypass |
+| POST | `/mfa/admin/users/:id/reset` | Reset user's MFA factors |
+
+#### Get MFA Policy
+
+```http
+GET /mfa/admin/policy
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "appId": "app_123",
+  "requiredFactors": 1,
+  "allowedTypes": ["totp", "sms", "email", "webauthn", "backup"],
+  "gracePeriod": 86400,
+  "enabled": true
+}
+```
+
+#### Update MFA Policy
+
+```http
+PUT /mfa/admin/policy
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "requiredFactors": 2,
+  "allowedTypes": ["totp", "webauthn"],
+  "gracePeriod": 3600,
+  "enabled": true
+}
+```
+
+#### Grant Temporary MFA Bypass
+
+```http
+POST /mfa/admin/bypass
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "userId": "usr_123",
+  "duration": 86400,
+  "reason": "User lost device, temporary bypass for 24h"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "MFA bypass granted successfully",
+  "userId": "usr_123",
+  "expiresAt": "+86400 seconds"
+}
+```
+
+#### Reset User's MFA
+
+```http
+POST /mfa/admin/users/usr_123/reset
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "message": "MFA reset successfully",
+  "userId": "usr_123",
+  "appId": "app_123"
+}
+```
+
+**Note:** Admin endpoints are currently placeholders. Full implementation requires:
+- Database schema for app-specific MFA policies
+- RBAC integration for permission checks
+- MFA bypass storage with expiry
+- Audit logging for administrative actions
+
+See [Plugin Admin Endpoint Guidelines](../../docs/PLUGIN_ADMIN_ENDPOINTS.md) for implementation details.
+
 ## Middleware Usage
 
 ### Require MFA

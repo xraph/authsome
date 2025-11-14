@@ -32,7 +32,7 @@ func (r *mockImpersonationRepository) Create(ctx context.Context, session *schem
 
 func (r *mockImpersonationRepository) Get(ctx context.Context, id xid.ID, orgID xid.ID) (*schema.ImpersonationSession, error) {
 	session, ok := r.sessions[id.String()]
-	if !ok || session.OrganizationID != orgID {
+	if !ok || session.AppID != orgID {
 		return nil, impersonation.ErrImpersonationNotFound
 	}
 	return session, nil
@@ -55,7 +55,7 @@ func (r *mockImpersonationRepository) Update(ctx context.Context, session *schem
 func (r *mockImpersonationRepository) List(ctx context.Context, req *impersonation.ListRequest) ([]*schema.ImpersonationSession, error) {
 	var sessions []*schema.ImpersonationSession
 	for _, session := range r.sessions {
-		if session.OrganizationID != req.OrganizationID {
+		if session.AppID != req.AppID {
 			continue
 		}
 		if req.ActiveOnly && (!session.Active || session.IsExpired()) {
@@ -80,7 +80,7 @@ func (r *mockImpersonationRepository) Count(ctx context.Context, req *impersonat
 func (r *mockImpersonationRepository) GetActive(ctx context.Context, impersonatorID xid.ID, orgID xid.ID) (*schema.ImpersonationSession, error) {
 	for _, session := range r.sessions {
 		if session.ImpersonatorID == impersonatorID &&
-			session.OrganizationID == orgID &&
+			session.AppID == orgID &&
 			session.Active &&
 			!session.IsExpired() {
 			return session, nil
@@ -111,7 +111,7 @@ func (r *mockImpersonationRepository) CreateAuditEvent(ctx context.Context, even
 func (r *mockImpersonationRepository) ListAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) ([]*schema.ImpersonationAuditEvent, error) {
 	var events []*schema.ImpersonationAuditEvent
 	for _, event := range r.auditEvents {
-		if event.OrganizationID != req.OrganizationID {
+		if event.AppID != req.AppID {
 			continue
 		}
 		if req.ImpersonationID != nil && event.ImpersonationID != *req.ImpersonationID {
@@ -255,7 +255,7 @@ func TestService_Start_Success(t *testing.T) {
 	orgID := xid.New()
 
 	req := &impersonation.StartRequest{
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  admin.ID,
 		TargetUserID:    target.ID,
 		Reason:          "Testing impersonation feature for debugging customer issue",
@@ -282,7 +282,7 @@ func TestService_Start_CannotImpersonateSelf(t *testing.T) {
 	orgID := xid.New()
 
 	req := &impersonation.StartRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   admin.ID, // Same as impersonator
 		Reason:         "Testing self impersonation",
@@ -300,7 +300,7 @@ func TestService_Start_ReasonTooShort(t *testing.T) {
 	orgID := xid.New()
 
 	req := &impersonation.StartRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Reason:         "Short", // Less than 10 characters
@@ -320,7 +320,7 @@ func TestService_Start_AlreadyImpersonating(t *testing.T) {
 	// Create existing active impersonation
 	existingSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -331,7 +331,7 @@ func TestService_Start_AlreadyImpersonating(t *testing.T) {
 
 	// Try to start another impersonation
 	req := &impersonation.StartRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Reason:         "Testing multiple impersonations",
@@ -348,7 +348,7 @@ func TestService_Start_UserNotFound(t *testing.T) {
 	orgID := xid.New()
 
 	req := &impersonation.StartRequest{
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: xid.New(), // Non-existent user
 		TargetUserID:   xid.New(),
 		Reason:         "Testing with non-existent user",
@@ -370,7 +370,7 @@ func TestService_End_Success(t *testing.T) {
 	sessionToken := "token_test"
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,
@@ -384,7 +384,7 @@ func TestService_End_Success(t *testing.T) {
 
 	req := &impersonation.EndRequest{
 		ImpersonationID: impSession.ID,
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  admin.ID,
 		Reason:          "manual",
 	}
@@ -410,7 +410,7 @@ func TestService_End_NotFound(t *testing.T) {
 
 	req := &impersonation.EndRequest{
 		ImpersonationID: xid.New(), // Non-existent
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  admin.ID,
 	}
 
@@ -434,7 +434,7 @@ func TestService_End_WrongImpersonator(t *testing.T) {
 	// Create active impersonation
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -446,7 +446,7 @@ func TestService_End_WrongImpersonator(t *testing.T) {
 	// Try to end with different user
 	req := &impersonation.EndRequest{
 		ImpersonationID: impSession.ID,
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  otherUser.ID, // Different from actual impersonator
 	}
 
@@ -465,7 +465,7 @@ func TestService_List_Success(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		session := &schema.ImpersonationSession{
 			ID:             xid.New(),
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         i < 3, // First 3 active, last 2 inactive
@@ -478,8 +478,8 @@ func TestService_List_Success(t *testing.T) {
 
 	// List all sessions
 	req := &impersonation.ListRequest{
-		OrganizationID: orgID,
-		Limit:          10,
+		AppID: orgID,
+		Limit: 10,
 	}
 
 	resp, err := service.List(context.Background(), req)
@@ -505,7 +505,7 @@ func TestService_Verify_Active(t *testing.T) {
 	sessionID := xid.New()
 	impSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,
@@ -552,7 +552,7 @@ func TestService_ExpireSessions(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
 			ID:             xid.New(),
-			OrganizationID: orgID,
+			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         true,
@@ -565,7 +565,7 @@ func TestService_ExpireSessions(t *testing.T) {
 	// Create active non-expired session
 	activeSession := &schema.ImpersonationSession{
 		ID:             xid.New(),
-		OrganizationID: orgID,
+		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
@@ -592,7 +592,7 @@ func TestService_CustomDuration(t *testing.T) {
 	customDuration := 120 // 2 hours
 
 	req := &impersonation.StartRequest{
-		OrganizationID:  orgID,
+		AppID:           orgID,
 		ImpersonatorID:  admin.ID,
 		TargetUserID:    target.ID,
 		Reason:          "Testing custom duration impersonation",
@@ -633,7 +633,7 @@ func TestService_InvalidDuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := &impersonation.StartRequest{
-				OrganizationID:  orgID,
+				AppID:           orgID,
 				ImpersonatorID:  admin.ID,
 				TargetUserID:    target.ID,
 				Reason:          "Testing invalid duration",

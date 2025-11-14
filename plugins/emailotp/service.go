@@ -16,15 +16,6 @@ import (
 	repo "github.com/xraph/authsome/repository"
 )
 
-// Config for Email OTP service
-type Config struct {
-	OTPLength           int
-	ExpiryMinutes       int
-	MaxAttempts         int
-	DevExposeOTP        bool // if true, return OTP in response for dev testing
-	AllowImplicitSignup bool // if true, create user when verifying if missing
-}
-
 // Service implements email OTP flow
 type Service struct {
 	repo         *repo.EmailOTPRepository

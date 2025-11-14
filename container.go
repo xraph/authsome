@@ -99,12 +99,12 @@ func ResolveAuthService(container forge.Container) (auth.ServiceInterface, error
 }
 
 // ResolveAppService resolves the app service from the container
-func ResolveAppService(container forge.Container) (*app.Service, error) {
+func ResolveAppService(container forge.Container) (*app.ServiceImpl, error) {
 	svc, err := container.Resolve(ServiceApp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve app service: %w", err)
 	}
-	appSvc, ok := svc.(*app.Service)
+	appSvc, ok := svc.(*app.ServiceImpl)
 	if !ok {
 		return nil, fmt.Errorf("app service has invalid type")
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
@@ -49,21 +49,26 @@ func (p *Plugin) Version() string {
 }
 
 // Init initializes the plugin with AuthSome dependencies
-func (p *Plugin) Init(auth interface{}) error {
-	// Type assert to get the auth instance with required methods
-	authInstance, ok := auth.(interface {
-		GetDB() *bun.DB
-		GetForgeApp() forge.App
-		GetServiceRegistry() *registry.ServiceRegistry
-	})
-	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("compliance plugin requires Auth instance")
 	}
 
-	db := authInstance.GetDB()
-	forgeApp := authInstance.GetForgeApp()
+	db := authInst.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available")
+	}
+
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available")
+	}
+
 	configManager := forgeApp.Config()
-	serviceRegistry := authInstance.GetServiceRegistry()
+	serviceRegistry := authInst.GetServiceRegistry()
+	if serviceRegistry == nil {
+		return fmt.Errorf("service registry not available")
+	}
 
 	// Load configuration from Forge config manager
 	var config Config
@@ -86,8 +91,8 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Get user service (interface type)
 	userSvc := serviceRegistry.UserService()
 
-	// Get organization service (interface type, may be nil if multi-tenancy plugin not loaded)
-	orgSvc := serviceRegistry.OrganizationService()
+	// Get app service (interface type, may be nil if multi-app plugin not loaded)
+	appSvc := serviceRegistry.AppService()
 
 	// Initialize repository
 	repo := NewBunRepository(db)
@@ -95,7 +100,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Create adapters for services
 	auditAdapter := NewAuditServiceAdapter(auditSvc)
 	userAdapter := NewUserServiceAdapter(userSvc)
-	orgAdapter := NewOrganizationServiceAdapter(orgSvc)
+	appAdapter := NewAppServiceAdapter(appSvc)
 	emailAdapter := NewEmailServiceAdapter(notificationSvc)
 
 	// Initialize service
@@ -104,7 +109,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		p.config,
 		auditAdapter,
 		userAdapter,
-		orgAdapter,
+		appAdapter,
 		emailAdapter,
 	)
 
@@ -155,7 +160,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile retrieved", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 		)
-		complianceGroup.GET("/organizations/:orgId/profile", p.handler.GetOrganizationProfile,
+		complianceGroup.GET("/apps/:appId/profile", p.handler.GetAppProfile,
 			forge.WithName("compliance.profiles.org"),
 			forge.WithSummary("Get organization profile"),
 			forge.WithDescription("Get the compliance profile for a specific organization"),
@@ -179,14 +184,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 
 		// Status and Dashboard
-		complianceGroup.GET("/organizations/:orgId/status", p.handler.GetComplianceStatus,
+		complianceGroup.GET("/apps/:appId/status", p.handler.GetComplianceStatus,
 			forge.WithName("compliance.status"),
 			forge.WithSummary("Get compliance status"),
 			forge.WithDescription("Get overall compliance status for an organization"),
 			forge.WithResponseSchema(200, "Status retrieved", ComplianceStatusDetailsResponse{}),
 			forge.WithTags("Compliance", "Organizations"),
 		)
-		complianceGroup.GET("/organizations/:orgId/dashboard", p.handler.GetDashboard,
+		complianceGroup.GET("/apps/:appId/dashboard", p.handler.GetDashboard,
 			forge.WithName("compliance.dashboard"),
 			forge.WithSummary("Get compliance dashboard"),
 			forge.WithDescription("Get compliance dashboard metrics and overview"),
@@ -219,7 +224,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 
 		// Violations
-		complianceGroup.GET("/organizations/:orgId/violations", p.handler.ListViolations,
+		complianceGroup.GET("/apps/:appId/violations", p.handler.ListViolations,
 			forge.WithName("compliance.violations.list"),
 			forge.WithSummary("List compliance violations"),
 			forge.WithDescription("List all compliance violations for an organization"),
@@ -243,7 +248,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 
 		// Reports
-		complianceGroup.POST("/organizations/:orgId/reports", p.handler.GenerateReport,
+		complianceGroup.POST("/apps/:appId/reports", p.handler.GenerateReport,
 			forge.WithName("compliance.reports.generate"),
 			forge.WithSummary("Generate compliance report"),
 			forge.WithDescription("Generate a compliance report for an organization"),
@@ -251,7 +256,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Compliance", "Reports"),
 			forge.WithValidation(true),
 		)
-		complianceGroup.GET("/organizations/:orgId/reports", p.handler.ListReports,
+		complianceGroup.GET("/apps/:appId/reports", p.handler.ListReports,
 			forge.WithName("compliance.reports.list"),
 			forge.WithSummary("List compliance reports"),
 			forge.WithDescription("List all compliance reports for an organization"),
@@ -274,7 +279,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 
 		// Evidence
-		complianceGroup.POST("/organizations/:orgId/evidence", p.handler.CreateEvidence,
+		complianceGroup.POST("/apps/:appId/evidence", p.handler.CreateEvidence,
 			forge.WithName("compliance.evidence.create"),
 			forge.WithSummary("Create evidence record"),
 			forge.WithDescription("Create a new compliance evidence record"),
@@ -282,7 +287,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Compliance", "Evidence"),
 			forge.WithValidation(true),
 		)
-		complianceGroup.GET("/organizations/:orgId/evidence", p.handler.ListEvidence,
+		complianceGroup.GET("/apps/:appId/evidence", p.handler.ListEvidence,
 			forge.WithName("compliance.evidence.list"),
 			forge.WithSummary("List evidence records"),
 			forge.WithDescription("List all compliance evidence records for an organization"),
@@ -305,7 +310,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 
 		// Policies
-		complianceGroup.POST("/organizations/:orgId/policies", p.handler.CreatePolicy,
+		complianceGroup.POST("/apps/:appId/policies", p.handler.CreatePolicy,
 			forge.WithName("compliance.policies.create"),
 			forge.WithSummary("Create compliance policy"),
 			forge.WithDescription("Create a new compliance policy document"),
@@ -313,7 +318,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
 		)
-		complianceGroup.GET("/organizations/:orgId/policies", p.handler.ListPolicies,
+		complianceGroup.GET("/apps/:appId/policies", p.handler.ListPolicies,
 			forge.WithName("compliance.policies.list"),
 			forge.WithSummary("List compliance policies"),
 			forge.WithDescription("List all compliance policies for an organization"),
@@ -344,7 +349,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 
 		// Training
-		complianceGroup.POST("/organizations/:orgId/training", p.handler.CreateTraining,
+		complianceGroup.POST("/apps/:appId/training", p.handler.CreateTraining,
 			forge.WithName("compliance.training.create"),
 			forge.WithSummary("Create training module"),
 			forge.WithDescription("Create a compliance training module"),
@@ -352,7 +357,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Compliance", "Training"),
 			forge.WithValidation(true),
 		)
-		complianceGroup.GET("/organizations/:orgId/training", p.handler.ListTraining,
+		complianceGroup.GET("/apps/:appId/training", p.handler.ListTraining,
 			forge.WithName("compliance.training.list"),
 			forge.WithSummary("List training modules"),
 			forge.WithDescription("List all compliance training modules"),

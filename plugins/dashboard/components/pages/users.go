@@ -20,22 +20,22 @@ type UsersData struct {
 }
 
 // UsersPage renders the users list page
-func UsersPage(data UsersData, basePath string) g.Node {
+func UsersPage(data UsersData, basePath string, appIDStr string) g.Node {
 	return Div(
 		Class("space-y-6"),
 
 		// Search and Actions
-		searchForm(data, basePath),
+		searchForm(data, basePath, appIDStr),
 
 		// Users Table
-		usersTable(data, basePath),
+		usersTable(data, basePath, appIDStr),
 	)
 }
 
-func searchForm(data UsersData, basePath string) g.Node {
+func searchForm(data UsersData, basePath string, appIDStr string) g.Node {
 	return FormEl(
 		Method("GET"),
-		Action(basePath+"/dashboard/users"),
+		Action(basePath+"/dashboard/app/"+appIDStr+"/users"),
 		Class("flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"),
 
 		Div(
@@ -61,7 +61,7 @@ func searchForm(data UsersData, basePath string) g.Node {
 			Class("flex items-center gap-2"),
 			g.If(data.Query != "",
 				A(
-					Href(basePath+"/dashboard/users"),
+					Href(basePath+"/dashboard/app/"+appIDStr+"/users"),
 					Class("inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 text-sm font-medium text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors"),
 					lucide.X(Class("h-4 w-4")),
 					g.Text("Clear"),
@@ -75,7 +75,7 @@ func searchForm(data UsersData, basePath string) g.Node {
 	)
 }
 
-func usersTable(data UsersData, basePath string) g.Node {
+func usersTable(data UsersData, basePath string, appIDStr string) g.Node {
 	return Div(
 		Class("flex flex-col rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden"),
 		g.If(len(data.Users) > 0,
@@ -182,8 +182,8 @@ func userTableRow(u *user.User, basePath string) g.Node {
 		),
 		Td(
 			Class("py-3 ps-3 text-end font-medium"),
-			A(
-				Href(basePath+"/dashboard/users/"+u.ID.String()),
+				A(
+					Href(basePath+"/dashboard/app/"+appIDStr+"/users/"+u.ID.String()),
 				Class("group inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 font-medium text-slate-800 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-800 dark:hover:text-violet-400 active:border-slate-200 transition-colors"),
 				Span(g.Text("View")),
 				lucide.ArrowRight(Class("inline-block size-4 text-slate-400 dark:text-gray-500 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-active:translate-x-0.5 transition-all")),

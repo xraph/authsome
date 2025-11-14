@@ -192,7 +192,7 @@ func (e *Extension) RegisterPlugin(plugin plugins.Plugin) error {
 
 // GetPluginRegistry returns the plugin registry for plugin detection
 // This is used by the dashboard plugin to detect which plugins are enabled
-func (e *Extension) GetPluginRegistry() *plugins.Registry {
+func (e *Extension) GetPluginRegistry() plugins.PluginRegistry {
 	if e.auth == nil {
 		return nil
 	}

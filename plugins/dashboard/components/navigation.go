@@ -5,6 +5,7 @@ import (
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
+	"github.com/xraph/authsome/core/app"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -23,19 +24,20 @@ func DashboardHeader(data PageData) g.Node {
 					Div(
 						Class("flex justify-between py-1.5 lg:py-2.5"),
 
-						// Left Section - Logo and Desktop Nav
-						Div(
-							Class("flex items-center gap-2 lg:gap-6"),
-							Logo(data.BasePath),
-						),
+					// Left Section - Logo and Desktop Nav
+					Div(
+						Class("flex items-center gap-2 lg:gap-6"),
+						Logo(data.BasePath, data.CurrentApp),
+					),
 
-						// Right Section - Theme Toggle, User Dropdown, Mobile Nav Toggle
-						Div(
-							Class("flex items-center gap-2"),
-							ThemeToggle(),
-							UserDropdown(data),
-							MobileNavToggle(),
-						),
+					// Right Section - App Switcher, Theme Toggle, User Dropdown, Mobile Nav Toggle
+					Div(
+						Class("flex items-center gap-2"),
+						g.If(data.ShowAppSwitcher, AppSwitcher(data)),
+						ThemeToggle(),
+						UserDropdown(data),
+						MobileNavToggle(),
+					),
 					),
 
 					// Mobile Navigation
@@ -90,9 +92,12 @@ func DashboardFooter(data PageData) g.Node {
 	)
 }
 
-func Logo(basePath string) g.Node {
+func Logo(basePath string, currentApp *app.App) g.Node {
+	// Logo always links to dashboard index (app list or redirect)
+	logoURL := basePath + "/dashboard/"
+	
 	return A(
-		Href(basePath+"/dashboard/"),
+		Href(logoURL),
 		Class("group inline-flex items-center gap-1.5 text-lg font-bold tracking-wide text-slate-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400"),
 		shieldCheckIcon(),
 		Span(
@@ -103,19 +108,32 @@ func Logo(basePath string) g.Node {
 }
 
 func DesktopNavigation(data PageData) g.Node {
+	// Build URLs with appId if we have a current app
+	var dashURL, usersURL, sessionsURL, pluginsURL, settingsURL string
+	
+	if data.CurrentApp != nil {
+		appIDStr := data.CurrentApp.ID.String()
+		dashURL = data.BasePath + "/dashboard/app/" + appIDStr + "/"
+		usersURL = data.BasePath + "/dashboard/app/" + appIDStr + "/users"
+		sessionsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/sessions"
+		pluginsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/plugins"
+		settingsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/settings"
+	} else {
+		// Fallback to index if no app context (shouldn't happen in app-scoped pages)
+		dashURL = data.BasePath + "/dashboard/"
+		usersURL = dashURL
+		sessionsURL = dashURL
+		pluginsURL = dashURL
+		settingsURL = dashURL
+	}
+
 	navItems := []g.Node{
-		navLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
-		navLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
-		navLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
-		navLink("Plugins", data.BasePath+"/dashboard/plugins", data.ActivePage == "plugins"),
+		navLink("Dashboard", dashURL, data.ActivePage == "dashboard"),
+		navLink("Users", usersURL, data.ActivePage == "users"),
+		navLink("Sessions", sessionsURL, data.ActivePage == "sessions"),
+		navLink("Plugins", pluginsURL, data.ActivePage == "plugins"),
+		navLink("Settings", settingsURL, data.ActivePage == "settings"),
 	}
-
-	// Add Organizations link if in SaaS mode
-	if data.IsSaaSMode {
-		navItems = append(navItems, navLink("Apps", data.BasePath+"/dashboard/apps", data.ActivePage == "organizations"))
-	}
-
-	navItems = append(navItems, navLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"))
 
 	return Nav(
 		Class("hidden items-center gap-1.5 lg:flex"),
@@ -124,19 +142,32 @@ func DesktopNavigation(data PageData) g.Node {
 }
 
 func MobileNavigation(data PageData) g.Node {
+	// Build URLs with appId if we have a current app
+	var dashURL, usersURL, sessionsURL, pluginsURL, settingsURL string
+	
+	if data.CurrentApp != nil {
+		appIDStr := data.CurrentApp.ID.String()
+		dashURL = data.BasePath + "/dashboard/app/" + appIDStr + "/"
+		usersURL = data.BasePath + "/dashboard/app/" + appIDStr + "/users"
+		sessionsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/sessions"
+		pluginsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/plugins"
+		settingsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/settings"
+	} else {
+		// Fallback to index if no app context
+		dashURL = data.BasePath + "/dashboard/"
+		usersURL = dashURL
+		sessionsURL = dashURL
+		pluginsURL = dashURL
+		settingsURL = dashURL
+	}
+
 	navItems := []g.Node{
-		mobileNavLink("Dashboard", data.BasePath+"/dashboard/", data.ActivePage == "dashboard"),
-		mobileNavLink("Users", data.BasePath+"/dashboard/users", data.ActivePage == "users"),
-		mobileNavLink("Sessions", data.BasePath+"/dashboard/sessions", data.ActivePage == "sessions"),
-		mobileNavLink("Plugins", data.BasePath+"/dashboard/plugins", data.ActivePage == "plugins"),
+		mobileNavLink("Dashboard", dashURL, data.ActivePage == "dashboard"),
+		mobileNavLink("Users", usersURL, data.ActivePage == "users"),
+		mobileNavLink("Sessions", sessionsURL, data.ActivePage == "sessions"),
+		mobileNavLink("Plugins", pluginsURL, data.ActivePage == "plugins"),
+		mobileNavLink("Settings", settingsURL, data.ActivePage == "settings"),
 	}
-
-	// Add Organizations link if in SaaS mode
-	if data.IsSaaSMode {
-		navItems = append(navItems, mobileNavLink("Apps", data.BasePath+"/dashboard/apps", data.ActivePage == "organizations"))
-	}
-
-	navItems = append(navItems, mobileNavLink("Settings", data.BasePath+"/dashboard/settings", data.ActivePage == "settings"))
 
 	return Div(
 		g.Attr("x-cloak", ""),
@@ -146,6 +177,89 @@ func MobileNavigation(data PageData) g.Node {
 			Class("flex flex-col gap-2 border-t border-slate-200 dark:border-gray-800 py-4"),
 			g.Group(navItems),
 		),
+	)
+}
+
+func AppSwitcher(data PageData) g.Node {
+	if data.CurrentApp == nil || len(data.UserApps) <= 1 {
+		return g.Text("") // Don't show if no app or only one app
+	}
+
+	currentAppName := data.CurrentApp.Name
+	
+	return Div(
+		Class("relative inline-block"),
+		g.Attr("x-data", "{ appDropdownOpen: false }"),
+		Button(
+			g.Attr("@click", "appDropdownOpen = !appDropdownOpen"),
+			g.Attr(":aria-expanded", "appDropdownOpen"),
+			Type("button"),
+			Class("inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm leading-5 font-semibold text-slate-800 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-800 dark:hover:text-violet-400 transition-colors"),
+			g.Attr("aria-haspopup", "true"),
+			g.Attr("title", "Switch App"),
+			folderOpenIcon(),
+			Span(Class("hidden lg:inline max-w-[150px] truncate"), g.Text(currentAppName)),
+			chevronDownIcon(),
+		),
+		appSwitcherDropdown(data),
+	)
+}
+
+func appSwitcherDropdown(data PageData) g.Node {
+	appLinks := []g.Node{}
+	for _, app := range data.UserApps {
+		isCurrentApp := data.CurrentApp != nil && app.ID == data.CurrentApp.ID
+		appLinks = append(appLinks, appSwitcherLink(app, data.BasePath, isCurrentApp))
+	}
+
+	return Div(
+		g.Attr("x-cloak", ""),
+		g.Attr("x-show", "appDropdownOpen"),
+		g.Attr("x-transition:enter", "transition ease-out duration-100"),
+		g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+		g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+		g.Attr("x-transition:leave", "transition ease-in duration-75"),
+		g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
+		g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
+		g.Attr("@click.outside", "appDropdownOpen = false"),
+		g.Attr("role", "menu"),
+		Class("absolute start-0 z-50 mt-2 w-64 rounded-lg shadow-xl origin-top-left"),
+		Div(
+			Class("divide-y divide-slate-100 dark:divide-gray-700 rounded-lg bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 max-h-96 overflow-y-auto"),
+			Div(
+				Class("px-3 py-2 border-b border-slate-100 dark:border-gray-700"),
+				P(Class("text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase"), g.Text("Switch App")),
+			),
+			Div(
+				Class("space-y-1 p-2"),
+				g.Group(appLinks),
+			),
+		),
+	)
+}
+
+func appSwitcherLink(app *app.App, basePath string, isActive bool) g.Node {
+	href := basePath + "/dashboard/app/" + app.ID.String() + "/"
+	
+	activeClass := ""
+	if isActive {
+		activeClass = "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
+	}
+	
+	return A(
+		g.Attr("role", "menuitem"),
+		Href(href),
+		Class("group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors "+activeClass),
+		Div(
+			Class("flex-shrink-0 w-8 h-8 rounded bg-primary/10 dark:bg-primary/20 flex items-center justify-center"),
+			Span(Class("text-xs font-bold text-primary"), g.Text(string(app.Name[0]))),
+		),
+		Div(
+			Class("flex-1 min-w-0"),
+			P(Class("font-semibold truncate"), g.Text(app.Name)),
+			P(Class("text-xs text-slate-500 dark:text-gray-400 truncate"), g.Text("@"+app.Slug)),
+		),
+		g.If(isActive, checkCircleIcon()),
 	)
 }
 
@@ -347,5 +461,17 @@ func heartIcon() g.Node {
 	return lucide.Heart(
 		Class("mx-1 inline-block size-4 text-red-600 dark:text-red-500"),
 		g.Attr("fill", "currentColor"),
+	)
+}
+
+func folderOpenIcon() g.Node {
+	return lucide.FolderOpen(
+		Class("inline-block size-5"),
+	)
+}
+
+func checkCircleIcon() g.Node {
+	return lucide.CircleCheck(
+		Class("inline-block size-5 flex-none text-violet-600 dark:text-violet-400"),
 	)
 }

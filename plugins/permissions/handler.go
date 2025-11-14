@@ -1,7 +1,7 @@
 package permissions
 
 import (
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/forge"
 )
 
@@ -21,9 +21,9 @@ func NewHandler(service *Service) *Handler {
 //
 // func (h *Handler) SomeMethod(c forge.Context) error {
 //     // Extract V2 context
-//     appID := interfaces.GetAppID(c.Request().Context())
-//     orgID := interfaces.GetOrganizationID(c.Request().Context())
-//     userID := interfaces.GetUserID(c.Request().Context())
+//     appID := contexts.GetAppID(c.Request().Context())
+//     orgID := contexts.GetOrganizationID(c.Request().Context())
+//     userID := contexts.GetUserID(c.Request().Context())
 //
 //     if appID.IsNil() {
 //         return c.JSON(400, map[string]string{"error": "App context required"})
@@ -199,13 +199,13 @@ func (h *Handler) GetAnalytics(c forge.Context) error {
 // V2 context extraction helper (for future use)
 // This shows the standard pattern for all handlers when fully implemented
 func extractV2Context(c forge.Context) (appID, orgID, userID string, err error) {
-	appIDVal := interfaces.GetAppID(c.Request().Context())
+	appIDVal := contexts.GetAppID(c.Request().Context())
 	if appIDVal.IsNil() {
 		return "", "", "", forge.NewHTTPError(400, "App context required")
 	}
 
-	orgIDVal := interfaces.GetOrganizationID(c.Request().Context())
-	userIDVal := interfaces.GetUserID(c.Request().Context())
+	orgIDVal := contexts.GetOrganizationID(c.Request().Context())
+	userIDVal := contexts.GetUserID(c.Request().Context())
 
 	return appIDVal.String(), orgIDVal.String(), userIDVal.String(), nil
 }

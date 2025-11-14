@@ -11,21 +11,12 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
-	"github.com/xraph/authsome/internal/interfaces"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 )
-
-// Config for Phone service
-type Config struct {
-	CodeLength          int
-	ExpiryMinutes       int
-	MaxAttempts         int
-	DevExposeCode       bool
-	AllowImplicitSignup bool
-}
 
 type Service struct {
 	repo         *repo.PhoneRepository
@@ -63,8 +54,8 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 	}
 
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -113,8 +104,8 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	}
 
 	// Get app and org from context
-	appID := interfaces.GetAppID(ctx)
-	orgID := interfaces.GetOrganizationID(ctx)
+	appID := contexts.GetAppID(ctx)
+	orgID := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID

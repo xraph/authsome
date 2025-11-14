@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/internal/interfaces"
 	"github.com/xraph/forge"
 )
 
@@ -126,14 +126,14 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 		ctx = context.WithValue(ctx, APIKeyPermissionsKey, apiKey.Scopes)
 
 		// Inject V2 architecture context (App, Environment, Organization)
-		ctx = interfaces.SetAppID(ctx, apiKey.AppID)
+		ctx = contexts.SetAppID(ctx, apiKey.AppID)
 		if apiKey.EnvironmentID != nil {
-			ctx = interfaces.SetEnvironmentID(ctx, *apiKey.EnvironmentID)
+			ctx = contexts.SetEnvironmentID(ctx, *apiKey.EnvironmentID)
 		}
 		if apiKey.OrganizationID != nil {
-			ctx = interfaces.SetOrganizationID(ctx, *apiKey.OrganizationID)
+			ctx = contexts.SetOrganizationID(ctx, *apiKey.OrganizationID)
 		}
-		ctx = interfaces.SetUserID(ctx, apiKey.UserID)
+		ctx = contexts.SetUserID(ctx, apiKey.UserID)
 
 		if usr != nil {
 			ctx = context.WithValue(ctx, APIKeyUserContextKey, usr)
@@ -285,7 +285,7 @@ func GetUser(c forge.Context) *user.User {
 // GetOrgID extracts the organization ID from context (V2 architecture)
 // Returns the xid.ID, check with IsNil() before use
 func GetOrgID(c forge.Context) string {
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
+	orgID := contexts.GetOrganizationID(c.Request().Context())
 	if orgID.IsNil() {
 		return ""
 	}

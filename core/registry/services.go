@@ -1,14 +1,20 @@
 package registry
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/device"
+	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/forms"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
@@ -19,6 +25,7 @@ import (
 // ServiceRegistry manages all core services and allows plugins to replace them
 type ServiceRegistry struct {
 	// Core services (using interfaces to allow decoration)
+	appService          *app.ServiceImpl
 	userService         user.ServiceInterface
 	sessionService      session.ServiceInterface
 	authService         auth.ServiceInterface
@@ -39,16 +46,21 @@ type ServiceRegistry struct {
 	roleRegistry *rbac.RoleRegistry
 
 	// Plugin-provided services (for multi-tenancy)
-	organizationService interface{} // Will be set by multi-tenancy plugin
-	configService       interface{} // Will be set by multi-tenancy plugin
-	environmentService  interface{} // Will be set by multi-tenancy plugin
+	organizationService *organization.Service
+	configService       *app.ServiceImpl               // Will be set by multi-tenancy plugin
+	environmentService  environment.EnvironmentService // will be set by multi-tenancy plugin
+
+	// External services registered by key (for plugins and external integrations)
+	externalServices map[string]interface{}
+	externalMu       sync.RWMutex
 }
 
 // NewServiceRegistry creates a new service registry
 func NewServiceRegistry() *ServiceRegistry {
 	return &ServiceRegistry{
-		hookRegistry: hooks.NewHookRegistry(),
-		roleRegistry: rbac.NewRoleRegistry(),
+		hookRegistry:     hooks.NewHookRegistry(),
+		roleRegistry:     rbac.NewRoleRegistry(),
+		externalServices: make(map[string]interface{}),
 	}
 }
 
@@ -160,7 +172,7 @@ func (r *ServiceRegistry) RoleRegistry() *rbac.RoleRegistry {
 	return r.roleRegistry
 }
 
-// Service replacement methods (used by plugins to decorate services)
+// ServiceImpl replacement methods (used by plugins to decorate services)
 func (r *ServiceRegistry) ReplaceUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
@@ -186,36 +198,36 @@ func (r *ServiceRegistry) ReplaceFormsService(svc *forms.Service) {
 }
 
 // Plugin service setters (for multi-tenancy plugin)
-func (r *ServiceRegistry) SetOrganizationService(svc interface{}) {
+func (r *ServiceRegistry) SetOrganizationService(svc *organization.Service) {
 	r.organizationService = svc
 }
 
-func (r *ServiceRegistry) SetAppService(svc interface{}) {
-	r.organizationService = svc // organizationService field stores app service (renamed terminology)
+func (r *ServiceRegistry) SetAppService(svc *app.ServiceImpl) {
+	r.appService = svc
 }
 
-func (r *ServiceRegistry) SetConfigService(svc interface{}) {
+func (r *ServiceRegistry) SetConfigService(svc *app.ServiceImpl) {
 	r.configService = svc
 }
 
-func (r *ServiceRegistry) SetEnvironmentService(svc interface{}) {
+func (r *ServiceRegistry) SetEnvironmentService(svc environment.EnvironmentService) {
 	r.environmentService = svc
 }
 
 // Plugin service getters (for multi-tenancy plugin)
-func (r *ServiceRegistry) OrganizationService() interface{} {
+func (r *ServiceRegistry) OrganizationService() *organization.Service {
 	return r.organizationService
 }
 
-func (r *ServiceRegistry) AppService() interface{} {
-	return r.organizationService // organizationService field stores app service (renamed terminology)
+func (r *ServiceRegistry) AppService() *app.ServiceImpl {
+	return r.appService
 }
 
-func (r *ServiceRegistry) ConfigService() interface{} {
+func (r *ServiceRegistry) ConfigService() *app.ServiceImpl {
 	return r.configService
 }
 
-func (r *ServiceRegistry) EnvironmentService() interface{} {
+func (r *ServiceRegistry) EnvironmentService() environment.EnvironmentService {
 	return r.environmentService
 }
 
@@ -239,4 +251,105 @@ func (r *ServiceRegistry) HasEnvironmentService() bool {
 // IsMultiTenant returns true if the multi-tenancy plugin is active
 func (r *ServiceRegistry) IsMultiTenant() bool {
 	return r.HasAppService()
+}
+
+// Register registers an external service by key
+// This allows plugins and external integrations to register custom services
+// that can be retrieved later by other plugins or components
+func (r *ServiceRegistry) Register(key string, service interface{}) error {
+	if key == "" {
+		return fmt.Errorf("service key cannot be empty")
+	}
+	if service == nil {
+		return fmt.Errorf("service cannot be nil")
+	}
+
+	r.externalMu.Lock()
+	defer r.externalMu.Unlock()
+
+	// Check if key already exists
+	if _, exists := r.externalServices[key]; exists {
+		return fmt.Errorf("service with key '%s' already registered", key)
+	}
+
+	r.externalServices[key] = service
+	return nil
+}
+
+// Get retrieves an external service by key
+// Returns the service and a boolean indicating if it was found
+// The caller must perform type assertion to use the service
+func (r *ServiceRegistry) Get(key string) (interface{}, bool) {
+	if key == "" {
+		return nil, false
+	}
+
+	r.externalMu.RLock()
+	defer r.externalMu.RUnlock()
+
+	service, exists := r.externalServices[key]
+	return service, exists
+}
+
+// GetAs retrieves an external service by key and performs type assertion
+// Returns the service as the requested type and an error if not found or type assertion fails
+// This is a generic function that provides type-safe service retrieval
+// Usage: service, err := registry.GetAs[*MyService](registry, "my-service-key")
+func GetAs[T any](r *ServiceRegistry, key string) (T, error) {
+	var zero T
+
+	service, exists := r.Get(key)
+	if !exists {
+		return zero, fmt.Errorf("service with key '%s' not found", key)
+	}
+
+	typed, ok := service.(T)
+	if !ok {
+		return zero, fmt.Errorf("service with key '%s' is not of type %T", key, zero)
+	}
+
+	return typed, nil
+}
+
+// Has checks if a service is registered for the given key
+func (r *ServiceRegistry) Has(key string) bool {
+	if key == "" {
+		return false
+	}
+
+	r.externalMu.RLock()
+	defer r.externalMu.RUnlock()
+
+	_, exists := r.externalServices[key]
+	return exists
+}
+
+// Unregister removes a service from the registry by key
+func (r *ServiceRegistry) Unregister(key string) error {
+	if key == "" {
+		return fmt.Errorf("service key cannot be empty")
+	}
+
+	r.externalMu.Lock()
+	defer r.externalMu.Unlock()
+
+	if _, exists := r.externalServices[key]; !exists {
+		return fmt.Errorf("service with key '%s' not found", key)
+	}
+
+	delete(r.externalServices, key)
+	return nil
+}
+
+// ListKeys returns all registered service keys
+func (r *ServiceRegistry) ListKeys() []string {
+	r.externalMu.RLock()
+	defer r.externalMu.RUnlock()
+
+	keys := make([]string, 0, len(r.externalServices))
+	for key := range r.externalServices {
+		keys = append(keys, key)
+	}
+
+	return keys
 }

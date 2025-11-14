@@ -4,19 +4,22 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"strings"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/interfaces"
-	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins"
+	"github.com/xraph/authsome/internal/errs"
 	mtorg "github.com/xraph/authsome/plugins/multitenancy/organization"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
@@ -27,14 +30,16 @@ var assets embed.FS
 
 // Plugin implements the dashboard plugin for AuthSome
 type Plugin struct {
+	log             forge.Logger
 	handler         *Handler
 	userSvc         user.ServiceInterface
 	sessionSvc      session.ServiceInterface
 	auditSvc        *audit.Service
 	rbacSvc         *rbac.Service
 	apikeyService   *apikey.Service
-	orgService      *app.Service
-	isSaaSMode      bool
+	appService      app.AppService
+	orgService      organization.OrganizationService
+	isMultiAppMode  bool
 	permChecker     *PermissionChecker
 	csrfProtector   *CSRFProtector
 	basePath        string
@@ -147,19 +152,8 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(dep interface{}) error {
-	// Try to extract required interfaces from auth instance
-	type authInstanceInterface interface {
-		GetDB() *bun.DB
-		GetServiceRegistry() *registry.ServiceRegistry
-		GetHookRegistry() *hooks.HookRegistry
-		GetBasePath() string
-		GetPluginRegistry() *plugins.Registry
-		GetForgeApp() forge.App
-	}
-
-	authInstance, ok := dep.(authInstanceInterface)
-	if !ok {
+func (p *Plugin) Init(authInstance core.Authsome) error {
+	if authInstance == nil {
 		return fmt.Errorf("dashboard plugin requires auth instance with GetDB, GetServiceRegistry, GetHookRegistry, GetBasePath, GetPluginRegistry, and GetForgeApp methods")
 	}
 
@@ -168,30 +162,32 @@ func (p *Plugin) Init(dep interface{}) error {
 	if forgeApp == nil {
 		return fmt.Errorf("forge app not available")
 	}
+
+	p.log = forgeApp.Logger().With(forge.F("plugin", "dashboard"))
 	configManager := forgeApp.Config()
 
 	// Bind plugin configuration using Forge ConfigManager with provided defaults
 	if err := configManager.BindWithDefault("auth.dashboard", &p.config, p.defaultConfig); err != nil {
 		// Log but don't fail - use defaults
-		fmt.Printf("[Dashboard] Warning: failed to bind dashboard config: %v\n", err)
+		p.log.Warn("failed to bind dashboard config", forge.F("error", err.Error()))
 		// Fall back to default config
 		p.config = p.defaultConfig
 	}
 
 	serviceRegistry := authInstance.GetServiceRegistry()
 	if serviceRegistry == nil {
-		return fmt.Errorf("service registry not available")
+		return errs.InternalServerError("service registry not available", nil)
 	}
 
 	hookRegistry := authInstance.GetHookRegistry()
 	if hookRegistry == nil {
-		return fmt.Errorf("hook registry not available")
+		return errs.InternalServerError("hook registry not available", nil)
 	}
 
 	// Get database for repository initialization
 	db := authInstance.GetDB()
 	if db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerError("database not available", nil)
 	}
 	p.db = db
 
@@ -210,10 +206,13 @@ func (p *Plugin) Init(dep interface{}) error {
 		for _, plugin := range pluginList {
 			pluginID := plugin.ID()
 			p.enabledPlugins[pluginID] = true
-			fmt.Printf("[Dashboard]    ✓ Enabled plugin: %s\n", pluginID)
+			if pluginID == "multitenancy" {
+				p.isMultiAppMode = true
+			}
+			p.log.Info("enabled plugin", forge.F("plugin", pluginID))
 		}
 	} else {
-		fmt.Printf("[Dashboard] ⚠️  Plugin registry is nil\n")
+		p.log.Warn("plugin registry is nil")
 	}
 
 	// Get required services from registry using specific getters
@@ -241,18 +240,9 @@ func (p *Plugin) Init(dep interface{}) error {
 	p.apikeyService = serviceRegistry.APIKeyService()
 
 	// Get Organization service and check if we're in SaaS mode
-	if orgSvcInterface := serviceRegistry.OrganizationService(); orgSvcInterface != nil {
-		// Try to get core organization service
-		if orgSvc, ok := orgSvcInterface.(*app.Service); ok {
-			p.orgService = orgSvc
-			p.isSaaSMode = serviceRegistry.IsMultiTenant()
-		}
-
-		// Try to get multitenancy organization service
-		if _, ok := orgSvcInterface.(*mtorg.Service); ok {
-			// Multitenancy service is available, will be set in handler
-			p.isSaaSMode = serviceRegistry.IsMultiTenant()
-		}
+	if orgSvc := serviceRegistry.OrganizationService(); orgSvc != nil {
+		p.orgService = orgSvc
+		p.isMultiAppMode = serviceRegistry.IsMultiTenant()
 	}
 
 	// Initialize Permission Checker
@@ -269,37 +259,28 @@ func (p *Plugin) Init(dep interface{}) error {
 	// Note: Role registration now happens via RegisterRoles() method (PluginWithRoles interface)
 	// This is called automatically by the authsome initialization system
 
-	// Get platform organization ID for context injection
-	// Dashboard always operates in platform organization context
-	var platformOrg struct {
-		ID xid.ID `bun:"id"`
-	}
-	err = db.NewSelect().
-		Table("organizations").
-		Column("id").
-		Where("is_platform = ?", true).
-		Scan(context.Background(), &platformOrg)
-
+	platformOrg, err := authInstance.GetServiceRegistry().AppService().GetPlatformApp(context.Background())
 	if err != nil {
-		fmt.Printf("[Dashboard] Warning: Could not find platform organization: %v\n", err)
-		fmt.Printf("[Dashboard] Dashboard will operate without platform org context\n")
+		p.log.Warn("could not find platform app", forge.F("error", err.Error()))
+		p.log.Warn("dashboard will operate without platform app context")
 	} else {
 		p.platformOrgID = platformOrg.ID
-		fmt.Printf("[Dashboard] ✅ Platform organization ID loaded: %s\n", p.platformOrgID.String())
+		p.log.Info("platform app loaded", forge.F("id", p.platformOrgID.String()))
 	}
 
 	// Setup default RBAC policies for immediate use (backward compatibility)
 	// The role bootstrap will ensure these are persisted
-	fmt.Printf("[Dashboard] Setting up default RBAC policies...\n")
+	p.log.Info("setting up default RBAC policies")
 	if err := SetupDefaultPolicies(p.rbacSvc); err != nil {
 		return fmt.Errorf("failed to setup default policies: %w", err)
 	}
-	fmt.Printf("[Dashboard] ✅ Default RBAC policies configured\n")
+	p.log.Info("default RBAC policies configured")
 
 	// Templates no longer needed - using gomponents
 	// Initialize handler with services, base path, and enabled plugins
 	p.handler = NewHandler(
 		assets,
+		p.appService,
 		p.userSvc,
 		p.sessionSvc,
 		p.auditSvc,
@@ -307,7 +288,7 @@ func (p *Plugin) Init(dep interface{}) error {
 		p.apikeyService,
 		p.orgService,
 		db,
-		p.isSaaSMode,
+		p.isMultiAppMode,
 		p.basePath,
 		p.enabledPlugins,
 		hookRegistry,
@@ -370,6 +351,39 @@ func (p *Plugin) PlatformOrgContext() func(func(forge.Context) error) func(forge
 	}
 }
 
+// AppContext middleware injects app context into dashboard requests for authless routes
+func (p *Plugin) AppContext() func(func(forge.Context) error) func(forge.Context) error {
+	return func(next func(forge.Context) error) func(forge.Context) error {
+		return func(c forge.Context) error {
+			r := c.Request()
+			appIDStr := r.Header.Get("X-App-ID")
+
+			host := r.Host
+			if idx := strings.Index(host, ":"); idx > 0 {
+				host = host[:idx]
+			}
+			if appIDStr == "" {
+				if idx := strings.Index(host, "."); idx > 0 {
+					sub := host[:idx]
+					if sub != "www" && sub != "api" && sub != "app" {
+						appIDStr = sub
+					}
+				}
+			}
+
+			if appIDStr != "" {
+				if appID, err := xid.FromString(appIDStr); err == nil {
+					ctx := interfaces.SetAppID(r.Context(), appID)
+					rr := r.WithContext(ctx)
+					*c.Request() = *rr
+				}
+			}
+
+			return next(c)
+		}
+	}
+}
+
 // RegisterRoutes registers the dashboard routes
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
@@ -385,7 +399,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				fmt.Printf("[Dashboard] ✅ Multitenancy organization service set in handler\n")
 			} else {
 				fmt.Printf("[Dashboard] ⚠️  Organization service is not multitenancy service (type: %T)\n", orgSvcInterface)
-				fmt.Printf("[Dashboard] SaaS mode: %v, but multitenancy service not available\n", p.isSaaSMode)
+				fmt.Printf("[Dashboard] SaaS mode: %v, but multitenancy service not available\n", p.isMultiAppMode)
 			}
 		} else {
 			fmt.Printf("[Dashboard] RegisterRoutes: No organization service found in registry\n")
@@ -398,9 +412,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return p.PlatformOrgContext()(p.RequireAuth()(p.RequireAdmin()(p.AuditLog()(p.RateLimit()(h)))))
 	}
 
-	// Chain for authenticated routes (login/signup) - with platform org context but no auth
+	// Chain for public auth routes: use app context (multi-app) without auth
 	authlessChain := func(h func(forge.Context) error) func(forge.Context) error {
-		return p.PlatformOrgContext()(h)
+		return p.AppContext()(h)
 	}
 
 	// Test route without middleware
@@ -468,190 +482,136 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Dashboard", "Authentication"),
 	)
 
-	// Dashboard pages (with auth middleware)
-	router.GET("/dashboard/", chain(p.handler.ServeDashboard),
-		forge.WithName("dashboard.home"),
-		forge.WithSummary("Dashboard home"),
-		forge.WithDescription("Render the main admin dashboard page with statistics and overview"),
+	// Dashboard index - shows app list or redirects to single app
+	router.GET("/dashboard/", chain(p.handler.ServeAppsList),
+		forge.WithName("dashboard.index"),
+		forge.WithSummary("Dashboard index"),
+		forge.WithDescription("Show app cards (multiapp mode) or redirect to default app (standalone)"),
+		forge.WithResponseSchema(200, "App list or redirect", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Apps"),
+	)
+
+	// App-scoped dashboard pages (with auth middleware)
+	// All routes now require appId in URL
+	router.GET("/dashboard/app/:appId/", chain(p.handler.ServeDashboard),
+		forge.WithName("dashboard.app.home"),
+		forge.WithSummary("App dashboard home"),
+		forge.WithDescription("Render the main admin dashboard page with app-specific statistics and overview"),
 		forge.WithResponseSchema(200, "Dashboard home HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin"),
+		forge.WithResponseSchema(404, "App not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps"),
 	)
 
-	router.GET("/dashboard/users", chain(p.handler.ServeUsers),
-		forge.WithName("dashboard.users.list"),
-		forge.WithSummary("List users"),
-		forge.WithDescription("Render the user management page with list of all users"),
+	router.GET("/dashboard/app/:appId/users", chain(p.handler.ServeUsers),
+		forge.WithName("dashboard.app.users.list"),
+		forge.WithSummary("List app users"),
+		forge.WithDescription("Render the user management page with list of all users in the app"),
 		forge.WithResponseSchema(200, "Users list HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Users"),
+		forge.WithResponseSchema(404, "App not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Users"),
 	)
 
-	router.GET("/dashboard/users/:id", chain(p.handler.ServeUserDetail),
-		forge.WithName("dashboard.users.detail"),
+	router.GET("/dashboard/app/:appId/users/:id", chain(p.handler.ServeUserDetail),
+		forge.WithName("dashboard.app.users.detail"),
 		forge.WithSummary("User detail"),
-		forge.WithDescription("Render detailed view of a specific user"),
+		forge.WithDescription("Render detailed view of a specific user in the app"),
 		forge.WithResponseSchema(200, "User detail HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Users"),
+		forge.WithResponseSchema(404, "User or app not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Users"),
 	)
 
-	router.GET("/dashboard/users/:id/edit", chain(p.handler.ServeUserEdit),
-		forge.WithName("dashboard.users.edit.page"),
+	router.GET("/dashboard/app/:appId/users/:id/edit", chain(p.handler.ServeUserEdit),
+		forge.WithName("dashboard.app.users.edit.page"),
 		forge.WithSummary("Edit user page"),
 		forge.WithDescription("Render the user edit form"),
 		forge.WithResponseSchema(200, "User edit form HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Users"),
+		forge.WithResponseSchema(404, "User or app not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Users"),
 	)
 
-	router.POST("/dashboard/users/:id/edit", chain(p.handler.HandleUserEdit),
-		forge.WithName("dashboard.users.edit.submit"),
+	router.POST("/dashboard/app/:appId/users/:id/edit", chain(p.handler.HandleUserEdit),
+		forge.WithName("dashboard.app.users.edit.submit"),
 		forge.WithSummary("Update user"),
 		forge.WithDescription("Process user edit form and update user information"),
 		forge.WithResponseSchema(200, "User updated", DashboardStatusResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Users"),
+		forge.WithResponseSchema(404, "User or app not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Users"),
 		forge.WithValidation(true),
 	)
 
-	router.POST("/dashboard/users/:id/delete", chain(p.handler.HandleUserDelete),
-		forge.WithName("dashboard.users.delete"),
+	router.POST("/dashboard/app/:appId/users/:id/delete", chain(p.handler.HandleUserDelete),
+		forge.WithName("dashboard.app.users.delete"),
 		forge.WithSummary("Delete user"),
 		forge.WithDescription("Delete a user account (requires admin privileges)"),
 		forge.WithResponseSchema(200, "User deleted", DashboardStatusResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", DashboardErrorResponse{}),
-		forge.WithResponseSchema(404, "User not found", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Users"),
+		forge.WithResponseSchema(404, "User or app not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Users"),
 	)
 
-	router.GET("/dashboard/sessions", chain(p.handler.ServeSessions),
-		forge.WithName("dashboard.sessions.list"),
-		forge.WithSummary("List sessions"),
-		forge.WithDescription("Render the session management page with all active sessions"),
+	router.GET("/dashboard/app/:appId/sessions", chain(p.handler.ServeSessions),
+		forge.WithName("dashboard.app.sessions.list"),
+		forge.WithSummary("List app sessions"),
+		forge.WithDescription("Render the session management page with all active sessions in the app"),
 		forge.WithResponseSchema(200, "Sessions list HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Sessions"),
+		forge.WithResponseSchema(404, "App not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Sessions"),
 	)
 
-	router.POST("/dashboard/sessions/:id/revoke", chain(p.handler.HandleRevokeSession),
-		forge.WithName("dashboard.sessions.revoke"),
+	router.POST("/dashboard/app/:appId/sessions/:id/revoke", chain(p.handler.HandleRevokeSession),
+		forge.WithName("dashboard.app.sessions.revoke"),
 		forge.WithSummary("Revoke session"),
 		forge.WithDescription("Revoke a specific user session by ID"),
 		forge.WithResponseSchema(200, "Session revoked", DashboardStatusResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithResponseSchema(404, "Session not found", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Sessions"),
+		forge.WithResponseSchema(404, "Session or app not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Sessions"),
 	)
 
-	router.POST("/dashboard/sessions/revoke-user", chain(p.handler.HandleRevokeUserSessions),
-		forge.WithName("dashboard.sessions.revoke.user"),
+	router.POST("/dashboard/app/:appId/sessions/revoke-user", chain(p.handler.HandleRevokeUserSessions),
+		forge.WithName("dashboard.app.sessions.revoke.user"),
 		forge.WithSummary("Revoke all user sessions"),
-		forge.WithDescription("Revoke all sessions for a specific user"),
+		forge.WithDescription("Revoke all sessions for a specific user in the app"),
 		forge.WithResponseSchema(200, "User sessions revoked", DashboardStatusResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Sessions"),
+		forge.WithResponseSchema(404, "App not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Sessions"),
 		forge.WithValidation(true),
 	)
 
-	router.GET("/dashboard/settings", chain(p.handler.ServeSettings),
-		forge.WithName("dashboard.settings"),
-		forge.WithSummary("Settings page"),
-		forge.WithDescription("Render the dashboard settings and configuration page"),
+	router.GET("/dashboard/app/:appId/settings", chain(p.handler.ServeSettings),
+		forge.WithName("dashboard.app.settings"),
+		forge.WithSummary("App settings page"),
+		forge.WithDescription("Render the dashboard settings and configuration page for the app"),
 		forge.WithResponseSchema(200, "Settings page HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Settings"),
+		forge.WithResponseSchema(404, "App not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Settings"),
 	)
 
-	router.GET("/dashboard/plugins", chain(p.handler.ServePlugins),
-		forge.WithName("dashboard.plugins"),
-		forge.WithSummary("Plugins page"),
+	router.GET("/dashboard/app/:appId/plugins", chain(p.handler.ServePlugins),
+		forge.WithName("dashboard.app.plugins"),
+		forge.WithSummary("App plugins page"),
 		forge.WithDescription("Render the plugins management page showing all available plugins and their status"),
 		forge.WithResponseSchema(200, "Plugins page HTML", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-		forge.WithTags("Dashboard", "Admin", "Plugins"),
+		forge.WithResponseSchema(404, "App not found", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Apps", "Plugins"),
 	)
 
-	// App management routes (only available in SaaS mode)
-	if p.isSaaSMode {
-		router.GET("/dashboard/apps", chain(p.handler.ServeApps),
-			forge.WithName("dashboard.apps.list"),
-			forge.WithSummary("List apps"),
-			forge.WithDescription("Render the organizations management page with list of all organizations"),
-			forge.WithResponseSchema(200, "Organizations list HTML", DashboardHTMLResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-		)
-
-		router.GET("/dashboard/apps/create", chain(p.handler.ServeAppCreate),
-			forge.WithName("dashboard.apps.create.page"),
-			forge.WithSummary("Create app page"),
-			forge.WithDescription("Render the organization creation form"),
-			forge.WithResponseSchema(200, "Create app form HTML", DashboardHTMLResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-		)
-
-		router.POST("/dashboard/apps/create", chain(p.handler.HandleAppCreate),
-			forge.WithName("dashboard.apps.create.submit"),
-			forge.WithSummary("Create app"),
-			forge.WithDescription("Process organization creation form and create new organization"),
-			forge.WithResponseSchema(200, "Organization created", DashboardStatusResponse{}),
-			forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-			forge.WithValidation(true),
-		)
-
-		router.GET("/dashboard/apps/:id", chain(p.handler.ServeAppDetail),
-			forge.WithName("dashboard.apps.detail"),
-			forge.WithSummary("App detail"),
-			forge.WithDescription("Render detailed view of a specific organization"),
-			forge.WithResponseSchema(200, "App detail HTML", DashboardHTMLResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-		)
-
-		router.GET("/dashboard/apps/:id/edit", chain(p.handler.ServeAppEdit),
-			forge.WithName("dashboard.apps.edit.page"),
-			forge.WithSummary("Edit app page"),
-			forge.WithDescription("Render the organization edit form"),
-			forge.WithResponseSchema(200, "Edit app form HTML", DashboardHTMLResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-		)
-
-		router.POST("/dashboard/apps/:id/edit", chain(p.handler.HandleAppEdit),
-			forge.WithName("dashboard.apps.edit.submit"),
-			forge.WithSummary("Update app"),
-			forge.WithDescription("Process organization edit form and update organization information"),
-			forge.WithResponseSchema(200, "Organization updated", DashboardStatusResponse{}),
-			forge.WithResponseSchema(400, "Invalid request", DashboardErrorResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-			forge.WithValidation(true),
-		)
-
-		router.POST("/dashboard/apps/:id/delete", chain(p.handler.HandleAppDelete),
-			forge.WithName("dashboard.apps.delete"),
-			forge.WithSummary("Delete app"),
-			forge.WithDescription("Delete an organization (requires admin privileges)"),
-			forge.WithResponseSchema(200, "Organization deleted", DashboardStatusResponse{}),
-			forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
-			forge.WithResponseSchema(403, "Insufficient privileges", DashboardErrorResponse{}),
-			forge.WithResponseSchema(404, "Organization not found", DashboardErrorResponse{}),
-			forge.WithTags("Dashboard", "Admin", "Organizations"),
-		)
-	}
+	// NOTE: Old app management routes removed
+	// App creation/management is now done via multiapp plugin API
+	// Dashboard index (/) shows app cards for selection
 
 	// Static assets (no auth required)
 	router.GET("/dashboard/static/*", p.handler.ServeStatic,
@@ -674,10 +634,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	fmt.Printf("  - POST %s/dashboard/login (process login)\n", p.basePath)
 	fmt.Printf("  - GET  %s/dashboard/signup (signup page)\n", p.basePath)
 	fmt.Printf("  - POST %s/dashboard/signup (process signup)\n", p.basePath)
-	fmt.Printf("  - GET  %s/dashboard/ (home)\n", p.basePath)
-	fmt.Printf("  - GET  %s/dashboard/users (list)\n", p.basePath)
-	fmt.Printf("  - GET  %s/dashboard/users/:id (detail)\n", p.basePath)
-	fmt.Printf("  - GET  %s/dashboard/sessions (list)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/ (app list or redirect)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/app/:appId/ (app dashboard)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/app/:appId/users (list)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/app/:appId/users/:id (detail)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/app/:appId/sessions (list)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/app/:appId/settings (settings)\n", p.basePath)
+	fmt.Printf("  - GET  %s/dashboard/app/:appId/plugins (plugins)\n", p.basePath)
 	fmt.Printf("  - GET  %s/dashboard/static/* (assets)\n", p.basePath)
 
 	return nil

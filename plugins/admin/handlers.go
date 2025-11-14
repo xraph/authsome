@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/internal/interfaces"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
 )
@@ -28,9 +28,9 @@ func NewHandler(service *Service) *Handler {
 // CreateUser handles POST /admin/users
 func (h *Handler) CreateUser(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -85,9 +85,9 @@ func (h *Handler) CreateUser(c forge.Context) error {
 // ListUsers handles GET /admin/users
 func (h *Handler) ListUsers(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	userID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -141,7 +141,7 @@ func (h *Handler) ListUsers(c forge.Context) error {
 // DeleteUser handles DELETE /admin/users/:id
 func (h *Handler) DeleteUser(c forge.Context) error {
 	// Extract V2 context
-	userID := interfaces.GetUserID(c.Request().Context())
+	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if userID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -179,9 +179,9 @@ func (h *Handler) DeleteUser(c forge.Context) error {
 // BanUser handles POST /admin/users/:id/ban
 func (h *Handler) BanUser(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	adminID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -244,9 +244,9 @@ func (h *Handler) BanUser(c forge.Context) error {
 // UnbanUser handles POST /admin/users/:id/unban
 func (h *Handler) UnbanUser(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	adminID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -307,9 +307,9 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 // ImpersonateUser handles POST /admin/users/:id/impersonate
 func (h *Handler) ImpersonateUser(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	adminID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -370,9 +370,9 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 // SetUserRole handles POST /admin/users/:id/role
 func (h *Handler) SetUserRole(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	adminID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -433,9 +433,9 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 // ListSessions handles GET /admin/sessions
 func (h *Handler) ListSessions(c forge.Context) error {
 	// Extract V2 context
-	appID := interfaces.GetAppID(c.Request().Context())
-	orgID := interfaces.GetOrganizationID(c.Request().Context())
-	adminID := interfaces.GetUserID(c.Request().Context())
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -491,7 +491,7 @@ func (h *Handler) ListSessions(c forge.Context) error {
 // RevokeSession handles DELETE /admin/sessions/:id
 func (h *Handler) RevokeSession(c forge.Context) error {
 	// Extract V2 context
-	adminID := interfaces.GetUserID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if adminID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -529,7 +529,7 @@ func (h *Handler) RevokeSession(c forge.Context) error {
 // GetStats handles GET /admin/stats
 func (h *Handler) GetStats(c forge.Context) error {
 	// Get admin user from context
-	adminID := interfaces.GetUserID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 	if adminID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Unauthorized",
@@ -553,7 +553,7 @@ func (h *Handler) GetStats(c forge.Context) error {
 // GetAuditLogs handles GET /admin/audit
 func (h *Handler) GetAuditLogs(c forge.Context) error {
 	// Get admin user from context
-	adminID := interfaces.GetUserID(c.Request().Context())
+	adminID, _ := contexts.GetUserID(c.Request().Context())
 	if adminID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Unauthorized",

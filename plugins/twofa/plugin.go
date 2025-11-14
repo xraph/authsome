@@ -5,41 +5,185 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
-	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
 // Plugin implements the plugins.Plugin interface for Two-Factor Authentication
 type Plugin struct {
-	service *Service
-	db      *bun.DB
+	service       *Service
+	db            *bun.DB
+	logger        forge.Logger
+	config        Config
+	defaultConfig Config
 }
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// Config holds the 2FA plugin configuration
+type Config struct {
+	// TOTPIssuer is the issuer name shown in authenticator apps
+	TOTPIssuer string `json:"totpIssuer"`
+	// TOTPPeriod is the TOTP time period in seconds
+	TOTPPeriod int `json:"totpPeriod"`
+	// TOTPDigits is the number of digits in TOTP code
+	TOTPDigits int `json:"totpDigits"`
+	// BackupCodeCount is the number of backup codes to generate
+	BackupCodeCount int `json:"backupCodeCount"`
+	// BackupCodeLength is the length of each backup code
+	BackupCodeLength int `json:"backupCodeLength"`
+	// OTPExpiryMinutes is the OTP expiry time in minutes
+	OTPExpiryMinutes int `json:"otpExpiryMinutes"`
+	// MaxOTPAttempts is the maximum failed OTP attempts before lockout
+	MaxOTPAttempts int `json:"maxOtpAttempts"`
+	// TrustedDeviceDays is the number of days a device remains trusted
+	TrustedDeviceDays int `json:"trustedDeviceDays"`
+	// RequireFor2FA forces 2FA for all users
+	RequireFor2FA bool `json:"requireFor2FA"`
+}
+
+// DefaultConfig returns the default 2FA plugin configuration
+func DefaultConfig() Config {
+	return Config{
+		TOTPIssuer:        "AuthSome",
+		TOTPPeriod:        30,
+		TOTPDigits:        6,
+		BackupCodeCount:   10,
+		BackupCodeLength:  8,
+		OTPExpiryMinutes:  5,
+		MaxOTPAttempts:    5,
+		TrustedDeviceDays: 30,
+		RequireFor2FA:     false,
+	}
+}
+
+// PluginOption is a functional option for configuring the 2FA plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg Config) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig = cfg
+	}
+}
+
+// WithTOTPIssuer sets the TOTP issuer name
+func WithTOTPIssuer(issuer string) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.TOTPIssuer = issuer
+	}
+}
+
+// WithTOTPPeriod sets the TOTP time period
+func WithTOTPPeriod(period int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.TOTPPeriod = period
+	}
+}
+
+// WithBackupCodeCount sets the number of backup codes
+func WithBackupCodeCount(count int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.BackupCodeCount = count
+	}
+}
+
+// WithBackupCodeLength sets the backup code length
+func WithBackupCodeLength(length int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.BackupCodeLength = length
+	}
+}
+
+// WithOTPExpiryMinutes sets the OTP expiry time
+func WithOTPExpiryMinutes(minutes int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.OTPExpiryMinutes = minutes
+	}
+}
+
+// WithMaxOTPAttempts sets the max OTP attempts
+func WithMaxOTPAttempts(max int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.MaxOTPAttempts = max
+	}
+}
+
+// WithTrustedDeviceDays sets the trusted device duration
+func WithTrustedDeviceDays(days int) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.TrustedDeviceDays = days
+	}
+}
+
+// WithRequireFor2FA sets whether 2FA is required for all users
+func WithRequireFor2FA(required bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.RequireFor2FA = required
+	}
+}
+
+// NewPlugin creates a new 2FA plugin instance with optional configuration
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		// Set built-in defaults
+		defaultConfig: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 func (p *Plugin) ID() string { return "twofa" }
 
-func (p *Plugin) Init(dep interface{}) error {
-	type authInstance interface {
-		GetDB() *bun.DB
+func (p *Plugin) Init(authInst core.Authsome) error {
+	if authInst == nil {
+		return fmt.Errorf("twofa plugin requires auth instance")
 	}
 
-	authInst, ok := dep.(authInstance)
-	if !ok {
-		return fmt.Errorf("twofa plugin requires auth instance with GetDB method")
-	}
-
-	db := authInst.GetDB()
-	if db == nil {
+	// Get dependencies
+	p.db = authInst.GetDB()
+	if p.db == nil {
 		return fmt.Errorf("database not available for twofa plugin")
 	}
 
-	p.db = db
-	// Wire repository-backed service
-	p.service = NewService(repo.NewTwoFARepository(db))
+	forgeApp := authInst.GetForgeApp()
+	if forgeApp == nil {
+		return fmt.Errorf("forge app not available for twofa plugin")
+	}
+
+	// Initialize logger
+	p.logger = forgeApp.Logger().With(forge.F("plugin", "twofa"))
+
+	// Get config manager and bind configuration
+	configManager := forgeApp.Config()
+	if err := configManager.BindWithDefault("auth.twofa", &p.config, p.defaultConfig); err != nil {
+		// Log warning but continue with defaults
+		p.logger.Warn("failed to bind 2FA config, using defaults",
+			forge.F("error", err.Error()))
+		p.config = p.defaultConfig
+	}
+
+	// Register Bun models for 2FA
+	p.db.RegisterModel((*schema.TwoFASecret)(nil))
+	p.db.RegisterModel((*schema.BackupCode)(nil))
+	p.db.RegisterModel((*schema.TrustedDevice)(nil))
+	p.db.RegisterModel((*schema.OTPCode)(nil))
+
+	// Wire repository-backed service with config
+	p.service = NewService(authInst.Repository().TwoFA(), p.config)
+
+	p.logger.Info("2FA plugin initialized",
+		forge.F("totp_issuer", p.config.TOTPIssuer),
+		forge.F("backup_code_count", p.config.BackupCodeCount),
+		forge.F("trusted_device_days", p.config.TrustedDeviceDays),
+		forge.F("require_for_2fa", p.config.RequireFor2FA))
+
 	return nil
 }
 

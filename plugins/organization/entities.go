@@ -1,50 +1,45 @@
 package organization
 
 import (
-	"errors"
+	"github.com/xraph/authsome/core/organization"
 )
 
 // Errors for organization plugin operations
 var (
-	ErrOrganizationNotFound       = errors.New("organization not found")
-	ErrOrganizationMemberNotFound = errors.New("organization member not found")
-	ErrOrganizationTeamNotFound   = errors.New("organization team not found")
-	ErrInvalidRole                = errors.New("invalid role")
-	ErrInvalidStatus              = errors.New("invalid status")
-	ErrSlugAlreadyExists          = errors.New("organization slug already exists")
-	ErrMemberAlreadyExists        = errors.New("member already exists in this organization")
-	ErrNotOrganizationOwner       = errors.New("only organization owner can perform this action")
-	ErrCannotRemoveOwner          = errors.New("cannot remove organization owner")
-	ErrMaxOrganizationsReached    = errors.New("maximum organizations limit reached")
+	ErrOrganizationNotFound    = organization.ErrOrganizationNotFound
+	ErrMemberNotFound          = organization.ErrMemberNotFound
+	ErrTeamNotFound            = organization.ErrTeamNotFound
+	ErrInvalidRole             = organization.ErrInvalidRole
+	ErrInvalidStatus           = organization.ErrInvalidStatus
+	ErrOrganizationSlugExists  = organization.ErrOrganizationSlugExists
+	ErrMemberAlreadyExists     = organization.ErrMemberAlreadyExists
+	ErrNotOwner                = organization.ErrNotOwner
+	ErrNotAdmin                = organization.ErrNotAdmin
+	ErrCannotRemoveOwner       = organization.ErrCannotRemoveOwner
+	ErrMaxOrganizationsReached = organization.ErrMaxOrganizationsReached
 )
 
 // Organization member roles
 const (
-	RoleOwner  = "owner"
-	RoleAdmin  = "admin"
-	RoleMember = "member"
+	RoleOwner  = organization.RoleOwner
+	RoleAdmin  = organization.RoleAdmin
+	RoleMember = organization.RoleMember
 )
 
 // Organization member statuses
 const (
-	StatusActive    = "active"
-	StatusSuspended = "suspended"
-	StatusPending   = "pending"
+	StatusActive    = organization.StatusActive
+	StatusSuspended = organization.StatusSuspended
+	StatusPending   = organization.StatusPending
 )
 
 // Organization invitation statuses
 const (
-	InvitationStatusPending   = "pending"
-	InvitationStatusAccepted  = "accepted"
-	InvitationStatusExpired   = "expired"
-	InvitationStatusCancelled = "cancelled"
-	InvitationStatusDeclined  = "declined"
-)
-
-// Team member roles
-const (
-	TeamRoleLead   = "lead"
-	TeamRoleMember = "member"
+	InvitationStatusPending   = organization.InvitationStatusPending
+	InvitationStatusAccepted  = organization.InvitationStatusAccepted
+	InvitationStatusExpired   = organization.InvitationStatusExpired
+	InvitationStatusCancelled = organization.InvitationStatusCancelled
+	InvitationStatusDeclined  = organization.InvitationStatusDeclined
 )
 
 // Note: Entity types (Organization, OrganizationMember, OrganizationTeam, OrganizationInvitation,
