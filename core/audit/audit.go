@@ -16,6 +16,7 @@ import (
 // This is separate from schema.AuditEvent to maintain proper separation of concerns
 type Event struct {
 	ID        xid.ID    `json:"id"`
+	AppID     xid.ID    `json:"appId"`
 	UserID    *xid.ID   `json:"userId,omitempty"`
 	Action    string    `json:"action"`
 	Resource  string    `json:"resource"`
@@ -42,6 +43,7 @@ func (e *Event) ToSchema() *schema.AuditEvent {
 			UpdatedAt: e.UpdatedAt,
 		},
 		ID:        e.ID,
+		AppID:     e.AppID,
 		UserID:    e.UserID,
 		Action:    e.Action,
 		Resource:  e.Resource,
@@ -59,6 +61,7 @@ func FromSchemaEvent(ae *schema.AuditEvent) *Event {
 
 	return &Event{
 		ID:        ae.ID,
+		AppID:     ae.AppID,
 		UserID:    ae.UserID,
 		Action:    ae.Action,
 		Resource:  ae.Resource,
@@ -85,6 +88,7 @@ func FromSchemaEvents(events []*schema.AuditEvent) []*Event {
 
 // CreateEventRequest represents a request to create an audit event
 type CreateEventRequest struct {
+	AppID     xid.ID  `json:"appId,omitempty"` // Optional - will be read from context if not provided
 	UserID    *xid.ID `json:"userId,omitempty"`
 	Action    string  `json:"action" validate:"required"`
 	Resource  string  `json:"resource" validate:"required"`

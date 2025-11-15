@@ -17,7 +17,7 @@ type AuditableModel struct {
 	CreatedAt time.Time  `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	CreatedBy xid.ID     `json:"createdBy" bun:"created_by,nullzero"`
 	UpdatedAt time.Time  `json:"updatedAt" bun:"updated_at,nullzero,notnull,default:current_timestamp"`
-	UpdatedBy xid.ID     `json:"updatedBy" bun:"updated_by,notnull"`
+	UpdatedBy xid.ID     `json:"updatedBy" bun:"updated_by,nullzero"`
 	DeletedAt *time.Time `json:"deletedAt,omitempty" bun:"deleted_at,nullzero"`
 	Version   int        `json:"version" bun:"version,default:1"`
 }

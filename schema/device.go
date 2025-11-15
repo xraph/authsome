@@ -13,6 +13,7 @@ type Device struct {
 	bun.BaseModel  `bun:"table:devices,alias:d"`
 
 	ID          xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
+	AppID       xid.ID    `json:"appID" bun:"app_id,notnull,type:varchar(20)"`
 	UserID      xid.ID    `json:"userID" bun:"user_id,notnull,type:varchar(20)"`
 	Fingerprint string    `json:"fingerprint" bun:"fingerprint,notnull,unique"`
 	UserAgent   string    `json:"userAgent" bun:"user_agent"`
@@ -20,5 +21,6 @@ type Device struct {
 	LastActive  time.Time `json:"lastActive" bun:"last_active,notnull"`
 
 	// Relations
+	App  *App  `bun:"rel:belongs-to,join:app_id=id"`
 	User *User `bun:"rel:belongs-to,join:user_id=id"`
 }

@@ -21,7 +21,7 @@ func (r *PermissionRepository) ListByOrg(ctx context.Context, orgID *string) ([]
 	var rows []schema.Permission
 	q := r.db.NewSelect().Model(&rows)
 	if orgID != nil {
-		q = q.Where("organization_id = ?", *orgID)
+		q = q.Where("app_id = ?", *orgID)
 	}
 	err := q.Scan(ctx)
 	return rows, err

@@ -123,11 +123,11 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 
 	// Register Admin Role - Platform-level administrative operations
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
-		Name:         "admin",
-		Description:  "Platform administrator with cross-cutting administrative capabilities",
-		Priority:     80,
-		IsPlatform:   true,     // Admin is a platform-level role
-		InheritsFrom: "member", // Inherits basic member permissions
+		Name:         rbac.RoleAdmin,
+		Description:  rbac.RoleDescAdmin,
+		Priority:     rbac.RolePriorityAdmin,
+		IsPlatform:   rbac.RoleIsPlatformAdmin,
+		InheritsFrom: rbac.RoleMember, // Inherits basic member permissions
 		Permissions: []string{
 			// User management - cross-cutting operations
 			PermUserCreate + " on admin:*",
@@ -154,11 +154,11 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 	// Extend Superadmin Role with impersonation (security-sensitive)
 	// Superadmin should already exist from core RBAC bootstrap
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
-		Name:         "superadmin",
-		Description:  "Platform superadmin with full control including sensitive operations",
-		Priority:     100,
-		IsPlatform:   true,
-		InheritsFrom: "admin", // Inherits all admin permissions
+		Name:         rbac.RoleSuperAdmin,
+		Description:  rbac.RoleDescSuperAdmin,
+		Priority:     rbac.RolePrioritySuperAdmin,
+		IsPlatform:   rbac.RoleIsPlatformSuperAdmin,
+		InheritsFrom: rbac.RoleAdmin, // Inherits all admin permissions
 		Permissions: []string{
 			// Impersonation is restricted to superadmin only
 			PermUserImpersonate + " on admin:*",

@@ -287,6 +287,7 @@ func (b *PermissionBuilder) Dashboard() *DashboardPermissions {
 
 // CanAccess checks if user can access the dashboard
 func (d *DashboardPermissions) CanAccess() bool {
+	fmt.Println("Checking dashboard access permissions...", d.Can("dashboard.view", "dashboard"), d.IsAdmin(), d.IsSuperAdmin())
 	return d.Can("dashboard.view", "dashboard") || d.IsAdmin() || d.IsSuperAdmin()
 }
 
@@ -325,10 +326,10 @@ func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
 	// Extend superadmin with dashboard permissions (redundant since * on * covers everything)
 	// But explicit for documentation purposes
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:        "superadmin",
-		Description: "System Superadministrator (Platform Owner)",
-		IsPlatform:  true,
-		Priority:    100,
+		Name:        rbac.RoleSuperAdmin,
+		Description: rbac.RoleDescSuperAdmin,
+		IsPlatform:  rbac.RoleIsPlatformSuperAdmin,
+		Priority:    rbac.RolePrioritySuperAdmin,
 		Permissions: []string{
 			"* on *", // Unrestricted access
 		},
@@ -338,10 +339,10 @@ func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
 
 	// Extend owner with dashboard management permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:        "owner",
-		Description: "Organization Owner",
-		IsPlatform:  false,
-		Priority:    80,
+		Name:        rbac.RoleOwner,
+		Description: rbac.RoleDescOwner,
+		IsPlatform:  rbac.RoleIsPlatformOwner,
+		Priority:    rbac.RolePriorityOwner,
 		Permissions: []string{
 			"* on organization.*",
 			"dashboard.view on dashboard",
@@ -357,11 +358,11 @@ func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
 
 	// Extend admin with dashboard permissions (inherits from member)
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:         "admin",
-		Description:  "Organization Administrator",
-		IsPlatform:   false,
-		InheritsFrom: "member", // Inherits member permissions
-		Priority:     60,
+		Name:         rbac.RoleAdmin,
+		Description:  rbac.RoleDescAdmin,
+		IsPlatform:   rbac.RoleIsPlatformAdmin,
+		InheritsFrom: rbac.RoleMember, // Inherits member permissions
+		Priority:     rbac.RolePriorityAdmin,
 		Permissions: []string{
 			"dashboard.view on dashboard",
 			"view,edit,delete,create on users",
@@ -376,10 +377,10 @@ func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
 
 	// Extend member with basic dashboard access
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:        "member",
-		Description: "Regular User",
-		IsPlatform:  false,
-		Priority:    40,
+		Name:        rbac.RoleMember,
+		Description: rbac.RoleDescMember,
+		IsPlatform:  rbac.RoleIsPlatformMember,
+		Priority:    rbac.RolePriorityMember,
 		Permissions: []string{
 			"dashboard.view on dashboard",
 			"view on profile",
@@ -400,32 +401,32 @@ func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
 	policies := []string{
 		// Superadmin role (Platform Owner - First User)
 		// Has unrestricted access to everything across all organizations
-		"role:superadmin can * on *",
+		"role:" + rbac.RoleSuperAdmin + " can * on *",
 
 		// Owner role (Organization Owner)
 		// Full control over their organization and its resources
-		"role:owner can * on organization.*",
-		"role:owner can dashboard.view on dashboard",
-		"role:owner can view,edit,delete,create on users",
-		"role:owner can view,delete on sessions",
-		"role:owner can view on audit_logs",
-		"role:owner can manage on apikeys",
-		"role:owner can manage on settings",
+		"role:" + rbac.RoleOwner + " can * on organization.*",
+		"role:" + rbac.RoleOwner + " can dashboard.view on dashboard",
+		"role:" + rbac.RoleOwner + " can view,edit,delete,create on users",
+		"role:" + rbac.RoleOwner + " can view,delete on sessions",
+		"role:" + rbac.RoleOwner + " can view on audit_logs",
+		"role:" + rbac.RoleOwner + " can manage on apikeys",
+		"role:" + rbac.RoleOwner + " can manage on settings",
 
 		// Admin role (Organization Administrator)
 		// Can manage users and resources but not organization settings
-		"role:admin can dashboard.view on dashboard",
-		"role:admin can view,edit,delete,create on users",
-		"role:admin can view,delete on sessions",
-		"role:admin can view on audit_logs",
-		"role:admin can view,create on apikeys",
-		"role:admin can view on settings",
+		"role:" + rbac.RoleAdmin + " can dashboard.view on dashboard",
+		"role:" + rbac.RoleAdmin + " can view,edit,delete,create on users",
+		"role:" + rbac.RoleAdmin + " can view,delete on sessions",
+		"role:" + rbac.RoleAdmin + " can view on audit_logs",
+		"role:" + rbac.RoleAdmin + " can view,create on apikeys",
+		"role:" + rbac.RoleAdmin + " can view on settings",
 
 		// Member role (Regular User)
 		// Basic dashboard access and self-management
-		"role:member can dashboard.view on dashboard",
-		"role:member can view on profile",
-		"role:member can edit on profile",
+		"role:" + rbac.RoleMember + " can dashboard.view on dashboard",
+		"role:" + rbac.RoleMember + " can view on profile",
+		"role:" + rbac.RoleMember + " can edit on profile",
 	}
 
 	for _, policy := range policies {
@@ -449,7 +450,7 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 
 	var adminRole *schema.Role
 	for i := range roles {
-		if roles[i].Name == "admin" {
+		if roles[i].Name == rbac.RoleAdmin {
 			adminRole = &roles[i]
 			break
 		}
@@ -458,10 +459,10 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 	// Create admin role if it doesn't exist
 	if adminRole == nil {
 		adminRole = &schema.Role{
-			ID:             xid.New(),
-			AppID: &orgID,
-			Name:           "admin",
-			Description:    "Dashboard Administrator",
+			ID:          xid.New(),
+			AppID:       &orgID,
+			Name:        rbac.RoleAdmin,
+			Description: rbac.RoleDescAdmin,
 		}
 		adminRole.CreatedBy = userID
 		adminRole.UpdatedBy = userID
@@ -495,7 +496,7 @@ func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, user
 
 	var superadminRole *schema.Role
 	for i := range roles {
-		if roles[i].Name == "superadmin" {
+		if roles[i].Name == rbac.RoleSuperAdmin {
 			superadminRole = &roles[i]
 			fmt.Printf("[Dashboard] Found existing superadmin role: %s\n", superadminRole.ID.String())
 			break
@@ -506,10 +507,10 @@ func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, user
 	if superadminRole == nil {
 		fmt.Printf("[Dashboard] Superadmin role not found, creating new one...\n")
 		superadminRole = &schema.Role{
-			ID:             xid.New(),
-			AppID: &orgID,
-			Name:           "superadmin",
-			Description:    "System Superadministrator (Platform Owner)",
+			ID:          xid.New(),
+			AppID:       &orgID,
+			Name:        rbac.RoleSuperAdmin,
+			Description: rbac.RoleDescSuperAdmin,
 		}
 		superadminRole.CreatedBy = userID
 		superadminRole.UpdatedBy = userID

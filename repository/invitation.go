@@ -63,7 +63,7 @@ func (r *InvitationRepository) ListByApp(ctx context.Context, appID xid.ID, limi
 	// Get paginated results
 	err := r.db.NewSelect().
 		Model(&invitations).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Limit(limit).
 		Offset(offset).
 		Order("created_at DESC").

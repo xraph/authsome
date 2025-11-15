@@ -130,7 +130,7 @@ func (r *RoleRegistry) ListRoles() []*RoleDefinition {
 //
 // This creates/updates:
 // 1. Role records in the database
-// 2. RolePermission associations
+// 2. Permission records in the database
 // 3. RBAC policy expressions in the policy engine
 func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformOrgID xid.ID) error {
 	fmt.Printf("[RoleBootstrap] Starting role bootstrap for platform org: %s\n", platformOrgID.String())
@@ -140,6 +140,22 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 	resolvedRoles, err := r.resolveInheritance()
 	if err != nil {
 		return fmt.Errorf("failed to resolve role inheritance: %w", err)
+	}
+
+	// Collect all unique permissions across all roles
+	permissionMap := make(map[string]bool)
+	for _, roleDef := range resolvedRoles {
+		for _, perm := range roleDef.Permissions {
+			permissionMap[perm] = true
+		}
+	}
+
+	// Upsert permissions in database
+	fmt.Printf("[RoleBootstrap] Creating %d unique permissions...\n", len(permissionMap))
+	for permName := range permissionMap {
+		if err := r.upsertPermission(ctx, db, platformOrgID, permName); err != nil {
+			return fmt.Errorf("failed to upsert permission %s: %w", permName, err)
+		}
 	}
 
 	// Upsert roles in database
@@ -163,7 +179,7 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 		}
 	}
 
-	fmt.Printf("[RoleBootstrap] ✅ Bootstrap complete - %d roles processed\n", len(resolvedRoles))
+	fmt.Printf("[RoleBootstrap] ✅ Bootstrap complete - %d roles, %d permissions processed\n", len(resolvedRoles), len(permissionMap))
 	return nil
 }
 
@@ -252,6 +268,46 @@ func (r *RoleRegistry) resolveInheritance() ([]*RoleDefinition, error) {
 	return result, nil
 }
 
+// upsertPermission creates or updates a permission in the database
+func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, orgID xid.ID, permissionExpr string) error {
+	// Find existing permission
+	var existingPerm schema.Permission
+	err := db.NewSelect().
+		Model(&existingPerm).
+		Where("name = ?", permissionExpr).
+		Where("app_id IS NULL OR app_id = ?", orgID).
+		Scan(ctx)
+
+	now := time.Now()
+
+	if err != nil {
+		// Permission doesn't exist - create it
+		newPerm := &schema.Permission{
+			ID:          xid.New(),
+			AppID:       &orgID,
+			Name:        permissionExpr,
+			Description: fmt.Sprintf("Permission: %s", permissionExpr),
+		}
+		newPerm.CreatedAt = now
+		newPerm.UpdatedAt = now
+		newPerm.CreatedBy = orgID
+		newPerm.UpdatedBy = orgID
+		newPerm.Version = 1
+
+		_, err = db.NewInsert().Model(newPerm).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to insert permission: %w", err)
+		}
+
+		fmt.Printf("[RoleBootstrap]   Created permission: %s\n", permissionExpr)
+	} else {
+		// Permission exists - just log it (no need to update)
+		fmt.Printf("[RoleBootstrap]   Permission exists: %s\n", permissionExpr)
+	}
+
+	return nil
+}
+
 // upsertRole creates or updates a role in the database
 func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID, def *RoleDefinition) error {
 	// Find existing role
@@ -259,7 +315,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID,
 	err := db.NewSelect().
 		Model(&existingRole).
 		Where("name = ?", def.Name).
-		Where("organization_id IS NULL OR organization_id = ?", orgID).
+		Where("app_id IS NULL OR app_id = ?", orgID).
 		Scan(ctx)
 
 	now := time.Now()
@@ -344,10 +400,10 @@ func (r *RoleRegistry) GetRoleHierarchy() []*RoleDefinition {
 func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// Superadmin - Platform owner with unrestricted access
 	if err := registry.RegisterRole(&RoleDefinition{
-		Name:        "superadmin",
-		Description: "System Superadministrator (Platform Owner)",
-		IsPlatform:  true,
-		Priority:    100,
+		Name:        RoleSuperAdmin,
+		Description: RoleDescSuperAdmin,
+		IsPlatform:  RoleIsPlatformSuperAdmin,
+		Priority:    RolePrioritySuperAdmin,
 		Permissions: []string{
 			"* on *", // Unrestricted access to everything
 		},
@@ -357,10 +413,10 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 
 	// Owner - Organization owner with full org control
 	if err := registry.RegisterRole(&RoleDefinition{
-		Name:        "owner",
-		Description: "Organization Owner",
-		IsPlatform:  false,
-		Priority:    80,
+		Name:        RoleOwner,
+		Description: RoleDescOwner,
+		IsPlatform:  RoleIsPlatformOwner,
+		Priority:    RolePriorityOwner,
 		Permissions: []string{
 			"* on organization.*",
 			"dashboard.view on dashboard",
@@ -376,11 +432,11 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 
 	// Admin - Organization administrator
 	if err := registry.RegisterRole(&RoleDefinition{
-		Name:         "admin",
-		Description:  "Organization Administrator",
-		IsPlatform:   false,
-		InheritsFrom: "member", // Inherits member permissions
-		Priority:     60,
+		Name:         RoleAdmin,
+		Description:  RoleDescAdmin,
+		IsPlatform:   RoleIsPlatformAdmin,
+		InheritsFrom: RoleMember, // Inherits member permissions
+		Priority:     RolePriorityAdmin,
 		Permissions: []string{
 			"dashboard.view on dashboard",
 			"view,edit,delete,create on users",
@@ -395,10 +451,10 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 
 	// Member - Regular user
 	if err := registry.RegisterRole(&RoleDefinition{
-		Name:        "member",
-		Description: "Regular User",
-		IsPlatform:  false,
-		Priority:    40,
+		Name:        RoleMember,
+		Description: RoleDescMember,
+		IsPlatform:  RoleIsPlatformMember,
+		Priority:    RolePriorityMember,
 		Permissions: []string{
 			"dashboard.view on dashboard",
 			"view on profile",
@@ -411,8 +467,9 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	return nil
 }
 
-// Helper function to parse permission strings like "view,edit,delete on resource"
+// expandPermissions is a helper function to parse permission strings like "view,edit,delete on resource"
 // Returns individual permission expressions
+// This is currently unused but may be needed for future permission expansion features
 func expandPermissions(permExpr string) []string {
 	parts := strings.Split(permExpr, " on ")
 	if len(parts) != 2 {

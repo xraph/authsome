@@ -52,10 +52,10 @@ func (s *SignupFormService) SaveFormSchema(ctx context.Context, req *SaveFormSch
 
 	// Create new form
 	return s.service.CreateForm(ctx, &CreateFormRequest{
-		OrganizationID: req.OrganizationID,
-		Name:           "Signup Form",
-		Type:           "signup",
-		Schema:         req.Schema,
+		AppID:  req.OrganizationID,
+		Name:   "Signup Form",
+		Type:   "signup",
+		Schema: req.Schema,
 	})
 }
 
@@ -150,13 +150,13 @@ func (s *SignupFormService) getDefaultForm(ctx context.Context, orgID xid.ID) (*
 	}
 
 	return &Form{
-		ID:             xid.New(),
-		OrganizationID: orgID,
-		Name:           "Default Signup Form",
-		Type:           "signup",
-		Schema:         defaultSchema,
-		IsActive:       true,
-		Version:        1,
+		ID:       xid.New(),
+		AppID:    orgID,
+		Name:     "Default Signup Form",
+		Type:     "signup",
+		Schema:   defaultSchema,
+		IsActive: true,
+		Version:  1,
 	}, nil
 }
 

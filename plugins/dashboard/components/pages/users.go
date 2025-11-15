@@ -87,7 +87,7 @@ func usersTable(data UsersData, basePath string, appIDStr string) g.Node {
 						Table(
 							Class("min-w-full align-middle text-sm"),
 							usersTableHead(),
-							usersTableBody(data.Users, basePath),
+							usersTableBody(data.Users, basePath, appIDStr),
 						),
 					),
 				),
@@ -126,15 +126,15 @@ func usersTableHead() g.Node {
 	)
 }
 
-func usersTableBody(users []*user.User, basePath string) g.Node {
+func usersTableBody(users []*user.User, basePath string, appIDStr string) g.Node {
 	rows := make([]g.Node, len(users))
 	for i, u := range users {
-		rows[i] = userTableRow(u, basePath)
+		rows[i] = userTableRow(u, basePath, appIDStr)
 	}
 	return TBody(g.Group(rows))
 }
 
-func userTableRow(u *user.User, basePath string) g.Node {
+func userTableRow(u *user.User, basePath string, appIDStr string) g.Node {
 	initial := "?"
 	if len(u.Email) > 0 {
 		initial = string(u.Email[0])

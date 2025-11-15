@@ -49,7 +49,7 @@ func TestNewHandler(t *testing.T) {
 	assert.Equal(t, apikeyService, handler.apikeyService)
 	assert.Equal(t, orgService, handler.orgService)
 	assert.Equal(t, basePath, handler.basePath)
-	assert.Equal(t, isSaaSMode, handler.isSaaSMode)
+	assert.Equal(t, isSaaSMode, handler.isMultiApp)
 }
 
 func TestGetContentType(t *testing.T) {

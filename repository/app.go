@@ -128,7 +128,7 @@ func (r *AppRepository) FindMemberByID(ctx context.Context, id xid.ID) (*schema.
 func (r *AppRepository) FindMember(ctx context.Context, appID, userID xid.ID) (*schema.Member, error) {
 	member := new(schema.Member)
 	err := r.db.NewSelect().Model(member).
-		Where("organization_id = ? AND user_id = ?", appID, userID).
+		Where("app_id = ? AND user_id = ?", appID, userID).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (r *AppRepository) ListMembers(ctx context.Context, filter *app.ListMembers
 	var members []*schema.Member
 
 	// Build base query with filters
-	query := r.db.NewSelect().Model(&members).Where("organization_id = ?", filter.AppID)
+	query := r.db.NewSelect().Model(&members).Where("app_id = ?", filter.AppID)
 	if filter.Role != nil {
 		query = query.Where("role = ?", *filter.Role)
 	}
@@ -150,7 +150,7 @@ func (r *AppRepository) ListMembers(ctx context.Context, filter *app.ListMembers
 	}
 
 	// Get total count before pagination
-	countQuery := r.db.NewSelect().Model((*schema.Member)(nil)).Where("organization_id = ?", filter.AppID)
+	countQuery := r.db.NewSelect().Model((*schema.Member)(nil)).Where("app_id = ?", filter.AppID)
 	if filter.Role != nil {
 		countQuery = countQuery.Where("role = ?", *filter.Role)
 	}
@@ -191,7 +191,9 @@ func (r *AppRepository) DeleteMember(ctx context.Context, id xid.ID) error {
 func (r *AppRepository) CountMembers(ctx context.Context, appID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Member)(nil)).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
+		Where("deleted_at IS NULL").
+		Where("status = ?", schema.MemberStatusActive).
 		Count(ctx)
 	return count, err
 }
@@ -201,7 +203,7 @@ func (r *AppRepository) ListMembersByUser(ctx context.Context, userID xid.ID) ([
 	var members []*schema.Member
 	err := r.db.NewSelect().Model(&members).
 		Where("user_id = ?", userID).
-		Where("deleted_at IS NULL").
+		Where("m.deleted_at IS NULL").
 		Relation("App").
 		Scan(ctx)
 	return members, err
@@ -231,12 +233,12 @@ func (r *AppRepository) ListTeams(ctx context.Context, filter *app.ListTeamsFilt
 	var teams []*schema.Team
 
 	// Build base query
-	query := r.db.NewSelect().Model(&teams).Where("organization_id = ?", filter.AppID)
+	query := r.db.NewSelect().Model(&teams).Where("app_id = ?", filter.AppID)
 
 	// Get total count before pagination
 	total, err := r.db.NewSelect().
 		Model((*schema.Team)(nil)).
-		Where("organization_id = ?", filter.AppID).
+		Where("app_id = ?", filter.AppID).
 		Count(ctx)
 	if err != nil {
 		return nil, err
@@ -271,7 +273,7 @@ func (r *AppRepository) DeleteTeam(ctx context.Context, id xid.ID) error {
 func (r *AppRepository) CountTeams(ctx context.Context, appID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Team)(nil)).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Count(ctx)
 	return count, err
 }
@@ -367,7 +369,7 @@ func (r *AppRepository) ListInvitations(ctx context.Context, filter *app.ListInv
 	var invitations []*schema.Invitation
 
 	// Build base query with filters
-	query := r.db.NewSelect().Model(&invitations).Where("organization_id = ?", filter.AppID)
+	query := r.db.NewSelect().Model(&invitations).Where("app_id = ?", filter.AppID)
 	if filter.Status != nil {
 		query = query.Where("status = ?", *filter.Status)
 	}
@@ -376,7 +378,7 @@ func (r *AppRepository) ListInvitations(ctx context.Context, filter *app.ListInv
 	}
 
 	// Get total count before pagination
-	countQuery := r.db.NewSelect().Model((*schema.Invitation)(nil)).Where("organization_id = ?", filter.AppID)
+	countQuery := r.db.NewSelect().Model((*schema.Invitation)(nil)).Where("app_id = ?", filter.AppID)
 	if filter.Status != nil {
 		countQuery = countQuery.Where("status = ?", *filter.Status)
 	}
@@ -433,7 +435,7 @@ func (r *AppRepository) DeleteExpiredInvitations(ctx context.Context) (int, erro
 func (r *AppRepository) FindTeamByName(ctx context.Context, appID xid.ID, name string) (*schema.Team, error) {
 	team := new(schema.Team)
 	err := r.db.NewSelect().Model(team).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Where("name = ?", name).
 		Scan(ctx)
 	if err != nil {

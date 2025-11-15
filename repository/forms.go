@@ -63,7 +63,7 @@ func (r *formsRepository) GetByOrganization(ctx context.Context, orgID xid.ID, f
 	form := &schema.FormSchema{}
 	err := r.db.NewSelect().
 		Model(form).
-		Where("organization_id = ? AND type = ? AND is_active = ?", orgID, formType, true).
+		Where("app_id = ? AND type = ? AND is_active = ?", orgID, formType, true).
 		Order("created_at DESC").
 		Limit(1).
 		Scan(ctx)
@@ -84,7 +84,7 @@ func (r *formsRepository) List(ctx context.Context, orgID xid.ID, formType strin
 
 	query := r.db.NewSelect().
 		Model((*schema.FormSchema)(nil)).
-		Where("organization_id = ?", orgID)
+		Where("app_id = ?", orgID)
 
 	if formType != "" {
 		query = query.Where("type = ?", formType)
@@ -257,7 +257,7 @@ func (r *formsRepository) GetActiveFormsByType(ctx context.Context, orgID xid.ID
 	var forms []*schema.FormSchema
 	err := r.db.NewSelect().
 		Model(&forms).
-		Where("organization_id = ? AND type = ? AND is_active = ?", orgID, formType, true).
+		Where("app_id = ? AND type = ? AND is_active = ?", orgID, formType, true).
 		Order("created_at DESC").
 		Scan(ctx)
 
@@ -273,7 +273,7 @@ func (r *formsRepository) GetFormVersions(ctx context.Context, orgID xid.ID, nam
 	var forms []*schema.FormSchema
 	err := r.db.NewSelect().
 		Model(&forms).
-		Where("organization_id = ? AND name = ?", orgID, name).
+		Where("app_id = ? AND name = ?", orgID, name).
 		Order("version DESC").
 		Scan(ctx)
 

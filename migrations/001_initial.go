@@ -84,7 +84,12 @@ func init() {
 			return err
 		}
 
-		// User organizations
+		// Identity core - Users must be created before Organization tables that reference them
+		if _, err := db.NewCreateTable().Model((*schema.User)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// User organizations (created after Users since OrganizationMember references users)
 		if _, err := db.NewCreateTable().Model((*schema.Organization)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -101,10 +106,7 @@ func init() {
 			return err
 		}
 
-		// Identity core
-		if _, err := db.NewCreateTable().Model((*schema.User)(nil)).IfNotExists().Exec(ctx); err != nil {
-			return err
-		}
+		// Additional identity tables (depend on User)
 		if _, err := db.NewCreateTable().Model((*schema.Member)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -251,7 +253,7 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.Session)(nil)).Index("idx_sessions_token").Column("token").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
-		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_org_user").Column("organization_id", "user_id").IfNotExists().Exec(ctx); err != nil {
+		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_app_user").Column("app_id", "user_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
 		// Event (webhook_events) now uses app_id instead of organization_id after app-scoped refactoring

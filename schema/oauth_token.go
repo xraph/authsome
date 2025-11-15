@@ -9,23 +9,26 @@ import (
 
 // OAuthToken represents an OAuth2/OIDC access token
 type OAuthToken struct {
-	bun.BaseModel `bun:"table:oauth_tokens"`
+	AuditableModel `bun:",inline"`
+	bun.BaseModel  `bun:"table:oauth_tokens,alias:ot"`
 
-	ID        xid.ID    `bun:",pk"`
-	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
-	UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
+	ID    xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
+	AppID xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appID"`
 
 	// Token fields
-	AccessToken      string     `bun:",unique,notnull"`           // The access token
-	RefreshToken     string     `bun:",unique"`                   // Optional refresh token
-	TokenType        string     `bun:",notnull,default:'Bearer'"` // Token type (Bearer)
-	ClientID         string     `bun:",notnull"`                  // OAuth client ID
-	UserID           xid.ID     `bun:",notnull"`                  // User who owns the token
-	Scope            string     `bun:",notnull"`                  // Granted scopes
-	ExpiresAt        time.Time  `bun:",notnull"`                  // Token expiration
-	RefreshExpiresAt *time.Time `bun:""`                          // Refresh token expiration
-	Revoked          bool       `bun:",notnull,default:false"`    // Whether token is revoked
-	RevokedAt        *time.Time `bun:""`                          // When token was revoked
+	AccessToken      string     `bun:"access_token,unique,notnull" json:"-"`          // The access token
+	RefreshToken     string     `bun:"refresh_token,unique" json:"-"`                 // Optional refresh token
+	TokenType        string     `bun:"token_type,notnull,default:'Bearer'" json:"tokenType"` // Token type (Bearer)
+	ClientID         string     `bun:"client_id,notnull" json:"clientID"`             // OAuth client ID
+	UserID           xid.ID     `bun:"user_id,notnull,type:varchar(20)" json:"userID"` // User who owns the token
+	Scope            string     `bun:"scope,notnull" json:"scope"`                    // Granted scopes
+	ExpiresAt        time.Time  `bun:"expires_at,notnull" json:"expiresAt"`           // Token expiration
+	RefreshExpiresAt *time.Time `bun:"refresh_expires_at" json:"refreshExpiresAt,omitempty"` // Refresh token expiration
+	Revoked          bool       `bun:"revoked,notnull,default:false" json:"revoked"`  // Whether token is revoked
+	RevokedAt        *time.Time `bun:"revoked_at" json:"revokedAt,omitempty"`         // When token was revoked
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // IsExpired checks if the access token has expired

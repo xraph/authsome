@@ -19,12 +19,12 @@ func NewMagicLinkRepository(db *bun.DB) *MagicLinkRepository { return &MagicLink
 // Create stores a new magic link record with app and optional org scoping
 func (r *MagicLinkRepository) Create(ctx context.Context, email, token string, appID xid.ID, userOrganizationID *xid.ID, expiresAt time.Time) error {
 	rec := &schema.MagicLink{
-		ID:                 xid.New(),
-		Email:              email,
-		Token:              token,
-		AppID:              appID,
-		UserOrganizationID: userOrganizationID,
-		ExpiresAt:          expiresAt,
+		ID:             xid.New(),
+		Email:          email,
+		Token:          token,
+		AppID:          appID,
+		OrganizationID: userOrganizationID,
+		ExpiresAt:      expiresAt,
 	}
 	rec.AuditableModel.CreatedBy = rec.ID
 	rec.AuditableModel.UpdatedBy = rec.ID

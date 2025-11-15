@@ -10,16 +10,16 @@ import (
 
 // Form represents a form configuration
 type Form struct {
-	ID             xid.ID                 `json:"id"`
-	OrganizationID xid.ID                 `json:"organizationId"`
-	Type           string                 `json:"type"`
-	Name           string                 `json:"name"`
-	Description    string                 `json:"description"`
-	Schema         map[string]interface{} `json:"schema"`
-	IsActive       bool                   `json:"isActive"`
-	Version        int                    `json:"version"`
-	CreatedAt      time.Time              `json:"createdAt"`
-	UpdatedAt      time.Time              `json:"updatedAt"`
+	ID          xid.ID                 `json:"id"`
+	AppID       xid.ID                 `json:"appId"`
+	Type        string                 `json:"type"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Schema      map[string]interface{} `json:"schema"`
+	IsActive    bool                   `json:"isActive"`
+	Version     int                    `json:"version"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
 }
 
 // FormField represents a form field configuration
@@ -50,11 +50,11 @@ type FormSubmission struct {
 
 // CreateFormRequest represents a request to create a new form
 type CreateFormRequest struct {
-	OrganizationID xid.ID                 `json:"organizationId"`
-	Type           string                 `json:"type"`
-	Name           string                 `json:"name"`
-	Description    string                 `json:"description"`
-	Schema         map[string]interface{} `json:"schema"`
+	AppID       xid.ID                 `json:"appId"`
+	Type        string                 `json:"type"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Schema      map[string]interface{} `json:"schema"`
 }
 
 // UpdateFormRequest represents a request to update a form

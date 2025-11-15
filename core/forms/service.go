@@ -41,19 +41,19 @@ func (s *Service) CreateForm(ctx context.Context, req *CreateFormRequest) (*Form
 
 	// Create schema entity
 	formSchema := &schema.FormSchema{
-		ID:             xid.New(),
-		OrganizationID: req.OrganizationID,
-		Type:           req.Type,
-		Name:           req.Name,
-		Description:    req.Description,
-		Schema:         req.Schema,
-		IsActive:       true,
-		Version:        1,
+		ID:          xid.New(),
+		AppID:       req.AppID,
+		Type:        req.Type,
+		Name:        req.Name,
+		Description: req.Description,
+		Schema:      req.Schema,
+		IsActive:    true,
+		Version:     1,
 	}
 
 	// Set auditable fields
-	formSchema.CreatedBy = req.OrganizationID // Use org ID as creator for now
-	formSchema.UpdatedBy = req.OrganizationID
+	formSchema.CreatedBy = req.AppID // Use org ID as creator for now
+	formSchema.UpdatedBy = req.AppID
 
 	if err := s.repo.Create(ctx, formSchema); err != nil {
 		return nil, fmt.Errorf("failed to create form: %w", err)
@@ -139,7 +139,7 @@ func (s *Service) UpdateForm(ctx context.Context, req *UpdateFormRequest) (*Form
 	formSchema.IsActive = req.IsActive
 
 	// Update auditable fields
-	formSchema.UpdatedBy = formSchema.OrganizationID // Use org ID as updater for now
+	formSchema.UpdatedBy = formSchema.AppID // Use org ID as updater for now
 
 	if err := s.repo.Update(ctx, formSchema); err != nil {
 		return nil, fmt.Errorf("failed to update form: %w", err)
@@ -186,7 +186,7 @@ func (s *Service) SubmitForm(ctx context.Context, req *SubmitFormRequest) (*Form
 	}
 
 	// Set auditable fields
-	createdBy := formSchema.OrganizationID
+	createdBy := formSchema.AppID
 	if req.UserID != nil {
 		createdBy = *req.UserID
 	}
@@ -317,16 +317,16 @@ func (s *Service) validateSubmissionData(schema map[string]interface{}, data map
 
 func (s *Service) schemaToForm(fs *schema.FormSchema) *Form {
 	return &Form{
-		ID:             fs.ID,
-		OrganizationID: fs.OrganizationID,
-		Type:           fs.Type,
-		Name:           fs.Name,
-		Description:    fs.Description,
-		Schema:         fs.Schema,
-		IsActive:       fs.IsActive,
-		Version:        fs.Version,
-		CreatedAt:      fs.CreatedAt,
-		UpdatedAt:      fs.UpdatedAt,
+		ID:          fs.ID,
+		AppID:       fs.AppID,
+		Type:        fs.Type,
+		Name:        fs.Name,
+		Description: fs.Description,
+		Schema:      fs.Schema,
+		IsActive:    fs.IsActive,
+		Version:     fs.Version,
+		CreatedAt:   fs.CreatedAt,
+		UpdatedAt:   fs.UpdatedAt,
 	}
 }
 

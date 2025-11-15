@@ -71,7 +71,7 @@ func (r *AuditRepository) List(ctx context.Context, filter *audit.ListEventsFilt
 
 	// Execute query
 	var events []*schema.AuditEvent
-	if err := baseQuery.Scan(ctx); err != nil {
+	if err := baseQuery.Scan(ctx, &events); err != nil {
 		return nil, err
 	}
 

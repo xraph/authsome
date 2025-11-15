@@ -49,10 +49,10 @@ type PluginItem struct {
 }
 
 // DashboardPage renders the dashboard stats page content
-func DashboardPage(stats *DashboardStats, basePath string) g.Node {
+func DashboardPage(stats *DashboardStats, basePath string, appIDStr string) g.Node {
 	return g.Group([]g.Node{
 		// Stats Grid
-		statsGrid(stats, basePath),
+		statsGrid(stats, basePath, appIDStr),
 
 		// Content Grid
 		Div(
@@ -62,21 +62,21 @@ func DashboardPage(stats *DashboardStats, basePath string) g.Node {
 		),
 
 		// Plugins Overview
-		pluginsOverviewCard(stats.Plugins, basePath),
+		pluginsOverviewCard(stats.Plugins, basePath, appIDStr),
 
 		// Quick Actions
-		quickActionsCard(basePath),
+		quickActionsCard(basePath, appIDStr),
 	})
 }
 
-func statsGrid(stats *DashboardStats, basePath string) g.Node {
+func statsGrid(stats *DashboardStats, basePath string, appIDStr string) g.Node {
 	return Div(
 		Class("grid grid-cols-1 gap-4 md:grid-cols-3 mb-6"),
 		statsCard(
 			"Total Users",
 			stats.TotalUsers,
 			stats.UserGrowth,
-			basePath+"/dashboard/users",
+			basePath+"/dashboard/app/"+appIDStr+"/users",
 			"violet",
 			lucide.Users(Class("h-6 w-6")),
 		),
@@ -84,7 +84,7 @@ func statsGrid(stats *DashboardStats, basePath string) g.Node {
 			"Active Sessions",
 			stats.ActiveSessions,
 			stats.SessionGrowth,
-			basePath+"/dashboard/sessions",
+			basePath+"/dashboard/app/"+appIDStr+"/sessions",
 			"emerald",
 			lucide.ShieldCheck(Class("h-6 w-6")),
 		),
@@ -168,13 +168,13 @@ func statsCard(title string, value int, growth float64, href, colorScheme string
 
 func recentActivityCard(activities []ActivityItem) g.Node {
 	return Div(
-		Class("bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"),
+		Class("bg-white dark:bg-gray-800 h-[400px] rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"),
 		Div(
 			Class("px-6 py-2 border-b border-gray-200 dark:border-gray-700"),
 			H3(Class("text-lg font-semibold text-gray-900 dark:text-white"), g.Text("Recent Activity")),
 		),
 		Div(
-			Class("px-6 py-5"),
+			Class("px-6 py-5 h-full overflow-y-scroll "),
 			Div(
 				Class("flow-root"),
 				Ul(
@@ -294,7 +294,7 @@ func statusRow(status StatusItem) g.Node {
 	)
 }
 
-func quickActionsCard(basePath string) g.Node {
+func quickActionsCard(basePath string, appIDStr string) g.Node {
 	return Div(
 		Class("mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"),
 		Div(
@@ -305,8 +305,8 @@ func quickActionsCard(basePath string) g.Node {
 			Class("px-6 py-5"),
 			Div(
 				Class("grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"),
-				quickActionButton("Manage Users", "View and manage accounts", basePath+"/dashboard/users", "violet", lucide.Users(Class("h-6 w-6"))),
-				quickActionButton("View Sessions", "Monitor active sessions", basePath+"/dashboard/sessions", "emerald", lucide.ShieldCheck(Class("h-6 w-6"))),
+				quickActionButton("Manage Users", "View and manage accounts", basePath+"/dashboard/app/"+appIDStr+"/users", "violet", lucide.Users(Class("h-6 w-6"))),
+				quickActionButton("View Sessions", "Monitor active sessions", basePath+"/dashboard/app/"+appIDStr+"/sessions", "emerald", lucide.ShieldCheck(Class("h-6 w-6"))),
 				quickActionButton("Security Settings", "Coming soon", "", "slate", lucide.Settings(Class("h-6 w-6"))),
 				quickActionButton("View Analytics", "Coming soon", "", "slate", lucide.ChartBar(Class("h-6 w-6"))),
 			),
@@ -358,7 +358,7 @@ func quickActionButton(title, subtitle, href, colorScheme string, icon g.Node) g
 	return A(Href(href), Class(classes), content)
 }
 
-func pluginsOverviewCard(plugins []PluginItem, basePath string) g.Node {
+func pluginsOverviewCard(plugins []PluginItem, basePath string, appIDStr string) g.Node {
 	// Count enabled plugins
 	enabledCount := 0
 	for _, p := range plugins {
@@ -402,7 +402,7 @@ func pluginsOverviewCard(plugins []PluginItem, basePath string) g.Node {
 			Div(
 				Class("mt-4 pt-4 border-t border-gray-200 dark:border-gray-700"),
 				A(
-					Href(basePath+"/dashboard/plugins"),
+					Href(basePath+"/dashboard/app/"+appIDStr+"/plugins"),
 					Class("inline-flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"),
 					g.Text("View all plugins"),
 					lucide.ArrowRight(Class("h-4 w-4")),

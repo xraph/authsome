@@ -124,7 +124,8 @@ func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) 
 
 	// Audit log
 	if s.auditSvc != nil {
-		s.auditSvc.Log(ctx, nil, req.AppID.String(), "webhook", "create", "",
+		userID := (*xid.ID)(nil)
+		s.auditSvc.Log(ctx, userID, "webhook.create", "webhook:"+webhook.ID.String(), "", "",
 			fmt.Sprintf(`{"webhook_id":"%s","app_id":"%s","environment_id":"%s","url":"%s","events":%s}`,
 				webhook.ID.String(), webhook.AppID.String(), webhook.EnvironmentID.String(), webhook.URL, mustMarshal(webhook.Events)))
 	}
@@ -175,7 +176,8 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 
 	// Audit log
 	if s.auditSvc != nil {
-		s.auditSvc.Log(ctx, nil, webhook.AppID.String(), "webhook", "update", "",
+		userID := (*xid.ID)(nil)
+		s.auditSvc.Log(ctx, userID, "webhook.update", "webhook:"+webhook.ID.String(), "", "",
 			fmt.Sprintf(`{"webhook_id":"%s"}`, webhook.ID.String()))
 	}
 
@@ -195,7 +197,8 @@ func (s *Service) DeleteWebhook(ctx context.Context, id xid.ID) error {
 
 	// Audit log
 	if s.auditSvc != nil {
-		s.auditSvc.Log(ctx, nil, schemaWebhook.AppID.String(), "webhook", "delete", "",
+		userID := (*xid.ID)(nil)
+		s.auditSvc.Log(ctx, userID, "webhook.delete", "webhook:"+schemaWebhook.ID.String(), "", "",
 			fmt.Sprintf(`{"webhook_id":"%s"}`, schemaWebhook.ID.String()))
 	}
 

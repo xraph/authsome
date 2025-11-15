@@ -82,6 +82,11 @@ All dashboard routes are now app-scoped. You must select an app before accessing
 - `/dashboard/app/:appId/` - Statistics and quick actions for the app
 - `/dashboard/app/:appId/users` - User management within the app
 - `/dashboard/app/:appId/users/:id` - User details
+- `/dashboard/app/:appId/organizations` - User-created organizations (workspaces) within the app
+- `/dashboard/app/:appId/organizations/:orgId` - Organization details
+- `/dashboard/app/:appId/apps-management` - Platform apps management (admin only)
+- `/dashboard/app/:appId/apps-management/:targetAppId` - App details
+- `/dashboard/app/:appId/apps-management/create` - Create new app (requires multiapp plugin)
 - `/dashboard/app/:appId/sessions` - Active sessions in the app
 - `/dashboard/app/:appId/settings` - App-specific settings
 - `/dashboard/app/:appId/plugins` - Plugin management for the app
@@ -98,10 +103,13 @@ In multiapp mode, a dropdown appears in the header allowing quick switching betw
    - `/dashboard/sessions` → `/dashboard/app/{appId}/sessions`
    - All routes now require an `appId` in the URL path
 
-2. **Organization management moved:**
-   - Dashboard no longer provides UI for creating/editing apps
-   - Use the `multiapp` plugin API endpoints for app management
+2. **App vs. Organization distinction:**
+   - **Apps** (platform-level tenants) can be managed via the dashboard "Apps Management" section
+     - List, view, edit, and delete apps are always available
+     - Create new apps is only available when `multiapp` plugin is enabled
+   - **Organizations** (user-created workspaces) are managed via the dashboard "Organizations" section
    - The dashboard `/` now displays app cards for navigation
+   - Within each app, you can create and manage user organizations
 
 3. **Context requirement:**
    - All dashboard features now operate within an app context

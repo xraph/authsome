@@ -39,7 +39,7 @@ type Invitation struct {
 	bun.BaseModel  `bun:"table:invitations,alias:inv"`
 
 	ID         xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID      xid.ID                 `json:"appID" bun:"organization_id,notnull,type:varchar(20)"` // Column still named organization_id for migration compatibility
+	AppID      xid.ID                 `json:"appID" bun:"app_id,notnull,type:varchar(20)"`
 	Email      string                 `json:"email" bun:"email,notnull"`
 	Role       MemberRole             `json:"role" bun:"role,notnull"`
 	InviterID  xid.ID                 `json:"inviterID" bun:"inviter_id,notnull,type:varchar(20)"`
@@ -50,5 +50,5 @@ type Invitation struct {
 	Metadata   map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
 
 	// Relations
-	App *App `json:"app,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
+	App *App `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
 }

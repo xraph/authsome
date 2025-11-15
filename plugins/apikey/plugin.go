@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
@@ -115,15 +115,9 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(auth interface{}) error {
-	// Type assert to get the auth instance with required methods
-	authInstance, ok := auth.(interface {
-		GetDB() *bun.DB
-		GetForgeApp() forge.App
-		GetServiceRegistry() *registry.ServiceRegistry
-	})
-	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+func (p *Plugin) Init(authInstance core.Authsome) error {
+	if authInstance == nil {
+		return fmt.Errorf("auth instance cannot be nil")
 	}
 
 	db := authInstance.GetDB()

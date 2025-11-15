@@ -14,7 +14,8 @@ import (
 // InvitationService handles invitation aggregate operations
 type InvitationService struct {
 	repo       InvitationRepository
-	memberRepo MemberRepository // For validation and creation
+	memberRepo MemberRepository // For validation
+	memberSvc  *MemberService   // For creating members with RBAC sync
 	appRepo    AppRepository    // For validation
 	config     Config
 	rbacSvc    *rbac.Service
@@ -24,6 +25,7 @@ type InvitationService struct {
 func NewInvitationService(
 	repo InvitationRepository,
 	memberRepo MemberRepository,
+	memberSvc *MemberService, // NEW: For RBAC-synced member creation
 	appRepo AppRepository,
 	cfg Config,
 	rbacSvc *rbac.Service,
@@ -31,6 +33,7 @@ func NewInvitationService(
 	return &InvitationService{
 		repo:       repo,
 		memberRepo: memberRepo,
+		memberSvc:  memberSvc,
 		appRepo:    appRepo,
 		config:     cfg,
 		rbacSvc:    rbacSvc,
@@ -115,7 +118,7 @@ func (s *InvitationService) AcceptInvitation(ctx context.Context, token string, 
 		return nil, err
 	}
 
-	// Create member
+	// Create member using MemberService to ensure RBAC sync
 	member := &Member{
 		ID:       xid.New(),
 		AppID:    schemaInv.AppID,
@@ -125,19 +128,11 @@ func (s *InvitationService) AcceptInvitation(ctx context.Context, token string, 
 		JoinedAt: time.Now(),
 	}
 
-	// Directly create member using repository
-	member.CreatedAt = time.Now()
-	member.UpdatedAt = time.Now()
-	if err := s.memberRepo.CreateMember(ctx, member.ToSchema()); err != nil {
+	// Use MemberService.CreateMember to ensure RBAC UserRole entry is created
+	createdMember, err := s.memberSvc.CreateMember(ctx, member)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create member: %w", err)
 	}
-
-	// Retrieve the created member
-	memberSchema, err := s.memberRepo.FindMemberByID(ctx, member.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve created member: %w", err)
-	}
-	createdMember := FromSchemaMember(memberSchema)
 
 	// Update invitation status
 	schemaInv.Status = InvitationStatusAccepted

@@ -127,8 +127,8 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 
 		// Inject V2 architecture context (App, Environment, Organization)
 		ctx = contexts.SetAppID(ctx, apiKey.AppID)
-		if apiKey.EnvironmentID != nil {
-			ctx = contexts.SetEnvironmentID(ctx, *apiKey.EnvironmentID)
+		if !apiKey.EnvironmentID.IsNil() {
+			ctx = contexts.SetEnvironmentID(ctx, apiKey.EnvironmentID)
 		}
 		if apiKey.OrganizationID != nil {
 			ctx = contexts.SetOrganizationID(ctx, *apiKey.OrganizationID)
@@ -285,7 +285,7 @@ func GetUser(c forge.Context) *user.User {
 // GetOrgID extracts the organization ID from context (V2 architecture)
 // Returns the xid.ID, check with IsNil() before use
 func GetOrgID(c forge.Context) string {
-	orgID := contexts.GetOrganizationID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 	if orgID.IsNil() {
 		return ""
 	}

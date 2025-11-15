@@ -3,35 +3,39 @@ package schema
 import (
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 )
 
 // UserBan represents a user ban record in the database
 type UserBan struct {
-	bun.BaseModel `bun:"table:user_bans,alias:ub"`
+	AuditableModel `bun:",inline"`
+	bun.BaseModel  `bun:"table:user_bans,alias:ub"`
 
 	// Primary key
-	ID string `bun:"id,pk" json:"id"`
+	ID xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
+
+	// App context
+	AppID xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appID"`
 
 	// Foreign keys
-	UserID       string `bun:"user_id,notnull" json:"user_id"`
-	BannedByID   string `bun:"banned_by_id,notnull" json:"banned_by_id"`
-	UnbannedByID string `bun:"unbanned_by_id" json:"unbanned_by_id,omitempty"`
+	UserID       xid.ID  `bun:"user_id,notnull,type:varchar(20)" json:"userID"`
+	BannedByID   xid.ID  `bun:"banned_by_id,notnull,type:varchar(20)" json:"bannedByID"`
+	UnbannedByID *xid.ID `bun:"unbanned_by_id,type:varchar(20)" json:"unbannedByID,omitempty"`
 
 	// Ban details
 	Reason    string     `bun:"reason,notnull" json:"reason"`
-	IsActive  bool       `bun:"is_active,notnull,default:true" json:"is_active"`
-	ExpiresAt *time.Time `bun:"expires_at" json:"expires_at,omitempty"`
+	IsActive  bool       `bun:"is_active,notnull,default:true" json:"isActive"`
+	ExpiresAt *time.Time `bun:"expires_at" json:"expiresAt,omitempty"`
 
 	// Timestamps
-	CreatedAt  time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt  time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updated_at"`
-	UnbannedAt *time.Time `bun:"unbanned_at" json:"unbanned_at,omitempty"`
+	UnbannedAt *time.Time `bun:"unbanned_at" json:"unbannedAt,omitempty"`
 
 	// Relations
+	App        *App  `bun:"rel:belongs-to,join:app_id=id"`
 	User       *User `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
-	BannedBy   *User `bun:"rel:belongs-to,join:banned_by_id=id" json:"banned_by,omitempty"`
-	UnbannedBy *User `bun:"rel:belongs-to,join:unbanned_by_id=id" json:"unbanned_by,omitempty"`
+	BannedBy   *User `bun:"rel:belongs-to,join:banned_by_id=id" json:"bannedBy,omitempty"`
+	UnbannedBy *User `bun:"rel:belongs-to,join:unbanned_by_id=id" json:"unbannedBy,omitempty"`
 }
 
 // TableName returns the table name for the UserBan model

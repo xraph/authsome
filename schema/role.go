@@ -11,7 +11,10 @@ type Role struct {
 	bun.BaseModel  `bun:"table:roles,alias:r"`
 
 	ID          xid.ID  `bun:"id,pk,type:varchar(20)"`
-	AppID       *xid.ID `bun:"organization_id,type:varchar(20)"` // Column still named organization_id for migration compatibility
-	Name        string  `bun:"name,notnull,unique:role_org_name"`
+	AppID       *xid.ID `bun:"app_id,type:varchar(20)"` // App-scoped roles
+	Name        string  `bun:"name,notnull,unique:role_app_name"`
 	Description string  `bun:"description"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }

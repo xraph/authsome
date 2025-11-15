@@ -213,6 +213,8 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	memberRepo := authInstance.Repository().App()
 	teamRepo := authInstance.Repository().App()
 	invitationRepo := authInstance.Repository().App()
+	roleRepo := authInstance.Repository().Role()         // NEW: Role repository for RBAC
+	userRoleRepo := authInstance.Repository().UserRole() // NEW: UserRole repository for RBAC
 
 	// Create app service config
 	appConfig := app.Config{
@@ -232,7 +234,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	}
 
 	// Use core app service directly
-	p.appService = app.NewService(appRepo, memberRepo, teamRepo, invitationRepo, appConfig, rbacSvc)
+	p.appService = app.NewService(appRepo, memberRepo, teamRepo, invitationRepo, roleRepo, userRoleRepo, appConfig, rbacSvc)
 
 	// Register the service with the service registry
 	serviceRegistry.SetAppService(p.appService)

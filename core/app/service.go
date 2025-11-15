@@ -23,14 +23,19 @@ func NewService(
 	memberRepo MemberRepository,
 	teamRepo TeamRepository,
 	invitationRepo InvitationRepository,
+	roleRepo rbac.RoleRepository, // From core/rbac package
+	userRoleRepo rbac.UserRoleRepository, // From core/rbac package
 	cfg Config,
 	rbacSvc *rbac.Service,
 ) *ServiceImpl {
+	// Create member service first (needed by invitation service)
+	memberService := NewMemberService(memberRepo, appRepo, roleRepo, userRoleRepo, cfg, rbacSvc)
+
 	return &ServiceImpl{
 		App:        NewAppService(appRepo, cfg, rbacSvc),
-		Member:     NewMemberService(memberRepo, appRepo, cfg, rbacSvc),
+		Member:     memberService,
 		Team:       NewTeamService(teamRepo, memberRepo, cfg, rbacSvc),
-		Invitation: NewInvitationService(invitationRepo, memberRepo, appRepo, cfg, rbacSvc),
+		Invitation: NewInvitationService(invitationRepo, memberRepo, memberService, appRepo, cfg, rbacSvc),
 	}
 }
 

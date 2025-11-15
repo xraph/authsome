@@ -59,14 +59,14 @@ type Member struct {
 	bun.BaseModel  `bun:"table:members,alias:m"`
 
 	ID       xid.ID       `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID    xid.ID       `json:"appID" bun:"organization_id,notnull,type:varchar(20)"` // Column still named organization_id for migration compatibility
+	AppID    xid.ID       `json:"appID" bun:"app_id,notnull,type:varchar(20)"` // App context
 	UserID   xid.ID       `json:"userID" bun:"user_id,notnull,type:varchar(20)"`
-	Role     MemberRole   `json:"role" bun:"role,notnull"`
+	Role     MemberRole   `json:"role" bun:"role,nullzero"`
 	Status   MemberStatus `json:"status" bun:"status,notnull,default:'active'"`
 	JoinedAt time.Time    `json:"joinedAt" bun:"joined_at,nullzero,notnull,default:current_timestamp"` // when the member joined
 
 	// Relations
-	App   *App   `json:"app,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
+	App   *App   `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
 	User  *User  `json:"user,omitempty" bun:"rel:belongs-to,join:user_id=id"`
 	Teams []Team `json:"teams,omitempty" bun:"m2m:team_members,join:Member=Team"`
 }

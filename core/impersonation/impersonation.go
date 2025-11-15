@@ -39,23 +39,25 @@ type ImpersonationSession struct {
 // ToSchema converts the ImpersonationSession DTO to a schema.ImpersonationSession model
 func (s *ImpersonationSession) ToSchema() *schema.ImpersonationSession {
 	return &schema.ImpersonationSession{
-		ID:                 s.ID,
-		AppID:              s.AppID, // Maps to organization_id column in DB
-		UserOrganizationID: s.UserOrganizationID,
-		ImpersonatorID:     s.ImpersonatorID,
-		TargetUserID:       s.TargetUserID,
-		NewSessionID:       s.NewSessionID,
-		SessionToken:       s.SessionToken,
-		Reason:             s.Reason,
-		TicketNumber:       s.TicketNumber,
-		IPAddress:          s.IPAddress,
-		UserAgent:          s.UserAgent,
-		Active:             s.Active,
-		ExpiresAt:          s.ExpiresAt,
-		EndedAt:            s.EndedAt,
-		EndReason:          s.EndReason,
-		CreatedAt:          s.CreatedAt,
-		UpdatedAt:          s.UpdatedAt,
+		AppID:          s.AppID, // Maps to organization_id column in DB
+		OrganizationID: s.UserOrganizationID,
+		ImpersonatorID: s.ImpersonatorID,
+		TargetUserID:   s.TargetUserID,
+		NewSessionID:   s.NewSessionID,
+		SessionToken:   s.SessionToken,
+		Reason:         s.Reason,
+		TicketNumber:   s.TicketNumber,
+		IPAddress:      s.IPAddress,
+		UserAgent:      s.UserAgent,
+		Active:         s.Active,
+		ExpiresAt:      s.ExpiresAt,
+		EndedAt:        s.EndedAt,
+		EndReason:      s.EndReason,
+		AuditableModel: schema.AuditableModel{
+			ID:        s.ID,
+			CreatedAt: s.CreatedAt,
+			UpdatedAt: s.UpdatedAt,
+		},
 	}
 }
 
@@ -68,7 +70,7 @@ func FromSchemaImpersonationSession(ss *schema.ImpersonationSession) *Impersonat
 	return &ImpersonationSession{
 		ID:                 ss.ID,
 		AppID:              ss.AppID, // Maps from organization_id column in DB
-		UserOrganizationID: ss.UserOrganizationID,
+		UserOrganizationID: ss.OrganizationID,
 		ImpersonatorID:     ss.ImpersonatorID,
 		TargetUserID:       ss.TargetUserID,
 		NewSessionID:       ss.NewSessionID,
@@ -136,17 +138,17 @@ type AuditEvent struct {
 // ToSchema converts the AuditEvent DTO to a schema.ImpersonationAuditEvent model
 func (e *AuditEvent) ToSchema() *schema.ImpersonationAuditEvent {
 	return &schema.ImpersonationAuditEvent{
-		ID:                 e.ID,
-		ImpersonationID:    e.ImpersonationID,
-		AppID:              e.AppID, // Maps to organization_id column in DB
-		UserOrganizationID: e.UserOrganizationID,
-		EventType:          e.EventType,
-		Action:             e.Action,
-		Resource:           e.Resource,
-		IPAddress:          e.IPAddress,
-		UserAgent:          e.UserAgent,
-		Details:            e.Details,
-		CreatedAt:          e.CreatedAt,
+		ID:              e.ID,
+		ImpersonationID: e.ImpersonationID,
+		AppID:           e.AppID, // Maps to organization_id column in DB
+		OrganizationID:  e.UserOrganizationID,
+		EventType:       e.EventType,
+		Action:          e.Action,
+		Resource:        e.Resource,
+		IPAddress:       e.IPAddress,
+		UserAgent:       e.UserAgent,
+		Details:         e.Details,
+		CreatedAt:       e.CreatedAt,
 	}
 }
 
@@ -160,7 +162,7 @@ func FromSchemaAuditEvent(se *schema.ImpersonationAuditEvent) *AuditEvent {
 		ID:                 se.ID,
 		ImpersonationID:    se.ImpersonationID,
 		AppID:              se.AppID, // Maps from organization_id column in DB
-		UserOrganizationID: se.UserOrganizationID,
+		UserOrganizationID: se.OrganizationID,
 		EventType:          se.EventType,
 		Action:             se.Action,
 		Resource:           se.Resource,

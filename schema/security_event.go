@@ -11,9 +11,13 @@ type SecurityEvent struct {
 	bun.BaseModel  `bun:"table:security_events,alias:se"`
 
 	ID        xid.ID  `bun:"id,pk,type:varchar(20)"`
+	AppID     xid.ID  `bun:"app_id,notnull,type:varchar(20)"`
 	UserID    *xid.ID `bun:"user_id,type:varchar(20)"`
 	Type      string  `bun:"type,notnull"`
 	IPAddress string  `bun:"ip_address"`
 	UserAgent string  `bun:"user_agent"`
 	Geo       string  `bun:"geo"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }

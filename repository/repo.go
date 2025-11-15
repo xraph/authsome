@@ -4,6 +4,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/forms"
+	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/webhook"
 	repository "github.com/xraph/authsome/repository/organization"
@@ -27,7 +28,7 @@ type Repository interface {
 	UserRole() *UserRoleRepository
 	UserBan() *UserBanRepository
 
-	Notification() NotificationRepository
+	Notification() notification.Repository
 
 	// OAuth & SSO
 	OAuthToken() *OAuthTokenRepository
@@ -84,7 +85,7 @@ type Repo struct {
 	userBan    *UserBanRepository
 
 	// Notification
-	notification NotificationRepository
+	notification notification.Repository
 
 	// OAuth & SSO
 	oauthToken        *OAuthTokenRepository
@@ -235,7 +236,7 @@ func (r *Repo) UserBan() *UserBanRepository {
 	return r.userBan
 }
 
-func (r *Repo) Notification() NotificationRepository {
+func (r *Repo) Notification() notification.Repository {
 	return r.notification
 }
 

@@ -24,9 +24,9 @@ func setupTestDB(t *testing.T) *bun.DB {
 	// Create necessary tables
 	ctx := context.Background()
 
-	// Organizations table
+	// Apps table
 	_, err = db.NewCreateTable().
-		Model((*schema.Organization)(nil)).
+		Model((*schema.App)(nil)).
 		IfNotExists().
 		Exec(ctx)
 	require.NoError(t, err)
@@ -38,6 +38,13 @@ func setupTestDB(t *testing.T) *bun.DB {
 		Exec(ctx)
 	require.NoError(t, err)
 
+	// Permissions table
+	_, err = db.NewCreateTable().
+		Model((*schema.Permission)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	require.NoError(t, err)
+
 	return db
 }
 
@@ -45,10 +52,10 @@ func TestRoleRegistry_RegisterRole(t *testing.T) {
 	registry := NewRoleRegistry()
 
 	role := &RoleDefinition{
-		Name:        "admin",
-		Description: "Administrator",
-		IsPlatform:  false,
-		Priority:    60,
+		Name:        RoleAdmin,
+		Description: RoleDescAdmin,
+		IsPlatform:  RoleIsPlatformAdmin,
+		Priority:    RolePriorityAdmin,
 		Permissions: []string{"view on users", "edit on users"},
 	}
 
@@ -56,10 +63,10 @@ func TestRoleRegistry_RegisterRole(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify role was registered
-	retrieved, exists := registry.GetRole("admin")
+	retrieved, exists := registry.GetRole(RoleAdmin)
 	assert.True(t, exists)
-	assert.Equal(t, "admin", retrieved.Name)
-	assert.Equal(t, "Administrator", retrieved.Description)
+	assert.Equal(t, RoleAdmin, retrieved.Name)
+	assert.Equal(t, RoleDescAdmin, retrieved.Description)
 	assert.Len(t, retrieved.Permissions, 2)
 }
 
@@ -68,10 +75,10 @@ func TestRoleRegistry_OverrideSemantics(t *testing.T) {
 
 	// Register initial role
 	role1 := &RoleDefinition{
-		Name:        "admin",
+		Name:        RoleAdmin,
 		Description: "Administrator v1",
-		IsPlatform:  false,
-		Priority:    60,
+		IsPlatform:  RoleIsPlatformAdmin,
+		Priority:    RolePriorityAdmin,
 		Permissions: []string{"view on users"},
 	}
 	err := registry.RegisterRole(role1)
@@ -79,9 +86,9 @@ func TestRoleRegistry_OverrideSemantics(t *testing.T) {
 
 	// Override with additional permissions
 	role2 := &RoleDefinition{
-		Name:        "admin",
+		Name:        RoleAdmin,
 		Description: "Administrator v2",
-		IsPlatform:  false,
+		IsPlatform:  RoleIsPlatformAdmin,
 		Priority:    70, // Higher priority
 		Permissions: []string{"edit on users", "delete on users"},
 	}
@@ -89,7 +96,7 @@ func TestRoleRegistry_OverrideSemantics(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify permissions were merged
-	retrieved, exists := registry.GetRole("admin")
+	retrieved, exists := registry.GetRole(RoleAdmin)
 	require.True(t, exists)
 	assert.Equal(t, "Administrator v2", retrieved.Description)
 	assert.Equal(t, 70, retrieved.Priority)
@@ -101,10 +108,10 @@ func TestRoleRegistry_RoleInheritance(t *testing.T) {
 
 	// Register parent role
 	parent := &RoleDefinition{
-		Name:        "member",
-		Description: "Member",
-		IsPlatform:  false,
-		Priority:    40,
+		Name:        RoleMember,
+		Description: RoleDescMember,
+		IsPlatform:  RoleIsPlatformMember,
+		Priority:    RolePriorityMember,
 		Permissions: []string{"view on profile", "edit on profile"},
 	}
 	err := registry.RegisterRole(parent)
@@ -112,11 +119,11 @@ func TestRoleRegistry_RoleInheritance(t *testing.T) {
 
 	// Register child role that inherits from parent
 	child := &RoleDefinition{
-		Name:         "admin",
-		Description:  "Administrator",
-		IsPlatform:   false,
-		InheritsFrom: "member",
-		Priority:     60,
+		Name:         RoleAdmin,
+		Description:  RoleDescAdmin,
+		IsPlatform:   RoleIsPlatformAdmin,
+		InheritsFrom: RoleMember,
+		Priority:     RolePriorityAdmin,
 		Permissions:  []string{"view on users", "edit on users"},
 	}
 	err = registry.RegisterRole(child)
@@ -129,7 +136,7 @@ func TestRoleRegistry_RoleInheritance(t *testing.T) {
 	// Find the resolved admin role
 	var adminRole *RoleDefinition
 	for _, r := range resolved {
-		if r.Name == "admin" {
+		if r.Name == RoleAdmin {
 			adminRole = r
 			break
 		}
@@ -148,18 +155,18 @@ func TestRoleRegistry_CircularInheritanceDetection(t *testing.T) {
 
 	// Create circular dependency: admin -> member -> admin
 	role1 := &RoleDefinition{
-		Name:         "admin",
-		Description:  "Administrator",
-		InheritsFrom: "member",
+		Name:         RoleAdmin,
+		Description:  RoleDescAdmin,
+		InheritsFrom: RoleMember,
 		Permissions:  []string{"admin permission"},
 	}
 	err := registry.RegisterRole(role1)
 	require.NoError(t, err)
 
 	role2 := &RoleDefinition{
-		Name:         "member",
-		Description:  "Member",
-		InheritsFrom: "admin", // Circular!
+		Name:         RoleMember,
+		Description:  RoleDescMember,
+		InheritsFrom: RoleAdmin, // Circular!
 		Permissions:  []string{"member permission"},
 	}
 	err = registry.RegisterRole(role2)
@@ -177,10 +184,10 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create platform organization
-	platformOrg := &schema.Organization{
+	// Create platform app
+	platformOrg := &schema.App{
 		ID:         xid.New(),
-		Name:       "Platform Organization",
+		Name:       "Platform App",
 		Slug:       "platform",
 		IsPlatform: true,
 		Metadata:   map[string]interface{}{},
@@ -198,19 +205,19 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	registry := NewRoleRegistry()
 
 	err = registry.RegisterRole(&RoleDefinition{
-		Name:        "admin",
-		Description: "Administrator",
-		IsPlatform:  false,
-		Priority:    60,
+		Name:        RoleAdmin,
+		Description: RoleDescAdmin,
+		IsPlatform:  RoleIsPlatformAdmin,
+		Priority:    RolePriorityAdmin,
 		Permissions: []string{"view on users", "edit on users"},
 	})
 	require.NoError(t, err)
 
 	err = registry.RegisterRole(&RoleDefinition{
-		Name:        "member",
-		Description: "Member",
-		IsPlatform:  false,
-		Priority:    40,
+		Name:        RoleMember,
+		Description: RoleDescMember,
+		IsPlatform:  RoleIsPlatformMember,
+		Priority:    RolePriorityMember,
 		Permissions: []string{"view on profile"},
 	})
 	require.NoError(t, err)
@@ -224,7 +231,7 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	var roles []schema.Role
 	err = db.NewSelect().
 		Model(&roles).
-		Where("organization_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformOrg.ID).
 		Scan(ctx)
 	require.NoError(t, err)
 
@@ -235,8 +242,25 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	for _, role := range roles {
 		roleNames[role.Name] = true
 	}
-	assert.True(t, roleNames["admin"])
-	assert.True(t, roleNames["member"])
+	assert.True(t, roleNames[RoleAdmin])
+	assert.True(t, roleNames[RoleMember])
+
+	// Verify permissions were created in database
+	var permissions []schema.Permission
+	err = db.NewSelect().
+		Model(&permissions).
+		Where("app_id = ?", platformOrg.ID).
+		Scan(ctx)
+	require.NoError(t, err)
+
+	assert.Greater(t, len(permissions), 0, "Permissions should have been created")
+
+	// Verify at least one permission exists
+	permNames := make(map[string]bool)
+	for _, perm := range permissions {
+		permNames[perm.Name] = true
+	}
+	assert.True(t, permNames["view on users"] || permNames["edit on users"] || permNames["view on profile"])
 }
 
 func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
@@ -245,10 +269,10 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create platform organization
-	platformOrg := &schema.Organization{
+	// Create platform app
+	platformOrg := &schema.App{
 		ID:         xid.New(),
-		Name:       "Platform Organization",
+		Name:       "Platform App",
 		Slug:       "platform",
 		IsPlatform: true,
 		Metadata:   map[string]interface{}{},
@@ -265,10 +289,10 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	// Create role registry
 	registry := NewRoleRegistry()
 	err = registry.RegisterRole(&RoleDefinition{
-		Name:        "admin",
+		Name:        RoleAdmin,
 		Description: "Administrator v1",
-		IsPlatform:  false,
-		Priority:    60,
+		IsPlatform:  RoleIsPlatformAdmin,
+		Priority:    RolePriorityAdmin,
 		Permissions: []string{"view on users"},
 	})
 	require.NoError(t, err)
@@ -281,17 +305,17 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	// Count roles
 	count1, err := db.NewSelect().
 		Model((*schema.Role)(nil)).
-		Where("organization_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformOrg.ID).
 		Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count1)
 
 	// Update role definition
 	err = registry.RegisterRole(&RoleDefinition{
-		Name:        "admin",
+		Name:        RoleAdmin,
 		Description: "Administrator v2",
-		IsPlatform:  false,
-		Priority:    60,
+		IsPlatform:  RoleIsPlatformAdmin,
+		Priority:    RolePriorityAdmin,
 		Permissions: []string{"view on users", "edit on users"},
 	})
 	require.NoError(t, err)
@@ -303,7 +327,7 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	// Should still have only 1 role (updated, not duplicated)
 	count2, err := db.NewSelect().
 		Model((*schema.Role)(nil)).
-		Where("organization_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformOrg.ID).
 		Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count2)
@@ -312,7 +336,7 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	var role schema.Role
 	err = db.NewSelect().
 		Model(&role).
-		Where("name = ? AND organization_id = ?", "admin", platformOrg.ID).
+		Where("name = ? AND app_id = ?", RoleAdmin, platformOrg.ID).
 		Scan(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "Administrator v2", role.Description)
@@ -323,37 +347,37 @@ func TestRoleRegistry_ValidateRoleAssignment(t *testing.T) {
 
 	// Register platform role
 	err := registry.RegisterRole(&RoleDefinition{
-		Name:        "superadmin",
-		Description: "Superadministrator",
-		IsPlatform:  true,
-		Priority:    100,
+		Name:        RoleSuperAdmin,
+		Description: RoleDescSuperAdmin,
+		IsPlatform:  RoleIsPlatformSuperAdmin,
+		Priority:    RolePrioritySuperAdmin,
 		Permissions: []string{"* on *"},
 	})
 	require.NoError(t, err)
 
 	// Register org role
 	err = registry.RegisterRole(&RoleDefinition{
-		Name:        "admin",
-		Description: "Administrator",
-		IsPlatform:  false,
-		Priority:    60,
+		Name:        RoleAdmin,
+		Description: RoleDescAdmin,
+		IsPlatform:  RoleIsPlatformAdmin,
+		Priority:    RolePriorityAdmin,
 		Permissions: []string{"view on users"},
 	})
 	require.NoError(t, err)
 
 	// Test platform role validation
-	err = registry.ValidateRoleAssignment("superadmin", true)
+	err = registry.ValidateRoleAssignment(RoleSuperAdmin, true)
 	assert.NoError(t, err, "Platform role should be assignable in platform org")
 
-	err = registry.ValidateRoleAssignment("superadmin", false)
+	err = registry.ValidateRoleAssignment(RoleSuperAdmin, false)
 	assert.Error(t, err, "Platform role should NOT be assignable in non-platform org")
 	assert.Contains(t, err.Error(), "platform role")
 
 	// Test org role validation
-	err = registry.ValidateRoleAssignment("admin", true)
+	err = registry.ValidateRoleAssignment(RoleAdmin, true)
 	assert.NoError(t, err, "Org role should be assignable in platform org")
 
-	err = registry.ValidateRoleAssignment("admin", false)
+	err = registry.ValidateRoleAssignment(RoleAdmin, false)
 	assert.NoError(t, err, "Org role should be assignable in non-platform org")
 }
 
@@ -362,10 +386,10 @@ func TestRoleRegistry_GetRoleHierarchy(t *testing.T) {
 
 	// Register roles with different priorities
 	roles := []*RoleDefinition{
-		{Name: "member", Priority: 40, Permissions: []string{"view on profile"}},
-		{Name: "admin", Priority: 60, Permissions: []string{"view on users"}},
-		{Name: "owner", Priority: 80, Permissions: []string{"* on organization.*"}},
-		{Name: "superadmin", Priority: 100, Permissions: []string{"* on *"}},
+		{Name: RoleMember, Priority: RolePriorityMember, Permissions: []string{"view on profile"}},
+		{Name: RoleAdmin, Priority: RolePriorityAdmin, Permissions: []string{"view on users"}},
+		{Name: RoleOwner, Priority: RolePriorityOwner, Permissions: []string{"* on organization.*"}},
+		{Name: RoleSuperAdmin, Priority: RolePrioritySuperAdmin, Permissions: []string{"* on *"}},
 	}
 
 	for _, role := range roles {
@@ -377,10 +401,10 @@ func TestRoleRegistry_GetRoleHierarchy(t *testing.T) {
 	hierarchy := registry.GetRoleHierarchy()
 	require.Len(t, hierarchy, 4)
 
-	assert.Equal(t, "superadmin", hierarchy[0].Name)
-	assert.Equal(t, "owner", hierarchy[1].Name)
-	assert.Equal(t, "admin", hierarchy[2].Name)
-	assert.Equal(t, "member", hierarchy[3].Name)
+	assert.Equal(t, RoleSuperAdmin, hierarchy[0].Name)
+	assert.Equal(t, RoleOwner, hierarchy[1].Name)
+	assert.Equal(t, RoleAdmin, hierarchy[2].Name)
+	assert.Equal(t, RoleMember, hierarchy[3].Name)
 }
 
 func TestRegisterDefaultPlatformRoles(t *testing.T) {
@@ -390,7 +414,7 @@ func TestRegisterDefaultPlatformRoles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify all default roles were registered
-	expectedRoles := []string{"superadmin", "owner", "admin", "member"}
+	expectedRoles := []string{RoleSuperAdmin, RoleOwner, RoleAdmin, RoleMember}
 	for _, roleName := range expectedRoles {
 		role, exists := registry.GetRole(roleName)
 		assert.True(t, exists, "Role %s should exist", roleName)
@@ -401,15 +425,15 @@ func TestRegisterDefaultPlatformRoles(t *testing.T) {
 
 	// Verify role hierarchy
 	hierarchy := registry.GetRoleHierarchy()
-	assert.Equal(t, "superadmin", hierarchy[0].Name)
-	assert.Equal(t, "owner", hierarchy[1].Name)
-	assert.Equal(t, "admin", hierarchy[2].Name)
-	assert.Equal(t, "member", hierarchy[3].Name)
+	assert.Equal(t, RoleSuperAdmin, hierarchy[0].Name)
+	assert.Equal(t, RoleOwner, hierarchy[1].Name)
+	assert.Equal(t, RoleAdmin, hierarchy[2].Name)
+	assert.Equal(t, RoleMember, hierarchy[3].Name)
 
 	// Verify platform flags
-	superadmin, _ := registry.GetRole("superadmin")
+	superadmin, _ := registry.GetRole(RoleSuperAdmin)
 	assert.True(t, superadmin.IsPlatform)
 
-	owner, _ := registry.GetRole("owner")
+	owner, _ := registry.GetRole(RoleOwner)
 	assert.False(t, owner.IsPlatform)
 }

@@ -49,7 +49,7 @@ func (r *TeamRepository) ListByApp(ctx context.Context, appID xid.ID, limit, off
 	// Get total count
 	total, err := r.db.NewSelect().
 		Model((*schema.Team)(nil)).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count teams: %w", err)
@@ -58,7 +58,7 @@ func (r *TeamRepository) ListByApp(ctx context.Context, appID xid.ID, limit, off
 	// Get paginated results
 	err = r.db.NewSelect().
 		Model(&teams).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Limit(limit).
 		Offset(offset).
 		Order("created_at DESC").
@@ -92,7 +92,7 @@ func (r *TeamRepository) Delete(ctx context.Context, id xid.ID) error {
 func (r *TeamRepository) CountByApp(ctx context.Context, appID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Team)(nil)).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count teams by app: %w", err)

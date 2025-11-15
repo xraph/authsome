@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
@@ -28,8 +29,16 @@ func NewService(repo Repository) *Service {
 
 // Log creates an audit event with timestamps
 func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip, ua, metadata string) error {
+	// Extract AppID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		// Skip audit logging if AppID is not in context
+		return nil
+	}
+
 	e := &Event{
 		ID:        xid.New(),
+		AppID:     appID,
 		UserID:    userID,
 		Action:    action,
 		Resource:  resource,
@@ -50,6 +59,17 @@ func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip,
 
 // Create creates a new audit event from a request
 func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, error) {
+	// Extract AppID from context or use from request
+	appID := req.AppID
+	if appID.IsNil() {
+		// Try to get from context
+		ctxAppID, ok := contexts.GetAppID(ctx)
+		if !ok || ctxAppID.IsNil() {
+			return nil, InvalidFilter("appId", "appId is required in request or context")
+		}
+		appID = ctxAppID
+	}
+
 	// Validate required fields
 	if req.Action == "" {
 		return nil, InvalidFilter("action", "action is required")
@@ -61,6 +81,7 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 	now := time.Now().UTC()
 	event := &Event{
 		ID:        xid.New(),
+		AppID:     appID,
 		UserID:    req.UserID,
 		Action:    req.Action,
 		Resource:  req.Resource,

@@ -3,14 +3,14 @@ package app
 import "github.com/xraph/authsome/core/rbac"
 
 // RegisterAppPermissions registers app-level role definitions with the RBAC registry.
-// This should be called during application bootstrap to set up default app roles.
+// This extends platform roles (owner, admin, member) with app-specific permissions.
 func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
-	// App Owner Role - Full control over the app
+	// Extend Owner Role with app-specific permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:        "app_owner",
-		Description: "App owner with full control over all app resources",
-		Priority:    90,
-		IsPlatform:  false,
+		Name:        rbac.RoleOwner,
+		Description: rbac.RoleDescOwner,
+		Priority:    rbac.RolePriorityOwner,
+		IsPlatform:  rbac.RoleIsPlatformOwner,
 		Permissions: []string{
 			// Full wildcard access to all app resources
 			"* on app:*",
@@ -27,13 +27,13 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 		return err
 	}
 
-	// App Admin Role - Can manage members, teams, and invitations
+	// Extend Admin Role with app-specific permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:         "app_admin",
-		Description:  "App administrator with management capabilities",
-		Priority:     70,
-		IsPlatform:   false,
-		InheritsFrom: "app_member", // Inherits basic member permissions
+		Name:         rbac.RoleAdmin,
+		Description:  rbac.RoleDescAdmin,
+		Priority:     rbac.RolePriorityAdmin,
+		IsPlatform:   rbac.RoleIsPlatformAdmin,
+		InheritsFrom: rbac.RoleMember, // Inherits basic member permissions
 		Permissions: []string{
 			// Member management (except owner operations)
 			"read on member:app/*",
@@ -64,12 +64,12 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 		return err
 	}
 
-	// App Member Role - Basic read access
+	// Extend Member Role with app-specific permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
-		Name:        "app_member",
-		Description: "Regular app member with read-only access",
-		Priority:    50,
-		IsPlatform:  false,
+		Name:        rbac.RoleMember,
+		Description: rbac.RoleDescMember,
+		Priority:    rbac.RolePriorityMember,
+		IsPlatform:  rbac.RoleIsPlatformMember,
 		Permissions: []string{
 			// Read-only access to app resources
 			"read on app:*",

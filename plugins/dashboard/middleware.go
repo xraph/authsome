@@ -7,13 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/forge"
 )
 
 const (
-	csrfCookieName    = "dashboard_csrf_token"
-	sessionCookieName = "authsome_session"
+	csrfCookieName        = "dashboard_csrf_token"
+	sessionCookieName     = "authsome_session"
+	environmentCookieName = "authsome_environment"
 )
 
 // rateLimiter implements a simple in-memory rate limiter
@@ -149,8 +151,11 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 
 			fmt.Printf("[Dashboard] RequireAuth: Session valid, fetching user: %s\n", sess.UserID)
 
+			// Set app context from session for user lookup
+			ctx := contexts.SetAppID(c.Request().Context(), sess.AppID)
+
 			// Get user information
-			user, err := p.userSvc.FindByID(c.Request().Context(), sess.UserID)
+			user, err := p.userSvc.FindByID(ctx, sess.UserID)
 			if err != nil {
 				fmt.Printf("[Dashboard] RequireAuth: Error finding user: %v\n", err)
 				// User not found, clear session and redirect
@@ -182,7 +187,8 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 			fmt.Printf("[Dashboard] RequireAuth: User authenticated: %s (%s)\n", user.Email, user.ID)
 
 			// Store user and session in context ONLY if all checks passed
-			ctx := context.WithValue(c.Request().Context(), "user", user)
+			// Reuse ctx that already has AppID set
+			ctx = context.WithValue(ctx, "user", user)
 			ctx = context.WithValue(ctx, "session", sess)
 			ctx = context.WithValue(ctx, "authenticated", true)
 
@@ -399,14 +405,20 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 			if userVal != nil {
 				userObj, ok := userVal.(*user.User)
 				if ok {
-					// Log dashboard access
-					go func() {
-						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-						defer cancel()
+					// Get AppID from context (set by RequireAuth middleware)
+					appID, hasAppID := contexts.GetAppID(c.Request().Context())
+					if hasAppID {
+						// Log dashboard access
+						go func() {
+							ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+							defer cancel()
 
-						// TODO: Implement proper audit logging once the Log method signature is clarified
-						_ = p.auditSvc.Log(ctx, &userObj.ID, "dashboard.access", c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
-					}()
+							// Set AppID in the background context for the audit log
+							ctx = contexts.SetAppID(ctx, appID)
+
+							_ = p.auditSvc.Log(ctx, &userObj.ID, "dashboard.access", c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
+						}()
+					}
 				}
 			}
 

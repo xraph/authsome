@@ -47,7 +47,7 @@ func (r *MemberRepository) FindByUserAndApp(ctx context.Context, userID, appID x
 	var member schema.Member
 	err := r.db.NewSelect().
 		Model(&member).
-		Where("user_id = ? AND organization_id = ?", userID, appID).
+		Where("user_id = ? AND app_id = ?", userID, appID).
 		Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -63,7 +63,7 @@ func (r *MemberRepository) ListByApp(ctx context.Context, appID xid.ID, role *sc
 	var members []*schema.Member
 
 	// Build query
-	query := r.db.NewSelect().Model(&members).Where("organization_id = ?", appID)
+	query := r.db.NewSelect().Model(&members).Where("app_id = ?", appID)
 	if role != nil {
 		query = query.Where("role = ?", *role)
 	}
@@ -72,7 +72,7 @@ func (r *MemberRepository) ListByApp(ctx context.Context, appID xid.ID, role *sc
 	}
 
 	// Get total count
-	countQuery := r.db.NewSelect().Model((*schema.Member)(nil)).Where("organization_id = ?", appID)
+	countQuery := r.db.NewSelect().Model((*schema.Member)(nil)).Where("app_id = ?", appID)
 	if role != nil {
 		countQuery = countQuery.Where("role = ?", *role)
 	}
@@ -141,7 +141,7 @@ func (r *MemberRepository) DeleteByUserID(ctx context.Context, userID xid.ID) er
 func (r *MemberRepository) CountByApp(ctx context.Context, appID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Member)(nil)).
-		Where("organization_id = ?", appID).
+		Where("app_id = ?", appID).
 		Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count members by app: %w", err)

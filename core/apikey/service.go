@@ -103,7 +103,6 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 
 	// Create API key schema
 	apiKey := &schema.APIKey{
-		ID:             xid.New(),
 		AppID:          req.AppID,
 		EnvironmentID:  req.EnvironmentID,
 		OrganizationID: req.OrgID,
@@ -119,8 +118,11 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 		Active:         true,
 		ExpiresAt:      expiresAt,
 		Metadata:       req.Metadata,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		AuditableModel: schema.AuditableModel{
+			ID:        xid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 	}
 
 	if err := s.repo.CreateAPIKey(ctx, apiKey); err != nil {

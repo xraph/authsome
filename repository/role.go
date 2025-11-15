@@ -32,8 +32,22 @@ func (r *RoleRepository) ListByOrg(ctx context.Context, orgID *string) ([]schema
 	var rows []schema.Role
 	q := r.db.NewSelect().Model(&rows)
 	if orgID != nil {
-		q = q.Where("organization_id = ?", *orgID)
+		q = q.Where("app_id = ?", *orgID)
 	}
 	err := q.Scan(ctx)
 	return rows, err
+}
+
+// FindByNameAndApp finds a role by name within an app
+func (r *RoleRepository) FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*schema.Role, error) {
+	var role schema.Role
+	err := r.db.NewSelect().
+		Model(&role).
+		Where("name = ?", name).
+		Where("app_id = ?", appID).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &role, nil
 }

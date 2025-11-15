@@ -232,9 +232,15 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.repo.App(),
 		a.repo.App(),
 		a.repo.App(),
+		a.repo.Role(),     // NEW: Role repository for RBAC
+		a.repo.UserRole(), // NEW: UserRole repository for RBAC
 		app.Config{},
 		a.rbacService,
 	)
+
+	if err := app.RegisterAppPermissions(a.serviceRegistry.RoleRegistry()); err != nil {
+		return errs.InternalServerError("failed to register app permissions", err)
+	}
 
 	// Set hook registry on app service for app creation hooks
 	a.appService.App.SetHookRegistry(a.hookRegistry)

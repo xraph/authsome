@@ -3,6 +3,7 @@ package components
 import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/user"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -10,20 +11,23 @@ import (
 
 // PageData represents common data for all pages
 type PageData struct {
-	Title           string
-	User            *user.User
-	CSRFToken       string
-	ActivePage      string
-	BasePath        string
-	Data            interface{}
-	Error           string
-	Success         string
-	Year            int
-	EnabledPlugins  map[string]bool
-	IsSaaSMode      bool      // Whether multitenancy is enabled (deprecated - use ShowAppSwitcher)
-	CurrentApp      *app.App  // Current app in context
-	UserApps        []*app.App // Apps user has access to
-	ShowAppSwitcher bool       // Whether to show app switcher in header
+	Title              string
+	User               *user.User
+	CSRFToken          string
+	ActivePage         string
+	BasePath           string
+	Data               interface{}
+	Error              string
+	Success            string
+	Year               int
+	EnabledPlugins     map[string]bool
+	IsMultiApp         bool                       // Whether multitenancy is enabled (deprecated - use ShowAppSwitcher)
+	CurrentApp         *app.App                   // Current app in context
+	UserApps           []*app.App                 // Apps user has access to
+	ShowAppSwitcher    bool                       // Whether to show app switcher in header
+	CurrentEnvironment *environment.Environment   // Current environment in context
+	UserEnvironments   []*environment.Environment // Environments for current app
+	ShowEnvSwitcher    bool                       // Whether to show environment switcher in header
 }
 
 // BaseLayout renders the main HTML structure
@@ -89,7 +93,7 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 
 						// Page Section
 						Div(
-							Class("container mx-auto p-4 lg:p-8 xl:max-w-7xl"),
+							Class("container mx-auto p-4 lg:p-8"),
 
 							// Flash Messages
 							flashMessages(data),
@@ -232,7 +236,7 @@ func pageHeading(data PageData) g.Node {
 		Class("mx-auto w-full space-y-2"),
 		Div(
 			Div(
-				Class("container mx-auto px-4 py-6 lg:px-8 lg:py-8 xl:max-w-7xl"),
+				Class("container mx-auto px-4 py-4 lg:px-8 lg:py-8"),
 				Div(
 					Class("flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start"),
 					Div(
@@ -246,7 +250,7 @@ func pageHeading(data PageData) g.Node {
 				),
 			),
 		),
-		Hr(Class("mt-6 border-slate-200 dark:border-gray-800 lg:mt-8")),
+		Hr(Class("mt-1 border-slate-200 dark:border-gray-800 lg:mt-8")),
 	)
 }
 

@@ -11,10 +11,8 @@ import (
 // APIKey represents an API key for programmatic access
 // Updated for V2 architecture: App → Environment → Organization
 type APIKey struct {
+	AuditableModel
 	bun.BaseModel `bun:"table:api_keys"`
-
-	// Primary key
-	ID xid.ID `bun:"id,pk" json:"id"`
 
 	// 3-tier context (V2 architecture)
 	AppID          xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appID"`                     // Platform tenant
@@ -43,11 +41,6 @@ type APIKey struct {
 	LastUsedAt *time.Time `bun:"last_used_at" json:"last_used_at,omitempty"`
 	LastUsedIP string     `bun:"last_used_ip" json:"last_used_ip,omitempty"`
 	LastUsedUA string     `bun:"last_used_ua" json:"last_used_ua,omitempty"`
-
-	// Audit fields
-	CreatedAt time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt *time.Time `bun:"deleted_at,soft_delete" json:"deleted_at,omitempty"`
 
 	// Metadata
 	Metadata map[string]string `bun:"metadata,type:jsonb" json:"metadata,omitempty"`

@@ -31,7 +31,7 @@ func (r *UserRoleRepository) ListRolesForUser(ctx context.Context, userID xid.ID
 		Join("JOIN user_roles AS ur ON ur.role_id = r.id").
 		Where("ur.user_id = ?", userID)
 	if orgID != nil && !orgID.IsNil() {
-		q = q.Where("ur.organization_id = ?", *orgID)
+		q = q.Where("ur.app_id = ?", *orgID)
 	}
 	err := q.Scan(ctx)
 	return roles, err
@@ -42,7 +42,7 @@ func (r *UserRoleRepository) Unassign(ctx context.Context, userID, roleID, orgID
 	_, err := r.db.NewDelete().Model((*schema.UserRole)(nil)).
 		Where("user_id = ?", userID).
 		Where("role_id = ?", roleID).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", orgID).
 		Exec(ctx)
 	return err
 }

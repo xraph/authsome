@@ -47,7 +47,6 @@ func (k *JWTKey) ToSchema() *schema.JWTKey {
 	}
 
 	return &schema.JWTKey{
-		ID:            k.ID,
 		AppID:         k.AppID,
 		IsPlatformKey: k.IsPlatformKey,
 		KeyID:         k.KeyID,
@@ -61,9 +60,12 @@ func (k *JWTKey) ToSchema() *schema.JWTKey {
 		LastUsedAt:    k.LastUsedAt,
 		ExpiresAt:     k.ExpiresAt,
 		Metadata:      metadata,
-		CreatedAt:     k.CreatedAt,
-		UpdatedAt:     k.UpdatedAt,
-		DeletedAt:     k.DeletedAt,
+		AuditableModel: schema.AuditableModel{
+			ID:        k.ID,
+			CreatedAt: k.CreatedAt,
+			UpdatedAt: k.UpdatedAt,
+			DeletedAt: k.DeletedAt,
+		},
 	}
 }
 

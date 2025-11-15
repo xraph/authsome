@@ -15,17 +15,17 @@ import (
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/hooks"
-	"github.com/xraph/authsome/core/interfaces"
 	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/authsome/plugins/dashboard/components/pages"
-	mtorg "github.com/xraph/authsome/plugins/multitenancy/organization"
-	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
 )
@@ -39,10 +39,10 @@ type Handler struct {
 	rbacSvc        *rbac.Service
 	apikeyService  *apikey.Service
 	appService     app.Service
-	orgService     organization.OrganizationService
-	mtOrgService   *mtorg.Service // Multitenancy organization service
+	orgService     *organization.Service
+	envService     environment.EnvironmentService
 	db             *bun.DB
-	isSaaSMode     bool
+	isMultiApp     bool
 	basePath       string
 	enabledPlugins map[string]bool
 	hookRegistry   *hooks.HookRegistry // For executing lifecycle hooks
@@ -57,9 +57,10 @@ func NewHandler(
 	auditSvc *audit.Service,
 	rbacSvc *rbac.Service,
 	apikeyService *apikey.Service,
-	orgService organization.OrganizationService,
+	orgService *organization.Service,
+	envService environment.EnvironmentService,
 	db *bun.DB,
-	isSaaSMode bool,
+	isMultiApp bool,
 	basePath string,
 	enabledPlugins map[string]bool,
 	hookRegistry *hooks.HookRegistry,
@@ -73,21 +74,15 @@ func NewHandler(
 		rbacSvc:        rbacSvc,
 		apikeyService:  apikeyService,
 		orgService:     orgService,
+		envService:     envService,
 		db:             db,
-		isSaaSMode:     isSaaSMode,
+		isMultiApp:     isMultiApp,
 		basePath:       basePath,
 		enabledPlugins: enabledPlugins,
 		hookRegistry:   hookRegistry,
 	}
 
-	// Try to get multitenancy organization service if available
-	// This will be set by the plugin during initialization
 	return h
-}
-
-// SetMultitenancyOrgService sets the multitenancy organization service
-func (h *Handler) SetMultitenancyOrgService(svc *mtorg.Service) {
-	h.mtOrgService = svc
 }
 
 // extractAndInjectAppID extracts appId from URL param and injects it into request context
@@ -122,14 +117,71 @@ func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.
 		}
 	}
 
-	// Inject appId into context
-	ctx = interfaces.SetAppID(ctx, appID)
+	// Inject app ID into context for downstream services
+	ctx = contexts.SetAppID(ctx, appID)
 
-	// Update the request context
-	r := c.Request().WithContext(ctx)
-	*c.Request() = *r
+	// Extract and inject environment ID
+	ctx, env, err := h.extractAndInjectEnvironmentID(c, ctx, appID)
+	if err != nil {
+		// If environment extraction fails, log but don't fail the request
+		// This allows the dashboard to work even if environments aren't set up yet
+		fmt.Printf("[Dashboard] Warning: Could not extract environment: %v\n", err)
+	}
+	_ = env // Environment is stored in context, no need to return it here
 
 	return ctx, appEntity, nil
+}
+
+// extractAndInjectEnvironmentID extracts environment from cookie or gets default, then injects into context
+func (h *Handler) extractAndInjectEnvironmentID(c forge.Context, ctx context.Context, appID xid.ID) (context.Context, *environment.Environment, error) {
+	// Try to get environment from cookie first
+	env, err := h.getEnvironmentFromCookie(c, appID)
+	if err != nil {
+		// No cookie or invalid cookie, get default environment for app
+		env, err = h.envService.GetDefaultEnvironment(ctx, appID)
+		if err != nil {
+			return ctx, nil, fmt.Errorf("failed to get default environment: %w", err)
+		}
+
+		// Set cookie with default environment
+		h.setEnvironmentCookie(c, env.ID)
+	}
+
+	// Inject environment ID into context
+	ctx = contexts.SetEnvironmentID(ctx, env.ID)
+
+	return ctx, env, nil
+}
+
+// getUserRoleForApp gets the user's RBAC role for a specific app from the user_roles table
+func (h *Handler) getUserRoleForApp(ctx context.Context, userID, appID xid.ID) string {
+	// Query user_roles table with role relation to get the role name
+	var userRoles []struct {
+		UserID   xid.ID `bun:"user_id"`
+		AppID    xid.ID `bun:"app_id"`
+		RoleID   xid.ID `bun:"role_id"`
+		RoleName string `bun:"role__name"`
+	}
+
+	err := h.db.NewSelect().
+		TableExpr("user_roles").
+		ColumnExpr("user_roles.user_id").
+		ColumnExpr("user_roles.app_id").
+		ColumnExpr("user_roles.role_id").
+		ColumnExpr("roles.name AS role__name").
+		Join("LEFT JOIN roles ON roles.id = user_roles.role_id").
+		Where("user_roles.user_id = ?", userID).
+		Where("user_roles.app_id = ?", appID).
+		Where("user_roles.deleted_at IS NULL").
+		Limit(1).
+		Scan(ctx, &userRoles)
+
+	if err != nil || len(userRoles) == 0 {
+		// If no role found in user_roles, return "member" as default
+		return "member"
+	}
+
+	return userRoles[0].RoleName
 }
 
 // getUserApps gets all apps the user belongs to (for app switcher)
@@ -140,12 +192,17 @@ func (h *Handler) getUserApps(ctx context.Context, userID xid.ID) ([]*app.App, e
 		return nil, err
 	}
 
-	// Get app details for each membership
-	apps := make([]*app.App, 0, len(memberships))
+	// Get app details for each membership, de-duplicating by app ID
+	seenApps := make(map[xid.ID]bool)
+	apps := make([]*app.App, 0)
 	for _, membership := range memberships {
+		if seenApps[membership.AppID] {
+			continue // Skip duplicate
+		}
 		appEntity, err := h.appService.FindAppByID(ctx, membership.AppID)
 		if err == nil {
 			apps = append(apps, appEntity)
+			seenApps[membership.AppID] = true
 		}
 	}
 
@@ -162,7 +219,7 @@ func (h *Handler) ServeAppsList(c forge.Context) error {
 	ctx := c.Request().Context()
 
 	// Check if multiapp mode is enabled
-	if !h.isSaaSMode {
+	if !h.isMultiApp {
 		// Standalone mode - redirect to default app
 		return h.redirectToDefaultApp(c, ctx)
 	}
@@ -192,28 +249,39 @@ func (h *Handler) renderAppCards(c forge.Context, ctx context.Context, currentUs
 		return h.renderError(c, "Failed to load your apps", err)
 	}
 
-	// Convert to app card data
-	appCards := make([]*pages.AppCardData, 0, len(memberships))
+	// Deduplicate apps by app ID
+	seenApps := make(map[xid.ID]bool)
+	appCards := make([]*pages.AppCardData, 0)
+
 	for _, membership := range memberships {
+		// Skip if we've already processed this app
+		if seenApps[membership.AppID] {
+			continue
+		}
+		seenApps[membership.AppID] = true
+
 		// Get the app details
-		app, err := h.appService.FindAppByID(ctx, membership.AppID)
+		appEntity, err := h.appService.FindAppByID(ctx, membership.AppID)
 		if err != nil {
 			// Skip apps we can't load
 			continue
 		}
 
 		// Get member count for this app
-		memberCount, _ := h.appService.CountMembers(ctx, app.ID)
+		memberCount, _ := h.appService.CountMembers(ctx, appEntity.ID)
+
+		// Get the user's actual RBAC role for this app from user_roles table
+		role := h.getUserRoleForApp(ctx, currentUser.ID, appEntity.ID)
 
 		appCards = append(appCards, &pages.AppCardData{
-			App:         app,
-			Role:        membership.Role,
+			App:         appEntity,
+			Role:        role,
 			MemberCount: memberCount,
 		})
 	}
 
 	// Check if user can create apps (for now, always show if multiapp enabled)
-	canCreateApps := h.isSaaSMode
+	canCreateApps := h.isMultiApp
 
 	pageData := components.PageData{
 		Title:           "Your Apps",
@@ -269,6 +337,9 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		userApps = []*app.App{} // Fallback to empty if failed
 	}
 
+	// Get environment data for PageData
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
+
 	// Get dashboard stats (now app-scoped via context)
 	stats, err := h.getDashboardStats(ctx)
 	if err != nil {
@@ -276,15 +347,18 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 	}
 
 	pageData := components.PageData{
-		Title:           "Dashboard",
-		ActivePage:      "dashboard",
-		User:            user,
-		CSRFToken:       h.getCSRFToken(c),
-		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
-		CurrentApp:      currentApp,
-		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		Title:              "Dashboard",
+		ActivePage:         "dashboard",
+		User:               user,
+		CSRFToken:          h.getCSRFToken(c),
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
 	}
 
 	// Convert to pages.DashboardStats
@@ -302,7 +376,7 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		Plugins:        convertPluginItems(stats.Plugins),
 	}
 
-	content := pages.DashboardPage(pageStats, h.basePath)
+	content := pages.DashboardPage(pageStats, h.basePath, currentApp.ID.String())
 	return h.renderWithLayout(c, pageData, content)
 }
 
@@ -380,42 +454,46 @@ func (h *Handler) ServeUsers(c forge.Context) error {
 	// Parse search query
 	query := c.Query("q")
 
-	// List or search users (app-scoped via context)
-	var users []*user.User
-	var total int
-	err = nil
-
-	if query != "" {
-		// Search users
-		users, total, err = h.userSvc.Search(c.Request().Context(), query, types.PaginationOptions{
-			Page:     page,
-			PageSize: pageSize,
-		})
-	} else {
-		// List all users
-		users, total, err = h.userSvc.List(c.Request().Context(), types.PaginationOptions{
-			Page:     page,
-			PageSize: pageSize,
-		})
+	// Build filter for listing users
+	filter := &user.ListUsersFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  page,
+			Limit: pageSize,
+		},
+		AppID: currentApp.ID,
 	}
 
+	// Add search filter if query provided
+	if query != "" {
+		filter.Search = &query
+	}
+
+	// Fetch users
+	response, err := h.userSvc.ListUsers(ctx, filter)
 	if err != nil {
 		return h.renderError(c, "Failed to load users", err)
 	}
 
-	// Calculate pagination info
-	totalPages := (total + pageSize - 1) / pageSize
+	users := response.Data
+	total := int(response.Pagination.Total)
+	totalPages := response.Pagination.TotalPages
+
+	// Get environment data for PageData
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
 
 	pageData := components.PageData{
-		Title:           "Users",
-		User:            currentUser,
-		CSRFToken:       h.getCSRFToken(c),
-		ActivePage:      "users",
-		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
-		CurrentApp:      currentApp,
-		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		Title:              "Users",
+		User:               currentUser,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "users",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
 	}
 
 	usersData := pages.UsersData{
@@ -467,11 +545,18 @@ func (h *Handler) ServeUserDetail(c forge.Context) error {
 	}
 
 	// Get active sessions for this user (limit to 10 for detail view)
-	allSessions, err := h.sessionSvc.ListByUser(c.Request().Context(), userID, 10, 0)
-	if err != nil {
-		// Log error but don't fail the page
-		// Just show empty sessions
-		allSessions = []*session.Session{}
+	sessionFilter := &session.ListSessionsFilter{
+		AppID:  currentApp.ID,
+		UserID: &userID,
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 10,
+		},
+	}
+	sessionResponse, err := h.sessionSvc.ListSessions(ctx, sessionFilter)
+	allSessions := []*session.Session{}
+	if err == nil && sessionResponse != nil {
+		allSessions = sessionResponse.Data
 	}
 
 	// Convert sessions to page data format
@@ -487,16 +572,22 @@ func (h *Handler) ServeUserDetail(c forge.Context) error {
 		})
 	}
 
+	// Get environment data for PageData
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
+
 	pageData := components.PageData{
-		Title:           fmt.Sprintf("User: %s", targetUser.Email),
-		User:            user,
-		CSRFToken:       h.getCSRFToken(c),
-		ActivePage:      "users",
-		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
-		CurrentApp:      currentApp,
-		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		Title:              fmt.Sprintf("User: %s", targetUser.Email),
+		User:               user,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "users",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
 	}
 
 	detailData := pages.UserDetailPageData{
@@ -545,7 +636,7 @@ func (h *Handler) ServeUserEdit(c forge.Context) error {
 	}
 
 	// Fetch user details
-	targetUser, err := h.userSvc.FindByID(c.Request().Context(), id)
+	targetUser, err := h.userSvc.FindByID(ctx, id)
 	if err != nil {
 		return c.String(http.StatusNotFound, "User not found")
 	}
@@ -556,10 +647,10 @@ func (h *Handler) ServeUserEdit(c forge.Context) error {
 		CSRFToken:       h.getCSRFToken(c),
 		ActivePage:      "users",
 		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
+		IsMultiApp:      h.isMultiApp,
 		CurrentApp:      currentApp,
 		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		ShowAppSwitcher: len(userApps) > 0,
 	}
 
 	editData := pages.UserEditPageData{
@@ -585,6 +676,12 @@ func (h *Handler) HandleUserEdit(c forge.Context) error {
 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
 	}
 
+	// Extract and inject app ID from URL
+	ctx, _, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
 	// Get user ID from path
 	userID := c.Param("id")
 	id, err := xid.FromString(userID)
@@ -593,7 +690,7 @@ func (h *Handler) HandleUserEdit(c forge.Context) error {
 	}
 
 	// Fetch user details
-	targetUser, err := h.userSvc.FindByID(c.Request().Context(), id)
+	targetUser, err := h.userSvc.FindByID(ctx, id)
 	if err != nil {
 		return c.String(http.StatusNotFound, "User not found")
 	}
@@ -624,7 +721,7 @@ func (h *Handler) HandleUserEdit(c forge.Context) error {
 		updateReq.Username = &username
 	}
 
-	updatedUser, err := h.userSvc.Update(c.Request().Context(), targetUser, updateReq)
+	updatedUser, err := h.userSvc.Update(ctx, targetUser, updateReq)
 	if err != nil {
 		fmt.Printf("[Dashboard] Failed to update user: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to update user")
@@ -643,6 +740,12 @@ func (h *Handler) HandleUserDelete(c forge.Context) error {
 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
 	}
 
+	// Extract and inject app ID from URL
+	ctx, _, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
 	// Get user ID from path
 	userID := c.Param("id")
 	id, err := xid.FromString(userID)
@@ -656,7 +759,7 @@ func (h *Handler) HandleUserDelete(c forge.Context) error {
 	}
 
 	// Delete user
-	if err := h.userSvc.Delete(c.Request().Context(), id); err != nil {
+	if err := h.userSvc.Delete(ctx, id); err != nil {
 		fmt.Printf("[Dashboard] Failed to delete user: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to delete user")
 	}
@@ -689,11 +792,20 @@ func (h *Handler) ServeSessions(c forge.Context) error {
 	// Parse search query
 	query := c.Query("q")
 
-	// Fetch all active sessions
-	allSessions, err := h.sessionSvc.ListAll(c.Request().Context(), 1000, 0)
-	if err != nil {
+	// Fetch all active sessions for current app
+	sessionFilter := &session.ListSessionsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 1000,
+		},
+		AppID: currentApp.ID,
+	}
+	sessionResponse, err := h.sessionSvc.ListSessions(ctx, sessionFilter)
+	allSessions := []*session.Session{}
+	if err == nil && sessionResponse != nil {
+		allSessions = sessionResponse.Data
+	} else if err != nil {
 		fmt.Printf("[Dashboard] Failed to list sessions: %v\n", err)
-		allSessions = []*session.Session{} // Show empty state on error
 	}
 
 	// Filter sessions if search query provided
@@ -711,16 +823,22 @@ func (h *Handler) ServeSessions(c forge.Context) error {
 		sessions = allSessions
 	}
 
+	// Get environment data for PageData
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
+
 	pageData := components.PageData{
-		Title:           "Sessions",
-		User:            currentUser,
-		CSRFToken:       h.getCSRFToken(c),
-		ActivePage:      "sessions",
-		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
-		CurrentApp:      currentApp,
-		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		Title:              "Sessions",
+		User:               currentUser,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "sessions",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
 	}
 
 	// Convert sessions to page data format
@@ -760,6 +878,12 @@ func (h *Handler) HandleRevokeSession(c forge.Context) error {
 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
 	}
 
+	// Extract and inject app ID from URL
+	ctx, _, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
 	// Get session ID from path
 	sessionID := c.Param("id")
 	id, err := xid.FromString(sessionID)
@@ -768,7 +892,7 @@ func (h *Handler) HandleRevokeSession(c forge.Context) error {
 	}
 
 	// Revoke session
-	if err := h.sessionSvc.RevokeByID(c.Request().Context(), id); err != nil {
+	if err := h.sessionSvc.RevokeByID(ctx, id); err != nil {
 		fmt.Printf("[Dashboard] Failed to revoke session: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to revoke session")
 	}
@@ -777,6 +901,482 @@ func (h *Handler) HandleRevokeSession(c forge.Context) error {
 
 	// Redirect back to sessions list with success message
 	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/sessions?success=revoked")
+}
+
+// HandleEnvironmentSwitch switches the current environment
+func (h *Handler) HandleEnvironmentSwitch(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	// Get target environment ID from form
+	envIDStr := c.FormValue("env_id")
+	if envIDStr == "" {
+		return c.String(http.StatusBadRequest, "Environment ID is required")
+	}
+
+	envID, err := xid.FromString(envIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid environment ID")
+	}
+
+	// Verify environment exists and belongs to current app
+	env, err := h.envService.GetEnvironment(ctx, envID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Environment not found")
+	}
+
+	if env.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Environment does not belong to current app")
+	}
+
+	// Set environment cookie
+	h.setEnvironmentCookie(c, envID)
+
+	// Get referrer or redirect to dashboard
+	referer := c.Request().Header.Get("Referer")
+	if referer == "" {
+		referer = h.basePath + "/dashboard/app/" + currentApp.ID.String() + "/"
+	}
+
+	return c.Redirect(http.StatusFound, referer)
+}
+
+// ServeEnvironments renders the environments list page
+func (h *Handler) ServeEnvironments(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get all user apps for the switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load apps", err)
+	}
+
+	// Get all environments for current app
+	environments, err := h.getUserEnvironments(ctx, currentApp.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load environments", err)
+	}
+
+	// Get current environment (from context)
+	currentEnv, _ := h.getEnvironmentFromCookie(c, currentApp.ID)
+	if currentEnv == nil {
+		// Try to get default
+		currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, currentApp.ID)
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:              "Environments - Dashboard",
+		User:               user,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "environments",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
+	}
+
+	// Prepare environments data
+	envsData := pages.EnvironmentsData{
+		Environments: environments,
+		Pagination:   nil, // TODO: Add pagination if needed
+	}
+
+	// Render page
+	content := pages.EnvironmentsPage(envsData, h.basePath, appIDStr)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeEnvironmentDetail renders the environment detail page
+func (h *Handler) ServeEnvironmentDetail(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get environment ID from URL
+	envIDStr := c.Param("envId")
+	envID, err := xid.FromString(envIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid environment ID")
+	}
+
+	// Get the environment
+	env, err := h.envService.GetEnvironment(ctx, envID)
+	if err != nil {
+		return h.renderError(c, "Environment not found", err)
+	}
+
+	// Verify environment belongs to current app
+	if env.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Environment does not belong to current app")
+	}
+
+	// Get all user apps for the switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load apps", err)
+	}
+
+	// Get all environments for current app
+	environments, err := h.getUserEnvironments(ctx, currentApp.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load environments", err)
+	}
+
+	// Get current environment (from context)
+	currentEnv, _ := h.getEnvironmentFromCookie(c, currentApp.ID)
+	if currentEnv == nil {
+		// Try to get default
+		currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, currentApp.ID)
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:              env.Name + " - Environments - Dashboard",
+		User:               user,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "environments",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
+	}
+
+	// Prepare environment detail data
+	envData := pages.EnvironmentDetailData{
+		Environment: env,
+	}
+
+	// Render page
+	content := pages.EnvironmentDetailPage(envData, h.basePath, appIDStr)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeEnvironmentCreate renders the create environment page
+func (h *Handler) ServeEnvironmentCreate(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get all user apps for the switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load apps", err)
+	}
+
+	// Get all environments for current app
+	environments, err := h.getUserEnvironments(ctx, currentApp.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load environments", err)
+	}
+
+	// Get current environment (from context)
+	currentEnv, _ := h.getEnvironmentFromCookie(c, currentApp.ID)
+	if currentEnv == nil {
+		// Try to get default
+		currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, currentApp.ID)
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:              "Create Environment - Dashboard",
+		User:               user,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "environments",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
+	}
+
+	// Render page
+	content := pages.EnvironmentCreatePage(h.basePath, appIDStr, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleEnvironmentCreate processes environment creation
+func (h *Handler) HandleEnvironmentCreate(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Parse form
+	name := c.FormValue("name")
+	slug := c.FormValue("slug")
+	envType := c.FormValue("type")
+	// isDefault := c.FormValue("is_default") == "true"
+
+	// Validate required fields
+	if name == "" || slug == "" || envType == "" {
+		return c.String(http.StatusBadRequest, "Name, slug, and type are required")
+	}
+
+	// Create environment request
+	req := &environment.CreateEnvironmentRequest{
+		AppID: currentApp.ID,
+		Name:  name,
+		Slug:  slug,
+		Type:  envType,
+		// IsDefault: isDefault,
+	}
+
+	// Create environment
+	env, err := h.envService.CreateEnvironment(ctx, req)
+	if err != nil {
+		return h.renderError(c, "Failed to create environment", err)
+	}
+
+	// Redirect to environment detail
+	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/app/"+appIDStr+"/environments/"+env.ID.String())
+}
+
+// ServeEnvironmentEdit renders the edit environment page
+func (h *Handler) ServeEnvironmentEdit(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get environment ID from URL
+	envIDStr := c.Param("envId")
+	envID, err := xid.FromString(envIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid environment ID")
+	}
+
+	// Get the environment
+	env, err := h.envService.GetEnvironment(ctx, envID)
+	if err != nil {
+		return h.renderError(c, "Environment not found", err)
+	}
+
+	// Verify environment belongs to current app
+	if env.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Environment does not belong to current app")
+	}
+
+	// Get all user apps for the switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load apps", err)
+	}
+
+	// Get all environments for current app
+	environments, err := h.getUserEnvironments(ctx, currentApp.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to load environments", err)
+	}
+
+	// Get current environment (from context)
+	currentEnv, _ := h.getEnvironmentFromCookie(c, currentApp.ID)
+	if currentEnv == nil {
+		// Try to get default
+		currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, currentApp.ID)
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:              "Edit " + env.Name + " - Dashboard",
+		User:               user,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "environments",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
+	}
+
+	// Prepare environment edit data
+	envData := pages.EnvironmentEditData{
+		Environment: env,
+	}
+
+	// Render page
+	content := pages.EnvironmentEditPage(envData, h.basePath, appIDStr, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleEnvironmentEdit processes environment update
+func (h *Handler) HandleEnvironmentEdit(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get environment ID from URL
+	envIDStr := c.Param("envId")
+	envID, err := xid.FromString(envIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid environment ID")
+	}
+
+	// Get the environment
+	env, err := h.envService.GetEnvironment(ctx, envID)
+	if err != nil {
+		return h.renderError(c, "Environment not found", err)
+	}
+
+	// Verify environment belongs to current app
+	if env.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Environment does not belong to current app")
+	}
+
+	// Parse form
+	name := c.FormValue("name")
+	slug := c.FormValue("slug")
+	envType := c.FormValue("type")
+
+	// Validate required fields
+	if name == "" || slug == "" || envType == "" {
+		return c.String(http.StatusBadRequest, "Name, slug, and type are required")
+	}
+
+	// Update environment request
+	req := &environment.UpdateEnvironmentRequest{
+		Name: &name,
+		// Slug: slug,
+		Type: &envType,
+	}
+
+	// Update environment
+	updatedEnv, err := h.envService.UpdateEnvironment(ctx, envID, req)
+	if err != nil {
+		return h.renderError(c, "Failed to update environment", err)
+	}
+
+	// Redirect to environment detail
+	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/app/"+appIDStr+"/environments/"+updatedEnv.ID.String())
+}
+
+// HandleEnvironmentDelete processes environment deletion
+func (h *Handler) HandleEnvironmentDelete(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get environment ID from URL
+	envIDStr := c.Param("envId")
+	envID, err := xid.FromString(envIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid environment ID")
+	}
+
+	// Get the environment
+	env, err := h.envService.GetEnvironment(ctx, envID)
+	if err != nil {
+		return h.renderError(c, "Environment not found", err)
+	}
+
+	// Verify environment belongs to current app
+	if env.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Environment does not belong to current app")
+	}
+
+	// Check if it's the default environment
+	if env.IsDefault {
+		return c.String(http.StatusForbidden, "Cannot delete the default environment")
+	}
+
+	// Delete environment
+	if err := h.envService.DeleteEnvironment(ctx, envID); err != nil {
+		return h.renderError(c, "Failed to delete environment", err)
+	}
+
+	// Clear cookie if this was the selected environment
+	currentEnvCookie, _ := h.getEnvironmentFromCookie(c, currentApp.ID)
+	if currentEnvCookie != nil && currentEnvCookie.ID == envID {
+		h.clearEnvironmentCookie(c)
+	}
+
+	// Redirect to environments list
+	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/app/"+appIDStr+"/environments")
 }
 
 // Serve404 serves the 404 page
@@ -812,16 +1412,22 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 		activeTab = "general"
 	}
 
+	// Get environment data for PageData
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
+
 	pageData := components.PageData{
-		Title:           "Settings",
-		User:            currentUser,
-		CSRFToken:       h.getCSRFToken(c),
-		ActivePage:      "settings",
-		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
-		CurrentApp:      currentApp,
-		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		Title:              "Settings",
+		User:               currentUser,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "settings",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
 	}
 
 	// Populate settings data
@@ -835,13 +1441,13 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 	apiKeysData := pages.APIKeysTabPageData{
 		APIKeys:       []pages.APIKeyData{}, // TODO: Fetch from h.apikeyService
 		Organizations: []pages.OrganizationOption{},
-		IsSaaSMode:    h.isSaaSMode,
+		IsSaaSMode:    h.isMultiApp,
 		CanCreateKeys: true,
 		CSRFToken:     h.getCSRFToken(c),
 	}
 
 	// If SaaS mode, fetch user's organizations
-	if h.isSaaSMode && h.orgService != nil {
+	if h.isMultiApp && h.orgService != nil {
 		// TODO: Fetch user's organizations and populate apiKeysData.Organizations
 	}
 
@@ -859,7 +1465,7 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 		SocialProviders:       []pages.SocialProvider{},       // TODO: Load from social auth service
 		ImpersonationLogs:     []pages.ImpersonationLog{},     // TODO: Load from impersonation service
 		MFAMethods:            []pages.MFAMethod{},            // TODO: Load from MFA service
-		IsSaaSMode:            h.isSaaSMode,
+		IsSaaSMode:            h.isMultiApp,
 		BasePath:              h.basePath,
 		CSRFToken:             h.getCSRFToken(c),
 		EnabledPlugins:        h.enabledPlugins,
@@ -912,16 +1518,22 @@ func (h *Handler) ServePlugins(c forge.Context) error {
 		}
 	}
 
+	// Get environment data for PageData
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
+
 	pageData := components.PageData{
-		Title:           "Plugins",
-		User:            currentUser,
-		CSRFToken:       h.getCSRFToken(c),
-		ActivePage:      "plugins",
-		BasePath:        h.basePath,
-		IsSaaSMode:      h.isSaaSMode,
-		CurrentApp:      currentApp,
-		UserApps:        userApps,
-		ShowAppSwitcher: len(userApps) > 1,
+		Title:              "Plugins",
+		User:               currentUser,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "plugins",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
 	}
 
 	pluginsPageData := pages.PluginsPageData{
@@ -943,6 +1555,12 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
 	}
 
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
 	// Get user ID from form
 	userIDStr := c.Request().FormValue("user_id")
 	if userIDStr == "" {
@@ -954,9 +1572,20 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 		return c.String(http.StatusBadRequest, "Invalid user ID")
 	}
 
-	// Get all sessions for this user
-	sessions, err := h.sessionSvc.ListByUser(c.Request().Context(), userID, 1000, 0)
-	if err != nil {
+	// Get all sessions for this user in current app
+	sessionFilter := &session.ListSessionsFilter{
+		AppID:  currentApp.ID,
+		UserID: &userID,
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 1000,
+		},
+	}
+	sessionResponse, err := h.sessionSvc.ListSessions(ctx, sessionFilter)
+	sessions := []*session.Session{}
+	if err == nil && sessionResponse != nil {
+		sessions = sessionResponse.Data
+	} else if err != nil {
 		fmt.Printf("[Dashboard] Failed to list user sessions: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to list user sessions")
 	}
@@ -964,7 +1593,7 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 	// Revoke each session
 	revokedCount := 0
 	for _, sess := range sessions {
-		if err := h.sessionSvc.RevokeByID(c.Request().Context(), sess.ID); err != nil {
+		if err := h.sessionSvc.RevokeByID(ctx, sess.ID); err != nil {
 			fmt.Printf("[Dashboard] Failed to revoke session %s: %v\n", sess.ID, err)
 			continue
 		}
@@ -1062,18 +1691,21 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 		return h.renderLoginError(c, "Email and password are required", redirect)
 	}
 
-	// Require app context and find user by email
+	// Get platform app to use as context
 	ctx := c.Request().Context()
-	appID, appErr := interfaces.GetAppID(ctx)
-	if appErr != nil {
-		return h.renderLoginError(c, "App context required", redirect)
+	platformApp, err := h.appService.GetPlatformApp(ctx)
+	if err != nil {
+		fmt.Printf("[Dashboard] Login error: Failed to get platform app: %v\n", err)
+		return h.renderLoginError(c, "System configuration error. Please contact administrator.", redirect)
 	}
-	user, err := h.userSvc.FindByEmail(ctx, email)
-	fmt.Printf("[Dashboard] Login: Email: %s\n", email)
+
+	ctx = contexts.SetAppID(ctx, platformApp.ID)
+
+	// Find user by email in platform app context
+	user, err := h.userSvc.FindByAppAndEmail(ctx, platformApp.ID, email)
+	fmt.Printf("[Dashboard] Login: Email: %s, Platform App: %s\n", email, platformApp.ID.String())
 	fmt.Printf("[Dashboard] Login: User: %+v\n", user)
 	fmt.Printf("[Dashboard] Login: Error: %+v\n", err)
-
-	// No organization fallback; app context is required
 
 	if err != nil || user == nil {
 		fmt.Printf("[Dashboard] Login error: Failed to find user: %v\n", err)
@@ -1101,17 +1733,11 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 
 	fmt.Printf("[Dashboard] Login: Password verified successfully for user %s\n", user.Email)
 
-	// Enforce membership in the selected app
-	if h.orgService != nil {
-		member, mErr := h.appService.FindMember(ctx, appID, user.ID)
-		if mErr != nil || member == nil {
-			return h.renderLoginError(c, "Access denied: You are not a member of this app", redirect)
-		}
-	}
-
-	// Note: Role checking is now handled by the RequireAdmin middleware
+	// Note: Role checking is handled by the RequireAdmin middleware
 	// The middleware will check if the user has the required permissions
 	// using the fast PermissionChecker after successful authentication
+
+	// App membership verification happens in extractAndInjectAppID for app-scoped routes
 
 	// Create session
 	sess, err := h.sessionSvc.Create(c.Request().Context(), &session.CreateSessionRequest{
@@ -1119,6 +1745,7 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 		IPAddress: c.Request().RemoteAddr,
 		UserAgent: c.Request().UserAgent(),
 		Remember:  false,
+		AppID:     platformApp.ID,
 	})
 	if err != nil {
 		return h.renderLoginError(c, "Failed to create session", redirect)
@@ -1241,23 +1868,43 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		return h.renderSignupError(c, "Password must be at least 8 characters", redirect)
 	}
 
-	// Require app context
+	// Get platform app to use as context for user creation
 	ctx := c.Request().Context()
-	appID, appErr := interfaces.GetAppID(ctx)
-	if appErr != nil {
-		return h.renderSignupError(c, "App context required", redirect)
+	platformApp, err := h.appService.GetPlatformApp(ctx)
+	if err != nil {
+		fmt.Printf("[Dashboard] Signup error: Failed to get platform app: %v\n", err)
+		return h.renderSignupError(c, "System configuration error. Please contact administrator.", redirect)
 	}
 
-	// Create user
-	fmt.Printf("[Dashboard] Signup: Creating user with email: %s, password length: %d\n", email, len(password))
-	newUser, err := h.userSvc.Create(c.Request().Context(), &user.CreateUserRequest{
+	ctx = contexts.SetAppID(ctx, platformApp.ID)
+
+	// Create user in platform app context
+	fmt.Printf("[Dashboard] Signup: Creating user with email: %s in platform app: %s\n", email, platformApp.ID.String())
+	newUser, err := h.userSvc.Create(ctx, &user.CreateUserRequest{
 		Email:    email,
 		Password: password,
 		Name:     name,
+		AppID:    platformApp.ID,
 	})
 	if err != nil {
 		fmt.Printf("[Dashboard] Signup error: Failed to create user: %v\n", err)
 		return h.renderSignupError(c, fmt.Sprintf("Failed to create account: %v", err), redirect)
+	}
+
+	// Add user as member of platform app
+	// Note: CreateMember will automatically detect if this is the first user
+	// and promote them to owner/superadmin as needed
+	_, err = h.appService.CreateMember(ctx, &app.Member{
+		ID:       xid.New(),
+		AppID:    platformApp.ID,
+		UserID:   newUser.ID,
+		Role:     app.MemberRoleMember, // Will be auto-promoted to owner if first user
+		Status:   app.MemberStatusActive,
+		JoinedAt: time.Now(),
+	})
+	if err != nil {
+		fmt.Printf("[Dashboard] Signup warning: Failed to add user to platform app: %v\n", err)
+		// Continue anyway - user is created, just not added to app yet
 	}
 
 	fmt.Printf("[Dashboard] User created successfully: %s (%s)\n", newUser.Email, newUser.ID.String())
@@ -1275,22 +1922,13 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		fmt.Printf("[Dashboard] ERROR: Password verification failed immediately after creation! This indicates a hashing issue.\n")
 	}
 
-	// Add membership to app (owner for first member, member otherwise)
-	role := "member"
-	if h.appService != nil {
-		count, _ := h.appService.CountMembers(ctx, appID)
-		if count == 0 {
-			role = "owner"
-		}
-		_ = h.appService.CreateMember(ctx, &app.Member{ID: xid.New(), AppID: appID, UserID: newUser.ID, Role: role})
-	}
-
 	// Create session for the new user
 	sess, err := h.sessionSvc.Create(c.Request().Context(), &session.CreateSessionRequest{
 		UserID:    newUser.ID,
 		IPAddress: c.Request().RemoteAddr,
 		UserAgent: c.Request().UserAgent(),
 		Remember:  false,
+		AppID:     platformApp.ID,
 	})
 	if err != nil {
 		fmt.Printf("[Dashboard] Signup error: Failed to create session: %v\n", err)
@@ -1380,33 +2018,21 @@ func (h *Handler) HandleLogout(c forge.Context) error {
 // isFirstUser checks if there are any users in the system
 // This is a global check that bypasses organization context for the first system user
 func (h *Handler) isFirstUser(ctx context.Context) (bool, error) {
-	// In SaaS mode, the user service is decorated with multi-tenant logic
-	// which requires organization context. However, for the first user check,
-	// we need to check globally if ANY users exist in the system at all.
-	//
-	// We can detect this by attempting the List call. If it fails with
-	// "organization context required", we know we're in multi-tenant mode
-	// and no organization exists yet (hence it's the first user).
-
-	users, total, err := h.userSvc.List(ctx, types.PaginationOptions{
-		Page:     1,
-		PageSize: 1,
-	})
-
-	// If we get "organization context required" error, it means:
-	// 1. We're in SaaS mode (multi-tenant decorator is active)
-	// 2. There's no organization in context (because this is signup)
-	// 3. This must be the first user attempting to sign up
+	// Check if platform app exists and has any members
+	platformApp, err := h.appService.GetPlatformApp(ctx)
 	if err != nil {
-		if err.Error() == "organization context required" {
-			// This is the first user - no organizations exist yet
-			return true, nil
-		}
-		// Some other error
-		return false, err
+		// No platform app exists - this is definitely the first user
+		return true, nil
 	}
 
-	return total == 0 || len(users) == 0, nil
+	// Count members in the platform app
+	count, err := h.appService.CountMembers(ctx, platformApp.ID)
+	if err != nil {
+		return false, fmt.Errorf("failed to count members: %w", err)
+	}
+
+	// If no members exist, this is the first user
+	return count == 0, nil
 }
 
 // generateCSRFToken generates a simple CSRF token
@@ -1475,7 +2101,7 @@ func (h *Handler) renderError(c forge.Context, message string, err error) error 
 		CSRFToken:      h.getCSRFToken(c),
 		ActivePage:     "",
 		BasePath:       h.basePath,
-		IsSaaSMode:     h.isSaaSMode,
+		IsMultiApp:     h.isMultiApp,
 		Error:          errorMsg,
 		Year:           time.Now().Year(),
 		EnabledPlugins: h.enabledPlugins,
@@ -1515,6 +2141,89 @@ func (h *Handler) getCSRFToken(c forge.Context) string {
 	}
 
 	return token
+}
+
+// getEnvironmentFromCookie retrieves the selected environment ID from cookie
+func (h *Handler) getEnvironmentFromCookie(c forge.Context, appID xid.ID) (*environment.Environment, error) {
+	cookie, err := c.Request().Cookie(environmentCookieName)
+	if err != nil || cookie == nil || cookie.Value == "" {
+		return nil, fmt.Errorf("no environment cookie found")
+	}
+
+	envID, err := xid.FromString(cookie.Value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid environment ID in cookie: %w", err)
+	}
+
+	// Fetch the environment and verify it belongs to the app
+	env, err := h.envService.GetEnvironment(c.Request().Context(), envID)
+	if err != nil {
+		return nil, fmt.Errorf("environment not found: %w", err)
+	}
+
+	// Verify environment belongs to the current app
+	if env.AppID != appID {
+		return nil, fmt.Errorf("environment does not belong to current app")
+	}
+
+	return env, nil
+}
+
+// setEnvironmentCookie stores the selected environment ID in a cookie
+func (h *Handler) setEnvironmentCookie(c forge.Context, envID xid.ID) {
+	cookie := &http.Cookie{
+		Name:     environmentCookieName,
+		Value:    envID.String(),
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   c.Request().TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   60 * 60 * 24 * 30, // 30 days
+	}
+	http.SetCookie(c.Response(), cookie)
+}
+
+// clearEnvironmentCookie removes the environment cookie
+func (h *Handler) clearEnvironmentCookie(c forge.Context) {
+	cookie := &http.Cookie{
+		Name:     environmentCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   c.Request().TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // Delete cookie
+	}
+	http.SetCookie(c.Response(), cookie)
+}
+
+// getUserEnvironments retrieves all environments for the given app
+func (h *Handler) getUserEnvironments(ctx context.Context, appID xid.ID) ([]*environment.Environment, error) {
+	envs, err := h.envService.ListEnvironments(ctx, &environment.ListEnvironmentsFilter{
+		AppID: appID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list environments: %w", err)
+	}
+	return envs.Data, nil
+}
+
+// getEnvironmentData retrieves current environment and environment list for PageData
+func (h *Handler) getEnvironmentData(c forge.Context, ctx context.Context, appID xid.ID) (currentEnv *environment.Environment, environments []*environment.Environment) {
+	// Get all environments for current app
+	environments, err := h.getUserEnvironments(ctx, appID)
+	if err != nil {
+		environments = []*environment.Environment{} // Fallback to empty if failed
+	}
+
+	// Get current environment (from context)
+	currentEnv, _ = h.getEnvironmentFromCookie(c, appID)
+	if currentEnv == nil {
+		// Try to get default
+		currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, appID)
+	}
+
+	return currentEnv, environments
 }
 
 // calculateSessionStatistics computes statistics from session data
@@ -1639,19 +2348,813 @@ func getContentType(ext string) string {
 }
 
 // ==============================================================================
-// NOTE: Organization Management Handlers have been REMOVED
+// Organization Management Handlers (User-Created Organizations)
 // ==============================================================================
-// The following handlers have been removed as app management is now handled
-// by the multiapp plugin API:
-// - ServeApps
-// - ServeAppDetail
-// - ServeAppCreate
-// - HandleAppCreate
-// - ServeAppEdit
-// - HandleAppEdit
-// - HandleAppDelete
+// These handlers manage user-created Organizations (Clerk-style workspaces)
+// within an app, NOT platform-level Apps (which are managed by multiapp plugin).
+
+// ServeOrganizations renders the organizations list page
+func (h *Handler) ServeOrganizations(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Get page number from query params
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		fmt.Sscanf(pageStr, "%d", &page)
+		if page < 1 {
+			page = 1
+		}
+	}
+
+	pageSize := 20
+
+	// List organizations for current app
+	filter := &organization.ListOrganizationsFilter{
+		AppID: currentApp.ID,
+		PaginationParams: pagination.PaginationParams{
+			Page:  page,
+			Limit: pageSize,
+		},
+	}
+
+	response, err := h.orgService.ListOrganizations(ctx, filter)
+	if err != nil {
+		return h.renderError(c, "Failed to load organizations", err)
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           "Organizations - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "organizations",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Prepare organizations data
+	orgsData := pages.OrganizationsData{
+		Organizations: response.Data,
+		Page:          response.Pagination.CurrentPage,
+		TotalPages:    response.Pagination.TotalPages,
+		Total:         int(response.Pagination.Total),
+	}
+
+	// Render page
+	content := pages.OrganizationsPage(orgsData, appIDStr)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeOrganizationDetail renders the organization detail page
+func (h *Handler) ServeOrganizationDetail(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Get organization ID from URL
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
+		return c.String(http.StatusBadRequest, "Organization ID is required")
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid organization ID")
+	}
+
+	// Get organization
+	org, err := h.orgService.FindOrganizationByID(ctx, orgID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Organization not found")
+	}
+
+	// Verify organization belongs to current app
+	if org.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Organization does not belong to this app")
+	}
+
+	// Get member count by listing members
+	memberFilter := &organization.ListMembersFilter{
+		OrganizationID: orgID,
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 1,
+		},
+	}
+	memberResponse, err := h.orgService.ListMembers(ctx, memberFilter)
+	memberCount := 0
+	if err == nil && memberResponse.Pagination != nil {
+		memberCount = int(memberResponse.Pagination.Total)
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           org.Name + " - Organizations - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "organizations",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Prepare organization detail data
+	orgData := pages.OrganizationDetailData{
+		Organization: org,
+		MemberCount:  memberCount,
+	}
+
+	// Render page
+	content := pages.OrganizationDetailPage(orgData, appIDStr)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeOrganizationCreate renders the organization creation form
+func (h *Handler) ServeOrganizationCreate(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           "Create Organization - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "organizations",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Render page
+	content := pages.OrganizationCreatePage(appIDStr, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleOrganizationCreate processes organization creation
+func (h *Handler) HandleOrganizationCreate(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Parse form
+	name := c.FormValue("name")
+	slug := c.FormValue("slug")
+
+	if name == "" || slug == "" {
+		return c.String(http.StatusBadRequest, "Name and slug are required")
+	}
+
+	// Create organization request
+	req := &organization.CreateOrganizationRequest{
+		Name: name,
+		Slug: slug,
+	}
+
+	// TODO: Get environment ID from context or use default
+	environmentID := xid.NilID()
+
+	// Create organization
+	org, err := h.orgService.CreateOrganization(ctx, req, user.ID, currentApp.ID, environmentID)
+	if err != nil {
+		return h.renderError(c, "Failed to create organization", err)
+	}
+
+	// Redirect to organization detail page
+	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/organizations/%s", h.basePath, appIDStr, org.ID.String()))
+}
+
+// ServeOrganizationEdit renders the organization edit form
+func (h *Handler) ServeOrganizationEdit(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Get organization ID from URL
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
+		return c.String(http.StatusBadRequest, "Organization ID is required")
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid organization ID")
+	}
+
+	// Get organization
+	org, err := h.orgService.FindOrganizationByID(ctx, orgID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Organization not found")
+	}
+
+	// Verify organization belongs to current app
+	if org.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Organization does not belong to this app")
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           "Edit " + org.Name + " - Organizations - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "organizations",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Prepare organization edit data
+	orgData := pages.OrganizationEditData{
+		Organization: org,
+	}
+
+	// Render page
+	content := pages.OrganizationEditPage(orgData, appIDStr, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleOrganizationEdit processes organization update
+func (h *Handler) HandleOrganizationEdit(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get organization ID from URL
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
+		return c.String(http.StatusBadRequest, "Organization ID is required")
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid organization ID")
+	}
+
+	// Get organization
+	org, err := h.orgService.FindOrganizationByID(ctx, orgID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Organization not found")
+	}
+
+	// Verify organization belongs to current app
+	if org.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Organization does not belong to this app")
+	}
+
+	// Parse form
+	name := c.FormValue("name")
+	if name == "" {
+		return c.String(http.StatusBadRequest, "Name is required")
+	}
+
+	// Update organization request
+	req := &organization.UpdateOrganizationRequest{
+		Name: &name,
+	}
+
+	// Update organization
+	_, err = h.orgService.UpdateOrganization(ctx, orgID, req)
+	if err != nil {
+		return h.renderError(c, "Failed to update organization", err)
+	}
+
+	// Redirect to organization detail page
+	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/organizations/%s", h.basePath, appIDStr, orgID.String()))
+}
+
+// HandleOrganizationDelete processes organization deletion
+func (h *Handler) HandleOrganizationDelete(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject app ID from URL
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get organization ID from URL
+	orgIDStr := c.Param("orgId")
+	if orgIDStr == "" {
+		return c.String(http.StatusBadRequest, "Organization ID is required")
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid organization ID")
+	}
+
+	// Get organization
+	org, err := h.orgService.FindOrganizationByID(ctx, orgID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Organization not found")
+	}
+
+	// Verify organization belongs to current app
+	if org.AppID != currentApp.ID {
+		return c.String(http.StatusForbidden, "Organization does not belong to this app")
+	}
+
+	// Delete organization
+	err = h.orgService.DeleteOrganization(ctx, orgID, user.ID)
+	if err != nil {
+		return h.renderError(c, "Failed to delete organization", err)
+	}
+
+	// Redirect to organizations list
+	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/organizations", h.basePath, appIDStr))
+}
+
+// ==============================================================================
+// App Management Handlers (Platform Apps Management)
+// ==============================================================================
+// These handlers manage platform-level Apps (multi-tenancy), NOT user-created
+// Organizations (workspaces). Create permission is based on multiapp plugin.
+
+// // ServeAppsManagement renders the apps management list page (admin only)
+// func (h *Handler) ServeAppsManagement(c forge.Context) error {
+// 	user := h.getUserFromContext(c)
+// 	if user == nil {
+// 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+// 	}
 //
-// The dashboard index (/) now displays app cards for users to select which
-// app to manage. Users navigate to /dashboard/app/{appId}/ to access app-specific
-// features like user management, sessions, settings, etc.
-// ==============================================================================
+// 	// Extract and inject app ID from URL (for navigation context)
+// 	ctx, currentApp, err := h.extractAndInjectAppID(c)
+// 	if err != nil {
+// 		return h.renderError(c, "Failed to load app context", err)
+// 	}
+//
+// 	appIDStr := currentApp.ID.String()
+//
+// 	// Get user apps for switcher
+// 	userApps, err := h.getUserApps(ctx, user.ID)
+// 	if err != nil {
+// 		userApps = []*app.App{}
+// 	}
+//
+// 	// Get page number from query params
+// 	page := 1
+// 	if pageStr := c.Query("page"); pageStr != "" {
+// 		fmt.Sscanf(pageStr, "%d", &page)
+// 		if page < 1 {
+// 			page = 1
+// 		}
+// 	}
+//
+// 	pageSize := 20
+//
+// 	// List all apps (admin can see all)
+// 	appsFilter := &app.ListAppsFilter{
+// 		PaginationParams: pagination.PaginationParams{
+// 			Page:  page,
+// 			Limit: pageSize,
+// 		},
+// 	}
+// 	appsResponse, err := h.appService.ListApps(ctx, appsFilter)
+// 	if err != nil {
+// 		return h.renderError(c, "Failed to load apps", err)
+// 	}
+//
+// 	pagedApps := appsResponse.Data
+// 	total := int(appsResponse.Pagination.Total)
+// 	totalPages := appsResponse.Pagination.TotalPages
+//
+// 	// Check if multiapp plugin is enabled (determines if user can create apps)
+// 	canCreateApps := h.enabledPlugins["multiapp"]
+//
+// 	// Prepare page data
+// 	pageData := components.PageData{
+// 		Title:           "Apps Management - Dashboard",
+// 		User:            user,
+// 		CSRFToken:       h.getCSRFToken(c),
+// 		ActivePage:      "apps-management",
+// 		BasePath:        h.basePath,
+// 		IsSaaSMode:      h.isMultiApp,
+// 		CurrentApp:      currentApp,
+// 		UserApps:        userApps,
+// 		ShowAppSwitcher: len(userApps) > 0,
+// 	}
+//
+// 	// Prepare apps management data
+// 	appsData := pages.AppsManagementData{
+// 		Apps:          pagedApps,
+// 		Page:          page,
+// 		TotalPages:    totalPages,
+// 		Total:         total,
+// 		CanCreateApps: canCreateApps,
+// 	}
+//
+// 	// Render page
+// 	content := pages.AppsManagementPage(appsData, appIDStr)
+// 	return h.renderWithLayout(c, pageData, content)
+// }
+
+// ServeAppMgmtDetail renders the app management detail page
+func (h *Handler) ServeAppMgmtDetail(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject current app ID from URL (for navigation context)
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Get target app ID from URL
+	targetAppIDStr := c.Param("targetAppId")
+	if targetAppIDStr == "" {
+		return c.String(http.StatusBadRequest, "App ID is required")
+	}
+
+	targetAppID, err := xid.FromString(targetAppIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app ID")
+	}
+
+	// Get target app
+	targetApp, err := h.appService.FindAppByID(ctx, targetAppID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "App not found")
+	}
+
+	// Get member count
+	memberCount, err := h.appService.CountMembers(ctx, targetAppID)
+	if err != nil {
+		memberCount = 0
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           targetApp.Name + " - Apps Management - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "apps-management",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Prepare app detail data
+	appData := pages.AppManagementDetailData{
+		App:         targetApp,
+		MemberCount: memberCount,
+	}
+
+	// Render page
+	content := pages.AppManagementDetailPage(appData, appIDStr)
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// ServeAppMgmtCreate renders the app creation form
+func (h *Handler) ServeAppMgmtCreate(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Check if multiapp plugin is enabled
+	if !h.enabledPlugins["multiapp"] {
+		return c.String(http.StatusForbidden, "App creation is only available when multiapp plugin is enabled")
+	}
+
+	// Extract and inject app ID from URL (for navigation context)
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           "Create App - Apps Management - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "apps-management",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Render page
+	content := pages.AppManagementCreatePage(appIDStr, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleAppMgmtCreate processes app creation
+func (h *Handler) HandleAppMgmtCreate(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Check if multiapp plugin is enabled
+	if !h.enabledPlugins["multiapp"] {
+		return c.String(http.StatusForbidden, "App creation is only available when multiapp plugin is enabled")
+	}
+
+	// Extract and inject app ID from URL (for navigation context)
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Parse form
+	name := c.FormValue("name")
+	slug := c.FormValue("slug")
+
+	if name == "" || slug == "" {
+		return c.String(http.StatusBadRequest, "Name and slug are required")
+	}
+
+	// Create app request
+	req := &app.CreateAppRequest{
+		Name: name,
+		Slug: slug,
+	}
+
+	// Create app
+	newApp, err := h.appService.CreateApp(ctx, req)
+	if err != nil {
+		return h.renderError(c, "Failed to create app", err)
+	}
+
+	// Redirect to app detail page
+	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/apps-management/%s", h.basePath, appIDStr, newApp.ID.String()))
+}
+
+// ServeAppMgmtEdit renders the app edit form
+func (h *Handler) ServeAppMgmtEdit(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject current app ID from URL (for navigation context)
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get user apps for switcher
+	userApps, err := h.getUserApps(ctx, user.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	// Get target app ID from URL
+	targetAppIDStr := c.Param("targetAppId")
+	if targetAppIDStr == "" {
+		return c.String(http.StatusBadRequest, "App ID is required")
+	}
+
+	targetAppID, err := xid.FromString(targetAppIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app ID")
+	}
+
+	// Get target app
+	targetApp, err := h.appService.FindAppByID(ctx, targetAppID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "App not found")
+	}
+
+	// Prepare page data
+	pageData := components.PageData{
+		Title:           "Edit " + targetApp.Name + " - Apps Management - Dashboard",
+		User:            user,
+		CSRFToken:       h.getCSRFToken(c),
+		ActivePage:      "apps-management",
+		BasePath:        h.basePath,
+		IsMultiApp:      h.isMultiApp,
+		CurrentApp:      currentApp,
+		UserApps:        userApps,
+		ShowAppSwitcher: len(userApps) > 0,
+	}
+
+	// Prepare app edit data
+	appData := pages.AppManagementEditData{
+		App: targetApp,
+	}
+
+	// Render page
+	content := pages.AppManagementEditPage(appData, appIDStr, h.getCSRFToken(c))
+	return h.renderWithLayout(c, pageData, content)
+}
+
+// HandleAppMgmtEdit processes app update
+func (h *Handler) HandleAppMgmtEdit(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject current app ID from URL (for navigation context)
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get target app ID from URL
+	targetAppIDStr := c.Param("targetAppId")
+	if targetAppIDStr == "" {
+		return c.String(http.StatusBadRequest, "App ID is required")
+	}
+
+	targetAppID, err := xid.FromString(targetAppIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app ID")
+	}
+
+	// Get target app
+	targetApp, err := h.appService.FindAppByID(ctx, targetAppID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "App not found")
+	}
+
+	// Parse form
+	name := c.FormValue("name")
+	if name == "" {
+		return c.String(http.StatusBadRequest, "Name is required")
+	}
+
+	// Update app request
+	req := &app.UpdateAppRequest{
+		Name: &name,
+	}
+
+	// Update app
+	_, err = h.appService.UpdateApp(ctx, targetAppID, req)
+	if err != nil {
+		return h.renderError(c, "Failed to update app", err)
+	}
+
+	// Redirect to app detail page
+	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/apps-management/%s", h.basePath, appIDStr, targetApp.ID.String()))
+}
+
+// HandleAppMgmtDelete processes app deletion
+func (h *Handler) HandleAppMgmtDelete(c forge.Context) error {
+	user := h.getUserFromContext(c)
+	if user == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Extract and inject current app ID from URL (for navigation context)
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	appIDStr := currentApp.ID.String()
+
+	// Get target app ID from URL
+	targetAppIDStr := c.Param("targetAppId")
+	if targetAppIDStr == "" {
+		return c.String(http.StatusBadRequest, "App ID is required")
+	}
+
+	targetAppID, err := xid.FromString(targetAppIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app ID")
+	}
+
+	// Get target app
+	targetApp, err := h.appService.FindAppByID(ctx, targetAppID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "App not found")
+	}
+
+	// Prevent deleting platform app
+	if targetApp.IsPlatform {
+		return c.String(http.StatusForbidden, "Cannot delete platform app")
+	}
+
+	// Delete app
+	err = h.appService.DeleteApp(ctx, targetAppID)
+	if err != nil {
+		return h.renderError(c, "Failed to delete app", err)
+	}
+
+	// Redirect to apps management list
+	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/apps-management", h.basePath, appIDStr))
+}

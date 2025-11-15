@@ -40,7 +40,6 @@ type APIKey struct {
 // ToSchema converts the APIKey DTO to schema.APIKey
 func (a *APIKey) ToSchema() *schema.APIKey {
 	return &schema.APIKey{
-		ID:             a.ID,
 		AppID:          a.AppID,
 		EnvironmentID:  a.EnvironmentID,
 		OrganizationID: a.OrganizationID,
@@ -59,11 +58,14 @@ func (a *APIKey) ToSchema() *schema.APIKey {
 		LastUsedAt:     a.LastUsedAt,
 		LastUsedIP:     a.LastUsedIP,
 		LastUsedUA:     a.LastUsedUA,
-		CreatedAt:      a.CreatedAt,
-		UpdatedAt:      a.UpdatedAt,
-		DeletedAt:      nil,
 		Metadata:       a.Metadata,
 		Key:            a.Key,
+		AuditableModel: schema.AuditableModel{
+			ID:        a.ID,
+			CreatedAt: a.CreatedAt,
+			UpdatedAt: a.UpdatedAt,
+			DeletedAt: nil,
+		},
 	}
 }
 

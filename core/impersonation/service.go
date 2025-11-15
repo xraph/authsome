@@ -395,7 +395,7 @@ func (s *Service) toSessionInfo(ctx context.Context, session *schema.Impersonati
 	info := &SessionInfo{
 		ID:                 session.ID,
 		AppID:              session.AppID,
-		UserOrganizationID: session.UserOrganizationID,
+		UserOrganizationID: session.OrganizationID,
 		ImpersonatorID:     session.ImpersonatorID,
 		TargetUserID:       session.TargetUserID,
 		Reason:             session.Reason,

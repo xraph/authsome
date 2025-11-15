@@ -16,17 +16,21 @@ type MFAFactor struct {
 	bun.BaseModel  `bun:"table:mfa_factors,alias:mff"`
 
 	ID             xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID     `bun:"app_id,notnull,type:varchar(20)"` // App context (required)
 	UserID         xid.ID     `bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID *xid.ID    `bun:"organization_id,type:varchar(20)"`
-	Type           string     `bun:"type,notnull"`        // totp, sms, email, webauthn, backup, etc.
-	Status         string     `bun:"status,notnull"`      // pending, active, disabled, revoked
-	Priority       string     `bun:"priority,notnull"`    // primary, backup, optional
-	Name           string     `bun:"name"`                // User-friendly name
-	Secret         string     `bun:"secret"`              // Encrypted factor secret
-	Metadata       JSONMap    `bun:"metadata,type:jsonb"` // Factor-specific metadata
+	OrganizationID *xid.ID    `bun:"organization_id,type:varchar(20)"` // User-created org (optional)
+	Type           string     `bun:"type,notnull"`                     // totp, sms, email, webauthn, backup, etc.
+	Status         string     `bun:"status,notnull"`                   // pending, active, disabled, revoked
+	Priority       string     `bun:"priority,notnull"`                 // primary, backup, optional
+	Name           string     `bun:"name"`                             // User-friendly name
+	Secret         string     `bun:"secret"`                           // Encrypted factor secret
+	Metadata       JSONMap    `bun:"metadata,type:jsonb"`              // Factor-specific metadata
 	LastUsedAt     *time.Time `bun:"last_used_at"`
 	VerifiedAt     *time.Time `bun:"verified_at"`
 	ExpiresAt      *time.Time `bun:"expires_at"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // MFAChallenge stores active MFA verification challenges
@@ -35,6 +39,7 @@ type MFAChallenge struct {
 	bun.BaseModel  `bun:"table:mfa_challenges,alias:mfc"`
 
 	ID          xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID       xid.ID     `bun:"app_id,notnull,type:varchar(20)"`     // App context
 	SessionID   xid.ID     `bun:"session_id,notnull,type:varchar(20)"` // Links to MFA session
 	UserID      xid.ID     `bun:"user_id,notnull,type:varchar(20)"`
 	FactorID    xid.ID     `bun:"factor_id,notnull,type:varchar(20)"`
@@ -48,6 +53,9 @@ type MFAChallenge struct {
 	UserAgent   string     `bun:"user_agent"`
 	ExpiresAt   time.Time  `bun:"expires_at,notnull"`
 	VerifiedAt  *time.Time `bun:"verified_at"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // MFASession represents an MFA verification session
@@ -56,6 +64,7 @@ type MFASession struct {
 	bun.BaseModel  `bun:"table:mfa_sessions,alias:mfs"`
 
 	ID              xid.ID      `bun:"id,pk,type:varchar(20)"`
+	AppID           xid.ID      `bun:"app_id,notnull,type:varchar(20)"` // App context
 	UserID          xid.ID      `bun:"user_id,notnull,type:varchar(20)"`
 	SessionToken    string      `bun:"session_token,unique,notnull"`
 	FactorsRequired int         `bun:"factors_required,notnull"`
@@ -69,6 +78,9 @@ type MFASession struct {
 	Metadata        JSONMap     `bun:"metadata,type:jsonb"`
 	ExpiresAt       time.Time   `bun:"expires_at,notnull"`
 	CompletedAt     *time.Time  `bun:"completed_at"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // MFATrustedDevice stores trusted devices that can skip MFA
@@ -77,6 +89,7 @@ type MFATrustedDevice struct {
 	bun.BaseModel  `bun:"table:mfa_trusted_devices,alias:mtd"`
 
 	ID         xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID      xid.ID     `bun:"app_id,notnull,type:varchar(20)"` // App context
 	UserID     xid.ID     `bun:"user_id,notnull,type:varchar(20)"`
 	DeviceID   string     `bun:"device_id,notnull"`   // Fingerprint/identifier
 	Name       string     `bun:"name"`                // User-friendly name
@@ -85,6 +98,9 @@ type MFATrustedDevice struct {
 	UserAgent  string     `bun:"user_agent"`
 	LastUsedAt *time.Time `bun:"last_used_at"`
 	ExpiresAt  time.Time  `bun:"expires_at,notnull"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // MFAPolicy defines organization-level MFA requirements
@@ -93,7 +109,8 @@ type MFAPolicy struct {
 	bun.BaseModel  `bun:"table:mfa_policies,alias:mfp"`
 
 	ID                     xid.ID      `bun:"id,pk,type:varchar(20)"`
-	OrganizationID         xid.ID      `bun:"organization_id,unique,notnull,type:varchar(20)"`
+	AppID                  xid.ID      `bun:"app_id,notnull,type:varchar(20)"`  // App context
+	OrganizationID         *xid.ID     `bun:"organization_id,type:varchar(20)"` // User-created org (optional)
 	Enabled                bool        `bun:"enabled,notnull,default:true"`
 	RequiredFactorCount    int         `bun:"required_factor_count,notnull,default:1"`
 	AllowedFactorTypes     StringArray `bun:"allowed_factor_types,type:text[]"`
@@ -105,6 +122,9 @@ type MFAPolicy struct {
 	MaxFailedAttempts      int         `bun:"max_failed_attempts,notnull,default:5"`
 	LockoutDurationMinutes int         `bun:"lockout_duration_minutes,notnull,default:30"`
 	Metadata               JSONMap     `bun:"metadata,type:jsonb"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // MFAAttempt tracks verification attempts for rate limiting and security
@@ -113,6 +133,7 @@ type MFAAttempt struct {
 	bun.BaseModel  `bun:"table:mfa_attempts,alias:mfa"`
 
 	ID            xid.ID  `bun:"id,pk,type:varchar(20)"`
+	AppID         xid.ID  `bun:"app_id,notnull,type:varchar(20)"` // App context
 	UserID        xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
 	FactorID      *xid.ID `bun:"factor_id,type:varchar(20)"`
 	ChallengeID   *xid.ID `bun:"challenge_id,type:varchar(20)"`
@@ -122,6 +143,9 @@ type MFAAttempt struct {
 	IPAddress     string  `bun:"ip_address"`
 	UserAgent     string  `bun:"user_agent"`
 	Metadata      JSONMap `bun:"metadata,type:jsonb"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // MFARiskAssessment stores risk assessment results
@@ -130,6 +154,7 @@ type MFARiskAssessment struct {
 	bun.BaseModel  `bun:"table:mfa_risk_assessments,alias:mra"`
 
 	ID          xid.ID      `bun:"id,pk,type:varchar(20)"`
+	AppID       xid.ID      `bun:"app_id,notnull,type:varchar(20)"` // App context
 	UserID      xid.ID      `bun:"user_id,notnull,type:varchar(20)"`
 	SessionID   *xid.ID     `bun:"session_id,type:varchar(20)"`
 	RiskLevel   string      `bun:"risk_level,notnull"`      // low, medium, high, critical
@@ -140,6 +165,9 @@ type MFARiskAssessment struct {
 	UserAgent   string      `bun:"user_agent"`
 	Location    string      `bun:"location"` // Geographic location
 	Metadata    JSONMap     `bun:"metadata,type:jsonb"`
+
+	// Relations
+	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
 // JSONMap is a helper type for storing JSON data

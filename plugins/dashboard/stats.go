@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/session"
-	"github.com/xraph/authsome/types"
+	"github.com/xraph/authsome/core/user"
 )
 
 // DashboardStats represents statistics for the dashboard
@@ -52,24 +54,51 @@ type PluginItem struct {
 
 // getDashboardStats fetches dashboard statistics
 func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error) {
-	// Get total users
-	_, totalUsers, err := h.userSvc.List(ctx, types.PaginationOptions{Page: 1, PageSize: 1})
-	if err != nil {
-		return nil, err
+	// Extract app ID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return nil, fmt.Errorf("app context required for dashboard stats")
 	}
 
-	// Get new users created today
-	newUsersToday, err := h.userSvc.CountCreatedToday(ctx)
+	// Count total users for this app
+	totalUsers := 0
+	newUsersToday := 0
+	
+	userFilter := &user.CountUsersFilter{
+		AppID: appID,
+	}
+	totalUsers, err := h.userSvc.CountUsers(ctx, userFilter)
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to count new users today: %v\n", err)
+		fmt.Printf("[Dashboard] Failed to count users: %v\n", err)
+		totalUsers = 0
+	}
+
+	// Count new users today
+	startOfToday := time.Now().Truncate(24 * time.Hour)
+	newUserFilter := &user.CountUsersFilter{
+		AppID:        appID,
+		CreatedSince: &startOfToday,
+	}
+	newUsersToday, err = h.userSvc.CountUsers(ctx, newUserFilter)
+	if err != nil {
+		fmt.Printf("[Dashboard] Failed to count new users: %v\n", err)
 		newUsersToday = 0
 	}
 
-	// Get all sessions
-	allSessions, err := h.sessionSvc.ListAll(ctx, 1000, 0) // Get up to 1000 sessions
+	// Get all sessions for this app
+	sessionFilter := &session.ListSessionsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 1000,
+		},
+		AppID: appID,
+	}
+	sessionResponse, err := h.sessionSvc.ListSessions(ctx, sessionFilter)
+	allSessions := []*session.Session{}
 	if err != nil {
 		fmt.Printf("[Dashboard] Failed to fetch sessions: %v\n", err)
-		allSessions = []*session.Session{}
+	} else if sessionResponse != nil {
+		allSessions = sessionResponse.Data
 	}
 
 	// Count active sessions (not expired)
@@ -128,22 +157,39 @@ func (h *Handler) getFailedLoginCount(ctx context.Context) int {
 		return 0
 	}
 
+	// Extract app ID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return 0
+	}
+
 	now := time.Now()
 	yesterday := now.Add(-24 * time.Hour)
+	action := "auth.login.failed"
 
-	// Search for failed login events
-	events, err := h.auditSvc.Search(ctx, audit.ListParams{
-		Action: "auth.login.failed",
+	// List failed login events
+	// TODO: Filter by app ID when audit service supports it
+	filter := &audit.ListEventsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 1000,
+		},
+		Action: &action,
 		Since:  &yesterday,
-		Limit:  1000,
-	})
+	}
+	_ = appID // Use appID to avoid unused variable warning
 
+	eventsResponse, err := h.auditSvc.List(ctx, filter)
 	if err != nil {
 		fmt.Printf("[Dashboard] Failed to fetch failed login events: %v\n", err)
 		return 0
 	}
 
-	return len(events)
+	if eventsResponse == nil || eventsResponse.Data == nil {
+		return 0
+	}
+
+	return len(eventsResponse.Data)
 }
 
 // getRecentActivity fetches recent activity from audit log
@@ -152,15 +198,34 @@ func (h *Handler) getRecentActivity(ctx context.Context) []ActivityItem {
 		return []ActivityItem{}
 	}
 
+	// Extract app ID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return []ActivityItem{}
+	}
+
 	// Fetch recent audit events
-	events, err := h.auditSvc.List(ctx, 10, 0)
+	// TODO: Filter by app ID when audit service supports it
+	filter := &audit.ListEventsFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 10,
+		},
+	}
+	_ = appID // Use appID to avoid unused variable warning
+
+	eventsResponse, err := h.auditSvc.List(ctx, filter)
 	if err != nil {
 		fmt.Printf("[Dashboard] Failed to fetch recent activity: %v\n", err)
 		return []ActivityItem{}
 	}
 
-	activities := make([]ActivityItem, 0, len(events))
-	for _, event := range events {
+	if eventsResponse == nil || eventsResponse.Data == nil {
+		return []ActivityItem{}
+	}
+
+	activities := make([]ActivityItem, 0, len(eventsResponse.Data))
+	for _, event := range eventsResponse.Data {
 		item := h.auditEventToActivity(event)
 		activities = append(activities, item)
 	}

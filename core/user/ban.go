@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/schema"
 )
@@ -31,29 +32,29 @@ type BanRepository interface {
 // Ban represents a user ban with business logic
 type Ban struct {
 	ID           string
-	UserID       string
-	BannedByID   string
-	UnbannedByID string
-	Reason       string
-	IsActive     bool
-	ExpiresAt    *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	UnbannedAt   *time.Time
+	UserID       xid.ID     `json:"userID"`
+	BannedByID   xid.ID     `json:"bannedByID"`
+	UnbannedByID *xid.ID    `json:"unbannedByID,omitempty"`
+	Reason       string     `json:"reason"`
+	IsActive     bool       `json:"isActive"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+	UnbannedAt   *time.Time `json:"unbannedAt,omitempty"`
 }
 
 // BanRequest represents a request to ban a user
 type BanRequest struct {
-	UserID    string
-	Reason    string
-	BannedBy  string
+	UserID    xid.ID `json:"userID"`
+	Reason    string `json:"reason"`
+	BannedBy  xid.ID `json:"bannedBy"`
 	ExpiresAt *time.Time
 }
 
 // UnbanRequest represents a request to unban a user
 type UnbanRequest struct {
-	UserID     string
-	UnbannedBy string
+	UserID     xid.ID `json:"userID"`
+	UnbannedBy xid.ID `json:"unbannedBy"`
 	Reason     string
 }
 
@@ -71,18 +72,18 @@ func NewBanService(banRepo BanRepository) *BanService {
 
 // BanUser bans a user with the given reason and optional expiration
 func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error) {
-	if req.UserID == "" {
+	if req.UserID.IsNil() {
 		return nil, errors.New("user ID is required")
 	}
 	if req.Reason == "" {
 		return nil, errors.New("ban reason is required")
 	}
-	if req.BannedBy == "" {
+	if req.BannedBy.IsNil() {
 		return nil, errors.New("banned by user ID is required")
 	}
 
 	// Check if user is already banned
-	existingBan, err := s.banRepo.FindActiveBan(ctx, req.UserID)
+	existingBan, err := s.banRepo.FindActiveBan(ctx, req.UserID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -90,22 +91,20 @@ func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error)
 		return nil, errors.New("user is already banned")
 	}
 
-	// Generate ban ID
-	banID, err := generateBanID()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate ban ID: %w", err)
-	}
-
 	// Create new ban record
 	ban := &schema.UserBan{
-		ID:         banID,
 		UserID:     req.UserID,
 		BannedByID: req.BannedBy,
 		Reason:     req.Reason,
 		IsActive:   true,
 		ExpiresAt:  req.ExpiresAt,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		AuditableModel: schema.AuditableModel{
+			ID:        xid.New(),
+			CreatedBy: req.BannedBy,
+			UpdatedBy: req.BannedBy,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 	}
 
 	if err := s.banRepo.CreateBan(ctx, ban); err != nil {
@@ -117,15 +116,15 @@ func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error)
 
 // UnbanUser removes an active ban from a user
 func (s *BanService) UnbanUser(ctx context.Context, req *UnbanRequest) error {
-	if req.UserID == "" {
+	if req.UserID.IsNil() {
 		return errors.New("user ID is required")
 	}
-	if req.UnbannedBy == "" {
+	if req.UnbannedBy.IsNil() {
 		return errors.New("unbanned by user ID is required")
 	}
 
 	// Find active ban
-	ban, err := s.banRepo.FindActiveBan(ctx, req.UserID)
+	ban, err := s.banRepo.FindActiveBan(ctx, req.UserID.String())
 	if err != nil {
 		return err
 	}
@@ -136,9 +135,10 @@ func (s *BanService) UnbanUser(ctx context.Context, req *UnbanRequest) error {
 	// Update ban record
 	now := time.Now()
 	ban.IsActive = false
-	ban.UnbannedByID = req.UnbannedBy
+	ban.UnbannedByID = &req.UnbannedBy
 	ban.UnbannedAt = &now
 	ban.UpdatedAt = now
+	ban.UpdatedBy = req.UnbannedBy
 
 	return s.banRepo.UpdateBan(ctx, ban)
 }
@@ -197,7 +197,7 @@ func (s *BanService) IsUserBanned(ctx context.Context, userID string) (bool, err
 // schemaToBan converts a schema.UserBan to a Ban
 func (s *BanService) schemaToBan(schemaBan *schema.UserBan) *Ban {
 	return &Ban{
-		ID:           schemaBan.ID,
+		ID:           schemaBan.ID.String(),
 		UserID:       schemaBan.UserID,
 		BannedByID:   schemaBan.BannedByID,
 		UnbannedByID: schemaBan.UnbannedByID,

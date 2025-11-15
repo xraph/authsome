@@ -13,6 +13,7 @@ type Verification struct {
 	bun.BaseModel  `bun:"table:verifications,alias:v"`
 
 	ID        xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID     xid.ID     `bun:"app_id,notnull,type:varchar(20)"`
 	UserID    xid.ID     `bun:"user_id,notnull,type:varchar(20)"`
 	Token     string     `bun:"token,notnull,unique"`
 	Type      string     `bun:"type,notnull"` // email, phone, password_reset
@@ -21,5 +22,6 @@ type Verification struct {
 	UsedAt    *time.Time `bun:"used_at"`
 
 	// Relations
+	App  *App  `bun:"rel:belongs-to,join:app_id=id"`
 	User *User `bun:"rel:belongs-to,join:user_id=id"`
 }
