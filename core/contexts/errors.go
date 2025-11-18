@@ -15,4 +15,19 @@ var (
 
 	// ErrUserContextRequired is returned when user context is required but not found
 	ErrUserContextRequired = errors.New("user context is required")
+
+	// ErrAuthContextRequired is returned when auth context is required but not found
+	ErrAuthContextRequired = errors.New("authentication context is required")
+
+	// ErrUserAuthRequired is returned when user authentication is required
+	ErrUserAuthRequired = errors.New("user authentication is required")
+
+	// ErrAPIKeyRequired is returned when API key authentication is required
+	ErrAPIKeyRequired = errors.New("API key authentication is required")
+
+	// ErrInsufficientScope is returned when API key lacks required scope
+	ErrInsufficientScope = errors.New("insufficient API key scope")
+
+	// ErrInsufficientPermission is returned when lacking required RBAC permission
+	ErrInsufficientPermission = errors.New("insufficient permission")
 )

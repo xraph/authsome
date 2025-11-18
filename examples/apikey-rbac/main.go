@@ -1,0 +1,284 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/core/apikey"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/forge"
+)
+
+func main() {
+	// Initialize AuthSome (assuming DB and config are set up)
+	auth, err := authsome.New(authsome.Options{
+		// ... configuration ...
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialize AuthSome: %v", err)
+	}
+
+	if err := auth.Initialize(context.Background()); err != nil {
+		log.Fatalf("Failed to initialize: %v", err)
+	}
+
+	// Create Forge app
+	app := forge.New()
+
+	// Mount AuthSome
+	auth.Mount(app, "/auth")
+
+	// Apply global authentication middleware
+	app.Use(auth.AuthMiddleware())
+
+	// =============================================================================
+	// EXAMPLE 1: RBAC-only permission check (strict)
+	// =============================================================================
+	app.GET("/api/users",
+		auth.RequireAPIKey(),
+		auth.RequireRBACPermission("view", "users"),
+		handleListUsers,
+	)
+
+	// =============================================================================
+	// EXAMPLE 2: Flexible check - accepts scope OR RBAC (recommended)
+	// =============================================================================
+	app.POST("/api/users",
+		auth.RequireAPIKey(),
+		auth.RequireCanAccess("create", "users"),
+		handleCreateUser,
+	)
+
+	// =============================================================================
+	// EXAMPLE 3: Multiple permission options
+	// =============================================================================
+	app.GET("/api/dashboard",
+		auth.RequireAuth(),
+		auth.RequireAnyPermission("view:analytics", "view:reports"),
+		handleDashboard,
+	)
+
+	// =============================================================================
+	// EXAMPLE 4: Runtime permission check
+	// =============================================================================
+	app.DELETE("/api/users/:id",
+		auth.RequireAPIKey(),
+		handleDeleteUser,
+	)
+
+	// =============================================================================
+	// EXAMPLE 5: API Key role management endpoints
+	// =============================================================================
+	app.POST("/api/api-keys/:id/roles",
+		auth.RequireUser(),
+		handleAssignRole,
+	)
+
+	app.GET("/api/api-keys/:id/permissions",
+		auth.RequireUser(),
+		handleGetEffectivePermissions,
+	)
+
+	fmt.Println("Server running on :8080")
+	fmt.Println("\nAPI Key RBAC Examples:")
+	fmt.Println("  GET    /api/users               - List users (requires view:users RBAC permission)")
+	fmt.Println("  POST   /api/users               - Create user (requires create:users scope OR RBAC)")
+	fmt.Println("  DELETE /api/users/:id           - Delete user (runtime permission check)")
+	fmt.Println("  GET    /api/dashboard           - Dashboard (requires view:analytics OR view:reports)")
+	fmt.Println("  POST   /api/api-keys/:id/roles  - Assign role to API key")
+	fmt.Println("  GET    /api/api-keys/:id/permissions - Get effective permissions")
+
+	if err := app.Listen(":8080"); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// =============================================================================
+// EXAMPLE HANDLERS
+// =============================================================================
+
+func handleListUsers(c forge.Context) error {
+	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
+
+	return c.JSON(200, map[string]interface{}{
+		"message": "List users",
+		"auth": map[string]interface{}{
+			"method":              string(authCtx.Method),
+			"apiKeyRoles":         authCtx.APIKeyRoles,
+			"apiKeyPermissions":   authCtx.APIKeyPermissions,
+			"effectivePermissions": authCtx.EffectivePermissions,
+		},
+	})
+}
+
+func handleCreateUser(c forge.Context) error {
+	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
+
+	// The middleware already checked CanAccess("create", "users")
+	// This means either:
+	// 1. API key has "users:create" scope, OR
+	// 2. API key has RBAC permission for create:users
+
+	return c.JSON(201, map[string]interface{}{
+		"message": "User created",
+		"auth": map[string]interface{}{
+			"method":              string(authCtx.Method),
+			"hasScope":            authCtx.HasScope("users:create"),
+			"hasRBACPermission":   authCtx.HasRBACPermission("create", "users"),
+		},
+	})
+}
+
+func handleDashboard(c forge.Context) error {
+	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
+
+	return c.JSON(200, map[string]interface{}{
+		"message": "Dashboard data",
+		"auth": map[string]interface{}{
+			"authenticated":       authCtx.IsAuthenticated,
+			"effectivePermissions": authCtx.EffectivePermissions,
+			"delegating":          authCtx.IsDelegatingCreatorPermissions(),
+		},
+	})
+}
+
+func handleDeleteUser(c forge.Context) error {
+	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
+
+	// Runtime permission check with detailed response
+	if !authCtx.CanAccess("delete", "users") {
+		return c.JSON(403, map[string]interface{}{
+			"error": "Access denied",
+			"reason": "Missing delete:users permission",
+			"yourPermissions": authCtx.EffectivePermissions,
+		})
+	}
+
+	userID := c.Param("id")
+
+	// Additional check: admins can delete anyone, regular users only themselves
+	if !authCtx.IsAdmin() {
+		if authCtx.User == nil || authCtx.User.ID.String() != userID {
+			return c.JSON(403, map[string]interface{}{
+				"error": "Access denied",
+				"reason": "Can only delete your own user",
+			})
+		}
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"message": fmt.Sprintf("User %s deleted", userID),
+	})
+}
+
+func handleAssignRole(c forge.Context) error {
+	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
+
+	// Only authenticated users can assign roles
+	if !authCtx.IsUserAuth {
+		return c.JSON(401, map[string]interface{}{
+			"error": "User authentication required",
+		})
+	}
+
+	keyID := c.Param("id")
+
+	var body struct {
+		RoleID string `json:"roleID"`
+	}
+	if err := c.BindJSON(&body); err != nil {
+		return c.JSON(400, map[string]interface{}{
+			"error": "Invalid request body",
+		})
+	}
+
+	// NOTE: In production, call the API key service here:
+	// err := apikeyService.AssignRole(ctx, keyID, roleID, orgID, userID)
+
+	return c.JSON(200, map[string]interface{}{
+		"message": fmt.Sprintf("Role %s assigned to API key %s", body.RoleID, keyID),
+	})
+}
+
+func handleGetEffectivePermissions(c forge.Context) error {
+	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
+
+	keyID := c.Param("id")
+
+	// NOTE: In production, call the API key service here:
+	// effectivePerms, err := apikeyService.GetEffectivePermissions(ctx, keyID, orgID)
+
+	// For demonstration, return the current auth context permissions
+	return c.JSON(200, map[string]interface{}{
+		"apiKeyID": keyID,
+		"effective": map[string]interface{}{
+			"scopes":               authCtx.APIKeyScopes,
+			"apiKeyRoles":          authCtx.APIKeyRoles,
+			"apiKeyPermissions":    authCtx.APIKeyPermissions,
+			"creatorPermissions":   authCtx.CreatorPermissions,
+			"effectivePermissions": authCtx.EffectivePermissions,
+			"delegating":           authCtx.IsDelegatingCreatorPermissions(),
+			"impersonating":        authCtx.IsImpersonating(),
+		},
+	})
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS FOR DEMONSTRATION
+// =============================================================================
+
+// DemonstratePermissionPatterns shows different permission check patterns
+func DemonstratePermissionPatterns(authCtx *contexts.AuthContext) {
+	fmt.Println("\n=== Permission Check Patterns ===")
+
+	// Pattern 1: Legacy scope check
+	fmt.Printf("Has scope 'users:read': %v\n", authCtx.HasScope("users:read"))
+
+	// Pattern 2: RBAC permission check
+	fmt.Printf("Has RBAC permission view:users: %v\n", authCtx.HasRBACPermission("view", "users"))
+
+	// Pattern 3: Flexible check (scope OR RBAC)
+	fmt.Printf("Can access view:users: %v\n", authCtx.CanAccess("view", "users"))
+
+	// Pattern 4: Multiple permission check
+	fmt.Printf("Has any permission: %v\n", authCtx.HasAnyPermission("view:users", "edit:users"))
+
+	// Pattern 5: All permissions required
+	fmt.Printf("Has all permissions: %v\n", authCtx.HasAllPermissions("view:users", "edit:users"))
+
+	// Check delegation
+	if authCtx.IsDelegatingCreatorPermissions() {
+		fmt.Println("⚠️  API key is delegating creator's permissions")
+		fmt.Printf("Creator permissions: %v\n", authCtx.CreatorPermissions)
+	}
+
+	// Check impersonation
+	if authCtx.IsImpersonating() {
+		fmt.Println("⚠️  API key is impersonating a user")
+		fmt.Printf("Impersonated user ID: %v\n", authCtx.GetImpersonatedUserID())
+	}
+}
+
+// DemonstrateScopeMapping shows scope-to-RBAC conversion
+func DemonstrateScopeMapping() {
+	fmt.Println("\n=== Scope to RBAC Mapping ===")
+
+	scopes := []string{
+		"users:read",
+		"users:write",
+		"sessions:create",
+		"admin:full",
+	}
+
+	for _, scope := range scopes {
+		action, resource := apikey.MapScopeToRBAC(scope)
+		fmt.Printf("Scope '%s' → RBAC: action=%s, resource=%s\n", scope, action, resource)
+	}
+
+	// Suggest role based on scopes
+	suggested := apikey.GenerateSuggestedRole(scopes)
+	fmt.Printf("\nSuggested role for these scopes: %s\n", suggested)
+}
+

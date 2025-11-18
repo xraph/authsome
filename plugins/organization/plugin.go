@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/ui"
 	orgrepo "github.com/xraph/authsome/repository/organization"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
@@ -21,6 +24,9 @@ type Plugin struct {
 	// Handlers
 	orgHandler *OrganizationHandler
 
+	// Dashboard
+	dashboardExtension *DashboardExtension
+
 	// Database
 	db *bun.DB
 
@@ -30,6 +36,9 @@ type Plugin struct {
 
 	// Logger
 	logger forge.Logger
+
+	// RBAC service
+	rbacService *rbac.Service
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -111,14 +120,8 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(auth interface{}) error {
-	// Type assert to get the auth instance
-	authInstance, ok := auth.(interface {
-		GetDB() *bun.DB
-		GetForgeApp() forge.App
-		GetServiceRegistry() *registry.ServiceRegistry
-	})
-	if !ok {
+func (p *Plugin) Init(authInstance core.Authsome) error {
+	if authInstance == nil {
 		return fmt.Errorf("invalid auth instance type")
 	}
 
@@ -135,6 +138,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	if rbacSvc == nil {
 		p.logger.Warn("RBAC service not available, authorization checks may not work properly")
 	}
+	p.rbacService = rbacSvc
 
 	// Register schema models with Bun for relationships to work
 	// Register OrganizationTeamMember first as it's the join table for m2m relationships
@@ -166,6 +170,8 @@ func (p *Plugin) Init(auth interface{}) error {
 		p.config.InvitationExpiryHours = 72 // 3 days
 	}
 
+	fmt.Println("Organization plugin initialized", p.config)
+
 	// Create repositories
 	orgRepo := orgrepo.NewOrganizationRepository(p.db)
 	memberRepo := orgrepo.NewOrganizationMemberRepository(p.db)
@@ -196,6 +202,9 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.orgHandler = &OrganizationHandler{
 		orgService: p.orgService,
 	}
+
+	// Initialize dashboard extension
+	p.dashboardExtension = NewDashboardExtension(p)
 
 	p.logger.Info("organization plugin initialized",
 		forge.F("max_orgs_per_user", p.config.MaxOrganizationsPerUser),
@@ -390,6 +399,13 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	return nil
 }
 
+// RegisterServiceDecorators registers service decorators
+func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
+	services.SetOrganizationService(p.orgService)
+	fmt.Println("Organization service set")
+	return nil
+}
+
 // Migrate runs the plugin's database migrations
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
@@ -435,6 +451,11 @@ func (p *Plugin) Migrate() error {
 	}
 
 	return nil
+}
+
+// DashboardExtension returns the dashboard extension interface implementation
+func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	return p.dashboardExtension
 }
 
 // DTOs for organization routes

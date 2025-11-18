@@ -28,6 +28,7 @@ type Config struct {
 // Updated for V2 architecture: App → Environment → Organization
 type Service struct {
 	repo     Repository
+	roleRepo RoleRepository // RBAC integration
 	auditSvc *audit.Service
 	config   Config
 }
@@ -56,9 +57,16 @@ func NewService(repo Repository, auditSvc *audit.Service, cfg Config) *Service {
 
 	return &Service{
 		repo:     repo,
+		roleRepo: nil, // Set via SetRoleRepository
 		auditSvc: auditSvc,
 		config:   cfg,
 	}
+}
+
+// SetRoleRepository sets the role repository (for RBAC integration)
+// This is set after service initialization to avoid circular dependencies
+func (s *Service) SetRoleRepository(roleRepo RoleRepository) {
+	s.roleRepo = roleRepo
 }
 
 // CreateAPIKey creates a new API key
@@ -80,8 +88,13 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	}
 	key := base64.URLEncoding.EncodeToString(keyBytes)
 
-	// Generate prefix for identification
-	prefix := s.generatePrefix(req.AppID, req.OrgID)
+	// Validate key type and scopes
+	if err := s.validateKeyTypeAndScopes(req.KeyType, req.Scopes); err != nil {
+		return nil, err
+	}
+
+	// Generate prefix for identification (includes key type)
+	prefix := s.generatePrefix(req.KeyType, req.EnvironmentID)
 
 	// Hash the key for storage
 	keyHash := s.hashKey(key)
@@ -110,6 +123,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 		Name:           req.Name,
 		Description:    req.Description,
 		Prefix:         prefix,
+		KeyType:        string(req.KeyType),
 		KeyHash:        keyHash,
 		Scopes:         req.Scopes,
 		Permissions:    req.Permissions,
@@ -427,9 +441,13 @@ func (s *Service) validateCreateRequest(ctx context.Context, req *CreateAPIKeyRe
 	if req.Name == "" {
 		return AccessDenied("name is required")
 	}
-	if len(req.Scopes) == 0 {
-		return AccessDenied("at least one scope is required")
+	if req.KeyType == "" {
+		return AccessDenied("key type is required")
 	}
+	if !req.KeyType.IsValid() {
+		return AccessDenied("invalid key type: must be pk, sk, or rk")
+	}
+	// Note: Scopes are validated in validateKeyTypeAndScopes
 	return nil
 }
 
@@ -458,28 +476,49 @@ func (s *Service) checkLimits(ctx context.Context, appID, userID xid.ID, orgID *
 	return nil
 }
 
-func (s *Service) generatePrefix(appID xid.ID, orgID *xid.ID) string {
-	// Generate a short random suffix
-	bytes := make([]byte, 4)
+func (s *Service) generatePrefix(keyType KeyType, envID xid.ID) string {
+	// Generate a random suffix for uniqueness
+	bytes := make([]byte, 6)
 	rand.Read(bytes)
-	suffix := base64.URLEncoding.EncodeToString(bytes)[:6]
+	suffix := base64.URLEncoding.EncodeToString(bytes)[:8]
 
-	// Create prefix based on scope
-	if orgID != nil && !orgID.IsNil() {
-		// Org-scoped: ak_org_<suffix>
-		orgShort := orgID.String()
-		if len(orgShort) > 8 {
-			orgShort = orgShort[:8]
-		}
-		return fmt.Sprintf("ak_org_%s_%s", orgShort, suffix)
-	} else {
-		// App-scoped: ak_app_<suffix>
-		appShort := appID.String()
-		if len(appShort) > 8 {
-			appShort = appShort[:8]
-		}
-		return fmt.Sprintf("ak_app_%s_%s", appShort, suffix)
+	// Determine environment name (could be enhanced with actual env lookup)
+	envName := "prod" // Default to prod
+	// You could add environment name lookup here based on envID
+	// For now, we'll use a simple default
+
+	// Create prefix based on key type
+	// Format: {type}_{env}_{random}
+	// Examples:
+	// - pk_test_a1b2c3d4
+	// - sk_prod_x9y8z7w6
+	// - rk_dev_m3n2o1p0
+	return fmt.Sprintf("%s_%s_%s", keyType, envName, suffix)
+}
+
+// validateKeyTypeAndScopes validates that the key type and scopes are compatible
+func (s *Service) validateKeyTypeAndScopes(keyType KeyType, scopes []string) error {
+	// For restricted keys, require explicit scopes
+	if keyType == KeyTypeRestricted && len(scopes) == 0 {
+		return AccessDenied("restricted keys require at least one explicit scope")
 	}
+
+	// For publishable keys, only allow safe scopes
+	if keyType == KeyTypePublishable {
+		for _, scope := range scopes {
+			if !IsSafeForPublicKey(scope) {
+				return AccessDenied(fmt.Sprintf("scope '%s' is not allowed for publishable keys", scope))
+			}
+		}
+	}
+
+	// For secret keys, no restrictions (admin:full is implied)
+	// But still validate that scopes are provided
+	if len(scopes) == 0 && keyType != KeyTypeSecret {
+		return AccessDenied("at least one scope is required")
+	}
+
+	return nil
 }
 
 func (s *Service) hashKey(key string) string {
@@ -489,4 +528,277 @@ func (s *Service) hashKey(key string) string {
 
 func (s *Service) verifyKeyHash(key, hash string) bool {
 	return s.hashKey(key) == hash
+}
+
+// ============================================================================
+// RBAC Integration Methods (Hybrid Approach)
+// ============================================================================
+
+// AssignRole assigns a role to an API key
+func (s *Service) AssignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
+	if s.roleRepo == nil {
+		return fmt.Errorf("RBAC not configured")
+	}
+
+	// Verify API key exists
+	_, err := s.repo.FindAPIKeyByID(ctx, apiKeyID)
+	if err != nil {
+		return APIKeyNotFound()
+	}
+
+	// Assign role
+	if err := s.roleRepo.AssignRole(ctx, apiKeyID, roleID, orgID, createdBy); err != nil {
+		return fmt.Errorf("failed to assign role: %w", err)
+	}
+
+	// Audit log
+	if createdBy != nil {
+		_ = s.auditSvc.Log(ctx, createdBy, "api_key.role_assigned", "api_key:"+apiKeyID.String(), "", "",
+			fmt.Sprintf(`{"api_key_id":"%s","role_id":"%s"}`, apiKeyID, roleID))
+	}
+
+	return nil
+}
+
+// UnassignRole removes a role from an API key
+func (s *Service) UnassignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID, actorID *xid.ID) error {
+	if s.roleRepo == nil {
+		return fmt.Errorf("RBAC not configured")
+	}
+
+	if err := s.roleRepo.UnassignRole(ctx, apiKeyID, roleID, orgID); err != nil {
+		return fmt.Errorf("failed to unassign role: %w", err)
+	}
+
+	// Audit log
+	if actorID != nil {
+		_ = s.auditSvc.Log(ctx, actorID, "api_key.role_unassigned", "api_key:"+apiKeyID.String(), "", "",
+			fmt.Sprintf(`{"api_key_id":"%s","role_id":"%s"}`, apiKeyID, roleID))
+	}
+
+	return nil
+}
+
+// GetRoles retrieves all roles assigned to an API key
+func (s *Service) GetRoles(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) ([]*Role, error) {
+	if s.roleRepo == nil {
+		return []*Role{}, nil
+	}
+
+	roles, err := s.roleRepo.GetRoles(ctx, apiKeyID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API key roles: %w", err)
+	}
+
+	// Convert to DTOs
+	result := make([]*Role, len(roles))
+	for i, role := range roles {
+		result[i] = &Role{
+			ID:          role.ID,
+			Name:        role.Name,
+			Description: role.Description,
+		}
+	}
+
+	return result, nil
+}
+
+// GetPermissions retrieves all permissions for an API key through its roles
+func (s *Service) GetPermissions(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) ([]*Permission, error) {
+	if s.roleRepo == nil {
+		return []*Permission{}, nil
+	}
+
+	permissions, err := s.roleRepo.GetPermissions(ctx, apiKeyID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API key permissions: %w", err)
+	}
+
+	// Convert to DTOs (parse action:resource from name)
+	result := make([]*Permission, len(permissions))
+	for i, perm := range permissions {
+		action, resource := parsePermissionName(perm.Name)
+		result[i] = &Permission{
+			ID:       perm.ID,
+			Action:   action,
+			Resource: resource,
+		}
+	}
+
+	return result, nil
+}
+
+// GetEffectivePermissions computes all effective permissions for an API key
+// This includes:
+// 1. API key's own permissions (scopes + roles)
+// 2. If delegation enabled: creator's permissions
+// 3. If impersonation set: target user's permissions
+func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) (*EffectivePermissions, error) {
+	// Get API key
+	apiKey, err := s.repo.FindAPIKeyByID(ctx, apiKeyID)
+	if err != nil {
+		return nil, APIKeyNotFound()
+	}
+
+	result := &EffectivePermissions{
+		Scopes:      apiKey.Scopes,
+		Permissions: []*Permission{},
+	}
+
+	if s.roleRepo == nil {
+		// RBAC not configured, return scopes only
+		return result, nil
+	}
+
+	// 1. Get API key's own permissions
+	keyPerms, err := s.roleRepo.GetPermissions(ctx, apiKeyID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key permissions: %w", err)
+	}
+	for _, perm := range keyPerms {
+		action, resource := parsePermissionName(perm.Name)
+		result.Permissions = append(result.Permissions, &Permission{
+			ID:       perm.ID,
+			Action:   action,
+			Resource: resource,
+			Source:   "key",
+		})
+	}
+
+	// 2. If delegation enabled, add creator's permissions
+	if apiKey.DelegateUserPermissions {
+		creatorPerms, err := s.roleRepo.GetCreatorPermissions(ctx, apiKey.UserID, orgID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get creator permissions: %w", err)
+		}
+		for _, perm := range creatorPerms {
+			action, resource := parsePermissionName(perm.Name)
+			result.Permissions = append(result.Permissions, &Permission{
+				ID:       perm.ID,
+				Action:   action,
+				Resource: resource,
+				Source:   "creator",
+			})
+		}
+		result.DelegatedFromCreator = true
+	}
+
+	// 3. If impersonation set, add target user's permissions
+	if apiKey.ImpersonateUserID != nil {
+		impersonatePerms, err := s.roleRepo.GetCreatorPermissions(ctx, *apiKey.ImpersonateUserID, orgID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get impersonation permissions: %w", err)
+		}
+		for _, perm := range impersonatePerms {
+			action, resource := parsePermissionName(perm.Name)
+			result.Permissions = append(result.Permissions, &Permission{
+				ID:       perm.ID,
+				Action:   action,
+				Resource: resource,
+				Source:   "impersonation",
+			})
+		}
+		result.ImpersonatingUser = apiKey.ImpersonateUserID
+	}
+
+	// Deduplicate permissions
+	result.Permissions = deduplicatePermissions(result.Permissions)
+
+	return result, nil
+}
+
+// CanAccess checks if an API key can perform a specific action on a resource
+// This checks both scopes (legacy) and RBAC permissions (new)
+func (s *Service) CanAccess(ctx context.Context, apiKey *APIKey, action, resource string, orgID *xid.ID) (bool, error) {
+	// Check scopes first (backward compatibility)
+	scopeString := fmt.Sprintf("%s:%s", resource, action)
+	if apiKey.HasScope(scopeString) || apiKey.HasScope("admin:full") {
+		return true, nil
+	}
+
+	// Check wildcard scopes
+	if apiKey.HasScopeWildcard(scopeString) {
+		return true, nil
+	}
+
+	// Check RBAC permissions
+	if s.roleRepo != nil {
+		effectivePerms, err := s.GetEffectivePermissions(ctx, apiKey.ID, orgID)
+		if err != nil {
+			return false, err
+		}
+
+		// Check if any permission matches
+		for _, perm := range effectivePerms.Permissions {
+			if matchesPermission(perm, action, resource) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// BulkAssignRoles assigns multiple roles to an API key
+func (s *Service) BulkAssignRoles(ctx context.Context, apiKeyID xid.ID, roleIDs []xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
+	if s.roleRepo == nil {
+		return fmt.Errorf("RBAC not configured")
+	}
+
+	if err := s.roleRepo.BulkAssignRoles(ctx, apiKeyID, roleIDs, orgID, createdBy); err != nil {
+		return fmt.Errorf("failed to bulk assign roles: %w", err)
+	}
+
+	// Audit log
+	if createdBy != nil {
+		_ = s.auditSvc.Log(ctx, createdBy, "api_key.roles_bulk_assigned", "api_key:"+apiKeyID.String(), "", "",
+			fmt.Sprintf(`{"api_key_id":"%s","role_count":%d}`, apiKeyID, len(roleIDs)))
+	}
+
+	return nil
+}
+
+// Helper functions
+
+func deduplicatePermissions(permissions []*Permission) []*Permission {
+	seen := make(map[string]bool)
+	result := []*Permission{}
+
+	for _, perm := range permissions {
+		key := fmt.Sprintf("%s:%s", perm.Action, perm.Resource)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, perm)
+		}
+	}
+
+	return result
+}
+
+func matchesPermission(perm *Permission, action, resource string) bool {
+	// Wildcard matching
+	if perm.Action == "*" && perm.Resource == "*" {
+		return true // Full admin
+	}
+	if perm.Action == "*" && perm.Resource == resource {
+		return true // All actions on resource
+	}
+	if perm.Action == action && perm.Resource == "*" {
+		return true // Specific action on all resources
+	}
+	if perm.Action == action && perm.Resource == resource {
+		return true // Exact match
+	}
+	return false
+}
+
+// parsePermissionName parses a permission name like "view:users" into action and resource
+func parsePermissionName(name string) (action, resource string) {
+	for i := 0; i < len(name); i++ {
+		if name[i] == ':' {
+			return name[:i], name[i+1:]
+		}
+	}
+	// If no colon, treat the whole name as action with empty resource
+	return name, ""
 }

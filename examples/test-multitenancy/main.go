@@ -330,6 +330,9 @@ func createTables(db *bun.DB, ctx context.Context) {
 
 	// Register models with bun for m2m relationships
 	db.RegisterModel((*schema.TeamMember)(nil))
+	db.RegisterModel((*schema.OrganizationTeamMember)(nil))
+	db.RegisterModel((*schema.RolePermission)(nil))
+	db.RegisterModel((*schema.APIKeyRole)(nil))
 
 	for _, model := range tables {
 		_, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)

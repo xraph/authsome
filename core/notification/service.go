@@ -385,3 +385,8 @@ func (s *Service) CleanupOldNotifications(ctx context.Context) error {
 	cutoff := time.Now().Add(-s.config.CleanupAfter)
 	return s.repo.CleanupOldNotifications(ctx, cutoff)
 }
+
+// GetRepository returns the repository for use by sub-services
+func (s *Service) GetRepository() Repository {
+	return s.repo
+}

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/forge"
@@ -153,6 +154,12 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 
 			// Set app context from session for user lookup
 			ctx := contexts.SetAppID(c.Request().Context(), sess.AppID)
+
+			// If session has no app_id (legacy session), try to get user without app context first
+			if sess.AppID.IsNil() {
+				fmt.Printf("[Dashboard] RequireAuth: Session has no app_id, trying user lookup without app context\n")
+				ctx = c.Request().Context()
+			}
 
 			// Get user information
 			user, err := p.userSvc.FindByID(ctx, sess.UserID)
@@ -421,6 +428,107 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 					}
 				}
 			}
+
+			return next(c)
+		}
+	}
+}
+
+// EnvironmentContext middleware injects environment context into all dashboard requests
+//
+// This middleware ensures that every app-scoped dashboard request has an environment ID
+// set in the context. This is critical for:
+// - Environment-scoped data operations
+// - Multi-environment isolation
+// - Audit trails with environment information
+// - Dashboard extensions that need environment context
+//
+// The middleware follows this flow:
+// 1. Extract app ID from URL path parameter (:appId)
+// 2. Check for environment ID in cookie (authsome_environment)
+// 3. If no cookie, fetch the default environment for the app
+// 4. Set environment context using contexts.SetEnvironmentID()
+// 5. Update cookie for future requests (30-day expiry)
+//
+// Routes without :appId parameter are skipped (e.g., /dashboard/login)
+// Gracefully handles missing environment service for backward compatibility
+func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge.Context) error {
+	return func(next func(forge.Context) error) func(forge.Context) error {
+		return func(c forge.Context) error {
+			ctx := c.Request().Context()
+
+			// Step 1: Get appID from URL path parameter (/dashboard/app/:appId/*)
+			appIDStr := c.Param("appId")
+			if appIDStr == "" {
+				// No appId in path (e.g., /dashboard/login), skip environment context
+				return next(c)
+			}
+
+			appID, err := xid.FromString(appIDStr)
+			if err != nil {
+				// Invalid appId format, skip environment context
+				return next(c)
+			}
+
+			// Set app context first (required for subsequent operations)
+			ctx = contexts.SetAppID(ctx, appID)
+
+			// Step 2: Check if environment service is available
+			// The environment service is optional and may not be present in all configurations
+			if p.serviceRegistry == nil || p.serviceRegistry.EnvironmentService() == nil {
+				// No environment service available, skip environment context
+				// This maintains backward compatibility with configurations without multiapp plugin
+				*c.Request() = *c.Request().WithContext(ctx)
+				return next(c)
+			}
+
+			envService := p.serviceRegistry.EnvironmentService()
+
+			// Step 3: Try to get environment ID from cookie
+			// The cookie persists the user's selected environment across requests
+			var envID xid.ID
+			if cookie, err := c.Request().Cookie(environmentCookieName); err == nil && cookie != nil && cookie.Value != "" {
+				if id, err := xid.FromString(cookie.Value); err == nil {
+					envID = id
+					fmt.Printf("[Dashboard] Environment from cookie: %s\n", envID.String())
+				}
+			}
+
+			// Step 4: If no environment in cookie, get the default environment for this app
+			// This happens on first visit or if cookie was cleared
+			if envID.IsNil() {
+				defaultEnv, err := envService.GetDefaultEnvironment(ctx, appID)
+				if err == nil && defaultEnv != nil {
+					envID = defaultEnv.ID
+					fmt.Printf("[Dashboard] Using default environment: %s\n", envID.String())
+
+					// Step 5: Set cookie for future requests (30-day expiry)
+					// This persists the environment selection across sessions
+					http.SetCookie(c.Response(), &http.Cookie{
+						Name:     environmentCookieName,
+						Value:    envID.String(),
+						Path:     "/dashboard",
+						HttpOnly: true,                   // Prevent XSS attacks
+						Secure:   c.Request().TLS != nil, // Only send over HTTPS in production
+						SameSite: http.SameSiteLaxMode,   // CSRF protection
+						MaxAge:   86400 * 30,             // 30 days
+					})
+				}
+			}
+
+			// Step 6: Set environment context if we have a valid environment ID
+			// This makes the environment ID available to all downstream handlers and services
+			if !envID.IsNil() {
+				ctx = contexts.SetEnvironmentID(ctx, envID)
+				fmt.Printf("[Dashboard] Environment context set: %s\n", envID.String())
+			} else {
+				// No environment available - this is acceptable in some scenarios
+				// (e.g., app has no environments yet, environment service error)
+				fmt.Printf("[Dashboard] No environment available for app: %s\n", appID.String())
+			}
+
+			// Update request with the enriched context
+			*c.Request() = *c.Request().WithContext(ctx)
 
 			return next(c)
 		}

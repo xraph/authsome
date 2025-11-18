@@ -15,6 +15,8 @@ func init() {
 		// and must be explicitly registered with Bun before creating tables with m2m relations
 		db.RegisterModel((*schema.TeamMember)(nil))
 		db.RegisterModel((*schema.OrganizationTeamMember)(nil))
+		db.RegisterModel((*schema.RolePermission)(nil))
+		db.RegisterModel((*schema.APIKeyRole)(nil))
 
 		// Drop existing tables to allow a clean reset (ignoring backward compatibility)
 		drop := []string{
@@ -49,9 +51,11 @@ func init() {
 			"webhooks",
 			"notification_templates",
 			"notifications",
+			"apikey_roles",
 			"api_keys",
 			"policies",
 			"user_roles",
+			"role_permissions",
 			"permissions",
 			"roles",
 			"user_bans",
@@ -136,6 +140,9 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.Permission)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+		if _, err := db.NewCreateTable().Model((*schema.RolePermission)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
 		if _, err := db.NewCreateTable().Model((*schema.UserRole)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -148,6 +155,9 @@ func init() {
 			return err
 		}
 		if _, err := db.NewCreateTable().Model((*schema.APIKey)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.APIKeyRole)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
 		if _, err := db.NewCreateTable().Model((*schema.SSOProvider)(nil)).IfNotExists().Exec(ctx); err != nil {
@@ -253,7 +263,11 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.Session)(nil)).Index("idx_sessions_token").Column("token").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
-		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_app_user").Column("app_id", "user_id").IfNotExists().Exec(ctx); err != nil {
+		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_app_user").Column("app_id", "user_id").Unique().IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		// Unique constraint for organization members to prevent duplicate memberships
+		if _, err := db.NewCreateIndex().Model((*schema.OrganizationMember)(nil)).Index("idx_organization_members_org_user").Column("organization_id", "user_id").Unique().IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
 		// Event (webhook_events) now uses app_id instead of organization_id after app-scoped refactoring
@@ -413,6 +427,70 @@ func init() {
 			Where("deleted_at IS NULL").
 			IfNotExists().
 			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_key_type").
+			Column("key_type").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_app_key_type").
+			Column("app_id", "key_type").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKey)(nil)).
+			Index("idx_apikeys_impersonate_user").
+			Column("impersonate_user_id").
+			Where("impersonate_user_id IS NOT NULL AND deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// API Key Roles indexes (RBAC join table)
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKeyRole)(nil)).
+			Index("idx_apikey_roles_apikey").
+			Column("api_key_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKeyRole)(nil)).
+			Index("idx_apikey_roles_role").
+			Column("role_id").
+			Where("deleted_at IS NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateIndex().
+			Model((*schema.APIKeyRole)(nil)).
+			Index("idx_apikey_roles_org").
+			Column("organization_id").
+			Where("deleted_at IS NULL AND organization_id IS NOT NULL").
+			IfNotExists().
+			Exec(ctx); err != nil {
+			return err
+		}
+		// Unique constraint to prevent duplicate role assignments
+		if _, err := db.ExecContext(ctx, `
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_apikey_roles_unique 
+			ON apikey_roles(api_key_id, role_id, COALESCE(organization_id, '')) 
+			WHERE deleted_at IS NULL
+		`); err != nil {
 			return err
 		}
 
@@ -578,6 +656,7 @@ func init() {
 			"webhooks",
 			"notification_templates",
 			"notifications",
+			"apikey_roles",
 			"api_keys",
 			"policies",
 			"user_roles",

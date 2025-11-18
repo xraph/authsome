@@ -243,6 +243,74 @@ type ListTemplatesResponse = pagination.PageResponse[*Template]
 type ListNotificationsResponse = pagination.PageResponse[*Notification]
 
 // =============================================================================
+// ANALYTICS REPORT TYPES
+// =============================================================================
+
+// TemplateAnalyticsReport represents analytics data for a specific template
+type TemplateAnalyticsReport struct {
+	TemplateID      xid.ID    `json:"templateId"`
+	TemplateName    string    `json:"templateName"`
+	TotalSent       int64     `json:"totalSent"`
+	TotalDelivered  int64     `json:"totalDelivered"`
+	TotalOpened     int64     `json:"totalOpened"`
+	TotalClicked    int64     `json:"totalClicked"`
+	TotalConverted  int64     `json:"totalConverted"`
+	TotalBounced    int64     `json:"totalBounced"`
+	TotalComplained int64     `json:"totalComplained"`
+	TotalFailed     int64     `json:"totalFailed"`
+	DeliveryRate    float64   `json:"deliveryRate"`    // Percentage of sent that were delivered
+	OpenRate        float64   `json:"openRate"`        // Percentage of delivered that were opened
+	ClickRate       float64   `json:"clickRate"`       // Percentage of opened that were clicked
+	ConversionRate  float64   `json:"conversionRate"`  // Percentage of clicked that converted
+	BounceRate      float64   `json:"bounceRate"`      // Percentage of sent that bounced
+	ComplaintRate   float64   `json:"complaintRate"`   // Percentage of delivered that complained
+	StartDate       time.Time `json:"startDate"`
+	EndDate         time.Time `json:"endDate"`
+}
+
+// AppAnalyticsReport represents aggregate analytics data for an app
+type AppAnalyticsReport struct {
+	AppID           xid.ID    `json:"appId"`
+	TotalSent       int64     `json:"totalSent"`
+	TotalDelivered  int64     `json:"totalDelivered"`
+	TotalOpened     int64     `json:"totalOpened"`
+	TotalClicked    int64     `json:"totalClicked"`
+	TotalConverted  int64     `json:"totalConverted"`
+	TotalBounced    int64     `json:"totalBounced"`
+	TotalComplained int64     `json:"totalComplained"`
+	TotalFailed     int64     `json:"totalFailed"`
+	DeliveryRate    float64   `json:"deliveryRate"`
+	OpenRate        float64   `json:"openRate"`
+	ClickRate       float64   `json:"clickRate"`
+	ConversionRate  float64   `json:"conversionRate"`
+	BounceRate      float64   `json:"bounceRate"`
+	ComplaintRate   float64   `json:"complaintRate"`
+	StartDate       time.Time `json:"startDate"`
+	EndDate         time.Time `json:"endDate"`
+}
+
+// OrgAnalyticsReport represents aggregate analytics data for an organization
+type OrgAnalyticsReport struct {
+	OrganizationID  xid.ID    `json:"organizationId"`
+	TotalSent       int64     `json:"totalSent"`
+	TotalDelivered  int64     `json:"totalDelivered"`
+	TotalOpened     int64     `json:"totalOpened"`
+	TotalClicked    int64     `json:"totalClicked"`
+	TotalConverted  int64     `json:"totalConverted"`
+	TotalBounced    int64     `json:"totalBounced"`
+	TotalComplained int64     `json:"totalComplained"`
+	TotalFailed     int64     `json:"totalFailed"`
+	DeliveryRate    float64   `json:"deliveryRate"`
+	OpenRate        float64   `json:"openRate"`
+	ClickRate       float64   `json:"clickRate"`
+	ConversionRate  float64   `json:"conversionRate"`
+	BounceRate      float64   `json:"bounceRate"`
+	ComplaintRate   float64   `json:"complaintRate"`
+	StartDate       time.Time `json:"startDate"`
+	EndDate         time.Time `json:"endDate"`
+}
+
+// =============================================================================
 // PROVIDER INTERFACE
 // =============================================================================
 
@@ -275,10 +343,18 @@ type Repository interface {
 	FindTemplateByID(ctx context.Context, id xid.ID) (*schema.NotificationTemplate, error)
 	FindTemplateByName(ctx context.Context, appID xid.ID, name string) (*schema.NotificationTemplate, error)
 	FindTemplateByKey(ctx context.Context, appID xid.ID, templateKey, notifType, language string) (*schema.NotificationTemplate, error)
+	FindTemplateByKeyOrgScoped(ctx context.Context, appID xid.ID, orgID *xid.ID, templateKey, notifType, language string) (*schema.NotificationTemplate, error)
 	ListTemplates(ctx context.Context, filter *ListTemplatesFilter) (*pagination.PageResponse[*schema.NotificationTemplate], error)
 	UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemplateRequest) error
 	UpdateTemplateMetadata(ctx context.Context, id xid.ID, isDefault, isModified bool, defaultHash string) error
+	UpdateTemplateAnalytics(ctx context.Context, id xid.ID, sendCount, openCount, clickCount, conversionCount int64) error
 	DeleteTemplate(ctx context.Context, id xid.ID) error
+
+	// Template versioning operations
+	CreateTemplateVersion(ctx context.Context, version *schema.NotificationTemplateVersion) error
+	FindTemplateVersionByID(ctx context.Context, id xid.ID) (*schema.NotificationTemplateVersion, error)
+	ListTemplateVersions(ctx context.Context, templateID xid.ID) ([]*schema.NotificationTemplateVersion, error)
+	GetLatestTemplateVersion(ctx context.Context, templateID xid.ID) (*schema.NotificationTemplateVersion, error)
 
 	// Notification operations
 	CreateNotification(ctx context.Context, notification *schema.Notification) error
@@ -287,8 +363,31 @@ type Repository interface {
 	UpdateNotificationStatus(ctx context.Context, id xid.ID, status NotificationStatus, error string, providerID string) error
 	UpdateNotificationDelivery(ctx context.Context, id xid.ID, deliveredAt time.Time) error
 
+	// Provider operations
+	CreateProvider(ctx context.Context, provider *schema.NotificationProvider) error
+	FindProviderByID(ctx context.Context, id xid.ID) (*schema.NotificationProvider, error)
+	FindProviderByTypeOrgScoped(ctx context.Context, appID xid.ID, orgID *xid.ID, providerType string) (*schema.NotificationProvider, error)
+	ListProviders(ctx context.Context, appID xid.ID, orgID *xid.ID) ([]*schema.NotificationProvider, error)
+	UpdateProvider(ctx context.Context, id xid.ID, config map[string]interface{}, isActive, isDefault bool) error
+	DeleteProvider(ctx context.Context, id xid.ID) error
+
+	// Analytics operations
+	CreateAnalyticsEvent(ctx context.Context, event *schema.NotificationAnalytics) error
+	FindAnalyticsByNotificationID(ctx context.Context, notificationID xid.ID) ([]*schema.NotificationAnalytics, error)
+	GetTemplateAnalytics(ctx context.Context, templateID xid.ID, startDate, endDate time.Time) (*TemplateAnalyticsReport, error)
+	GetAppAnalytics(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (*AppAnalyticsReport, error)
+	GetOrgAnalytics(ctx context.Context, orgID xid.ID, startDate, endDate time.Time) (*OrgAnalyticsReport, error)
+
+	// Test operations
+	CreateTest(ctx context.Context, test *schema.NotificationTest) error
+	FindTestByID(ctx context.Context, id xid.ID) (*schema.NotificationTest, error)
+	ListTests(ctx context.Context, templateID xid.ID) ([]*schema.NotificationTest, error)
+	UpdateTestStatus(ctx context.Context, id xid.ID, status string, results map[string]interface{}, successCount, failureCount int) error
+
 	// Cleanup operations
 	CleanupOldNotifications(ctx context.Context, olderThan time.Time) error
+	CleanupOldAnalytics(ctx context.Context, olderThan time.Time) error
+	CleanupOldTests(ctx context.Context, olderThan time.Time) error
 }
 
 // =============================================================================

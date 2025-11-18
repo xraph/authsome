@@ -28,6 +28,8 @@ type PageData struct {
 	CurrentEnvironment *environment.Environment   // Current environment in context
 	UserEnvironments   []*environment.Environment // Environments for current app
 	ShowEnvSwitcher    bool                       // Whether to show environment switcher in header
+	ExtensionNavItems  []g.Node                   // Navigation items from dashboard extensions
+	ExtensionWidgets   []g.Node                   // Dashboard widgets from extensions
 }
 
 // BaseLayout renders the main HTML structure
@@ -69,7 +71,7 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 			),
 
 			Body(
-				Class("h-full bg-slate-50 dark:bg-gray-950"),
+				Class("w-full min-h-screen overflow-x-hidden bg-slate-50 dark:bg-gray-950"),
 				g.Attr("x-data", "{ userDropdownOpen: false, mobileNavOpen: false }"),
 
 				// Global notification container

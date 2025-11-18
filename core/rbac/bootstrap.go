@@ -165,6 +165,10 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 		}
 	}
 
+	// Note: App-level roles are NOT templates - they are the actual roles for the app
+	// Templates are separate entities that organizations can clone if needed
+	// The is_template, is_owner_role fields are for future use with explicit template creation
+
 	// Apply RBAC policies to the policy engine
 	if rbacService != nil {
 		for _, roleDef := range resolvedRoles {

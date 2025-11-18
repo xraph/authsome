@@ -397,3 +397,189 @@ func (h *Handler) VerifyAPIKey(c forge.Context) error {
 
 	return c.JSON(200, response)
 }
+
+// =============================================================================
+// RBAC ROLE MANAGEMENT HANDLERS
+// =============================================================================
+
+// AssignRole handles POST /api-keys/:id/roles
+func (h *Handler) AssignRole(c forge.Context) error {
+	// Extract context
+	userID, _ := contexts.GetUserID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
+	if userID.IsNil() {
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	// Parse key ID
+	keyIDStr := c.Param("id")
+	if keyIDStr == "" {
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	keyID, err := xid.FromString(keyIDStr)
+	if err != nil {
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	// Parse request body
+	var reqBody struct {
+		RoleID string `json:"roleID"`
+	}
+
+	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
+		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	if reqBody.RoleID == "" {
+		err := errs.New("ROLE_ID_REQUIRED", "Role ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	roleID, err := xid.FromString(reqBody.RoleID)
+	if err != nil {
+		authErr := errs.New("INVALID_ROLE_ID", "Invalid role ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	// Assign role
+	if err := h.service.AssignRole(c.Request().Context(), keyID, roleID, orgIDPtr, &userID); err != nil {
+		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
+	}
+
+	return c.JSON(200, map[string]string{
+		"message": "Role assigned successfully",
+	})
+}
+
+// UnassignRole handles DELETE /api-keys/:id/roles/:roleId
+func (h *Handler) UnassignRole(c forge.Context) error {
+	// Extract context
+	userID, _ := contexts.GetUserID(c.Request().Context())
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
+	if userID.IsNil() {
+		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	// Parse key ID
+	keyIDStr := c.Param("id")
+	if keyIDStr == "" {
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	keyID, err := xid.FromString(keyIDStr)
+	if err != nil {
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	// Parse role ID
+	roleIDStr := c.Param("roleId")
+	if roleIDStr == "" {
+		err := errs.New("ROLE_ID_REQUIRED", "Role ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	roleID, err := xid.FromString(roleIDStr)
+	if err != nil {
+		authErr := errs.New("INVALID_ROLE_ID", "Invalid role ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	// Unassign role
+	if err := h.service.UnassignRole(c.Request().Context(), keyID, roleID, orgIDPtr, &userID); err != nil {
+		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
+	}
+
+	return c.JSON(200, map[string]string{
+		"message": "Role unassigned successfully",
+	})
+}
+
+// GetRoles handles GET /api-keys/:id/roles
+func (h *Handler) GetRoles(c forge.Context) error {
+	// Extract context
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
+	// Parse key ID
+	keyIDStr := c.Param("id")
+	if keyIDStr == "" {
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	keyID, err := xid.FromString(keyIDStr)
+	if err != nil {
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	// Get roles
+	roles, err := h.service.GetRoles(c.Request().Context(), keyID, orgIDPtr)
+	if err != nil {
+		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"roles": roles,
+	})
+}
+
+// GetEffectivePermissions handles GET /api-keys/:id/permissions
+func (h *Handler) GetEffectivePermissions(c forge.Context) error {
+	// Extract context
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
+	// Parse key ID
+	keyIDStr := c.Param("id")
+	if keyIDStr == "" {
+		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
+		return c.JSON(err.HTTPStatus, err)
+	}
+
+	keyID, err := xid.FromString(keyIDStr)
+	if err != nil {
+		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	// Get effective permissions
+	effectivePerms, err := h.service.GetEffectivePermissions(c.Request().Context(), keyID, orgIDPtr)
+	if err != nil {
+		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+		return c.JSON(internalErr.HTTPStatus, internalErr)
+	}
+
+	return c.JSON(200, effectivePerms)
+}

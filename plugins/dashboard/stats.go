@@ -63,7 +63,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	// Count total users for this app
 	totalUsers := 0
 	newUsersToday := 0
-	
+
 	userFilter := &user.CountUsersFilter{
 		AppID: appID,
 	}
@@ -362,7 +362,7 @@ var pluginMetadata = map[string]struct {
 	"twofa":          {"Two-Factor Auth", "TOTP-based two-factor authentication", "security", "ShieldCheck"},
 	"mfa":            {"Multi-Factor Auth", "Advanced multi-factor authentication", "security", "Shield"},
 	"anonymous":      {"Anonymous Auth", "Guest user authentication", "authentication", "UserCircle"},
-	"multitenancy":   {"Multi-Tenancy", "Organization and tenant management", "core", "Building2"},
+	"multiapp":       {"Multi-App", "Organization and tenant management", "core", "Building2"},
 	"emailotp":       {"Email OTP", "One-time password via email", "authentication", "Mail"},
 	"magiclink":      {"Magic Link", "Passwordless login via email links", "authentication", "Link"},
 	"phone":          {"Phone Auth", "SMS-based authentication", "authentication", "Phone"},

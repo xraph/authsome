@@ -245,20 +245,29 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Note: Config service is not registered in ServiceRegistry as it has a different purpose
 	// It provides app-scoped configuration overrides, not app entity management
 
-	// Create environment repository and service
+	// Get environment repository for bootstrap
 	envRepo := authInstance.Repository().Environment()
 	if envRepo == nil {
 		return errs.InternalServerError("environment repository not available", nil)
 	}
-	envConfig := environment.Config{
-		AutoCreateDev:                  true,
-		DefaultDevName:                 p.config.DefaultEnvironmentName,
-		AllowPromotion:                 true,
-		RequireConfirmationForDataCopy: true,
-		MaxEnvironmentsPerApp:          10,
+
+	// Get environment service from core (initialized in authsome.go)
+	// The core already initialized environment service with default config
+	// We can optionally replace it with plugin-specific config if needed
+	p.environmentService = serviceRegistry.EnvironmentService()
+	if p.environmentService == nil {
+		// Fallback: create new service if somehow not available (shouldn't happen)
+		envConfig := environment.Config{
+			AutoCreateDev:                  true,
+			DefaultDevName:                 p.config.DefaultEnvironmentName,
+			AllowPromotion:                 true,
+			RequireConfirmationForDataCopy: true,
+			MaxEnvironmentsPerApp:          10,
+		}
+		p.environmentService = environment.NewService(envRepo, envConfig)
+		serviceRegistry.SetEnvironmentService(p.environmentService)
+		p.logger.Warn("environment service was not in registry - created new instance")
 	}
-	p.environmentService = environment.NewService(envRepo, envConfig)
-	authInstance.GetServiceRegistry().SetEnvironmentService(p.environmentService)
 
 	// Bootstrap default app and environment on first initialization
 	if p.config.AutoCreateDefaultApp {

@@ -28,6 +28,8 @@ func TestInitialMigration_M2MModelsRegistered(t *testing.T) {
 	// Manually register m2m models (simulating what the migration does)
 	db.RegisterModel((*schema.TeamMember)(nil))
 	db.RegisterModel((*schema.OrganizationTeamMember)(nil))
+	db.RegisterModel((*schema.RolePermission)(nil))
+	db.RegisterModel((*schema.APIKeyRole)(nil))
 
 	t.Log("Registered m2m models")
 

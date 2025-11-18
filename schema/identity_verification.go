@@ -8,6 +8,7 @@ import (
 
 // IdentityVerification represents a KYC verification attempt
 type IdentityVerification struct {
+	AuditableModel
 	bun.BaseModel `bun:"table:identity_verifications,alias:iv"`
 
 	ID             string `bun:"id,pk,type:varchar(255)" json:"id"`
@@ -67,10 +68,7 @@ type IdentityVerification struct {
 	// Webhook tracking
 	WebhookDeliveryStatus string     `bun:"webhook_delivery_status,type:varchar(50)" json:"webhookDeliveryStatus,omitempty"`
 	WebhookDeliveredAt    *time.Time `bun:"webhook_delivered_at,type:timestamptz" json:"webhookDeliveredAt,omitempty"`
-
-	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
-	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
-
+	
 	// Relations
 	User         *User         `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
 	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`

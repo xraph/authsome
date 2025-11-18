@@ -23,8 +23,9 @@ type APIKey struct {
 	// Key identification
 	Name        string `bun:"name,notnull" json:"name"`
 	Description string `bun:"description" json:"description,omitempty"`
-	Prefix      string `bun:"prefix,notnull,unique" json:"prefix"` // ak_prod_abc123
-	KeyHash     string `bun:"key_hash,notnull" json:"-"`           // Hashed key for verification
+	Prefix      string `bun:"prefix,notnull,unique" json:"prefix"`          // pk_test_xxx, sk_prod_xxx, rk_dev_xxx
+	KeyType     string `bun:"key_type,notnull,default:'rk'" json:"keyType"` // pk/sk/rk
+	KeyHash     string `bun:"key_hash,notnull" json:"-"`                    // Hashed key for verification
 
 	// Permissions and scopes
 	Scopes      []string          `bun:"scopes,type:jsonb" json:"scopes"`                     // ["read", "write", "admin"]
@@ -44,6 +45,13 @@ type APIKey struct {
 
 	// Metadata
 	Metadata map[string]string `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
+
+	// RBAC Integration (Hybrid Approach)
+	DelegateUserPermissions bool    `bun:"delegate_user_permissions,notnull,default:false" json:"delegateUserPermissions"` // Inherit creator's permissions
+	ImpersonateUserID       *xid.ID `bun:"impersonate_user_id,type:varchar(20)" json:"impersonateUserID,omitempty"`        // Act as specific user
+
+	// RBAC Relationships
+	Roles []*Role `bun:"m2m:apikey_roles,join:APIKey=Role" json:"-"` // Many-to-many with roles
 
 	// Transient field - only populated during creation
 	Key string `bun:"-" json:"key,omitempty"`

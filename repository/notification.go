@@ -314,3 +314,470 @@ func (r *notificationRepository) CleanupOldNotifications(ctx context.Context, ol
 		Exec(ctx)
 	return err
 }
+
+// =============================================================================
+// ORG-SCOPED TEMPLATE OPERATIONS
+// =============================================================================
+
+// FindTemplateByKeyOrgScoped finds a template with org-scoping support
+// Priority: org-specific > app-level
+func (r *notificationRepository) FindTemplateByKeyOrgScoped(ctx context.Context, appID xid.ID, orgID *xid.ID, templateKey, notifType, language string) (*schema.NotificationTemplate, error) {
+	template := &schema.NotificationTemplate{}
+
+	// Try org-specific template first if orgID is provided
+	if orgID != nil {
+		query := r.db.NewSelect().
+			Model(template).
+			Where("app_id = ? AND organization_id = ? AND template_key = ? AND active = true", appID, orgID, templateKey).
+			Where("deleted_at IS NULL")
+
+		if notifType != "" {
+			query = query.Where("type = ?", notifType)
+		}
+		if language != "" {
+			query = query.Where("language = ?", language)
+		}
+
+		err := query.Limit(1).Scan(ctx)
+		if err == nil {
+			return template, nil
+		}
+		if err != sql.ErrNoRows {
+			return nil, err
+		}
+	}
+
+	// Fall back to app-level template
+	query := r.db.NewSelect().
+		Model(template).
+		Where("app_id = ? AND organization_id IS NULL AND template_key = ? AND active = true", appID, templateKey).
+		Where("deleted_at IS NULL")
+
+	if notifType != "" {
+		query = query.Where("type = ?", notifType)
+	}
+	if language != "" {
+		query = query.Where("language = ?", language)
+	}
+
+	err := query.Limit(1).Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return template, nil
+}
+
+// UpdateTemplateAnalytics updates analytics counters for a template
+func (r *notificationRepository) UpdateTemplateAnalytics(ctx context.Context, id xid.ID, sendCount, openCount, clickCount, conversionCount int64) error {
+	_, err := r.db.NewUpdate().
+		Model((*schema.NotificationTemplate)(nil)).
+		Set("send_count = ?", sendCount).
+		Set("open_count = ?", openCount).
+		Set("click_count = ?", clickCount).
+		Set("conversion_count = ?", conversionCount).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+// =============================================================================
+// TEMPLATE VERSIONING OPERATIONS
+// =============================================================================
+
+// CreateTemplateVersion creates a new template version
+func (r *notificationRepository) CreateTemplateVersion(ctx context.Context, version *schema.NotificationTemplateVersion) error {
+	_, err := r.db.NewInsert().Model(version).Exec(ctx)
+	return err
+}
+
+// FindTemplateVersionByID finds a version by ID
+func (r *notificationRepository) FindTemplateVersionByID(ctx context.Context, id xid.ID) (*schema.NotificationTemplateVersion, error) {
+	version := &schema.NotificationTemplateVersion{}
+	err := r.db.NewSelect().
+		Model(version).
+		Where("id = ?", id).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return version, err
+}
+
+// ListTemplateVersions lists all versions for a template
+func (r *notificationRepository) ListTemplateVersions(ctx context.Context, templateID xid.ID) ([]*schema.NotificationTemplateVersion, error) {
+	var versions []*schema.NotificationTemplateVersion
+	err := r.db.NewSelect().
+		Model(&versions).
+		Where("template_id = ?", templateID).
+		Order("version DESC").
+		Scan(ctx)
+	return versions, err
+}
+
+// GetLatestTemplateVersion gets the most recent version
+func (r *notificationRepository) GetLatestTemplateVersion(ctx context.Context, templateID xid.ID) (*schema.NotificationTemplateVersion, error) {
+	version := &schema.NotificationTemplateVersion{}
+	err := r.db.NewSelect().
+		Model(version).
+		Where("template_id = ?", templateID).
+		Order("version DESC").
+		Limit(1).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return version, err
+}
+
+// =============================================================================
+// PROVIDER OPERATIONS
+// =============================================================================
+
+// CreateProvider creates a new notification provider
+func (r *notificationRepository) CreateProvider(ctx context.Context, provider *schema.NotificationProvider) error {
+	_, err := r.db.NewInsert().Model(provider).Exec(ctx)
+	return err
+}
+
+// FindProviderByID finds a provider by ID
+func (r *notificationRepository) FindProviderByID(ctx context.Context, id xid.ID) (*schema.NotificationProvider, error) {
+	provider := &schema.NotificationProvider{}
+	err := r.db.NewSelect().
+		Model(provider).
+		Where("id = ?", id).
+		Where("deleted_at IS NULL").
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return provider, err
+}
+
+// FindProviderByTypeOrgScoped finds a default provider for a type with org-scoping
+func (r *notificationRepository) FindProviderByTypeOrgScoped(ctx context.Context, appID xid.ID, orgID *xid.ID, providerType string) (*schema.NotificationProvider, error) {
+	provider := &schema.NotificationProvider{}
+
+	// Try org-specific provider first if orgID is provided
+	if orgID != nil {
+		err := r.db.NewSelect().
+			Model(provider).
+			Where("app_id = ? AND organization_id = ? AND provider_type = ? AND is_default = true AND is_active = true", appID, orgID, providerType).
+			Where("deleted_at IS NULL").
+			Limit(1).
+			Scan(ctx)
+		if err == nil {
+			return provider, nil
+		}
+		if err != sql.ErrNoRows {
+			return nil, err
+		}
+	}
+
+	// Fall back to app-level provider
+	err := r.db.NewSelect().
+		Model(provider).
+		Where("app_id = ? AND organization_id IS NULL AND provider_type = ? AND is_default = true AND is_active = true", appID, providerType).
+		Where("deleted_at IS NULL").
+		Limit(1).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return provider, err
+}
+
+// ListProviders lists all providers for an app/org
+func (r *notificationRepository) ListProviders(ctx context.Context, appID xid.ID, orgID *xid.ID) ([]*schema.NotificationProvider, error) {
+	var providers []*schema.NotificationProvider
+	query := r.db.NewSelect().
+		Model(&providers).
+		Where("app_id = ?", appID).
+		Where("deleted_at IS NULL")
+
+	if orgID != nil {
+		query = query.Where("(organization_id = ? OR organization_id IS NULL)", orgID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+
+	err := query.Scan(ctx)
+	return providers, err
+}
+
+// UpdateProvider updates a provider
+func (r *notificationRepository) UpdateProvider(ctx context.Context, id xid.ID, config map[string]interface{}, isActive, isDefault bool) error {
+	_, err := r.db.NewUpdate().
+		Model((*schema.NotificationProvider)(nil)).
+		Set("config = ?", config).
+		Set("is_active = ?", isActive).
+		Set("is_default = ?", isDefault).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+// DeleteProvider soft-deletes a provider
+func (r *notificationRepository) DeleteProvider(ctx context.Context, id xid.ID) error {
+	_, err := r.db.NewUpdate().
+		Model((*schema.NotificationProvider)(nil)).
+		Set("deleted_at = ?", time.Now().UTC()).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+// =============================================================================
+// ANALYTICS OPERATIONS
+// =============================================================================
+
+// CreateAnalyticsEvent creates a new analytics event
+func (r *notificationRepository) CreateAnalyticsEvent(ctx context.Context, event *schema.NotificationAnalytics) error {
+	_, err := r.db.NewInsert().Model(event).Exec(ctx)
+	return err
+}
+
+// FindAnalyticsByNotificationID finds all analytics events for a notification
+func (r *notificationRepository) FindAnalyticsByNotificationID(ctx context.Context, notificationID xid.ID) ([]*schema.NotificationAnalytics, error) {
+	var events []*schema.NotificationAnalytics
+	err := r.db.NewSelect().
+		Model(&events).
+		Where("notification_id = ?", notificationID).
+		Order("created_at ASC").
+		Scan(ctx)
+	return events, err
+}
+
+// GetTemplateAnalytics aggregates analytics for a template
+func (r *notificationRepository) GetTemplateAnalytics(ctx context.Context, templateID xid.ID, startDate, endDate time.Time) (*notification.TemplateAnalyticsReport, error) {
+	template := &schema.NotificationTemplate{}
+	err := r.db.NewSelect().
+		Model(template).
+		Where("id = ?", templateID).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	report := &notification.TemplateAnalyticsReport{
+		TemplateID:   templateID,
+		TemplateName: template.Name,
+		StartDate:    startDate,
+		EndDate:      endDate,
+	}
+
+	// Count events by type
+	var results []struct {
+		Event string `bun:"event"`
+		Count int64  `bun:"count"`
+	}
+
+	err = r.db.NewSelect().
+		Model((*schema.NotificationAnalytics)(nil)).
+		Column("event").
+		ColumnExpr("COUNT(*) as count").
+		Where("template_id = ?", templateID).
+		Where("created_at BETWEEN ? AND ?", startDate, endDate).
+		Group("event").
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map counts to report
+	for _, result := range results {
+		switch result.Event {
+		case string(schema.NotificationEventSent):
+			report.TotalSent = result.Count
+		case string(schema.NotificationEventDelivered):
+			report.TotalDelivered = result.Count
+		case string(schema.NotificationEventOpened):
+			report.TotalOpened = result.Count
+		case string(schema.NotificationEventClicked):
+			report.TotalClicked = result.Count
+		case string(schema.NotificationEventConverted):
+			report.TotalConverted = result.Count
+		case string(schema.NotificationEventBounced):
+			report.TotalBounced = result.Count
+		case string(schema.NotificationEventComplained):
+			report.TotalComplained = result.Count
+		case string(schema.NotificationEventFailed):
+			report.TotalFailed = result.Count
+		}
+	}
+
+	return report, nil
+}
+
+// GetAppAnalytics aggregates analytics for an app
+func (r *notificationRepository) GetAppAnalytics(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (*notification.AppAnalyticsReport, error) {
+	report := &notification.AppAnalyticsReport{
+		AppID:     appID,
+		StartDate: startDate,
+		EndDate:   endDate,
+	}
+
+	var results []struct {
+		Event string `bun:"event"`
+		Count int64  `bun:"count"`
+	}
+
+	err := r.db.NewSelect().
+		Model((*schema.NotificationAnalytics)(nil)).
+		Column("event").
+		ColumnExpr("COUNT(*) as count").
+		Where("app_id = ?", appID).
+		Where("created_at BETWEEN ? AND ?", startDate, endDate).
+		Group("event").
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, result := range results {
+		switch result.Event {
+		case string(schema.NotificationEventSent):
+			report.TotalSent = result.Count
+		case string(schema.NotificationEventDelivered):
+			report.TotalDelivered = result.Count
+		case string(schema.NotificationEventOpened):
+			report.TotalOpened = result.Count
+		case string(schema.NotificationEventClicked):
+			report.TotalClicked = result.Count
+		case string(schema.NotificationEventConverted):
+			report.TotalConverted = result.Count
+		case string(schema.NotificationEventBounced):
+			report.TotalBounced = result.Count
+		case string(schema.NotificationEventComplained):
+			report.TotalComplained = result.Count
+		case string(schema.NotificationEventFailed):
+			report.TotalFailed = result.Count
+		}
+	}
+
+	return report, nil
+}
+
+// GetOrgAnalytics aggregates analytics for an organization
+func (r *notificationRepository) GetOrgAnalytics(ctx context.Context, orgID xid.ID, startDate, endDate time.Time) (*notification.OrgAnalyticsReport, error) {
+	report := &notification.OrgAnalyticsReport{
+		OrganizationID: orgID,
+		StartDate:      startDate,
+		EndDate:        endDate,
+	}
+
+	var results []struct {
+		Event string `bun:"event"`
+		Count int64  `bun:"count"`
+	}
+
+	err := r.db.NewSelect().
+		Model((*schema.NotificationAnalytics)(nil)).
+		Column("event").
+		ColumnExpr("COUNT(*) as count").
+		Where("organization_id = ?", orgID).
+		Where("created_at BETWEEN ? AND ?", startDate, endDate).
+		Group("event").
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, result := range results {
+		switch result.Event {
+		case string(schema.NotificationEventSent):
+			report.TotalSent = result.Count
+		case string(schema.NotificationEventDelivered):
+			report.TotalDelivered = result.Count
+		case string(schema.NotificationEventOpened):
+			report.TotalOpened = result.Count
+		case string(schema.NotificationEventClicked):
+			report.TotalClicked = result.Count
+		case string(schema.NotificationEventConverted):
+			report.TotalConverted = result.Count
+		case string(schema.NotificationEventBounced):
+			report.TotalBounced = result.Count
+		case string(schema.NotificationEventComplained):
+			report.TotalComplained = result.Count
+		case string(schema.NotificationEventFailed):
+			report.TotalFailed = result.Count
+		}
+	}
+
+	return report, nil
+}
+
+// =============================================================================
+// TEST OPERATIONS
+// =============================================================================
+
+// CreateTest creates a new notification test
+func (r *notificationRepository) CreateTest(ctx context.Context, test *schema.NotificationTest) error {
+	_, err := r.db.NewInsert().Model(test).Exec(ctx)
+	return err
+}
+
+// FindTestByID finds a test by ID
+func (r *notificationRepository) FindTestByID(ctx context.Context, id xid.ID) (*schema.NotificationTest, error) {
+	test := &schema.NotificationTest{}
+	err := r.db.NewSelect().
+		Model(test).
+		Where("id = ?", id).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return test, err
+}
+
+// ListTests lists all tests for a template
+func (r *notificationRepository) ListTests(ctx context.Context, templateID xid.ID) ([]*schema.NotificationTest, error) {
+	var tests []*schema.NotificationTest
+	err := r.db.NewSelect().
+		Model(&tests).
+		Where("template_id = ?", templateID).
+		Order("created_at DESC").
+		Scan(ctx)
+	return tests, err
+}
+
+// UpdateTestStatus updates the status of a test
+func (r *notificationRepository) UpdateTestStatus(ctx context.Context, id xid.ID, status string, results map[string]interface{}, successCount, failureCount int) error {
+	now := time.Now().UTC()
+	_, err := r.db.NewUpdate().
+		Model((*schema.NotificationTest)(nil)).
+		Set("status = ?", status).
+		Set("results = ?", results).
+		Set("success_count = ?", successCount).
+		Set("failure_count = ?", failureCount).
+		Set("completed_at = ?", now).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+// =============================================================================
+// CLEANUP OPERATIONS
+// =============================================================================
+
+// CleanupOldAnalytics removes old analytics data
+func (r *notificationRepository) CleanupOldAnalytics(ctx context.Context, olderThan time.Time) error {
+	_, err := r.db.NewDelete().
+		Model((*schema.NotificationAnalytics)(nil)).
+		Where("created_at < ?", olderThan).
+		Exec(ctx)
+	return err
+}
+
+// CleanupOldTests removes old test records
+func (r *notificationRepository) CleanupOldTests(ctx context.Context, olderThan time.Time) error {
+	_, err := r.db.NewDelete().
+		Model((*schema.NotificationTest)(nil)).
+		Where("created_at < ?", olderThan).
+		Exec(ctx)
+	return err
+}

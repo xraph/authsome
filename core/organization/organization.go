@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -74,10 +75,12 @@ func FromSchemaOrganizations(orgs []*schema.Organization) []*Organization {
 
 // CreateOrganizationRequest represents a create organization request
 type CreateOrganizationRequest struct {
-	Name     string                 `json:"name" validate:"required,min=1,max=100"`
-	Slug     string                 `json:"slug" validate:"required,min=1,max=100,slug"`
-	Logo     *string                `json:"logo,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Name                string                 `json:"name" validate:"required,min=1,max=100"`
+	Slug                string                 `json:"slug" validate:"required,min=1,max=100,slug"`
+	Logo                *string                `json:"logo,omitempty"`
+	Metadata            map[string]interface{} `json:"metadata,omitempty"`
+	RoleTemplateIDs     []xid.ID               `json:"roleTemplateIDs,omitempty"`     // Role templates to bootstrap (empty = all)
+	RoleCustomizations  map[xid.ID]*rbac.RoleCustomization `json:"roleCustomizations,omitempty"` // Customizations for role templates
 }
 
 // UpdateOrganizationRequest represents an update organization request

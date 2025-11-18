@@ -28,6 +28,14 @@ const (
 	CodeProviderNotFound      = "PROVIDER_NOT_FOUND"
 	CodeProviderValidationFailed = "PROVIDER_VALIDATION_FAILED"
 
+	// Version errors
+	CodeVersionNotFound = "VERSION_NOT_FOUND"
+	CodeVersionRestoreFailed = "VERSION_RESTORE_FAILED"
+
+	// Test errors
+	CodeTestNotFound = "TEST_NOT_FOUND"
+	CodeTestFailed = "TEST_FAILED"
+
 	// Validation errors
 	CodeInvalidNotificationType = "INVALID_NOTIFICATION_TYPE"
 	CodeInvalidRecipient        = "INVALID_RECIPIENT"
@@ -91,6 +99,25 @@ func ProviderValidationFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeProviderValidationFailed, "Provider configuration validation failed", http.StatusBadRequest)
 }
 
+// Version errors
+func VersionNotFound() *errs.AuthsomeError {
+	return errs.New(CodeVersionNotFound, "Template version not found", http.StatusNotFound)
+}
+
+func VersionRestoreFailed(err error) *errs.AuthsomeError {
+	return errs.Wrap(err, CodeVersionRestoreFailed, "Failed to restore template version", http.StatusInternalServerError)
+}
+
+// Test errors
+func TestNotFound() *errs.AuthsomeError {
+	return errs.New(CodeTestNotFound, "Notification test not found", http.StatusNotFound)
+}
+
+func TestFailed(reason string) *errs.AuthsomeError {
+	return errs.New(CodeTestFailed, "Notification test failed", http.StatusInternalServerError).
+		WithContext("reason", reason)
+}
+
 // Validation errors
 func InvalidNotificationType(notifType string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidNotificationType, "Invalid notification type", http.StatusBadRequest).
@@ -123,6 +150,10 @@ var (
 	ErrProviderNotConfigured     = &errs.AuthsomeError{Code: CodeProviderNotConfigured}
 	ErrProviderNotFound          = &errs.AuthsomeError{Code: CodeProviderNotFound}
 	ErrProviderValidationFailed  = &errs.AuthsomeError{Code: CodeProviderValidationFailed}
+	ErrVersionNotFound           = &errs.AuthsomeError{Code: CodeVersionNotFound}
+	ErrVersionRestoreFailed      = &errs.AuthsomeError{Code: CodeVersionRestoreFailed}
+	ErrTestNotFound              = &errs.AuthsomeError{Code: CodeTestNotFound}
+	ErrTestFailed                = &errs.AuthsomeError{Code: CodeTestFailed}
 	ErrInvalidNotificationType   = &errs.AuthsomeError{Code: CodeInvalidNotificationType}
 	ErrInvalidRecipient          = &errs.AuthsomeError{Code: CodeInvalidRecipient}
 	ErrMissingTemplateVariable   = &errs.AuthsomeError{Code: CodeMissingTemplateVariable}

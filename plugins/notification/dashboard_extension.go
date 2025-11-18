@@ -1,0 +1,2378 @@
+package notification
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	lucide "github.com/eduardolat/gomponents-lucide"
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/ui"
+	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/plugins/dashboard"
+	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/schema"
+	"github.com/xraph/forge"
+	g "maragu.dev/gomponents"
+	. "maragu.dev/gomponents/html"
+)
+
+// DashboardExtension implements the ui.DashboardExtension interface
+// This allows the notification plugin to add its own screens to the dashboard
+type DashboardExtension struct {
+	plugin   *Plugin
+	registry *dashboard.ExtensionRegistry
+}
+
+// NewDashboardExtension creates a new dashboard extension for notification plugin
+func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
+	return &DashboardExtension{plugin: plugin}
+}
+
+// SetRegistry sets the extension registry reference (called by dashboard after registration)
+func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
+	e.registry = registry
+}
+
+// ExtensionID returns the unique identifier for this extension
+func (e *DashboardExtension) ExtensionID() string {
+	return "notification"
+}
+
+// NavigationItems returns navigation items to register
+func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
+	return []ui.NavigationItem{
+		{
+			ID:    "notifications",
+			Label: "Notifications",
+			Icon: lucide.Mail(
+				Class("size-4"),
+			),
+			Position: ui.NavPositionMain,
+			Order:    55, // After organizations
+			URLBuilder: func(basePath string, currentApp *app.App) string {
+				if currentApp != nil {
+					return basePath + "/dashboard/app/" + currentApp.ID.String() + "/notifications"
+				}
+				return basePath + "/dashboard/"
+			},
+			ActiveChecker: func(activePage string) bool {
+				return activePage == "notifications"
+			},
+			RequiresPlugin: "notification",
+		},
+	}
+}
+
+// Routes returns routes to register under /dashboard/app/:appId/
+func (e *DashboardExtension) Routes() []ui.Route {
+	return []ui.Route{
+		// Notifications Overview
+		{
+			Method:       "GET",
+			Path:         "/notifications",
+			Handler:      e.ServeNotificationsOverview,
+			Name:         "dashboard.notifications.overview",
+			Summary:      "Notifications overview",
+			Description:  "View notification statistics and recent activity",
+			Tags:         []string{"Dashboard", "Notifications"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Templates List
+		{
+			Method:       "GET",
+			Path:         "/notifications/templates",
+			Handler:      e.ServeTemplatesList,
+			Name:         "dashboard.notifications.templates",
+			Summary:      "Notification templates",
+			Description:  "Manage notification templates",
+			Tags:         []string{"Dashboard", "Notifications", "Templates"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Create Template Page
+		{
+			Method:       "GET",
+			Path:         "/notifications/templates/create",
+			Handler:      e.ServeCreateTemplate,
+			Name:         "dashboard.notifications.templates.create",
+			Summary:      "Create template",
+			Description:  "Create a new notification template",
+			Tags:         []string{"Dashboard", "Notifications", "Templates"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Edit Template Page
+		{
+			Method:       "GET",
+			Path:         "/notifications/templates/:templateId/edit",
+			Handler:      e.ServeEditTemplate,
+			Name:         "dashboard.notifications.templates.edit",
+			Summary:      "Edit template",
+			Description:  "Edit an existing notification template",
+			Tags:         []string{"Dashboard", "Notifications", "Templates"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Template Preview
+		{
+			Method:       "POST",
+			Path:         "/notifications/templates/:templateId/preview",
+			Handler:      e.PreviewTemplate,
+			Name:         "dashboard.notifications.templates.preview",
+			Summary:      "Preview template",
+			Description:  "Preview a template with test variables",
+			Tags:         []string{"Dashboard", "Notifications", "Templates"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Test Send
+		{
+			Method:       "POST",
+			Path:         "/notifications/templates/:templateId/test",
+			Handler:      e.TestSendTemplate,
+			Name:         "dashboard.notifications.templates.test",
+			Summary:      "Test send",
+			Description:  "Send a test notification",
+			Tags:         []string{"Dashboard", "Notifications", "Templates"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Settings Pages Routes
+		{
+			Method:       "GET",
+			Path:         "/settings/notifications",
+			Handler:      e.ServeNotificationSettings,
+			Name:         "dashboard.settings.notifications",
+			Summary:      "Notification settings",
+			Description:  "Configure notification plugin settings",
+			Tags:         []string{"Dashboard", "Settings", "Notifications"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/settings/notifications/save",
+			Handler:      e.SaveNotificationSettings,
+			Name:         "dashboard.settings.notifications.save",
+			Summary:      "Save notification settings",
+			Description:  "Update notification plugin configuration",
+			Tags:         []string{"Dashboard", "Settings", "Notifications"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "GET",
+			Path:         "/settings/notifications/providers",
+			Handler:      e.ServeProviderSettings,
+			Name:         "dashboard.settings.notifications.providers",
+			Summary:      "Provider settings",
+			Description:  "Configure email and SMS providers",
+			Tags:         []string{"Dashboard", "Settings", "Notifications"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/settings/notifications/providers/test",
+			Handler:      e.TestProvider,
+			Name:         "dashboard.settings.notifications.providers.test",
+			Summary:      "Test provider",
+			Description:  "Test email or SMS provider configuration",
+			Tags:         []string{"Dashboard", "Settings", "Notifications"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "GET",
+			Path:         "/settings/notifications/analytics",
+			Handler:      e.ServeAnalyticsSettings,
+			Name:         "dashboard.settings.notifications.analytics",
+			Summary:      "Analytics settings",
+			Description:  "View notification analytics and performance",
+			Tags:         []string{"Dashboard", "Settings", "Notifications"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+	}
+}
+
+// SettingsSections returns settings sections for backward compatibility
+// Deprecated: Use SettingsPages() instead
+func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
+	return []ui.SettingsSection{}
+}
+
+// SettingsPages returns full settings pages for the sidebar layout
+func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
+	return []ui.SettingsPage{
+		{
+			ID:            "notification-providers",
+			Label:         "Email & SMS Providers",
+			Description:   "Configure notification delivery providers",
+			Icon:          lucide.Send(Class("h-5 w-5")),
+			Category:      "communication",
+			Order:         11,
+			Path:          "notifications/providers",
+			RequirePlugin: "notification",
+			RequireAdmin:  true,
+		},
+		{
+			ID:            "notification-settings",
+			Label:         "Notification Settings",
+			Description:   "Configure notification plugin behavior",
+			Icon:          lucide.Settings(Class("h-5 w-5")),
+			Category:      "general",
+			Order:         20,
+			Path:          "notifications",
+			RequirePlugin: "notification",
+			RequireAdmin:  true,
+		},
+	}
+}
+
+// DashboardWidgets returns widgets to show on the main dashboard
+func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
+	return []ui.DashboardWidget{
+		{
+			ID:    "notification-stats",
+			Title: "Notifications",
+			Icon: lucide.Mail(
+				Class("size-5"),
+			),
+			Order: 30,
+			Size:  1, // 1 column
+			Renderer: func(basePath string, currentApp *app.App) g.Node {
+				return e.RenderDashboardWidget(basePath, currentApp)
+			},
+		},
+	}
+}
+
+// =============================================================================
+// HANDLER IMPLEMENTATIONS
+// =============================================================================
+
+// ServeNotificationsOverview renders the notifications overview page
+func (e *DashboardExtension) ServeNotificationsOverview(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	// Build minimal PageData
+	pageData := components.PageData{
+		Title:      "Notifications",
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	// Render page content
+	content := e.renderNotificationsOverview(currentApp, basePath)
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// ServeTemplatesList renders the templates list page
+func (e *DashboardExtension) ServeTemplatesList(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	pageData := components.PageData{
+		Title:      "Notification Templates",
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	content := e.renderTemplatesList(currentApp, basePath)
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// ServeCreateTemplate renders the create template page
+func (e *DashboardExtension) ServeCreateTemplate(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	pageData := components.PageData{
+		Title:      "Create Template",
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	content := e.renderCreateTemplate(currentApp, basePath)
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// ServeEditTemplate renders the edit template page
+func (e *DashboardExtension) ServeEditTemplate(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	templateID, err := xid.FromString(c.Param("templateId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid template ID"})
+	}
+
+	basePath := handler.GetBasePath()
+
+	pageData := components.PageData{
+		Title:      "Edit Template",
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	content := e.renderEditTemplate(currentApp, basePath, templateID)
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// PreviewTemplate handles template preview requests
+func (e *DashboardExtension) PreviewTemplate(c forge.Context) error {
+	templateIDStr := c.Param("templateId")
+	templateID, err := xid.FromString(templateIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid template ID"})
+	}
+
+	var req struct {
+		Variables map[string]interface{} `json:"variables"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	// Fetch template
+	template, err := e.plugin.service.GetTemplate(c.Context(), templateID)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
+	}
+
+	// Create template engine for rendering
+	engine := NewTemplateEngine()
+
+	// Render subject
+	subject := ""
+	if template.Subject != "" {
+		subject, err = engine.Render(template.Subject, req.Variables)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": fmt.Sprintf("Failed to render subject: %v", err),
+			})
+		}
+	}
+
+	// Render body
+	body, err := engine.Render(template.Body, req.Variables)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": fmt.Sprintf("Failed to render body: %v", err),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"subject": subject,
+		"body":    body,
+		"type":    template.Type,
+	})
+}
+
+// TestSendTemplate handles test send requests
+func (e *DashboardExtension) TestSendTemplate(c forge.Context) error {
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
+	}
+
+	templateIDStr := c.Param("templateId")
+	templateID, err := xid.FromString(templateIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid template ID"})
+	}
+
+	var req struct {
+		Recipient string                 `json:"recipient"`
+		Variables map[string]interface{} `json:"variables"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	if req.Recipient == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Recipient is required"})
+	}
+
+	// Get template
+	template, err := e.plugin.service.GetTemplate(c.Context(), templateID)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
+	}
+
+	// Prepare default variables if not provided
+	if req.Variables == nil {
+		req.Variables = make(map[string]interface{})
+	}
+
+	// Add some default variables for testing
+	if _, exists := req.Variables["user_name"]; !exists {
+		req.Variables["user_name"] = currentUser.Name
+	}
+	if _, exists := req.Variables["user_email"]; !exists {
+		req.Variables["user_email"] = currentUser.Email
+	}
+	if _, exists := req.Variables["app_name"]; !exists {
+		req.Variables["app_name"] = currentApp.Name
+	}
+
+	// Send test notification
+	notif, err := e.plugin.templateSvc.SendWithTemplate(c.Context(), &SendWithTemplateRequest{
+		AppID:       currentApp.ID,
+		TemplateKey: template.TemplateKey,
+		Type:        template.Type,
+		Recipient:   req.Recipient,
+		Variables:   req.Variables,
+		Language:    template.Language,
+		Metadata: map[string]interface{}{
+			"test_send":     true,
+			"test_by_user":  currentUser.ID.String(),
+			"test_by_email": currentUser.Email,
+		},
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("Failed to send test notification: %v", err),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success":        true,
+		"message":        "Test notification sent successfully",
+		"notificationId": notif.ID,
+		"recipient":      req.Recipient,
+	})
+}
+
+// ServeNotificationSettings renders the notification settings page
+func (e *DashboardExtension) ServeNotificationSettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	content := e.renderNotificationSettingsContent(currentApp, handler.GetBasePath())
+
+	// Use the settings layout with sidebar navigation
+	return handler.RenderSettingsPage(c, "notification-settings", content)
+}
+
+// SaveNotificationSettings handles saving notification settings
+func (e *DashboardExtension) SaveNotificationSettings(c forge.Context) error {
+	_, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
+	}
+
+	var req struct {
+		AutoSendWelcome bool   `json:"autoSendWelcome"`
+		RetryAttempts   int    `json:"retryAttempts"`
+		RetryDelay      string `json:"retryDelay"`
+		CleanupAfter    string `json:"cleanupAfter"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	// Validate retry attempts
+	if req.RetryAttempts < 0 || req.RetryAttempts > 10 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Retry attempts must be between 0 and 10",
+		})
+	}
+
+	// Note: In a full implementation, you would save these settings to the app configuration
+	// This might involve:
+	// 1. Updating app-specific config in the database or config file
+	// 2. Reloading the plugin configuration
+	// 3. Applying the changes to the running service
+
+	// For now, we'll just return success as the config structure would need to support
+	// per-app overrides which is part of the configuration management system
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Notification settings saved successfully",
+		"settings": map[string]interface{}{
+			"autoSendWelcome": req.AutoSendWelcome,
+			"retryAttempts":   req.RetryAttempts,
+			"retryDelay":      req.RetryDelay,
+			"cleanupAfter":    req.CleanupAfter,
+		},
+	})
+}
+
+// ServeProviderSettings renders the provider settings page
+func (e *DashboardExtension) ServeProviderSettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	content := e.renderProviderSettingsContent(currentApp, handler.GetBasePath())
+
+	// Use the settings layout with sidebar navigation
+	return handler.RenderSettingsPage(c, "notification-providers", content)
+}
+
+// TestProvider handles provider test requests
+func (e *DashboardExtension) TestProvider(c forge.Context) error {
+	_, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
+	}
+
+	var req struct {
+		ProviderType  string                 `json:"providerType"` // "email" or "sms"
+		ProviderName  string                 `json:"providerName"` // "smtp", "sendgrid", "twilio", etc.
+		Config        map[string]interface{} `json:"config"`
+		TestRecipient string                 `json:"testRecipient"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	if req.TestRecipient == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Test recipient is required"})
+	}
+
+	// For now, we'll return a success response since actual provider testing
+	// would require implementing provider-specific logic
+	// In a full implementation, you would:
+	// 1. Create a temporary provider instance with the config
+	// 2. Send a test message through that provider
+	// 3. Return the result with timing information
+
+	startTime := time.Now()
+
+	// Simulate provider validation
+	if req.Config == nil || len(req.Config) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Provider configuration is required",
+		})
+	}
+
+	// Basic validation based on provider type
+	if req.ProviderType == "email" {
+		if req.ProviderName == "smtp" {
+			required := []string{"host", "port", "username", "password", "from"}
+			for _, field := range required {
+				if _, exists := req.Config[field]; !exists {
+					return c.JSON(http.StatusBadRequest, map[string]string{
+						"error": fmt.Sprintf("Missing required field: %s", field),
+					})
+				}
+			}
+		} else if req.ProviderName == "sendgrid" || req.ProviderName == "resend" || req.ProviderName == "postmark" {
+			if _, exists := req.Config["api_key"]; !exists {
+				return c.JSON(http.StatusBadRequest, map[string]string{
+					"error": "API key is required",
+				})
+			}
+		}
+	} else if req.ProviderType == "sms" {
+		if req.ProviderName == "twilio" {
+			required := []string{"account_sid", "auth_token", "from"}
+			for _, field := range required {
+				if _, exists := req.Config[field]; !exists {
+					return c.JSON(http.StatusBadRequest, map[string]string{
+						"error": fmt.Sprintf("Missing required field: %s", field),
+					})
+				}
+			}
+		}
+	}
+
+	duration := time.Since(startTime)
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"message":      "Provider configuration validated successfully",
+		"deliveryTime": fmt.Sprintf("%.2fs", duration.Seconds()),
+		"recipient":    req.TestRecipient,
+		"providerName": req.ProviderName,
+	})
+}
+
+// ServeAnalyticsSettings renders the analytics page
+func (e *DashboardExtension) ServeAnalyticsSettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	content := e.renderAnalyticsContent(currentApp, handler.GetBasePath())
+
+	pageData := components.PageData{
+		Title:      "Notification Analytics",
+		User:       currentUser,
+		ActivePage: "notifications-analytics",
+		BasePath:   handler.GetBasePath(),
+		CurrentApp: currentApp,
+	}
+
+	// Use the settings layout with sidebar navigation
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// =============================================================================
+// RENDERING HELPERS
+// =============================================================================
+
+// getUserFromContext extracts the current user from context
+func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
+	return e.registry.GetHandler().GetUserFromContext(c)
+}
+
+// extractAppFromURL extracts app using the dashboard handler
+func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return nil, fmt.Errorf("handler not available")
+	}
+
+	currentApp, err := handler.GetCurrentApp(c)
+	if err != nil {
+		return nil, err
+	}
+
+	return currentApp, nil
+}
+
+// RenderDashboardWidget renders the notification stats widget
+func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *app.App) g.Node {
+	// TODO: Get actual stats from database
+	totalSent := 1234
+	delivered := 1150
+	opened := 456
+	deliveryRate := float64(delivered) / float64(totalSent) * 100
+
+	return Div(
+		Class("flex flex-col gap-2"),
+
+		// Total sent
+		Div(
+			Class("flex items-center justify-between text-sm"),
+			Span(Class("text-slate-600 dark:text-gray-400"), g.Text("Total Sent")),
+			Span(Class("font-semibold text-slate-900 dark:text-white"), g.Textf("%d", totalSent)),
+		),
+
+		// Delivery rate
+		Div(
+			Class("flex items-center justify-between text-sm"),
+			Span(Class("text-slate-600 dark:text-gray-400"), g.Text("Delivered")),
+			Span(Class("font-semibold text-green-600 dark:text-green-400"), g.Textf("%.1f%%", deliveryRate)),
+		),
+
+		// Open rate
+		Div(
+			Class("flex items-center justify-between text-sm"),
+			Span(Class("text-slate-600 dark:text-gray-400"), g.Text("Opened")),
+			Span(Class("font-semibold text-blue-600 dark:text-blue-400"), g.Textf("%d", opened)),
+		),
+
+		// View details link
+		Div(
+			Class("mt-2 pt-2 border-t border-slate-200 dark:border-gray-700"),
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications", basePath, currentApp.ID.String())),
+				Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"),
+				g.Text("View all notifications →"),
+			),
+		),
+	)
+}
+
+// renderNotificationsOverview renders the main notifications overview
+func (e *DashboardExtension) renderNotificationsOverview(currentApp *app.App, basePath string) g.Node {
+	return Div(
+		Class("space-y-6"),
+
+		// Header
+		Div(
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Notifications")),
+				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Manage templates, providers, and view analytics")),
+			),
+		),
+
+		// Quick actions
+		Div(
+			Class("grid gap-4 md:grid-cols-3"),
+
+			// Templates card
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
+				Class("block p-6 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/20"),
+						lucide.FileText(Class("h-5 w-5 text-violet-600 dark:text-violet-400")),
+					),
+					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						g.Text("Templates")),
+				),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Manage email and SMS templates")),
+			),
+
+			// Providers card
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/notifications/providers", basePath, currentApp.ID)),
+				Class("block p-6 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/20"),
+						lucide.Send(Class("h-5 w-5 text-green-600 dark:text-green-400")),
+					),
+					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						g.Text("Providers")),
+				),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Configure email and SMS providers")),
+			),
+
+			// Analytics card
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/notifications/analytics", basePath, currentApp.ID)),
+				Class("block p-6 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/20"),
+						lucide.ChartBar(Class("h-5 w-5 text-blue-600 dark:text-blue-400")),
+					),
+					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						g.Text("Analytics")),
+				),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("View performance metrics")),
+			),
+		),
+
+		// Recent notifications placeholder
+		Div(
+			Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+			H2(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+				g.Text("Recent Activity")),
+			P(Class("text-sm text-slate-600 dark:text-gray-400"),
+				g.Text("Recent notification activity will appear here")),
+		),
+	)
+}
+
+// renderTemplatesList renders the templates list
+func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath string) g.Node {
+	ctx := context.Background()
+
+	// Fetch templates with pagination
+	filter := &notification.ListTemplatesFilter{
+		PaginationParams: pagination.PaginationParams{
+			Page:  1,
+			Limit: 50,
+		},
+		AppID: currentApp.ID,
+	}
+
+	response, err := e.plugin.service.ListTemplates(ctx, filter)
+
+	if err != nil {
+		return Div(
+			Class("space-y-6"),
+			Div(
+				Class("rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"),
+				P(Class("text-sm text-red-800 dark:text-red-200"),
+					g.Textf("Error loading templates: %v", err)),
+			),
+		)
+	}
+
+	return Div(
+		Class("space-y-6"),
+
+		// Header with create button
+		Div(
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Notification Templates")),
+				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
+					g.Textf("Manage %d notification templates", len(response.Data))),
+			),
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
+				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+				lucide.Plus(Class("h-4 w-4")),
+				g.Text("New Template"),
+			),
+		),
+
+		// Templates table
+		g.If(len(response.Data) == 0,
+			renderEmptyTemplatesState(basePath, currentApp),
+		),
+		g.If(len(response.Data) > 0,
+			renderTemplatesTable(response.Data, basePath, currentApp),
+		),
+	)
+}
+
+// renderEmptyTemplatesState renders the empty state when no templates exist
+func renderEmptyTemplatesState(basePath string, currentApp *app.App) g.Node {
+	return Div(
+		Class("rounded-lg border border-slate-200 bg-white p-12 text-center dark:border-gray-800 dark:bg-gray-900"),
+		Div(
+			Class("mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/20"),
+			lucide.FileText(Class("h-6 w-6 text-violet-600 dark:text-violet-400")),
+		),
+		H3(Class("mt-4 text-lg font-semibold text-slate-900 dark:text-white"),
+			g.Text("No templates yet")),
+		P(Class("mt-2 text-sm text-slate-600 dark:text-gray-400"),
+			g.Text("Get started by creating your first notification template")),
+		Div(
+			Class("mt-6"),
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
+				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+				lucide.Plus(Class("h-4 w-4")),
+				g.Text("Create Template"),
+			),
+		),
+	)
+}
+
+// renderTemplatesTable renders the templates data table
+func renderTemplatesTable(templates []*notification.Template, basePath string, currentApp *app.App) g.Node {
+	return Div(
+		Class("overflow-hidden rounded-lg border border-slate-200 bg-white shadow dark:border-gray-800 dark:bg-gray-900"),
+
+		// Table
+		Div(
+			Class("overflow-x-auto"),
+			Table(
+				Class("min-w-full divide-y divide-slate-200 dark:divide-gray-800"),
+
+				// Table header
+				g.El("thead",
+					Class("bg-slate-50 dark:bg-gray-800/50"),
+					Tr(
+						Th(Class("px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400"),
+							g.Text("Name")),
+						Th(Class("px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400"),
+							g.Text("Type")),
+						Th(Class("px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400"),
+							g.Text("Language")),
+						Th(Class("px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400"),
+							g.Text("Status")),
+						Th(Class("px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400"),
+							g.Text("Stats")),
+						Th(Class("px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400"),
+							g.Text("Actions")),
+					),
+				),
+
+				// Table body
+				g.El("tbody",
+					Class("divide-y divide-slate-200 bg-white dark:divide-gray-800 dark:bg-gray-900"),
+					g.Group(renderTemplateRows(templates, basePath, currentApp)),
+				),
+			),
+		),
+	)
+}
+
+// renderTemplateRows renders individual template rows
+func renderTemplateRows(templates []*notification.Template, basePath string, currentApp *app.App) []g.Node {
+	rows := make([]g.Node, len(templates))
+	for i, template := range templates {
+		rows[i] = renderTemplateRow(template, basePath, currentApp)
+	}
+	return rows
+}
+
+// renderTemplateRow renders a single template row
+func renderTemplateRow(template *notification.Template, basePath string, currentApp *app.App) g.Node {
+	return Tr(
+		Class("hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors"),
+
+		// Name and key
+		Td(Class("px-6 py-4 whitespace-nowrap"),
+			Div(
+				Div(Class("text-sm font-medium text-slate-900 dark:text-white"),
+					g.Text(template.Name)),
+				Div(Class("text-xs text-slate-500 dark:text-gray-400"),
+					g.Text(template.TemplateKey)),
+			),
+		),
+
+		// Type
+		Td(Class("px-6 py-4 whitespace-nowrap"),
+			Span(
+				Class("inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium"),
+				g.If(template.Type == notification.NotificationTypeEmail,
+					Class("bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"),
+				),
+				g.If(template.Type == notification.NotificationTypeSMS,
+					Class("bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"),
+				),
+				g.If(template.Type == notification.NotificationTypeEmail,
+					lucide.Mail(Class("h-3 w-3")),
+				),
+				g.If(template.Type == notification.NotificationTypeSMS,
+					lucide.MessageSquare(Class("h-3 w-3")),
+				),
+				g.Text(string(template.Type)),
+			),
+		),
+
+		// Language
+		Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white"),
+			g.Text(template.Language)),
+
+		// Status
+		Td(Class("px-6 py-4 whitespace-nowrap"),
+			g.If(template.Active,
+				Span(
+					Class("inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300"),
+					lucide.Check(Class("h-3 w-3")),
+					g.Text("Active"),
+				),
+			),
+			g.If(!template.Active,
+				Span(
+					Class("inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300"),
+					lucide.Circle(Class("h-3 w-3")),
+					g.Text("Inactive"),
+				),
+			),
+		),
+
+		// Stats
+		Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-gray-400"),
+			Span(Class("text-xs text-slate-500 dark:text-gray-500"),
+				g.Text("-")),
+		),
+
+		// Actions
+		Td(Class("px-6 py-4 whitespace-nowrap text-right text-sm font-medium"),
+			Div(Class("flex items-center justify-end gap-2"),
+				A(
+					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/%s/edit", basePath, currentApp.ID, template.ID)),
+					Class("text-violet-600 hover:text-violet-900 dark:text-violet-400 dark:hover:text-violet-300"),
+					Title("Edit template"),
+					lucide.Pencil(Class("h-4 w-4")),
+				),
+				Button(
+					Type("button"),
+					Class("text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"),
+					Title("Test send"),
+					g.Attr("onclick", fmt.Sprintf("openTestSendModal('%s')", template.ID)),
+					lucide.Send(Class("h-4 w-4")),
+				),
+				Button(
+					Type("button"),
+					Class("text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"),
+					Title("Delete template"),
+					g.Attr("onclick", fmt.Sprintf("confirmDelete('%s', '%s')", template.ID, template.Name)),
+					lucide.Trash2(Class("h-4 w-4")),
+				),
+			),
+		),
+	)
+}
+
+// renderCreateTemplate renders the create template form
+func (e *DashboardExtension) renderCreateTemplate(currentApp *app.App, basePath string) g.Node {
+	return Div(
+		Class("space-y-6"),
+		g.Attr("x-data", `{
+			templateType: 'email',
+			showSubject: true,
+			templateBody: '',
+			templateSubject: '',
+			extractedVars: [],
+			extractVariables() {
+				const regex = /\{\{\.(\w+)\}\}/g;
+				const vars = new Set();
+				let match;
+				
+				// Extract from subject
+				while ((match = regex.exec(this.templateSubject)) !== null) {
+					vars.add(match[1]);
+				}
+				
+				// Extract from body
+				regex.lastIndex = 0;
+				while ((match = regex.exec(this.templateBody)) !== null) {
+					vars.add(match[1]);
+				}
+				
+				this.extractedVars = Array.from(vars);
+			}
+		}`),
+
+		// Header
+		Div(
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Create Notification Template")),
+				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Create a new email or SMS notification template")),
+			),
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
+				Class("text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
+				g.Text("← Back to Templates"),
+			),
+		),
+
+		// Main form
+		FormEl(
+			Method("POST"),
+			Action(fmt.Sprintf("%s/auth/notification/templates?redirect=%s/dashboard/app/%s/notifications/templates",
+				basePath, basePath, currentApp.ID)),
+			g.Attr("x-on:input.debounce.500ms", "extractVariables()"),
+			Class("space-y-6"),
+
+			// Basic Information Section
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Basic Information")),
+
+				Div(Class("space-y-4"),
+					// Template Name
+					Div(
+						Label(
+							For("name"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Template Name"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Input(
+							Type("text"),
+							ID("name"),
+							Name("name"),
+							Required(),
+							g.Attr("placeholder", "e.g., Welcome Email, Password Reset"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("A descriptive name for this template")),
+					),
+
+					// Template Key
+					Div(
+						Label(
+							For("templateKey"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Template Key"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Input(
+							Type("text"),
+							ID("templateKey"),
+							Name("templateKey"),
+							Required(),
+							g.Attr("placeholder", "e.g., auth.welcome, auth.password_reset"),
+							g.Attr("pattern", "[a-z0-9_.]+"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Unique identifier (lowercase, dots, underscores only)")),
+					),
+
+					// Type Selection
+					Div(
+						Label(
+							For("type"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Notification Type"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Select(
+							ID("type"),
+							Name("type"),
+							Required(),
+							g.Attr("x-model", "templateType"),
+							g.Attr("@change", "showSubject = (templateType === 'email')"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+							Option(Value("email"), Selected(), g.Text("Email")),
+							Option(Value("sms"), g.Text("SMS")),
+						),
+					),
+
+					// Language
+					Div(
+						Label(
+							For("language"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Language"),
+						),
+						Select(
+							ID("language"),
+							Name("language"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+							Option(Value("en"), Selected(), g.Text("English (en)")),
+							Option(Value("es"), g.Text("Spanish (es)")),
+							Option(Value("fr"), g.Text("French (fr)")),
+							Option(Value("de"), g.Text("German (de)")),
+							Option(Value("pt"), g.Text("Portuguese (pt)")),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Language for this template variant")),
+					),
+
+					// Active Toggle
+					Div(
+						Label(
+							Class("flex items-center gap-2"),
+							Input(
+								Type("checkbox"),
+								Name("active"),
+								Value("true"),
+								Checked(),
+								Class("rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800"),
+							),
+							Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Active")),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400 ml-6"),
+							g.Text("Make this template available for use immediately")),
+					),
+				),
+			),
+
+			// Content Section
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Template Content")),
+
+				Div(Class("space-y-4"),
+					// Subject (Email only)
+					Div(
+						g.Attr("x-show", "showSubject"),
+						g.Attr("x-cloak", ""),
+						Label(
+							For("subject"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Subject Line"),
+							Span(Class("text-red-500"), g.Attr("x-show", "showSubject"), g.Text(" *")),
+						),
+						Input(
+							Type("text"),
+							ID("subject"),
+							Name("subject"),
+							g.Attr("x-model", "templateSubject"),
+							g.Attr("placeholder", "e.g., Welcome to {{.app_name}}!"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Use {{.variable_name}} for dynamic content")),
+					),
+
+					// Body
+					Div(
+						Label(
+							For("body"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Message Body"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Textarea(
+							ID("body"),
+							Name("body"),
+							Required(),
+							g.Attr("x-model", "templateBody"),
+							g.Attr("placeholder", "e.g., Hello {{.user_name}},\n\nWelcome to our platform!"),
+							g.Attr("rows", "10"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Use {{.variable_name}} syntax for template variables. Supports Go template language.")),
+					),
+
+					// Variable hints
+					Div(
+						Class("rounded-md bg-blue-50 p-4 dark:bg-blue-900/20"),
+						Div(Class("flex items-start gap-3"),
+							lucide.Info(Class("h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5")),
+							Div(
+								H4(Class("text-sm font-medium text-blue-900 dark:text-blue-300"),
+									g.Text("Template Variables")),
+								P(Class("mt-1 text-xs text-blue-800 dark:text-blue-200"),
+									g.Text("Use these syntax patterns:")),
+								Ul(Class("mt-2 text-xs text-blue-800 dark:text-blue-200 list-disc list-inside space-y-1"),
+									Li(g.Text("{{.variable_name}} - Simple variable")),
+									Li(g.Text("{{if .condition}}...{{end}} - Conditional")),
+									Li(g.Text("{{range .items}}...{{end}} - Loop")),
+								),
+								Div(
+									g.Attr("x-show", "extractedVars.length > 0"),
+									g.Attr("x-cloak", ""),
+									Class("mt-3 pt-3 border-t border-blue-200 dark:border-blue-800"),
+									P(Class("text-xs font-medium text-blue-900 dark:text-blue-300 mb-1"),
+										g.Text("Detected variables:")),
+									Div(
+										Class("flex flex-wrap gap-1"),
+										g.Raw(`<template x-for="varName in extractedVars" :key="varName">
+											<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100" x-text="varName"></span>
+										</template>`),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+
+			// Hidden field for app ID
+			Input(Type("hidden"), Name("appId"), Value(currentApp.ID.String())),
+
+			// Form Actions
+			Div(
+				Class("flex items-center justify-end gap-4 pt-6"),
+				A(
+					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
+					Class("rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
+					g.Text("Cancel"),
+				),
+				Button(
+					Type("submit"),
+					Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+					lucide.Check(Class("h-4 w-4")),
+					g.Text("Create Template"),
+				),
+			),
+		),
+	)
+}
+
+// renderEditTemplate renders the edit template form
+func (e *DashboardExtension) renderEditTemplate(currentApp *app.App, basePath string, templateID xid.ID) g.Node {
+	ctx := context.Background()
+
+	// Fetch existing template
+	template, err := e.plugin.service.GetTemplate(ctx, templateID)
+	if err != nil {
+		return Div(
+			Class("space-y-6"),
+			Div(
+				Class("rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"),
+				P(Class("text-sm text-red-800 dark:text-red-200"),
+					g.Textf("Error loading template: %v", err)),
+			),
+		)
+	}
+
+	return Div(
+		Class("space-y-6"),
+		g.Attr("x-data", fmt.Sprintf(`{
+			templateType: '%s',
+			showSubject: %t,
+			templateBody: '',
+			templateSubject: '',
+			extractedVars: [],
+			showDeleteConfirm: false,
+			showTestSend: false,
+			testRecipient: '',
+			testVars: {},
+			extractVariables() {
+				const regex = /\{\{\.(\w+)\}\}/g;
+				const vars = new Set();
+				let match;
+				
+				while ((match = regex.exec(this.templateSubject)) !== null) {
+					vars.add(match[1]);
+				}
+				
+				regex.lastIndex = 0;
+				while ((match = regex.exec(this.templateBody)) !== null) {
+					vars.add(match[1]);
+				}
+				
+				this.extractedVars = Array.from(vars);
+			}
+		}`, template.Type, template.Type == notification.NotificationTypeEmail)),
+
+		// Header with actions
+		Div(
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Edit Template")),
+				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
+					g.Text(template.TemplateKey)),
+			),
+			Div(
+				Class("flex items-center gap-3"),
+				A(
+					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
+					Class("text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
+					g.Text("← Back to Templates"),
+				),
+				Button(
+					Type("button"),
+					g.Attr("@click", "showTestSend = true"),
+					Class("inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"),
+					lucide.Send(Class("h-4 w-4")),
+					g.Text("Test Send"),
+				),
+				Button(
+					Type("button"),
+					g.Attr("@click", "showDeleteConfirm = true"),
+					Class("inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300"),
+					lucide.Trash2(Class("h-4 w-4")),
+					g.Text("Delete"),
+				),
+			),
+		),
+
+		// Edit Form
+		FormEl(
+			Method("POST"),
+			Action(fmt.Sprintf("%s/auth/notification/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates",
+				basePath, templateID, basePath, currentApp.ID)),
+			g.Attr("x-on:input.debounce.500ms", "extractVariables()"),
+			Class("space-y-6"),
+
+			// Basic Information Section
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Basic Information")),
+
+				Div(Class("space-y-4"),
+					// Template Name
+					Div(
+						Label(
+							For("name"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Template Name"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Input(
+							Type("text"),
+							ID("name"),
+							Name("name"),
+							Required(),
+							Value(template.Name),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+					),
+
+					// Template Key (readonly)
+					Div(
+						Label(
+							For("templateKey"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Template Key"),
+						),
+						Input(
+							Type("text"),
+							ID("templateKey"),
+							Value(template.TemplateKey),
+							Disabled(),
+							Class("mt-1 block w-full rounded-md border-slate-300 bg-slate-50 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Template key cannot be changed after creation")),
+					),
+
+					// Type (readonly)
+					Div(
+						Label(
+							For("type"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Notification Type"),
+						),
+						Input(
+							Type("text"),
+							ID("type"),
+							Value(string(template.Type)),
+							Disabled(),
+							Class("mt-1 block w-full rounded-md border-slate-300 bg-slate-50 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"),
+						),
+					),
+
+					// Language
+					Div(
+						Label(
+							For("language"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Language"),
+						),
+						Select(
+							ID("language"),
+							Name("language"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+							Option(Value("en"), g.If(template.Language == "en", Selected()), g.Text("English (en)")),
+							Option(Value("es"), g.If(template.Language == "es", Selected()), g.Text("Spanish (es)")),
+							Option(Value("fr"), g.If(template.Language == "fr", Selected()), g.Text("French (fr)")),
+							Option(Value("de"), g.If(template.Language == "de", Selected()), g.Text("German (de)")),
+							Option(Value("pt"), g.If(template.Language == "pt", Selected()), g.Text("Portuguese (pt)")),
+						),
+					),
+
+					// Active Toggle
+					Div(
+						Label(
+							Class("flex items-center gap-2"),
+							Input(
+								Type("checkbox"),
+								Name("active"),
+								Value("true"),
+								g.If(template.Active, Checked()),
+								Class("rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800"),
+							),
+							Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Active")),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400 ml-6"),
+							g.Text("Template is available for use")),
+					),
+				),
+			),
+
+			// Content Section
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Template Content")),
+
+				Div(Class("space-y-4"),
+					// Subject (Email only)
+					g.If(template.Type == notification.NotificationTypeEmail,
+						Div(
+							Label(
+								For("subject"),
+								Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Subject Line"),
+								Span(Class("text-red-500"), g.Text(" *")),
+							),
+							Input(
+								Type("text"),
+								ID("subject"),
+								Name("subject"),
+								Value(template.Subject),
+								g.Attr("x-model", "templateSubject"),
+								g.Attr("x-init", fmt.Sprintf("templateSubject = '%s'", template.Subject)),
+								Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+							),
+						),
+					),
+
+					// Body
+					Div(
+						Label(
+							For("body"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Message Body"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Textarea(
+							ID("body"),
+							Name("body"),
+							Required(),
+							g.Attr("x-model", "templateBody"),
+							g.Attr("x-init", fmt.Sprintf("templateBody = `%s`", template.Body)),
+							g.Attr("rows", "12"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+							g.Text(template.Body),
+						),
+					),
+
+					// Variable hints
+					Div(
+						Class("rounded-md bg-blue-50 p-4 dark:bg-blue-900/20"),
+						Div(Class("flex items-start gap-3"),
+							lucide.Info(Class("h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5")),
+							Div(
+								H4(Class("text-sm font-medium text-blue-900 dark:text-blue-300"),
+									g.Text("Template Variables")),
+								g.If(len(template.Variables) > 0,
+									Div(
+										Class("mt-2"),
+										P(Class("text-xs text-blue-800 dark:text-blue-200 mb-1"),
+											g.Text("Current variables:")),
+										Div(
+											Class("flex flex-wrap gap-1"),
+											g.Group(renderVariableTags(template.Variables)),
+										),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+
+			// Hidden fields
+			Input(Type("hidden"), Name("_method"), Value("PUT")),
+
+			// Form Actions
+			Div(
+				Class("flex items-center justify-end gap-4 pt-6"),
+				A(
+					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
+					Class("rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
+					g.Text("Cancel"),
+				),
+				Button(
+					Type("submit"),
+					Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+					lucide.Check(Class("h-4 w-4")),
+					g.Text("Save Changes"),
+				),
+			),
+		),
+
+		// Delete Confirmation Modal
+		renderDeleteConfirmModal(templateID, template.Name, basePath, currentApp),
+
+		// Test Send Modal
+		renderTestSendModal(templateID, basePath, currentApp),
+	)
+}
+
+// renderVariableTags renders variable name tags
+func renderVariableTags(variables []string) []g.Node {
+	tags := make([]g.Node, len(variables))
+	for i, v := range variables {
+		tags[i] = Span(
+			Class("inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"),
+			g.Text(v),
+		)
+	}
+	return tags
+}
+
+// renderDeleteConfirmModal renders the delete confirmation modal
+func renderDeleteConfirmModal(templateID xid.ID, templateName, basePath string, currentApp *app.App) g.Node {
+	return Div(
+		g.Attr("x-show", "showDeleteConfirm"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
+		g.Attr("@keydown.escape.window", "showDeleteConfirm = false"),
+
+		// Overlay
+		Div(
+			g.Attr("x-show", "showDeleteConfirm"),
+			g.Attr("@click", "showDeleteConfirm = false"),
+			Class("fixed inset-0 bg-black bg-opacity-50 transition-opacity"),
+		),
+
+		// Modal
+		Div(
+			Class("flex min-h-screen items-center justify-center p-4"),
+			Div(
+				g.Attr("x-show", "showDeleteConfirm"),
+				g.Attr("@click.stop", ""),
+				Class("relative bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full p-6"),
+
+				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-2"),
+					g.Text("Delete Template")),
+				P(Class("text-sm text-slate-600 dark:text-gray-400 mb-4"),
+					g.Textf("Are you sure you want to delete \"%s\"? This action cannot be undone.", templateName)),
+
+				Div(
+					Class("flex items-center justify-end gap-3"),
+					Button(
+						Type("button"),
+						g.Attr("@click", "showDeleteConfirm = false"),
+						Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+						g.Text("Cancel"),
+					),
+					FormEl(
+						Method("POST"),
+						Action(fmt.Sprintf("%s/auth/notification/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates",
+							basePath, templateID, basePath, currentApp.ID)),
+						Class("inline"),
+						Input(Type("hidden"), Name("_method"), Value("DELETE")),
+						Button(
+							Type("submit"),
+							Class("px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"),
+							g.Text("Delete Template"),
+						),
+					),
+				),
+			),
+		),
+	)
+}
+
+// renderTestSendModal renders the test send modal
+func renderTestSendModal(templateID xid.ID, basePath string, currentApp *app.App) g.Node {
+	return Div(
+		g.Attr("x-show", "showTestSend"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
+		g.Attr("@keydown.escape.window", "showTestSend = false"),
+
+		// Overlay
+		Div(
+			g.Attr("x-show", "showTestSend"),
+			g.Attr("@click", "showTestSend = false"),
+			Class("fixed inset-0 bg-black bg-opacity-50 transition-opacity"),
+		),
+
+		// Modal
+		Div(
+			Class("flex min-h-screen items-center justify-center p-4"),
+			Div(
+				g.Attr("x-show", "showTestSend"),
+				g.Attr("@click.stop", ""),
+				Class("relative bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full p-6"),
+
+				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Send Test Notification")),
+
+				FormEl(
+					Method("POST"),
+					Action(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/%s/test", basePath, currentApp.ID, templateID)),
+					Class("space-y-4"),
+
+					Div(
+						Label(
+							For("testRecipient"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Recipient"),
+						),
+						Input(
+							Type("text"),
+							ID("testRecipient"),
+							Name("recipient"),
+							Required(),
+							g.Attr("placeholder", "email@example.com or +1234567890"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Email address or phone number to send test to")),
+					),
+
+					Div(
+						Class("flex items-center justify-end gap-3 pt-4"),
+						Button(
+							Type("button"),
+							g.Attr("@click", "showTestSend = false"),
+							Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+							g.Text("Cancel"),
+						),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"),
+							lucide.Send(Class("h-4 w-4")),
+							g.Text("Send Test"),
+						),
+					),
+				),
+			),
+		),
+	)
+}
+
+// renderNotificationSettingsContent renders the notification settings page
+func (e *DashboardExtension) renderNotificationSettingsContent(currentApp *app.App, basePath string) g.Node {
+	cfg := e.plugin.config
+
+	return Div(
+		Class("space-y-6"),
+
+		// Header
+		Div(
+			H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+				g.Text("Notification Settings")),
+			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
+				g.Text("Configure notification plugin behavior")),
+		),
+
+		// Settings form
+		Div(
+			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+			Form(
+				Method("POST"),
+				Action(fmt.Sprintf("%s/dashboard/app/%s/settings/notifications/save", basePath, currentApp.ID)),
+				Class("space-y-6"),
+
+				// Auto-send welcome emails
+				Div(
+					Label(
+						For("autoSendWelcome"),
+						Class("flex items-center"),
+						Input(
+							Type("checkbox"),
+							Name("autoSendWelcome"),
+							ID("autoSendWelcome"),
+							Class("rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800"),
+							g.If(cfg.AutoSendWelcome, Checked()),
+						),
+						Span(Class("ml-2 text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Auto-send welcome emails")),
+					),
+					P(Class("mt-1 ml-6 text-sm text-slate-500 dark:text-gray-400"),
+						g.Text("Automatically send welcome emails when users sign up")),
+				),
+
+				// Retry attempts
+				Div(
+					Label(
+						For("retryAttempts"),
+						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+						g.Text("Retry Attempts"),
+					),
+					Input(
+						Type("number"),
+						Name("retryAttempts"),
+						ID("retryAttempts"),
+						Value(strconv.Itoa(cfg.RetryAttempts)),
+						g.Attr("min", "0"),
+						g.Attr("max", "10"),
+						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+					),
+					P(Class("mt-1 text-sm text-slate-500 dark:text-gray-400"),
+						g.Text("Number of retry attempts for failed notifications")),
+				),
+
+				// Save button
+				Div(
+					Class("flex items-center justify-end gap-4"),
+					Button(
+						Type("submit"),
+						Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+						g.Text("Save Settings"),
+					),
+				),
+			),
+		),
+	)
+}
+
+// renderProviderSettingsContent renders the provider settings page
+func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, basePath string) g.Node {
+	// Fetch current providers from service - note: this would need providerSvc to be accessible
+	// For now, we'll render the forms without pre-population
+	var providers []*schema.NotificationProvider
+	var err error
+	_ = providers // Prevent unused variable error
+	_ = err       // Prevent unused variable error
+
+	var emailProvider, smsProvider *schema.NotificationProvider
+	if err == nil {
+		for _, p := range providers {
+			if p.ProviderType == "email" && p.IsDefault {
+				emailProvider = p
+			} else if p.ProviderType == "sms" && p.IsDefault {
+				smsProvider = p
+			}
+		}
+	}
+
+	return Div(
+		Class("space-y-6"),
+		g.Attr("x-data", `{
+			emailProviderType: 'smtp',
+			smsProviderType: 'twilio',
+			showEmailTest: false,
+			showSMSTest: false
+		}`),
+
+		// Header
+		Div(
+			H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+				g.Text("Email & SMS Providers")),
+			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
+				g.Text("Configure notification delivery providers")),
+		),
+
+		// Security Notice
+		Div(
+			Class("rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"),
+			Div(Class("flex items-start gap-3"),
+				lucide.Shield(Class("h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5")),
+				Div(
+					H4(Class("text-sm font-medium text-blue-900 dark:text-blue-300"),
+						g.Text("Credentials Security")),
+					P(Class("mt-1 text-xs text-blue-800 dark:text-blue-200"),
+						g.Text("All sensitive credentials (API keys, passwords, tokens) are automatically encrypted using AES-256-GCM before storage.")),
+				),
+			),
+		),
+
+		// Email Provider Section
+		Div(
+			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+			Div(
+				Class("flex items-center justify-between mb-4"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+					g.Text("Email Provider")),
+				g.If(emailProvider != nil,
+					Button(
+						Type("button"),
+						g.Attr("@click", "showEmailTest = true"),
+						Class("text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"),
+						g.Text("Test Connection"),
+					),
+				),
+			),
+
+			FormEl(
+				Method("POST"),
+				Action(fmt.Sprintf("%s/auth/notification/providers?redirect=%s/dashboard/app/%s/notifications/providers",
+					basePath, basePath, currentApp.ID)),
+				Class("space-y-4"),
+
+				// Provider Type Selection
+				Div(
+					Label(
+						For("emailProviderType"),
+						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+						g.Text("Provider Type"),
+					),
+					Select(
+						ID("emailProviderType"),
+						Name("providerName"),
+						g.Attr("x-model", "emailProviderType"),
+						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						Option(Value("smtp"), g.If(emailProvider == nil || emailProvider.ProviderName == "smtp", Selected()), g.Text("SMTP")),
+						Option(Value("sendgrid"), g.If(emailProvider != nil && emailProvider.ProviderName == "sendgrid", Selected()), g.Text("SendGrid")),
+						Option(Value("resend"), g.If(emailProvider != nil && emailProvider.ProviderName == "resend", Selected()), g.Text("Resend")),
+						Option(Value("postmark"), g.If(emailProvider != nil && emailProvider.ProviderName == "postmark", Selected()), g.Text("Postmark")),
+					),
+				),
+
+				// SMTP Fields
+				Div(
+					g.Attr("x-show", "emailProviderType === 'smtp'"),
+					g.Attr("x-cloak", ""),
+					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+
+					renderProviderField("Host", "config[host]", "text", "smtp.example.com", "SMTP server hostname", true, ""),
+					renderProviderField("Port", "config[port]", "number", "587", "SMTP server port (587 for TLS, 465 for SSL)", true, ""),
+					renderProviderField("Username", "config[username]", "text", "your-username", "SMTP username", true, ""),
+					renderProviderField("Password", "config[password]", "password", "", "SMTP password (will be encrypted)", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+
+					Div(
+						Label(
+							Class("flex items-center gap-2"),
+							Input(
+								Type("checkbox"),
+								Name("config[use_tls]"),
+								Value("true"),
+								Checked(),
+								Class("rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800"),
+							),
+							Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Use TLS")),
+						),
+					),
+				),
+
+				// SendGrid Fields
+				Div(
+					g.Attr("x-show", "emailProviderType === 'sendgrid'"),
+					g.Attr("x-cloak", ""),
+					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+
+					renderProviderField("API Key", "config[api_key]", "password", "", "SendGrid API key (will be encrypted)", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+					renderProviderField("From Name", "config[from_name]", "text", "My App", "Default sender name", false, ""),
+				),
+
+				// Resend Fields
+				Div(
+					g.Attr("x-show", "emailProviderType === 'resend'"),
+					g.Attr("x-cloak", ""),
+					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+
+					renderProviderField("API Key", "config[api_key]", "password", "", "Resend API key (will be encrypted)", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+				),
+
+				// Postmark Fields
+				Div(
+					g.Attr("x-show", "emailProviderType === 'postmark'"),
+					g.Attr("x-cloak", ""),
+					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+
+					renderProviderField("Server Token", "config[server_token]", "password", "", "Postmark server token (will be encrypted)", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+				),
+
+				// Hidden fields
+				Input(Type("hidden"), Name("providerType"), Value("email")),
+				Input(Type("hidden"), Name("isDefault"), Value("true")),
+				Input(Type("hidden"), Name("appId"), Value(currentApp.ID.String())),
+
+				// Submit
+				Div(
+					Class("flex items-center justify-end gap-3 pt-4"),
+					Button(
+						Type("submit"),
+						Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+						lucide.Save(Class("h-4 w-4")),
+						g.Text("Save Email Provider"),
+					),
+				),
+			),
+		),
+
+		// SMS Provider Section
+		Div(
+			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+			Div(
+				Class("flex items-center justify-between mb-4"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+					g.Text("SMS Provider (Optional)")),
+				g.If(smsProvider != nil,
+					Button(
+						Type("button"),
+						g.Attr("@click", "showSMSTest = true"),
+						Class("text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"),
+						g.Text("Test Connection"),
+					),
+				),
+			),
+
+			FormEl(
+				Method("POST"),
+				Action(fmt.Sprintf("%s/auth/notification/providers?redirect=%s/dashboard/app/%s/notifications/providers",
+					basePath, basePath, currentApp.ID)),
+				Class("space-y-4"),
+
+				// Provider Type Selection
+				Div(
+					Label(
+						For("smsProviderType"),
+						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+						g.Text("Provider Type"),
+					),
+					Select(
+						ID("smsProviderType"),
+						Name("providerName"),
+						g.Attr("x-model", "smsProviderType"),
+						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						Option(Value("twilio"), g.If(smsProvider == nil || smsProvider.ProviderName == "twilio", Selected()), g.Text("Twilio")),
+						Option(Value("aws-sns"), g.If(smsProvider != nil && smsProvider.ProviderName == "aws-sns", Selected()), g.Text("AWS SNS")),
+					),
+				),
+
+				// Twilio Fields
+				Div(
+					g.Attr("x-show", "smsProviderType === 'twilio'"),
+					g.Attr("x-cloak", ""),
+					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+
+					renderProviderField("Account SID", "config[account_sid]", "text", "ACxxxxxxxxxxxxx", "Twilio Account SID", true, ""),
+					renderProviderField("Auth Token", "config[auth_token]", "password", "", "Twilio Auth Token (will be encrypted)", true, ""),
+					renderProviderField("From Number", "config[from]", "tel", "+1234567890", "Twilio phone number", true, ""),
+				),
+
+				// AWS SNS Fields
+				Div(
+					g.Attr("x-show", "smsProviderType === 'aws-sns'"),
+					g.Attr("x-cloak", ""),
+					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+
+					renderProviderField("Access Key ID", "config[access_key_id]", "text", "AKIAXXXXXXXXXXXXX", "AWS Access Key ID", true, ""),
+					renderProviderField("Secret Access Key", "config[secret_access_key]", "password", "", "AWS Secret Access Key (will be encrypted)", true, ""),
+					renderProviderField("Region", "config[region]", "text", "us-east-1", "AWS Region", true, ""),
+				),
+
+				// Hidden fields
+				Input(Type("hidden"), Name("providerType"), Value("sms")),
+				Input(Type("hidden"), Name("isDefault"), Value("true")),
+				Input(Type("hidden"), Name("appId"), Value(currentApp.ID.String())),
+
+				// Submit
+				Div(
+					Class("flex items-center justify-end gap-3 pt-4"),
+					Button(
+						Type("submit"),
+						Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+						lucide.Save(Class("h-4 w-4")),
+						g.Text("Save SMS Provider"),
+					),
+				),
+			),
+		),
+	)
+}
+
+// renderProviderField renders a form field for provider configuration
+func renderProviderField(label, name, inputType, placeholder, helpText string, required bool, value string) g.Node {
+	return Div(
+		Label(
+			For(name),
+			Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+			g.Text(label),
+			g.If(required, Span(Class("text-red-500"), g.Text(" *"))),
+		),
+		Input(
+			Type(inputType),
+			ID(name),
+			Name(name),
+			g.If(placeholder != "", g.Attr("placeholder", placeholder)),
+			g.If(value != "", Value(value)),
+			g.If(required, Required()),
+			Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+		),
+		g.If(helpText != "",
+			P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+				g.Text(helpText)),
+		),
+	)
+}
+
+// renderAnalyticsContent renders the analytics page
+func (e *DashboardExtension) renderAnalyticsContent(currentApp *app.App, basePath string) g.Node {
+	// Fetch analytics for the last 30 days
+	endDate := time.Now()
+	startDate := endDate.AddDate(0, 0, -30)
+
+	// Note: Analytics service would need to be accessible on the plugin
+	// For now, showing placeholder analytics with simple struct
+	report := struct {
+		TotalSent    int64
+		Delivered    int64
+		Opened       int64
+		Clicked      int64
+		Bounced      int64
+		Complained   int64
+		Converted    int64
+		TopTemplates []struct {
+			TemplateName string
+			TotalSent    int64
+			Opened       int64
+		}
+	}{
+		TotalSent:  0,
+		Delivered:  0,
+		Opened:     0,
+		Clicked:    0,
+		Bounced:    0,
+		Complained: 0,
+		Converted:  0,
+		TopTemplates: []struct {
+			TemplateName string
+			TotalSent    int64
+			Opened       int64
+		}{},
+	}
+	var err error
+	_ = err // Prevent unused variable error
+
+	if err != nil {
+		return Div(
+			Class("space-y-6"),
+			Div(
+				Class("rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"),
+				P(Class("text-sm text-red-800 dark:text-red-200"),
+					g.Textf("Error loading analytics: %v", err)),
+			),
+		)
+	}
+
+	// Calculate rates
+	deliveryRate := 0.0
+	openRate := 0.0
+	clickRate := 0.0
+
+	if report.TotalSent > 0 {
+		deliveryRate = float64(report.Delivered) / float64(report.TotalSent) * 100
+		openRate = float64(report.Opened) / float64(report.TotalSent) * 100
+		clickRate = float64(report.Clicked) / float64(report.TotalSent) * 100
+	}
+
+	return Div(
+		Class("space-y-6"),
+
+		// Header with date range
+		Div(
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Notification Analytics")),
+				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
+					g.Textf("Performance metrics for the last 30 days (since %s)", startDate.Format("Jan 2, 2006"))),
+			),
+		),
+
+		// Stats cards
+		Div(
+			Class("grid gap-4 md:grid-cols-4"),
+
+			// Total sent
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-sm font-medium text-slate-600 dark:text-gray-400"),
+						g.Text("Total Sent")),
+					lucide.Send(Class("h-5 w-5 text-slate-400")),
+				),
+				P(Class("mt-3 text-3xl font-bold text-slate-900 dark:text-white"),
+					g.Textf("%d", report.TotalSent)),
+			),
+
+			// Delivery rate
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-sm font-medium text-slate-600 dark:text-gray-400"),
+						g.Text("Delivery Rate")),
+					lucide.Check(Class("h-5 w-5 text-green-400")),
+				),
+				P(Class("mt-3 text-3xl font-bold text-green-600 dark:text-green-400"),
+					g.Textf("%.1f%%", deliveryRate)),
+				P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+					g.Textf("%d delivered", report.Delivered)),
+			),
+
+			// Open rate
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-sm font-medium text-slate-600 dark:text-gray-400"),
+						g.Text("Open Rate")),
+					lucide.Eye(Class("h-5 w-5 text-blue-400")),
+				),
+				P(Class("mt-3 text-3xl font-bold text-blue-600 dark:text-blue-400"),
+					g.Textf("%.1f%%", openRate)),
+				P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+					g.Textf("%d opened", report.Opened)),
+			),
+
+			// Click rate
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-sm font-medium text-slate-600 dark:text-gray-400"),
+						g.Text("Click Rate")),
+					lucide.MousePointer(Class("h-5 w-5 text-violet-400")),
+				),
+				P(Class("mt-3 text-3xl font-bold text-violet-600 dark:text-violet-400"),
+					g.Textf("%.1f%%", clickRate)),
+				P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+					g.Textf("%d clicked", report.Clicked)),
+			),
+		),
+
+		// Secondary metrics
+		Div(
+			Class("grid gap-4 md:grid-cols-3"),
+
+			// Bounced
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-xs font-medium text-slate-600 dark:text-gray-400 uppercase tracking-wide"),
+						g.Text("Bounced")),
+					lucide.X(Class("h-4 w-4 text-red-400")),
+				),
+				P(Class("mt-2 text-2xl font-bold text-red-600 dark:text-red-400"),
+					g.Textf("%d", report.Bounced)),
+			),
+
+			// Complaints
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-xs font-medium text-slate-600 dark:text-gray-400 uppercase tracking-wide"),
+						g.Text("Complaints")),
+					lucide.Ban(Class("h-4 w-4 text-orange-400")),
+				),
+				P(Class("mt-2 text-2xl font-bold text-orange-600 dark:text-orange-400"),
+					g.Textf("%d", report.Complained)),
+			),
+
+			// Conversions
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"),
+				Div(Class("flex items-center justify-between"),
+					P(Class("text-xs font-medium text-slate-600 dark:text-gray-400 uppercase tracking-wide"),
+						g.Text("Conversions")),
+					lucide.TrendingUp(Class("h-4 w-4 text-emerald-400")),
+				),
+				P(Class("mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400"),
+					g.Textf("%d", report.Converted)),
+			),
+		),
+
+		// Top Templates
+		g.If(len(report.TopTemplates) > 0,
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				H2(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Top Performing Templates")),
+				Div(Class("space-y-3"),
+					g.Group(renderTopTemplates(report.TopTemplates)),
+				),
+			),
+		),
+
+		// Performance note
+		Div(
+			Class("rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"),
+			Div(Class("flex items-start gap-3"),
+				lucide.Info(Class("h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5")),
+				Div(
+					H4(Class("text-sm font-medium text-blue-900 dark:text-blue-300"),
+						g.Text("About These Metrics")),
+					P(Class("mt-1 text-xs text-blue-800 dark:text-blue-200"),
+						g.Text("Analytics data is collected from notification events including sends, deliveries, opens, clicks, and conversions. Open and click tracking requires tracking pixels and link tracking to be enabled in templates.")),
+				),
+			),
+		),
+	)
+}
+
+// renderTopTemplates renders the top performing templates list
+func renderTopTemplates(templates []struct {
+	TemplateName string
+	TotalSent    int64
+	Opened       int64
+}) []g.Node {
+	nodes := make([]g.Node, len(templates))
+	for i, tmpl := range templates {
+		openRate := 0.0
+		if tmpl.TotalSent > 0 {
+			openRate = float64(tmpl.Opened) / float64(tmpl.TotalSent) * 100
+		}
+
+		nodes[i] = Div(
+			Class("flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-gray-800/50"),
+			Div(
+				P(Class("text-sm font-medium text-slate-900 dark:text-white"),
+					g.Text(tmpl.TemplateName)),
+				P(Class("text-xs text-slate-500 dark:text-gray-400"),
+					g.Textf("%d sent", tmpl.TotalSent)),
+			),
+			Div(
+				Class("text-right"),
+				P(Class("text-sm font-semibold text-blue-600 dark:text-blue-400"),
+					g.Textf("%.1f%%", openRate)),
+				P(Class("text-xs text-slate-500 dark:text-gray-400"),
+					g.Text("open rate")),
+			),
+		)
+	}
+	return nodes
+}

@@ -10,6 +10,8 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/providers/email"
 	"github.com/xraph/authsome/providers/sms"
@@ -20,13 +22,14 @@ import (
 
 // Plugin implements the notification template management plugin
 type Plugin struct {
-	service       *notification.Service
-	templateSvc   *TemplateService
-	db            *bun.DB
-	config        Config
-	defaultConfig Config
-	forgeConfig   forge.ConfigManager
-	defaultsAdded bool
+	service            *notification.Service
+	templateSvc        *TemplateService
+	db                 *bun.DB
+	config             Config
+	defaultConfig      Config
+	forgeConfig        forge.ConfigManager
+	defaultsAdded      bool
+	dashboardExtension *DashboardExtension
 }
 
 // PluginOption is a functional option for configuring the notification plugin
@@ -141,6 +144,8 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		p.config = p.defaultConfig
 	}
 
+	fmt.Println("[Notification] Initialized", p.config.Providers.Email)
+
 	// Initialize repositories
 	notificationRepo := repo.NewNotificationRepository(db)
 	auditSvc := audit.NewService(repo.NewAuditRepository(db))
@@ -170,6 +175,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Initialize template service
 	p.templateSvc = NewTemplateService(p.service, notificationRepo, p.config)
+
+	// Initialize dashboard extension
+	p.dashboardExtension = NewDashboardExtension(p)
 
 	return nil
 }
@@ -385,7 +393,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 // RegisterServiceDecorators registers the notification service
 // TODO: Implement when service registry is available
-func (p *Plugin) RegisterServiceDecorators(svcRegistry interface{}) error {
+func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Service registry integration will be implemented when the service registry
 	// infrastructure is added to AuthSome core
 	return nil
@@ -417,16 +425,61 @@ func (p *Plugin) Migrate() error {
 		return fmt.Errorf("failed to create notifications table: %w", err)
 	}
 
+	// Create notification_providers table
+	_, err = p.db.NewCreateTable().
+		Model((*schema.NotificationProvider)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create notification_providers table: %w", err)
+	}
+
+	// Create notification_template_versions table
+	_, err = p.db.NewCreateTable().
+		Model((*schema.NotificationTemplateVersion)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create notification_template_versions table: %w", err)
+	}
+
+	// Create notification_analytics table
+	_, err = p.db.NewCreateTable().
+		Model((*schema.NotificationAnalytics)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create notification_analytics table: %w", err)
+	}
+
+	// Create notification_tests table
+	_, err = p.db.NewCreateTable().
+		Model((*schema.NotificationTest)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create notification_tests table: %w", err)
+	}
+
 	// Create indexes
 	_, err = p.db.NewCreateIndex().
 		Model((*schema.NotificationTemplate)(nil)).
-		Index("idx_notification_templates_app_key").
-		Column("app_id", "template_key", "type", "language").
-		Unique().
+		Index("idx_notification_templates_app_org_key").
+		Column("app_id", "organization_id", "template_key", "type", "language").
 		IfNotExists().
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create notification_templates index: %w", err)
+	}
+
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.NotificationTemplate)(nil)).
+		Index("idx_notification_templates_ab_test").
+		Column("ab_test_group", "ab_test_enabled").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create ab_test index: %w", err)
 	}
 
 	_, err = p.db.NewCreateIndex().
@@ -437,6 +490,46 @@ func (p *Plugin) Migrate() error {
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create notifications index: %w", err)
+	}
+
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.NotificationProvider)(nil)).
+		Index("idx_notification_providers_app_org_type").
+		Column("app_id", "organization_id", "provider_type", "is_default").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create providers index: %w", err)
+	}
+
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.NotificationAnalytics)(nil)).
+		Index("idx_notification_analytics_notification").
+		Column("notification_id").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create analytics notification index: %w", err)
+	}
+
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.NotificationAnalytics)(nil)).
+		Index("idx_notification_analytics_template").
+		Column("template_id", "event", "created_at").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create analytics template index: %w", err)
+	}
+
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.NotificationTest)(nil)).
+		Index("idx_notification_tests_template").
+		Column("template_id", "created_at").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create tests index: %w", err)
 	}
 
 	// Add default templates if enabled
@@ -481,6 +574,11 @@ func (p *Plugin) GetTemplateService() *TemplateService {
 	return p.templateSvc
 }
 
+// DashboardExtension returns the dashboard extension interface implementation
+func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	return p.dashboardExtension
+}
+
 // registerProviders registers email and SMS providers based on configuration
 func (p *Plugin) registerProviders() error {
 	// Register email provider
@@ -512,9 +610,12 @@ func (p *Plugin) registerProviders() error {
 func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 	// Import email providers
 	emailProviders := struct {
-		smtp     func() notification.Provider
-		sendgrid func() notification.Provider
-		mock     func() notification.Provider
+		smtp       func() notification.Provider
+		sendgrid   func() notification.Provider
+		resend     func() notification.Provider
+		mailersend func() notification.Provider
+		postmark   func() notification.Provider
+		mock       func() notification.Provider
 	}{
 		smtp: func() notification.Provider {
 			return email.NewSMTPProvider(email.SMTPConfig{
@@ -534,6 +635,32 @@ func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 				FromName: p.config.Providers.Email.FromName,
 			})
 		},
+		resend: func() notification.Provider {
+			return NewResendProvider(ResendConfig{
+				APIKey:   getStringConfig(p.config.Providers.Email.Config, "api_key", ""),
+				From:     p.config.Providers.Email.From,
+				FromName: p.config.Providers.Email.FromName,
+				ReplyTo:  p.config.Providers.Email.ReplyTo,
+			})
+		},
+		mailersend: func() notification.Provider {
+			return NewMailerSendProvider(MailerSendConfig{
+				APIKey:   getStringConfig(p.config.Providers.Email.Config, "api_key", ""),
+				From:     p.config.Providers.Email.From,
+				FromName: p.config.Providers.Email.FromName,
+				ReplyTo:  p.config.Providers.Email.ReplyTo,
+			})
+		},
+		postmark: func() notification.Provider {
+			return NewPostmarkProvider(PostmarkConfig{
+				ServerToken: getStringConfig(p.config.Providers.Email.Config, "server_token", ""),
+				From:        p.config.Providers.Email.From,
+				FromName:    p.config.Providers.Email.FromName,
+				ReplyTo:     p.config.Providers.Email.ReplyTo,
+				TrackOpens:  getBoolConfig(p.config.Providers.Email.Config, "track_opens", false),
+				TrackLinks:  getStringConfig(p.config.Providers.Email.Config, "track_links", "None"),
+			})
+		},
 		mock: func() notification.Provider {
 			return email.NewMockEmailProvider()
 		},
@@ -544,6 +671,12 @@ func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 		return emailProviders.smtp(), nil
 	case "sendgrid":
 		return emailProviders.sendgrid(), nil
+	case "resend":
+		return emailProviders.resend(), nil
+	case "mailersend":
+		return emailProviders.mailersend(), nil
+	case "postmark":
+		return emailProviders.postmark(), nil
 	case "mock":
 		return emailProviders.mock(), nil
 	case "":
@@ -556,6 +689,11 @@ func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 
 // createSMSProvider creates an SMS provider based on configuration
 func (p *Plugin) createSMSProvider() (notification.Provider, error) {
+	// SMS provider is optional - return nil if not configured
+	if p.config.Providers.SMS == nil {
+		return nil, nil
+	}
+
 	// Import SMS providers
 	smsProviders := struct {
 		twilio func() notification.Provider
@@ -579,8 +717,8 @@ func (p *Plugin) createSMSProvider() (notification.Provider, error) {
 	case "mock":
 		return smsProviders.mock(), nil
 	case "":
-		// No provider configured, use mock for development
-		return smsProviders.mock(), nil
+		// No provider specified, return nil (SMS is optional)
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown SMS provider: %s", p.config.Providers.SMS.Provider)
 	}

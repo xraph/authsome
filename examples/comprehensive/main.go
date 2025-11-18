@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/plugins/dashboard"
 	"github.com/xraph/authsome/plugins/emailotp"
 	"github.com/xraph/authsome/plugins/magiclink"
+	"github.com/xraph/authsome/plugins/multiapp"
 	"github.com/xraph/authsome/plugins/multisession"
 	"github.com/xraph/authsome/plugins/oidcprovider"
 	"github.com/xraph/authsome/plugins/passkey"
@@ -156,16 +157,19 @@ func (app *ComprehensiveApp) registerPlugins() error {
 	log.Println("🔌 Registering plugins...")
 
 	// List of all available plugins with proper function signature
+	// NOTE: Plugin order does NOT matter! The system automatically sorts plugins
+	// by their dependencies using topological sort. Plugins with dependencies
+	// (like Dashboard depending on Multi-app) will be initialized in the correct order.
 	pluginRegistrations := []struct {
 		name   string
 		plugin func() plugins.Plugin
 		emoji  string
 	}{
-		{"Dashboard", func() plugins.Plugin { return dashboard.NewPlugin() }, "📊"},
+		{"Dashboard", func() plugins.Plugin { return dashboard.NewPlugin() }, "📊"}, // Declares dependency on multiapp
+		{"Multi-app", func() plugins.Plugin { return multiapp.NewPlugin() }, "🏢"},
 		{"Username", func() plugins.Plugin { return username.NewPlugin() }, "👤"},
 		{"Two-Factor Auth", func() plugins.Plugin { return twofa.NewPlugin() }, "🔐"},
 		{"Anonymous", func() plugins.Plugin { return anonymous.NewPlugin() }, "👻"},
-		{"Multi-tenancy", func() plugins.Plugin { return multitenancy.NewPlugin() }, "🏢"},
 		{"Email OTP", func() plugins.Plugin { return emailotp.NewPlugin() }, "📧"},
 		{"Magic Link", func() plugins.Plugin { return magiclink.NewPlugin() }, "✨"},
 		{"Phone", func() plugins.Plugin { return phone.NewPlugin() }, "📱"},

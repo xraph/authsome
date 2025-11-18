@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/plugins/dashboard/components"
@@ -32,20 +33,21 @@ import (
 
 // Handler handles dashboard HTTP requests
 type Handler struct {
-	assets         embed.FS
-	userSvc        user.ServiceInterface
-	sessionSvc     session.ServiceInterface
-	auditSvc       *audit.Service
-	rbacSvc        *rbac.Service
-	apikeyService  *apikey.Service
-	appService     app.Service
-	orgService     *organization.Service
-	envService     environment.EnvironmentService
-	db             *bun.DB
-	isMultiApp     bool
-	basePath       string
-	enabledPlugins map[string]bool
-	hookRegistry   *hooks.HookRegistry // For executing lifecycle hooks
+	assets            embed.FS
+	userSvc           user.ServiceInterface
+	sessionSvc        session.ServiceInterface
+	auditSvc          *audit.Service
+	rbacSvc           *rbac.Service
+	apikeyService     *apikey.Service
+	appService        app.Service
+	orgService        *organization.Service
+	envService        environment.EnvironmentService
+	db                *bun.DB
+	isMultiApp        bool
+	basePath          string
+	enabledPlugins    map[string]bool
+	hookRegistry      *hooks.HookRegistry // For executing lifecycle hooks
+	extensionRegistry *ExtensionRegistry  // For rendering extension navigation items and widgets
 }
 
 // NewHandler creates a new dashboard handler
@@ -83,6 +85,38 @@ func NewHandler(
 	}
 
 	return h
+}
+
+// enrichPageDataWithExtensions adds extension navigation items and widgets to PageData
+func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
+	if h.extensionRegistry == nil {
+		return
+	}
+
+	// Get navigation items for main position
+	navItems := h.extensionRegistry.GetNavigationItems(ui.NavPositionMain, h.enabledPlugins)
+
+	// Render navigation items
+	if len(navItems) > 0 {
+		pageData.ExtensionNavItems = RenderNavigationItems(
+			navItems,
+			h.basePath,
+			pageData.CurrentApp,
+			pageData.ActivePage,
+		)
+	}
+
+	// Get dashboard widgets
+	widgets := h.extensionRegistry.GetDashboardWidgets()
+	if len(widgets) > 0 {
+		widgetNodes := make([]g.Node, 0, len(widgets))
+		for _, widget := range widgets {
+			if widget.Renderer != nil && pageData.CurrentApp != nil {
+				widgetNodes = append(widgetNodes, widget.Renderer(h.basePath, pageData.CurrentApp))
+			}
+		}
+		pageData.ExtensionWidgets = widgetNodes
+	}
 }
 
 // extractAndInjectAppID extracts appId from URL param and injects it into request context
@@ -360,6 +394,9 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		UserEnvironments:   environments,
 		ShowEnvSwitcher:    len(environments) > 0,
 	}
+
+	// Enrich with extension navigation items and widgets
+	h.enrichPageDataWithExtensions(&pageData)
 
 	// Convert to pages.DashboardStats
 	pageStats := &pages.DashboardStats{
@@ -2079,11 +2116,60 @@ func (h *Handler) render(c forge.Context, node g.Node) error {
 }
 
 // renderWithLayout renders content within the base layout
-func (h *Handler) renderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+// RenderWithLayout renders content with the dashboard layout (public for extensions)
+// This method automatically populates app, environment, and extension data
+func (h *Handler) RenderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	ctx := c.Request().Context()
+
+	// Set common fields
 	pageData.Year = time.Now().Year()
 	pageData.EnabledPlugins = h.enabledPlugins
+
+	// Get user if not already set
+	if pageData.User == nil {
+		pageData.User = h.getUserFromContext(c)
+	}
+
+	// Prepopulate app data if CurrentApp is set
+	if pageData.CurrentApp != nil {
+		// Get user apps for switcher if not already set
+		if pageData.UserApps == nil && pageData.User != nil {
+			userApps, _ := h.getUserApps(ctx, pageData.User.ID)
+			pageData.UserApps = userApps
+			pageData.ShowAppSwitcher = len(userApps) > 0
+		}
+
+		// Prepopulate environment data if not already set
+		if pageData.CurrentEnvironment == nil {
+			currentEnv, _ := h.getEnvironmentFromCookie(c, pageData.CurrentApp.ID)
+			if currentEnv == nil {
+				// Fall back to default environment
+				currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, pageData.CurrentApp.ID)
+				if currentEnv != nil {
+					h.setEnvironmentCookie(c, currentEnv.ID)
+				}
+			}
+			pageData.CurrentEnvironment = currentEnv
+		}
+
+		// Get user environments if not already set
+		if pageData.UserEnvironments == nil {
+			environments, _ := h.getUserEnvironments(ctx, pageData.CurrentApp.ID)
+			pageData.UserEnvironments = environments
+			pageData.ShowEnvSwitcher = len(environments) > 0
+		}
+	}
+
+	// Enrich with extension navigation items and widgets
+	h.enrichPageDataWithExtensions(&pageData)
+
 	page := components.BaseLayout(pageData, content)
 	return h.render(c, page)
+}
+
+// renderWithLayout is the internal version (kept for backward compatibility)
+func (h *Handler) renderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	return h.RenderWithLayout(c, pageData, content)
 }
 
 // renderError renders an error page
@@ -2111,6 +2197,79 @@ func (h *Handler) renderError(c forge.Context, message string, err error) error 
 	page := components.BaseLayout(pageData, content)
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
 	return h.render(c, page)
+}
+
+// Public helper methods for extensions to access context data
+
+// GetUserFromContext returns the authenticated user from request context
+// Extensions should use this instead of c.Get("user")
+func (h *Handler) GetUserFromContext(c forge.Context) *user.User {
+	return h.getUserFromContext(c)
+}
+
+// GetCurrentApp extracts and returns the current app from URL parameter
+// This handles parsing the appId param and fetching the app
+func (h *Handler) GetCurrentApp(c forge.Context) (*app.App, error) {
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return nil, err
+	}
+	// Update request context
+	*c.Request() = *c.Request().WithContext(ctx)
+	return currentApp, nil
+}
+
+// GetUserApps returns all apps the user has access to
+func (h *Handler) GetUserApps(c forge.Context, userID xid.ID) ([]*app.App, error) {
+	ctx := c.Request().Context()
+	return h.getUserApps(ctx, userID)
+}
+
+// GetCSRFToken returns the CSRF token for the request
+func (h *Handler) GetCSRFToken(c forge.Context) string {
+	return h.getCSRFToken(c)
+}
+
+// GetBasePath returns the dashboard base path
+func (h *Handler) GetBasePath() string {
+	return h.basePath
+}
+
+// GetEnabledPlugins returns map of enabled plugins
+func (h *Handler) GetEnabledPlugins() map[string]bool {
+	return h.enabledPlugins
+}
+
+// RenderSettingsPage renders content within the settings layout with sidebar navigation
+// Extensions should use this to render their settings pages instead of RenderWithLayout
+// The pageID should match the ID in the SettingsPage definition
+func (h *Handler) RenderSettingsPage(c forge.Context, pageID string, content g.Node) error {
+	return h.renderSettingsPage(c, pageID, content)
+}
+
+// GetCurrentEnvironment returns the current environment from cookie or default
+func (h *Handler) GetCurrentEnvironment(c forge.Context, appID xid.ID) (*environment.Environment, error) {
+	ctx := c.Request().Context()
+
+	// Try to get from cookie first
+	env, err := h.getEnvironmentFromCookie(c, appID)
+	if err != nil {
+		// No cookie or invalid cookie, get default environment
+		env, err = h.envService.GetDefaultEnvironment(ctx, appID)
+		if err != nil {
+			return nil, err
+		}
+		// Set cookie with default environment
+		h.setEnvironmentCookie(c, env.ID)
+	}
+
+	return env, nil
+}
+
+// GetUserEnvironments returns all environments for the given app
+func (h *Handler) GetUserEnvironments(c forge.Context, appID xid.ID) ([]*environment.Environment, error) {
+	ctx := c.Request().Context()
+	return h.getUserEnvironments(ctx, appID)
 }
 
 // getUserFromContext retrieves the user from the request context
@@ -2296,20 +2455,33 @@ func (h *Handler) checkExistingSession(c forge.Context) *user.User {
 	// Validate session
 	sess, err := h.sessionSvc.FindByToken(c.Request().Context(), sessionToken)
 	if err != nil || sess == nil {
+		fmt.Printf("[Dashboard] checkExistingSession: Failed to find session: %v\n", err)
 		return nil
 	}
 
 	// Check if session is expired
 	if time.Now().After(sess.ExpiresAt) {
+		fmt.Printf("[Dashboard] checkExistingSession: Session expired\n")
 		return nil
+	}
+
+	// Set app context from session for user lookup (required for multi-tenancy)
+	ctx := c.Request().Context()
+	if !sess.AppID.IsNil() {
+		ctx = contexts.SetAppID(ctx, sess.AppID)
+		fmt.Printf("[Dashboard] checkExistingSession: Set app context from session: %s\n", sess.AppID)
+	} else {
+		fmt.Printf("[Dashboard] checkExistingSession: Session has no app_id, using context as-is\n")
 	}
 
 	// Get user information
-	user, err := h.userSvc.FindByID(c.Request().Context(), sess.UserID)
+	user, err := h.userSvc.FindByID(ctx, sess.UserID)
 	if err != nil || user == nil {
+		fmt.Printf("[Dashboard] checkExistingSession: Failed to find user %s: %v\n", sess.UserID, err)
 		return nil
 	}
 
+	fmt.Printf("[Dashboard] checkExistingSession: User authenticated: %s\n", user.Email)
 	return user
 }
 
@@ -3157,4 +3329,110 @@ func (h *Handler) HandleAppMgmtDelete(c forge.Context) error {
 
 	// Redirect to apps management list
 	return c.Redirect(http.StatusFound, fmt.Sprintf("%s/dashboard/app/%s/apps-management", h.basePath, appIDStr))
+}
+
+// renderSettingsPage is a helper to render any settings page with the sidebar layout
+func (h *Handler) renderSettingsPage(c forge.Context, pageID string, content g.Node) error {
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	ctx, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	userApps, err := h.getUserApps(ctx, currentUser.ID)
+	if err != nil {
+		userApps = []*app.App{}
+	}
+
+	currentEnv, environments := h.getEnvironmentData(c, ctx, currentApp.ID)
+
+	// Build settings navigation from extensions
+	navItems := h.buildSettingsNavigation(currentApp)
+
+	layoutData := components.SettingsLayoutData{
+		NavItems:    navItems,
+		ActivePage:  pageID,
+		BasePath:    h.basePath,
+		CurrentApp:  currentApp,
+		PageContent: content,
+	}
+
+	pageData := components.PageData{
+		Title:              "Settings",
+		User:               currentUser,
+		CSRFToken:          h.getCSRFToken(c),
+		ActivePage:         "settings",
+		BasePath:           h.basePath,
+		IsMultiApp:         h.isMultiApp,
+		CurrentApp:         currentApp,
+		UserApps:           userApps,
+		ShowAppSwitcher:    len(userApps) > 0,
+		CurrentEnvironment: currentEnv,
+		UserEnvironments:   environments,
+		ShowEnvSwitcher:    len(environments) > 0,
+	}
+
+	settingsPage := components.SettingsLayout(layoutData)
+	return h.renderWithLayout(c, pageData, settingsPage)
+}
+
+// buildSettingsNavigation builds the settings sidebar navigation
+func (h *Handler) buildSettingsNavigation(currentApp *app.App) []components.SettingsNavItem {
+	var navItems []components.SettingsNavItem
+
+	// Core settings pages - General
+	navItems = append(navItems, components.SettingsNavItem{
+		ID:       "general",
+		Label:    "General",
+		Icon:     nil, // Will use default settings icon in layout
+		URL:      components.BuildSettingsURL(h.basePath, currentApp.ID.String(), "general"),
+		Category: "general",
+	})
+
+	// Add pages from extensions
+	if h.extensionRegistry != nil {
+		pages := h.extensionRegistry.GetSettingsPages(h.enabledPlugins)
+		for _, page := range pages {
+			navItems = append(navItems, components.SettingsNavItem{
+				ID:            page.ID,
+				Label:         page.Label,
+				Icon:          page.Icon,
+				URL:           components.BuildSettingsURL(h.basePath, currentApp.ID.String(), page.Path),
+				Category:      page.Category,
+				RequirePlugin: page.RequirePlugin,
+			})
+		}
+	}
+
+	return navItems
+}
+
+// ServeSettingsGeneral handles the general settings page
+func (h *Handler) ServeSettingsGeneral(c forge.Context) error {
+	// Get environment data
+	_, currentApp, err := h.extractAndInjectAppID(c)
+	if err != nil {
+		return h.renderError(c, "Failed to load app context", err)
+	}
+
+	// Load general settings data
+	// TODO: Load these from actual configuration
+	settingsData := pages.GeneralSettingsPageData{
+		Settings: pages.GeneralSettings{
+			DashboardName:            "AuthSome Dashboard",
+			SessionDuration:          24,
+			MaxLoginAttempts:         5,
+			RequireEmailVerification: true,
+		},
+		BasePath:  h.basePath,
+		CSRFToken: h.getCSRFToken(c),
+		AppID:     currentApp.ID.String(),
+	}
+
+	content := pages.GeneralSettingsPage(settingsData)
+	return h.renderSettingsPage(c, "general", content)
 }

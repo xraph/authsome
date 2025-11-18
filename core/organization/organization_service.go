@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // OrganizationService handles organization aggregate operations
@@ -31,6 +33,14 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 	// Check if user creation is enabled
 	if !s.config.EnableUserCreation {
 		return nil, OrganizationCreationDisabled()
+	}
+
+	if environmentID.IsNil() {
+		envId, err := contexts.RequireEnvironmentID(ctx)
+		if err != nil {
+			return nil, errs.InternalServerError("failed to get environment ID", err)
+		}
+		environmentID = envId
 	}
 
 	// Check user's organization limit
@@ -71,6 +81,22 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 
 	if err := s.repo.Create(ctx, org); err != nil {
 		return nil, fmt.Errorf("failed to create organization: %w", err)
+	}
+
+	// Bootstrap roles from templates if RBAC service is available
+	if s.rbacSvc != nil {
+		err = s.rbacSvc.BootstrapOrgRoles(ctx, org.ID, req.RoleTemplateIDs, req.RoleCustomizations)
+		if err != nil {
+			// Log error but don't fail org creation - roles can be added later
+			fmt.Printf("[OrgService] Warning: failed to bootstrap org roles for %s: %v\n", org.ID.String(), err)
+		} else {
+			// Auto-assign owner role to creator
+			err = s.rbacSvc.AssignOwnerRole(ctx, creatorUserID, org.ID)
+			if err != nil {
+				// Log error but don't fail - owner can be assigned manually
+				fmt.Printf("[OrgService] Warning: failed to assign owner role to creator for %s: %v\n", org.ID.String(), err)
+			}
+		}
 	}
 
 	return org, nil

@@ -13,8 +13,10 @@ import (
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	dev "github.com/xraph/authsome/core/device"
+	env "github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
+	"github.com/xraph/authsome/core/middleware"
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/organization"
 	rl "github.com/xraph/authsome/core/ratelimit"
@@ -66,27 +68,31 @@ type Auth struct {
 	logger   forge.Logger
 
 	// Core services (using interfaces to allow plugin decoration)
-	userService      user.ServiceInterface
-	sessionService   session.ServiceInterface
-	authService      auth.ServiceInterface
-	appService       *app.ServiceImpl
-	orgService       *organization.Service
-	rateLimitService *rl.Service
-	rateLimitStorage rl.Storage
-	rateLimitConfig  rl.Config
-	deviceService    *dev.Service
-	securityService  *sec.Service
-	securityConfig   sec.Config
-	geoipProvider    sec.GeoIPProvider
-	auditService     *aud.Service
-	rbacService      *rbac.Service
-	repo             repo.Repository
+	userService        user.ServiceInterface
+	sessionService     session.ServiceInterface
+	authService        auth.ServiceInterface
+	appService         *app.ServiceImpl
+	orgService         *organization.Service
+	environmentService *env.Service
+	rateLimitService   *rl.Service
+	rateLimitStorage   rl.Storage
+	rateLimitConfig    rl.Config
+	deviceService      *dev.Service
+	securityService    *sec.Service
+	securityConfig     sec.Config
+	geoipProvider      sec.GeoIPProvider
+	auditService       *aud.Service
+	rbacService        *rbac.Service
+	repo               repo.Repository
 
 	// Phase 10 services
 	webhookService      *webhook.Service
 	notificationService *notification.Service
 	jwtService          *jwt.Service
 	apikeyService       *apikey.Service
+
+	// Global authentication middleware
+	authMiddleware *middleware.AuthMiddleware
 
 	// Plugin registry
 	pluginRegistry plugins.PluginRegistry
@@ -153,6 +159,8 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// and must be explicitly registered with Bun
 	db.RegisterModel((*schema.TeamMember)(nil))
 	db.RegisterModel((*schema.OrganizationTeamMember)(nil))
+	db.RegisterModel((*schema.RolePermission)(nil))
+	db.RegisterModel((*schema.APIKeyRole)(nil))
 
 	// Rate limit storage and service
 	if a.rateLimitStorage == nil {
@@ -219,12 +227,29 @@ func (a *Auth) Initialize(ctx context.Context) error {
 
 	a.apikeyService = apikey.NewService(a.repo.APIKey(), a.auditService, apikey.Config{})
 
+	// Initialize global authentication middleware
+	// Note: This will be initialized fully after session and user services are created
+	// For now, we'll create a placeholder that will be updated later
+
 	// Initialize services (now with webhook service dependency)
 	a.userService = user.NewService(a.repo.User(), user.Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
 	}, a.webhookService)
 	a.sessionService = session.NewService(a.repo.Session(), session.Config{}, a.webhookService)
 	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{})
+
+	// Initialize global authentication middleware now that all required services are ready
+	a.authMiddleware = middleware.NewAuthMiddleware(
+		a.apikeyService,
+		a.sessionService,
+		a.userService,
+		middleware.AuthMiddlewareConfig{
+			SessionCookieName:   "authsome_session",
+			Optional:            true,  // Don't block unauthenticated requests by default
+			AllowAPIKeyInQuery:  false, // Security best practice
+			AllowSessionInQuery: false, // Security best practice
+		},
+	)
 
 	// App service (platform tenant management)
 	a.appService = app.NewService(
@@ -255,6 +280,19 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.rbacService,
 	)
 
+	// Environment service (app environment management)
+	// Initialize with default config - plugins can override via decorator pattern
+	a.environmentService = env.NewService(
+		a.repo.Environment(),
+		env.Config{
+			AutoCreateDev:                  true,
+			DefaultDevName:                 "Development",
+			AllowPromotion:                 true,
+			RequireConfirmationForDataCopy: true,
+			MaxEnvironmentsPerApp:          10,
+		},
+	)
+
 	// Populate service registry BEFORE plugin initialization
 	// This allows plugins to access and decorate services
 	a.serviceRegistry.SetAppService(a.appService)
@@ -270,6 +308,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	a.serviceRegistry.SetRBACService(a.rbacService)
 	a.serviceRegistry.SetRateLimitService(a.rateLimitService)
 	a.serviceRegistry.SetOrganizationService(a.orgService)
+	a.serviceRegistry.SetEnvironmentService(a.environmentService)
 
 	// Register services into Forge DI container
 	if err := a.registerServicesIntoContainer(db); err != nil {
@@ -290,8 +329,18 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	}
 
 	// Initialize plugins with full Auth instance and run complete lifecycle
+	// Plugins are automatically sorted by dependencies using topological sort
 	if a.pluginRegistry != nil {
-		for _, p := range a.pluginRegistry.List() {
+		// Get plugins sorted by dependencies
+		sortedPlugins, err := a.pluginRegistry.(*plugins.Registry).ListSorted()
+		if err != nil {
+			return errs.InternalServerError("plugin dependency validation failed", err)
+		}
+
+		a.logger.Info("initializing plugins in dependency order",
+			forge.F("count", len(sortedPlugins)))
+
+		for _, p := range sortedPlugins {
 			// 1. Initialize plugin with Auth instance (not just DB)
 			if err := p.Init(a); err != nil {
 				return errs.InternalServerError("plugin init failed", err)
@@ -538,6 +587,71 @@ func (a *Auth) IsPluginEnabled(pluginID string) bool {
 	_, exists := a.pluginRegistry.Get(pluginID)
 	return exists
 }
+
+// =============================================================================
+// AUTHENTICATION MIDDLEWARE
+// =============================================================================
+
+// AuthMiddleware returns the optional authentication middleware
+// This middleware populates the auth context with API key and/or session data
+// but does not block unauthenticated requests
+func (a *Auth) AuthMiddleware() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.Authenticate
+}
+
+// RequireAuth returns middleware that requires authentication
+// Blocks requests that are not authenticated via API key or session
+func (a *Auth) RequireAuth() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireAuth
+}
+
+// RequireUser returns middleware that requires user authentication (session)
+// Blocks requests that don't have a valid user session
+func (a *Auth) RequireUser() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireUser
+}
+
+// RequireAPIKey returns middleware that requires API key authentication
+// Blocks requests that don't have a valid API key
+func (a *Auth) RequireAPIKey() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireAPIKey
+}
+
+// RequireScope returns middleware that requires a specific API key scope
+// Blocks requests where the API key lacks the specified scope
+func (a *Auth) RequireScope(scope string) func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireScope(scope)
+}
+
+// RequireAnyScope returns middleware that requires any of the specified scopes
+func (a *Auth) RequireAnyScope(scopes ...string) func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireAnyScope(scopes...)
+}
+
+// RequireAllScopes returns middleware that requires all of the specified scopes
+func (a *Auth) RequireAllScopes(scopes ...string) func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireAllScopes(scopes...)
+}
+
+// RequireSecretKey returns middleware that requires a secret (sk_) API key
+func (a *Auth) RequireSecretKey() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireSecretKey
+}
+
+// RequirePublishableKey returns middleware that requires a publishable (pk_) API key
+func (a *Auth) RequirePublishableKey() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequirePublishableKey
+}
+
+// RequireAdmin returns middleware that requires admin privileges
+// Blocks requests that don't have admin:full scope via secret API key
+func (a *Auth) RequireAdmin() func(func(forge.Context) error) func(forge.Context) error {
+	return a.authMiddleware.RequireAdmin
+}
+
+// =============================================================================
+// SERVICE REGISTRATION
+// =============================================================================
 
 // registerServicesIntoContainer registers all AuthSome services into the Forge DI container
 // This enables dependency injection for handlers, plugins, and middleware

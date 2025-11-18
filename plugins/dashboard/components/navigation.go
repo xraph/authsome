@@ -1,6 +1,7 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -113,13 +114,13 @@ func Logo(basePath string, currentApp *app.App) g.Node {
 
 func DesktopNavigation(data PageData) g.Node {
 	// Build URLs with appId if we have a current app
-	var dashURL, usersURL, organizationsURL, environmentsURL, sessionsURL, pluginsURL, settingsURL string
+	var dashURL, usersURL, environmentsURL, sessionsURL, pluginsURL, settingsURL string
 
 	if data.CurrentApp != nil {
 		appIDStr := data.CurrentApp.ID.String()
 		dashURL = data.BasePath + "/dashboard/app/" + appIDStr + "/"
 		usersURL = data.BasePath + "/dashboard/app/" + appIDStr + "/users"
-		organizationsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/organizations"
+		// organizationsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/organizations"
 		environmentsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/environments"
 		sessionsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/sessions"
 		pluginsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/plugins"
@@ -128,22 +129,34 @@ func DesktopNavigation(data PageData) g.Node {
 		// Fallback to index if no app context (shouldn't happen in app-scoped pages)
 		dashURL = data.BasePath + "/dashboard/"
 		usersURL = dashURL
-		organizationsURL = dashURL
+		// organizationsURL = dashURL
 		environmentsURL = dashURL
 		sessionsURL = dashURL
 		pluginsURL = dashURL
 		settingsURL = dashURL
 	}
 
+	// Core navigation items
 	navItems := []g.Node{
 		navLink("Dashboard", dashURL, data.ActivePage == "dashboard"),
 		navLink("Users", usersURL, data.ActivePage == "users"),
-		g.If(data.EnabledPlugins["organization"], navLink("Organizations", organizationsURL, data.ActivePage == "organizations")),
+		// g.If(data.EnabledPlugins["organization"], navLink("Organizations", organizationsURL, data.ActivePage == "organizations")),
 		navLink("Environments", environmentsURL, data.ActivePage == "environments"),
 		navLink("Sessions", sessionsURL, data.ActivePage == "sessions"),
+	}
+
+	// Add extension navigation items for main position
+	if data.ExtensionNavItems != nil {
+		for _, item := range data.ExtensionNavItems {
+			navItems = append(navItems, item)
+		}
+	}
+
+	// Add core settings/plugins at the end
+	navItems = append(navItems,
 		navLink("Plugins", pluginsURL, data.ActivePage == "plugins"),
 		navLink("Settings", settingsURL, data.ActivePage == "settings"),
-	}
+	)
 
 	return Nav(
 		Class("hidden items-center gap-1.5 lg:flex"),
@@ -283,6 +296,7 @@ func appSwitcherLink(app *app.App, basePath string, isActive bool) g.Node {
 }
 
 func EnvironmentSwitcher(data PageData) g.Node {
+	fmt.Println("EnvironmentSwitcher", data.CurrentEnvironment, data.UserEnvironments)
 	if data.CurrentEnvironment == nil || len(data.UserEnvironments) < 1 {
 		return g.Text("") // Don't show if no environment or only one environment
 	}

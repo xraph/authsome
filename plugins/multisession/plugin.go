@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
 	repo "github.com/xraph/authsome/repository"
@@ -19,11 +20,12 @@ import (
 
 // Plugin wires the multi-session service and registers routes
 type Plugin struct {
-	db            *bun.DB
-	service       *Service
-	logger        forge.Logger
-	config        Config
-	defaultConfig Config
+	db                 *bun.DB
+	service            *Service
+	logger             forge.Logger
+	config             Config
+	defaultConfig      Config
+	dashboardExtension *DashboardExtension
 }
 
 // Config holds the multisession plugin configuration
@@ -141,7 +143,16 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	sessSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{AllowMultiple: true}, webhookSvc)
 	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
 	devSvc := dev.NewService(repo.NewDeviceRepository(p.db))
-	p.service = NewService(repo.NewSessionRepository(p.db), repo.NewDeviceRepository(p.db), authSvc, devSvc, p.config)
+	p.service = NewService(
+		authInst.Repository().Session(),
+		sessSvc,
+		authInst.Repository().Device(),
+		authSvc,
+		devSvc,
+	)
+
+	// Initialize dashboard extension
+	p.dashboardExtension = NewDashboardExtension(p)
 
 	p.logger.Info("multisession plugin initialized",
 		forge.F("max_sessions_per_user", p.config.MaxSessionsPerUser),
@@ -218,4 +229,10 @@ func (p *Plugin) GetAuthService() *auth.Service {
 		return nil
 	}
 	return p.service.auth
+}
+
+// DashboardExtension implements the PluginWithDashboardExtension interface
+// This allows the multisession plugin to extend the dashboard with custom screens
+func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	return p.dashboardExtension
 }

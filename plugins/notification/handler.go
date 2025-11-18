@@ -3,6 +3,7 @@ package notification
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
@@ -14,17 +15,28 @@ import (
 
 // Handler handles notification HTTP requests
 type Handler struct {
-	service     *notification.Service
-	templateSvc *TemplateService
-	config      Config
+	service      *notification.Service
+	templateSvc  *TemplateService
+	providerSvc  *notification.ProviderService
+	versionSvc   *notification.VersionService
+	abTestSvc    *notification.ABTestService
+	analyticsSvc *notification.AnalyticsService
+	config       Config
 }
 
 // NewHandler creates a new notification handler
 func NewHandler(service *notification.Service, templateSvc *TemplateService, config Config) *Handler {
+	// Initialize sub-services
+	repo := service.GetRepository()
+
 	return &Handler{
-		service:     service,
-		templateSvc: templateSvc,
-		config:      config,
+		service:      service,
+		templateSvc:  templateSvc,
+		providerSvc:  notification.NewProviderService(repo),
+		versionSvc:   notification.NewVersionService(repo),
+		abTestSvc:    notification.NewABTestService(repo),
+		analyticsSvc: notification.NewAnalyticsService(repo),
+		config:       config,
 	}
 }
 
@@ -41,8 +53,19 @@ func (h *Handler) CreateTemplate(c forge.Context) error {
 	}
 
 	var req notification.CreateTemplateRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+
+	// Support both JSON and form data
+	contentType := c.Request().Header.Get("Content-Type")
+	if contentType == "application/x-www-form-urlencoded" || contentType == "multipart/form-data" {
+		// Bind form data
+		if err := c.Bind(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+		}
+	} else {
+		// Bind JSON data
+		if err := c.BindJSON(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+		}
 	}
 
 	// Set app ID from context
@@ -54,6 +77,11 @@ func (h *Handler) CreateTemplate(c forge.Context) error {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	// Check for redirect parameter (for form submissions)
+	if redirect := c.Query("redirect"); redirect != "" {
+		return c.Redirect(http.StatusSeeOther, redirect)
 	}
 
 	return c.JSON(http.StatusCreated, template)
@@ -151,8 +179,19 @@ func (h *Handler) UpdateTemplate(c forge.Context) error {
 	}
 
 	var req notification.UpdateTemplateRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+
+	// Support both JSON and form data
+	contentType := c.Request().Header.Get("Content-Type")
+	if contentType == "application/x-www-form-urlencoded" || contentType == "multipart/form-data" {
+		// Bind form data
+		if err := c.Bind(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+		}
+	} else {
+		// Bind JSON data
+		if err := c.BindJSON(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+		}
 	}
 
 	if err := h.service.UpdateTemplate(c.Context(), id, &req); err != nil {
@@ -160,6 +199,11 @@ func (h *Handler) UpdateTemplate(c forge.Context) error {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	// Check for redirect parameter (for form submissions)
+	if redirect := c.Query("redirect"); redirect != "" {
+		return c.Redirect(http.StatusSeeOther, redirect)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -180,6 +224,11 @@ func (h *Handler) DeleteTemplate(c forge.Context) error {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	// Check for redirect parameter (for form submissions)
+	if redirect := c.Query("redirect"); redirect != "" {
+		return c.Redirect(http.StatusSeeOther, redirect)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -483,4 +532,477 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "processed",
 	})
+}
+
+// =============================================================================
+// PROVIDER HANDLERS
+// =============================================================================
+
+// CreateProvider creates a new notification provider
+func (h *Handler) CreateProvider(c forge.Context) error {
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	var req struct {
+		OrganizationID *string                `json:"organizationId,omitempty" form:"organizationId"`
+		ProviderType   string                 `json:"providerType" form:"providerType"` // "email" or "sms"
+		ProviderName   string                 `json:"providerName" form:"providerName"` // "smtp", "sendgrid", "twilio", etc.
+		Config         map[string]interface{} `json:"config" form:"config"`
+		IsDefault      bool                   `json:"isDefault" form:"isDefault"`
+	}
+
+	// Support both JSON and form data
+	contentType := c.Request().Header.Get("Content-Type")
+	if contentType == "application/x-www-form-urlencoded" || contentType == "multipart/form-data" {
+		// Bind form data
+		if err := c.Bind(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+		}
+	} else {
+		// Bind JSON data
+		if err := c.BindJSON(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+		}
+	}
+
+	var orgID *xid.ID
+	if req.OrganizationID != nil {
+		id, err := xid.FromString(*req.OrganizationID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid organization ID"))
+		}
+		orgID = &id
+	}
+
+	provider, err := h.providerSvc.CreateProvider(c.Context(), appID, orgID, req.ProviderType, req.ProviderName, req.Config, req.IsDefault)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	// Check for redirect parameter (for form submissions)
+	if redirect := c.Query("redirect"); redirect != "" {
+		return c.Redirect(http.StatusSeeOther, redirect)
+	}
+
+	return c.JSON(http.StatusCreated, provider)
+}
+
+// GetProvider retrieves a provider by ID
+func (h *Handler) GetProvider(c forge.Context) error {
+	idStr := c.Param("id")
+	id, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid provider ID"))
+	}
+
+	provider, err := h.providerSvc.GetProvider(c.Context(), id)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, provider)
+}
+
+// ListProviders lists all providers for an app/org
+func (h *Handler) ListProviders(c forge.Context) error {
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	var orgID *xid.ID
+	if orgIDStr := c.Query("organizationId"); orgIDStr != "" {
+		id, err := xid.FromString(orgIDStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid organization ID"))
+		}
+		orgID = &id
+	}
+
+	providers, err := h.providerSvc.ListProviders(c.Context(), appID, orgID)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"providers": providers,
+		"count":     len(providers),
+	})
+}
+
+// UpdateProvider updates a provider's configuration
+func (h *Handler) UpdateProvider(c forge.Context) error {
+	idStr := c.Param("id")
+	id, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid provider ID"))
+	}
+
+	var req struct {
+		Config    map[string]interface{} `json:"config"`
+		IsActive  bool                   `json:"isActive"`
+		IsDefault bool                   `json:"isDefault"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+	}
+
+	if err := h.providerSvc.UpdateProvider(c.Context(), id, req.Config, req.IsActive, req.IsDefault); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "provider updated successfully",
+	})
+}
+
+// DeleteProvider deletes a provider
+func (h *Handler) DeleteProvider(c forge.Context) error {
+	idStr := c.Param("id")
+	id, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid provider ID"))
+	}
+
+	if err := h.providerSvc.DeleteProvider(c.Context(), id); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "provider deleted successfully",
+	})
+}
+
+// =============================================================================
+// TEMPLATE VERSIONING HANDLERS
+// =============================================================================
+
+// CreateTemplateVersion creates a new version for a template
+func (h *Handler) CreateTemplateVersion(c forge.Context) error {
+	idStr := c.Param("id")
+	templateID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID"))
+	}
+
+	var req struct {
+		Changes string `json:"changes"` // Description of what changed
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+	}
+
+	// Get current template
+	template, err := h.service.GetTemplate(c.Context(), templateID)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	// Get current user ID if available (for changedBy)
+	var changedBy *xid.ID
+	// TODO: Extract user ID from context
+
+	version, err := h.versionSvc.CreateVersion(c.Context(), template.ToSchema(), changedBy, req.Changes)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusCreated, version)
+}
+
+// GetTemplateVersion retrieves a specific template version
+func (h *Handler) GetTemplateVersion(c forge.Context) error {
+	idStr := c.Param("versionId")
+	versionID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid version ID"))
+	}
+
+	version, err := h.versionSvc.GetVersion(c.Context(), versionID)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, version)
+}
+
+// ListTemplateVersions lists all versions for a template
+func (h *Handler) ListTemplateVersions(c forge.Context) error {
+	idStr := c.Param("id")
+	templateID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID"))
+	}
+
+	versions, err := h.versionSvc.ListVersions(c.Context(), templateID)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"versions": versions,
+		"count":    len(versions),
+	})
+}
+
+// RestoreTemplateVersion restores a template to a previous version
+func (h *Handler) RestoreTemplateVersion(c forge.Context) error {
+	templateIDStr := c.Param("id")
+	templateID, err := xid.FromString(templateIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID"))
+	}
+
+	versionIDStr := c.Param("versionId")
+	versionID, err := xid.FromString(versionIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid version ID"))
+	}
+
+	// Get current user ID if available (for restoredBy)
+	var restoredBy *xid.ID
+	// TODO: Extract user ID from context
+
+	if err := h.versionSvc.RestoreVersion(c.Context(), templateID, versionID, restoredBy); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "template restored successfully",
+	})
+}
+
+// =============================================================================
+// A/B TESTING HANDLERS
+// =============================================================================
+
+// CreateABTestVariant creates a new A/B test variant
+func (h *Handler) CreateABTestVariant(c forge.Context) error {
+	parentIDStr := c.Param("id")
+	parentTemplateID, err := xid.FromString(parentIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID"))
+	}
+
+	var req struct {
+		Name    string `json:"name"`
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+		Weight  int    `json:"weight"` // 0-100
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+	}
+
+	variant, err := h.abTestSvc.CreateVariant(c.Context(), parentTemplateID, req.Name, req.Weight, req.Subject, req.Body)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusCreated, variant)
+}
+
+// GetABTestResults retrieves A/B test results for a test group
+func (h *Handler) GetABTestResults(c forge.Context) error {
+	abTestGroup := c.Query("abTestGroup")
+	if abTestGroup == "" {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("abTestGroup required"))
+	}
+
+	results, err := h.abTestSvc.GetABTestResults(c.Context(), abTestGroup)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, results)
+}
+
+// DeclareABTestWinner declares a winner for an A/B test
+func (h *Handler) DeclareABTestWinner(c forge.Context) error {
+	var req struct {
+		WinnerID    string `json:"winnerId"`
+		ABTestGroup string `json:"abTestGroup"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+	}
+
+	winnerID, err := xid.FromString(req.WinnerID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid winner ID"))
+	}
+
+	if err := h.abTestSvc.DeclareWinner(c.Context(), winnerID, req.ABTestGroup); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "winner declared successfully",
+	})
+}
+
+// =============================================================================
+// ANALYTICS HANDLERS
+// =============================================================================
+
+// TrackNotificationEvent tracks an analytics event
+func (h *Handler) TrackNotificationEvent(c forge.Context) error {
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	var req struct {
+		OrganizationID *string                `json:"organizationId,omitempty"`
+		NotificationID string                 `json:"notificationId"`
+		TemplateID     string                 `json:"templateId"`
+		Event          string                 `json:"event"` // "sent", "delivered", "opened", "clicked", "converted"
+		EventData      map[string]interface{} `json:"eventData,omitempty"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
+	}
+
+	notificationID, err := xid.FromString(req.NotificationID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid notification ID"))
+	}
+
+	templateID, err := xid.FromString(req.TemplateID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID"))
+	}
+
+	var orgID *xid.ID
+	if req.OrganizationID != nil {
+		id, err := xid.FromString(*req.OrganizationID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid organization ID"))
+		}
+		orgID = &id
+	}
+
+	if err := h.analyticsSvc.TrackEvent(c.Context(), notificationID, templateID, appID, orgID, req.Event, req.EventData); err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "event tracked successfully",
+	})
+}
+
+// GetTemplateAnalytics retrieves analytics for a template
+func (h *Handler) GetTemplateAnalytics(c forge.Context) error {
+	idStr := c.Param("id")
+	templateID, err := xid.FromString(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid template ID"))
+	}
+
+	// TODO: Parse date range from query params
+	end := time.Now()
+	start := end.AddDate(0, 0, -30)
+
+	report, err := h.analyticsSvc.GetTemplateAnalytics(c.Context(), templateID, start, end)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, report)
+}
+
+// GetAppAnalytics retrieves analytics for an app
+func (h *Handler) GetAppAnalytics(c forge.Context) error {
+	appID, err := contexts.RequireAppID(c.Context())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	}
+
+	// TODO: Parse date range from query params
+	end := time.Now()
+	start := end.AddDate(0, 0, -30)
+
+	report, err := h.analyticsSvc.GetAppAnalytics(c.Context(), appID, start, end)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, report)
+}
+
+// GetOrgAnalytics retrieves analytics for an organization
+func (h *Handler) GetOrgAnalytics(c forge.Context) error {
+	orgIDStr := c.Query("organizationId")
+	if orgIDStr == "" {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("organization ID required"))
+	}
+
+	orgID, err := xid.FromString(orgIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid organization ID"))
+	}
+
+	// TODO: Parse date range from query params
+	end := time.Now()
+	start := end.AddDate(0, 0, -30)
+
+	report, err := h.analyticsSvc.GetOrgAnalytics(c.Context(), orgID, start, end)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, report)
 }
