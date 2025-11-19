@@ -1,0 +1,123 @@
+# Pagination Service
+
+## Package Purpose
+
+Provides cursor-based and offset-based pagination utilities with Bun ORM integration. Enables efficient pagination for all list endpoints.
+
+## Key Types
+
+```go
+type PageResponse[T any] struct {
+    Items   []T    `json:"items"`
+    Total   int    `json:"total"`
+    Limit   int    `json:"limit"`
+    Offset  int    `json:"offset"`
+    HasMore bool   `json:"hasMore"`
+}
+
+type CursorResponse[T any] struct {
+    Items      []T     `json:"items"`
+    NextCursor *string `json:"nextCursor,omitempty"`
+    HasMore    bool    `json:"hasMore"`
+}
+
+type Request struct {
+    Limit  int    `json:"limit"`
+    Offset int    `json:"offset"`
+    Cursor string `json:"cursor"`
+    SortBy string `json:"sortBy"`
+    Order  string `json:"order"`  // asc or desc
+}
+```
+
+## Public API
+
+### Offset Pagination
+```go
+query := db.NewSelect().Model((*schema.User)(nil)).Where("app_id = ?", appID)
+
+response, err := pagination.ApplyOffset(ctx, query, &pagination.Request{
+    Limit:  20,
+    Offset: 0,
+})
+// Returns: {Items, Total, Limit, Offset, HasMore}
+```
+
+### Cursor Pagination
+```go
+query := db.NewSelect().Model((*schema.User)(nil))
+
+response, err := pagination.ApplyCursor(ctx, query, &pagination.Request{
+    Limit:  20,
+    Cursor: "eyJpZCI6ImFiYzEyMyJ9",  // base64-encoded cursor
+})
+// Returns: {Items, NextCursor, HasMore}
+```
+
+## Pagination Strategies
+
+### Offset Pagination
+- **Pros**: Simple, supports random access, total count available
+- **Cons**: Slow on large datasets, can skip/duplicate on concurrent writes
+- **Use for**: Admin interfaces, small datasets
+
+### Cursor Pagination
+- **Pros**: Fast, consistent, handles concurrent writes
+- **Cons**: No random access, no total count, forward-only
+- **Use for**: Infinite scroll, real-time feeds, large datasets
+
+## Bun Integration
+
+```go
+// Automatic pagination
+func (r *userRepository) ListUsers(ctx context.Context, filter *user.ListUsersFilter) (*pagination.PageResponse[*schema.User], error) {
+    query := r.db.NewSelect().
+        Model((*schema.User)(nil)).
+        Where("app_id = ?", filter.AppID)
+    
+    if filter.Email != "" {
+        query = query.Where("email LIKE ?", "%"+filter.Email+"%")
+    }
+    
+    return pagination.ApplyOffset(ctx, query, &pagination.Request{
+        Limit:  filter.Limit,
+        Offset: filter.Offset,
+        SortBy: "created_at",
+        Order:  "desc",
+    })
+}
+```
+
+## Dependencies
+
+- **Bun ORM**: Database query builder
+- **encoding/base64**: Cursor encoding
+
+## Used By
+
+All services that return lists:
+- user.ListUsers
+- organization.ListOrganizations
+- session.ListSessions
+- apikey.List
+- audit.List
+
+## Best Practices
+
+1. **Limit Defaults**: Set reasonable defaults (20-100)
+2. **Max Limits**: Cap at 1000 to prevent abuse
+3. **Indexes**: Ensure sort columns are indexed
+4. **Cursor Encoding**: Use base64 for cursor strings
+5. **Cache Counts**: Cache total counts for expensive queries
+
+## Configuration Example
+
+```yaml
+auth:
+  pagination:
+    defaultLimit: 20
+    maxLimit: 1000
+    defaultSortBy: "created_at"
+    defaultOrder: "desc"
+```
+

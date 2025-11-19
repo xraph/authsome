@@ -1,0 +1,59 @@
+# Multi-App Plugin
+
+## Purpose
+Enables multiple applications within organizations with app-scoped authentication and configuration.
+
+## Features
+- App creation and management
+- App-scoped users
+- App-scoped API keys
+- App-scoped configuration
+- App switching
+- App dashboard
+- Member management per app
+
+## Use Cases
+- Development/Staging/Production separation
+- Multiple products in one organization
+- API segregation
+- Environment isolation
+
+## Public API
+```go
+// Create app
+app, err := multiappSvc.CreateApp(ctx, orgID, &CreateAppRequest{
+    Name: "Production",
+    Environment: "production",
+})
+
+// Switch app
+err := multiappSvc.SwitchApp(ctx, sessionID, appID)
+
+// List apps
+apps, err := multiappSvc.ListApps(ctx, orgID)
+```
+
+## Routes
+- `GET /apps` - List apps
+- `POST /apps` - Create app
+- `GET /apps/{id}` - App dashboard
+- `POST /apps/{id}/switch` - Switch context
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    multiapp:
+      enabled: true
+      maxAppsPerOrg: 10
+      requireAppContext: true
+```
+
+## Dependencies
+- **core/app**: App service
+- **core/organization**: Parent organization
+- **core/environment**: Environment context
+- **plugins/dashboard**: UI integration
+
+See: `README.md`
+

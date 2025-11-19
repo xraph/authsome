@@ -1,0 +1,159 @@
+# Crypto Utilities
+
+## Package Purpose
+
+Provides cryptographic utilities for password hashing, token generation, and secure random operations used throughout AuthSome.
+
+## Key Files
+
+- **password.go**: Password hashing and verification with bcrypt
+- **token.go**: Secure token generation and HMAC operations
+
+## Public API
+
+### Password Operations
+
+#### Hash Password
+```go
+hash, err := crypto.HashPassword(password)
+// Returns bcrypt hash with cost 10
+```
+
+#### Check Password
+```go
+valid := crypto.CheckPassword(password, hash)
+// Constant-time comparison
+```
+
+### Token Generation
+
+#### Generate Secure Token
+```go
+token, err := crypto.GenerateToken(32)
+// Generates 32 bytes of cryptographically secure random data
+// Returns base64 URL-encoded string
+```
+
+#### Generate Random String
+```go
+str, err := crypto.RandomString(16)
+// Generates random alphanumeric string
+```
+
+### HMAC Operations
+
+#### Generate HMAC Signature
+```go
+signature := crypto.GenerateHMAC(data, secret)
+// Returns hex-encoded HMAC-SHA256 signature
+```
+
+#### Verify HMAC Signature
+```go
+valid := crypto.VerifyHMAC(data, signature, secret)
+// Constant-time comparison
+```
+
+## Implementation Details
+
+### Password Hashing
+- Algorithm: bcrypt
+- Cost Factor: 10 (2^10 = 1,024 iterations)
+- Salt: Automatically generated per password
+- Output: 60-character hash string
+
+### Token Generation
+- Source: crypto/rand
+- Encoding: base64 URL-safe
+- Typical sizes: 16-32 bytes
+- Use cases: Session tokens, API keys, reset tokens
+
+### HMAC Signatures
+- Algorithm: HMAC-SHA256
+- Encoding: Hex
+- Use cases: Webhook signatures, token validation
+
+## Security Properties
+
+1. **Password Hashing**
+   - Computationally expensive (prevents brute force)
+   - Unique salt per password
+   - One-way function (cannot reverse)
+   - Resistant to rainbow table attacks
+
+2. **Token Generation**
+   - Cryptographically secure random
+   - Unpredictable
+   - Unique per generation
+   - Suitable for security-critical operations
+
+3. **HMAC**
+   - Message authentication
+   - Tamper detection
+   - Constant-time verification
+
+## Performance Characteristics
+
+- **HashPassword**: ~100-200ms (intentionally slow)
+- **CheckPassword**: ~100-200ms (intentionally slow)
+- **GenerateToken**: <1ms
+- **GenerateHMAC**: <1ms
+
+## Best Practices
+
+1. **Password Hashing**
+   - Always hash passwords before storage
+   - Never log or expose hashes
+   - Use CheckPassword for verification
+   - Rehash on cost factor changes
+
+2. **Token Generation**
+   - Use sufficient length (≥16 bytes for tokens, ≥32 for keys)
+   - Never reuse tokens
+   - Store tokens securely
+   - Set expiration times
+
+3. **HMAC Signatures**
+   - Use strong secrets (≥32 bytes)
+   - Rotate secrets periodically
+   - Always verify signatures
+   - Use constant-time verification
+
+## Testing
+
+```go
+func TestHashPassword(t *testing.T) {
+    password := "SecurePass123!"
+    hash, err := crypto.HashPassword(password)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, hash)
+    
+    valid := crypto.CheckPassword(password, hash)
+    assert.True(t, valid)
+    
+    invalid := crypto.CheckPassword("WrongPass", hash)
+    assert.False(t, invalid)
+}
+```
+
+## Dependencies
+
+- **golang.org/x/crypto/bcrypt**: Password hashing
+- **crypto/rand**: Secure random generation
+- **crypto/hmac**: HMAC operations
+- **crypto/sha256**: SHA-256 hashing
+- **encoding/base64**: Token encoding
+- **encoding/hex**: HMAC encoding
+
+## Common Errors
+
+- `bcrypt: password exceeds limit` - Password too long (>72 bytes)
+- `rand: read failed` - System random source unavailable
+
+## Migration Notes
+
+If changing bcrypt cost factor:
+1. Update HashPassword cost
+2. Rehash passwords on next login
+3. Support both old and new hashes during transition
+

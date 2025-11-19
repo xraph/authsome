@@ -1,0 +1,175 @@
+# Internal Utilities
+
+## Package Purpose
+
+The `internal` package contains utility packages that are only importable by the authsome package itself. These provide common functionality used throughout the codebase.
+
+## Package Structure
+
+```
+internal/
+├── errs/           # Structured error handling
+├── crypto/         # Cryptographic utilities
+├── validator/      # Input validation
+├── dbschema/       # Database schema utilities
+├── utils/          # General utilities
+├── interfaces/     # Shared interfaces
+└── clients/        # Client SDK generation
+```
+
+## Key Packages
+
+### errs/
+Comprehensive error handling system with:
+- Structured error types with codes and HTTP status
+- Error wrapping with context
+- Forge HTTPError conversion
+- Sentinel errors for comparison
+- JSON serialization
+
+**See**: `errs/llm.txt` for details
+
+### crypto/
+Cryptographic operations:
+- Password hashing (bcrypt)
+- Secure token generation
+- HMAC signature generation
+- Random string generation
+- Constant-time comparisons
+
+**See**: `crypto/llm.txt` for details
+
+### validator/
+Input validation:
+- Email format validation
+- Password strength checking
+- Username validation
+- Phone number validation
+- URL validation
+
+**See**: `validator/llm.txt` for details
+
+### dbschema/
+Database schema utilities:
+- Schema extraction
+- Migration helpers
+- Table definition helpers
+
+### utils/
+General utilities:
+- Random ID generation
+- String manipulation
+- Request helpers
+- Context helpers
+
+### interfaces/
+Shared interface definitions used across packages.
+
+### clients/
+Client SDK generation tools:
+- Introspection
+- Code generation for Go, Rust, TypeScript
+
+## Import Restrictions
+
+Packages in `internal/` can ONLY be imported by:
+- The root `authsome` package
+- Other `internal/` packages
+
+They CANNOT be imported by:
+- External packages
+- Plugins (must use public APIs)
+
+## Design Principles
+
+1. **Single Responsibility**: Each package has one clear purpose
+2. **No External Dependencies**: Minimize external imports
+3. **Performance**: Optimized for common operations
+4. **Security**: Cryptographic operations follow best practices
+5. **Reusability**: Used throughout authsome codebase
+
+## Common Usage Patterns
+
+### Error Handling
+```go
+import "github.com/xraph/authsome/internal/errs"
+
+if user == nil {
+    return errs.UserNotFound()
+}
+
+if !isAuthorized {
+    return errs.PermissionDenied("delete", "user")
+}
+```
+
+### Password Operations
+```go
+import "github.com/xraph/authsome/internal/crypto"
+
+// Hash password
+hash, err := crypto.HashPassword(password)
+
+// Check password
+valid := crypto.CheckPassword(password, hash)
+```
+
+### Token Generation
+```go
+import "github.com/xraph/authsome/internal/crypto"
+
+// Generate secure token
+token, err := crypto.GenerateToken(32) // 32 bytes
+```
+
+### Validation
+```go
+import "github.com/xraph/authsome/internal/validator"
+
+// Validate email
+if !validator.IsValidEmail(email) {
+    return errs.InvalidInput("email", "invalid format")
+}
+
+// Validate password
+requirements := validator.PasswordRequirements{
+    MinLength:      8,
+    RequireUpper:   true,
+    RequireLower:   true,
+    RequireDigit:   true,
+    RequireSpecial: true,
+}
+if err := validator.ValidatePassword(password, requirements); err != nil {
+    return errs.WeakPassword(err.Error())
+}
+```
+
+## Testing
+
+Internal packages have comprehensive test coverage:
+```bash
+go test ./internal/...
+```
+
+## Performance Considerations
+
+- Password hashing is intentionally slow (bcrypt cost 10)
+- Token generation uses crypto/rand (secure but slower than math/rand)
+- Validation functions are fast (regex-based)
+- Error creation is lightweight
+
+## Security Considerations
+
+- All cryptographic operations use Go's crypto package
+- No custom crypto implementations
+- Constant-time comparisons for passwords
+- Secure random number generation
+- Input validation prevents injection attacks
+
+## Documentation
+
+Each internal package has detailed documentation:
+- `errs/llm.txt` - Error handling
+- `crypto/llm.txt` - Cryptographic utilities
+- `validator/llm.txt` - Input validation
+

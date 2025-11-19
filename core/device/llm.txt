@@ -1,0 +1,171 @@
+# Device Service
+
+## Package Purpose
+
+The `device` package manages device tracking, fingerprinting, and trust levels. It enables device-based security features like device binding, trusted device lists, and anomaly detection.
+
+## Key Files
+
+- **service.go**: Main device service
+- **device.go**: Device DTO and types
+- **repository.go**: Repository interface
+- **errors.go**: Device-specific errors
+- **filters.go**: Query filters
+
+## Main Types
+
+### Device
+```go
+type Device struct {
+    ID          xid.ID
+    UserID      xid.ID
+    AppID       xid.ID
+    Fingerprint string        // Browser/device fingerprint
+    Name        string         // User-friendly name
+    Type        DeviceType     // web, mobile, desktop
+    TrustLevel  TrustLevel     // trusted, recognized, new
+    IPAddress   string
+    UserAgent   string
+    LastSeenAt  time.Time
+    CreatedAt   time.Time
+}
+
+type DeviceType string
+const (
+    DeviceTypeWeb     DeviceType = "web"
+    DeviceTypeMobile  DeviceType = "mobile"
+    DeviceTypeDesktop DeviceType = "desktop"
+)
+
+type TrustLevel string
+const (
+    TrustLevelTrusted    TrustLevel = "trusted"
+    TrustLevelRecognized TrustLevel = "recognized"
+    TrustLevelNew        TrustLevel = "new"
+)
+```
+
+## Public API
+
+### Register Device
+```go
+req := &RegisterDeviceRequest{
+    UserID:      userID,
+    AppID:       appID,
+    Fingerprint: "fp_abc123...",
+    Name:        "Chrome on MacBook Pro",
+    Type:        DeviceTypeWeb,
+    IPAddress:   "192.168.1.1",
+    UserAgent:   "Mozilla/5.0...",
+}
+device, err := deviceSvc.Register(ctx, req)
+```
+
+### Get or Create Device
+```go
+// Returns existing device or creates new one
+device, isNew, err := deviceSvc.GetOrCreate(ctx, userID, fingerprint, ipAddress, userAgent)
+```
+
+### Update Device Trust Level
+```go
+err := deviceSvc.SetTrustLevel(ctx, deviceID, TrustLevelTrusted)
+```
+
+### List User Devices
+```go
+devices, err := deviceSvc.ListForUser(ctx, userID)
+// Returns all devices for user with last seen info
+```
+
+### Revoke Device
+```go
+err := deviceSvc.Revoke(ctx, deviceID)
+// Future logins from this device require re-authentication
+```
+
+### Update Last Seen
+```go
+err := deviceSvc.UpdateLastSeen(ctx, deviceID)
+```
+
+## Dependencies
+
+- **core/user**: User validation
+- **internal/errs**: Error handling
+- **repository**: Device persistence
+- **schema**: Database model
+
+## Used By
+
+- **core/session**: Device binding for sessions
+- **core/auth**: Device-based authentication
+- **plugins/mfa**: Skip MFA for trusted devices
+- **plugins/dashboard**: Device management UI
+
+## Common Patterns
+
+### Device-Based Session Binding
+```go
+func (s *SessionService) Create(ctx context.Context, req *CreateSessionRequest) (*Session, error) {
+    // Get or create device
+    device, isNew, err := s.deviceSvc.GetOrCreate(
+        ctx,
+        req.UserID,
+        req.Fingerprint,
+        req.IPAddress,
+        req.UserAgent,
+    )
+    
+    // Flag if new device (may trigger MFA)
+    if isNew {
+        s.notificationSvc.Send(ctx, req.UserID, "new_device_detected", device)
+    }
+    
+    // Bind session to device
+    session := &Session{
+        UserID:   req.UserID,
+        DeviceID: &device.ID,
+        ...
+    }
+    
+    return session, nil
+}
+```
+
+### Trusted Device Check
+```go
+func (s *AuthService) RequiresMFA(ctx context.Context, userID xid.ID, deviceID xid.ID) bool {
+    device, err := s.deviceSvc.FindByID(ctx, deviceID)
+    if err != nil || device.TrustLevel != TrustLevelTrusted {
+        return true  // MFA required for untrusted devices
+    }
+    
+    // Check if device was recently seen
+    if time.Since(device.LastSeenAt) > 30*24*time.Hour {
+        return true  // MFA required if not seen in 30 days
+    }
+    
+    return false
+}
+```
+
+## Security Considerations
+
+- Fingerprints are one-way hashed
+- Device revocation is immediate
+- Trust level changes logged in audit
+- Anomaly detection for device changes
+- Rate limiting on device registration
+
+## Configuration Example
+
+```yaml
+auth:
+  device:
+    trackingEnabled: true
+    autoTrustThreshold: 10   # Trust after 10 successful logins
+    maxDevicesPerUser: 20
+    inactiveDeviceThreshold: "90d"
+```
+

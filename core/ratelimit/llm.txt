@@ -1,0 +1,114 @@
+# Rate Limit Service
+
+## Package Purpose
+
+Provides rate limiting with multiple storage backends (memory, Redis) to prevent abuse and ensure fair resource usage.
+
+## Key Types
+
+```go
+type Service struct {
+    storage Storage
+    config  Config
+}
+
+type Config struct {
+    DefaultLimit  int           // Requests per window
+    DefaultWindow time.Duration // Time window
+    Storage       string        // "memory" or "redis"
+}
+
+type Storage interface {
+    Check(ctx context.Context, key string, limit int, window time.Duration) (allowed bool, remaining int, resetAt time.Time)
+    Increment(ctx context.Context, key string, window time.Duration) error
+    Reset(ctx context.Context, key string) error
+}
+```
+
+## Public API
+
+```go
+// Check rate limit
+allowed, remaining, resetAt := rateLimitSvc.Check(ctx, "user:123", 100, 1*time.Minute)
+if !allowed {
+    return errs.RateLimitExceeded(resetAt)
+}
+
+// Increment counter
+err := rateLimitSvc.Increment(ctx, "user:123", 1*time.Minute)
+
+// Reset limit
+err := rateLimitSvc.Reset(ctx, "user:123")
+```
+
+## Rate Limit Keys
+
+Format: `{type}:{id}:{action}`
+
+Examples:
+- `user:123:login` - User login attempts
+- `ip:192.168.1.1:api` - IP-based API requests
+- `apikey:abc:requests` - API key requests
+- `org:456:invites` - Organization invitations
+
+## Storage Backends
+
+### Memory Storage
+- Fast, low latency
+- Single-server only
+- Lost on restart
+- Good for: Development, single-server deployments
+
+### Redis Storage
+- Distributed, multi-server
+- Persists across restarts
+- Slightly higher latency
+- Good for: Production, multi-server deployments
+
+## Middleware Integration
+
+```go
+func RateLimitMiddleware(rateLimitSvc *ratelimit.Service, limit int, window time.Duration) forge.Middleware {
+    return func(c *forge.Context) error {
+        userID := contexts.GetUserID(c.Context())
+        key := fmt.Sprintf("user:%s:api", userID)
+        
+        allowed, remaining, resetAt := rateLimitSvc.Check(c.Context(), key, limit, window)
+        
+        // Add rate limit headers
+        c.Response().Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+        c.Response().Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+        c.Response().Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetAt.Unix(), 10))
+        
+        if !allowed {
+            return errs.RateLimitExceeded(resetAt)
+        }
+        
+        return c.Next()
+    }
+}
+```
+
+## Dependencies
+
+- **storage**: Memory or Redis storage
+- **internal/errs**: Error handling
+
+## Used By
+
+- **core/auth**: Login rate limiting
+- **core/apikey**: API key rate limiting
+- **handlers**: HTTP endpoint rate limiting
+- **Middleware**: Global rate limiting
+
+## Configuration Example
+
+```yaml
+auth:
+  ratelimit:
+    defaultLimit: 100
+    defaultWindow: "1m"
+    storage: "redis"     # or "memory"
+    redisURL: "redis://localhost:6379"
+```
+

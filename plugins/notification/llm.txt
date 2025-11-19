@@ -1,0 +1,51 @@
+# Notification Plugin
+
+## Purpose
+Advanced notification features including A/B testing, template versioning, provider management, and analytics.
+
+## Features
+- Template management UI
+- A/B test creation and tracking
+- Provider configuration
+- Send test notifications
+- Delivery analytics
+- Template variables testing
+- Version control
+- Localization support
+
+## Template Types
+- Welcome emails
+- Verification emails
+- Password reset
+- Invitation emails
+- MFA codes
+- Security alerts
+- Custom templates
+
+## A/B Testing
+Test different template versions:
+- Subject lines
+- Content variations
+- Send times
+- Track open/click rates
+
+## Analytics
+- Delivery rate
+- Open rate
+- Click rate
+- Bounce rate
+- Conversion tracking
+
+## Routes
+- `GET /notifications/templates` - Template list
+- `POST /notifications/templates` - Create template
+- `GET /notifications/analytics` - Analytics dashboard
+- `POST /notifications/test` - Send test notification
+- `GET /notifications/providers` - Provider list
+
+## Dependencies
+- **core/notification**: Notification service
+- **plugins/dashboard**: Dashboard integration
+
+See: `README.md`, `PROVIDER_CONFIGURATION.md`
+

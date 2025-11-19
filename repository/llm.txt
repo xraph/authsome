@@ -1,0 +1,286 @@
+# Repository Layer
+
+## Package Purpose
+
+The `repository` package provides Bun ORM implementations for all data access operations. It follows the repository pattern, abstracting database operations from business logic.
+
+## Architecture
+
+Each core service defines its repository interface in `core/*/repository.go`, and implementations live in `repository/*.go`:
+
+```
+core/user/repository.go (interface)
+    ↓
+repository/user.go (implementation)
+```
+
+## Repository Files
+
+### User & Auth
+- **user.go**: User CRUD operations
+- **user_ban.go**: User ban management
+- **user_role.go**: User role assignments
+- **session.go**: Session storage
+- **social_account.go**: Social OAuth accounts
+
+### Organization & Teams
+- **organization/organization.go**: Organization CRUD
+- **organization/member.go**: Organization members
+- **organization/team.go**: Team management
+- **organization/invitation.go**: Invitations
+
+### Application
+- **app.go**: Application management
+- **member.go**: App members
+- **team.go**: App teams
+- **invitation.go**: App invitations
+
+### Security & Auth
+- **apikey.go**: API key storage
+- **apikey_role.go**: API key RBAC roles
+- **jwt_key.go**: JWT signing keys
+- **device.go**: Device tracking
+- **security.go**: Security events
+
+### RBAC
+- **role.go**: Role definitions
+- **permission.go**: Permission definitions
+- **role_permission.go**: Role-permission mapping
+- **policy.go**: RBAC policies
+
+### Audit & Events
+- **audit.go**: Audit event storage
+- **webhook.go**: Webhook configurations
+
+### SSO & OAuth
+- **sso_provider.go**: SSO provider config
+- **oauth_client.go**: OAuth client registration
+- **oauth_token.go**: OAuth token storage
+- **authorization_code.go**: OAuth authorization codes
+
+### MFA & Passwordless
+- **mfa.go**: MFA settings and credentials
+- **twofa.go**: 2FA settings
+- **passkey.go**: WebAuthn credentials (in mfa.go)
+- **emailotp.go**: Email OTP tokens
+- **magiclink.go**: Magic link tokens
+- **phone.go**: Phone verification
+
+### Notifications
+- **notification.go**: Notification logs
+- **notification/**: Template and provider management
+
+### Forms & Templates
+- **forms.go**: Dynamic form schemas
+- **identity_verification.go**: ID verification records
+
+## Repository Interface Pattern
+
+```go
+// Interface definition in core service
+type Repository interface {
+    Create(ctx context.Context, entity *Entity) error
+    FindByID(ctx context.Context, id xid.ID) (*Entity, error)
+    Update(ctx context.Context, entity *Entity) error
+    Delete(ctx context.Context, id xid.ID) error
+    List(ctx context.Context, filter *Filter) ([]*Entity, error)
+}
+
+// Implementation in repository package
+type entityRepository struct {
+    db *bun.DB
+}
+
+func NewEntityRepository(db *bun.DB) *entityRepository {
+    return &entityRepository{db: db}
+}
+
+func (r *entityRepository) Create(ctx context.Context, entity *schema.Entity) error {
+    _, err := r.db.NewInsert().
+        Model(entity).
+        Exec(ctx)
+    return err
+}
+```
+
+## Common Patterns
+
+### Basic CRUD
+```go
+// Create
+_, err := r.db.NewInsert().
+    Model(user).
+    Exec(ctx)
+
+// Read
+err := r.db.NewSelect().
+    Model(user).
+    Where("id = ?", id).
+    Scan(ctx)
+
+// Update
+_, err := r.db.NewUpdate().
+    Model(user).
+    WherePK().
+    Exec(ctx)
+
+// Delete
+_, err := r.db.NewDelete().
+    Model(user).
+    Where("id = ?", id).
+    Exec(ctx)
+```
+
+### Filtering
+```go
+query := r.db.NewSelect().Model((*schema.User)(nil))
+
+if filter.Email != "" {
+    query = query.Where("email LIKE ?", "%"+filter.Email+"%")
+}
+
+if filter.AppID != nil {
+    query = query.Where("app_id = ?", filter.AppID)
+}
+
+if filter.EmailVerified != nil {
+    query = query.Where("email_verified = ?", *filter.EmailVerified)
+}
+
+users := []*schema.User{}
+err := query.Scan(ctx, &users)
+```
+
+### Pagination
+```go
+// Offset pagination
+query := r.db.NewSelect().
+    Model((*schema.User)(nil)).
+    Limit(filter.Limit).
+    Offset(filter.Offset).
+    Order("created_at DESC")
+
+// Cursor pagination
+query := r.db.NewSelect().
+    Model((*schema.User)(nil)).
+    Where("id > ?", cursor).
+    Limit(limit).
+    Order("id ASC")
+```
+
+### Joins
+```go
+err := r.db.NewSelect().
+    Model((*schema.Member)(nil)).
+    Relation("User").
+    Relation("Organization").
+    Where("organization_id = ?", orgID).
+    Scan(ctx, &members)
+```
+
+### Transactions
+```go
+func (r *repository) ComplexOperation(ctx context.Context) error {
+    return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+        // Multiple operations in transaction
+        if err := r.createEntity1(ctx, tx); err != nil {
+            return err
+        }
+        if err := r.createEntity2(ctx, tx); err != nil {
+            return err
+        }
+        return nil
+    })
+}
+```
+
+## Bun Features Used
+
+- **Model tagging**: Struct tags for table mapping
+- **Relations**: One-to-many, many-to-many
+- **Hooks**: BeforeInsert, AfterSelect, etc.
+- **Soft deletes**: DeletedAt field
+- **Timestamps**: CreatedAt, UpdatedAt auto-management
+- **Query building**: Type-safe query construction
+- **Migrations**: Schema versioning
+- **Multi-tenancy**: Organization/app scoping
+
+## Database Support
+
+All repositories work with:
+- PostgreSQL (primary, recommended)
+- MySQL
+- SQLite (development, testing)
+
+## Error Handling
+
+Repository errors are wrapped before returning to services:
+```go
+if err != nil {
+    if err == sql.ErrNoRows {
+        return nil, nil  // Or specific NotFound error
+    }
+    return nil, fmt.Errorf("database error: %w", err)
+}
+```
+
+## Testing
+
+Repositories are tested with real database using test containers:
+```go
+func setupTestDB(t *testing.T) *bun.DB {
+    // Setup test database
+    db := testcontainers.NewPostgresDB(t)
+    // Run migrations
+    runMigrations(t, db)
+    return db
+}
+
+func TestUserRepository_Create(t *testing.T) {
+    db := setupTestDB(t)
+    defer db.Close()
+    
+    repo := repository.NewUserRepository(db)
+    user := &schema.User{
+        ID:    xid.New(),
+        Email: "test@example.com",
+    }
+    
+    err := repo.Create(context.Background(), user)
+    assert.NoError(t, err)
+}
+```
+
+## Performance Considerations
+
+- Indexes on frequently queried columns
+- Use of prepared statements
+- Connection pooling configuration
+- Query result caching where appropriate
+- Batch operations for bulk inserts
+- Efficient pagination
+
+## Security Considerations
+
+- SQL injection prevention (Bun query builder)
+- Organization/app isolation enforced
+- Soft deletes for audit trail
+- No direct SQL string interpolation
+- Parameterized queries only
+
+## Migration
+
+See `migrations/` package for schema migrations using Bun's migration system.
+
+## Configuration
+
+```go
+// Database connection
+db := bun.NewDB(sql.Open("postgres", dsn), pgdialect.New())
+
+// Connection pool
+db.SetMaxOpenConns(25)
+db.SetMaxIdleConns(5)
+db.SetConnMaxLifetime(5 * time.Minute)
+```
+

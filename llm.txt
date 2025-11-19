@@ -1,0 +1,373 @@
+# AuthSome - Comprehensive Authentication Framework
+
+## Package Purpose
+
+AuthSome is an enterprise-grade, pluggable authentication and authorization framework for Go applications. It provides a complete authentication solution with multi-tenancy support, designed to integrate seamlessly with the Forge web framework. The framework follows clean architecture principles with service-oriented design and repository patterns.
+
+## Project Architecture
+
+```
+github.com/xraph/authsome/
+├── authsome.go          # Main Auth instance and initialization
+├── config.go            # Root configuration (aliases core.Config)
+├── options.go           # Functional options pattern for Auth initialization
+├── container.go         # Dependency injection container
+├── exports.go           # Public API exports
+├── core/                # Core business logic services (NO HTTP dependencies)
+├── plugins/             # Extensible authentication plugins
+├── handlers/            # HTTP request handlers
+├── routes/              # Route registration
+├── repository/          # Database access layer (Bun ORM)
+├── schema/              # Database table schemas
+├── internal/            # Internal utilities (not importable externally)
+├── providers/           # Email/SMS/OAuth providers
+├── storage/             # Secondary storage (Redis, memory)
+├── types/               # Shared type definitions
+├── flows/               # Dynamic authentication flows with hooks
+├── migrations/          # Database migrations
+├── clients/             # Generated client SDKs (Go, Rust, TypeScript)
+└── cmd/                 # CLI tools and examples
+```
+
+## Key Design Principles
+
+1. **Clean Architecture**: Core services are HTTP-agnostic
+2. **Service-Oriented**: All business logic lives in services
+3. **Repository Pattern**: Database abstraction for testability
+4. **Plugin System**: Extensible authentication methods
+5. **No Cyclic Dependencies**: Strict unidirectional dependency flow
+6. **Multi-Tenancy First**: Organization-scoped configuration and isolation
+
+## Deployment Modes
+
+- **Standalone Mode**: Single-tenant applications (one default organization)
+- **SaaS Mode**: Multi-tenant platforms with full organization isolation
+
+## Main Components
+
+### Core Services (core/)
+- **user**: User account management and profile operations
+- **auth**: Authentication logic (login, password reset, verification)
+- **session**: Session lifecycle and token management
+- **organization**: Multi-tenant organization management
+- **app**: Application-scoped authentication (sub-tenancy)
+- **rbac**: Role-based access control with policy language
+- **apikey**: API key authentication and RBAC scoping
+- **audit**: Security event logging and audit trails
+- **device**: Device tracking and session binding
+- **webhook**: Webhook delivery and management
+- **jwt**: JWT token generation and validation
+- **notification**: Email/SMS notification templates
+
+### Plugin System (plugins/)
+Core plugins enhance authentication with additional methods:
+- **dashboard**: Admin UI with server-rendered templates
+- **admin**: Admin operations and management APIs
+- **mfa**: Multi-factor authentication (TOTP, Email, SMS, WebAuthn, Backup codes)
+- **social**: OAuth social login (Google, GitHub, Facebook, etc.)
+- **sso**: Enterprise SSO (SAML, OIDC)
+- **passkey**: WebAuthn/FIDO2 passwordless authentication
+- **organization**: Organization-specific features and UI
+- **impersonation**: Admin user impersonation
+- **multisession**: Multiple concurrent session management
+- **multiapp**: Multi-application support within organizations
+- **notification**: Advanced notification features
+- **oidcprovider**: Act as an OIDC identity provider
+
+Enterprise plugins (plugins/enterprise/):
+- **backupauth**: Backup authentication methods
+- **compliance**: Regulatory compliance features (GDPR, HIPAA)
+- **consent**: User consent management and tracking
+- **geofence**: Geographic access control
+- **idverification**: Identity verification workflows
+- **mtls**: Mutual TLS authentication
+- **scim**: SCIM 2.0 user provisioning
+- **stepup**: Step-up authentication for sensitive operations
+
+### Infrastructure
+- **repository/**: Bun ORM implementations for all services
+- **schema/**: Database table definitions
+- **handlers/**: HTTP request handlers (thin layer over services)
+- **routes/**: Route registration and middleware chains
+- **internal/**: Utilities (crypto, validation, errors)
+
+### Client SDKs (clients/)
+Auto-generated type-safe client libraries:
+- **go/**: Go client SDK
+- **rust/**: Rust client SDK
+- **typescript/**: TypeScript/JavaScript SDK
+
+## Dependency Flow
+
+```
+cmd/ → authsome (root) → handlers → core/* services → repository interfaces
+                      → routes → handlers
+                      → plugins → core/* + own handlers
+```
+
+**Critical Rules:**
+1. `core/*` services NEVER import handlers
+2. `handlers/*` ONLY import `core/*` services
+3. `plugins/*` can import `core/*` and create handlers
+4. `internal/*` only importable by authsome package
+5. Repository interfaces in `core/*/repository.go`
+6. Repository implementations in `repository/*.go`
+
+## Configuration System
+
+Uses Forge ConfigManager with bind pattern:
+
+```go
+// Each service binds its config from a namespace
+type Config struct {
+    Field1 string `json:"field1"`
+}
+
+func NewService(forgeConfig forge.ConfigManager) (*Service, error) {
+    var cfg Config
+    err := forgeConfig.Bind("auth.servicename", &cfg)
+    return &Service{config: cfg}, err
+}
+```
+
+### Organization-Scoped Config Overrides
+
+```yaml
+# Default config
+auth:
+  oauth:
+    google:
+      clientId: "default-client-id"
+      
+# Organization override
+orgs:
+  org_123:
+    auth:
+      oauth:
+        google:
+          clientId: "org-specific-client-id"
+```
+
+## Main Types and Interfaces
+
+### Auth Instance (authsome.go)
+```go
+type Auth struct {
+    config              Config
+    forgeApp            forge.App
+    db                  interface{} // *bun.DB
+    
+    // Core services (interfaces allow plugin decoration)
+    userService         user.ServiceInterface
+    sessionService      session.ServiceInterface
+    authService         auth.ServiceInterface
+    appService          *app.ServiceImpl
+    orgService          *organization.Service
+    rbacService         *rbac.Service
+    
+    // Plugin registry
+    pluginRegistry      plugins.PluginRegistry
+    
+    // Service registry (decorator pattern)
+    serviceRegistry     *registry.ServiceRegistry
+    hookRegistry        *hooks.Registry
+}
+```
+
+### Plugin Interface
+```go
+type Plugin interface {
+    ID() string
+    Init(auth *Auth, container forge.Container) error
+    RegisterRoutes(router forge.Router) error
+    RegisterHooks(hooks *hooks.Registry) error
+}
+```
+
+## Public API
+
+### Initialization
+```go
+// Create new Auth instance with functional options
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithForgeConfig(app.Config()),
+    authsome.WithMode(authsome.ModeStandalone),
+    authsome.WithPlugins(
+        dashboard.NewPlugin(),
+        mfa.NewPlugin(),
+    ),
+)
+
+// Initialize services and run migrations
+err := auth.Initialize(ctx)
+
+// Mount routes to Forge app
+err := auth.Mount(app, "/auth")
+```
+
+### Service Access
+```go
+// Access core services
+userSvc := auth.GetUserService()
+sessionSvc := auth.GetSessionService()
+rbacSvc := auth.GetRBACService()
+
+// Access config
+config := auth.GetConfig()
+```
+
+## Common Patterns
+
+### Service Pattern
+```go
+type Service struct {
+    repo   Repository
+    config Config
+}
+
+func NewService(cfg forge.ConfigManager, repo Repository) (*Service, error) {
+    var config Config
+    err := cfg.Bind("auth.service", &config)
+    return &Service{repo: repo, config: config}, err
+}
+```
+
+### Repository Pattern
+```go
+// Interface in core/user/repository.go
+type Repository interface {
+    Create(ctx context.Context, user *User) error
+    FindByID(ctx context.Context, id string) (*User, error)
+}
+
+// Implementation in repository/user.go
+type userRepository struct {
+    db *bun.DB
+}
+```
+
+### Handler Pattern
+```go
+type Handler struct {
+    service *Service
+}
+
+func (h *Handler) HandleRequest(c *forge.Context) error {
+    result, err := h.service.Process(c.Context())
+    if err != nil {
+        return errs.ToHTTPError(err)
+    }
+    return c.JSON(200, result)
+}
+```
+
+### Error Handling
+Uses `internal/errs` package for structured errors:
+```go
+// Service layer
+if user == nil {
+    return errs.UserNotFound()
+}
+
+// Handler layer
+if err != nil {
+    return errs.ToHTTPError(err)
+}
+```
+
+## Integration Points
+
+### With Forge Framework
+- Mounts as Forge middleware via `auth.Mount(app, basePath)`
+- Uses Forge's config manager, logger, and router
+- Integrates with Forge's dependency injection container
+
+### Database Integration
+- Uses Bun ORM for all database operations
+- Supports PostgreSQL, MySQL, and SQLite
+- Schema migrations via `migrations/` package
+
+### Redis Integration (Optional)
+- Session caching for distributed systems
+- Rate limiting storage
+- Configurable via `storage/` package
+
+### Plugin Integration
+- Plugins register via `WithPlugins()` option
+- Can decorate core services using decorator pattern
+- Can add routes, hooks, and custom handlers
+- Access Auth instance for service dependencies
+
+## Testing Approach
+
+- **Unit Tests**: Service logic with mocked repositories
+- **Integration Tests**: Full request/response with test database
+- **Plugin Tests**: Plugin initialization and integration
+- Test files: `*_test.go` alongside implementation
+
+## Key Files to Start With
+
+1. `authsome.go` - Main Auth struct and initialization
+2. `core/user/service.go` - Example core service
+3. `plugins/dashboard/plugin.go` - Example plugin
+4. `internal/errs/errors.go` - Error handling system
+5. `repository/user.go` - Example repository implementation
+6. `handlers/auth.go` - Example HTTP handlers
+
+## Environment Variables
+
+```bash
+# Database
+DATABASE_URL=postgres://user:pass@localhost/db
+
+# Session
+SESSION_SECRET=your-secret-key
+
+# Mode
+AUTHSOME_MODE=standalone  # or "saas"
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379
+```
+
+## Quick Navigation
+
+- **Core Services**: See `core/llm.txt`
+- **Plugin System**: See `plugins/llm.txt`
+- **Error Handling**: See `internal/errs/llm.txt`
+- **Database Layer**: See `repository/llm.txt`
+- **Client SDKs**: See `clients/llm.txt`
+
+## Documentation
+
+- **Main README**: `/README.md`
+- **API Documentation**: `https://authsome.dev/api`
+- **Examples**: `/examples/`
+- **Contributing**: Follow clean architecture and no-cycle rules
+
+## Performance Considerations
+
+- Session caching reduces database load
+- RBAC permission checks cached for 5 minutes
+- Connection pooling configured via Bun
+- Rate limiting prevents abuse
+- Pagination for all list endpoints
+
+## Security Features
+
+- Password hashing with bcrypt
+- CSRF protection for web endpoints
+- Rate limiting on authentication endpoints
+- IP-based geolocation and filtering
+- Device tracking and fingerprinting
+- Audit logging for all security events
+- Session rotation and invalidation
+- JWT signing with configurable algorithms
+
+## Version
+
+Go 1.25+ required
+Built on Forge framework (github.com/xraph/forge)
+Uses Bun ORM (github.com/uptrace/bun)
+

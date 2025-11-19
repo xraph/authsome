@@ -1,0 +1,127 @@
+# MFA Plugin
+
+## Purpose
+Multi-factor authentication with support for TOTP, SMS, Email, WebAuthn, and backup codes. Enhances security with second authentication factor.
+
+## Supported Methods
+- **TOTP**: Time-based OTP (Google Authenticator, Authy)
+- **SMS**: SMS verification codes
+- **Email**: Email verification codes
+- **WebAuthn**: Hardware keys (YubiKey, etc.)
+- **Backup Codes**: Single-use recovery codes
+
+## Key Files
+- **service.go**: Main MFA orchestration
+- **adapter_totp.go**: TOTP implementation
+- **adapter_sms.go**: SMS implementation
+- **adapter_email.go**: Email implementation
+- **adapter_webauthn.go**: WebAuthn implementation
+- **adapter_backup.go**: Backup codes
+- **middleware.go**: MFA enforcement
+- **handlers.go**: HTTP endpoints
+
+## Flow
+
+### Setup
+1. User initiates MFA setup
+2. Generate secret/challenge
+3. User verifies with code/response
+4. MFA enabled, backup codes generated
+
+### Verification
+1. User logs in with credentials
+2. MFA challenge issued
+3. User provides second factor
+4. Session granted on success
+
+## Public API
+```go
+// Setup TOTP
+secret, qrCode, err := mfaSvc.SetupTOTP(ctx, userID)
+
+// Verify TOTP
+valid, err := mfaSvc.VerifyTOTP(ctx, userID, code)
+
+// Send SMS code
+err := mfaSvc.SendSMSCode(ctx, userID)
+
+// Verify SMS code
+valid, err := mfaSvc.VerifySMSCode(ctx, userID, code)
+
+// Generate backup codes
+codes, err := mfaSvc.GenerateBackupCodes(ctx, userID)
+
+// Disable MFA
+err := mfaSvc.Disable(ctx, userID)
+```
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    mfa:
+      enabled: true
+      required: false              # Force MFA for all users
+      methods: ["totp", "sms", "email", "webauthn"]
+      totp:
+        issuer: "MyApp"
+        digits: 6
+        period: 30
+      sms:
+        provider: "twilio"
+      email:
+        provider: "smtp"
+      webauthn:
+        rpName: "MyApp"
+        rpID: "example.com"
+      backupCodes:
+        count: 10
+```
+
+## Routes
+- `POST /mfa/setup/totp` - Setup TOTP
+- `POST /mfa/setup/sms` - Setup SMS
+- `POST /mfa/setup/email` - Setup Email
+- `POST /mfa/setup/webauthn` - Setup WebAuthn
+- `POST /mfa/verify` - Verify code
+- `POST /mfa/disable` - Disable MFA
+- `GET /mfa/backup-codes` - Get backup codes
+
+## Middleware
+```go
+func RequireMFA() forge.Middleware {
+    return func(c *forge.Context) error {
+        session := contexts.GetSession(c.Context())
+        if !session.MFAVerified {
+            return errs.TwoFactorRequired()
+        }
+        return c.Next()
+    }
+}
+```
+
+## Dependencies
+- **core/user**: User MFA settings
+- **core/session**: MFA session state
+- **providers/sms**: SMS delivery
+- **providers/email**: Email delivery
+- **github.com/pquerna/otp**: TOTP library
+
+## Security
+- TOTP secrets encrypted at rest
+- SMS/Email codes expire after 10 minutes
+- Rate limiting on verification attempts
+- Account lockout after failed attempts
+- Backup codes hashed
+- WebAuthn uses platform authenticators
+
+## Best Practices
+1. Always generate backup codes
+2. Enforce MFA for admins
+3. Allow trusted devices to skip MFA
+4. Provide multiple MFA methods
+5. Send alerts on MFA changes
+6. Log all MFA events
+
+See: `README.md`, `TESTING_GUIDE.md`
+

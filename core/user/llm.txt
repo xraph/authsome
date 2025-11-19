@@ -1,0 +1,353 @@
+# User Service
+
+## Package Purpose
+
+The `user` package manages the complete user lifecycle including creation, profile management, email verification, password changes, banning, and user search. It serves as the foundation for all user-related operations in AuthSome and is designed to be decoratable by plugins.
+
+## Key Files
+
+- **service.go** (325 lines): Main service implementation with business logic
+- **interface.go**: Service interface for plugin decoration pattern
+- **repository.go**: Repository interface defining storage operations
+- **user.go**: User DTO, request/response types, and schema conversions
+- **errors.go**: User-specific error definitions
+- **filters.go**: Query filter types for user listing
+- **ban.go**: User banning functionality
+- **service_test.go**: Comprehensive unit tests
+- **service_bench_test.go**: Performance benchmarks
+
+## Main Types/Interfaces
+
+### User DTO
+```go
+type User = base.User  // Aliases core/base.User
+
+type User struct {
+    ID              xid.ID
+    AppID           xid.ID
+    Email           string
+    EmailVerified   bool
+    EmailVerifiedAt *time.Time
+    Name            string
+    Image           string
+    PasswordHash    string
+    Username        string
+    DisplayUsername string
+    CreatedAt       time.Time
+    UpdatedAt       time.Time
+    DeletedAt       *time.Time
+}
+```
+
+### Service Interface
+```go
+type ServiceInterface interface {
+    Create(ctx context.Context, req *CreateUserRequest) (*User, error)
+    FindByID(ctx context.Context, id xid.ID) (*User, error)
+    FindByEmail(ctx context.Context, email string) (*User, error)
+    FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*User, error)
+    FindByUsername(ctx context.Context, username string) (*User, error)
+    Update(ctx context.Context, u *User, req *UpdateUserRequest) (*User, error)
+    Delete(ctx context.Context, id xid.ID) error
+    ListUsers(ctx context.Context, filter *ListUsersFilter) (*PageResponse[*User], error)
+    CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error)
+}
+```
+
+### Repository Interface
+```go
+type Repository interface {
+    Create(ctx context.Context, user *schema.User) error
+    FindByID(ctx context.Context, id xid.ID) (*schema.User, error)
+    FindByEmail(ctx context.Context, email string) (*schema.User, error)
+    FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*schema.User, error)
+    FindByUsername(ctx context.Context, username string) (*schema.User, error)
+    Update(ctx context.Context, user *schema.User) error
+    Delete(ctx context.Context, id xid.ID) error
+    ListUsers(ctx context.Context, filter *ListUsersFilter) (*PageResponse[*schema.User], error)
+    CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error)
+}
+```
+
+## Public API
+
+### User Creation
+```go
+req := &CreateUserRequest{
+    AppID:    appID,
+    Email:    "user@example.com",
+    Password: "securepass123",
+    Name:     "John Doe",
+}
+user, err := userSvc.Create(ctx, req)
+```
+
+### User Lookup
+```go
+// By ID
+user, err := userSvc.FindByID(ctx, userID)
+
+// By email (global)
+user, err := userSvc.FindByEmail(ctx, "user@example.com")
+
+// By email within app
+user, err := userSvc.FindByAppAndEmail(ctx, appID, "user@example.com")
+
+// By username
+user, err := userSvc.FindByUsername(ctx, "johndoe")
+```
+
+### User Update
+```go
+name := "Jane Doe"
+verified := true
+req := &UpdateUserRequest{
+    Name:          &name,
+    EmailVerified: &verified,
+}
+updated, err := userSvc.Update(ctx, user, req)
+```
+
+### Password Management
+```go
+// Change password
+err := userSvc.ChangePassword(ctx, userID, oldPassword, newPassword)
+
+// Update password (without old password verification)
+err := userSvc.UpdatePassword(ctx, userID, newPassword)
+
+// Verify password
+valid := userSvc.VerifyPassword(ctx, userID, password)
+```
+
+### Email Verification
+```go
+// Mark as verified
+err := userSvc.VerifyEmail(ctx, userID)
+
+// Check verification status
+verified := userSvc.IsEmailVerified(ctx, userID)
+```
+
+### User Banning
+```go
+// Ban user
+err := userSvc.BanUser(ctx, userID, reason, expiresAt)
+
+// Unban user
+err := userSvc.UnbanUser(ctx, userID)
+
+// Check ban status
+banned, reason, expiresAt := userSvc.IsUserBanned(ctx, userID)
+```
+
+### User Listing
+```go
+filter := &ListUsersFilter{
+    AppID:         &appID,
+    Email:         "search@example.com",
+    EmailVerified: &trueVal,
+    Limit:         20,
+    Offset:        0,
+}
+response, err := userSvc.ListUsers(ctx, filter)
+// response contains: Items []*User, Total int, HasMore bool
+```
+
+## Configuration
+
+```go
+type Config struct {
+    PasswordRequirements validator.PasswordRequirements
+    
+    ChangeEmail struct {
+        Enabled             bool
+        RequireVerification bool
+    }
+    
+    DeleteAccount struct {
+        RequirePassword     bool
+        RequireVerification bool
+    }
+}
+```
+
+Bound from `auth.user` namespace in config.
+
+## Dependencies
+
+- **internal/crypto**: Password hashing (bcrypt)
+- **internal/validator**: Email and password validation
+- **internal/errs**: Structured error handling
+- **core/webhook**: User event webhooks (user.created, user.updated, user.deleted)
+- **core/pagination**: List pagination support
+- **repository.Repository**: Data persistence
+- **schema.User**: Database model
+
+## Used By
+
+- **core/auth**: Authentication operations (login, password reset)
+- **core/session**: Session creation and user lookup
+- **core/organization**: Organization member management
+- **core/app**: Application member management
+- **handlers/auth**: User registration and profile endpoints
+- **plugins/admin**: Admin user management
+- **plugins/dashboard**: User listing and management UI
+
+## Common Patterns
+
+### Creating a User with Validation
+```go
+func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, error) {
+    // 1. Validate email
+    if !validator.IsValidEmail(req.Email) {
+        return nil, errs.InvalidInput("email", "invalid format")
+    }
+    
+    // 2. Validate password strength
+    if err := validator.ValidatePassword(req.Password, s.config.PasswordRequirements); err != nil {
+        return nil, errs.WeakPassword(err.Error())
+    }
+    
+    // 3. Check if user already exists
+    existing, _ := s.repo.FindByAppAndEmail(ctx, req.AppID, req.Email)
+    if existing != nil {
+        return nil, errs.EmailAlreadyExists(req.Email)
+    }
+    
+    // 4. Hash password
+    hash, err := crypto.HashPassword(req.Password)
+    if err != nil {
+        return nil, errs.InternalError(err)
+    }
+    
+    // 5. Create user
+    user := &schema.User{
+        ID:           xid.New(),
+        AppID:        &req.AppID,
+        Email:        req.Email,
+        PasswordHash: hash,
+        Name:         req.Name,
+    }
+    
+    if err := s.repo.Create(ctx, user); err != nil {
+        return nil, errs.DatabaseError("Create", err)
+    }
+    
+    // 6. Trigger webhook
+    s.webhookSvc.TriggerEvent(ctx, "user.created", user)
+    
+    return FromSchemaUser(user), nil
+}
+```
+
+### Plugin Decoration Example
+```go
+// Plugin decorates user service
+type EnhancedUserService struct {
+    base user.ServiceInterface
+}
+
+func (s *EnhancedUserService) Create(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
+    // Pre-processing (e.g., additional validation, logging)
+    log.Info("Creating user", "email", req.Email)
+    
+    // Call base implementation
+    user, err := s.base.Create(ctx, req)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Post-processing (e.g., send welcome email, analytics)
+    sendWelcomeEmail(user.Email)
+    
+    return user, nil
+}
+```
+
+## Integration Points
+
+### With Auth Service
+Auth service uses user service for credential verification:
+```go
+user, err := userSvc.FindByAppAndEmail(ctx, appID, email)
+if err != nil || !userSvc.VerifyPassword(ctx, user.ID, password) {
+    return errs.InvalidCredentials()
+}
+```
+
+### With Webhook Service
+User events trigger webhooks:
+- `user.created` - After user creation
+- `user.updated` - After profile update
+- `user.deleted` - After user deletion
+- `user.email.verified` - After email verification
+- `user.password.changed` - After password change
+
+### With Organization Service
+Organization service links users to orgs via members:
+```go
+user, err := userSvc.FindByID(ctx, userID)
+member := orgSvc.AddMember(ctx, orgID, user.ID, role)
+```
+
+## Error Handling
+
+Common errors returned:
+- `errs.UserNotFound()` - User doesn't exist
+- `errs.EmailAlreadyExists(email)` - Email already registered
+- `errs.UsernameAlreadyExists(username)` - Username taken
+- `errs.WeakPassword(reason)` - Password doesn't meet requirements
+- `errs.InvalidInput(field, reason)` - Invalid input data
+- `errs.AccountLocked(reason)` - User account is banned
+
+## Testing
+
+### Unit Tests (service_test.go)
+```go
+func TestService_Create(t *testing.T) {
+    mockRepo := newMockRepository()
+    service := user.NewService(mockConfig, mockRepo, mockWebhook)
+    
+    req := &user.CreateUserRequest{
+        AppID:    appID,
+        Email:    "test@example.com",
+        Password: "SecurePass123!",
+    }
+    
+    user, err := service.Create(context.Background(), req)
+    assert.NoError(t, err)
+    assert.NotNil(t, user)
+    assert.Equal(t, "test@example.com", user.Email)
+}
+```
+
+### Benchmarks (service_bench_test.go)
+```bash
+go test -bench=. -benchmem ./core/user/
+```
+
+## Performance Considerations
+
+- Password hashing uses bcrypt (computationally expensive by design)
+- Email lookups use database indexes on `email` column
+- Username lookups use index on `username` column
+- User listing supports pagination to limit result sets
+- Webhook triggers are asynchronous (don't block user operations)
+
+## Security Considerations
+
+- Passwords never stored in plaintext (bcrypt with cost 10)
+- Password hashes never returned in User DTO
+- Email verification required before certain operations
+- Account banning prevents all user operations
+- Deleted users use soft deletion (DeletedAt timestamp)
+- All operations require valid context with auth info
+
+## Migration Notes
+
+- Schema defined in `schema/user.go`
+- Migrations in `migrations/`
+- Indexes on: email, username, app_id
+- Foreign keys to app table
+

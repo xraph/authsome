@@ -1,0 +1,127 @@
+# SSO Plugin
+
+## Purpose
+Enterprise Single Sign-On with SAML 2.0 and OIDC support. Enables integration with corporate identity providers.
+
+## Supported Protocols
+- **SAML 2.0**: Okta, OneLogin, Azure AD, ADFS
+- **OIDC**: Auth0, Keycloak, custom providers
+
+## Key Files
+- **plugin.go**: Plugin registration
+- **service.go**: SSO orchestration
+- **handlers.go**: HTTP endpoints
+- **saml/**: SAML 2.0 implementation
+- **oidc/**: OIDC implementation
+
+## SAML Flow
+1. User navigates to SSO login
+2. Generate SAML AuthnRequest
+3. Redirect to IdP
+4. User authenticates at IdP
+5. IdP POSTs SAML Response
+6. Validate assertion and signature
+7. Extract user attributes
+8. Find or create user
+9. Create session
+
+## OIDC Flow
+1. User navigates to SSO login
+2. Redirect to OIDC provider
+3. User authenticates
+4. Receive authorization code
+5. Exchange for ID token
+6. Validate JWT signature
+7. Extract claims
+8. Find or create user
+9. Create session
+
+## Public API
+```go
+// SAML
+metadata, err := ssoSvc.GetSAMLMetadata(ctx, orgID)
+url, err := ssoSvc.InitiateSAML(ctx, orgID, relayState)
+user, session, err := ssoSvc.ConsumeSAMLResponse(ctx, samlResponse)
+
+// OIDC
+url, state, nonce, err := ssoSvc.InitiateOIDC(ctx, orgID)
+user, session, err := ssoSvc.HandleOIDCCallback(ctx, code, state, nonce)
+
+// Configuration
+err := ssoSvc.ConfigureSAML(ctx, orgID, &SAMLConfig{
+    EntityID:   "https://idp.example.com",
+    SSOURL:     "https://idp.example.com/sso",
+    Certificate: cert,
+})
+```
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    sso:
+      enabled: true
+      saml:
+        entityID: "https://authsome.example.com"
+        assertionConsumerServiceURL: "https://authsome.example.com/sso/saml/acs"
+        signRequests: true
+      oidc:
+        issuer: "https://idp.example.com"
+        clientId: "..."
+        clientSecret: "..."
+```
+
+## Routes
+### SAML
+- `GET /sso/saml/metadata` - SP metadata
+- `GET /sso/saml/login` - Initiate SAML
+- `POST /sso/saml/acs` - Assertion Consumer Service
+- `GET /sso/saml/logout` - Single Logout
+
+### OIDC
+- `GET /sso/oidc/login` - Initiate OIDC
+- `GET /sso/oidc/callback` - Callback endpoint
+- `POST /sso/oidc/logout` - Logout
+
+## Attribute Mapping
+Map IdP attributes to user fields:
+```yaml
+attributeMapping:
+  email: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+  name: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+  groups: "http://schemas.xmlsoap.org/claims/Group"
+```
+
+## Just-in-Time Provisioning
+Automatically create users on first SSO login:
+```yaml
+jitProvisioning:
+  enabled: true
+  updateAttributes: true
+  defaultRole: "member"
+```
+
+## Dependencies
+- **core/user**: User management
+- **core/organization**: Org-scoped SSO
+- **core/session**: Session creation
+- **github.com/crewjam/saml**: SAML library
+- **github.com/coreos/go-oidc**: OIDC library
+
+## Security
+- XML signature validation
+- Certificate verification
+- Replay attack prevention
+- Assertion expiration checking
+- Audience restriction validation
+- OIDC token validation
+
+## Provider Setup Guides
+- Okta SAML
+- Azure AD SAML/OIDC
+- Auth0 OIDC
+- Google Workspace SAML
+- OneLogin SAML
+
+See: `README.md`, provider setup docs
+

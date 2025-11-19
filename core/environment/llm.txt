@@ -1,0 +1,78 @@
+# Environment Service
+
+## Package Purpose
+
+Manages environment contexts (development, staging, production) enabling environment-specific configuration and data isolation.
+
+## Key Types
+
+```go
+type Environment struct {
+    ID        xid.ID
+    Name      string        // e.g., "production", "staging"
+    Slug      string        // e.g., "prod", "staging"
+    Type      EnvironmentType
+    Active    bool
+    Config    map[string]any
+    CreatedAt time.Time
+}
+
+type EnvironmentType string
+const (
+    EnvironmentTypeDevelopment EnvironmentType = "development"
+    EnvironmentTypeStaging     EnvironmentType = "staging"
+    EnvironmentTypeProduction  EnvironmentType = "production"
+)
+```
+
+## Public API
+
+```go
+// Create environment
+env, err := envSvc.Create(ctx, &CreateEnvironmentRequest{
+    Name: "Production",
+    Slug: "prod",
+    Type: EnvironmentTypeProduction,
+})
+
+// Get environment
+env, err := envSvc.FindByID(ctx, envID)
+
+// List environments
+envs, err := envSvc.List(ctx)
+
+// Bootstrap default environments
+err := envSvc.BootstrapDefaults(ctx)
+// Creates: development, staging, production
+```
+
+## Environment Middleware
+
+```go
+func EnvironmentMiddleware(envSvc *environment.Service) forge.Middleware {
+    return func(c *forge.Context) error {
+        envSlug := c.Request().Header.Get("X-Environment")
+        env, err := envSvc.FindBySlug(ctx, envSlug)
+        if err != nil {
+            env, _ = envSvc.GetDefault(ctx)
+        }
+        
+        ctx := contexts.WithEnvironment(c.Context(), env)
+        c.SetContext(ctx)
+        return c.Next()
+    }
+}
+```
+
+## Dependencies
+
+- **internal/errs**: Error handling
+- **repository**: Environment persistence
+- **core/contexts**: Environment context helpers
+
+## Used By
+
+- **core/organization**: Org-environment scoping
+- **core/app**: App-environment scoping
+- **All services**: Environment context awareness
+

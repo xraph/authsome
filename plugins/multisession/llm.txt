@@ -1,0 +1,51 @@
+# Multi-Session Plugin
+
+## Purpose
+Manages multiple concurrent sessions per user with device tracking, session listing, and selective revocation.
+
+## Features
+- Session list per user
+- Device information
+- Location tracking
+- Selective revocation
+- Revoke all except current
+- Session activity timeline
+- Current session highlighting
+
+## Session Information
+- Device name and type
+- IP address and location
+- Browser and OS
+- Created and last active times
+- Current session indicator
+
+## Public API
+```go
+// List sessions
+sessions, err := multisessionSvc.ListSessions(ctx, userID)
+
+// Revoke session
+err := multisessionSvc.RevokeSession(ctx, sessionID)
+
+// Revoke all except current
+err := multisessionSvc.RevokeAllExceptCurrent(ctx, userID, currentSessionID)
+
+// Get session details
+session, err := multisessionSvc.GetSessionDetails(ctx, sessionID)
+```
+
+## Dashboard Extension
+Adds session management page to user settings.
+
+## Routes
+- `GET /sessions` - List sessions
+- `DELETE /sessions/{id}` - Revoke session
+- `POST /sessions/revoke-all` - Revoke all sessions
+
+## Dependencies
+- **core/session**: Session service
+- **core/device**: Device tracking
+- **plugins/dashboard**: UI integration
+
+See: `README.md`, `FEATURES.md`
+

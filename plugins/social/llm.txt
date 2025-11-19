@@ -1,0 +1,126 @@
+# Social OAuth Plugin
+
+## Purpose
+OAuth 2.0 social login integration with major providers. Enables users to sign in with existing social accounts.
+
+## Supported Providers
+- **Google**: Google account login
+- **GitHub**: GitHub account login
+- **Facebook**: Facebook account login
+- **Twitter/X**: Twitter account login
+- **LinkedIn**: LinkedIn account login
+- **Microsoft**: Microsoft account login
+- **Apple**: Sign in with Apple
+- **Discord**: Discord account login
+- **Slack**: Slack workspace login
+
+## Provider Structure
+```
+providers/
+├── google.go
+├── github.go
+├── facebook.go
+├── twitter.go
+├── linkedin.go
+├── microsoft.go
+├── apple.go
+├── discord.go
+└── slack.go
+```
+
+## OAuth Flow
+1. User clicks "Sign in with Provider"
+2. Redirect to provider OAuth page
+3. User authorizes application
+4. Provider redirects back with code
+5. Exchange code for access token
+6. Fetch user profile from provider
+7. Find or create user account
+8. Create session and redirect
+
+## Public API
+```go
+// Get OAuth URL
+url, state, err := socialSvc.GetAuthURL(ctx, "google", redirectURI)
+
+// Handle callback
+user, session, err := socialSvc.HandleCallback(ctx, "google", code, state)
+
+// Link account
+err := socialSvc.LinkAccount(ctx, userID, "github", oauthToken)
+
+// Unlink account
+err := socialSvc.UnlinkAccount(ctx, userID, "google")
+
+// List linked accounts
+accounts, err := socialSvc.ListLinkedAccounts(ctx, userID)
+```
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    social:
+      enabled: true
+      providers:
+        google:
+          enabled: true
+          clientId: "..."
+          clientSecret: "..."
+          scopes: ["email", "profile"]
+        github:
+          enabled: true
+          clientId: "..."
+          clientSecret: "..."
+          scopes: ["user:email"]
+        # ... more providers
+```
+
+## Routes
+- `GET /auth/social/{provider}` - Initiate OAuth
+- `GET /auth/social/{provider}/callback` - Handle callback
+- `POST /auth/social/{provider}/link` - Link account
+- `DELETE /auth/social/{provider}/unlink` - Unlink account
+- `GET /auth/social/accounts` - List linked accounts
+
+## Account Linking
+Users can link multiple social accounts to one AuthSome account:
+```
+User Account
+├── Google (primary)
+├── GitHub (linked)
+└── Facebook (linked)
+```
+
+## Dependencies
+- **core/user**: User management
+- **core/auth**: Authentication service
+- **core/session**: Session creation
+- **golang.org/x/oauth2**: OAuth 2.0 library
+
+## Security
+- State parameter prevents CSRF
+- Nonce for OIDC providers
+- PKCE for mobile apps
+- Secure token storage
+- Scopes limited to minimum required
+
+## Provider-Specific Notes
+
+### Google
+- Requires verified domain
+- Supports One Tap sign-in
+- Returns email as verified
+
+### GitHub
+- Requires public email or email scope
+- Returns username
+- Enterprise support available
+
+### Apple
+- Requires private relay handling
+- Returns limited user data
+- Sign in with Apple required for iOS apps
+
+See: `README.md`, provider-specific docs
+

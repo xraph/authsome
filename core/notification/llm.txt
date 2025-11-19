@@ -1,0 +1,100 @@
+# Notification Service
+
+## Package Purpose
+
+Manages email and SMS notification templates with A/B testing, versioning, and multi-provider support. Enables customizable transactional notifications.
+
+## Key Types
+
+```go
+type Service struct {
+    templateSvc  *TemplateService
+    providerSvc  *ProviderService
+    analyticsSvc *AnalyticsService
+    abTestSvc    *ABTestService
+}
+
+type Template struct {
+    ID      xid.ID
+    Name    string        // e.g., "welcome_email"
+    Type    TemplateType  // email or sms
+    Subject string
+    Body    string        // Supports {{variable}} syntax
+    Active  bool
+    Version int
+}
+```
+
+## Public API
+
+```go
+// Send email
+err := notificationSvc.SendEmail(ctx, &SendEmailRequest{
+    To:       "user@example.com",
+    Template: "welcome_email",
+    Variables: map[string]string{
+        "name": "John Doe",
+        "verificationLink": "https://...",
+    },
+})
+
+// Send SMS
+err := notificationSvc.SendSMS(ctx, &SendSMSRequest{
+    To:       "+15551234567",
+    Template: "verification_code",
+    Variables: map[string]string{
+        "code": "123456",
+    },
+})
+
+// Create template
+template, err := notificationSvc.CreateTemplate(ctx, &CreateTemplateRequest{
+    Name:    "password_reset",
+    Type:    TemplateTypeEmail,
+    Subject: "Reset Your Password",
+    Body:    "Click here: {{resetLink}}",
+})
+```
+
+## Template Types
+
+- **Email**: HTML or plain text
+- **SMS**: Plain text only
+
+## Built-in Templates
+
+- `welcome_email` - New user welcome
+- `email_verification` - Email verification
+- `password_reset` - Password reset
+- `password_changed` - Password change confirmation
+- `new_device` - New device login alert
+- `mfa_code` - MFA verification code
+- `invitation` - Organization invitation
+
+## Provider Support
+
+### Email
+- SMTP
+- SendGrid
+- AWS SES
+- Mailgun
+- Postmark
+
+### SMS
+- Twilio
+- AWS SNS
+- Nexmo
+
+## Dependencies
+
+- **providers/email**: Email provider implementations
+- **providers/sms**: SMS provider implementations
+- **repository**: Template storage
+
+## Used By
+
+- **core/auth**: Authentication emails
+- **core/organization**: Invitation emails
+- **plugins/mfa**: MFA codes
+- **plugins/notification**: Advanced notification features
+

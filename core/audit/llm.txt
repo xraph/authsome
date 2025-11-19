@@ -1,0 +1,248 @@
+# Audit Service
+
+## Package Purpose
+
+The `audit` package provides comprehensive security event logging and audit trail functionality. It tracks all significant security operations including authentication, authorization changes, data access, and administrative actions.
+
+## Key Files
+
+- **service.go**: Main audit service (153 lines)
+- **audit.go**: Audit event DTO and types
+- **repository.go**: Repository interface
+- **errors.go**: Audit-specific errors
+- **filters.go**: Query filters for audit log search
+
+## Main Types
+
+### AuditEvent
+```go
+type Event struct {
+    ID        xid.ID
+    AppID     xid.ID
+    UserID    *xid.ID      // Optional: system events have nil
+    Action    string       // e.g., "user.login", "org.member.added"
+    Resource  string       // Resource ID or type
+    IPAddress string
+    UserAgent string
+    Metadata  string       // JSON-encoded additional data
+    CreatedAt time.Time
+}
+```
+
+### Service
+```go
+type Service struct {
+    repo Repository
+}
+```
+
+## Public API
+
+### Log Event
+```go
+err := auditSvc.Log(ctx, &userID, "user.login", userID.String(), "192.168.1.1", "Mozilla/5.0...", `{"method": "password"}`)
+```
+
+### Create Structured Event
+```go
+req := &CreateEventRequest{
+    UserID:    &userID,
+    Action:    "org.member.added",
+    Resource:  memberID.String(),
+    IPAddress: "192.168.1.1",
+    UserAgent: "Mozilla/5.0...",
+    Metadata:  map[string]any{"role": "admin", "invitedBy": inviterID.String()},
+}
+event, err := auditSvc.Create(ctx, req)
+```
+
+### Query Audit Log
+```go
+filter := &ListEventsFilter{
+    UserID:    &userID,
+    Action:    "user.login",
+    StartTime: time.Now().AddDate(0, 0, -7),  // Last 7 days
+    Limit:     100,
+}
+response, err := auditSvc.List(ctx, filter)
+// Returns paginated events with total count
+```
+
+### Get Single Event
+```go
+event, err := auditSvc.Get(ctx, eventID)
+```
+
+## Standard Actions
+
+### Authentication
+- `user.login` - User logged in
+- `user.logout` - User logged out
+- `user.signup` - New user registered
+- `user.password.changed` - Password changed
+- `user.password.reset` - Password reset
+- `user.email.verified` - Email verified
+
+### Authorization
+- `role.assigned` - Role assigned to user
+- `role.revoked` - Role revoked from user
+- `permission.granted` - Permission granted
+- `permission.revoked` - Permission revoked
+
+### Organization
+- `org.created` - Organization created
+- `org.updated` - Organization updated
+- `org.deleted` - Organization deleted
+- `org.member.added` - Member added
+- `org.member.removed` - Member removed
+- `org.member.role.changed` - Member role changed
+
+### API Keys
+- `apikey.created` - API key created
+- `apikey.used` - API key used
+- `apikey.revoked` - API key revoked
+- `apikey.rotated` - API key rotated
+
+### Session
+- `session.created` - Session created
+- `session.refreshed` - Session refreshed
+- `session.revoked` - Session revoked
+
+## Dependencies
+
+- **core/contexts**: Extract app/user context
+- **core/pagination**: Paginated audit log queries
+- **repository**: Event persistence
+- **schema**: Database model
+
+## Used By
+
+- **All core services**: Log security events
+- **All handlers**: Log HTTP operations
+- **Plugins**: Log plugin-specific operations
+- **Middleware**: Log authentication/authorization
+- **Admin dashboard**: Display audit trail
+
+## Common Patterns
+
+### Auto-Logging Middleware
+```go
+func AuditMiddleware(auditSvc *audit.Service) forge.Middleware {
+    return func(c *forge.Context) error {
+        start := time.Now()
+        
+        // Process request
+        err := c.Next()
+        
+        // Log after completion
+        userID := contexts.GetUserID(c.Context())
+        action := fmt.Sprintf("http.%s.%s", c.Request().Method, c.Request().URL.Path)
+        
+        metadata := map[string]any{
+            "method":     c.Request().Method,
+            "path":       c.Request().URL.Path,
+            "status":     c.Response().Status,
+            "duration_ms": time.Since(start).Milliseconds(),
+        }
+        
+        auditSvc.Create(c.Context(), &audit.CreateEventRequest{
+            UserID:    userID,
+            Action:    action,
+            IPAddress: c.ClientIP(),
+            UserAgent: c.Request().UserAgent(),
+            Metadata:  metadata,
+        })
+        
+        return err
+    }
+}
+```
+
+### Service-Level Audit Logging
+```go
+func (s *OrganizationService) AddMember(ctx context.Context, orgID, userID xid.ID, role string) error {
+    // Perform operation
+    member, err := s.repo.CreateMember(ctx, ...)
+    if err != nil {
+        return err
+    }
+    
+    // Log audit event
+    actorID := contexts.GetUserID(ctx)
+    metadata := map[string]any{
+        "orgID": orgID.String(),
+        "role":  role,
+    }
+    
+    s.auditSvc.Create(ctx, &audit.CreateEventRequest{
+        UserID:   &actorID,
+        Action:   "org.member.added",
+        Resource: member.ID.String(),
+        Metadata: metadata,
+    })
+    
+    return nil
+}
+```
+
+## Error Handling
+
+- `AuditEventCreateFailed(err)` - Failed to create audit event
+- `AuditEventNotFound()` - Event doesn't exist
+
+Note: Audit logging failures should not block operations.
+
+## Performance Considerations
+
+- Audit writes are asynchronous when possible
+- Indexed on: user_id, action, created_at
+- Metadata stored as JSON (queryable in PostgreSQL)
+- Pagination prevents large result sets
+- Old audit logs can be archived/compressed
+
+## Security Considerations
+
+- Audit logs are append-only
+- No deletion (only archival)
+- Immutable after creation
+- Access restricted to admins
+- PII handling follows data retention policies
+- IP addresses logged for forensics
+
+## Testing
+
+```go
+func TestService_Create(t *testing.T) {
+    mockRepo := newMockAuditRepository()
+    auditSvc := audit.NewService(mockRepo)
+    
+    req := &audit.CreateEventRequest{
+        UserID:   &userID,
+        Action:   "user.login",
+        Resource: userID.String(),
+    }
+    
+    event, err := auditSvc.Create(ctx, req)
+    assert.NoError(t, err)
+    assert.Equal(t, "user.login", event.Action)
+}
+```
+
+## Compliance Features
+
+- **GDPR**: User-level audit trail for data access
+- **SOC 2**: Comprehensive security event logging
+- **HIPAA**: PHI access tracking
+- **PCI DSS**: Administrative action logging
+
+## Configuration Example
+
+```yaml
+auth:
+  audit:
+    enabled: true
+    retention: "2y"      # Keep logs for 2 years
+    async: true          # Async logging for performance
+    logLevel: "info"     # Log level threshold
+```
+

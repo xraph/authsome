@@ -1,0 +1,325 @@
+# AuthSome Plugin System
+
+## Package Purpose
+
+The `plugins` package provides a pluggable architecture for extending AuthSome with additional authentication methods, features, and integrations. Plugins can add routes, decorate services, register hooks, and extend the dashboard.
+
+## Plugin Architecture
+
+```
+Plugin Interface
+├── ID() - Unique plugin identifier
+├── Init() - Initialize with Auth instance
+├── RegisterRoutes() - Add HTTP endpoints
+├── RegisterHooks() - Add before/after hooks
+└── Migrate() - Run database migrations (optional)
+```
+
+## Plugin Categories
+
+### Core Plugins
+- **dashboard**: Admin UI with server-rendered templates
+- **admin**: Admin operations and management APIs
+- **mfa**: Multi-factor authentication (TOTP, SMS, Email, WebAuthn, Backup codes)
+- **social**: OAuth social login (Google, GitHub, Facebook, etc.)
+- **sso**: Enterprise SSO (SAML, OIDC)
+- **passkey**: WebAuthn/FIDO2 passwordless
+- **organization**: Organization features and UI
+- **notification**: Advanced notification features
+- **oidcprovider**: Act as OIDC identity provider
+- **impersonation**: Admin user impersonation
+- **multisession**: Multi-session management
+- **multiapp**: Multi-application support
+
+### Enterprise Plugins (plugins/enterprise/)
+- **backupauth**: Backup authentication methods
+- **compliance**: Regulatory compliance (GDPR, HIPAA)
+- **consent**: User consent management
+- **geofence**: Geographic access control
+- **idverification**: Identity verification workflows
+- **mtls**: Mutual TLS authentication
+- **scim**: SCIM 2.0 user provisioning
+- **stepup**: Step-up authentication
+
+### Utility Plugins
+- **apikey**: API key management UI
+- **bearer**: Bearer token authentication
+- **jwt**: JWT token management
+- **username**: Username-based login
+- **anonymous**: Anonymous user support
+- **emailotp**: Email OTP authentication
+- **magiclink**: Magic link passwordless
+- **phone**: Phone number authentication
+- **twofa**: Basic 2FA (legacy)
+
+## Plugin Interface
+
+```go
+type Plugin interface {
+    // ID returns unique plugin identifier (e.g., "dashboard", "mfa")
+    ID() string
+    
+    // Init initializes plugin with Auth instance and DI container
+    Init(auth *Auth, container forge.Container) error
+    
+    // RegisterRoutes registers HTTP routes (optional)
+    RegisterRoutes(router forge.Router) error
+    
+    // RegisterHooks registers before/after hooks (optional)
+    RegisterHooks(hooks *hooks.Registry) error
+}
+```
+
+## Plugin Lifecycle
+
+1. **Registration**: Plugin registered via `WithPlugins()` option
+2. **Initialization**: `Init()` called with Auth instance
+3. **Route Registration**: `RegisterRoutes()` adds endpoints
+4. **Hook Registration**: `RegisterHooks()` adds interceptors
+5. **Ready**: Plugin operational
+
+## Service Decoration Pattern
+
+Plugins can decorate core services:
+
+```go
+// In plugin Init()
+func (p *Plugin) Init(auth *authsome.Auth) error {
+    // Get base service
+    baseUserSvc := auth.GetUserService()
+    
+    // Create decorator
+    enhancedSvc := &EnhancedUserService{
+        base: baseUserSvc,
+        plugin: p,
+    }
+    
+    // Register decorated service
+    auth.GetServiceRegistry().Register("user", enhancedSvc)
+    
+    return nil
+}
+
+// Decorator implementation
+type EnhancedUserService struct {
+    base   user.ServiceInterface
+    plugin *Plugin
+}
+
+func (s *EnhancedUserService) Create(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
+    // Pre-processing
+    p.plugin.logger.Info("Creating user", "email", req.Email)
+    
+    // Call base service
+    user, err := s.base.Create(ctx, req)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Post-processing
+    p.plugin.sendWelcomeEmail(user)
+    
+    return user, nil
+}
+```
+
+## Hook System
+
+Plugins can intercept operations:
+
+```go
+func (p *Plugin) RegisterHooks(hooks *hooks.Registry) error {
+    // Before user creation
+    hooks.Register("user.beforeCreate", func(ctx context.Context, data any) error {
+        user := data.(*user.CreateUserRequest)
+        // Validate or modify user data
+        return p.validateCustomRules(user)
+    })
+    
+    // After user creation
+    hooks.Register("user.afterCreate", func(ctx context.Context, data any) error {
+        user := data.(*user.User)
+        // Send notifications, update external systems, etc.
+        return p.notifyExternalSystem(user)
+    })
+    
+    return nil
+}
+```
+
+## Route Registration
+
+Plugins add custom endpoints:
+
+```go
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
+    group := router.Group("/mfa")
+    
+    // Public routes
+    group.POST("/setup", p.handler.Setup)
+    group.POST("/verify", p.handler.Verify)
+    
+    // Protected routes
+    protected := group.Group("", authMiddleware)
+    protected.GET("/codes", p.handler.GetBackupCodes)
+    protected.POST("/disable", p.handler.Disable)
+    
+    return nil
+}
+```
+
+## Configuration
+
+Each plugin can have its own configuration:
+
+```yaml
+auth:
+  plugins:
+    mfa:
+      enabled: true
+      methods: ["totp", "sms", "email"]
+      required: false
+    
+    social:
+      enabled: true
+      providers:
+        google:
+          clientId: "..."
+          clientSecret: "..."
+    
+    dashboard:
+      enabled: true
+      path: "/dashboard"
+```
+
+## Plugin Discovery
+
+Plugins are registered during Auth initialization:
+
+```go
+auth := authsome.New(
+    authsome.WithPlugins(
+        dashboard.NewPlugin(),
+        mfa.NewPlugin(),
+        social.NewPlugin(),
+    ),
+)
+```
+
+## Dashboard Extension
+
+Plugins can extend the dashboard UI:
+
+```go
+type DashboardExtension interface {
+    // Menu items
+    MenuItems() []MenuItem
+    
+    // Pages
+    Pages() []Page
+    
+    // Widgets
+    Widgets() []Widget
+}
+
+func (p *Plugin) Init(auth *authsome.Auth) error {
+    if dashboardPlugin := auth.GetPlugin("dashboard"); dashboardPlugin != nil {
+        dashboard := dashboardPlugin.(*dashboard.Plugin)
+        dashboard.RegisterExtension(p)
+    }
+    return nil
+}
+```
+
+## Built-in Plugins
+
+### Essential
+- **dashboard**: Web-based admin interface
+- **admin**: REST API for administration
+
+### Authentication Methods
+- **mfa**: Multi-factor authentication
+- **social**: Social OAuth login
+- **sso**: Enterprise SSO
+- **passkey**: WebAuthn passwordless
+- **username**: Username-based auth
+- **emailotp**: Email OTP codes
+- **magiclink**: Magic link login
+- **phone**: Phone number auth
+
+### Features
+- **organization**: Organization management UI
+- **notification**: Email/SMS templates
+- **impersonation**: User impersonation
+- **multisession**: Session management
+- **multiapp**: Multi-app support
+
+### Enterprise
+- **compliance**: GDPR, HIPAA compliance
+- **scim**: User provisioning
+- **mtls**: Certificate-based auth
+- **geofence**: Geographic restrictions
+- **stepup**: Step-up authentication
+
+## Plugin Dependencies
+
+Plugins can depend on other plugins:
+
+```go
+func (p *Plugin) Init(auth *authsome.Auth) error {
+    // Check if required plugin exists
+    mfaPlugin := auth.GetPlugin("mfa")
+    if mfaPlugin == nil {
+        return errors.New("MFA plugin required")
+    }
+    
+    p.mfa = mfaPlugin.(*mfa.Plugin)
+    return nil
+}
+```
+
+## Testing Plugins
+
+```go
+func TestPlugin_Init(t *testing.T) {
+    auth := setupTestAuth(t)
+    plugin := NewPlugin()
+    
+    err := plugin.Init(auth, nil)
+    assert.NoError(t, err)
+    assert.NotNil(t, plugin.service)
+}
+
+func TestPlugin_Routes(t *testing.T) {
+    router := setupTestRouter(t)
+    plugin := NewPlugin()
+    
+    err := plugin.RegisterRoutes(router)
+    assert.NoError(t, err)
+    
+    // Test route exists
+    response := testRequest(t, router, "GET", "/plugin/endpoint")
+    assert.Equal(t, 200, response.StatusCode)
+}
+```
+
+## Best Practices
+
+1. **ID Format**: Use lowercase, hyphenated (e.g., "multi-session")
+2. **Graceful Degradation**: Handle missing dependencies
+3. **Configuration**: Provide sensible defaults
+4. **Logging**: Use structured logging
+5. **Errors**: Use errs package for consistency
+6. **Testing**: Unit and integration tests
+7. **Documentation**: Include README.md
+8. **Versioning**: Semantic versioning
+
+## Plugin Examples
+
+See individual plugin llm.txt files:
+- `dashboard/llm.txt` - Admin dashboard
+- `mfa/llm.txt` - Multi-factor authentication
+- `social/llm.txt` - Social OAuth
+- `enterprise/llm.txt` - Enterprise features
+- And more...
+

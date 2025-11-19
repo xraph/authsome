@@ -1,0 +1,65 @@
+# App Service
+
+## Package Purpose
+
+Provides application-scoped authentication enabling sub-tenancy within organizations. Apps allow multiple isolated authentication contexts within a single organization.
+
+## Key Types
+
+```go
+type App struct {
+    ID             xid.ID
+    EnvironmentID  xid.ID
+    OrganizationID xid.ID
+    Name           string
+    Description    string
+    Slug           string        // Unique within environment+org
+    Settings       map[string]any
+    CreatedAt      time.Time
+}
+
+type Member struct {
+    ID     xid.ID
+    AppID  xid.ID
+    UserID xid.ID
+    Role   MemberRole
+}
+```
+
+## Public API
+
+```go
+// Create app
+app, err := appSvc.CreateApp(ctx, orgID, envID, &CreateAppRequest{
+    Name: "Production API",
+    Slug: "prod-api",
+})
+
+// Add member
+member, err := appSvc.AddMember(ctx, appID, userID, MemberRoleAdmin)
+
+// List apps
+apps, err := appSvc.ListApps(ctx, orgID, envID)
+```
+
+## Use Cases
+
+- **Multi-environment**: dev, staging, production apps
+- **Multi-product**: Separate apps per product line
+- **API Segregation**: Different API keys per app
+- **User Isolation**: Users scoped to specific apps
+
+## Dependencies
+
+- **core/rbac**: App-level permissions
+- **core/organization**: Parent organization
+- **core/environment**: Environment context
+- **repository**: App persistence
+
+## Used By
+
+- **core/user**: User app context
+- **core/session**: Session app binding
+- **core/apikey**: API key app scoping
+- **plugins/multiapp**: Multi-app plugin
+

@@ -1,0 +1,65 @@
+# Impersonation Plugin
+
+## Purpose
+Allows administrators to impersonate users for support and debugging purposes with full audit trail.
+
+## Features
+- Admin user impersonation
+- Audit logging
+- Time-limited sessions
+- Permission preservation
+- Impersonation banner
+- Exit impersonation
+- Reason requirement
+
+## Flow
+1. Admin initiates impersonation
+2. Provides reason
+3. Creates impersonation session
+4. Admin acts as user
+5. All actions logged
+6. Admin exits impersonation
+
+## Public API
+```go
+// Start impersonation
+session, err := impersonationSvc.Start(ctx, adminID, targetUserID, reason, duration)
+
+// End impersonation
+err := impersonationSvc.End(ctx, sessionID)
+
+// Check if impersonating
+isImpersonating, targetUser := impersonationSvc.IsImpersonating(ctx, sessionID)
+```
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    impersonation:
+      enabled: true
+      requireReason: true
+      maxDuration: "1h"
+      requireAdminRole: true
+```
+
+## Routes
+- `POST /impersonate/{userID}` - Start impersonation
+- `POST /impersonate/end` - End impersonation
+- `GET /impersonate/active` - List active impersonations
+
+## Security
+- Requires admin role
+- Full audit logging
+- Time-limited sessions
+- Reason required
+- Cannot impersonate other admins
+- Visible banner to user
+
+## Dependencies
+- **core/session**: Session management
+- **core/audit**: Audit logging
+- **core/rbac**: Permission checking
+
+See: `README.md`, `IMPLEMENTATION.md`
+

@@ -1,0 +1,221 @@
+# Providers
+
+## Package Purpose
+
+The `providers` package contains implementations for external service providers including email delivery and SMS messaging.
+
+## Package Structure
+
+```
+providers/
+├── email/
+│   ├── smtp.go       # SMTP email provider
+│   ├── sendgrid.go   # SendGrid API
+│   ├── ses.go        # AWS SES
+│   └── interface.go  # Email provider interface
+└── sms/
+    ├── twilio.go     # Twilio SMS
+    ├── sns.go        # AWS SNS
+    └── interface.go  # SMS provider interface
+```
+
+## Email Providers
+
+### Provider Interface
+```go
+type EmailProvider interface {
+    SendEmail(ctx context.Context, req *SendEmailRequest) error
+    SendTemplate(ctx context.Context, template string, to []string, data map[string]any) error
+}
+
+type SendEmailRequest struct {
+    To      []string
+    From    string
+    Subject string
+    Body    string
+    HTML    bool
+}
+```
+
+### SMTP Provider
+Standard SMTP email delivery:
+```go
+provider := email.NewSMTPProvider(email.SMTPConfig{
+    Host:     "smtp.gmail.com",
+    Port:     587,
+    Username: "user@gmail.com",
+    Password: "app-password",
+    From:     "noreply@example.com",
+})
+
+err := provider.SendEmail(ctx, &email.SendEmailRequest{
+    To:      []string{"user@example.com"},
+    Subject: "Welcome",
+    Body:    "Welcome to our platform!",
+    HTML:    true,
+})
+```
+
+### SendGrid Provider
+SendGrid API integration:
+```go
+provider := email.NewSendGridProvider(email.SendGridConfig{
+    APIKey: "SG.xxx",
+    From:   "noreply@example.com",
+})
+
+err := provider.SendTemplate(ctx, "welcome", []string{"user@example.com"}, map[string]any{
+    "name": "John Doe",
+})
+```
+
+### AWS SES Provider
+Amazon SES integration:
+```go
+provider := email.NewSESProvider(email.SESConfig{
+    Region:    "us-east-1",
+    AccessKey: "xxx",
+    SecretKey: "xxx",
+    From:      "noreply@example.com",
+})
+```
+
+## SMS Providers
+
+### Provider Interface
+```go
+type SMSProvider interface {
+    SendSMS(ctx context.Context, req *SendSMSRequest) error
+}
+
+type SendSMSRequest struct {
+    To      string
+    Message string
+}
+```
+
+### Twilio Provider
+Twilio SMS API:
+```go
+provider := sms.NewTwilioProvider(sms.TwilioConfig{
+    AccountSID: "ACxxx",
+    AuthToken:  "xxx",
+    From:       "+15551234567",
+})
+
+err := provider.SendSMS(ctx, &sms.SendSMSRequest{
+    To:      "+15559876543",
+    Message: "Your verification code is 123456",
+})
+```
+
+### AWS SNS Provider
+Amazon SNS for SMS:
+```go
+provider := sms.NewSNSProvider(sms.SNSConfig{
+    Region:    "us-east-1",
+    AccessKey: "xxx",
+    SecretKey: "xxx",
+})
+```
+
+## Configuration
+
+### Email
+```yaml
+auth:
+  email:
+    provider: "smtp"  # smtp, sendgrid, ses
+    smtp:
+      host: "smtp.gmail.com"
+      port: 587
+      username: "user@gmail.com"
+      password: "app-password"
+      from: "noreply@example.com"
+    sendgrid:
+      apiKey: "SG.xxx"
+      from: "noreply@example.com"
+    ses:
+      region: "us-east-1"
+      accessKey: "xxx"
+      secretKey: "xxx"
+      from: "noreply@example.com"
+```
+
+### SMS
+```yaml
+auth:
+  sms:
+    provider: "twilio"  # twilio, sns
+    twilio:
+      accountSID: "ACxxx"
+      authToken: "xxx"
+      from: "+15551234567"
+    sns:
+      region: "us-east-1"
+      accessKey: "xxx"
+      secretKey: "xxx"
+```
+
+## Provider Selection
+
+Providers are selected at runtime based on configuration:
+```go
+func NewEmailProvider(cfg Config) email.EmailProvider {
+    switch cfg.Provider {
+    case "smtp":
+        return email.NewSMTPProvider(cfg.SMTP)
+    case "sendgrid":
+        return email.NewSendGridProvider(cfg.SendGrid)
+    case "ses":
+        return email.NewSESProvider(cfg.SES)
+    default:
+        return email.NewSMTPProvider(cfg.SMTP)
+    }
+}
+```
+
+## Testing
+
+Mock providers for testing:
+```go
+type MockEmailProvider struct {
+    SentEmails []*email.SendEmailRequest
+}
+
+func (m *MockEmailProvider) SendEmail(ctx context.Context, req *email.SendEmailRequest) error {
+    m.SentEmails = append(m.SentEmails, req)
+    return nil
+}
+```
+
+## Best Practices
+
+1. **Use interfaces**: Abstract provider implementations
+2. **Handle errors**: Retry transient failures
+3. **Rate limiting**: Respect provider limits
+4. **Monitoring**: Track delivery success/failure rates
+5. **Fallback**: Have backup provider configured
+6. **Templates**: Use provider templates when available
+7. **Testing**: Mock providers in tests
+
+## Security
+
+- Store credentials securely (environment variables)
+- Use TLS for SMTP
+- Rotate API keys regularly
+- Monitor for abuse
+- Validate recipient addresses
+- Rate limit sending
+
+## Future Enhancements
+
+- Additional email providers (Mailgun, Postmark)
+- Additional SMS providers (Nexmo, MessageBird)
+- Webhook delivery providers
+- Push notification providers
+- Template engines
+- Delivery tracking
+- Bounce handling
+- Unsubscribe management
+

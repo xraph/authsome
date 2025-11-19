@@ -1,0 +1,96 @@
+# Security Service
+
+## Package Purpose
+
+Provides security features including IP filtering, geolocation-based access control, security event tracking, and anomaly detection.
+
+## Key Types
+
+```go
+type Service struct {
+    repo          Repository
+    geoipProvider GeoIPProvider
+    config        Config
+}
+
+type Config struct {
+    IPWhitelist      []string
+    IPBlacklist      []string
+    AllowedCountries []string
+    BlockedCountries []string
+    EnableGeoIP      bool
+}
+
+type SecurityEvent struct {
+    ID        xid.ID
+    UserID    *xid.ID
+    Type      EventType
+    IPAddress string
+    Country   string
+    Risk      RiskLevel
+    Metadata  map[string]any
+}
+```
+
+## Public API
+
+```go
+// Check IP access
+allowed := securitySvc.IsIPAllowed(ctx, "192.168.1.1")
+
+// Check country access
+allowed := securitySvc.IsCountryAllowed(ctx, "US")
+
+// Log security event
+err := securitySvc.LogEvent(ctx, &SecurityEvent{
+    UserID:    &userID,
+    Type:      EventTypeSuspiciousLogin,
+    IPAddress: "203.0.113.1",
+    Risk:      RiskLevelHigh,
+})
+
+// Get GeoIP info
+info, err := securitySvc.GetGeoIP(ctx, "8.8.8.8")
+// Returns: {Country, City, Latitude, Longitude}
+```
+
+## Event Types
+
+- `EventTypeSuspiciousLogin` - Unusual login pattern
+- `EventTypeMultipleFailedLogins` - Brute force attempt
+- `EventTypeNewDevice` - Login from new device
+- `EventTypeNewLocation` - Login from new country
+- `EventTypeAPIKeyAbuse` - API key rate limit exceeded
+
+## Risk Levels
+
+- `RiskLevelLow` - Normal activity
+- `RiskLevelMedium` - Unusual but not critical
+- `RiskLevelHigh` - Requires investigation
+- `RiskLevelCritical` - Immediate action required
+
+## Dependencies
+
+- **GeoIP Provider**: IP geolocation (MaxMind, IP2Location, etc.)
+- **repository**: Security event storage
+- **core/audit**: Audit logging
+
+## Used By
+
+- **core/auth**: Login security checks
+- **core/apikey**: IP filtering for API keys
+- **plugins/enterprise/geofence**: Geographic restrictions
+- **Middleware**: Request security checks
+
+## Configuration Example
+
+```yaml
+auth:
+  security:
+    ipWhitelist: []
+    ipBlacklist: ["203.0.113.0/24"]
+    allowedCountries: ["US", "CA", "GB"]
+    blockedCountries: ["CN", "RU"]
+    enableGeoIP: true
+```
+

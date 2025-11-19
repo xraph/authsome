@@ -1,0 +1,480 @@
+# RBAC Service
+
+## Package Purpose
+
+The `rbac` package provides Role-Based Access Control with a powerful CEL (Common Expression Language) policy engine. It manages roles, permissions, policies, and permission checking with caching for performance.
+
+## Key Files
+
+- **service.go**: Main RBAC service with policy management (392 lines)
+- **evaluator.go**: CEL-based policy evaluation engine
+- **parser.go**: Policy DSL parser
+- **repository.go**: Repository interfaces for roles and permissions
+- **role.go**: Role entity and operations
+- **permission.go**: Permission entity and operations
+- **policy.go**: Policy entity and CEL expressions
+- **types.go**: Common types and constants
+- **constants.go**: Built-in roles and permissions
+- **bootstrap.go**: Default role/permission initialization
+- **evaluator_test.go**: Policy evaluation tests
+- **parser_test.go**: Policy parser tests
+- **bootstrap_test.go**: Bootstrap tests
+
+## Main Types/Interfaces
+
+### Role
+```go
+type Role struct {
+    ID           xid.ID
+    Name         string        // e.g., "admin", "editor", "viewer"
+    Description  string
+    Scope        RoleScope     // system, organization, app
+    ScopeID      *xid.ID       // org ID or app ID
+    Permissions  []string      // Permission names
+    CreatedAt    time.Time
+}
+
+type RoleScope string
+const (
+    RoleScopeSystem       RoleScope = "system"
+    RoleScopeOrganization RoleScope = "organization"
+    RoleScopeApp          RoleScope = "app"
+)
+```
+
+### Permission
+```go
+type Permission struct {
+    ID          xid.ID
+    Name        string        // e.g., "users:read", "org:manage"
+    Description string
+    Resource    string        // e.g., "users", "organizations"
+    Action      string        // e.g., "read", "write", "delete"
+    CreatedAt   time.Time
+}
+```
+
+### Policy
+```go
+type Policy struct {
+    Name        string
+    Description string
+    Effect      Effect        // allow or deny
+    Actions     []string      // e.g., ["users:read", "users:write"]
+    Resources   []string      // e.g., ["users/*", "users/{userID}"]
+    Condition   string        // CEL expression
+}
+
+type Effect string
+const (
+    EffectAllow Effect = "allow"
+    EffectDeny  Effect = "deny"
+)
+```
+
+### Service
+```go
+type Service struct {
+    policies            []*Policy
+    eval                *Evaluator
+    roleRepo            RoleRepository
+    permissionRepo      PermissionRepository
+    rolePermissionRepo  RolePermissionRepository
+    userRoleRepo        UserRoleRepository
+}
+```
+
+## Public API
+
+### Role Management
+
+#### Create Role
+```go
+role := &Role{
+    Name:        "editor",
+    Description: "Can edit content",
+    Scope:       RoleScopeOrganization,
+    ScopeID:     &orgID,
+    Permissions: []string{"content:read", "content:write"},
+}
+created, err := rbacSvc.CreateRole(ctx, role)
+```
+
+#### Assign Role to User
+```go
+err := rbacSvc.AssignRole(ctx, userID, roleID, orgID)
+// User now has role's permissions within org scope
+```
+
+#### Get User Roles
+```go
+roles, err := rbacSvc.GetUserRoles(ctx, userID, orgID)
+// Returns all roles assigned to user in org
+```
+
+#### Revoke Role from User
+```go
+err := rbacSvc.RevokeRole(ctx, userID, roleID, orgID)
+```
+
+### Permission Management
+
+#### Create Permission
+```go
+perm := &Permission{
+    Name:        "content:publish",
+    Description: "Publish content",
+    Resource:    "content",
+    Action:      "publish",
+}
+created, err := rbacSvc.CreatePermission(ctx, perm)
+```
+
+#### Add Permission to Role
+```go
+err := rbacSvc.AddPermissionToRole(ctx, roleID, permissionID)
+```
+
+#### Get Role Permissions
+```go
+perms, err := rbacSvc.GetRolePermissions(ctx, roleID)
+// Returns all permissions attached to role
+```
+
+### Permission Checking
+
+#### Check Permission
+```go
+// Simple check
+hasPermission := rbacSvc.CheckPermission(ctx, userID, "users:read", orgID)
+
+// With resource context
+allowed := rbacSvc.CheckPermissionWithContext(ctx, userID, "users:delete", map[string]any{
+    "userID":  targetUserID,
+    "orgID":   orgID,
+    "actorID": userID,
+})
+```
+
+#### Get User Permissions
+```go
+permissions, err := rbacSvc.GetUserPermissions(ctx, userID, orgID)
+// Returns all permissions from all user's roles
+```
+
+### Policy Management
+
+#### Add Policy
+```go
+policy := &Policy{
+    Name:        "CanManageOwnContent",
+    Description: "Users can manage their own content",
+    Effect:      EffectAllow,
+    Actions:     []string{"content:update", "content:delete"},
+    Resources:   []string{"content/*"},
+    Condition:   "resource.createdBy == actor.id",
+}
+rbacSvc.AddPolicy(policy)
+```
+
+#### Evaluate Policy
+```go
+context := map[string]any{
+    "actor": map[string]any{
+        "id":   userID.String(),
+        "role": "editor",
+    },
+    "resource": map[string]any{
+        "id":        contentID.String(),
+        "createdBy": contentOwnerID.String(),
+    },
+    "environment": map[string]any{
+        "time": time.Now().Unix(),
+    },
+}
+
+result := rbacSvc.EvaluatePolicy(policy, context)
+// Returns: allow, deny, or abstain
+```
+
+### Bootstrap Default Roles
+
+#### Bootstrap System Roles
+```go
+err := rbacSvc.BootstrapSystemRoles(ctx)
+// Creates: super_admin, system_admin, system_viewer
+```
+
+#### Bootstrap Organization Roles
+```go
+err := rbacSvc.BootstrapOrganizationRoles(ctx, orgID)
+// Creates: owner, admin, member
+```
+
+#### Bootstrap App Roles
+```go
+err := rbacSvc.BootstrapAppRoles(ctx, appID)
+// Creates: app_admin, app_editor, app_viewer
+```
+
+## Permission Naming Convention
+
+Format: `resource:action[:subresource]`
+
+Examples:
+- `users:read` - Read users
+- `users:write` - Create/update users
+- `users:delete` - Delete users
+- `organizations:manage` - Full org management
+- `content:publish` - Publish content
+- `api_keys:create` - Create API keys
+
+## Policy CEL Expressions
+
+CEL expressions provide powerful conditional logic:
+
+### Basic Conditions
+```javascript
+// User is admin
+actor.role == "admin"
+
+// User owns resource
+resource.createdBy == actor.id
+
+// Time-based access
+environment.time < 1704067200  // Before 2024-01-01
+
+// IP-based access
+actor.ip.startsWith("192.168.")
+```
+
+### Complex Conditions
+```javascript
+// Admin or owner of resource
+actor.role == "admin" || resource.createdBy == actor.id
+
+// Business hours access
+environment.time >= 32400 && environment.time <= 64800
+
+// Team member check
+actor.id in resource.teamMembers
+
+// Multi-condition
+actor.role == "editor" && 
+resource.status == "draft" && 
+resource.createdBy == actor.id
+```
+
+## Dependencies
+
+- **Google CEL-Go**: Policy evaluation engine
+- **repository**: Role and permission persistence
+- **internal/errs**: Error handling
+- **schema**: Database models
+
+## Used By
+
+- **core/organization**: Member permission checking
+- **core/app**: App-level authorization
+- **core/apikey**: API key scope validation
+- **handlers/**: Authorization middleware
+- **plugins/admin**: Admin permission checks
+- **plugins/dashboard**: UI permission enforcement
+
+## Common Patterns
+
+### Permission Check with Caching
+```go
+func (s *Service) CheckPermission(ctx context.Context, userID xid.ID, permission string, scopeID xid.ID) bool {
+    // Cache key: user:permission:scope
+    cacheKey := fmt.Sprintf("perm:%s:%s:%s", userID, permission, scopeID)
+    
+    // Check cache (5-minute TTL)
+    if cached, found := s.cache.Get(cacheKey); found {
+        return cached.(bool)
+    }
+    
+    // Get user roles
+    roles, err := s.GetUserRoles(ctx, userID, scopeID)
+    if err != nil {
+        return false
+    }
+    
+    // Check if any role has permission
+    for _, role := range roles {
+        for _, perm := range role.Permissions {
+            if perm == permission || perm == "*" {
+                s.cache.Set(cacheKey, true, 5*time.Minute)
+                return true
+            }
+        }
+    }
+    
+    s.cache.Set(cacheKey, false, 5*time.Minute)
+    return false
+}
+```
+
+### Policy-Based Authorization
+```go
+func (s *Service) CanDeleteUser(ctx context.Context, actorID, targetUserID, orgID xid.ID) bool {
+    // Get actor's roles
+    roles, _ := s.GetUserRoles(ctx, actorID, orgID)
+    
+    // Build context for policy evaluation
+    policyCtx := map[string]any{
+        "actor": map[string]any{
+            "id":    actorID.String(),
+            "roles": roleNames(roles),
+        },
+        "resource": map[string]any{
+            "id":   targetUserID.String(),
+            "type": "user",
+        },
+        "org": map[string]any{
+            "id": orgID.String(),
+        },
+    }
+    
+    // Evaluate all applicable policies
+    for _, policy := range s.policies {
+        if contains(policy.Actions, "users:delete") {
+            result := s.eval.Evaluate(policy, policyCtx)
+            if result == EffectAllow {
+                return true
+            } else if result == EffectDeny {
+                return false
+            }
+        }
+    }
+    
+    // Default deny
+    return false
+}
+```
+
+## Integration Points
+
+### With Organization Service
+RBAC checks member permissions:
+```go
+// Check if user can invite members
+if !rbacSvc.CheckPermission(ctx, userID, "org:invite", orgID) {
+    return errs.PermissionDenied("invite", "organization")
+}
+```
+
+### With API Key Service
+RBAC validates API key scopes:
+```go
+// Check if API key has required scope
+allowed := rbacSvc.CheckAPIKeyScope(ctx, apiKeyID, "users:write")
+```
+
+### With Middleware
+RBAC enforces route-level authorization:
+```go
+func RequirePermission(rbacSvc *rbac.Service, permission string) forge.Middleware {
+    return func(c *forge.Context) error {
+        userID := contexts.GetUserID(c.Context())
+        orgID := contexts.GetOrganizationID(c.Context())
+        
+        if !rbacSvc.CheckPermission(c.Context(), userID, permission, orgID) {
+            return errs.PermissionDenied(permission, "resource")
+        }
+        
+        return c.Next()
+    }
+}
+```
+
+## Error Handling
+
+Common errors:
+- `RoleNotFound(roleID)` - Role doesn't exist
+- `PermissionNotFound(permissionID)` - Permission doesn't exist
+- `PermissionDenied(action, resource)` - User lacks permission
+- `PolicyViolation(policy, reason)` - Policy condition failed
+- `InvalidPolicy(reason)` - Policy syntax error
+
+## Testing
+
+```go
+func TestService_CheckPermission(t *testing.T) {
+    rbacSvc := rbac.NewService()
+    
+    // Create role with permission
+    role := &rbac.Role{
+        Name:        "admin",
+        Permissions: []string{"users:read", "users:write"},
+    }
+    rbacSvc.CreateRole(ctx, role)
+    
+    // Assign to user
+    rbacSvc.AssignRole(ctx, userID, role.ID, orgID)
+    
+    // Check permission
+    hasRead := rbacSvc.CheckPermission(ctx, userID, "users:read", orgID)
+    assert.True(t, hasRead)
+    
+    hasDelete := rbacSvc.CheckPermission(ctx, userID, "users:delete", orgID)
+    assert.False(t, hasDelete)
+}
+```
+
+## Performance Considerations
+
+- Permission checks cached for 5 minutes
+- Role lookups use user_id + scope_id index
+- Policy evaluation is fast (<1ms per policy)
+- Permission strings compared with simple equality
+- Wildcard permissions (`*`) checked first
+- Cache invalidation on role/permission changes
+
+## Security Considerations
+
+- Default deny (fail closed)
+- Explicit permission grants required
+- Policy conditions prevent privilege escalation
+- Audit logging for permission changes
+- Role hierarchy prevents circular assignments
+- Scope isolation (system vs org vs app)
+
+## CEL Policy Examples
+
+### Time-Based Access
+```javascript
+// Business hours (9 AM - 5 PM)
+environment.hour >= 9 && environment.hour < 17
+
+// Weekdays only
+environment.dayOfWeek >= 1 && environment.dayOfWeek <= 5
+```
+
+### Resource Ownership
+```javascript
+// Owner or admin
+resource.ownerId == actor.id || actor.role == "admin"
+
+// Team member
+actor.id in resource.team
+```
+
+### Complex Business Logic
+```javascript
+// Can approve if: admin OR (approver AND not own request)
+actor.role == "admin" || 
+(actor.hasPermission("requests:approve") && resource.requesterId != actor.id)
+```
+
+## Configuration Example
+
+```yaml
+auth:
+  rbac:
+    enableCaching: true
+    cacheTTL: "5m"
+    defaultDeny: true
+    auditChanges: true
+```
+

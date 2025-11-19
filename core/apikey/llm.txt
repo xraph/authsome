@@ -1,0 +1,418 @@
+# API Key Service
+
+## Package Purpose
+
+The `apikey` package provides API key-based authentication with RBAC scoping, rate limiting, IP restrictions, and comprehensive audit logging. API keys enable programmatic access to AuthSome-protected resources.
+
+## Key Files
+
+- **service.go**: Main API key service (805 lines)
+- **apikey.go**: API key DTO and types
+- **repository.go**: Repository interface
+- **rbac_types.go**: RBAC scope definitions
+- **scope_mapper.go**: Scope to permission mapping
+- **errors.go**: API key-specific errors
+- **filters.go**: Query filters
+- **types.go**: Request/response types
+
+## Main Types/Interfaces
+
+### APIKey
+```go
+type APIKey struct {
+    ID              xid.ID
+    AppID           xid.ID
+    EnvironmentID   xid.ID
+    OrganizationID  xid.ID
+    UserID          *xid.ID         // Optional: user association
+    Name            string
+    KeyHash         string          // SHA-256 hash of key
+    KeyPrefix       string          // First 8 chars for identification
+    Scopes          []string        // RBAC permissions
+    RateLimit       int             // Requests per minute
+    IPWhitelist     []string        // Allowed IPs
+    IPBlacklist     []string        // Blocked IPs
+    ExpiresAt       *time.Time
+    LastUsedAt      *time.Time
+    CreatedAt       time.Time
+    RevokedAt       *time.Time
+}
+```
+
+### Configuration
+```go
+type Config struct {
+    DefaultRateLimit int           `json:"default_rate_limit"`  // 1000 rpm
+    MaxRateLimit     int           `json:"max_rate_limit"`      // 10000 rpm
+    DefaultExpiry    time.Duration `json:"default_expiry"`      // 365 days
+    MaxKeysPerUser   int           `json:"max_keys_per_user"`   // 10
+    MaxKeysPerOrg    int           `json:"max_keys_per_org"`    // 100
+    KeyLength        int           `json:"key_length"`          // 32 bytes
+}
+```
+
+## Public API
+
+### Create API Key
+```go
+req := &CreateAPIKeyRequest{
+    Name:       "Production API Key",
+    Scopes:     []string{"users:read", "users:write"},
+    RateLimit:  5000,
+    IPWhitelist: []string{"192.168.1.0/24", "10.0.0.1"},
+    ExpiresAt:  time.Now().AddDate(1, 0, 0),  // 1 year
+}
+apiKey, plainKey, err := apikeySvc.Create(ctx, appID, envID, orgID, userID, req)
+// plainKey is only returned once - store securely!
+// Format: "as_1A2B3C4D_rest-of-secure-key"
+```
+
+### Validate API Key
+```go
+// Validates key, checks expiration, IP, rate limit
+apiKey, err := apikeySvc.Validate(ctx, plainKeyString, ipAddress)
+if err != nil {
+    return errs.Unauthorized()
+}
+
+// Update last used timestamp
+apikeySvc.UpdateLastUsed(ctx, apiKey.ID)
+```
+
+### Rotate API Key
+```go
+// Generates new key, revokes old one
+newKey, plainKey, err := apikeySvc.Rotate(ctx, oldKeyID)
+```
+
+### Revoke API Key
+```go
+err := apikeySvc.Revoke(ctx, keyID)
+// Sets RevokedAt timestamp, key no longer valid
+```
+
+### List API Keys
+```go
+filter := &ListAPIKeysFilter{
+    UserID:    &userID,
+    Active:    true,
+    Limit:     20,
+}
+keys, err := apikeySvc.List(ctx, filter)
+// Returns keys with redacted key values (only prefix shown)
+```
+
+### Check Scope
+```go
+hasScope := apikeySvc.HasScope(ctx, apiKeyID, "users:write")
+// Checks if API key has required scope/permission
+```
+
+### Get Usage Stats
+```go
+stats, err := apikeySvc.GetUsageStats(ctx, keyID, since, until)
+// Returns: request count, last used, rate limit hits, etc.
+```
+
+## API Key Format
+
+Keys use a structured format for easy identification:
+
+```
+as_<prefix>_<secure-random-part>
+
+Example:
+as_1A2B3C4D_a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2
+```
+
+Components:
+- **as_** - AuthSome prefix
+- **1A2B3C4D** - 8-character prefix (first 8 of base64 hash)
+- **Secure part** - 32 bytes of cryptographically secure random data
+
+## Scope System
+
+Scopes map to RBAC permissions:
+
+### Standard Scopes
+```
+users:read         # Read user data
+users:write        # Create/update users
+users:delete       # Delete users
+organizations:read # Read org data
+organizations:write # Manage organizations
+sessions:read      # View sessions
+sessions:revoke    # Revoke sessions
+audit:read         # View audit logs
+*                  # Full access (use with caution)
+```
+
+### Hierarchical Scopes
+```
+users             # Equivalent to users:*
+users:*           # All user operations
+users:read,write  # Multiple scopes
+```
+
+## IP Filtering
+
+### Whitelist (Allow Only)
+```go
+apiKey.IPWhitelist = []string{
+    "192.168.1.100",        // Single IP
+    "192.168.1.0/24",       // CIDR range
+    "10.0.0.0/8",           // Large range
+}
+// Only these IPs can use the key
+```
+
+### Blacklist (Block Specific)
+```go
+apiKey.IPBlacklist = []string{
+    "203.0.113.0/24",       // Block range
+    "198.51.100.42",        // Block specific IP
+}
+// These IPs cannot use the key
+```
+
+### Validation Logic
+```
+1. If whitelist exists, IP must be in whitelist
+2. If blacklist exists, IP must NOT be in blacklist
+3. If both exist, whitelist takes precedence
+```
+
+## Rate Limiting
+
+Per-key rate limiting:
+
+```go
+// Check rate limit before processing request
+allowed, retryAfter := apikeySvc.CheckRateLimit(ctx, apiKeyID)
+if !allowed {
+    return errs.RateLimitExceeded(retryAfter)
+}
+
+// Process request...
+
+// Track usage
+apikeySvc.IncrementUsage(ctx, apiKeyID)
+```
+
+Rate limit storage:
+- **Memory**: Fast, single-server only
+- **Redis**: Distributed, multi-server support
+
+## Dependencies
+
+- **core/rbac**: Scope validation and mapping
+- **core/audit**: API key usage audit logging
+- **internal/crypto**: Secure key generation and hashing
+- **repository**: API key persistence
+- **schema**: Database model
+
+## Used By
+
+- **handlers/**: API key middleware
+- **plugins/apikey**: API key management UI
+- **plugins/admin**: Admin API key inspection
+- **External clients**: Programmatic API access
+
+## Common Patterns
+
+### API Key Middleware
+```go
+func APIKeyAuth(apikeySvc *apikey.Service) forge.Middleware {
+    return func(c *forge.Context) error {
+        // Extract key from header
+        authHeader := c.Request().Header.Get("Authorization")
+        if !strings.HasPrefix(authHeader, "Bearer ") {
+            return errs.Unauthorized()
+        }
+        
+        keyString := strings.TrimPrefix(authHeader, "Bearer ")
+        ipAddress := c.ClientIP()
+        
+        // Validate key
+        apiKey, err := apikeySvc.Validate(c.Context(), keyString, ipAddress)
+        if err != nil {
+            return errs.Unauthorized()
+        }
+        
+        // Check rate limit
+        allowed, retryAfter := apikeySvc.CheckRateLimit(c.Context(), apiKey.ID)
+        if !allowed {
+            return errs.RateLimitExceeded(retryAfter)
+        }
+        
+        // Attach to context
+        ctx := contexts.WithAPIKey(c.Context(), apiKey)
+        c.SetContext(ctx)
+        
+        // Update last used (async)
+        go apikeySvc.UpdateLastUsed(context.Background(), apiKey.ID)
+        
+        return c.Next()
+    }
+}
+```
+
+### Scope Checking
+```go
+func RequireAPIKeyScope(apikeySvc *apikey.Service, scope string) forge.Middleware {
+    return func(c *forge.Context) error {
+        apiKey := contexts.GetAPIKey(c.Context())
+        if apiKey == nil {
+            return errs.Unauthorized()
+        }
+        
+        if !apikeySvc.HasScope(c.Context(), apiKey.ID, scope) {
+            return errs.PermissionDenied(scope, "api_key")
+        }
+        
+        return c.Next()
+    }
+}
+```
+
+### Automatic Key Rotation
+```go
+func (s *Service) RotateExpiringSoon(ctx context.Context, threshold time.Duration) error {
+    // Find keys expiring within threshold
+    keys, err := s.repo.FindExpiringSoon(ctx, threshold)
+    if err != nil {
+        return err
+    }
+    
+    for _, key := range keys {
+        // Notify owner
+        s.notifyKeyExpiring(ctx, key)
+        
+        // Auto-rotate if enabled
+        if key.AutoRotate {
+            newKey, plainKey, err := s.Rotate(ctx, key.ID)
+            if err != nil {
+                continue
+            }
+            
+            // Send new key securely
+            s.sendNewKeySecurely(ctx, key.UserID, plainKey)
+            
+            // Audit log
+            s.auditSvc.Log(ctx, &key.UserID, "apikey.rotated", 
+                newKey.ID.String(), "", "", "")
+        }
+    }
+    
+    return nil
+}
+```
+
+## Integration Points
+
+### With RBAC Service
+API key scopes map to RBAC permissions:
+```go
+// Validate scope against RBAC
+for _, scope := range apiKey.Scopes {
+    hasPermission := rbacSvc.CheckPermission(ctx, apiKey.UserID, scope, orgID)
+    if !hasPermission {
+        return errs.InvalidScope(scope)
+    }
+}
+```
+
+### With Audit Service
+All API key operations are audited:
+```go
+auditSvc.Log(ctx, &apiKey.UserID, "apikey.created", apiKey.ID.String(), ipAddress, userAgent, "")
+auditSvc.Log(ctx, &apiKey.UserID, "apikey.used", apiKey.ID.String(), ipAddress, userAgent, "")
+auditSvc.Log(ctx, &apiKey.UserID, "apikey.revoked", apiKey.ID.String(), ipAddress, userAgent, "")
+```
+
+### With Rate Limit Service
+API keys use dedicated rate limiting:
+```go
+// Per-key rate limit
+key := fmt.Sprintf("apikey:%s", apiKeyID)
+allowed := rateLimitSvc.Check(ctx, key, apiKey.RateLimit, 60*time.Second)
+```
+
+## Error Handling
+
+Common errors:
+- `APIKeyNotFound()` - Key doesn't exist
+- `APIKeyExpired()` - Key has expired
+- `APIKeyRevoked()` - Key was revoked
+- `InvalidAPIKey()` - Key format invalid or hash mismatch
+- `IPNotAllowed(ip)` - IP not in whitelist or in blacklist
+- `RateLimitExceeded(retryAfter)` - Too many requests
+- `InvalidScope(scope)` - Scope not allowed
+- `MaxKeysReached(max)` - Hit key limit
+
+## Testing
+
+```go
+func TestService_Create(t *testing.T) {
+    mockRepo := newMockAPIKeyRepository()
+    apikeySvc := apikey.NewService(mockRepo, auditSvc, config)
+    
+    req := &apikey.CreateAPIKeyRequest{
+        Name:      "Test Key",
+        Scopes:    []string{"users:read"},
+        RateLimit: 1000,
+    }
+    
+    apiKey, plainKey, err := apikeySvc.Create(ctx, appID, envID, orgID, userID, req)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, plainKey)
+    assert.True(t, strings.HasPrefix(plainKey, "as_"))
+}
+```
+
+## Security Considerations
+
+- Keys stored as SHA-256 hashes
+- Plain key only shown once at creation
+- Keys transmitted over HTTPS only
+- IP filtering prevents unauthorized use
+- Rate limiting prevents abuse
+- Automatic expiration enforces key rotation
+- Revocation is immediate (no grace period)
+- Audit logging tracks all usage
+- Scopes limit blast radius
+- Key prefix enables key identification without exposing full key
+
+## Performance Considerations
+
+- Key validation uses hash index (fast lookup)
+- Rate limiting uses Redis for distributed systems
+- IP validation uses CIDR matching (efficient)
+- Scope checking is simple string comparison
+- Last used update is async (non-blocking)
+- Usage stats aggregated periodically
+
+## Configuration Example
+
+```yaml
+auth:
+  apikey:
+    defaultRateLimit: 1000
+    maxRateLimit: 10000
+    defaultExpiry: "8760h"  # 365 days
+    maxKeysPerUser: 10
+    maxKeysPerOrg: 100
+    keyLength: 32
+```
+
+## Best Practices
+
+1. **Rotate Regularly**: Rotate keys every 90-365 days
+2. **Scope Minimal**: Grant minimum required scopes
+3. **Use IP Whitelist**: Restrict to known IPs when possible
+4. **Monitor Usage**: Watch for anomalous patterns
+5. **Set Expiration**: All keys should expire
+6. **Revoke Unused**: Revoke keys that haven't been used in 90+ days
+7. **Audit Regularly**: Review key usage and scopes
+8. **Secure Storage**: Never commit keys to code/repos
+

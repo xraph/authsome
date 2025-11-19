@@ -1,0 +1,34 @@
+# Organization Plugin
+
+## Purpose
+Enhanced organization features including organization switcher, member management UI, and team collaboration tools.
+
+## Features
+- Organization dashboard
+- Member directory
+- Team management
+- Invitation system
+- Role management
+- Organization settings
+- Billing integration
+- Usage analytics
+
+## Routes
+- `GET /orgs` - List organizations
+- `GET /orgs/{id}` - Organization dashboard
+- `GET /orgs/{id}/members` - Member directory
+- `GET /orgs/{id}/teams` - Team list
+- `GET /orgs/{id}/settings` - Settings page
+- `POST /orgs/{id}/invite` - Invite member
+- `POST /orgs/{id}/teams` - Create team
+
+## Dashboard Extension
+Extends main dashboard with org-specific pages and widgets.
+
+## Dependencies
+- **core/organization**: Organization service
+- **core/rbac**: Permission checking
+- **plugins/dashboard**: Dashboard integration
+
+See: `README.md`
+

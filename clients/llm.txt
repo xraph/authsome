@@ -1,0 +1,394 @@
+# Client SDKs
+
+## Package Purpose
+
+The `clients` package contains auto-generated, type-safe client libraries for AuthSome in multiple languages. These SDKs enable easy integration with AuthSome from various platforms.
+
+## Supported Languages
+
+```
+clients/
+├── go/           # Go client SDK
+├── rust/         # Rust client SDK
+└── typescript/   # TypeScript/JavaScript SDK
+```
+
+## Generation System
+
+Client SDKs are automatically generated from:
+1. **API Introspection**: Routes, handlers, types extracted from code
+2. **Manifest Files**: YAML descriptions of endpoints (internal/clients/manifest/data/)
+3. **Code Generators**: Language-specific generators (internal/clients/generator/)
+
+## Go Client
+
+### Installation
+```bash
+go get github.com/xraph/authsome/clients/go
+```
+
+### Usage
+```go
+import "github.com/xraph/authsome/clients/go"
+
+client := authsome.NewClient("https://auth.example.com", &authsome.Config{
+    APIKey: "as_xxx...",
+})
+
+// Authenticate
+user, session, err := client.Auth.SignIn(ctx, &authsome.SignInRequest{
+    Email:    "user@example.com",
+    Password: "password123",
+})
+
+// List users
+users, err := client.Users.List(ctx, &authsome.ListUsersRequest{
+    Limit: 20,
+})
+
+// Create organization
+org, err := client.Organizations.Create(ctx, &authsome.CreateOrgRequest{
+    Name: "My Org",
+    Slug: "my-org",
+})
+```
+
+### Features
+- Type-safe API calls
+- Context support
+- Error handling
+- Automatic retries
+- Request/response logging
+- Plugin support
+
+### Structure
+```
+go/
+├── client.go          # Main client
+├── errors.go          # Error types
+├── types.go           # Shared types
+├── plugin.go          # Plugin interface
+└── plugins/           # Plugin-specific clients
+    ├── admin/
+    ├── mfa/
+    ├── organization/
+    └── ...
+```
+
+## Rust Client
+
+### Installation
+```toml
+[dependencies]
+authsome = "0.1.0"
+```
+
+### Usage
+```rust
+use authsome::{Client, Config};
+
+let client = Client::new("https://auth.example.com", Config {
+    api_key: Some("as_xxx...".to_string()),
+    ..Default::default()
+})?;
+
+// Authenticate
+let response = client.auth().sign_in(SignInRequest {
+    email: "user@example.com".to_string(),
+    password: "password123".to_string(),
+    ..Default::default()
+}).await?;
+
+// List users
+let users = client.users().list(ListUsersRequest {
+    limit: Some(20),
+    ..Default::default()
+}).await?;
+```
+
+### Features
+- Async/await support
+- Type safety
+- Error handling with `Result<T, E>`
+- Serde serialization
+- Reqwest HTTP client
+- Plugin architecture
+
+### Structure
+```
+rust/
+├── src/
+│   ├── lib.rs         # Main library
+│   ├── client.rs      # Client implementation
+│   ├── error.rs       # Error types
+│   ├── types.rs       # Shared types
+│   ├── plugin.rs      # Plugin trait
+│   └── plugins/       # Plugin implementations
+└── Cargo.toml
+```
+
+## TypeScript Client
+
+### Installation
+```bash
+npm install @authsome/client
+# or
+yarn add @authsome/client
+```
+
+### Usage
+```typescript
+import { AuthsomeClient } from '@authsome/client';
+
+const client = new AuthsomeClient({
+  baseURL: 'https://auth.example.com',
+  apiKey: 'as_xxx...',
+});
+
+// Authenticate
+const { user, session } = await client.auth.signIn({
+  email: 'user@example.com',
+  password: 'password123',
+});
+
+// List users
+const users = await client.users.list({
+  limit: 20,
+});
+
+// Create organization
+const org = await client.organizations.create({
+  name: 'My Org',
+  slug: 'my-org',
+});
+```
+
+### Features
+- TypeScript type definitions
+- Promise-based API
+- Automatic type inference
+- Error handling
+- Interceptors
+- Plugin support
+- Browser and Node.js support
+
+### Structure
+```
+typescript/
+├── src/
+│   ├── client.ts      # Main client
+│   ├── errors.ts      # Error classes
+│   ├── types.ts       # Type definitions
+│   ├── plugin.ts      # Plugin interface
+│   └── plugins/       # Plugin clients
+├── dist/              # Compiled output
+├── package.json
+└── tsconfig.json
+```
+
+## Plugin Architecture
+
+Each plugin has its own client module:
+
+### Go
+```go
+// MFA plugin client
+mfaClient := client.Plugins.MFA()
+secret, qr, err := mfaClient.SetupTOTP(ctx)
+valid, err := mfaClient.VerifyTOTP(ctx, code)
+```
+
+### Rust
+```rust
+// MFA plugin client
+let mfa = client.mfa();
+let (secret, qr) = mfa.setup_totp().await?;
+let valid = mfa.verify_totp(code).await?;
+```
+
+### TypeScript
+```typescript
+// MFA plugin client
+const { secret, qrCode } = await client.plugins.mfa.setupTOTP();
+const valid = await client.plugins.mfa.verifyTOTP(code);
+```
+
+## Code Generation
+
+### Introspection
+The introspector scans the AuthSome codebase to extract:
+- Route definitions
+- Handler signatures
+- Request/response types
+- Plugin APIs
+
+### Manifest Files
+YAML files describe endpoints:
+```yaml
+# internal/clients/manifest/data/core.yaml
+endpoints:
+  - name: SignIn
+    method: POST
+    path: /auth/signin
+    request:
+      email: string
+      password: string
+    response:
+      user: User
+      session: Session
+      token: string
+```
+
+### Generators
+Language-specific code generators (internal/clients/generator/):
+- `go.go`: Go client generation
+- `rust.go`: Rust client generation
+- `typescript.go`: TypeScript client generation
+
+### Running Generation
+```bash
+# Generate all clients
+make generate-clients
+
+# Generate specific language
+make generate-go-client
+make generate-rust-client
+make generate-typescript-client
+```
+
+## Configuration
+
+### Go Client Config
+```go
+type Config struct {
+    APIKey        string
+    SessionToken  string
+    BaseURL       string
+    Timeout       time.Duration
+    RetryAttempts int
+    Logger        Logger
+}
+```
+
+### Rust Client Config
+```rust
+pub struct Config {
+    pub api_key: Option<String>,
+    pub session_token: Option<String>,
+    pub timeout: Option<Duration>,
+    pub retry_attempts: usize,
+}
+```
+
+### TypeScript Client Config
+```typescript
+interface ClientConfig {
+  apiKey?: string;
+  sessionToken?: string;
+  baseURL: string;
+  timeout?: number;
+  retryAttempts?: number;
+}
+```
+
+## Authentication Methods
+
+All clients support multiple auth methods:
+1. **API Key**: `Authorization: Bearer as_xxx...`
+2. **Session Token**: `Authorization: Bearer session_token`
+3. **Custom Headers**: User-provided headers
+
+## Error Handling
+
+### Go
+```go
+user, err := client.Users.Get(ctx, userID)
+if errors.Is(err, authsome.ErrNotFound) {
+    // Handle not found
+} else if errors.Is(err, authsome.ErrUnauthorized) {
+    // Handle unauthorized
+}
+```
+
+### Rust
+```rust
+match client.users().get(user_id).await {
+    Ok(user) => println!("User: {:?}", user),
+    Err(AuthsomeError::NotFound) => println!("User not found"),
+    Err(AuthsomeError::Unauthorized) => println!("Unauthorized"),
+    Err(e) => println!("Error: {:?}", e),
+}
+```
+
+### TypeScript
+```typescript
+try {
+  const user = await client.users.get(userId);
+} catch (error) {
+  if (error instanceof NotFoundError) {
+    // Handle not found
+  } else if (error instanceof UnauthorizedError) {
+    // Handle unauthorized
+  }
+}
+```
+
+## Testing
+
+Each client has comprehensive tests:
+```bash
+# Go
+cd clients/go && go test ./...
+
+# Rust
+cd clients/rust && cargo test
+
+# TypeScript
+cd clients/typescript && npm test
+```
+
+## Publishing
+
+### Go
+Published as Go module on GitHub.
+
+### Rust
+Published to crates.io:
+```bash
+cd clients/rust && cargo publish
+```
+
+### TypeScript
+Published to npm:
+```bash
+cd clients/typescript && npm publish
+```
+
+## Documentation
+
+- **Go**: GoDoc at pkg.go.dev
+- **Rust**: docs.rs
+- **TypeScript**: TypeDoc at docs site
+
+## Examples
+
+Each client includes example code in their respective directories.
+
+## Versioning
+
+Clients follow semantic versioning and are versioned independently of the main AuthSome server.
+
+## Future Enhancements
+
+- Python client
+- PHP client
+- Ruby client
+- Java/Kotlin client
+- Swift client
+- Dart/Flutter client
+- WebSocket support
+- Streaming responses
+- Request interceptors
+- Response caching
+- Offline support
+

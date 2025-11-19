@@ -1,0 +1,93 @@
+# Enterprise Plugins
+
+## Overview
+Enterprise-grade features for compliance, security, and advanced authentication requirements.
+
+## Available Plugins
+
+### backupauth/
+Backup authentication methods when primary methods fail.
+- SMS backup
+- Email backup
+- Security questions
+- Recovery codes
+- Admin override
+
+### compliance/
+Regulatory compliance features.
+- GDPR data export
+- HIPAA audit trails
+- SOC 2 compliance
+- Data retention policies
+- Privacy controls
+
+### consent/
+User consent management and tracking.
+- Consent collection
+- Consent versioning
+- Withdrawal tracking
+- Audit trail
+- GDPR compliance
+
+### geofence/
+Geographic access control.
+- Country restrictions
+- IP geolocation
+- Region-based access
+- Geo-blocking
+- Compliance enforcement
+
+### idverification/
+Identity verification workflows.
+- Document verification
+- Liveness detection
+- KYC integration
+- AML checks
+- Identity providers (Stripe Identity, Onfido)
+
+### mtls/
+Mutual TLS authentication.
+- Certificate-based auth
+- Client certificate validation
+- Certificate revocation
+- Hardware security module support
+
+### scim/
+SCIM 2.0 user provisioning.
+- User provisioning
+- Group sync
+- Deprovisioning
+- Attribute mapping
+- IdP integration (Okta, Azure AD)
+
+### stepup/
+Step-up authentication for sensitive operations.
+- Re-authentication required
+- Time-based elevation
+- Operation-specific MFA
+- Risk-based triggers
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    enterprise:
+      backupauth:
+        enabled: true
+      compliance:
+        enabled: true
+        gdprEnabled: true
+      geofence:
+        enabled: true
+        allowedCountries: ["US", "CA"]
+      scim:
+        enabled: true
+        endpoint: "/scim/v2"
+```
+
+## Licensing
+Enterprise plugins require enterprise license.
+
+## Documentation
+See individual plugin README.md files for detailed documentation.
+

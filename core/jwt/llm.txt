@@ -1,0 +1,86 @@
+# JWT Service
+
+## Package Purpose
+
+Manages JWT token generation, validation, and key rotation. Supports multiple signing algorithms (RSA, ECDSA, HS256) and provides app-scoped token management.
+
+## Key Types
+
+```go
+type Service struct {
+    repo   Repository
+    config Config
+}
+
+type JWTKey struct {
+    ID        xid.ID
+    AppID     xid.ID
+    Algorithm string        // RS256, ES256, HS256
+    PublicKey string
+    PrivateKey string      // Encrypted at rest
+    Active    bool
+    ExpiresAt *time.Time
+}
+```
+
+## Public API
+
+```go
+// Generate token
+claims := map[string]any{
+    "sub": userID.String(),
+    "org": orgID.String(),
+    "role": "admin",
+}
+token, err := jwtSvc.GenerateToken(ctx, appID, claims, 24*time.Hour)
+
+// Validate token
+claims, err := jwtSvc.ValidateToken(ctx, tokenString)
+
+// Rotate keys
+newKey, err := jwtSvc.RotateKey(ctx, appID)
+```
+
+## Supported Algorithms
+
+- **RS256**: RSA with SHA-256 (recommended for production)
+- **ES256**: ECDSA with SHA-256 (shorter keys)
+- **HS256**: HMAC with SHA-256 (symmetric, simpler)
+
+## Standard Claims
+
+```go
+{
+    "iss": "authsome",           // Issuer
+    "sub": "usr_abc123",         // Subject (user ID)
+    "aud": "app_xyz789",         // Audience (app ID)
+    "exp": 1704067200,           // Expiration
+    "iat": 1704063600,           // Issued at
+    "org": "org_def456",         // Organization
+    "role": "admin",             // Role
+    "permissions": ["users:read"] // Permissions
+}
+```
+
+## Dependencies
+
+- **golang-jwt/jwt**: JWT implementation
+- **internal/crypto**: Key generation
+- **repository**: Key storage
+
+## Used By
+
+- **plugins/jwt**: JWT plugin
+- **plugins/bearer**: Bearer token auth
+- **External APIs**: Token-based authentication
+
+## Configuration
+
+```yaml
+auth:
+  jwt:
+    algorithm: "RS256"
+    defaultExpiry: "24h"
+    keyRotationInterval: "30d"
+```
+

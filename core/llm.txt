@@ -1,0 +1,381 @@
+# AuthSome Core Services
+
+## Package Purpose
+
+The `core` package contains all business logic services for AuthSome. These services are HTTP-agnostic and implement the core authentication, authorization, and user management functionality. Each service follows clean architecture principles with clear separation between business logic and infrastructure concerns.
+
+## Architecture Principles
+
+1. **HTTP-Agnostic**: Core services have NO dependencies on HTTP handlers or routing
+2. **Repository Pattern**: All data access goes through repository interfaces
+3. **Service Interfaces**: Main services expose interfaces to allow plugin decoration
+4. **Configuration Binding**: Each service binds its config from Forge ConfigManager
+5. **Context Propagation**: All operations accept `context.Context` for cancellation and tracing
+
+## Core Services Overview
+
+### User Management
+- **user/**: User account lifecycle, profile management, banning
+- **session/**: Session creation, validation, and revocation
+- **auth/**: Authentication logic (login, password reset, email verification)
+
+### Multi-Tenancy
+- **organization/**: Organization management, members, teams, invitations
+- **app/**: Application-scoped authentication (sub-tenancy within organizations)
+- **environment/**: Environment contexts (development, staging, production)
+
+### Security & Authorization
+- **rbac/**: Role-based access control with CEL policy language
+- **apikey/**: API key authentication with RBAC scoping and IP restrictions
+- **audit/**: Security event logging and audit trails
+- **device/**: Device tracking, fingerprinting, and session binding
+- **security/**: IP filtering, geolocation, security events
+
+### Token & Communication
+- **jwt/**: JWT token generation, validation, and key management
+- **webhook/**: Webhook delivery with retry logic
+- **notification/**: Email/SMS notification templates and delivery
+- **ratelimit/**: Rate limiting with memory or Redis storage
+
+### Utilities
+- **pagination/**: Cursor and offset pagination with Bun integration
+- **forms/**: Dynamic form schemas with Smartform
+- **hooks/**: Before/after hook system for authentication flows
+- **contexts/**: Context helpers for auth, user, and org data
+- **middleware/**: Core authentication middleware
+
+## Service Structure Pattern
+
+Each service typically has:
+```
+service_name/
+├── service.go           # Main service implementation
+├── repository.go        # Repository interface definition
+├── interface.go         # Service interface (for decoratable services)
+├── types.go or *.go     # Domain types and models
+├── errors.go            # Service-specific errors
+├── filters.go           # Query filter types
+├── config.go            # Service configuration struct (if needed)
+└── service_test.go      # Unit tests
+```
+
+## Dependency Flow
+
+```
+handlers/ → core services → repository interfaces → repository implementations
+```
+
+**Critical**: Core services never import from handlers or plugins.
+
+## Service Initialization Pattern
+
+```go
+type Service struct {
+    repo   Repository
+    config Config
+}
+
+func NewService(forgeConfig forge.ConfigManager, repo Repository) (*Service, error) {
+    var cfg Config
+    if err := forgeConfig.Bind("auth.servicename", &cfg); err != nil {
+        return nil, fmt.Errorf("config bind failed: %w", err)
+    }
+    return &Service{
+        repo:   repo,
+        config: cfg,
+    }, nil
+}
+```
+
+## Decoratable Services
+
+Some services implement interfaces to allow plugin decoration:
+
+- **user.ServiceInterface**: Can be decorated to add custom user logic
+- **session.ServiceInterface**: Can be decorated for custom session handling
+- **auth.ServiceInterface**: Can be decorated for custom auth flows
+
+Example decorator pattern:
+```go
+type CustomUserService struct {
+    base user.ServiceInterface
+}
+
+func (s *CustomUserService) Create(ctx context.Context, req *CreateRequest) (*User, error) {
+    // Custom pre-processing
+    user, err := s.base.Create(ctx, req)
+    // Custom post-processing
+    return user, err
+}
+```
+
+## Repository Interfaces
+
+Each service defines its repository interface in `repository.go`:
+
+```go
+type Repository interface {
+    Create(ctx context.Context, entity *Entity) error
+    FindByID(ctx context.Context, id string) (*Entity, error)
+    Update(ctx context.Context, entity *Entity) error
+    Delete(ctx context.Context, id string) error
+    List(ctx context.Context, filters Filters) ([]*Entity, error)
+}
+```
+
+Implementations live in `/repository/*.go`.
+
+## Error Handling
+
+Core services use the `internal/errs` package for structured errors:
+
+```go
+if user == nil {
+    return errs.UserNotFound()
+}
+
+if !hasPermission {
+    return errs.PermissionDenied(action, resource)
+}
+```
+
+All errors include:
+- Error code (e.g., "USER_NOT_FOUND")
+- HTTP status code
+- Contextual information
+- Error wrapping support
+
+## Configuration
+
+Root config in `config.go`:
+```go
+type Config struct {
+    BasePath         string
+    TrustedOrigins   []string
+    Secret           string
+    RBACEnforce      bool
+    DatabaseSchema   string
+}
+```
+
+Individual services bind their own sub-configs from namespaces like `auth.user`, `auth.session`, etc.
+
+## Key Features by Service
+
+### user/
+- User creation with email/password
+- Email verification workflow
+- Password change and reset
+- User profile updates
+- Account banning/unbanning
+- User search and listing
+
+### session/
+- Session creation and storage
+- Token generation and validation
+- Session refresh and rotation
+- Multi-session management
+- Session revocation (single or all)
+- Device binding
+
+### auth/
+- Login with credentials
+- Password reset flow
+- Email verification
+- Account lockout on failed attempts
+- Integration with session service
+
+### organization/
+- Organization CRUD operations
+- Member management (add, remove, update roles)
+- Team management within orgs
+- Invitation system
+- Slug uniqueness validation
+
+### app/
+- Application creation within organizations
+- App-scoped authentication
+- Member management per app
+- Team management per app
+- Invitation system per app
+
+### rbac/
+- Role and permission management
+- CEL-based policy evaluation
+- Permission checking with caching
+- Role assignment to users
+- Policy parsing and validation
+
+### apikey/
+- API key generation with prefixes
+- Key rotation and revocation
+- RBAC scope attachment
+- IP whitelist/blacklist
+- Rate limiting per key
+- Key listing and management
+
+### audit/
+- Security event logging
+- Audit trail querying
+- Event types (login, logout, permission change, etc.)
+- Actor and resource tracking
+- Timestamp and metadata
+
+### device/
+- Device fingerprinting
+- Device trust levels
+- Device-session binding
+- Device listing per user
+- Device revocation
+
+### security/
+- IP-based filtering (whitelist/blacklist)
+- GeoIP lookup integration
+- Country-based access control
+- Security event tracking
+- Anomaly detection hooks
+
+### webhook/
+- Webhook registration and management
+- Event delivery with retries
+- Signature generation (HMAC)
+- Delivery status tracking
+- Webhook testing endpoints
+
+### jwt/
+- JWT token generation
+- Token validation and parsing
+- Key rotation (RSA, ECDSA)
+- Claims management
+- Token revocation support
+
+### notification/
+- Template management (email/SMS)
+- Template rendering with variables
+- Provider abstraction (SMTP, Twilio, etc.)
+- A/B testing support
+- Version management
+- Analytics tracking
+
+### ratelimit/
+- Request rate limiting
+- Multiple storage backends (memory, Redis)
+- Per-user and per-IP limiting
+- Configurable time windows
+- Burst support
+
+### pagination/
+- Cursor-based pagination
+- Offset-based pagination
+- Bun query integration
+- Standard request/response types
+- Efficient database queries
+
+## Testing Approach
+
+Each service has `*_test.go` files with:
+- Unit tests with mocked repositories
+- Table-driven tests for edge cases
+- Context cancellation tests
+- Error condition coverage
+
+Run tests:
+```bash
+go test ./core/...
+```
+
+## Common Patterns
+
+### Context Usage
+```go
+func (s *Service) Operation(ctx context.Context, params Params) error {
+    // Check context cancellation
+    select {
+    case <-ctx.Done():
+        return ctx.Err()
+    default:
+    }
+    
+    // Use context in repository calls
+    return s.repo.Operation(ctx, params)
+}
+```
+
+### Filter Pattern
+```go
+type Filters struct {
+    Email      string
+    OrganizationID string
+    Status     string
+    Limit      int
+    Offset     int
+}
+
+func (s *Service) List(ctx context.Context, filters Filters) ([]*Entity, error) {
+    return s.repo.List(ctx, filters)
+}
+```
+
+### Transaction Support
+```go
+func (s *Service) ComplexOperation(ctx context.Context) error {
+    return s.repo.RunInTransaction(ctx, func(ctx context.Context) error {
+        // Multiple operations in transaction
+        return nil
+    })
+}
+```
+
+## Integration with Root Package
+
+Core services are initialized in the root `authsome.go` and registered in the service registry for dependency injection:
+
+```go
+// In authsome.go
+userSvc := user.NewService(forgeConfig, userRepo)
+sessionSvc := session.NewService(forgeConfig, sessionRepo)
+authSvc := auth.NewService(forgeConfig, userSvc, sessionSvc)
+```
+
+## Hook System
+
+Services can emit hooks for plugins to intercept:
+
+```go
+// Before operation
+hookRegistry.Trigger("user.beforeCreate", hookData)
+
+// Perform operation
+user, err := s.repo.Create(ctx, user)
+
+// After operation
+hookRegistry.Trigger("user.afterCreate", user)
+```
+
+## Next Steps
+
+For detailed documentation on individual services, see:
+- `user/llm.txt` - User service
+- `auth/llm.txt` - Authentication service
+- `session/llm.txt` - Session service
+- `organization/llm.txt` - Organization service
+- `rbac/llm.txt` - RBAC service
+- `apikey/llm.txt` - API key service
+- And more...
+
+## Performance Considerations
+
+- Repository queries use indexes defined in schema
+- RBAC permission checks cached for 5 minutes
+- Session lookups can use Redis cache
+- Pagination prevents large result sets
+- Context timeouts prevent long-running operations
+
+## Security Considerations
+
+- All password operations use bcrypt
+- Sensitive data never logged
+- Context carries authentication state
+- Repository layer enforces org isolation
+- Rate limiting at service layer
+

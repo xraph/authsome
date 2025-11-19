@@ -1,0 +1,455 @@
+# Organization Service
+
+## Package Purpose
+
+The `organization` package provides multi-tenant organization management with members, teams, invitations, and hierarchical role-based access control. Organizations are the primary isolation boundary in SaaS mode and enable workspace-style collaboration.
+
+## Key Files
+
+- **organization_service.go**: Organization CRUD operations
+- **member_service.go**: Member management and role assignment
+- **team_service.go**: Team management within organizations
+- **invitation_service.go**: Invitation workflow
+- **service.go**: Aggregated service facade
+- **organization.go**: Organization DTO and types
+- **member.go**: Member DTO and types
+- **team.go**: Team DTO and types
+- **invitation.go**: Invitation DTO and types
+- **repository.go**: Repository interfaces
+- **errors.go**: Organization-specific errors
+- **config.go**: Service configuration
+- **enums.go**: Role and permission enums
+- **validation.go**: Input validation logic
+
+## Main Types/Interfaces
+
+### Organization
+```go
+type Organization struct {
+    ID             xid.ID
+    AppID          xid.ID
+    EnvironmentID  xid.ID
+    Name           string
+    Slug           string        // Unique within app+environment
+    Description    string
+    Logo           string
+    Metadata       map[string]any
+    CreatedByID    xid.ID
+    CreatedAt      time.Time
+    UpdatedAt      time.Time
+}
+```
+
+### Member
+```go
+type Member struct {
+    ID             xid.ID
+    OrganizationID xid.ID
+    UserID         xid.ID
+    Role           MemberRole     // owner, admin, member
+    JoinedAt       time.Time
+    InvitedBy      *xid.ID
+}
+```
+
+### Team
+```go
+type Team struct {
+    ID             xid.ID
+    OrganizationID xid.ID
+    Name           string
+    Description    string
+    Members        []*TeamMember
+    CreatedAt      time.Time
+}
+```
+
+### Invitation
+```go
+type Invitation struct {
+    ID             xid.ID
+    OrganizationID xid.ID
+    Email          string
+    Role           MemberRole
+    Token          string
+    ExpiresAt      time.Time
+    InvitedBy      xid.ID
+    AcceptedAt     *time.Time
+}
+```
+
+### Service
+```go
+type Service struct {
+    orgSvc    *OrganizationService
+    memberSvc *MemberService
+    teamSvc   *TeamService
+    invSvc    *InvitationService
+    config    Config
+}
+```
+
+## Configuration
+
+```go
+type Config struct {
+    EnableUserCreation       bool  // Allow users to create orgs
+    MaxOrganizationsPerUser  int   // Limit per user
+    MaxMembersPerOrg         int   // Limit per organization
+    MaxTeamsPerOrg           int   // Limit per organization
+    InvitationExpiry         time.Duration
+    RequireSlugValidation    bool
+    AllowSlugChange          bool
+}
+```
+
+## Public API
+
+### Organization Operations
+
+#### Create Organization
+```go
+req := &CreateOrganizationRequest{
+    Name:        "Acme Corp",
+    Slug:        "acme-corp",
+    Description: "Software company",
+}
+org, err := orgSvc.CreateOrganization(ctx, req, creatorUserID, appID, envID)
+// Creator automatically becomes owner
+```
+
+#### Find Organization
+```go
+// By ID
+org, err := orgSvc.FindByID(ctx, orgID)
+
+// By slug
+org, err := orgSvc.FindBySlug(ctx, appID, envID, "acme-corp")
+```
+
+#### Update Organization
+```go
+name := "Acme Corporation"
+req := &UpdateOrganizationRequest{
+    Name: &name,
+}
+updated, err := orgSvc.UpdateOrganization(ctx, orgID, req)
+```
+
+#### List Organizations
+```go
+// For a user
+orgs, err := orgSvc.ListUserOrganizations(ctx, userID)
+
+// All (admin only)
+filter := &ListOrganizationsFilter{
+    AppID: &appID,
+    Limit: 20,
+}
+response, err := orgSvc.ListOrganizations(ctx, filter)
+```
+
+### Member Operations
+
+#### Add Member
+```go
+member, err := orgSvc.AddMember(ctx, orgID, userID, MemberRoleAdmin)
+```
+
+#### Update Member Role
+```go
+err := orgSvc.UpdateMemberRole(ctx, orgID, userID, MemberRoleOwner)
+```
+
+#### Remove Member
+```go
+err := orgSvc.RemoveMember(ctx, orgID, userID)
+```
+
+#### List Members
+```go
+members, err := orgSvc.ListMembers(ctx, orgID)
+// Returns members with user info populated
+```
+
+#### Check Membership
+```go
+member, err := orgSvc.GetMember(ctx, orgID, userID)
+if err != nil {
+    return errs.NotMember()
+}
+```
+
+### Team Operations
+
+#### Create Team
+```go
+req := &CreateTeamRequest{
+    Name:        "Engineering",
+    Description: "Development team",
+}
+team, err := orgSvc.CreateTeam(ctx, orgID, req)
+```
+
+#### Add Member to Team
+```go
+err := orgSvc.AddTeamMember(ctx, teamID, userID)
+```
+
+#### Remove Member from Team
+```go
+err := orgSvc.RemoveTeamMember(ctx, teamID, userID)
+```
+
+#### List Teams
+```go
+teams, err := orgSvc.ListTeams(ctx, orgID)
+```
+
+### Invitation Operations
+
+#### Send Invitation
+```go
+req := &CreateInvitationRequest{
+    Email: "newuser@example.com",
+    Role:  MemberRoleAdmin,
+}
+invitation, err := orgSvc.InviteUser(ctx, orgID, req, inviterUserID)
+// Sends email with invitation link containing token
+```
+
+#### Accept Invitation
+```go
+member, err := orgSvc.AcceptInvitation(ctx, invitationToken, userID)
+// User becomes member of organization
+```
+
+#### Revoke Invitation
+```go
+err := orgSvc.RevokeInvitation(ctx, invitationID)
+```
+
+#### List Pending Invitations
+```go
+invitations, err := orgSvc.ListInvitations(ctx, orgID)
+// Returns only pending (not accepted) invitations
+```
+
+## Member Roles
+
+```go
+const (
+    MemberRoleOwner  MemberRole = "owner"   // Full control
+    MemberRoleAdmin  MemberRole = "admin"   // Most permissions
+    MemberRoleMember MemberRole = "member"  // Basic access
+)
+```
+
+### Role Hierarchy
+- **Owner**: Can delete org, manage all settings, manage all members
+- **Admin**: Can manage members (except owners), manage teams, manage settings
+- **Member**: Can view org, participate in teams
+
+## Dependencies
+
+- **core/rbac**: Role and permission management
+- **core/user**: User lookups
+- **internal/errs**: Error handling
+- **internal/validator**: Slug and input validation
+- **repository**: Data persistence
+
+## Used By
+
+- **handlers/**: Organization API endpoints
+- **plugins/organization**: Organization plugin UI and features
+- **plugins/dashboard**: Org selection and management
+- **core/app**: App-level organization scoping
+- **core/session**: Session organization context
+
+## Common Patterns
+
+### Creating Organization with First Member
+```go
+func (s *OrganizationService) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest, creatorUserID, appID, envID xid.ID) (*Organization, error) {
+    // Check creation is enabled
+    if !s.config.EnableUserCreation {
+        return nil, OrganizationCreationDisabled()
+    }
+    
+    // Check user's org limit
+    count, err := s.repo.CountByUser(ctx, creatorUserID)
+    if err != nil {
+        return nil, err
+    }
+    if count >= s.config.MaxOrganizationsPerUser {
+        return nil, MaxOrganizationsReached(s.config.MaxOrganizationsPerUser)
+    }
+    
+    // Validate slug uniqueness
+    existing, _ := s.repo.FindBySlug(ctx, appID, envID, req.Slug)
+    if existing != nil {
+        return nil, OrganizationSlugExists(req.Slug)
+    }
+    
+    // Create organization
+    org := &Organization{
+        ID:            xid.New(),
+        AppID:         appID,
+        EnvironmentID: envID,
+        Name:          req.Name,
+        Slug:          req.Slug,
+        Description:   req.Description,
+        CreatedByID:   creatorUserID,
+        CreatedAt:     time.Now(),
+    }
+    
+    if err := s.repo.Create(ctx, org.ToSchema()); err != nil {
+        return nil, DatabaseError("Create", err)
+    }
+    
+    // Add creator as owner
+    member := &Member{
+        ID:             xid.New(),
+        OrganizationID: org.ID,
+        UserID:         creatorUserID,
+        Role:           MemberRoleOwner,
+        JoinedAt:       time.Now(),
+    }
+    
+    if err := s.repo.CreateMember(ctx, member.ToSchema()); err != nil {
+        return nil, DatabaseError("CreateMember", err)
+    }
+    
+    // Bootstrap default roles
+    s.rbacSvc.BootstrapOrganizationRoles(ctx, org.ID)
+    
+    return org, nil
+}
+```
+
+### Permission Checking
+```go
+func (s *MemberService) RemoveMember(ctx context.Context, orgID, targetUserID xid.ID) error {
+    // Get actor from context
+    actorUserID, _ := contexts.RequireUserID(ctx)
+    
+    // Get actor's member record
+    actorMember, err := s.repo.FindMember(ctx, orgID, actorUserID)
+    if err != nil {
+        return NotMember()
+    }
+    
+    // Get target's member record
+    targetMember, err := s.repo.FindMember(ctx, orgID, targetUserID)
+    if err != nil {
+        return MemberNotFound()
+    }
+    
+    // Check permissions
+    if !canRemoveMember(actorMember.Role, targetMember.Role) {
+        return InsufficientRole("admin")
+    }
+    
+    // Prevent removing last owner
+    if targetMember.Role == MemberRoleOwner {
+        ownerCount, _ := s.repo.CountMembersByRole(ctx, orgID, MemberRoleOwner)
+        if ownerCount <= 1 {
+            return CannotRemoveLastOwner()
+        }
+    }
+    
+    return s.repo.DeleteMember(ctx, targetMember.ID)
+}
+```
+
+## Integration Points
+
+### With RBAC Service
+Organization service uses RBAC for fine-grained permissions:
+```go
+// Check if user can manage org
+hasPermission := rbacSvc.CheckPermission(ctx, userID, "org:manage", orgID)
+
+// Assign role to member
+rbacSvc.AssignRole(ctx, userID, roleID, orgID)
+```
+
+### With User Service
+Organization service validates user existence:
+```go
+user, err := userSvc.FindByID(ctx, userID)
+if err != nil {
+    return UserNotFound()
+}
+```
+
+### With Session Context
+Sessions carry organization context:
+```go
+orgID, err := contexts.RequireOrganizationID(ctx)
+org, err := orgSvc.FindByID(ctx, orgID)
+```
+
+## Error Handling
+
+Common errors:
+- `OrganizationNotFound()` - Org doesn't exist
+- `OrganizationSlugExists(slug)` - Slug already taken
+- `NotMember()` - User is not org member
+- `InsufficientRole(required)` - User lacks required role
+- `MaxOrganizationsReached(max)` - User hit org limit
+- `MaxMembersReached(max)` - Org hit member limit
+- `CannotRemoveLastOwner()` - Must have at least one owner
+- `InvitationExpired()` - Invitation token expired
+
+## Testing
+
+```go
+func TestOrganizationService_Create(t *testing.T) {
+    mockRepo := newMockOrgRepository()
+    orgSvc := organization.NewOrganizationService(mockRepo, config, rbacSvc)
+    
+    req := &organization.CreateOrganizationRequest{
+        Name: "Test Org",
+        Slug: "test-org",
+    }
+    
+    org, err := orgSvc.CreateOrganization(ctx, req, userID, appID, envID)
+    assert.NoError(t, err)
+    assert.Equal(t, "Test Org", org.Name)
+    assert.Equal(t, "test-org", org.Slug)
+}
+```
+
+## Security Considerations
+
+- Slug uniqueness prevents collisions
+- Member role hierarchy prevents privilege escalation
+- Last owner protection prevents org lockout
+- Invitation tokens are single-use
+- Invitation expiration prevents stale invites
+- RBAC integration for fine-grained control
+- All operations check membership and permissions
+
+## Performance Considerations
+
+- Member lookups use composite index (org_id, user_id)
+- Slug lookups use unique index (app_id, environment_id, slug)
+- Team member queries batched when possible
+- Organization listing supports pagination
+- Member counts cached for large orgs
+
+## Configuration Example
+
+```yaml
+auth:
+  organization:
+    enableUserCreation: true
+    maxOrganizationsPerUser: 10
+    maxMembersPerOrg: 100
+    maxTeamsPerOrg: 50
+    invitationExpiry: "168h"  # 7 days
+    requireSlugValidation: true
+    allowSlugChange: false
+```
+

@@ -1,0 +1,294 @@
+# Auth Service
+
+## Package Purpose
+
+The `auth` package provides high-level authentication operations including user sign-up, sign-in, password reset, email verification, and token management. It orchestrates user and session services to provide complete authentication flows.
+
+## Key Files
+
+- **service.go**: Main authentication service implementation
+- **interface.go**: Service interface for plugin decoration
+- **types.go**: Request/response types for auth operations
+- **config.go**: Authentication configuration
+- **service_test.go**: Unit tests
+
+## Main Types/Interfaces
+
+### Service
+```go
+type Service struct {
+    users   user.ServiceInterface
+    session session.ServiceInterface
+    config  Config
+}
+```
+
+### Service Interface
+```go
+type ServiceInterface interface {
+    SignUp(ctx context.Context, req *SignUpRequest) (*AuthResponse, error)
+    SignIn(ctx context.Context, req *SignInRequest) (*AuthResponse, error)
+    SignOut(ctx context.Context, sessionToken string) error
+    RefreshSession(ctx context.Context, sessionToken string) (*AuthResponse, error)
+    VerifyEmail(ctx context.Context, token string) error
+    RequestPasswordReset(ctx context.Context, email string) error
+    ResetPassword(ctx context.Context, token, newPassword string) error
+    ChangePassword(ctx context.Context, userID xid.ID, oldPassword, newPassword string) error
+}
+```
+
+### Configuration
+```go
+type Config struct {
+    RequireEmailVerification bool
+    AllowSignUp              bool
+    MinPasswordLength        int
+    MaxLoginAttempts         int
+    LockoutDuration          time.Duration
+    ResetTokenExpiry         time.Duration
+}
+```
+
+## Public API
+
+### Sign Up
+```go
+req := &SignUpRequest{
+    Email:     "user@example.com",
+    Password:  "SecurePass123!",
+    Name:      "John Doe",
+    Remember:  false,
+    IPAddress: "192.168.1.1",
+    UserAgent: "Mozilla/5.0...",
+}
+response, err := authSvc.SignUp(ctx, req)
+// response contains: User, Session (if email verification not required), Token
+```
+
+### Sign In
+```go
+req := &SignInRequest{
+    Email:      "user@example.com",
+    Password:   "SecurePass123!",
+    Remember:   true,
+    IPAddress:  "192.168.1.1",
+    UserAgent:  "Mozilla/5.0...",
+}
+response, err := authSvc.SignIn(ctx, req)
+// response contains: User, Session, Token
+```
+
+### Sign Out
+```go
+err := authSvc.SignOut(ctx, sessionToken)
+```
+
+### Password Reset Flow
+```go
+// Step 1: Request password reset (sends email)
+err := authSvc.RequestPasswordReset(ctx, "user@example.com")
+
+// Step 2: User clicks email link and submits new password
+err := authSvc.ResetPassword(ctx, resetToken, "NewSecurePass123!")
+```
+
+### Email Verification
+```go
+// User clicks verification link
+err := authSvc.VerifyEmail(ctx, verificationToken)
+```
+
+### Password Change (Authenticated User)
+```go
+err := authSvc.ChangePassword(ctx, userID, "OldPass123!", "NewPass123!")
+```
+
+## Dependencies
+
+- **core/user**: User creation and lookup
+- **core/session**: Session management
+- **internal/crypto**: Password verification, token generation
+- **internal/errs**: Structured error handling
+
+## Used By
+
+- **handlers/auth**: HTTP endpoints for authentication
+- **plugins/social**: OAuth callback handling
+- **plugins/magiclink**: Magic link authentication
+- **plugins/mfa**: Multi-factor authentication flows
+
+## Common Patterns
+
+### Sign-Up with Email Verification
+```go
+func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*AuthResponse, error) {
+    // Create user
+    user, err := s.users.Create(ctx, &user.CreateUserRequest{
+        Email:    req.Email,
+        Password: req.Password,
+        Name:     req.Name,
+    })
+    if err != nil {
+        return nil, err
+    }
+    
+    // If verification required, return user without session
+    if s.config.RequireEmailVerification {
+        // Generate verification token
+        token, _ := crypto.GenerateToken(32)
+        // Send verification email (via webhook or notification service)
+        return &AuthResponse{User: user}, nil
+    }
+    
+    // Create session immediately
+    sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
+        UserID:    user.ID,
+        Remember:  req.Remember,
+        IPAddress: req.IPAddress,
+        UserAgent: req.UserAgent,
+    })
+    
+    return &AuthResponse{
+        User:    user,
+        Session: sess,
+        Token:   sess.Token,
+    }, nil
+}
+```
+
+### Sign-In with Account Lockout Protection
+```go
+func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*AuthResponse, error) {
+    // Find user
+    user, err := s.users.FindByEmail(ctx, req.Email)
+    if err != nil {
+        return nil, errs.InvalidCredentials()
+    }
+    
+    // Check if account is locked
+    if user.LockedUntil != nil && time.Now().Before(*user.LockedUntil) {
+        return nil, errs.AccountLocked("too many failed attempts")
+    }
+    
+    // Verify password
+    if !crypto.CheckPassword(req.Password, user.PasswordHash) {
+        // Increment failed attempts
+        s.users.IncrementFailedAttempts(ctx, user.ID)
+        return nil, errs.InvalidCredentials()
+    }
+    
+    // Reset failed attempts on successful login
+    s.users.ResetFailedAttempts(ctx, user.ID)
+    
+    // Create session
+    sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
+        UserID:    user.ID,
+        Remember:  req.Remember,
+        IPAddress: req.IPAddress,
+        UserAgent: req.UserAgent,
+    })
+    
+    return &AuthResponse{
+        User:    user,
+        Session: sess,
+        Token:   sess.Token,
+    }, nil
+}
+```
+
+## Integration Points
+
+### With User Service
+Auth service creates and validates users:
+```go
+user, err := s.users.Create(ctx, createReq)
+user, err := s.users.FindByEmail(ctx, email)
+valid := crypto.CheckPassword(password, user.PasswordHash)
+```
+
+### With Session Service
+Auth service manages session lifecycle:
+```go
+sess, err := s.session.Create(ctx, sessionReq)
+sess, err := s.session.FindByToken(ctx, token)
+err := s.session.Revoke(ctx, sessionToken)
+```
+
+### With Webhook Service
+Auth events trigger webhooks:
+- `user.signup` - After successful registration
+- `user.signin` - After successful login
+- `user.signout` - After logout
+- `user.password.reset` - After password reset
+- `user.email.verified` - After email verification
+
+## Error Handling
+
+Common errors:
+- `errs.InvalidCredentials()` - Wrong email or password
+- `errs.EmailAlreadyExists(email)` - Email already registered
+- `errs.EmailNotVerified(email)` - Email verification required
+- `errs.AccountLocked(reason)` - Account locked due to failed attempts
+- `errs.TokenExpired()` - Reset/verification token expired
+- `errs.WeakPassword(reason)` - Password doesn't meet requirements
+
+## Testing
+
+```go
+func TestService_SignIn(t *testing.T) {
+    mockUsers := newMockUserService()
+    mockSession := newMockSessionService()
+    authSvc := auth.NewService(mockUsers, mockSession, config)
+    
+    req := &auth.SignInRequest{
+        Email:    "test@example.com",
+        Password: "password123",
+    }
+    
+    response, err := authSvc.SignIn(context.Background(), req)
+    assert.NoError(t, err)
+    assert.NotNil(t, response.User)
+    assert.NotNil(t, response.Session)
+}
+```
+
+## Security Considerations
+
+- Passwords validated for strength before acceptance
+- Failed login attempts tracked and can trigger account lockout
+- Password reset tokens have expiration time
+- Email verification tokens are single-use
+- Session tokens are cryptographically secure random strings
+- All password operations use timing-safe comparisons
+- IP address and user agent logged for audit purposes
+
+## Configuration Example
+
+```yaml
+auth:
+  auth:
+    requireEmailVerification: true
+    allowSignUp: true
+    minPasswordLength: 8
+    maxLoginAttempts: 5
+    lockoutDuration: "15m"
+    resetTokenExpiry: "1h"
+```
+
+## Performance Considerations
+
+- Password hashing is intentionally slow (bcrypt cost 10)
+- Session creation is fast (single database insert)
+- User lookup uses email index
+- Session lookup uses token index
+- Failed attempt tracking may add slight overhead
+
+## Future Enhancements
+
+- Configurable password complexity requirements
+- Suspicious login detection
+- CAPTCHA integration after failed attempts
+- Remember device functionality
+- Social authentication integration
+- Multi-factor authentication support
+

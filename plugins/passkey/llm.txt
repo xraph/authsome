@@ -1,0 +1,63 @@
+# Passkey Plugin
+
+## Purpose
+WebAuthn/FIDO2 passwordless authentication using passkeys, security keys, and biometrics.
+
+## Features
+- Platform authenticators (Face ID, Touch ID, Windows Hello)
+- Roaming authenticators (YubiKey, security keys)
+- Passwordless login
+- Multi-device credentials
+- Credential management
+
+## Flow
+### Registration
+1. User initiates passkey setup
+2. Generate challenge
+3. Browser prompts for authenticator
+4. User verifies (biometric/PIN)
+5. Store public key credential
+
+### Authentication
+1. User initiates passkey login
+2. Generate challenge
+3. Browser prompts for credential
+4. User verifies
+5. Validate signature
+6. Create session
+
+## Public API
+```go
+// Registration
+options, err := passkeySvc.BeginRegistration(ctx, userID)
+credential, err := passkeySvc.FinishRegistration(ctx, userID, response)
+
+// Authentication
+options, err := passkeySvc.BeginLogin(ctx, email)
+user, session, err := passkeySvc.FinishLogin(ctx, response)
+
+// Management
+credentials, err := passkeySvc.ListCredentials(ctx, userID)
+err := passkeySvc.DeleteCredential(ctx, credentialID)
+```
+
+## Configuration
+```yaml
+auth:
+  plugins:
+    passkey:
+      enabled: true
+      rpName: "MyApp"
+      rpID: "example.com"
+      rpOrigins: ["https://example.com"]
+      requireResidentKey: false
+      userVerification: "preferred"
+```
+
+## Dependencies
+- **core/user**: User management
+- **core/session**: Session creation
+- **WebAuthn library**: FIDO2 implementation
+
+See: `README.md`
+

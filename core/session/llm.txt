@@ -1,0 +1,374 @@
+# Session Service
+
+## Package Purpose
+
+The `session` package manages user session lifecycle including creation, validation, refresh, revocation, and multi-session support. Sessions can be bound to devices and support both cookie-based and token-based authentication.
+
+## Key Files
+
+- **service.go**: Main session service implementation (215 lines)
+- **interface.go**: Service interface for plugin decoration
+- **repository.go**: Repository interface for session storage
+- **session.go**: Session DTO and request/response types
+- **errors.go**: Session-specific errors
+- **filters.go**: Query filters for session listing
+- **service_test.go**: Unit tests
+
+## Main Types/Interfaces
+
+### Session DTO
+```go
+type Session struct {
+    ID             xid.ID
+    Token          string
+    AppID          xid.ID
+    EnvironmentID  xid.ID
+    OrganizationID xid.ID
+    UserID         xid.ID
+    DeviceID       *xid.ID
+    ExpiresAt      time.Time
+    IPAddress      string
+    UserAgent      string
+    CreatedAt      time.Time
+    UpdatedAt      time.Time
+}
+```
+
+### Service Interface
+```go
+type ServiceInterface interface {
+    Create(ctx context.Context, req *CreateSessionRequest) (*Session, error)
+    FindByToken(ctx context.Context, token string) (*Session, error)
+    FindByID(ctx context.Context, id xid.ID) (*Session, error)
+    Refresh(ctx context.Context, sessionID xid.ID) (*Session, error)
+    Revoke(ctx context.Context, sessionID xid.ID) error
+    RevokeByToken(ctx context.Context, token string) error
+    RevokeAllForUser(ctx context.Context, userID xid.ID) error
+    ListForUser(ctx context.Context, userID xid.ID, filter *ListSessionsFilter) ([]*Session, error)
+    IsValid(ctx context.Context, token string) bool
+    Cleanup(ctx context.Context) (int, error)
+}
+```
+
+### Configuration
+```go
+type Config struct {
+    DefaultTTL      time.Duration  // Default: 24 hours
+    RememberTTL     time.Duration  // Default: 7 days
+    AllowMultiple   bool           // Allow multiple sessions per user
+    RequireUserAuth bool           // Require authenticated user context
+}
+```
+
+## Public API
+
+### Session Creation
+```go
+req := &CreateSessionRequest{
+    AppID:          appID,
+    EnvironmentID:  envID,
+    OrganizationID: orgID,
+    UserID:         userID,
+    Remember:       true,  // Use RememberTTL instead of DefaultTTL
+    IPAddress:      "192.168.1.1",
+    UserAgent:      "Mozilla/5.0...",
+    DeviceID:       &deviceID,  // Optional: bind to device
+}
+session, err := sessionSvc.Create(ctx, req)
+// session contains: ID, Token (secure random string), ExpiresAt, etc.
+```
+
+### Session Validation
+```go
+// By token
+session, err := sessionSvc.FindByToken(ctx, token)
+if err != nil || time.Now().After(session.ExpiresAt) {
+    return errs.SessionExpired()
+}
+
+// Quick validity check
+isValid := sessionSvc.IsValid(ctx, token)
+```
+
+### Session Refresh
+```go
+// Extends session expiration
+refreshed, err := sessionSvc.Refresh(ctx, sessionID)
+// refreshed.ExpiresAt is updated to Now + TTL
+```
+
+### Session Revocation
+```go
+// Revoke single session
+err := sessionSvc.Revoke(ctx, sessionID)
+
+// Revoke by token
+err := sessionSvc.RevokeByToken(ctx, sessionToken)
+
+// Revoke all user sessions (e.g., on password change)
+err := sessionSvc.RevokeAllForUser(ctx, userID)
+```
+
+### Session Listing
+```go
+filter := &ListSessionsFilter{
+    Active: true,  // Only non-expired sessions
+    Limit:  10,
+}
+sessions, err := sessionSvc.ListForUser(ctx, userID, filter)
+// Returns all active sessions for user with device info
+```
+
+### Cleanup Expired Sessions
+```go
+// Run periodically (e.g., via cron job)
+deleted, err := sessionSvc.Cleanup(ctx)
+// Returns count of deleted expired sessions
+```
+
+## Dependencies
+
+- **internal/crypto**: Secure token generation
+- **internal/errs**: Structured error handling
+- **core/webhook**: Session event webhooks
+- **repository**: Session storage interface
+- **schema**: Database model
+
+## Used By
+
+- **core/auth**: Creates sessions on login
+- **handlers/auth**: Session management endpoints
+- **core/middleware**: Authentication middleware validates sessions
+- **plugins/multisession**: Multi-session management UI
+- **plugins/admin**: Admin session inspection
+
+## Common Patterns
+
+### Creating Session with Context
+```go
+func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Session, error) {
+    // Validate required context
+    if req.AppID.IsNil() {
+        return nil, MissingAppContext()
+    }
+    
+    // Generate cryptographically secure token
+    token, err := crypto.GenerateToken(32)
+    if err != nil {
+        return nil, SessionCreationFailed(err)
+    }
+    
+    // Determine TTL based on remember flag
+    ttl := s.config.DefaultTTL
+    if req.Remember {
+        ttl = s.config.RememberTTL
+    }
+    
+    // Create session
+    session := &Session{
+        ID:             xid.New(),
+        Token:          token,
+        AppID:          req.AppID,
+        EnvironmentID:  req.EnvironmentID,
+        OrganizationID: req.OrganizationID,
+        UserID:         req.UserID,
+        DeviceID:       req.DeviceID,
+        ExpiresAt:      time.Now().Add(ttl),
+        IPAddress:      req.IPAddress,
+        UserAgent:      req.UserAgent,
+    }
+    
+    // Store in database
+    if err := s.repo.CreateSession(ctx, session.ToSchema()); err != nil {
+        return nil, SessionCreationFailed(err)
+    }
+    
+    // Trigger webhook
+    s.webhookSvc.TriggerEvent(ctx, "session.created", session)
+    
+    return session, nil
+}
+```
+
+### Session Validation with Caching
+```go
+func (s *Service) FindByToken(ctx context.Context, token string) (*Session, error) {
+    // Check cache first (if Redis available)
+    if cached := s.cache.Get(token); cached != nil {
+        return cached.(*Session), nil
+    }
+    
+    // Lookup from database
+    schemaSession, err := s.repo.FindByToken(ctx, token)
+    if err != nil {
+        return nil, SessionNotFound()
+    }
+    
+    session := FromSchemaSession(schemaSession)
+    
+    // Validate expiration
+    if time.Now().After(session.ExpiresAt) {
+        return nil, SessionExpired()
+    }
+    
+    // Cache for future requests
+    s.cache.Set(token, session, time.Until(session.ExpiresAt))
+    
+    return session, nil
+}
+```
+
+### Multi-Session Management
+```go
+func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Session, error) {
+    // If multiple sessions not allowed, revoke existing sessions
+    if !s.config.AllowMultiple {
+        if err := s.RevokeAllForUser(ctx, req.UserID); err != nil {
+            return nil, err
+        }
+    }
+    
+    // Create new session
+    return s.createSession(ctx, req)
+}
+```
+
+## Integration Points
+
+### With Auth Service
+Auth service creates sessions after successful authentication:
+```go
+session, err := sessionSvc.Create(ctx, &CreateSessionRequest{
+    UserID:    user.ID,
+    Remember:  loginReq.Remember,
+    IPAddress: loginReq.IPAddress,
+    UserAgent: loginReq.UserAgent,
+})
+```
+
+### With Device Service
+Sessions can be bound to trusted devices:
+```go
+device, err := deviceSvc.GetOrCreateDevice(ctx, fingerprint)
+sessionReq.DeviceID = &device.ID
+```
+
+### With Middleware
+Authentication middleware validates sessions:
+```go
+session, err := sessionSvc.FindByToken(ctx, tokenFromCookie)
+if err != nil {
+    return errs.Unauthorized()
+}
+ctx = contexts.WithSession(ctx, session)
+```
+
+### With Webhook Service
+Session events trigger webhooks:
+- `session.created` - New session created
+- `session.refreshed` - Session expiration extended
+- `session.revoked` - Session manually revoked
+- `session.expired` - Session expired naturally
+
+## Error Handling
+
+Common errors:
+- `SessionNotFound()` - Session doesn't exist
+- `SessionExpired()` - Session has expired
+- `SessionRevoked()` - Session was revoked
+- `SessionCreationFailed(err)` - Failed to create session
+- `MissingAppContext()` - Required app context missing
+- `ConcurrentSessionLimit()` - Too many active sessions
+
+## Testing
+
+```go
+func TestService_Create(t *testing.T) {
+    mockRepo := newMockSessionRepository()
+    sessionSvc := session.NewService(mockRepo, config, mockWebhook)
+    
+    req := &session.CreateSessionRequest{
+        AppID:     appID,
+        UserID:    userID,
+        Remember:  false,
+        IPAddress: "192.168.1.1",
+    }
+    
+    sess, err := sessionSvc.Create(context.Background(), req)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, sess.Token)
+    assert.Equal(t, userID, sess.UserID)
+}
+```
+
+## Security Considerations
+
+- Session tokens are cryptographically secure (32 bytes random)
+- Tokens never logged or exposed in error messages
+- Expired sessions automatically invalidated
+- Session revocation is immediate (no grace period)
+- IP address and user agent tracked for audit
+- Device binding prevents session theft
+- Remember Me sessions use longer TTL but are still finite
+
+## Performance Considerations
+
+- Session lookups use token index (fast)
+- Session caching (Redis) dramatically improves performance
+- Cleanup job runs periodically, not per request
+- Multi-session check adds slight overhead
+- Token generation is fast (< 1ms)
+
+## Configuration Example
+
+```yaml
+auth:
+  session:
+    defaultTTL: "24h"        # Regular sessions
+    rememberTTL: "168h"      # 7 days for "Remember Me"
+    allowMultiple: true      # Allow concurrent sessions
+    requireUserAuth: true    # Require user context
+```
+
+## Caching Strategy
+
+Sessions can be cached for improved performance:
+
+### Memory Cache (Single Server)
+```go
+// Fast but not distributed
+sessions cached in-process
+```
+
+### Redis Cache (Distributed)
+```go
+// Shared across servers
+key: "session:{token}"
+value: serialized Session
+TTL: same as session expiration
+```
+
+## Cleanup Job
+
+Recommended cron schedule:
+```bash
+# Run cleanup every hour
+0 * * * * /app/authsome-cli session cleanup
+
+# Or in code:
+ticker := time.NewTicker(1 * time.Hour)
+go func() {
+    for range ticker.C {
+        deleted, _ := sessionSvc.Cleanup(ctx)
+        log.Printf("Cleaned up %d expired sessions", deleted)
+    }
+}()
+```
+
+## Migration Notes
+
+- Schema defined in `schema/session.go`
+- Indexes on: token (unique), user_id, expires_at
+- Foreign keys to users, apps, organizations, devices
+- Soft deletion not used (sessions are hard-deleted on revocation)
+

@@ -1,0 +1,299 @@
+# GoReleaser configuration for AuthSome CLI
+# Build system for cross-platform releases
+version: 2
+
+project_name: authsome-cli
+
+# Pre-build hooks
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+    - go generate ./...
+
+builds:
+  - id: authsome-cli
+    main: ./cmd/authsome-cli
+    binary: authsome
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # Ignore 32-bit architectures for modern CLI
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.buildTime={{.Date}}
+      - -X main.builtBy=goreleaser
+    flags:
+      - -trimpath
+
+archives:
+  - id: authsome-cli-archives
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- .Version }}-
+      {{- .Os }}-
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+    # format auto-detected from extension (.tar.gz for unix, .zip for windows)
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - merge conflict
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: 'Security Updates'
+      regexp: '^.*?sec(\(.+\))??!?:.+$'
+      order: 1
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 2
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 3
+    - title: 'Refactoring'
+      regexp: '^.*?refactor(\(.+\))??!?:.+$'
+      order: 4
+    - title: 'Documentation Updates'
+      regexp: '^.*?docs(\(.+\))??!?:.+$'
+      order: 5
+    - title: 'Build System'
+      regexp: '^.*?build(\(.+\))??!?:.+$'
+      order: 6
+    - title: 'Other Changes'
+      order: 999
+
+release:
+  github:
+    owner: xraph
+    name: authsome
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## AuthSome {{ .Tag }} ({{ .Date }})
+    
+    Welcome to this new release of AuthSome - Enterprise-grade authentication framework for Go!
+
+  footer: |
+    ## Installation
+    
+    ### Using Go Install (CLI)
+    ```bash
+    go install github.com/xraph/authsome/cmd/authsome-cli@{{ .Tag }}
+    ```
+    
+    ### Download Binary (CLI)
+    Download the appropriate binary for your platform from the assets below.
+    
+    ### Using as a Library
+    ```bash
+    go get github.com/xraph/authsome@{{ .Tag }}
+    ```
+    
+    ### Using Package Managers
+    ```bash
+    # Homebrew (macOS/Linux)
+    brew install xraph/tap/authsome
+    
+    # Scoop (Windows)
+    scoop bucket add xraph https://github.com/xraph/scoop-bucket
+    scoop install authsome
+    ```
+    
+    ## What's Changed
+    Full changelog: https://github.com/xraph/authsome/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+# Homebrew tap - DEPRECATED but still functional
+# Awaiting clear migration path to homebrew_casks with compatible field structure
+brews:
+  - repository:
+      owner: xraph
+      name: homebrew-tap
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    directory: Formula
+    homepage: https://github.com/xraph/authsome
+    description: "Enterprise-grade authentication framework for Go with multi-tenancy support"
+    license: MIT
+    dependencies:
+      - name: go
+        type: optional
+    install: |
+      bin.install "authsome"
+    test: |
+      system "#{bin}/authsome", "version"
+
+# Scoop manifest
+scoops:
+  - repository:
+      owner: xraph
+      name: scoop-bucket
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    homepage: https://github.com/xraph/authsome
+    description: "Enterprise-grade authentication framework for Go with multi-tenancy support"
+    license: MIT
+
+# # Snapcraft packages
+# snapcrafts:
+#   - id: forge-snap
+#     publish: true
+#     summary: Comprehensive backend framework for Go
+#     description: |
+#       Forge is a comprehensive, opinionated backend framework for Go that 
+#       provides enterprise-grade features for building scalable, distributed applications.
+#     grade: stable
+#     confinement: strict
+#     license: MIT
+#     base: core22
+#     apps:
+#       forge:
+#         command: forge
+#         plugs: ["home", "network"]
+
+# AUR packages for Arch Linux
+# NOTE: Disabled - Requires AUR_KEY secret for SSH authentication
+# To enable: Set up AUR account, add AUR_KEY secret to GitHub Actions, update maintainer email
+# aurs:
+#   - name: forge-bin
+#     ids:
+#       - forge-archives
+#     homepage: https://github.com/xraph/forge
+#     description: "Comprehensive backend framework for Go with enterprise-grade features"
+#     maintainers:
+#       - 'Your Name <your.email@example.com>'
+#     license: MIT
+#     private_key: '{{ .Env.AUR_KEY }}'
+#     git_url: 'ssh://aur@aur.archlinux.org/forge-bin.git'
+#     package: |-
+#       # bin
+#       install -Dm755 "./forge" "${pkgdir}/usr/bin/forge"
+#       # license
+#       install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/forge/LICENSE"
+#     commit_author:
+#       name: goreleaserbot
+#       email: bot@goreleaser.com
+
+# NFPM packages for Debian/RPM
+nfpms:
+  - file_name_template: '{{ .ConventionalFileName }}'
+    id: authsome-cli-packages
+    homepage: https://github.com/xraph/authsome
+    description: |-
+      AuthSome is an enterprise-grade authentication framework for Go
+      with multi-tenancy support, RBAC, and comprehensive plugin system
+      for various authentication methods.
+    maintainer: Xraph <hello@xraph.com>
+    license: MIT
+    vendor: Xraph
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/authsome-cli/copyright
+        file_info:
+          mode: 0644
+      - src: ./README.md
+        dst: /usr/share/doc/authsome-cli/README.md
+        file_info:
+          mode: 0644
+    formats:
+      - apk
+      - deb
+      - rpm
+      - termux.deb
+      - archlinux
+    dependencies:
+      - git
+    recommends:
+      - golang
+    deb:
+      lintian_overrides:
+        - statically-linked-binary
+        - changelog-file-missing-in-native-package
+
+# Docker images - OPTIONAL: Commented out for CLI tool
+# Uncomment and configure if you want containerized authsome-cli distribution
+# Note: dockers API is deprecated in favor of dockers_v2, but v2 syntax is still evolving
+# dockers:
+#   - id: authsome-amd64
+#     image_templates:
+#       - "ghcr.io/xraph/authsome:{{ .Version }}-amd64"
+#       - "ghcr.io/xraph/authsome:latest-amd64"
+#     dockerfile: Dockerfile
+#     use: buildx
+#     build_flag_templates:
+#       - "--pull"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.name={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"
+#       - "--label=org.opencontainers.image.source={{.GitURL}}"
+#       - "--platform=linux/amd64"
+#   - id: authsome-arm64
+#     image_templates:
+#       - "ghcr.io/xraph/authsome:{{ .Version }}-arm64"
+#       - "ghcr.io/xraph/authsome:latest-arm64"
+#     dockerfile: Dockerfile
+#     use: buildx
+#     build_flag_templates:
+#       - "--pull"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.name={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"
+#       - "--label=org.opencontainers.image.source={{.GitURL}}"
+#       - "--platform=linux/arm64"
+#     goarch: arm64
+
+# Docker manifests - OPTIONAL: Commented out for CLI tool
+# docker_manifests:
+#   - name_template: "ghcr.io/xraph/authsome:{{ .Version }}"
+#     image_templates:
+#       - "ghcr.io/xraph/authsome:{{ .Version }}-amd64"
+#       - "ghcr.io/xraph/authsome:{{ .Version }}-arm64"
+#   - name_template: "ghcr.io/xraph/authsome:latest"
+#     image_templates:
+#       - "ghcr.io/xraph/authsome:latest-amd64"
+#       - "ghcr.io/xraph/authsome:latest-arm64"
+
+# Git settings
+git:
+  tag_sort: -version:refname
+
+# Metadata
+metadata:
+  mod_timestamp: '{{ .CommitTimestamp }}'

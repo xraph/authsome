@@ -272,6 +272,7 @@ summary/*
 summary/**/*
 
 
+!/**/QUICK_REFERENCE.md
 !docs/**/*.md
 !README.md
 **/*.md

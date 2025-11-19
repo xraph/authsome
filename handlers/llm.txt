@@ -1,0 +1,229 @@
+# HTTP Handlers
+
+## Package Purpose
+
+The `handlers` package provides thin HTTP handlers that call core services and return HTTP responses. Handlers are HTTP-aware but contain minimal business logic.
+
+## Handler Files
+
+- **auth.go**: Authentication endpoints (signup, signin, signout, password reset)
+- **auth_test.go**: Authentication handler tests
+- **app.go**: Application management endpoints
+- **audit.go**: Audit log query endpoints
+- **webhook.go**: Webhook management endpoints
+- **types.go**: Request/response DTOs
+
+## Handler Pattern
+
+```go
+type Handler struct {
+    service *Service
+}
+
+func NewHandler(svc *Service) *Handler {
+    return &Handler{service: svc}
+}
+
+func (h *Handler) HandleRequest(c *forge.Context) error {
+    // 1. Parse and validate request
+    var req RequestDTO
+    if err := c.BindJSON(&req); err != nil {
+        return c.JSON(400, ErrorResponse{Message: "invalid request"})
+    }
+    
+    // 2. Call service
+    result, err := h.service.Operation(c.Context(), &req)
+    if err != nil {
+        // 3. Convert error to HTTP response
+        return handleError(c, err)
+    }
+    
+    // 4. Return success response
+    return c.JSON(200, result)
+}
+```
+
+## Request/Response Flow
+
+```
+HTTP Request
+    ↓
+Handler (parse, validate)
+    ↓
+Service (business logic)
+    ↓
+Repository (database)
+    ↓
+Service (process result)
+    ↓
+Handler (format response)
+    ↓
+HTTP Response
+```
+
+## Error Handling
+
+Handlers convert service errors to HTTP responses:
+```go
+func handleError(c *forge.Context, err error) error {
+    var authErr *errs.AuthsomeError
+    if errors.As(err, &authErr) {
+        return authErr.ToHTTPError()
+    }
+    
+    // Fallback for unknown errors
+    return c.JSON(500, ErrorResponse{
+        Message: "Internal server error",
+    })
+}
+```
+
+## Common Endpoints
+
+### Authentication (auth.go)
+- `POST /auth/signup` - User registration
+- `POST /auth/signin` - User login
+- `POST /auth/signout` - User logout
+- `POST /auth/refresh` - Refresh session
+- `POST /auth/forgot-password` - Request password reset
+- `POST /auth/reset-password` - Reset password with token
+- `POST /auth/verify-email` - Verify email address
+- `GET /auth/me` - Get current user
+- `PUT /auth/me` - Update user profile
+
+### Application (app.go)
+- `GET /apps` - List applications
+- `POST /apps` - Create application
+- `GET /apps/{id}` - Get application
+- `PUT /apps/{id}` - Update application
+- `DELETE /apps/{id}` - Delete application
+- `GET /apps/{id}/members` - List members
+- `POST /apps/{id}/members` - Add member
+
+### Audit (audit.go)
+- `GET /audit/events` - List audit events
+- `GET /audit/events/{id}` - Get event details
+
+### Webhooks (webhook.go)
+- `GET /webhooks` - List webhooks
+- `POST /webhooks` - Create webhook
+- `PUT /webhooks/{id}` - Update webhook
+- `DELETE /webhooks/{id}` - Delete webhook
+- `POST /webhooks/{id}/test` - Test webhook
+
+## Request DTOs
+
+```go
+type SignUpRequest struct {
+    Email    string `json:"email" validate:"required,email"`
+    Password string `json:"password" validate:"required,min=8"`
+    Name     string `json:"name"`
+}
+
+type SignInRequest struct {
+    Email    string `json:"email" validate:"required,email"`
+    Password string `json:"password" validate:"required"`
+    Remember bool   `json:"remember"`
+}
+```
+
+## Response DTOs
+
+```go
+type AuthResponse struct {
+    User    *user.User       `json:"user"`
+    Session *session.Session `json:"session,omitempty"`
+    Token   string           `json:"token,omitempty"`
+}
+
+type ErrorResponse struct {
+    Message string            `json:"message"`
+    Code    string            `json:"code,omitempty"`
+    Details map[string]string `json:"details,omitempty"`
+}
+```
+
+## Middleware Usage
+
+Handlers can use middleware for:
+- Authentication
+- Authorization
+- Rate limiting
+- CORS
+- Request logging
+
+```go
+// In routes registration
+router.POST("/protected", 
+    authMiddleware,
+    rbacMiddleware("resource:action"),
+    handler.ProtectedEndpoint,
+)
+```
+
+## Context Helpers
+
+Extracting data from context:
+```go
+func (h *Handler) ProtectedEndpoint(c *forge.Context) error {
+    userID := contexts.GetUserID(c.Context())
+    orgID := contexts.GetOrganizationID(c.Context())
+    session := contexts.GetSession(c.Context())
+    
+    // Use context data...
+}
+```
+
+## Testing
+
+```go
+func TestHandler_SignUp(t *testing.T) {
+    mockService := newMockAuthService()
+    handler := NewHandler(mockService)
+    
+    req := httptest.NewRequest("POST", "/auth/signup", strings.NewReader(`{
+        "email": "test@example.com",
+        "password": "password123"
+    }`))
+    rec := httptest.NewRecorder()
+    
+    c := newTestContext(req, rec)
+    err := handler.SignUp(c)
+    
+    assert.NoError(t, err)
+    assert.Equal(t, 201, rec.Code)
+}
+```
+
+## Best Practices
+
+1. **Thin handlers**: Minimal logic, delegate to services
+2. **Validate input**: Check required fields and formats
+3. **Use DTOs**: Separate request/response types from domain models
+4. **Consistent errors**: Use errs package for all errors
+5. **Document endpoints**: OpenAPI/Swagger docs
+6. **Test thoroughly**: Unit tests for all endpoints
+7. **Context propagation**: Pass context to services
+8. **HTTP status codes**: Use appropriate codes (200, 201, 400, 401, 403, 404, 500)
+
+## HTTP Status Codes
+
+- `200 OK`: Success
+- `201 Created`: Resource created
+- `204 No Content`: Success with no body
+- `400 Bad Request`: Invalid input
+- `401 Unauthorized`: Authentication required
+- `403 Forbidden`: Permission denied
+- `404 Not Found`: Resource doesn't exist
+- `409 Conflict`: Resource conflict (e.g., email exists)
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Unexpected error
+
+## Security
+
+- Input validation on all requests
+- CSRF protection (handled by middleware)
+- Rate limiting on authentication endpoints
+- No sensitive data in logs
+- Sanitize error messages (don't expose internals)
+

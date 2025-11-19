@@ -1,0 +1,63 @@
+# Webhook Service
+
+## Package Purpose
+
+Provides webhook delivery system with automatic retries, signature verification, and event filtering. Enables external systems to receive real-time notifications of AuthSome events.
+
+## Key Types
+
+```go
+type Webhook struct {
+    ID          xid.ID
+    AppID       xid.ID
+    URL         string
+    Events      []string       // e.g., ["user.created", "user.login"]
+    Secret      string         // For HMAC signature
+    Active      bool
+    RetryCount  int
+    MaxRetries  int
+    Timeout     time.Duration
+}
+```
+
+## Public API
+
+```go
+// Register webhook
+webhook, err := webhookSvc.Create(ctx, &CreateWebhookRequest{
+    URL:    "https://api.example.com/webhooks",
+    Events: []string{"user.created", "user.updated"},
+})
+
+// Trigger event
+err := webhookSvc.TriggerEvent(ctx, "user.created", userData)
+
+// List webhooks
+webhooks, err := webhookSvc.List(ctx, appID)
+```
+
+## Event Types
+
+- Authentication: `user.login`, `user.logout`, `user.signup`
+- Users: `user.created`, `user.updated`, `user.deleted`
+- Organizations: `org.created`, `org.member.added`
+- Sessions: `session.created`, `session.revoked`
+- API Keys: `apikey.created`, `apikey.revoked`
+
+## Signature Verification
+
+Webhooks include HMAC-SHA256 signature in `X-AuthSome-Signature` header:
+```
+X-AuthSome-Signature: sha256=<hex-encoded-hmac>
+```
+
+## Dependencies
+
+- **internal/crypto**: HMAC signature generation
+- **repository**: Webhook persistence
+- **HTTP client**: Delivery with retries
+
+## Used By
+
+All core services trigger webhooks for significant events.
+

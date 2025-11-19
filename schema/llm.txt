@@ -1,0 +1,236 @@
+# Database Schema
+
+## Package Purpose
+
+The `schema` package defines all database table structures using Bun ORM models. These are the canonical source of truth for the database schema.
+
+## Schema Files
+
+### Core Entities
+- **user.go**: User accounts
+- **session.go**: User sessions
+- **device.go**: Device tracking
+
+### Organizations
+- **organization.go**: Organization/tenant data
+- **member.go**: Organization members
+- **team.go**: Teams within organizations
+- **invitation.go**: Organization invitations
+
+### Applications
+- **app.go**: Application definitions
+- **app_member.go**: App members
+- **app_team.go**: App teams
+- **app_invitation.go**: App invitations
+- **environment.go**: Environment contexts
+
+### Authentication
+- **social_account.go**: Social OAuth links
+- **apikey.go**: API keys
+- **apikey_role.go**: API key RBAC
+- **jwt_key.go**: JWT signing keys
+- **passkey.go**: WebAuthn credentials
+
+### RBAC
+- **role.go**: Role definitions
+- **permission.go**: Permission definitions
+- **role_permission.go**: Role-permission mapping
+- **user_role.go**: User role assignments
+- **policy.go**: RBAC policies
+
+### Security & Audit
+- **audit_event.go**: Audit logs
+- **security_event.go**: Security events
+- **user_ban.go**: Banned users
+- **impersonation_session.go**: Impersonation records
+
+### MFA
+- **mfa_settings.go**: MFA configuration
+- **mfa_credential.go**: MFA credentials (TOTP, WebAuthn)
+- **mfa_backup_code.go**: Backup codes
+
+### Passwordless
+- **magic_link_token.go**: Magic link tokens
+- **email_otp.go**: Email OTP codes
+- **phone_verification.go**: Phone verification
+
+### SSO & OAuth
+- **sso_provider.go**: SSO provider config
+- **oauth_client.go**: OAuth clients
+- **oauth_token.go**: OAuth tokens
+- **authorization_code.go**: OAuth codes
+
+### Notifications & Webhooks
+- **notification.go**: Notification logs
+- **notification_template.go**: Email/SMS templates
+- **webhook.go**: Webhook configurations
+- **webhook_delivery.go**: Delivery logs
+
+### Forms & Misc
+- **form_schema.go**: Dynamic forms
+- **identity_verification.go**: ID verification
+
+## Model Structure Pattern
+
+```go
+type Entity struct {
+    bun.BaseModel `bun:"table:entities,alias:e"`
+    
+    // Primary key
+    ID xid.ID `bun:"id,pk,type:varchar(20)"`
+    
+    // Foreign keys
+    AppID          xid.ID  `bun:"app_id,notnull"`
+    EnvironmentID  xid.ID  `bun:"environment_id,notnull"`
+    OrganizationID xid.ID  `bun:"organization_id,notnull"`
+    UserID         *xid.ID `bun:"user_id,type:varchar(20)"`
+    
+    // Fields
+    Name        string         `bun:"name,notnull"`
+    Description string         `bun:"description"`
+    Active      bool           `bun:"active,default:true"`
+    Metadata    map[string]any `bun:"metadata,type:jsonb"`
+    
+    // Timestamps
+    CreatedAt time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+    UpdatedAt time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
+    DeletedAt *time.Time `bun:"deleted_at,soft_delete"`
+    
+    // Relations
+    User         *User         `bun:"rel:belongs-to,join:user_id=id"`
+    Organization *Organization `bun:"rel:belongs-to,join:organization_id=id"`
+}
+```
+
+## Common Field Types
+
+### IDs
+```go
+ID xid.ID `bun:"id,pk,type:varchar(20)"`
+```
+
+### Foreign Keys
+```go
+UserID xid.ID  `bun:"user_id,notnull,type:varchar(20)"`
+UserID *xid.ID `bun:"user_id,type:varchar(20)"` // Optional
+```
+
+### Timestamps
+```go
+CreatedAt time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+UpdatedAt time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
+DeletedAt *time.Time `bun:"deleted_at,soft_delete"`
+```
+
+### JSON Fields
+```go
+Metadata map[string]any `bun:"metadata,type:jsonb"` // PostgreSQL
+Metadata map[string]any `bun:"metadata,type:json"`  // MySQL/SQLite
+```
+
+### Enums
+```go
+Status string `bun:"status,type:varchar(20),default:'pending'"`
+// Validate in service layer
+```
+
+## Relations
+
+### Belongs To
+```go
+type Member struct {
+    UserID xid.ID `bun:"user_id,notnull"`
+    User   *User  `bun:"rel:belongs-to,join:user_id=id"`
+}
+```
+
+### Has Many
+```go
+type Organization struct {
+    ID      xid.ID     `bun:"id,pk"`
+    Members []*Member  `bun:"rel:has-many,join:id=organization_id"`
+}
+```
+
+### Many To Many
+```go
+type Role struct {
+    ID          xid.ID        `bun:"id,pk"`
+    Permissions []*Permission `bun:"m2m:role_permissions,join:Role=Permission"`
+}
+```
+
+## Indexes
+
+Defined in migrations:
+```go
+// Composite indexes
+CREATE INDEX idx_users_app_email ON users(app_id, email);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_members_org_user ON members(organization_id, user_id);
+
+// Unique constraints
+CREATE UNIQUE INDEX idx_users_email_unique ON users(email) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_apikeys_prefix_unique ON api_keys(key_prefix);
+```
+
+## Multi-Tenancy
+
+All tenant-scoped entities include:
+```go
+AppID          xid.ID `bun:"app_id,notnull"`
+EnvironmentID  xid.ID `bun:"environment_id,notnull"`
+OrganizationID xid.ID `bun:"organization_id,notnull"`
+```
+
+Queries automatically filter by tenant context.
+
+## Soft Deletes
+
+Enable with `DeletedAt` field:
+```go
+DeletedAt *time.Time `bun:"deleted_at,soft_delete"`
+```
+
+Bun automatically excludes soft-deleted records from queries.
+
+## Migrations
+
+Schema changes managed through `migrations/` package:
+```go
+func init() {
+    Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
+        _, err := db.NewCreateTable().
+            Model((*schema.Entity)(nil)).
+            IfNotExists().
+            Exec(ctx)
+        return err
+    }, func(ctx context.Context, db *bun.DB) error {
+        _, err := db.NewDropTable().
+            Model((*schema.Entity)(nil)).
+            IfExists().
+            Exec(ctx)
+        return err
+    })
+}
+```
+
+## Database Support
+
+Schemas work across:
+- PostgreSQL (recommended)
+- MySQL
+- SQLite
+
+Type differences handled by Bun dialect.
+
+## Best Practices
+
+1. **Always use xid.ID for IDs**: Consistent across all tables
+2. **Include timestamps**: CreatedAt, UpdatedAt on all entities
+3. **Use soft deletes**: Preserve data for audit
+4. **Add indexes**: On foreign keys and frequently queried fields
+5. **JSONB for metadata**: Flexible additional data storage
+6. **Normalize where needed**: Balance between normalization and query performance
+7. **Document schema changes**: Clear migration descriptions
+

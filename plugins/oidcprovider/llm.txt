@@ -1,0 +1,51 @@
+# OIDC Provider Plugin
+
+## Purpose
+Act as OpenID Connect identity provider allowing AuthSome to provide authentication for third-party applications.
+
+## Features
+- Authorization endpoint
+- Token endpoint
+- UserInfo endpoint
+- JWKS endpoint
+- Discovery endpoint
+- Client registration
+- Consent management
+- Scope management
+
+## OIDC Flow
+1. Client redirects to authorization endpoint
+2. User authenticates with AuthSome
+3. User consents to requested scopes
+4. Authorization code issued
+5. Client exchanges code for tokens
+6. Client uses access token for UserInfo
+
+## Endpoints
+- `GET /.well-known/openid-configuration` - Discovery
+- `GET /oidc/authorize` - Authorization
+- `POST /oidc/token` - Token exchange
+- `GET /oidc/userinfo` - User information
+- `GET /oidc/jwks` - JSON Web Key Set
+- `POST /oidc/register` - Client registration
+
+## Supported Flows
+- Authorization Code Flow
+- Authorization Code Flow with PKCE
+- Implicit Flow (discouraged)
+- Hybrid Flow
+
+## Scopes
+- `openid` - Required
+- `profile` - User profile
+- `email` - Email address
+- `phone` - Phone number
+- Custom scopes per client
+
+## Dependencies
+- **core/user**: User data
+- **core/jwt**: Token generation
+- **core/organization**: Tenant isolation
+
+See: `README.md`
+
