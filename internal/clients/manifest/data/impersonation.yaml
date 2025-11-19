@@ -12,6 +12,8 @@ routes:
         ticket_number: string
       response:
         error: string!
+      request_type: StartImpersonation_reqBody
+      response_type: ErrorResponse
     - name: EndImpersonation
       description: EndImpersonation handles POST /impersonation/end
       method: POST
@@ -21,49 +23,44 @@ routes:
         reason: string
       response:
         error: string!
+      request_type: EndImpersonation_reqBody
+      response_type: ErrorResponse
     - name: GetImpersonation
       description: GetImpersonation handles GET /impersonation/:id
       method: GET
       path: /:id
       response:
         error: string!
+      response_type: ErrorResponse
     - name: ListImpersonations
       description: ListImpersonations handles GET /impersonation
       method: GET
       path: /
       response:
         error: string!
+      response_type: ErrorResponse
     - name: ListAuditEvents
       description: ListAuditEvents handles GET /impersonation/audit
       method: GET
       path: /audit
       response:
         error: string!
+      response_type: ErrorResponse
     - name: VerifyImpersonation
       description: VerifyImpersonation handles GET /impersonation/verify/:sessionId
       method: POST
       path: /verify
       response:
         error: string!
+      response_type: ErrorResponse
 types:
+    - name: Handler
+      fields:
+        "": Config
     - name: EndImpersonation_reqBody
       fields:
         impersonation_id: string!
         reason: string
-    - name: ImpersonationVerifyResponse
-      fields:
-        impersonator_id: string!
-        is_impersonating: bool!
-        target_user_id: string!
-    - name: Handler
-      fields:
-        "": Config
-    - name: ErrorResponse
-      fields:
-        error: string!
-    - name: mockForgeContext
-      fields:
-        "": '*http.Request'
     - name: ImpersonationContext
       fields:
         impersonation_id: '*xid.ID!'
@@ -71,17 +68,49 @@ types:
         indicator_message: string!
         is_impersonating: bool!
         target_user_id: '*xid.ID!'
-    - name: Plugin
+    - name: ImpersonationStartResponse
+      fields:
+        impersonator_id: string!
+        session_id: string!
+        started_at: string!
+        target_user_id: string!
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: StartImpersonation_reqBody
+      fields:
+        duration_minutes: int
+        reason: string!
+        target_user_id: string!
+        ticket_number: string
+    - name: mockForgeContext
+      fields:
+        "": '*http.Request'
+    - name: mockImpersonationRepository
       fields:
         "": ""
-    - name: ImpersonationSession
-      fields: {}
-    - name: mockImpersonationRepository
+    - name: mockUserService
       fields:
         "": ""
     - name: mockSessionService
       fields:
         "": ""
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: ImpersonationMiddleware
+      fields:
+        "": Config
+    - name: Plugin
+      fields:
+        "": '*Handler'
+    - name: ImpersonationErrorResponse
+      fields:
+        error: string!
+    - name: ImpersonationEndResponse
+      fields:
+        ended_at: string!
+        status: string!
     - name: Config
       fields:
         audit_all_actions: bool!
@@ -100,37 +129,16 @@ types:
         webhook_on_end: bool!
         webhook_on_start: bool!
         webhook_urls: '[]string!'
-    - name: StatusResponse
-      fields:
-        status: string!
-    - name: ImpersonationMiddleware
-      fields:
-        "": Config
-    - name: ImpersonationStartResponse
-      fields:
-        impersonator_id: string!
-        session_id: string!
-        started_at: string!
-        target_user_id: string!
-    - name: mockUserService
-      fields:
-        "": ""
     - name: MessageResponse
       fields:
         message: string!
-    - name: ImpersonationErrorResponse
-      fields:
-        error: string!
-    - name: ImpersonationEndResponse
-      fields:
-        ended_at: string!
-        status: string!
     - name: SuccessResponse
       fields:
         success: bool!
-    - name: StartImpersonation_reqBody
+    - name: ImpersonationSession
+      fields: {}
+    - name: ImpersonationVerifyResponse
       fields:
-        duration_minutes: int
-        reason: string!
+        impersonator_id: string!
+        is_impersonating: bool!
         target_user_id: string!
-        ticket_number: string

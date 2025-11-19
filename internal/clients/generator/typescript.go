@@ -299,22 +299,48 @@ func (g *TypeScriptGenerator) generateClient() error {
 		}
 	}
 
+	sb.WriteString("/**\n")
+	sb.WriteString(" * AuthSome client configuration\n")
+	sb.WriteString(" * Supports multiple authentication methods that can be used simultaneously:\n")
+	sb.WriteString(" * - Cookies: Automatically sent with every request (session-based auth)\n")
+	sb.WriteString(" * - Bearer Token: JWT tokens sent in Authorization header when auth: true\n")
+	sb.WriteString(" * - API Key: Sent with every request for server-to-server auth\n")
+	sb.WriteString(" *   - Publishable Key (pk_*): Safe for frontend, limited permissions\n")
+	sb.WriteString(" *   - Secret Key (sk_*): Backend only, full admin access\n")
+	sb.WriteString(" */\n")
 	sb.WriteString("export interface AuthsomeClientConfig {\n")
+	sb.WriteString("  /** Base URL of the AuthSome API */\n")
 	sb.WriteString("  baseURL: string;\n")
+	sb.WriteString("  \n")
+	sb.WriteString("  /** Plugin instances to initialize */\n")
 	sb.WriteString("  plugins?: ClientPlugin[];\n")
+	sb.WriteString("  \n")
+	sb.WriteString("  /** JWT/Bearer token for user authentication (sent only when auth: true) */\n")
 	sb.WriteString("  token?: string;\n")
+	sb.WriteString("  \n")
+	sb.WriteString("  /** API key for server-to-server auth (pk_* or sk_*, sent with all requests) */\n")
+	sb.WriteString("  apiKey?: string;\n")
+	sb.WriteString("  \n")
+	sb.WriteString("  /** Custom header name for API key (default: 'X-API-Key') */\n")
+	sb.WriteString("  apiKeyHeader?: string;\n")
+	sb.WriteString("  \n")
+	sb.WriteString("  /** Custom headers to include with all requests */\n")
 	sb.WriteString("  headers?: Record<string, string>;\n")
 	sb.WriteString("}\n\n")
 
 	sb.WriteString("export class AuthsomeClient {\n")
 	sb.WriteString("  private baseURL: string;\n")
 	sb.WriteString("  private token?: string;\n")
+	sb.WriteString("  private apiKey?: string;\n")
+	sb.WriteString("  private apiKeyHeader: string;\n")
 	sb.WriteString("  private headers: Record<string, string>;\n")
 	sb.WriteString("  private plugins: Map<string, ClientPlugin>;\n\n")
 
 	sb.WriteString("  constructor(config: AuthsomeClientConfig) {\n")
 	sb.WriteString("    this.baseURL = config.baseURL;\n")
 	sb.WriteString("    this.token = config.token;\n")
+	sb.WriteString("    this.apiKey = config.apiKey;\n")
+	sb.WriteString("    this.apiKeyHeader = config.apiKeyHeader || 'X-API-Key';\n")
 	sb.WriteString("    this.headers = config.headers || {};\n")
 	sb.WriteString("    this.plugins = new Map();\n\n")
 	sb.WriteString("    if (config.plugins) {\n")
@@ -327,6 +353,39 @@ func (g *TypeScriptGenerator) generateClient() error {
 
 	sb.WriteString("  setToken(token: string): void {\n")
 	sb.WriteString("    this.token = token;\n")
+	sb.WriteString("  }\n\n")
+
+	sb.WriteString("  setApiKey(apiKey: string, header?: string): void {\n")
+	sb.WriteString("    this.apiKey = apiKey;\n")
+	sb.WriteString("    if (header) {\n")
+	sb.WriteString("      this.apiKeyHeader = header;\n")
+	sb.WriteString("    }\n")
+	sb.WriteString("  }\n\n")
+
+	// Add publishable key helper
+	sb.WriteString("  /**\n")
+	sb.WriteString("   * Set a publishable key (pk_*) - safe for frontend use\n")
+	sb.WriteString("   * Publishable keys have limited permissions and can be exposed in client-side code\n")
+	sb.WriteString("   * Typically used for: session creation, user verification, public data reads\n")
+	sb.WriteString("   */\n")
+	sb.WriteString("  setPublishableKey(publishableKey: string): void {\n")
+	sb.WriteString("    if (!publishableKey.startsWith('pk_')) {\n")
+	sb.WriteString("      console.warn('Warning: Publishable keys should start with pk_');\n")
+	sb.WriteString("    }\n")
+	sb.WriteString("    this.setApiKey(publishableKey);\n")
+	sb.WriteString("  }\n\n")
+
+	// Add secret key helper
+	sb.WriteString("  /**\n")
+	sb.WriteString("   * Set a secret key (sk_*) - MUST be kept secret on server-side only!\n")
+	sb.WriteString("   * Secret keys have full administrative access to all operations\n")
+	sb.WriteString("   * WARNING: Never expose secret keys in client-side code (browser, mobile apps)\n")
+	sb.WriteString("   */\n")
+	sb.WriteString("  setSecretKey(secretKey: string): void {\n")
+	sb.WriteString("    if (!secretKey.startsWith('sk_')) {\n")
+	sb.WriteString("      console.warn('Warning: Secret keys should start with sk_');\n")
+	sb.WriteString("    }\n")
+	sb.WriteString("    this.setApiKey(secretKey);\n")
 	sb.WriteString("  }\n\n")
 
 	sb.WriteString("  getPlugin<T extends ClientPlugin>(id: string): T | undefined {\n")
@@ -355,6 +414,9 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("    };\n\n")
 	sb.WriteString("    if (options?.auth && this.token) {\n")
 	sb.WriteString("      headers['Authorization'] = `Bearer ${this.token}`;\n")
+	sb.WriteString("    }\n\n")
+	sb.WriteString("    if (this.apiKey) {\n")
+	sb.WriteString("      headers[this.apiKeyHeader] = this.apiKey;\n")
 	sb.WriteString("    }\n\n")
 	sb.WriteString("    const response = await fetch(url.toString(), {\n")
 	sb.WriteString("      method,\n")
@@ -565,7 +627,12 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 
 	params := []string{}
 	if len(route.Request) > 0 {
-		params = append(params, fmt.Sprintf("request: { %s }", g.generateTSRequestType(route)))
+		// Use named type if available, otherwise inline type
+		if route.RequestType != "" {
+			params = append(params, fmt.Sprintf("request: types.%s", route.RequestType))
+		} else {
+			params = append(params, fmt.Sprintf("request: { %s }", g.generateTSRequestType(route)))
+		}
 	}
 	if len(route.Params) > 0 {
 		params = append(params, fmt.Sprintf("params: { %s }", g.generateTSParamsType(route)))
@@ -575,7 +642,17 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 	}
 
 	sb.WriteString(strings.Join(params, ", "))
-	sb.WriteString(fmt.Sprintf("): Promise<{ %s }> {\n", g.generateTSResponseType(route)))
+
+	// Use named response type if available, otherwise inline type
+	var responseType string
+	if route.ResponseType != "" {
+		responseType = "types." + route.ResponseType
+	} else if len(route.Response) > 0 {
+		responseType = fmt.Sprintf("{ %s }", g.generateTSResponseType(route))
+	} else {
+		responseType = "void"
+	}
+	sb.WriteString(fmt.Sprintf("): Promise<%s> {\n", responseType))
 
 	// Build path
 	path := route.Path
@@ -588,7 +665,7 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 		sb.WriteString(fmt.Sprintf("    const path = '%s%s';\n", m.BasePath, path))
 	}
 
-	sb.WriteString(fmt.Sprintf("    return this.client.request<{ %s }>('%s', path", g.generateTSResponseType(route), strings.ToUpper(route.Method)))
+	sb.WriteString(fmt.Sprintf("    return this.client.request<%s>('%s', path", responseType, strings.ToUpper(route.Method)))
 
 	if len(route.Request) > 0 || len(route.Query) > 0 || route.Auth {
 		sb.WriteString(", {\n")

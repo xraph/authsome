@@ -1,0 +1,142 @@
+name: Release Go Client
+
+on:
+  push:
+    tags:
+      - 'clients/go/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release Go Client
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if Go client changed
+        id: check_changes
+        run: |
+          # Get the previous tag for this client
+          PREV_TAG=$(git tag -l 'clients/go/v*' --sort=-version:refname | sed -n '2p')
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "First release, proceeding"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            # Check if there are changes in clients/go since last tag
+            CHANGES=$(git diff --name-only $PREV_TAG ${{ github.ref }} -- clients/go/)
+            
+            if [ -z "$CHANGES" ]; then
+              echo "No changes in clients/go, skipping release"
+              echo "changed=false" >> $GITHUB_OUTPUT
+            else
+              echo "Changes detected in clients/go"
+              echo "changed=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Extract version from tag
+        if: steps.check_changes.outputs.changed == 'true'
+        id: extract_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/clients/go/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "full_version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Setup Go
+        if: steps.check_changes.outputs.changed == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Update go.mod version comment
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/go
+        run: |
+          # Add version comment to go.mod if not present
+          if ! grep -q "// version:" go.mod; then
+            echo "// version: ${{ steps.extract_version.outputs.full_version }}" >> go.mod
+          else
+            sed -i "s|// version:.*|// version: ${{ steps.extract_version.outputs.full_version }}|" go.mod
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build Go client
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/go
+        run: go build -v ./...
+
+      - name: Run tests
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/go
+        run: go test -v ./...
+
+      - name: Run go mod tidy
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/go
+        run: go mod tidy
+
+      - name: Create tarball for GitHub release
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/go
+        run: |
+          tar -czf ../go-client-v${{ steps.extract_version.outputs.version }}.tar.gz \
+            *.go plugins/ go.mod go.sum README.md
+
+      - name: Commit version update
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git add clients/go/go.mod clients/go/go.sum
+          git commit -m "chore(clients/go): bump version to ${{ steps.extract_version.outputs.full_version }}" || echo "No changes to commit"
+          git push origin HEAD:main || echo "Failed to push, may need manual intervention"
+
+      - name: Create GitHub Release
+        if: steps.check_changes.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Go Client v${{ steps.extract_version.outputs.version }}
+          body: |
+            ## Go Client v${{ steps.extract_version.outputs.version }}
+            
+            ### Installation
+            ```bash
+            go get github.com/xraph/authsome/clients/go@${{ steps.extract_version.outputs.full_version }}
+            ```
+            
+            ### Usage
+            ```go
+            import "github.com/xraph/authsome/clients/go"
+            ```
+            
+            ### What's Changed
+            This release is automatically available via Go modules.
+            The Go proxy will pick up this tag and make it available for `go get`.
+            
+            ### Assets
+            - Go client source files (tarball)
+            
+            ### Notes
+            Go modules are served directly from GitHub tags. No separate registry needed.
+            The version is: `${{ steps.extract_version.outputs.full_version }}`
+          files: |
+            clients/go-client-v${{ steps.extract_version.outputs.version }}.tar.gz
+          draft: false
+          prerelease: false
+
+      - name: Notify Go Proxy
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          # Request the Go proxy to fetch the new version
+          curl "https://proxy.golang.org/github.com/xraph/authsome/clients/go/@v/${{ steps.extract_version.outputs.full_version }}.info" || true
+          echo "Notified Go proxy about new version"
+

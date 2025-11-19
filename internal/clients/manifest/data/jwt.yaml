@@ -5,6 +5,7 @@ routes:
       description: CreateJWTKey creates a new JWT signing key
       method: POST
       path: /createjwtkey
+      request_type: jwt.CreateJWTKeyRequest
     - name: ListJWTKeys
       description: ListJWTKeys lists JWT signing keys
       method: GET
@@ -17,11 +18,19 @@ routes:
       description: GenerateToken generates a new JWT token
       method: POST
       path: /generate
+      request_type: jwt.GenerateTokenRequest
     - name: VerifyToken
       description: VerifyToken verifies a JWT token
       method: POST
       path: /verify
+      request_type: jwt.VerifyTokenRequest
 types:
+    - name: Handler
+      fields:
+        "": '*jwt.Service'
+    - name: Plugin
+      fields:
+        "": '*Handler'
     - name: Config
       fields:
         accessExpirySeconds: int!
@@ -32,9 +41,3 @@ types:
     - name: ErrorResponse
       fields:
         error: string!
-    - name: Handler
-      fields:
-        "": '*jwt.Service'
-    - name: Plugin
-      fields:
-        "": Config

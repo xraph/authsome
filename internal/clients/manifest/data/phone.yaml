@@ -7,6 +7,7 @@ routes:
       path: /phone/send-code
       request:
         phone: string!
+      request_type: SendCode_body
     - name: Verify
       description: Verify checks the code and creates a session on success
       method: POST
@@ -20,6 +21,8 @@ routes:
         session: '!'
         token: string!
         user: '!'
+      request_type: Verify_body
+      response_type: VerifyResponse
     - name: SignIn
       description: SignIn aliases to Verify for convenience
       method: POST
@@ -33,31 +36,14 @@ routes:
         session: '!'
         token: string!
         user: '!'
+      request_type: SignIn_body
+      response_type: VerifyResponse
 types:
     - name: VerifyResponse
       fields:
         session: '!'
         token: string!
         user: '!'
-    - name: Plugin
-      fields:
-        "": '*Service'
-    - name: Config
-      fields:
-        allowImplicitSignup: bool!
-        codeLength: int!
-        devExposeCode: bool!
-        expiryMinutes: int!
-        maxAttempts: int!
-        rateLimitPerHour: int!
-        smsProvider: string!
-    - name: PhoneSendCodeResponse
-      fields:
-        dev_code: string!
-        status: string!
-    - name: Handler
-      fields:
-        "": '*rl.Service'
     - name: SendCode_body
       fields:
         phone: string!
@@ -73,14 +59,33 @@ types:
         email: string!
         phone: string!
         remember: bool!
-    - name: PhoneErrorResponse
+    - name: Plugin
       fields:
-        error: string!
+        "": Config
+    - name: PhoneSendCodeResponse
+      fields:
+        dev_code: string!
+        status: string!
     - name: PhoneVerifyResponse
       fields:
         session: '!'
         token: string!
         user: '!'
+    - name: Handler
+      fields:
+        "": '*rl.Service'
+    - name: Config
+      fields:
+        allowImplicitSignup: bool!
+        codeLength: int!
+        devExposeCode: bool!
+        expiryMinutes: int!
+        maxAttempts: int!
+        rateLimitPerHour: int!
+        smsProvider: string!
+    - name: PhoneErrorResponse
+      fields:
+        error: string!
     - name: Service
       fields:
-        "": Config
+        "": '*auth.Service'

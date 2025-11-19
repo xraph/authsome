@@ -5,6 +5,7 @@ routes:
       description: CreateApp handles app creation requests
       method: POST
       path: /createapp
+      request_type: coreapp.CreateAppRequest
     - name: GetApp
       description: GetApp handles get app requests
       method: GET
@@ -13,6 +14,7 @@ routes:
       description: UpdateApp handles app update requests
       method: PUT
       path: /:appId
+      request_type: coreapp.UpdateAppRequest
     - name: DeleteApp
       description: DeleteApp handles app deletion requests
       method: DELETE
@@ -33,10 +35,12 @@ routes:
       description: InviteMember handles inviting a member to an organization
       method: POST
       path: /invite
+      request_type: app.InviteMemberRequest
     - name: UpdateMember
       description: UpdateMember handles updating a member in an organization
       method: PUT
       path: /:memberId
+      request_type: app.UpdateMemberRequest
     - name: GetInvitation
       description: GetInvitation handles getting an invitation by token
       method: GET
@@ -53,6 +57,7 @@ routes:
       description: CreateTeam handles team creation requests
       method: POST
       path: /createteam
+      request_type: app.CreateTeamRequest
     - name: GetTeam
       description: GetTeam handles team retrieval requests
       method: GET
@@ -61,6 +66,7 @@ routes:
       description: UpdateTeam handles team update requests
       method: PUT
       path: /:teamId
+      request_type: app.UpdateTeamRequest
     - name: DeleteTeam
       description: DeleteTeam handles team deletion requests
       method: DELETE
@@ -76,18 +82,12 @@ routes:
       request:
         member_id: xid.ID!
         role: string!
+      request_type: AddTeamMember_req
     - name: RemoveTeamMember
       description: RemoveTeamMember handles removing a member from a team
       method: DELETE
       path: /:teamId/members/:memberId
 types:
-    - name: MemberHandler
-      fields:
-        "": '*coreapp.ServiceImpl'
-    - name: AddMember_req
-      fields:
-        role: string!
-        user_id: string!
     - name: TeamHandler
       fields:
         "": '*app.ServiceImpl'
@@ -107,3 +107,10 @@ types:
     - name: AppHandler
       fields:
         "": '*coreapp.ServiceImpl'
+    - name: MemberHandler
+      fields:
+        "": '*coreapp.ServiceImpl'
+    - name: AddMember_req
+      fields:
+        role: string!
+        user_id: string!

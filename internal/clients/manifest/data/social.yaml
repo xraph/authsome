@@ -13,6 +13,8 @@ routes:
         scopes: '[]string!'
       response:
         url: string!
+      request_type: SignInRequest
+      response_type: AuthURLResponse
     - name: Callback
       description: |-
         Callback handles OAuth provider callback
@@ -23,6 +25,7 @@ routes:
         action: string!
         isNewUser: bool!
         user: '!'
+      response_type: CallbackDataResponse
     - name: LinkAccount
       description: |-
         LinkAccount links a social provider to the current user
@@ -34,6 +37,8 @@ routes:
         scopes: '[]string!'
       response:
         url: string!
+      request_type: LinkAccountRequest
+      response_type: AuthURLResponse
     - name: UnlinkAccount
       description: |-
         UnlinkAccount unlinks a social provider from the current user
@@ -42,6 +47,7 @@ routes:
       path: /account/unlink/:provider
       response:
         message: string!
+      response_type: MessageResponse
     - name: ListProviders
       description: |-
         ListProviders returns available OAuth providers
@@ -50,6 +56,7 @@ routes:
       path: /providers
       response:
         providers: '!'
+      response_type: ProvidersResponse
 types:
     - name: ProvidersConfig
       fields:
@@ -70,56 +77,34 @@ types:
         spotify: '*providers.ProviderConfig!'
         twitch: '*providers.ProviderConfig!'
         twitter: '*providers.ProviderConfig!'
-    - name: SocialStatusResponse
-      fields:
-        status: string!
-    - name: SocialCallbackResponse
-      fields:
-        token: string!
-        user: '!'
-    - name: SocialProvidersResponse
-      fields:
-        providers: '[]string!'
-    - name: Service
-      fields:
-        "": Config
-    - name: OAuthState
-      fields:
-        "": string
-    - name: Config
-      fields:
-        allowAccountLinking: bool!
-        autoCreateUser: bool!
-        baseUrl: string!
-        providers: ProvidersConfig!
-        requireEmailVerified: bool!
-        trustEmailVerified: bool!
     - name: Handler
       fields:
         "": '*Service'
-    - name: ConnectionsResponse
+    - name: MessageResponse
       fields:
-        connections: '!'
+        message: string!
     - name: CallbackDataResponse
       fields:
         action: string!
         isNewUser: bool!
         user: '!'
+    - name: ProviderConfigResponse
+      fields:
+        appId: string!
+        message: string!
+        provider: string!
     - name: AdminUpdateProviderRequest
       fields:
         clientId: '*string!'
         clientSecret: '*string!'
         enabled: '*bool!'
         scopes: '[]string!'
-    - name: Plugin
+    - name: SocialErrorResponse
       fields:
-        "": core.Authsome
-    - name: SocialSignInResponse
+        error: string!
+    - name: OAuthState
       fields:
-        redirect_url: string!
-    - name: SocialLinkResponse
-      fields:
-        linked: bool!
+        "": time.Time
     - name: AuthURLResponse
       fields:
         url: string!
@@ -128,21 +113,9 @@ types:
         session: '!'
         token: string!
         user: '!'
-    - name: MessageResponse
-      fields:
-        message: string!
     - name: ConnectionResponse
       fields:
         connection: '!'
-    - name: ProvidersAppResponse
-      fields:
-        appId: string!
-        providers: '!'
-    - name: ProviderConfigResponse
-      fields:
-        appId: string!
-        message: string!
-        provider: string!
     - name: SignInRequest
       fields:
         provider: string!
@@ -152,12 +125,28 @@ types:
       fields:
         provider: string!
         scopes: '[]string!'
-    - name: ProvidersResponse
-      fields:
-        providers: '!'
     - name: AdminListProvidersRequest
       fields:
         appId: xid.ID!
+    - name: SocialSignInResponse
+      fields:
+        redirect_url: string!
+    - name: SocialCallbackResponse
+      fields:
+        token: string!
+        user: '!'
+    - name: Config
+      fields:
+        allowAccountLinking: bool!
+        autoCreateUser: bool!
+        baseUrl: string!
+        providers: ProvidersConfig!
+        requireEmailVerified: bool!
+        trustEmailVerified: bool!
+    - name: ProvidersAppResponse
+      fields:
+        appId: string!
+        providers: '!'
     - name: AdminAddProviderRequest
       fields:
         appId: xid.ID!
@@ -166,9 +155,27 @@ types:
         enabled: bool!
         provider: string!
         scopes: '[]string!'
-    - name: SocialErrorResponse
+    - name: Plugin
       fields:
-        error: string!
+        "": core.Authsome
+    - name: SocialProvidersResponse
+      fields:
+        providers: '[]string!'
+    - name: Service
+      fields:
+        "": ""
+    - name: ConnectionsResponse
+      fields:
+        connections: '!'
+    - name: ProvidersResponse
+      fields:
+        providers: '!'
+    - name: SocialStatusResponse
+      fields:
+        status: string!
+    - name: SocialLinkResponse
+      fields:
+        linked: bool!
     - name: CallbackResult
       fields:
         "": string

@@ -17,17 +17,19 @@ type Manifest struct {
 
 // Route represents a single API endpoint
 type Route struct {
-	Name        string            `yaml:"name" json:"name"`
-	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
-	Method      string            `yaml:"method" json:"method"`
-	Path        string            `yaml:"path" json:"path"`
-	Request     map[string]string `yaml:"request,omitempty" json:"request,omitempty"`
-	Response    map[string]string `yaml:"response,omitempty" json:"response,omitempty"`
-	Params      map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
-	Query       map[string]string `yaml:"query,omitempty" json:"query,omitempty"`
-	Headers     map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
-	Errors      []ErrorDef        `yaml:"errors,omitempty" json:"errors,omitempty"`
-	Auth        bool              `yaml:"auth,omitempty" json:"auth,omitempty"` // Requires authentication
+	Name         string            `yaml:"name" json:"name"`
+	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Method       string            `yaml:"method" json:"method"`
+	Path         string            `yaml:"path" json:"path"`
+	Request      map[string]string `yaml:"request,omitempty" json:"request,omitempty"`
+	Response     map[string]string `yaml:"response,omitempty" json:"response,omitempty"`
+	RequestType  string            `yaml:"request_type,omitempty" json:"request_type,omitempty"`   // Named type for request (e.g., "SignInRequest")
+	ResponseType string            `yaml:"response_type,omitempty" json:"response_type,omitempty"` // Named type for response (e.g., "SignInResponse")
+	Params       map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
+	Query        map[string]string `yaml:"query,omitempty" json:"query,omitempty"`
+	Headers      map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	Errors       []ErrorDef        `yaml:"errors,omitempty" json:"errors,omitempty"`
+	Auth         bool              `yaml:"auth,omitempty" json:"auth,omitempty"` // Requires authentication
 }
 
 // ErrorDef represents an error response

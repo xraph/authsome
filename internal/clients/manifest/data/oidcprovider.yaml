@@ -16,16 +16,20 @@ routes:
         code_verifier: string!
         grant_type: string!
         redirect_uri: string!
+      request_type: TokenRequest
+      response_type: ErrorResponse
     - name: UserInfo
       description: |-
         UserInfo returns user info based on scopes (placeholder user)
         UserInfo returns user information based on the access token
       method: GET
       path: /userinfo
+      response_type: ErrorResponse
     - name: JWKS
       description: JWKS returns the JSON Web Key Set
       method: GET
       path: /jwks
+      response_type: ErrorResponse
     - name: RegisterClient
       description: RegisterClient registers a new OAuth client
       method: POST
@@ -33,32 +37,39 @@ routes:
       request:
         name: string!
         redirect_uri: string!
+      request_type: RegisterClient_req
+      response_type: ErrorResponse
     - name: HandleConsent
       description: HandleConsent processes the consent form submission
       method: POST
       path: /consent
+      response_type: ErrorResponse
 types:
-    - name: AccessTokenClaims
-      fields:
-        client_id: string!
-        scope: string!
-        token_type: string!
-    - name: OIDCConfigResponse
-      fields:
-        config: '!'
-        issuer: string!
     - name: ScopeInfo
       fields:
         "": string
     - name: KeyPair
       fields:
-        "": '*rsa.PublicKey'
-    - name: KeyStore
+        "": time.Time
+    - name: Plugin
       fields:
-        "": string
+        "": forge.Logger
+    - name: OIDCJWKSResponse
+      fields:
+        keys: '[]!'
+    - name: Service
+      fields:
+        "": ""
+    - name: JWKS
+      fields:
+        keys: '[]JWK!'
     - name: JWTService
       fields:
         "": string
+    - name: OIDCErrorResponse
+      fields:
+        error: string!
+        error_description: string!
     - name: OIDCUserInfoResponse
       fields:
         email: string!
@@ -68,80 +79,11 @@ types:
         name: string!
         picture: string!
         sub: string!
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: RegisterClient_req
-      fields:
-        name: string!
-        redirect_uri: string!
-    - name: JWK
-      fields:
-        alg: string!
-        e: string!
-        kid: string!
-        kty: string!
-        "n": string!
-        use: string!
-    - name: Plugin
-      fields:
-        "": forge.Logger
-    - name: OIDCErrorResponse
-      fields:
-        error: string!
-        error_description: string!
-    - name: OIDCTokenResponse
-      fields:
-        access_token: string!
-        expires_in: int!
-        id_token: string!
-        refresh_token: string!
-        scope: string!
-        token_type: string!
-    - name: OIDCJWKSResponse
-      fields:
-        keys: '[]!'
-    - name: OIDCClientResponse
-      fields:
-        client_id: string!
-        client_secret: string!
-        redirect_uris: '[]string!'
-    - name: IDTokenClaims
-      fields:
-        auth_time: int64!
-        email: string!
-        email_verified: bool!
-        family_name: string!
-        given_name: string!
-        name: string!
-        nonce: string!
-        preferred_username: string!
-        session_state: string!
-    - name: TokenRequest
-      fields:
-        client_id: string!
-        client_secret: string!
-        code: string!
-        code_verifier: string!
-        grant_type: string!
-        redirect_uri: string!
-    - name: JWKS
-      fields:
-        keys: '[]JWK!'
-    - name: JWKSService
-      fields:
-        "": '*KeyStore'
-    - name: ConsentDecision
-      fields:
-        "": bool
     - name: Config
       fields:
         issuer: string!
         keys: '!'
         tokens: '!'
-    - name: Service
-      fields:
-        "": Config
     - name: AuthorizeRequest
       fields:
         "": string
@@ -153,3 +95,68 @@ types:
         refresh_token: string!
         scope: string!
         token_type: string!
+    - name: OIDCConfigResponse
+      fields:
+        config: '!'
+        issuer: string!
+    - name: JWKSService
+      fields:
+        "": '*KeyStore'
+    - name: IDTokenClaims
+      fields:
+        auth_time: int64!
+        email: string!
+        email_verified: bool!
+        family_name: string!
+        given_name: string!
+        name: string!
+        nonce: string!
+        preferred_username: string!
+        session_state: string!
+    - name: JWK
+      fields:
+        alg: string!
+        e: string!
+        kid: string!
+        kty: string!
+        "n": string!
+        use: string!
+    - name: KeyStore
+      fields:
+        "": time.Duration
+    - name: AccessTokenClaims
+      fields:
+        client_id: string!
+        scope: string!
+        token_type: string!
+    - name: OIDCTokenResponse
+      fields:
+        access_token: string!
+        expires_in: int!
+        id_token: string!
+        refresh_token: string!
+        scope: string!
+        token_type: string!
+    - name: OIDCClientResponse
+      fields:
+        client_id: string!
+        client_secret: string!
+        redirect_uris: '[]string!'
+    - name: ConsentDecision
+      fields:
+        "": '[]string'
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: TokenRequest
+      fields:
+        client_id: string!
+        client_secret: string!
+        code: string!
+        code_verifier: string!
+        grant_type: string!
+        redirect_uri: string!
+    - name: RegisterClient_req
+      fields:
+        name: string!
+        redirect_uri: string!

@@ -16,6 +16,8 @@ routes:
       response:
         api_key: '*apikey.APIKey!'
         message: string!
+      request_type: CreateAPIKey_reqBody
+      response_type: CreateAPIKeyResponse
     - name: ListAPIKeys
       description: ListAPIKeys handles GET /api-keys
       method: GET
@@ -28,12 +30,14 @@ routes:
       description: UpdateAPIKey handles PATCH /api-keys/:id
       method: PUT
       path: /:id
+      request_type: apikey.UpdateAPIKeyRequest
     - name: DeleteAPIKey
       description: DeleteAPIKey handles DELETE /api-keys/:id
       method: DELETE
       path: /:id
       response:
         message: string!
+      response_type: MessageResponse
     - name: RotateAPIKey
       description: RotateAPIKey handles POST /api-keys/:id/rotate
       method: POST
@@ -41,11 +45,16 @@ routes:
       response:
         api_key: '*apikey.APIKey!'
         message: string!
+      response_type: RotateAPIKeyResponse
     - name: VerifyAPIKey
       description: VerifyAPIKey handles POST /api-keys/verify
       method: POST
       path: /verify
+      request_type: apikey.VerifyAPIKeyRequest
 types:
+    - name: Plugin
+      fields:
+        "": '*Handler'
     - name: Config
       fields:
         allow_query_param: bool!
@@ -59,32 +68,10 @@ types:
         max_rate_limit: int!
         rate_limiting: RateLimitConfig!
         webhooks: WebhookConfig!
-    - name: RateLimitConfig
-      fields:
-        enabled: bool!
-        window: time.Duration!
     - name: IPWhitelistConfig
       fields:
         enabled: bool!
         strict_mode: bool!
-    - name: AutoCleanupConfig
-      fields:
-        enabled: bool!
-        interval: time.Duration!
-    - name: Handler
-      fields:
-        "": Config
-    - name: CreateAPIKeyResponse
-      fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
-    - name: MessageResponse
-      fields:
-        message: string!
-    - name: RotateAPIKeyResponse
-      fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
     - name: WebhookConfig
       fields:
         enabled: bool!
@@ -95,9 +82,37 @@ types:
         notify_on_rate_limit: bool!
         notify_on_rotated: bool!
         webhook_urls: '[]string!'
+    - name: Handler
+      fields:
+        "": Config
+    - name: RotateAPIKeyResponse
+      fields:
+        api_key: '*apikey.APIKey!'
+        message: string!
     - name: RolesResponse
       fields:
         roles: '[]*apikey.Role!'
+    - name: AssignRole_reqBody
+      fields:
+        roleID: string!
+    - name: Middleware
+      fields:
+        "": Config
+    - name: RateLimitConfig
+      fields:
+        enabled: bool!
+        window: time.Duration!
+    - name: AutoCleanupConfig
+      fields:
+        enabled: bool!
+        interval: time.Duration!
+    - name: CreateAPIKeyResponse
+      fields:
+        api_key: '*apikey.APIKey!'
+        message: string!
+    - name: MessageResponse
+      fields:
+        message: string!
     - name: CreateAPIKey_reqBody
       fields:
         allowed_ips: '[]string'
@@ -107,12 +122,3 @@ types:
         permissions: ""
         rate_limit: int
         scopes: '[]string!'
-    - name: AssignRole_reqBody
-      fields:
-        roleID: string!
-    - name: Middleware
-      fields:
-        "": Config
-    - name: Plugin
-      fields:
-        "": '*apikey.Service'

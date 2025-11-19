@@ -421,12 +421,14 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 		}
 
 		manifestRoute := manifest.Route{
-			Name:        route.Name,
-			Description: route.Description,
-			Method:      reg.Method,
-			Path:        path,
-			Request:     i.convertTypeToFields(route.RequestType, routeInfo),
-			Response:    i.convertTypeToFields(route.ResponseType, routeInfo),
+			Name:         route.Name,
+			Description:  route.Description,
+			Method:       reg.Method,
+			Path:         path,
+			Request:      i.convertTypeToFields(route.RequestType, routeInfo),
+			Response:     i.convertTypeToFields(route.ResponseType, routeInfo),
+			RequestType:  route.RequestType,  // Store the named type
+			ResponseType: route.ResponseType, // Store the named type
 		}
 
 		m.Routes = append(m.Routes, manifestRoute)

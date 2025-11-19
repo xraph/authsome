@@ -1,0 +1,129 @@
+name: Release TypeScript Client
+
+on:
+  push:
+    tags:
+      - 'clients/typescript/v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Build and Publish TypeScript Client
+    runs-on: ubuntu-latest
+    
+    # Only run if clients/typescript/** has changes
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if TypeScript client changed
+        id: check_changes
+        run: |
+          # Get the previous tag for this client
+          PREV_TAG=$(git tag -l 'clients/typescript/v*' --sort=-version:refname | sed -n '2p')
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "First release, proceeding"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            # Check if there are changes in clients/typescript since last tag
+            CHANGES=$(git diff --name-only $PREV_TAG ${{ github.ref }} -- clients/typescript/)
+            
+            if [ -z "$CHANGES" ]; then
+              echo "No changes in clients/typescript, skipping release"
+              echo "changed=false" >> $GITHUB_OUTPUT
+            else
+              echo "Changes detected in clients/typescript"
+              echo "changed=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Extract version from tag
+        if: steps.check_changes.outputs.changed == 'true'
+        id: extract_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/clients/typescript/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Setup Node.js
+        if: steps.check_changes.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update package.json version
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/typescript
+        run: |
+          npm version ${{ steps.extract_version.outputs.version }} --no-git-tag-version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/typescript
+        run: npm install
+
+      - name: Build TypeScript client
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/typescript
+        run: npm run build
+
+      - name: Run tests
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/typescript
+        run: npm test --if-present
+        continue-on-error: true
+
+      - name: Publish to npm
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/typescript
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create tarball for GitHub release
+        if: steps.check_changes.outputs.changed == 'true'
+        working-directory: clients/typescript
+        run: |
+          tar -czf ../typescript-client-v${{ steps.extract_version.outputs.version }}.tar.gz dist/ package.json README.md
+
+      - name: Commit version bump
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git add clients/typescript/package.json clients/typescript/package-lock.json
+          git commit -m "chore(clients/typescript): bump version to ${{ steps.extract_version.outputs.version }}" || echo "No changes to commit"
+          git push origin HEAD:main || echo "Failed to push, may need manual intervention"
+
+      - name: Create GitHub Release
+        if: steps.check_changes.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: TypeScript Client v${{ steps.extract_version.outputs.version }}
+          body: |
+            ## TypeScript Client v${{ steps.extract_version.outputs.version }}
+            
+            ### Installation
+            ```bash
+            npm install @authsome/client@${{ steps.extract_version.outputs.version }}
+            ```
+            
+            ### What's Changed
+            Published to npm: https://www.npmjs.com/package/@authsome/client
+            
+            ### Assets
+            - TypeScript client distribution files (tarball)
+          files: |
+            clients/typescript-client-v${{ steps.extract_version.outputs.version }}.tar.gz
+          draft: false
+          prerelease: false
+

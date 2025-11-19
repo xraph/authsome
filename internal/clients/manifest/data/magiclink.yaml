@@ -6,6 +6,7 @@ routes:
       path: /magic-link/send
       request:
         email: string!
+      request_type: Send_body
     - name: Verify
       method: GET
       path: /magic-link/verify
@@ -13,17 +14,15 @@ routes:
         session: '!'
         token: string!
         user: '!'
+      response_type: VerifyResponse
 types:
+    - name: MagicLinkErrorResponse
+      fields:
+        error: string!
     - name: MagicLinkSendResponse
       fields:
         dev_url: string!
         status: string!
-    - name: Plugin
-      fields:
-        "": Config
-    - name: Config
-      fields:
-        "": int
     - name: MagicLinkVerifyResponse
       fields:
         session: '!'
@@ -31,18 +30,21 @@ types:
         user: '!'
     - name: Service
       fields:
-        "": '*repo.MagicLinkRepository'
+        "": '*audit.Service'
     - name: Handler
       fields:
-        "": '*rl.Service'
+        "": '*Service'
     - name: VerifyResponse
       fields:
         session: '!'
         token: string!
         user: '!'
+    - name: Config
+      fields:
+        "": bool
     - name: Send_body
       fields:
         email: string!
-    - name: MagicLinkErrorResponse
+    - name: Plugin
       fields:
-        error: string!
+        "": Config

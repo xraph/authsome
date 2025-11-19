@@ -1,0 +1,17 @@
+{
+  "name": "@authsome/client",
+  "version": "1.0.0",
+  "description": "TypeScript client for AuthSome authentication",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["authsome", "authentication", "client"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

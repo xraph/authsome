@@ -18,18 +18,22 @@ routes:
         type: string!
       response:
         status: string!
+      request_type: RegisterProvider_req
+      response_type: StatusResponse
     - name: SAMLSPMetadata
       description: SAMLSPMetadata returns Service Provider metadata (placeholder)
       method: GET
       path: /saml2/sp/metadata
       response:
         metadata: string!
+      response_type: MetadataResponse
     - name: SAMLCallback
       description: SAMLCallback handles SAML response callback for given provider
       method: POST
       path: /saml2/callback/{providerId}
       response:
         status: string!
+      response_type: StatusResponse
     - name: SAMLLogin
       description: SAMLLogin initiates SAML authentication by redirecting to IdP
       method: GET
@@ -40,16 +44,20 @@ routes:
       path: /oidc/callback/{providerId}
       response:
         status: string!
+      response_type: StatusResponse
 types:
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: ErrorResponse
-      fields:
-        error: string!
     - name: StatusResponse
       fields:
         status: string!
+    - name: Config
+      fields:
+        allowOIDC: bool!
+        allowSAML: bool!
+        autoProvision: bool!
+        oidcRedirectURL: string!
+        requireEncryption: bool!
+        samlACS: string!
+        samlMetadataURL: string!
     - name: SSOSAMLCallbackResponse
       fields:
         attributes: '!'
@@ -57,9 +65,25 @@ types:
         providerId: string!
         status: string!
         subject: string!
+    - name: Service
+      fields:
+        "": '*samsvc.Service'
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: MessageResponse
+      fields:
+        message: string!
     - name: MetadataResponse
       fields:
         metadata: string!
+    - name: SSOInitResponse
+      fields:
+        redirect_url: string!
+        request_id: string!
     - name: RegisterProvider_req
       fields:
         OIDCClientID: string!
@@ -72,34 +96,15 @@ types:
         domain: string!
         providerId: string!
         type: string!
-    - name: Config
+    - name: Plugin
       fields:
-        allowOIDC: bool!
-        allowSAML: bool!
-        autoProvision: bool!
-        oidcRedirectURL: string!
-        requireEncryption: bool!
-        samlACS: string!
-        samlMetadataURL: string!
+        "": '*Service'
     - name: SSOErrorResponse
       fields:
         error: string!
-    - name: Service
-      fields:
-        "": '*samsvc.Service'
-    - name: MessageResponse
-      fields:
-        message: string!
     - name: SuccessResponse
       fields:
         success: bool!
-    - name: SSOInitResponse
-      fields:
-        redirect_url: string!
-        request_id: string!
-    - name: Plugin
-      fields:
-        "": Config
     - name: SSOProviderResponse
       fields:
         providerId: string!

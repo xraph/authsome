@@ -39,104 +39,130 @@ routes:
       path: /createorganization
       response:
         error: string!
+      request_type: CreateOrganizationRequest
+      response_type: ErrorResponse
     - name: GetOrganization
       description: GetOrganization handles get organization requests
       method: GET
       path: /:id
       response:
         error: string!
+      response_type: ErrorResponse
     - name: ListOrganizations
       description: ListOrganizations handles list organizations requests (user's organizations)
       method: GET
       path: /listorganizations
       response:
         error: string!
+      response_type: ErrorResponse
     - name: UpdateOrganization
       description: UpdateOrganization handles organization update requests
       method: PATCH
       path: /:id
       response:
         error: string!
+      request_type: UpdateOrganizationRequest
+      response_type: ErrorResponse
     - name: DeleteOrganization
       description: DeleteOrganization handles organization deletion requests
       method: DELETE
       path: /:id
       response:
         error: string!
+      response_type: ErrorResponse
     - name: GetOrganizationBySlug
       description: GetOrganizationBySlug handles get organization by slug requests
       method: GET
       path: /slug/:slug
       response:
         error: string!
+      response_type: ErrorResponse
     - name: ListMembers
       description: ListMembers handles list organization members requests
       method: GET
       path: /listmembers
       response:
         error: string!
+      response_type: ErrorResponse
     - name: InviteMember
       description: InviteMember handles member invitation requests
       method: POST
       path: /invite
       response:
         error: string!
+      request_type: InviteMemberRequest
+      response_type: ErrorResponse
     - name: UpdateMember
       description: UpdateMember handles member update requests
       method: PATCH
       path: /:memberId
       response:
         error: string!
+      request_type: UpdateMemberRequest
+      response_type: ErrorResponse
     - name: RemoveMember
       description: RemoveMember handles member removal requests
       method: DELETE
       path: /:memberId
       response:
         error: string!
+      response_type: ErrorResponse
     - name: AcceptInvitation
       description: AcceptInvitation handles invitation acceptance requests
       method: POST
       path: /:token/accept
       response:
         error: string!
+      response_type: ErrorResponse
     - name: DeclineInvitation
       description: DeclineInvitation handles invitation decline requests
       method: POST
       path: /:token/decline
       response:
         status: string!
+      response_type: StatusResponse
     - name: ListTeams
       description: ListTeams handles list teams requests
       method: GET
       path: /listteams
       response:
         error: string!
+      response_type: ErrorResponse
     - name: CreateTeam
       description: CreateTeam handles team creation requests
       method: POST
       path: /createteam
       response:
         error: string!
+      request_type: CreateTeamRequest
+      response_type: ErrorResponse
     - name: UpdateTeam
       description: UpdateTeam handles team update requests
       method: PATCH
       path: /:teamId
       response:
         error: string!
+      request_type: UpdateTeamRequest
+      response_type: ErrorResponse
     - name: DeleteTeam
       description: DeleteTeam handles team deletion requests
       method: DELETE
       path: /:teamId
       response:
         error: string!
+      response_type: ErrorResponse
 types:
+    - name: AddCustomPermission_req
+      fields:
+        category: string!
+        description: string!
+        name: string!
+    - name: OrganizationHandler
+      fields:
+        "": '*organization.Service'
     - name: MessageResponse
       fields:
         message: string!
-    - name: MembersResponse
-      fields:
-        members: '[]*organization.Member!'
-        total: int!
     - name: InvitationResponse
       fields:
         invitation: '*organization.Invitation!'
@@ -148,23 +174,19 @@ types:
     - name: MockService
       fields:
         "": error
-    - name: DashboardExtension
-      fields:
-        "": string
     - name: Plugin
       fields:
-        "": '*OrganizationHandler'
-    - name: ErrorResponse
-      fields:
-        error: string!
+        "": '*bun.DB'
     - name: StatusResponse
       fields:
         status: string!
-    - name: AddCustomPermission_req
+    - name: DashboardExtension
       fields:
-        category: string!
-        description: string!
-        name: string!
-    - name: OrganizationHandler
+        "": string
+    - name: MembersResponse
       fields:
-        "": '*organization.Service'
+        members: '[]*organization.Member!'
+        total: int!
+    - name: ErrorResponse
+      fields:
+        error: string!

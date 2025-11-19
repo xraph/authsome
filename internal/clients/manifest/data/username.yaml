@@ -9,6 +9,8 @@ routes:
         username: string!
       response:
         status: string!
+      request_type: SignUp_body
+      response_type: StatusResponse
     - name: SignIn
       method: POST
       path: /username/signin
@@ -20,7 +22,26 @@ routes:
         session: '!'
         token: string!
         user: '!'
+      request_type: SignIn_body
+      response_type: SignInResponse
 types:
+    - name: Config
+      fields:
+        allowUsernameLogin: bool!
+        maxPasswordLength: int!
+        minPasswordLength: int!
+        requireLowercase: bool!
+        requireNumber: bool!
+        requireSpecialChar: bool!
+        requireUppercase: bool!
+    - name: UsernameErrorResponse
+      fields:
+        error: string!
+    - name: SignInResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
     - name: UsernameStatusResponse
       fields:
         status: string!
@@ -29,9 +50,20 @@ types:
         session: '!'
         token: string!
         user: '!'
+    - name: Username2FARequiredResponse
+      fields:
+        device_id: string!
+        require_twofa: bool!
+        user: '!'
+    - name: Service
+      fields:
+        "": Config
     - name: Handler
       fields:
         "": '*repo.TwoFARepository'
+    - name: StatusResponse
+      fields:
+        status: string!
     - name: TwoFARequiredResponse
       fields:
         device_id: string!
@@ -49,31 +81,3 @@ types:
     - name: Plugin
       fields:
         "": core.Authsome
-    - name: UsernameErrorResponse
-      fields:
-        error: string!
-    - name: Username2FARequiredResponse
-      fields:
-        device_id: string!
-        require_twofa: bool!
-        user: '!'
-    - name: Service
-      fields:
-        "": Config
-    - name: StatusResponse
-      fields:
-        status: string!
-    - name: SignInResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Config
-      fields:
-        allowUsernameLogin: bool!
-        maxPasswordLength: int!
-        minPasswordLength: int!
-        requireLowercase: bool!
-        requireNumber: bool!
-        requireSpecialChar: bool!
-        requireUppercase: bool!
