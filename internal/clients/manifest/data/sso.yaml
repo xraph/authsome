@@ -1,0 +1,109 @@
+plugin_id: sso
+version: 1.0.0
+routes:
+    - name: RegisterProvider
+      description: RegisterProvider registers an SSO provider (SAML or OIDC); org scoping TBD
+      method: POST
+      path: /provider/register
+      request:
+        OIDCClientID: string!
+        OIDCClientSecret: string!
+        OIDCIssuer: string!
+        OIDCRedirectURI: string!
+        SAMLCert: string!
+        SAMLEntryPoint: string!
+        SAMLIssuer: string!
+        domain: string!
+        providerId: string!
+        type: string!
+      response:
+        status: string!
+    - name: SAMLSPMetadata
+      description: SAMLSPMetadata returns Service Provider metadata (placeholder)
+      method: GET
+      path: /saml2/sp/metadata
+      response:
+        metadata: string!
+    - name: SAMLCallback
+      description: SAMLCallback handles SAML response callback for given provider
+      method: POST
+      path: /saml2/callback/{providerId}
+      response:
+        status: string!
+    - name: SAMLLogin
+      description: SAMLLogin initiates SAML authentication by redirecting to IdP
+      method: GET
+      path: /saml2/login/{providerId}
+    - name: OIDCCallback
+      description: OIDCCallback handles OIDC response callback for given provider
+      method: GET
+      path: /oidc/callback/{providerId}
+      response:
+        status: string!
+types:
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: SSOSAMLCallbackResponse
+      fields:
+        attributes: '!'
+        issuer: string!
+        providerId: string!
+        status: string!
+        subject: string!
+    - name: MetadataResponse
+      fields:
+        metadata: string!
+    - name: RegisterProvider_req
+      fields:
+        OIDCClientID: string!
+        OIDCClientSecret: string!
+        OIDCIssuer: string!
+        OIDCRedirectURI: string!
+        SAMLCert: string!
+        SAMLEntryPoint: string!
+        SAMLIssuer: string!
+        domain: string!
+        providerId: string!
+        type: string!
+    - name: Config
+      fields:
+        allowOIDC: bool!
+        allowSAML: bool!
+        autoProvision: bool!
+        oidcRedirectURL: string!
+        requireEncryption: bool!
+        samlACS: string!
+        samlMetadataURL: string!
+    - name: SSOErrorResponse
+      fields:
+        error: string!
+    - name: Service
+      fields:
+        "": '*samsvc.Service'
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: SuccessResponse
+      fields:
+        success: bool!
+    - name: SSOInitResponse
+      fields:
+        redirect_url: string!
+        request_id: string!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: SSOProviderResponse
+      fields:
+        providerId: string!
+        status: string!
+    - name: SSOSAMLMetadataResponse
+      fields:
+        metadata: string!

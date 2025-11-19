@@ -107,7 +107,7 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 		Enabled:   true,
 		Mode:      mode,
 		Transport: transport,
-		HTTPPort:  mcpHTTPPort,
+		Port:      mcpHTTPPort,
 		Authorization: mcp.AuthorizationConfig{
 			RequireAPIKey: !mcpNoAuth,
 			AllowedOperations: []string{
@@ -148,7 +148,7 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 	)
 
 	// Create and register MCP plugin
-	mcpPlugin := mcp.NewPlugin(mcpConfig)
+	mcpPlugin := mcp.NewPlugin(mcp.WithDefaultConfig(mcpConfig))
 	if err := auth.RegisterPlugin(mcpPlugin); err != nil {
 		return fmt.Errorf("failed to register MCP plugin: %w", err)
 	}

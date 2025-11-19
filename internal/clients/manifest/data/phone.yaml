@@ -1,0 +1,86 @@
+plugin_id: phone
+version: 1.0.0
+routes:
+    - name: SendCode
+      description: SendCode handles sending of verification code via SMS
+      method: POST
+      path: /phone/send-code
+      request:
+        phone: string!
+    - name: Verify
+      description: Verify checks the code and creates a session on success
+      method: POST
+      path: /phone/verify
+      request:
+        code: string!
+        email: string!
+        phone: string!
+        remember: bool!
+      response:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: SignIn
+      description: SignIn aliases to Verify for convenience
+      method: POST
+      path: /phone/signin
+      request:
+        code: string!
+        email: string!
+        phone: string!
+        remember: bool!
+      response:
+        session: '!'
+        token: string!
+        user: '!'
+types:
+    - name: VerifyResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Plugin
+      fields:
+        "": '*Service'
+    - name: Config
+      fields:
+        allowImplicitSignup: bool!
+        codeLength: int!
+        devExposeCode: bool!
+        expiryMinutes: int!
+        maxAttempts: int!
+        rateLimitPerHour: int!
+        smsProvider: string!
+    - name: PhoneSendCodeResponse
+      fields:
+        dev_code: string!
+        status: string!
+    - name: Handler
+      fields:
+        "": '*rl.Service'
+    - name: SendCode_body
+      fields:
+        phone: string!
+    - name: Verify_body
+      fields:
+        code: string!
+        email: string!
+        phone: string!
+        remember: bool!
+    - name: SignIn_body
+      fields:
+        code: string!
+        email: string!
+        phone: string!
+        remember: bool!
+    - name: PhoneErrorResponse
+      fields:
+        error: string!
+    - name: PhoneVerifyResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Service
+      fields:
+        "": Config

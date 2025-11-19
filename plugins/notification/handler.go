@@ -24,6 +24,40 @@ type Handler struct {
 	config       Config
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+type TemplatesResponse struct {
+	Templates interface{} `json:"templates"`
+	Count     int         `json:"count"`
+}
+
+type ChannelsResponse struct {
+	Channels interface{} `json:"channels"`
+	Count    int         `json:"count"`
+}
+
+type NotificationsResponse struct {
+	Notifications interface{} `json:"notifications"`
+	Count         int         `json:"count"`
+}
+
 // NewHandler creates a new notification handler
 func NewHandler(service *notification.Service, templateSvc *TemplateService, config Config) *Handler {
 	// Initialize sub-services
@@ -206,9 +240,7 @@ func (h *Handler) UpdateTemplate(c forge.Context) error {
 		return c.Redirect(http.StatusSeeOther, redirect)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "template updated successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "template updated successfully",})
 }
 
 // DeleteTemplate deletes a template
@@ -231,9 +263,7 @@ func (h *Handler) DeleteTemplate(c forge.Context) error {
 		return c.Redirect(http.StatusSeeOther, redirect)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "template deleted successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "template deleted successfully",})
 }
 
 // ResetTemplate resets a template to default values
@@ -251,9 +281,7 @@ func (h *Handler) ResetTemplate(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "template reset to default successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "template reset to default successfully",})
 }
 
 // ResetAllTemplates resets all templates for an app to defaults
@@ -271,9 +299,7 @@ func (h *Handler) ResetAllTemplates(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "all templates reset to defaults successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "all templates reset to defaults successfully",})
 }
 
 // GetTemplateDefaults returns default template metadata
@@ -529,9 +555,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 
 	// Process webhook based on provider
 	// For now, just acknowledge receipt
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": "processed",
-	})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "processed",})
 }
 
 // =============================================================================
@@ -665,9 +689,7 @@ func (h *Handler) UpdateProvider(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "provider updated successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "provider updated successfully",})
 }
 
 // DeleteProvider deletes a provider
@@ -685,9 +707,7 @@ func (h *Handler) DeleteProvider(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "provider deleted successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "provider deleted successfully",})
 }
 
 // =============================================================================
@@ -799,9 +819,7 @@ func (h *Handler) RestoreTemplateVersion(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "template restored successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "template restored successfully",})
 }
 
 // =============================================================================
@@ -877,9 +895,7 @@ func (h *Handler) DeclareABTestWinner(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "winner declared successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "winner declared successfully",})
 }
 
 // =============================================================================
@@ -930,9 +946,7 @@ func (h *Handler) TrackNotificationEvent(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "event tracked successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "event tracked successfully",})
 }
 
 // GetTemplateAnalytics retrieves analytics for a template

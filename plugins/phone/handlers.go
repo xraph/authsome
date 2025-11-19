@@ -15,6 +15,13 @@ type Handler struct {
 	rl  *rl.Service
 }
 
+// Response types
+type VerifyResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token"`
+}
+
 func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
 
 // handleError returns the error in a structured format
@@ -82,7 +89,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	if res == nil {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired verification code", http.StatusUnauthorized))
 	}
-	return c.JSON(http.StatusOK, map[string]any{"user": res.User, "session": res.Session, "token": res.Token})
+	return c.JSON(http.StatusOK, &VerifyResponse{User: res.User, Session: res.Session, Token: res.Token})
 }
 
 // SignIn aliases to Verify for convenience
@@ -105,5 +112,5 @@ func (h *Handler) SignIn(c forge.Context) error {
 	if res == nil {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired verification code", http.StatusUnauthorized))
 	}
-	return c.JSON(http.StatusOK, map[string]any{"user": res.User, "session": res.Session, "token": res.Token})
+	return c.JSON(http.StatusOK, &VerifyResponse{User: res.User, Session: res.Session, Token: res.Token})
 }

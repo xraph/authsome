@@ -1,0 +1,40 @@
+plugin_id: jwt
+version: 1.0.0
+routes:
+    - name: CreateJWTKey
+      description: CreateJWTKey creates a new JWT signing key
+      method: POST
+      path: /createjwtkey
+    - name: ListJWTKeys
+      description: ListJWTKeys lists JWT signing keys
+      method: GET
+      path: /listjwtkeys
+    - name: GetJWKS
+      description: GetJWKS returns the JSON Web Key Set
+      method: GET
+      path: /jwks
+    - name: GenerateToken
+      description: GenerateToken generates a new JWT token
+      method: POST
+      path: /generate
+    - name: VerifyToken
+      description: VerifyToken verifies a JWT token
+      method: POST
+      path: /verify
+types:
+    - name: Config
+      fields:
+        accessExpirySeconds: int!
+        includeAppIDClaim: bool!
+        issuer: string!
+        refreshExpirySeconds: int!
+        signingAlgorithm: string!
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: Handler
+      fields:
+        "": '*jwt.Service'
+    - name: Plugin
+      fields:
+        "": Config

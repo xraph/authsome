@@ -27,8 +27,8 @@ var userListCmd = &cobra.Command{
 	Short: "List users",
 	Long:  `List all users or users in a specific organization.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		orgID, _ := cmd.Flags().GetString("org")
-		return listUsers(orgID)
+		appID, _ := cmd.Flags().GetString("app")
+		return listUsers(appID)
 	},
 }
 
@@ -42,15 +42,15 @@ var userCreateCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 		firstName, _ := cmd.Flags().GetString("first-name")
 		lastName, _ := cmd.Flags().GetString("last-name")
-		orgID, _ := cmd.Flags().GetString("org")
+		appID, _ := cmd.Flags().GetString("app")
 		role, _ := cmd.Flags().GetString("role")
 		verified, _ := cmd.Flags().GetBool("verified")
 
-		if email == "" || password == "" || orgID == "" {
-			return fmt.Errorf("email, password, and org are required")
+		if email == "" || password == "" || appID == "" {
+			return fmt.Errorf("email, password, and app are required")
 		}
 
-		user, err := createUser(email, password, firstName, lastName, orgID, role, verified)
+		user, err := createUser(email, password, firstName, lastName, appID, role, verified)
 		if err != nil {
 			return err
 		}
@@ -142,15 +142,15 @@ func init() {
 	userCmd.AddCommand(userVerifyCmd)
 
 	// List flags
-	userListCmd.Flags().StringP("org", "o", "", "Filter by organization ID")
+	userListCmd.Flags().StringP("app", "a", "", "Filter by app ID")
 
 	// Create flags
 	userCreateCmd.Flags().StringP("email", "e", "", "User email (required)")
 	userCreateCmd.Flags().StringP("password", "p", "", "User password (required)")
 	userCreateCmd.Flags().String("first-name", "", "User first name")
 	userCreateCmd.Flags().String("last-name", "", "User last name")
-	userCreateCmd.Flags().StringP("org", "o", "", "Organization ID (required)")
-	userCreateCmd.Flags().StringP("role", "r", "member", "User role in organization")
+	userCreateCmd.Flags().StringP("app", "a", "", "App ID (required)")
+	userCreateCmd.Flags().StringP("role", "r", "member", "User role in app")
 	userCreateCmd.Flags().Bool("verified", false, "Mark email as verified")
 
 	// Delete flags
@@ -165,8 +165,8 @@ func connectUserDB() (*bun.DB, error) {
 	return connectDatabaseMulti()
 }
 
-// listUsers lists all users with their organization memberships
-func listUsers(orgID string) error {
+// listUsers lists all users with their app memberships
+func listUsers(appID string) error {
 	db, err := connectUserDB()
 	if err != nil {
 		return err
@@ -178,10 +178,10 @@ func listUsers(orgID string) error {
 
 	query := db.NewSelect().Model(&users)
 
-	if orgID != "" {
-		// Filter by organization through members table
+	if appID != "" {
+		// Filter by app through members table
 		query = query.Join("JOIN members m ON m.user_id = u.id").
-			Where("m.organization_id = ?", orgID)
+			Where("m.app_id = ?", appID)
 	}
 
 	err = query.Scan(ctx)
@@ -226,7 +226,7 @@ func listUsers(orgID string) error {
 }
 
 // createUser creates a new user
-func createUser(email, password, firstName, lastName, orgID, role string, verified bool) (*schema.User, error) {
+func createUser(email, password, firstName, lastName, appID, role string, verified bool) (*schema.User, error) {
 	db, err := connectUserDB()
 	if err != nil {
 		return nil, err
@@ -235,11 +235,11 @@ func createUser(email, password, firstName, lastName, orgID, role string, verifi
 
 	ctx := context.Background()
 
-	// Check if organization exists
-	var org schema.Organization
-	err = db.NewSelect().Model(&org).Where("id = ?", orgID).Scan(ctx)
+	// Check if app exists
+	var app schema.App
+	err = db.NewSelect().Model(&app).Where("id = ?", appID).Scan(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("organization not found: %w", err)
+		return nil, fmt.Errorf("app not found: %w", err)
 	}
 
 	// Check if user already exists
@@ -278,20 +278,20 @@ func createUser(email, password, firstName, lastName, orgID, role string, verifi
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Parse organization ID
-	orgXID, err := xid.FromString(orgID)
+	// Parse app ID
+	appXID, err := xid.FromString(appID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid organization ID: %w", err)
+		return nil, fmt.Errorf("invalid app ID: %w", err)
 	}
 
 	// Create membership
 	memberID := xid.New()
 
 	member := &schema.Member{
-		ID:             memberID,
-		UserID:         user.ID,
-		OrganizationID: orgXID,
-		Role:           role,
+		ID:     memberID,
+		UserID: user.ID,
+		AppID:  appXID,
+		Role:   schema.MemberRole(role),
 	}
 
 	// Set audit fields manually for CLI operations
@@ -327,7 +327,7 @@ func showUser(userID string) error {
 	// Get memberships
 	var memberships []schema.Member
 	err = db.NewSelect().Model(&memberships).
-		Relation("Organization").
+		Relation("App").
 		Where("user_id = ?", userID).
 		Scan(ctx)
 	if err != nil {
@@ -344,13 +344,13 @@ func showUser(userID string) error {
 	fmt.Printf("  Updated: %s\n", user.UpdatedAt.Format(time.RFC3339))
 
 	if len(memberships) > 0 {
-		fmt.Printf("\nOrganization Memberships:\n")
+		fmt.Printf("\nApp Memberships:\n")
 		for _, membership := range memberships {
-			orgName := "Unknown"
-			if membership.Organization != nil {
-				orgName = membership.Organization.Name
+			appName := "Unknown"
+			if membership.App != nil {
+				appName = membership.App.Name
 			}
-			fmt.Printf("  - %s (%s) - Role: %s\n", orgName, membership.OrganizationID, membership.Role)
+			fmt.Printf("  - %s (%s) - Role: %s\n", appName, membership.AppID, membership.Role)
 		}
 	}
 

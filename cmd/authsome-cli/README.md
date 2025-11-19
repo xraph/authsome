@@ -65,59 +65,59 @@ authsome generate secret --length 64
 Seed the database with test data for development:
 
 ```bash
-# Seed basic test data (organizations, users, roles)
+# Seed basic test data (apps, users, roles)
 authsome seed basic
 
 # Seed test users
-authsome seed users --count 50 --org org_id_here
+authsome seed users --count 50 --app app_id_here
 
-# Seed test organizations
-authsome seed orgs --count 10
+# Seed test apps
+authsome seed apps --count 10
 
 # Clear all seeded data
 authsome seed clear --confirm
 ```
 
-### Organization Management
+### App Management
 
-Manage organizations in SaaS mode:
+Manage platform-level apps (tenants):
 
 ```bash
-# List all organizations
-authsome org list
+# List all apps
+authsome app list
 
-# Create a new organization
-authsome org create --name "Acme Corp" --slug "acme"
+# Create a new app
+authsome app create --name "Acme Corp" --slug "acme"
 
-# Show organization details
-authsome org show org_id_here
+# Show app details
+authsome app show app_id_here
 
-# Delete an organization
-authsome org delete org_id_here --confirm
+# Delete an app
+authsome app delete app_id_here --confirm
 
-# List organization members
-authsome org members org_id_here
+# List app members
+authsome app members app_id_here
 
-# Add member to organization
-authsome org add-member org_id_here user_id_here --role admin
+# Add member to app
+authsome app add-member app_id_here user_id_here --role admin
 
-# Remove member from organization
-authsome org remove-member org_id_here user_id_here
+# Remove member from app
+authsome app remove-member app_id_here user_id_here
 ```
 
 ### User Management
 
-Manage users across organizations:
+Manage users across apps:
 
 ```bash
 # List all users
 authsome user list
 
-# List users in specific organization
-authsome user list --org org_id_here
+# List users in specific app
+authsome user list --app app_id_here
 
 # Create a new user
-authsome user create --email user@example.com --name "John Doe" --password password123
+authsome user create --email user@example.com --password password123 --app app_id_here --role member
 
 # Show user details
 authsome user show user_id_here
@@ -253,19 +253,19 @@ plugins:
 
 ### User Management
 
-1. Create admin user:
+1. Create app:
    ```bash
-   authsome user create --email admin@company.com --name "Admin User" --password securepassword
+   authsome app create --name "My Company" --slug "mycompany"
    ```
 
-2. Create organization:
+2. Create admin user:
    ```bash
-   authsome org create --name "My Company" --slug "mycompany"
+   authsome user create --email admin@company.com --password securepassword --app app_id --role admin
    ```
 
-3. Add user to organization:
+3. Add additional user to app:
    ```bash
-   authsome org add-member org_id user_id --role admin
+   authsome app add-member app_id user_id --role admin
    ```
 
 ## Database Support

@@ -33,8 +33,11 @@ type Config struct {
 	// Transport specifies communication method
 	Transport Transport `json:"transport" yaml:"transport"`
 
-	// HTTPPort for HTTP transport (default: 9090)
-	HTTPPort int `json:"http_port" yaml:"http_port"`
+	// Port for HTTP transport (default: 9090)
+	Port int `json:"port" yaml:"port"`
+
+	// ExposeSecrets determines if secrets are exposed (dev only)
+	ExposeSecrets bool `json:"expose_secrets" yaml:"expose_secrets"`
 
 	// Authorization settings
 	Authorization AuthorizationConfig `json:"authorization" yaml:"authorization"`
@@ -64,10 +67,11 @@ type RateLimitConfig struct {
 // DefaultConfig returns sensible defaults
 func DefaultConfig() Config {
 	return Config{
-		Enabled:   false, // Opt-in
-		Mode:      ModeReadOnly,
-		Transport: TransportStdio,
-		HTTPPort:  9090,
+		Enabled:       false, // Opt-in
+		Mode:          ModeReadOnly,
+		Transport:     TransportStdio,
+		Port:          9090,
+		ExposeSecrets: false,
 		Authorization: AuthorizationConfig{
 			RequireAPIKey: true,
 			AllowedOperations: []string{

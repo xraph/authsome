@@ -444,7 +444,7 @@ func TestMCPPlugin(t *testing.T) {
     auth := authsome.New(...)
     
     // Register MCP plugin
-    mcpPlugin := mcp.NewPlugin(mcp.DefaultConfig())
+    mcpPlugin := mcp.NewPlugin(mcp.WithDefaultConfig(mcp.DefaultConfig()))
     auth.RegisterPlugin(mcpPlugin)
     
     // Initialize

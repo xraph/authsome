@@ -12,6 +12,28 @@ import (
 
 type Handler struct{ svc *Service }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SessionsResponse struct {
+	Sessions interface{} `json:"sessions"`
+}
+
+type SessionTokenResponse struct {
+	Session interface{} `json:"session"`
+	Token   string      `json:"token"`
+}
+
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
 // handleError returns the error in a structured format
@@ -37,7 +59,7 @@ func (h *Handler) List(c forge.Context) error {
 	if err != nil {
 		return handleError(c, err, "LIST_SESSIONS_FAILED", "Failed to list sessions", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"sessions": out})
+	return c.JSON(http.StatusOK, &SessionsResponse{Sessions: out})
 }
 
 // SetActive switches the current session cookie to the provided session id
@@ -71,7 +93,7 @@ func (h *Handler) SetActive(c forge.Context) error {
 	// Set cookie header manually (no helper on Context)
 	cookieStr := fmt.Sprintf("session_token=%s; Path=/; HttpOnly; SameSite=Lax", sess.Token)
 	c.SetHeader("Set-Cookie", cookieStr)
-	return c.JSON(http.StatusOK, map[string]any{"session": sess, "token": sess.Token})
+	return c.JSON(http.StatusOK, &SessionTokenResponse{Session: sess, Token: sess.Token})
 }
 
 // Delete revokes a session by id for the current user
@@ -96,5 +118,5 @@ func (h *Handler) Delete(c forge.Context) error {
 	if err := h.svc.Delete(c.Request().Context(), uid, sid); err != nil {
 		return handleError(c, err, "DELETE_SESSION_FAILED", "Failed to delete session", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "deleted"})
 }

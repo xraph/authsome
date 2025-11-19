@@ -1,98 +1,174 @@
 plugin_id: social
 version: 1.0.0
-description: Social OAuth authentication
-base_path: /api/auth
-
 routes:
-  - name: SignIn
-    description: Initiate OAuth flow for sign-in
-    method: POST
-    path: /signin/social
-    request:
-      provider: string!
-      scopes: string[]
-      redirectUrl: string
-    response:
-      url: string!
-    errors:
-      - code: 400
-        description: Invalid provider
-      - code: 403
-        description: Provider not enabled
-
-  - name: Callback
-    description: Handle OAuth provider callback
-    method: GET
-    path: /callback/{provider}
-    params:
-      provider: string!
-    query:
-      code: string!
-      state: string!
-      error: string
-    response:
-      user: User!
-      session: Session!
-    errors:
-      - code: 400
-        description: OAuth error or invalid code
-      - code: 500
-        description: Failed to exchange token
-
-  - name: LinkAccount
-    description: Link a social account to current user
-    method: POST
-    path: /social/link
-    auth: true
-    request:
-      provider: string!
-      scopes: string[]
-    response:
-      url: string!
-    errors:
-      - code: 400
-        description: Invalid provider
-      - code: 401
-        description: Not authenticated
-
-  - name: UnlinkAccount
-    description: Unlink a social account
-    method: POST
-    path: /social/unlink
-    auth: true
-    request:
-      provider: string!
-    response:
-      success: boolean!
-    errors:
-      - code: 400
-        description: Invalid provider
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Account not linked
-
-  - name: ListAccounts
-    description: List linked social accounts
-    method: GET
-    path: /social/accounts
-    auth: true
-    response:
-      accounts: SocialAccount[]!
-    errors:
-      - code: 401
-        description: Not authenticated
-
+    - name: SignIn
+      description: |-
+        SignIn initiates OAuth flow for sign-in
+        POST /api/auth/signin/social
+      method: POST
+      path: /signin/social
+      request:
+        provider: string!
+        redirectUrl: string!
+        scopes: '[]string!'
+      response:
+        url: string!
+    - name: Callback
+      description: |-
+        Callback handles OAuth provider callback
+        GET /api/auth/callback/:provider
+      method: GET
+      path: /callback/:provider
+      response:
+        action: string!
+        isNewUser: bool!
+        user: '!'
+    - name: LinkAccount
+      description: |-
+        LinkAccount links a social provider to the current user
+        POST /api/auth/account/link
+      method: POST
+      path: /account/link
+      request:
+        provider: string!
+        scopes: '[]string!'
+      response:
+        url: string!
+    - name: UnlinkAccount
+      description: |-
+        UnlinkAccount unlinks a social provider from the current user
+        DELETE /api/auth/account/unlink/:provider
+      method: DELETE
+      path: /account/unlink/:provider
+      response:
+        message: string!
+    - name: ListProviders
+      description: |-
+        ListProviders returns available OAuth providers
+        GET /api/auth/providers
+      method: GET
+      path: /providers
+      response:
+        providers: '!'
 types:
-  - name: SocialAccount
-    description: Linked social account
-    fields:
-      id: string!
-      userId: string!
-      provider: string!
-      providerAccountId: string!
-      email: string
-      name: string
-      picture: string
-      createdAt: string!
-
+    - name: ProvidersConfig
+      fields:
+        apple: '*providers.ProviderConfig!'
+        bitbucket: '*providers.ProviderConfig!'
+        discord: '*providers.ProviderConfig!'
+        dropbox: '*providers.ProviderConfig!'
+        facebook: '*providers.ProviderConfig!'
+        github: '*providers.ProviderConfig!'
+        gitlab: '*providers.ProviderConfig!'
+        google: '*providers.ProviderConfig!'
+        line: '*providers.ProviderConfig!'
+        linkedin: '*providers.ProviderConfig!'
+        microsoft: '*providers.ProviderConfig!'
+        notion: '*providers.ProviderConfig!'
+        reddit: '*providers.ProviderConfig!'
+        slack: '*providers.ProviderConfig!'
+        spotify: '*providers.ProviderConfig!'
+        twitch: '*providers.ProviderConfig!'
+        twitter: '*providers.ProviderConfig!'
+    - name: SocialStatusResponse
+      fields:
+        status: string!
+    - name: SocialCallbackResponse
+      fields:
+        token: string!
+        user: '!'
+    - name: SocialProvidersResponse
+      fields:
+        providers: '[]string!'
+    - name: Service
+      fields:
+        "": Config
+    - name: OAuthState
+      fields:
+        "": string
+    - name: Config
+      fields:
+        allowAccountLinking: bool!
+        autoCreateUser: bool!
+        baseUrl: string!
+        providers: ProvidersConfig!
+        requireEmailVerified: bool!
+        trustEmailVerified: bool!
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: ConnectionsResponse
+      fields:
+        connections: '!'
+    - name: CallbackDataResponse
+      fields:
+        action: string!
+        isNewUser: bool!
+        user: '!'
+    - name: AdminUpdateProviderRequest
+      fields:
+        clientId: '*string!'
+        clientSecret: '*string!'
+        enabled: '*bool!'
+        scopes: '[]string!'
+    - name: Plugin
+      fields:
+        "": core.Authsome
+    - name: SocialSignInResponse
+      fields:
+        redirect_url: string!
+    - name: SocialLinkResponse
+      fields:
+        linked: bool!
+    - name: AuthURLResponse
+      fields:
+        url: string!
+    - name: CallbackResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: ConnectionResponse
+      fields:
+        connection: '!'
+    - name: ProvidersAppResponse
+      fields:
+        appId: string!
+        providers: '!'
+    - name: ProviderConfigResponse
+      fields:
+        appId: string!
+        message: string!
+        provider: string!
+    - name: SignInRequest
+      fields:
+        provider: string!
+        redirectUrl: string!
+        scopes: '[]string!'
+    - name: LinkAccountRequest
+      fields:
+        provider: string!
+        scopes: '[]string!'
+    - name: ProvidersResponse
+      fields:
+        providers: '!'
+    - name: AdminListProvidersRequest
+      fields:
+        appId: xid.ID!
+    - name: AdminAddProviderRequest
+      fields:
+        appId: xid.ID!
+        clientId: string!
+        clientSecret: string!
+        enabled: bool!
+        provider: string!
+        scopes: '[]string!'
+    - name: SocialErrorResponse
+      fields:
+        error: string!
+    - name: CallbackResult
+      fields:
+        "": string

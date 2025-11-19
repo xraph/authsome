@@ -19,6 +19,37 @@ type Handler struct {
 	metrics *Metrics
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+type UsersResponse struct {
+	Resources   interface{} `json:"Resources"`
+	TotalResults int        `json:"totalResults"`
+	StartIndex   int        `json:"startIndex"`
+	ItemsPerPage int        `json:"itemsPerPage"`
+}
+
+type GroupsResponse struct {
+	Resources   interface{} `json:"Resources"`
+	TotalResults int        `json:"totalResults"`
+}
+
 // NewHandler creates a new SCIM handler
 func NewHandler(service *Service, config *Config) *Handler {
 	return &Handler{
@@ -554,7 +585,7 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 	}
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request"})
 	}
 
 	// Get 3-tier architecture context
@@ -565,9 +596,7 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 
 	// If orgID is not set, this is an error
 	if orgIDVal.IsNil() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Organization context required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Organization context required",})
 	}
 
 	token, provToken, err := h.service.CreateProvisioningToken(
@@ -582,7 +611,7 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 	)
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error()})
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
@@ -614,9 +643,7 @@ func (h *Handler) ListProvisioningTokens(c forge.Context) error {
 
 	tokens, total, err := h.service.ListProvisioningTokens(c.Request().Context(), appID, envID, orgID, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	// Remove sensitive data from response
@@ -648,14 +675,10 @@ func (h *Handler) RevokeProvisioningToken(c forge.Context) error {
 	tokenID := c.Param("id")
 
 	if err := h.service.RevokeProvisioningToken(c.Request().Context(), tokenID); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Token revoked successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "Token revoked successfully",})
 }
 
 // GetAttributeMappings gets attribute mappings
@@ -668,9 +691,7 @@ func (h *Handler) GetAttributeMappings(c forge.Context) error {
 
 	mappings, err := h.service.GetAttributeMappings(c.Request().Context(), appID, envID, orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -691,20 +712,14 @@ func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
 	}
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	if err := h.service.UpdateAttributeMappings(c.Request().Context(), appID, envID, orgID, req.Mappings); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Attribute mappings updated successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "Attribute mappings updated successfully",})
 }
 
 // GetProvisioningLogs gets provisioning logs
@@ -730,9 +745,7 @@ func (h *Handler) GetProvisioningLogs(c forge.Context) error {
 
 	logs, total, err := h.service.GetProvisioningLogs(c.Request().Context(), appID, envID, orgID, action, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -773,7 +786,7 @@ func (h *Handler) processBulkOperation(c forge.Context, op *BulkOperation) BulkO
 
 	// TODO: Implement bulk operation processing
 	result.Status = http.StatusNotImplemented
-	result.Response = map[string]string{"error": "Not implemented"}
+	result.Response = &ErrorResponse{Error: "Not implemented"}
 
 	return result
 }

@@ -82,6 +82,12 @@ func introspectPlugin(intro *introspector.Introspector, pluginID, outputDir stri
 		return fmt.Errorf("failed to introspect plugin %s: %w", pluginID, err)
 	}
 
+	// Check if manifest has routes - skip if none (middleware/service only plugins)
+	if len(manifest.Routes) == 0 {
+		fmt.Printf("⚠ Skipped: Plugin has no HTTP routes (middleware/service only)\n")
+		return nil
+	}
+
 	// Validate manifest
 	if err := manifest.Validate(); err != nil {
 		return fmt.Errorf("generated manifest is invalid: %w", err)
@@ -181,6 +187,15 @@ func introspectAllPlugins(intro *introspector.Introspector, outputDir string, dr
 			continue
 		}
 
+		// Handle enterprise as a composite plugin with sub-plugins
+		if pluginID == "enterprise" {
+			fmt.Printf("\n")
+			success, fail := introspectEnterprisePlugins(intro, outputDir, dryRun)
+			successCount += success
+			failCount += fail
+			continue
+		}
+
 		fmt.Printf("\n")
 		if err := introspectPlugin(intro, pluginID, outputDir, dryRun); err != nil {
 			fmt.Printf("✗ Failed to introspect %s: %v\n", pluginID, err)
@@ -198,4 +213,84 @@ func introspectAllPlugins(intro *introspector.Introspector, outputDir string, dr
 	}
 
 	return nil
+}
+
+func introspectEnterprisePlugins(intro *introspector.Introspector, outputDir string, dryRun bool) (int, int) {
+	enterpriseDir := filepath.Join(".", "plugins", "enterprise")
+	entries, err := os.ReadDir(enterpriseDir)
+	if err != nil {
+		fmt.Printf("✗ Failed to read enterprise directory: %v\n", err)
+		return 0, 1
+	}
+
+	var successCount int
+	var failCount int
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		subPluginID := entry.Name()
+		fullPluginID := "enterprise/" + subPluginID
+
+		fmt.Printf("Introspecting enterprise sub-plugin: %s\n", subPluginID)
+
+		// Generate manifest for sub-plugin
+		manifest, err := intro.GenerateManifest(fullPluginID)
+		if err != nil {
+			fmt.Printf("✗ Failed to introspect %s: %v\n", fullPluginID, err)
+			failCount++
+			continue
+		}
+
+		// Check if manifest has routes - skip if none
+		if len(manifest.Routes) == 0 {
+			fmt.Printf("⚠ Skipped %s: No HTTP routes (middleware/service only)\n", subPluginID)
+			continue
+		}
+
+		// Validate manifest
+		if err := manifest.Validate(); err != nil {
+			fmt.Printf("✗ Failed to introspect %s: generated manifest is invalid: %v\n", fullPluginID, err)
+			failCount++
+			continue
+		}
+
+		// Convert to YAML
+		yamlData, err := yaml.Marshal(manifest)
+		if err != nil {
+			fmt.Printf("✗ Failed to marshal %s manifest: %v\n", fullPluginID, err)
+			failCount++
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("\n--- %s.yaml ---\n", subPluginID)
+			fmt.Println(string(yamlData))
+			successCount++
+			continue
+		}
+
+		// Write to file
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			fmt.Printf("✗ Failed to create output directory: %v\n", err)
+			failCount++
+			continue
+		}
+
+		outputPath := filepath.Join(outputDir, "enterprise-"+subPluginID+".yaml")
+		if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+			fmt.Printf("✗ Failed to write %s manifest: %v\n", fullPluginID, err)
+			failCount++
+			continue
+		}
+
+		fmt.Printf("✓ Generated manifest: %s\n", outputPath)
+		fmt.Printf("  - %d routes\n", len(manifest.Routes))
+		fmt.Printf("  - %d types\n", len(manifest.Types))
+		successCount++
+	}
+
+	return successCount, failCount
 }

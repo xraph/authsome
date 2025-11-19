@@ -230,7 +230,7 @@ func (h *WebhookHandler) DeleteWebhook(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "webhook deleted successfully"})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "webhook deleted successfully"})
 }
 
 // GetWebhookDeliveries retrieves delivery logs for a webhook

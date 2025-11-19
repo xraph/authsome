@@ -1,109 +1,141 @@
 plugin_id: twofa
 version: 1.0.0
-description: Two-factor authentication
-base_path: /api/auth
-
-types:
-  - name: TwoFASetup
-    description: 2FA setup information
-    fields:
-      secret: string!
-      qrCode: string!
-      backupCodes: string[]!
-
-  - name: TwoFAStatus
-    description: 2FA status
-    fields:
-      enabled: boolean!
-      method: string
-
 routes:
-  - name: Enable
-    description: Enable 2FA for user
-    method: POST
-    path: /2fa/enable
-    auth: true
-    request:
-      method: string!
-    response:
-      secret: string!
-      qrCode: string!
-      backupCodes: string[]!
-    errors:
-      - code: 400
-        description: Invalid method
-      - code: 401
-        description: Not authenticated
-      - code: 409
-        description: 2FA already enabled
-
-  - name: Verify
-    description: Verify 2FA code
-    method: POST
-    path: /2fa/verify
-    auth: true
-    request:
-      code: string!
-    response:
-      success: boolean!
-    errors:
-      - code: 400
-        description: Invalid code
-      - code: 401
-        description: Not authenticated
-
-  - name: Disable
-    description: Disable 2FA for user
-    method: POST
-    path: /2fa/disable
-    auth: true
-    request:
-      password: string!
-    response:
-      success: boolean!
-    errors:
-      - code: 400
-        description: Invalid password
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: 2FA not enabled
-
-  - name: GenerateBackupCodes
-    description: Generate new backup codes
-    method: POST
-    path: /2fa/generate-backup-codes
-    auth: true
-    response:
-      backupCodes: string[]!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: 2FA not enabled
-
-  - name: SendOTP
-    description: Send OTP to user
-    method: POST
-    path: /2fa/send-otp
-    auth: true
-    response:
-      success: boolean!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 429
-        description: Too many requests
-
-  - name: Status
-    description: Get 2FA status
-    method: POST
-    path: /2fa/status
-    auth: true
-    response:
-      enabled: boolean!
-      method: string
-    errors:
-      - code: 401
-        description: Not authenticated
-
+    - name: Enable
+      method: POST
+      path: /2fa/enable
+      request:
+        method: string!
+        user_id: string!
+    - name: Verify
+      method: POST
+      path: /2fa/verify
+      request:
+        code: string!
+        device_id: string!
+        remember_device: bool!
+        user_id: string!
+      response:
+        status: string!
+    - name: Disable
+      method: POST
+      path: /2fa/disable
+      request:
+        user_id: string!
+      response:
+        status: string!
+    - name: GenerateBackupCodes
+      method: POST
+      path: /2fa/generate-backup-codes
+      request:
+        count: int!
+        user_id: string!
+      response:
+        codes: '[]string!'
+    - name: SendOTP
+      description: SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
+      method: POST
+      path: /2fa/send-otp
+      request:
+        user_id: string!
+      response:
+        code: string!
+        status: string!
+    - name: Status
+      description: Status returns whether 2FA is enabled and whether the device is trusted
+      method: POST
+      path: /2fa/status
+      request:
+        device_id: string!
+        user_id: string!
+      response:
+        status: string!
+types:
+    - name: CodesResponse
+      fields:
+        codes: '[]string!'
+    - name: TwoFAStatusResponse
+      fields:
+        status: string!
+    - name: Enable_body
+      fields:
+        method: string!
+        user_id: string!
+    - name: TwoFAErrorResponse
+      fields:
+        error: string!
+    - name: TwoFAStatusDetailResponse
+      fields:
+        enabled: bool!
+        method: string!
+        trusted: bool!
+    - name: Service
+      fields:
+        "": Config
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: Verify_body
+      fields:
+        code: string!
+        device_id: string!
+        remember_device: bool!
+        user_id: string!
+    - name: GenerateBackupCodes_body
+      fields:
+        count: int!
+        user_id: string!
+    - name: SendOTP_body
+      fields:
+        user_id: string!
+    - name: Status_body
+      fields:
+        device_id: string!
+        user_id: string!
+    - name: TwoFAEnableResponse
+      fields:
+        status: string!
+        totp_uri: string!
+    - name: TwoFABackupCodesResponse
+      fields:
+        codes: '[]string!'
+    - name: VerifyRequest
+      fields:
+        "": string
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: OTPSentResponse
+      fields:
+        code: string!
+        status: string!
+    - name: Disable_body
+      fields:
+        user_id: string!
+    - name: Plugin
+      fields:
+        "": '*Service'
+    - name: TwoFASendOTPResponse
+      fields:
+        code: string!
+        status: string!
+    - name: Config
+      fields:
+        backupCodeCount: int!
+        backupCodeLength: int!
+        maxOtpAttempts: int!
+        otpExpiryMinutes: int!
+        requireFor2FA: bool!
+        totpDigits: int!
+        totpIssuer: string!
+        totpPeriod: int!
+        trustedDeviceDays: int!
+    - name: EnableRequest
+      fields:
+        "": string
+    - name: Status
+      fields:
+        "": bool
+    - name: TOTPSecret
+      fields:
+        "": string

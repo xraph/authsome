@@ -174,16 +174,15 @@ func (s *SecurityLayer) sanitizeUser(data interface{}) interface{} {
 
 	// Conditionally mask these based on mode
 	if s.config.Mode == ModeReadOnly {
-		maskFields := []string{
-			"phone",
-			"last_ip",
+		if val, exists := userMap["phone"]; exists {
+			if str, ok := val.(string); ok {
+				userMap["phone"] = maskString(str)
+			}
 		}
 
-		for _, field := range maskFields {
-			if val, exists := userMap[field]; exists {
-				if str, ok := val.(string); ok {
-					userMap[field] = maskString(str)
-				}
+		if val, exists := userMap["last_ip"]; exists {
+			if str, ok := val.(string); ok {
+				userMap["last_ip"] = maskIP(str)
 			}
 		}
 	}

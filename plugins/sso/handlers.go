@@ -13,6 +13,34 @@ type Handler struct {
 	svc *Service
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+
+type MetadataResponse struct {
+	Metadata string `json:"metadata"`
+}
+
+type SSOInitResponse struct {
+	RedirectURL string `json:"redirect_url"`
+	RequestID   string `json:"request_id"`
+}
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // handleError returns the error in a structured format
@@ -56,13 +84,13 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 		OIDCRedirectURI:  req.OIDCRedirectURI,
 	}
 	_ = h.svc.RegisterProvider(c.Request().Context(), prov)
-	return c.JSON(http.StatusOK, map[string]string{"status": "registered", "providerId": prov.ProviderID})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "registered", "providerId": prov.ProviderID})
 }
 
 // SAMLSPMetadata returns Service Provider metadata (placeholder)
 func (h *Handler) SAMLSPMetadata(c forge.Context) error {
 	md := h.svc.SPMetadata()
-	return c.JSON(http.StatusOK, map[string]string{"metadata": md})
+	return c.JSON(http.StatusOK, &MetadataResponse{Metadata: md})
 }
 
 // SAMLCallback handles SAML response callback for given provider
@@ -90,13 +118,11 @@ func (h *Handler) SAMLCallback(c forge.Context) error {
 		return handleError(c, err, "INVALID_SAML_RESPONSE", "Invalid or tampered SAML response", http.StatusBadRequest)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"status":     "saml_callback_ok",
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "saml_callback_ok",
 		"subject":    assertion.Subject,
 		"issuer":     assertion.Issuer,
 		"attributes": assertion.Attributes,
-		"providerId": pid,
-	})
+		"providerId": pid,})
 }
 
 // SAMLLogin initiates SAML authentication by redirecting to IdP
@@ -215,13 +241,11 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":       "oidc_callback_success",
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "oidc_callback_success",
 		"provider_id":  pid,
 		"user_info":    userInfo,
 		"access_token": tokenResponse.AccessToken,
 		"token_type":   tokenResponse.TokenType,
 		"expires_in":   tokenResponse.ExpiresIn,
-		"scope":        tokenResponse.Scope,
-	})
+		"scope":        tokenResponse.Scope,})
 }

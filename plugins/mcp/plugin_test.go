@@ -7,13 +7,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
+	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/repository"
+	"github.com/xraph/forge"
 )
 
 // mockAuth implements the required interfaces for testing
 type mockAuth struct {
 	db              *bun.DB
 	serviceRegistry *registry.ServiceRegistry
+	forgeApp        forge.App
 }
 
 func (m *mockAuth) GetDB() *bun.DB {
@@ -24,8 +29,22 @@ func (m *mockAuth) GetServiceRegistry() *registry.ServiceRegistry {
 	return m.serviceRegistry
 }
 
+func (m *mockAuth) GetForgeApp() forge.App {
+	return m.forgeApp
+}
+
+func (m *mockAuth) Initialize(ctx context.Context) error             { return nil }
+func (m *mockAuth) Mount(router forge.Router, basePath string) error { return nil }
+func (m *mockAuth) RegisterPlugin(plugin core.Plugin) error          { return nil }
+func (m *mockAuth) GetConfig() core.Config                           { return core.Config{} }
+func (m *mockAuth) GetHookRegistry() *hooks.HookRegistry             { return nil }
+func (m *mockAuth) GetBasePath() string                              { return "" }
+func (m *mockAuth) GetPluginRegistry() core.PluginRegistry           { return nil }
+func (m *mockAuth) IsPluginEnabled(pluginID string) bool             { return false }
+func (m *mockAuth) Repository() repository.Repository                { return nil }
+
 func TestPluginID(t *testing.T) {
-	plugin := NewPlugin(DefaultConfig())
+	plugin := NewPlugin(WithDefaultConfig(DefaultConfig()))
 	assert.Equal(t, "mcp", plugin.ID())
 }
 
@@ -34,7 +53,7 @@ func TestPluginInit(t *testing.T) {
 	config.Enabled = true
 	config.Transport = TransportStdio
 
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 
 	// Mock auth with nil DB (will fail)
 	auth := &mockAuth{
@@ -47,22 +66,13 @@ func TestPluginInit(t *testing.T) {
 	assert.Contains(t, err.Error(), "database not available")
 }
 
-func TestPluginInitInvalidAuth(t *testing.T) {
-	plugin := NewPlugin(DefaultConfig())
-
-	// Pass invalid auth type
-	err := plugin.Init("not-an-auth-instance")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "does not implement required methods")
-}
-
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	assert.False(t, config.Enabled) // Opt-in
 	assert.Equal(t, ModeReadOnly, config.Mode)
 	assert.Equal(t, TransportStdio, config.Transport)
-	assert.Equal(t, 9090, config.HTTPPort)
+	assert.Equal(t, 9090, config.Port)
 	assert.True(t, config.Authorization.RequireAPIKey)
 	assert.Greater(t, len(config.Authorization.AllowedOperations), 0)
 	assert.Equal(t, 60, config.RateLimit.RequestsPerMinute)
@@ -106,7 +116,7 @@ func TestConfigTransports(t *testing.T) {
 }
 
 func TestPluginHooksAndDecorators(t *testing.T) {
-	plugin := NewPlugin(DefaultConfig())
+	plugin := NewPlugin(WithDefaultConfig(DefaultConfig()))
 
 	// MCP plugin doesn't use hooks or decorators
 	err := plugin.RegisterHooks(nil)
@@ -358,7 +368,7 @@ func TestServerCreation(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
 
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 	server, err := NewServer(config, plugin)
 
 	require.NoError(t, err)
@@ -370,7 +380,7 @@ func TestServerCreation(t *testing.T) {
 
 func TestServerHandleInitialize(t *testing.T) {
 	config := DefaultConfig()
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 	server, err := NewServer(config, plugin)
 	require.NoError(t, err)
 
@@ -390,7 +400,7 @@ func TestServerHandleInitialize(t *testing.T) {
 
 func TestServerHandlePing(t *testing.T) {
 	config := DefaultConfig()
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 	server, err := NewServer(config, plugin)
 	require.NoError(t, err)
 
@@ -413,7 +423,7 @@ func TestServerHandlePing(t *testing.T) {
 
 func TestServerHandleResourcesList(t *testing.T) {
 	config := DefaultConfig()
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 	server, err := NewServer(config, plugin)
 	require.NoError(t, err)
 
@@ -438,7 +448,7 @@ func TestServerHandleResourcesList(t *testing.T) {
 
 func TestServerHandleToolsList(t *testing.T) {
 	config := DefaultConfig()
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 	server, err := NewServer(config, plugin)
 	require.NoError(t, err)
 
@@ -463,7 +473,7 @@ func TestServerHandleToolsList(t *testing.T) {
 
 func TestServerHandleUnknownMethod(t *testing.T) {
 	config := DefaultConfig()
-	plugin := NewPlugin(config)
+	plugin := NewPlugin(WithDefaultConfig(config))
 	server, err := NewServer(config, plugin)
 	require.NoError(t, err)
 

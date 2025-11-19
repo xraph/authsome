@@ -1,0 +1,254 @@
+plugin_id: notification
+version: 1.0.0
+routes:
+    - name: PreviewTemplate
+      description: PreviewTemplate handles template preview requests
+      method: POST
+      path: /:id/preview
+      request:
+        variables: '!'
+    - name: CreateTemplate
+      description: CreateTemplate creates a new notification template
+      method: POST
+      path: /createtemplate
+    - name: GetTemplate
+      description: GetTemplate retrieves a template by ID
+      method: GET
+      path: /:id
+    - name: ListTemplates
+      description: ListTemplates lists all templates with pagination
+      method: GET
+      path: /listtemplates
+    - name: UpdateTemplate
+      description: UpdateTemplate updates a template
+      method: PUT
+      path: /:id
+      response:
+        message: string!
+    - name: DeleteTemplate
+      description: DeleteTemplate deletes a template
+      method: DELETE
+      path: /:id
+      response:
+        message: string!
+    - name: ResetTemplate
+      description: ResetTemplate resets a template to default values
+      method: POST
+      path: /:id/reset
+      response:
+        message: string!
+    - name: ResetAllTemplates
+      description: ResetAllTemplates resets all templates for an app to defaults
+      method: POST
+      path: /reset-all
+      response:
+        message: string!
+    - name: GetTemplateDefaults
+      description: GetTemplateDefaults returns default template metadata
+      method: GET
+      path: /defaults
+    - name: PreviewTemplate
+      description: PreviewTemplate renders a template with provided variables
+      method: POST
+      path: /:id/preview
+      request:
+        variables: '!'
+    - name: RenderTemplate
+      description: RenderTemplate renders a template string with variables (no template ID required)
+      method: POST
+      path: /render
+      request:
+        template: string!
+        variables: '!'
+    - name: SendNotification
+      description: SendNotification sends a notification
+      method: POST
+      path: /send
+    - name: GetNotification
+      description: GetNotification retrieves a notification by ID
+      method: GET
+      path: /:id
+    - name: ListNotifications
+      description: ListNotifications lists all notifications with pagination
+      method: GET
+      path: /listnotifications
+    - name: ResendNotification
+      description: ResendNotification resends a notification
+      method: POST
+      path: /:id/resend
+    - name: HandleWebhook
+      description: HandleWebhook handles provider webhook callbacks
+      method: POST
+      path: /notifications/webhook/:provider
+      response:
+        status: string!
+types:
+    - name: RateLimit
+      fields:
+        max_requests: int!
+        window: time.Duration!
+    - name: UpdateProvider_req
+      fields:
+        config: '!'
+        isActive: bool!
+        isDefault: bool!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: Config
+      fields:
+        add_default_templates: bool!
+        allow_app_overrides: bool!
+        allow_template_reset: bool!
+        auto_populate_templates: bool!
+        auto_send_welcome: bool!
+        cleanup_after: time.Duration!
+        default_language: string!
+        providers: ProvidersConfig!
+        rate_limits: '!'
+        retry_attempts: int!
+        retry_delay: time.Duration!
+    - name: DashboardExtension
+      fields:
+        "": '*dashboard.ExtensionRegistry'
+    - name: TemplateDefault
+      fields:
+        "": string
+    - name: NotificationTemplateListResponse
+      fields:
+        templates: '[]!'
+        total: int!
+    - name: NotificationResponse
+      fields:
+        notification: '!'
+    - name: TemplateService
+      fields:
+        "": Config
+    - name: EmailProviderConfig
+      fields:
+        config: '!'
+        from: string!
+        from_name: string!
+        provider: string!
+        reply_to: string!
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: TemplatesResponse
+      fields:
+        count: int!
+        templates: '!'
+    - name: DeclareABTestWinner_req
+      fields:
+        abTestGroup: string!
+        winnerId: string!
+    - name: TrackNotificationEvent_req
+      fields:
+        event: string!
+        eventData: ""
+        notificationId: string!
+        organizationId: '*string'
+        templateId: string!
+    - name: NotificationTemplateResponse
+      fields:
+        template: '!'
+    - name: NotificationListResponse
+      fields:
+        notifications: '[]!'
+        total: int!
+    - name: Adapter
+      fields:
+        "": '*TemplateService'
+    - name: SMSProviderConfig
+      fields:
+        config: '!'
+        from: string!
+        provider: string!
+    - name: TestProvider_req
+      fields:
+        config: '!'
+        providerName: string!
+        providerType: string!
+        testRecipient: string!
+    - name: ChannelsResponse
+      fields:
+        channels: '!'
+        count: int!
+    - name: NotificationErrorResponse
+      fields:
+        error: string!
+    - name: NotificationPreviewResponse
+      fields:
+        body: string!
+        subject: string!
+    - name: SendWithTemplateRequest
+      fields:
+        appId: xid.ID!
+        language: string!
+        metadata: '!'
+        recipient: string!
+        templateKey: string!
+        type: notification.NotificationType!
+        variables: '!'
+    - name: SaveNotificationSettings_req
+      fields:
+        autoSendWelcome: bool!
+        cleanupAfter: string!
+        retryAttempts: int!
+        retryDelay: string!
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: NotificationsResponse
+      fields:
+        count: int!
+        notifications: '!'
+    - name: RenderTemplate_req
+      fields:
+        template: string!
+        variables: '!'
+    - name: CreateTemplateVersion_req
+      fields:
+        changes: string!
+    - name: CreateABTestVariant_req
+      fields:
+        body: string!
+        name: string!
+        subject: string!
+        weight: int!
+    - name: TemplateEngine
+      fields:
+        "": template.FuncMap
+    - name: Handler
+      fields:
+        "": '*notification.AnalyticsService'
+    - name: PreviewTemplate_req
+      fields:
+        variables: '!'
+    - name: TestSendTemplate_req
+      fields:
+        recipient: string!
+        variables: '!'
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: ProvidersConfig
+      fields:
+        email: EmailProviderConfig!
+        sms: '*SMSProviderConfig!'
+    - name: SuccessResponse
+      fields:
+        success: bool!
+    - name: CreateProvider_req
+      fields:
+        config: '!'
+        isDefault: bool!
+        organizationId: '*string'
+        providerName: string!
+        providerType: string!
+    - name: NotificationWebhookResponse
+      fields:
+        status: string!
+    - name: NotificationStatusResponse
+      fields:
+        status: string!

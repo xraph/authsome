@@ -13,6 +13,31 @@ type Handler struct {
 	svc *Service
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+
+type AuthResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token"`
+}
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
 // handleError returns the error in a structured format
@@ -58,7 +83,7 @@ func (h *Handler) FinishRegister(c forge.Context) error {
 	if err := h.svc.FinishRegistration(c.Request().Context(), userID, body.CredentialID, ip, ua); err != nil {
 		return handleError(c, err, "FINISH_REGISTRATION_FAILED", "Failed to complete passkey registration", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "registered"})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "registered"})
 }
 
 func (h *Handler) BeginLogin(c forge.Context) error {
@@ -97,7 +122,7 @@ func (h *Handler) FinishLogin(c forge.Context) error {
 	if err != nil {
 		return handleError(c, err, "FINISH_LOGIN_FAILED", "Failed to complete passkey login", http.StatusUnauthorized)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"user": res.User, "session": res.Session, "token": res.Token})
+	return c.JSON(http.StatusOK, &AuthResponse{User: res.User, Session: res.Session, Token: res.Token})
 }
 
 func (h *Handler) List(c forge.Context) error {
@@ -130,5 +155,5 @@ func (h *Handler) Delete(c forge.Context) error {
 	if err := h.svc.Delete(c.Request().Context(), id, ip, ua); err != nil {
 		return handleError(c, err, "DELETE_PASSKEY_FAILED", "Failed to delete passkey", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "deleted"})
 }

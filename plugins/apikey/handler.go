@@ -18,6 +18,25 @@ type Handler struct {
 	config  Config
 }
 
+// Response types
+type CreateAPIKeyResponse struct {
+	APIKey  *apikey.APIKey `json:"api_key"`
+	Message string         `json:"message"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type RotateAPIKeyResponse struct {
+	APIKey  *apikey.APIKey `json:"api_key"`
+	Message string         `json:"message"`
+}
+
+type RolesResponse struct {
+	Roles []*apikey.Role `json:"roles"`
+}
+
 // NewHandler creates a new API key handler
 func NewHandler(service *apikey.Service, config Config) *Handler {
 	return &Handler{
@@ -102,9 +121,9 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
-	return c.JSON(201, map[string]interface{}{
-		"api_key": key,
-		"message": "API key created successfully. Store the key securely - it won't be shown again.",
+	return c.JSON(201, &CreateAPIKeyResponse{
+		APIKey:  key,
+		Message: "API key created successfully. Store the key securely - it won't be shown again.",
 	})
 }
 
@@ -304,8 +323,8 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
-	return c.JSON(200, map[string]string{
-		"message": "API key deleted successfully",
+	return c.JSON(200, &MessageResponse{
+		Message: "API key deleted successfully",
 	})
 }
 
@@ -357,9 +376,9 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
-	return c.JSON(200, map[string]interface{}{
-		"api_key": newKey,
-		"message": "API key rotated successfully. Store the new key securely - it won't be shown again.",
+	return c.JSON(200, &RotateAPIKeyResponse{
+		APIKey:  newKey,
+		Message: "API key rotated successfully. Store the new key securely - it won't be shown again.",
 	})
 }
 
@@ -458,8 +477,8 @@ func (h *Handler) AssignRole(c forge.Context) error {
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
-	return c.JSON(200, map[string]string{
-		"message": "Role assigned successfully",
+	return c.JSON(200, &MessageResponse{
+		Message: "Role assigned successfully",
 	})
 }
 
@@ -511,8 +530,8 @@ func (h *Handler) UnassignRole(c forge.Context) error {
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
-	return c.JSON(200, map[string]string{
-		"message": "Role unassigned successfully",
+	return c.JSON(200, &MessageResponse{
+		Message: "Role unassigned successfully",
 	})
 }
 
@@ -546,8 +565,8 @@ func (h *Handler) GetRoles(c forge.Context) error {
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
-	return c.JSON(200, map[string]interface{}{
-		"roles": roles,
+	return c.JSON(200, &RolesResponse{
+		Roles: roles,
 	})
 }
 

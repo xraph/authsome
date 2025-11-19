@@ -11,6 +11,26 @@ import (
 // Handler exposes HTTP endpoints for 2FA operations
 type Handler struct{ svc *Service }
 
+// Response types
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type CodesResponse struct {
+	Codes []string `json:"codes"`
+}
+
+type OTPSentResponse struct {
+	Status string `json:"status"`
+	Code   string `json:"code"`
+}
+
+type TwoFAStatusResponse struct {
+	Enabled bool   `json:"enabled"`
+	Method  string `json:"method"`
+	Trusted bool   `json:"trusted"`
+}
+
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
 // handleError returns the error in a structured format
@@ -64,7 +84,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	if body.RememberDevice && body.DeviceID != "" {
 		_ = h.svc.MarkTrusted(c.Request().Context(), body.UserID, body.DeviceID, 30)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "verified"})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "verified"})
 }
 
 func (h *Handler) Disable(c forge.Context) error {
@@ -78,7 +98,7 @@ func (h *Handler) Disable(c forge.Context) error {
 	if err := h.svc.Disable(c.Request().Context(), body.UserID); err != nil {
 		return handleError(c, err, "DISABLE_2FA_FAILED", "Failed to disable 2FA", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "2fa_disabled"})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: "2fa_disabled"})
 }
 
 func (h *Handler) GenerateBackupCodes(c forge.Context) error {
@@ -96,7 +116,7 @@ func (h *Handler) GenerateBackupCodes(c forge.Context) error {
 	if err != nil {
 		return handleError(c, err, "GENERATE_CODES_FAILED", "Failed to generate backup codes", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{"codes": codes})
+	return c.JSON(http.StatusOK, &CodesResponse{Codes: codes})
 }
 
 // SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
@@ -115,7 +135,7 @@ func (h *Handler) SendOTP(c forge.Context) error {
 		return handleError(c, err, "SEND_OTP_FAILED", "Failed to send OTP", http.StatusBadRequest)
 	}
 	// In production, deliver via email/SMS; here we return for testing
-	return c.JSON(http.StatusOK, map[string]interface{}{"status": "otp_sent", "code": code})
+	return c.JSON(http.StatusOK, &OTPSentResponse{Status: "otp_sent", Code: code})
 }
 
 // Status returns whether 2FA is enabled and whether the device is trusted
@@ -138,5 +158,5 @@ func (h *Handler) Status(c forge.Context) error {
 		}
 		return handleError(c, err, "GET_STATUS_FAILED", "Failed to get 2FA status", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{"enabled": st.Enabled, "method": st.Method, "trusted": st.Trusted})
+	return c.JSON(http.StatusOK, &TwoFAStatusResponse{Enabled: st.Enabled, Method: st.Method, Trusted: st.Trusted})
 }

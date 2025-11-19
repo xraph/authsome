@@ -86,19 +86,67 @@ func (i *Introspector) extractHandlerMethod(fn *ast.FuncDecl, routeInfo *RouteIn
 		Description: i.extractComment(fn.Doc),
 	}
 
+	// Track variable declarations for type inference
+	varTypes := make(map[string]*TypeInfo)
+
 	// Extract request/response types from function body
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch x := n.(type) {
+		case *ast.DeclStmt:
+			// Look for variable declarations like: var reqBody struct { ... }
+			if genDecl, ok := x.Decl.(*ast.GenDecl); ok && genDecl.Tok == token.VAR {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for idx, name := range valueSpec.Names {
+							varName := name.Name
+							// Extract type from inline struct or named type
+							if idx < len(valueSpec.Values) {
+								// Has initializer
+								continue
+							}
+							if valueSpec.Type != nil {
+								if structType, ok := valueSpec.Type.(*ast.StructType); ok {
+									// Inline struct definition - use handler name to make unique
+									uniqueName := fn.Name.Name + "_" + varName
+									typeInfo := i.extractInlineStruct(uniqueName, structType)
+									varTypes[varName] = typeInfo
+									routeInfo.Types[uniqueName] = typeInfo
+								} else {
+									// Named type reference
+									typeName := i.exprToString(valueSpec.Type)
+									varTypes[varName] = &TypeInfo{Name: typeName}
+								}
+							}
+						}
+					}
+				}
+			}
 		case *ast.CallExpr:
 			// Look for c.BindJSON(&req) to find request type
 			if i.isBindCall(x) {
-				if reqType := i.extractTypeFromCall(x); reqType != "" {
-					route.RequestType = reqType
+				if reqVar := i.extractVarFromCall(x); reqVar != "" {
+					if typeInfo, ok := varTypes[reqVar]; ok {
+						route.RequestType = typeInfo.Name
+					}
+				}
+			}
+			// Look for json.NewDecoder().Decode(&req) to find request type
+			if i.isDecodeCall(x) {
+				if reqVar := i.extractVarFromCall(x); reqVar != "" {
+					if typeInfo, ok := varTypes[reqVar]; ok {
+						route.RequestType = typeInfo.Name
+					}
 				}
 			}
 			// Look for c.JSON(status, response) to find response type
 			if i.isJSONCall(x) {
-				if respType := i.extractTypeFromCall(x); respType != "" {
+				if respVar := i.extractVarFromJSONCall(x); respVar != "" {
+					if typeInfo, ok := varTypes[respVar]; ok {
+						route.ResponseType = typeInfo.Name
+					}
+				}
+				// Also check for inline struct literals like &CreateAPIKeyResponse{...}
+				if respType := i.extractTypeFromJSONCall(x); respType != "" {
 					route.ResponseType = respType
 				}
 			}
@@ -106,9 +154,9 @@ func (i *Introspector) extractHandlerMethod(fn *ast.FuncDecl, routeInfo *RouteIn
 		return true
 	})
 
-	if route.RequestType != "" || route.ResponseType != "" {
-		routeInfo.Routes = append(routeInfo.Routes, route)
-	}
+	// Always add handler methods, even if we couldn't determine request/response types
+	// The route registration will provide the path and method
+	routeInfo.Routes = append(routeInfo.Routes, route)
 }
 
 // isHandlerMethod checks if a function is a handler method
@@ -126,14 +174,15 @@ func (i *Introspector) isHandlerMethod(fn *ast.FuncDecl) bool {
 	return false
 }
 
-// isForgeContext checks if a type is *forge.Context
+// isForgeContext checks if a type is forge.Context or *forge.Context
 func (i *Introspector) isForgeContext(expr ast.Expr) bool {
-	star, ok := expr.(*ast.StarExpr)
-	if !ok {
-		return false
+	// Check for *forge.Context (pointer)
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
 	}
 
-	sel, ok := star.X.(*ast.SelectorExpr)
+	// Check for forge.Context (value)
+	sel, ok := expr.(*ast.SelectorExpr)
 	if !ok {
 		return false
 	}
@@ -324,16 +373,18 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 		return nil, err
 	}
 
-	// Get handler info
-	handlerPath := pluginPath
+	// Get handler info - look in handlers subdirectory if it exists, otherwise plugin root
+	handlerPath := filepath.Join(pluginPath, "handlers")
+	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
+		handlerPath = pluginPath
+	}
 	routeInfo, err := i.IntrospectHandlers(handlerPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get route registrations
-	routesPath := filepath.Join(i.projectRoot, "routes")
-	registrations, err := i.IntrospectRoutes(routesPath)
+	// Get route registrations from plugin directory (routes.go or plugin.go)
+	registrations, err := i.IntrospectRoutes(pluginPath)
 	if err != nil {
 		return nil, err
 	}
@@ -362,11 +413,18 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 			continue
 		}
 
+		// Handle empty paths (from router groups) - use a placeholder
+		path := reg.Path
+		if path == "" {
+			// Try to infer from handler name (e.g., CreateAPIKey -> /api-key)
+			path = "/" + strings.ToLower(route.Name)
+		}
+
 		manifestRoute := manifest.Route{
 			Name:        route.Name,
 			Description: route.Description,
 			Method:      reg.Method,
-			Path:        reg.Path,
+			Path:        path,
 			Request:     i.convertTypeToFields(route.RequestType, routeInfo),
 			Response:    i.convertTypeToFields(route.ResponseType, routeInfo),
 		}
@@ -448,6 +506,109 @@ func (i *Introspector) isBindCall(call *ast.CallExpr) bool {
 func (i *Introspector) isJSONCall(call *ast.CallExpr) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	return ok && sel.Sel.Name == "JSON"
+}
+
+func (i *Introspector) isDecodeCall(call *ast.CallExpr) bool {
+	// Look for json.NewDecoder().Decode(&req) pattern
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Decode" {
+		return false
+	}
+	// Check if receiver is a call to NewDecoder
+	if innerCall, ok := sel.X.(*ast.CallExpr); ok {
+		if innerSel, ok := innerCall.Fun.(*ast.SelectorExpr); ok {
+			return innerSel.Sel.Name == "NewDecoder"
+		}
+	}
+	return false
+}
+
+func (i *Introspector) extractVarFromCall(call *ast.CallExpr) string {
+	if len(call.Args) == 0 {
+		return ""
+	}
+
+	// For Decode(&req) or BindJSON(&req), extract variable name from unary expression
+	if unary, ok := call.Args[0].(*ast.UnaryExpr); ok {
+		if ident, ok := unary.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	}
+
+	return ""
+}
+
+func (i *Introspector) extractVarFromJSONCall(call *ast.CallExpr) string {
+	// For c.JSON(status, response), extract second argument
+	if len(call.Args) < 2 {
+		return ""
+	}
+
+	if ident, ok := call.Args[1].(*ast.Ident); ok {
+		return ident.Name
+	}
+
+	return ""
+}
+
+func (i *Introspector) extractTypeFromJSONCall(call *ast.CallExpr) string {
+	// For c.JSON(status, &ResponseType{...}), extract type from composite literal
+	if len(call.Args) < 2 {
+		return ""
+	}
+
+	// Check for unary expression (address operator &)
+	var expr ast.Expr = call.Args[1]
+	if unary, ok := expr.(*ast.UnaryExpr); ok {
+		expr = unary.X
+	}
+
+	// Check for composite literal
+	if comp, ok := expr.(*ast.CompositeLit); ok {
+		return i.exprToString(comp.Type)
+	}
+
+	return ""
+}
+
+func (i *Introspector) extractInlineStruct(varName string, structType *ast.StructType) *TypeInfo {
+	typeInfo := &TypeInfo{
+		Name:   varName,
+		Fields: make(map[string]FieldInfo),
+	}
+
+	if structType.Fields == nil {
+		return typeInfo
+	}
+
+	for _, field := range structType.Fields.List {
+		// Extract JSON tag
+		jsonTag := ""
+		if field.Tag != nil {
+			jsonTag = i.extractJSONTag(field.Tag)
+		}
+
+		// Skip fields without JSON tags or with "-"
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+
+		// Extract field type
+		fieldType := i.exprToString(field.Type)
+
+		// Extract field names
+		for _, name := range field.Names {
+			fieldInfo := FieldInfo{
+				Name:     name.Name,
+				Type:     fieldType,
+				JSONTag:  jsonTag,
+				Required: !strings.Contains(field.Tag.Value, "omitempty"),
+			}
+			typeInfo.Fields[jsonTag] = fieldInfo
+		}
+	}
+
+	return typeInfo
 }
 
 func (i *Introspector) extractTypeFromCall(call *ast.CallExpr) string {

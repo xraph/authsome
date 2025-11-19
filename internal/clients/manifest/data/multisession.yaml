@@ -1,0 +1,70 @@
+plugin_id: multisession
+version: 1.0.0
+routes:
+    - name: List
+      description: List returns sessions for the current user based on cookie
+      method: GET
+      path: /list
+      response:
+        sessions: '!'
+    - name: SetActive
+      description: SetActive switches the current session cookie to the provided session id
+      method: POST
+      path: /set-active
+      request:
+        id: string!
+      response:
+        session: '!'
+        token: string!
+    - name: Delete
+      description: Delete revokes a session by id for the current user
+      method: POST
+      path: /delete/{id}
+types:
+    - name: Config
+      fields:
+        allowCrossPlatform: bool!
+        enableDeviceTracking: bool!
+        maxSessionsPerUser: int!
+        sessionExpiryHours: int!
+    - name: MultiSessionErrorResponse
+      fields:
+        error: string!
+    - name: MultiSessionSetActiveResponse
+      fields:
+        session: '!'
+        token: string!
+    - name: MultiSessionDeleteResponse
+      fields:
+        status: string!
+    - name: DashboardExtension
+      fields:
+        "": '*dashboard.ExtensionRegistry'
+    - name: SessionsResponse
+      fields:
+        sessions: '!'
+    - name: SessionTokenResponse
+      fields:
+        session: '!'
+        token: string!
+    - name: testContext
+      fields:
+        "": '*http.Request'
+    - name: MultiSessionListResponse
+      fields:
+        sessions: '[]!'
+    - name: Service
+      fields:
+        "": '*auth.Service'
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: SetActive_body
+      fields:
+        id: string!
+    - name: testRouter
+      fields:
+        "": string
+    - name: Plugin
+      fields:
+        "": '*DashboardExtension'

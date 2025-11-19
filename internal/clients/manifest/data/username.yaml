@@ -1,0 +1,79 @@
+plugin_id: username
+version: 1.0.0
+routes:
+    - name: SignUp
+      method: POST
+      path: /username/signup
+      request:
+        password: string!
+        username: string!
+      response:
+        status: string!
+    - name: SignIn
+      method: POST
+      path: /username/signin
+      request:
+        password: string!
+        remember: bool!
+        username: string!
+      response:
+        session: '!'
+        token: string!
+        user: '!'
+types:
+    - name: UsernameStatusResponse
+      fields:
+        status: string!
+    - name: UsernameSignInResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Handler
+      fields:
+        "": '*repo.TwoFARepository'
+    - name: TwoFARequiredResponse
+      fields:
+        device_id: string!
+        require_twofa: bool!
+        user: '!'
+    - name: SignUp_body
+      fields:
+        password: string!
+        username: string!
+    - name: SignIn_body
+      fields:
+        password: string!
+        remember: bool!
+        username: string!
+    - name: Plugin
+      fields:
+        "": core.Authsome
+    - name: UsernameErrorResponse
+      fields:
+        error: string!
+    - name: Username2FARequiredResponse
+      fields:
+        device_id: string!
+        require_twofa: bool!
+        user: '!'
+    - name: Service
+      fields:
+        "": Config
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: SignInResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Config
+      fields:
+        allowUsernameLogin: bool!
+        maxPasswordLength: int!
+        minPasswordLength: int!
+        requireLowercase: bool!
+        requireNumber: bool!
+        requireSpecialChar: bool!
+        requireUppercase: bool!

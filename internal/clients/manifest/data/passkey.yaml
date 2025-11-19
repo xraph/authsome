@@ -1,100 +1,103 @@
 plugin_id: passkey
 version: 1.0.0
-description: Passkey (WebAuthn) authentication
-base_path: /api/auth
-
-types:
-  - name: PasskeyCredential
-    description: Passkey credential
-    fields:
-      id: string!
-      userId: string!
-      credentialId: string!
-      publicKey: string!
-      name: string
-      createdAt: string!
-      lastUsedAt: string
-
 routes:
-  - name: RegisterBegin
-    description: Begin passkey registration
-    method: POST
-    path: /passkey/register/begin
-    auth: true
-    request:
-      name: string
-    response:
-      options: object!
-    errors:
-      - code: 401
-        description: Not authenticated
-
-  - name: RegisterComplete
-    description: Complete passkey registration
-    method: POST
-    path: /passkey/register/complete
-    auth: true
-    request:
-      credential: object!
-    response:
-      success: boolean!
-      credentialId: string!
-    errors:
-      - code: 400
-        description: Invalid credential
-      - code: 401
-        description: Not authenticated
-
-  - name: AuthenticateBegin
-    description: Begin passkey authentication
-    method: POST
-    path: /passkey/authenticate/begin
-    request:
-      email: string
-    response:
-      options: object!
-    errors:
-      - code: 400
-        description: Invalid request
-
-  - name: AuthenticateComplete
-    description: Complete passkey authentication
-    method: POST
-    path: /passkey/authenticate/complete
-    request:
-      credential: object!
-    response:
-      user: User!
-      session: Session!
-    errors:
-      - code: 400
-        description: Invalid credential
-      - code: 401
-        description: Authentication failed
-
-  - name: List
-    description: List user passkeys
-    method: GET
-    path: /passkey/list
-    auth: true
-    response:
-      credentials: PasskeyCredential[]!
-    errors:
-      - code: 401
-        description: Not authenticated
-
-  - name: Delete
-    description: Delete a passkey
-    method: POST
-    path: /passkey/delete
-    auth: true
-    request:
-      credentialId: string!
-    response:
-      success: boolean!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Credential not found
-
+    - name: BeginRegister
+      method: POST
+      path: /register/begin
+      request:
+        user_id: string!
+    - name: FinishRegister
+      method: POST
+      path: /register/finish
+      request:
+        credential_id: string!
+        user_id: string!
+      response:
+        status: string!
+    - name: BeginLogin
+      method: POST
+      path: /login/begin
+      request:
+        user_id: string!
+    - name: FinishLogin
+      method: POST
+      path: /login/finish
+      request:
+        remember: bool!
+        user_id: string!
+      response:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: List
+      method: GET
+      path: /list
+    - name: Delete
+      method: DELETE
+      path: /:id
+      response:
+        status: string!
+types:
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: SuccessResponse
+      fields:
+        success: bool!
+    - name: BeginRegister_body
+      fields:
+        user_id: string!
+    - name: FinishRegister_body
+      fields:
+        credential_id: string!
+        user_id: string!
+    - name: FinishLogin_body
+      fields:
+        remember: bool!
+        user_id: string!
+    - name: PasskeyLoginOptionsResponse
+      fields:
+        options: '!'
+    - name: PasskeyListResponse
+      fields:
+        passkeys: '[]!'
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: AuthResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: PasskeyErrorResponse
+      fields:
+        error: string!
+    - name: PasskeyStatusResponse
+      fields:
+        status: string!
+    - name: PasskeyLoginResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: PasskeyRegistrationOptionsResponse
+      fields:
+        options: '!'
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: BeginLogin_body
+      fields:
+        user_id: string!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: Config
+      fields:
+        "": string
+    - name: Service
+      fields:
+        "": Config

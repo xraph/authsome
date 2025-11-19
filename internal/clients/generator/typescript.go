@@ -142,8 +142,13 @@ func (g *TypeScriptGenerator) generateTypes() error {
 	for _, t := range typeMap {
 		sb.WriteString(fmt.Sprintf("export interface %s {\n", t.Name))
 		for name, typeStr := range t.Fields {
+			// Skip fields with empty or invalid names (embedded fields)
+			if name == "" || name == "-" {
+				continue
+			}
+
 			field := manifest.ParseField(name, typeStr)
-			tsType := g.mapTypeToTS(field.Type)
+			tsType := g.mapTypeToTSForTypesFile(field.Type)
 
 			if field.Array {
 				tsType += "[]"
@@ -329,7 +334,7 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("  }\n\n")
 
 	// Generate request helper
-	sb.WriteString("  private async request<T>(\n")
+	sb.WriteString("  public async request<T>(\n")
 	sb.WriteString("    method: string,\n")
 	sb.WriteString("    path: string,\n")
 	sb.WriteString("    options?: {\n")
@@ -436,6 +441,10 @@ func (g *TypeScriptGenerator) generateTSMethod(sb *strings.Builder, m *manifest.
 func (g *TypeScriptGenerator) generateTSRequestType(route *manifest.Route) string {
 	var parts []string
 	for name, typeStr := range route.Request {
+		// Skip fields with empty or invalid names (embedded fields)
+		if name == "" || name == "-" {
+			continue
+		}
 		field := manifest.ParseField(name, typeStr)
 		tsType := g.mapTypeToTS(field.Type)
 		if field.Array {
@@ -453,6 +462,10 @@ func (g *TypeScriptGenerator) generateTSRequestType(route *manifest.Route) strin
 func (g *TypeScriptGenerator) generateTSParamsType(route *manifest.Route) string {
 	var parts []string
 	for name, typeStr := range route.Params {
+		// Skip fields with empty or invalid names (embedded fields)
+		if name == "" || name == "-" {
+			continue
+		}
 		field := manifest.ParseField(name, typeStr)
 		tsType := g.mapTypeToTS(field.Type)
 		parts = append(parts, fmt.Sprintf("%s: %s", field.Name, tsType))
@@ -463,6 +476,10 @@ func (g *TypeScriptGenerator) generateTSParamsType(route *manifest.Route) string
 func (g *TypeScriptGenerator) generateTSQueryType(route *manifest.Route) string {
 	var parts []string
 	for name, typeStr := range route.Query {
+		// Skip fields with empty or invalid names (embedded fields)
+		if name == "" || name == "-" {
+			continue
+		}
 		field := manifest.ParseField(name, typeStr)
 		tsType := g.mapTypeToTS(field.Type)
 		optional := "?"
@@ -474,6 +491,10 @@ func (g *TypeScriptGenerator) generateTSQueryType(route *manifest.Route) string 
 func (g *TypeScriptGenerator) generateTSResponseType(route *manifest.Route) string {
 	var parts []string
 	for name, typeStr := range route.Response {
+		// Skip fields with empty or invalid names (embedded fields)
+		if name == "" || name == "-" {
+			continue
+		}
 		field := manifest.ParseField(name, typeStr)
 		tsType := g.mapTypeToTS(field.Type)
 		if field.Array {
@@ -516,7 +537,14 @@ func (g *TypeScriptGenerator) generatePluginFile(m *manifest.Manifest) error {
 	sb.WriteString("  }\n\n")
 
 	// Generate plugin methods
+	generatedMethods := make(map[string]bool)
 	for _, route := range m.Routes {
+		methodName := g.camelCase(route.Name)
+		// Skip duplicate method names (can happen if routes are extracted multiple times)
+		if generatedMethods[methodName] {
+			continue
+		}
+		generatedMethods[methodName] = true
 		g.generatePluginTSMethod(&sb, m, &route)
 	}
 
@@ -560,11 +588,7 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 		sb.WriteString(fmt.Sprintf("    const path = '%s%s';\n", m.BasePath, path))
 	}
 
-	sb.WriteString("    return (this.client as any).request")
-	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("<{ %s }>", g.generateTSResponseType(route)))
-	}
-	sb.WriteString(fmt.Sprintf("('%s', path", strings.ToUpper(route.Method)))
+	sb.WriteString(fmt.Sprintf("    return this.client.request<{ %s }>('%s', path", g.generateTSResponseType(route), strings.ToUpper(route.Method)))
 
 	if len(route.Request) > 0 || len(route.Query) > 0 || route.Auth {
 		sb.WriteString(", {\n")
@@ -604,7 +628,42 @@ func (g *TypeScriptGenerator) generateIndex() error {
 	return g.writeFile("src/index.ts", sb.String())
 }
 
-func (g *TypeScriptGenerator) mapTypeToTS(goType string) string {
+// mapTypeToTSForTypesFile maps Go types to TypeScript without the types. prefix
+// Used when generating the types.ts file itself
+func (g *TypeScriptGenerator) mapTypeToTSForTypesFile(goType string) string {
+	// Handle empty types
+	if goType == "" {
+		return "any"
+	}
+
+	// Handle array notation (shouldn't happen after ParseField, but just in case)
+	if strings.HasPrefix(goType, "[]") {
+		innerType := g.mapTypeToTSForTypesFile(strings.TrimPrefix(goType, "[]"))
+		return innerType + "[]"
+	}
+
+	// Handle pointer notation
+	if strings.HasPrefix(goType, "*") {
+		innerType := g.mapTypeToTSForTypesFile(strings.TrimPrefix(goType, "*"))
+		return innerType + " | undefined"
+	}
+
+	// Handle qualified types (e.g., xid.ID, time.Time, types.User)
+	if strings.Contains(goType, ".") {
+		// For qualified types, just return string or appropriate mapping
+		switch {
+		case strings.HasSuffix(goType, ".ID"):
+			return "string"
+		case strings.HasSuffix(goType, ".Time"):
+			return "string"
+		case strings.HasPrefix(goType, "types."):
+			// Already prefixed with types. - just use the type name without prefix
+			return strings.TrimPrefix(goType, "types.")
+		default:
+			return "any"
+		}
+	}
+
 	switch goType {
 	case "string":
 		return "string"
@@ -612,11 +671,85 @@ func (g *TypeScriptGenerator) mapTypeToTS(goType string) string {
 		return "number"
 	case "bool", "boolean":
 		return "boolean"
+	case "byte":
+		return "number"
 	case "object", "map":
 		return "Record<string, any>"
+	case "error":
+		return "Error"
+	case "any", "interface{}":
+		return "any"
+	// Enums and special types that should be strings
+	case "ComplianceStandard", "RecoveryMethod", "FactorType", "FactorPriority", "RecoveryStatus", "SecurityLevel", "ChallengeStatus", "FactorStatus", "VerificationMethod", "RiskLevel":
+		return "string"
+	// Special map types
+	case "JSONBMap":
+		return "Record<string, any>"
 	default:
-		// Assume it's a custom type
+		// It's a custom type - NO prefix since we're in types.ts
 		return goType
+	}
+}
+
+// mapTypeToTS maps Go types to TypeScript with the types. prefix for use in plugin files
+func (g *TypeScriptGenerator) mapTypeToTS(goType string) string {
+	// Handle empty types
+	if goType == "" {
+		return "any"
+	}
+
+	// Handle array notation (shouldn't happen after ParseField, but just in case)
+	if strings.HasPrefix(goType, "[]") {
+		innerType := g.mapTypeToTS(strings.TrimPrefix(goType, "[]"))
+		return innerType + "[]"
+	}
+
+	// Handle pointer notation
+	if strings.HasPrefix(goType, "*") {
+		innerType := g.mapTypeToTS(strings.TrimPrefix(goType, "*"))
+		return innerType + " | undefined"
+	}
+
+	// Handle qualified types (e.g., xid.ID, time.Time)
+	if strings.Contains(goType, ".") {
+		// For qualified types, just return string or appropriate mapping
+		switch {
+		case strings.HasSuffix(goType, ".ID"):
+			return "string"
+		case strings.HasSuffix(goType, ".Time"):
+			return "string"
+		case strings.HasPrefix(goType, "types."):
+			// Already has types. prefix
+			return goType
+		default:
+			return "any"
+		}
+	}
+
+	switch goType {
+	case "string":
+		return "string"
+	case "int", "int32", "int64", "uint", "uint32", "uint64", "float32", "float64":
+		return "number"
+	case "bool", "boolean":
+		return "boolean"
+	case "byte":
+		return "number"
+	case "object", "map":
+		return "Record<string, any>"
+	case "error":
+		return "Error"
+	case "any", "interface{}":
+		return "any"
+	// Enums and special types that should be strings
+	case "ComplianceStandard", "RecoveryMethod", "FactorType", "FactorPriority", "RecoveryStatus", "SecurityLevel", "ChallengeStatus", "FactorStatus", "VerificationMethod", "RiskLevel":
+		return "string"
+	// Special map types
+	case "JSONBMap":
+		return "Record<string, any>"
+	default:
+		// It's a custom type defined in types.ts - prefix with types.
+		return "types." + goType
 	}
 }
 

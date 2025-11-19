@@ -19,6 +19,24 @@ type Handler struct {
 	config  Config
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
 // NewHandler creates a new impersonation handler
 func NewHandler(service *impersonation.Service, config Config) *Handler {
 	return &Handler{
@@ -35,9 +53,7 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "App context required",})
 	}
 
 	var reqBody struct {
@@ -47,17 +63,13 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 		DurationMinutes int    `json:"duration_minutes,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	// Parse target user ID
 	targetUserID, err := xid.FromString(reqBody.TargetUserID)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid target user ID",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Invalid target user ID",})
 	}
 
 	// Build service request with V2 context
@@ -83,16 +95,12 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	if err != nil {
 		// Handle structured errors
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
-			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
-				"error": authErr.Message,
-				"code":  authErr.Code,
-			})
+			return c.JSON(authErr.HTTPStatus, &ErrorResponse{Error: authErr.Message,
+				"code":  authErr.Code,})
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, resp)
@@ -106,9 +114,7 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "App context required",})
 	}
 
 	var reqBody struct {
@@ -116,17 +122,13 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 		Reason          string `json:"reason,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	// Parse impersonation ID
 	impersonationID, err := xid.FromString(reqBody.ImpersonationID)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid impersonation ID",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Invalid impersonation ID",})
 	}
 
 	// Build service request with V2 context
@@ -147,16 +149,12 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 	if err != nil {
 		// Handle structured errors
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
-			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
-				"error": authErr.Message,
-				"code":  authErr.Code,
-			})
+			return c.JSON(authErr.HTTPStatus, &ErrorResponse{Error: authErr.Message,
+				"code":  authErr.Code,})
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, resp)
@@ -169,23 +167,17 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "App context required",})
 	}
 
 	idParam := c.Param("id")
 	if idParam == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Impersonation ID is required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Impersonation ID is required",})
 	}
 
 	id, err := xid.FromString(idParam)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid impersonation ID",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Invalid impersonation ID",})
 	}
 
 	// Build service request with V2 context
@@ -204,16 +196,12 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 	if err != nil {
 		// Handle structured errors
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
-			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
-				"error": authErr.Message,
-				"code":  authErr.Code,
-			})
+			return c.JSON(authErr.HTTPStatus, &ErrorResponse{Error: authErr.Message,
+				"code":  authErr.Code,})
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, session)
@@ -226,9 +214,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "App context required",})
 	}
 
 	// Parse query parameters
@@ -283,9 +269,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 
 	resp, err := h.service.List(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, resp)
@@ -298,9 +282,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, map[string]string{
-			"error": "App context required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "App context required",})
 	}
 
 	// Parse query parameters
@@ -345,9 +327,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 
 	resp, err := h.service.ListAuditEvents(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, resp)
@@ -357,16 +337,12 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 func (h *Handler) VerifyImpersonation(c forge.Context) error {
 	sessionIDParam := c.Param("sessionId")
 	if sessionIDParam == "" {
-		return c.JSON(400, map[string]string{
-			"error": "Session ID is required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Session ID is required",})
 	}
 
 	sessionID, err := xid.FromString(sessionIDParam)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "Invalid session ID",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "Invalid session ID",})
 	}
 
 	req := &impersonation.VerifyRequest{
@@ -375,9 +351,7 @@ func (h *Handler) VerifyImpersonation(c forge.Context) error {
 
 	resp, err := h.service.Verify(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, resp)

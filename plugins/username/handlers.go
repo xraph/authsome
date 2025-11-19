@@ -19,6 +19,23 @@ type Handler struct {
 	twofa *repo.TwoFARepository
 }
 
+// Response types
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type TwoFARequiredResponse struct {
+	User         interface{} `json:"user"`
+	RequireTwoFA bool        `json:"require_twofa"`
+	DeviceID     string      `json:"device_id"`
+}
+
+type SignInResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token"`
+}
+
 func NewHandler(s *Service, tf *repo.TwoFARepository) *Handler { return &Handler{svc: s, twofa: tf} }
 
 // handleError returns the error in a structured format
@@ -43,7 +60,7 @@ func (h *Handler) SignUp(c forge.Context) error {
 	if err := h.svc.SignUpWithUsername(c.Request().Context(), body.Username, body.Password); err != nil {
 		return handleError(c, err, "SIGNUP_FAILED", "Failed to create user", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusCreated, map[string]string{"status": "created"})
+	return c.JSON(http.StatusCreated, &StatusResponse{Status: "created"})
 }
 
 func (h *Handler) SignIn(c forge.Context) error {
@@ -79,7 +96,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 		if sec, _ := h.twofa.GetSecret(c.Request().Context(), u.ID); sec != nil && sec.Enabled {
 			trusted, _ := h.twofa.IsTrustedDevice(c.Request().Context(), u.ID, fp, time.Now())
 			if !trusted {
-				return c.JSON(http.StatusOK, map[string]interface{}{"user": u, "require_twofa": true, "device_id": fp})
+				return c.JSON(http.StatusOK, &TwoFARequiredResponse{User: u, RequireTwoFA: true, DeviceID: fp})
 			}
 		}
 	}
@@ -88,5 +105,5 @@ func (h *Handler) SignIn(c forge.Context) error {
 	if err != nil {
 		return handleError(c, err, "SESSION_FAILED", "Failed to create session", http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{"user": res.User, "session": res.Session, "token": res.Token})
+	return c.JSON(http.StatusOK, &SignInResponse{User: res.User, Session: res.Session, Token: res.Token})
 }

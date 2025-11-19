@@ -15,6 +15,12 @@ import (
 
 type Handler struct{ svc *Service }
 
+
+
+type OIDCConfigResponse struct {
+	Issuer string      `json:"issuer"`
+	Config interface{} `json:"config"`
+}
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Authorize handles OAuth2/OIDC authorization requests
@@ -105,7 +111,7 @@ func (h *Handler) Token(c forge.Context) error {
 	// Parse form data or JSON
 	if c.Request().Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 		if err := c.Request().ParseForm(); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "Failed to parse form data"})
+			return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid_request", "error_description": "Failed to parse form data"})
 		}
 		req.GrantType = c.Request().FormValue("grant_type")
 		req.Code = c.Request().FormValue("code")
@@ -115,24 +121,24 @@ func (h *Handler) Token(c forge.Context) error {
 		req.CodeVerifier = c.Request().FormValue("code_verifier")
 	} else {
 		if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "Invalid JSON"})
+			return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid_request", "error_description": "Invalid JSON"})
 		}
 	}
 
 	// Validate grant type
 	if req.GrantType != "authorization_code" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported_grant_type"})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "unsupported_grant_type"})
 	}
 
 	// Validate authorization code
 	authCode, err := h.svc.ValidateAuthorizationCode(c.Request().Context(), req.Code, req.ClientID, req.RedirectURI, req.CodeVerifier)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": err.Error()})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid_grant", "error_description": err.Error()})
 	}
 
 	// Mark code as used
 	if err := h.svc.MarkCodeAsUsed(c.Request().Context(), req.Code); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "server_error", "error_description": "Failed to mark code as used"})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "server_error", "error_description": "Failed to mark code as used"})
 	}
 
 	// Get user info for ID token (placeholder - should get from user service)
@@ -145,7 +151,7 @@ func (h *Handler) Token(c forge.Context) error {
 	// Exchange code for tokens
 	tokenResponse, err := h.svc.ExchangeCodeForTokens(c.Request().Context(), authCode, userInfo)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "server_error", "error_description": err.Error()})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "server_error", "error_description": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse)
@@ -157,36 +163,28 @@ func (h *Handler) UserInfo(c forge.Context) error {
 	// Extract access token from Authorization header
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error":             "invalid_request",
-			"error_description": "Missing Authorization header",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid_request",
+			"error_description": "Missing Authorization header",})
 	}
 
 	// Check for Bearer token format
 	const bearerPrefix = "Bearer "
 	if len(authHeader) < len(bearerPrefix) || authHeader[:len(bearerPrefix)] != bearerPrefix {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error":             "invalid_request",
-			"error_description": "Authorization header must use Bearer token",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid_request",
+			"error_description": "Authorization header must use Bearer token",})
 	}
 
 	accessToken := authHeader[len(bearerPrefix):]
 	if accessToken == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error":             "invalid_token",
-			"error_description": "Access token is required",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid_token",
+			"error_description": "Access token is required",})
 	}
 
 	// Get user information from the service
 	userInfo, err := h.svc.GetUserInfoFromToken(c.Request().Context(), accessToken)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error":             "invalid_token",
-			"error_description": "Invalid or expired access token",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid_token",
+			"error_description": "Invalid or expired access token",})
 	}
 
 	return c.JSON(http.StatusOK, userInfo)
@@ -196,7 +194,7 @@ func (h *Handler) UserInfo(c forge.Context) error {
 func (h *Handler) JWKS(c forge.Context) error {
 	jwks, err := h.svc.GetJWKS()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get JWKS"})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "Failed to get JWKS"})
 	}
 	return c.JSON(http.StatusOK, jwks)
 }
@@ -208,11 +206,11 @@ func (h *Handler) RegisterClient(c forge.Context) error {
 		RedirectURI string `json:"redirect_uri"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid_request"})
 	}
 	cl, err := h.svc.RegisterClient(c.Request().Context(), req.Name, req.RedirectURI)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, map[string]any{"client_id": cl.ClientID, "client_secret": cl.ClientSecret, "redirect_uri": cl.RedirectURI})
 }
@@ -238,10 +236,8 @@ func (h *Handler) getSessionToken(c forge.Context) string {
 // redirectWithError redirects to the client with an OAuth error
 func (h *Handler) redirectWithError(c forge.Context, redirectURI, errorCode, errorDescription, state string) error {
 	if redirectURI == "" {
-		return c.JSON(400, map[string]string{
-			"error":             errorCode,
-			"error_description": errorDescription,
-		})
+		return c.JSON(400, &ErrorResponse{Error: errorCode,
+			"error_description": errorDescription,})
 	}
 
 	redirectURL := fmt.Sprintf("%s?error=%s&error_description=%s",
@@ -548,10 +544,8 @@ func (h *Handler) generatePermissionsHTML(scopes []ScopeInfo) string {
 func (h *Handler) HandleConsent(c forge.Context) error {
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error":             "invalid_request",
-			"error_description": "Failed to parse form data",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid_request",
+			"error_description": "Failed to parse form data",})
 	}
 
 	// Get form values
@@ -566,10 +560,8 @@ func (h *Handler) HandleConsent(c forge.Context) error {
 
 	// Validate required parameters
 	if clientID == "" || redirectURI == "" || responseType == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error":             "invalid_request",
-			"error_description": "Missing required parameters",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid_request",
+			"error_description": "Missing required parameters",})
 	}
 
 	// Get current session

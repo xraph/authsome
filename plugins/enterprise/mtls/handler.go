@@ -14,6 +14,39 @@ type Handler struct {
 	service *Service
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+type CertificatesResponse struct {
+	Certificates interface{} `json:"certificates"`
+	Count        int         `json:"count"`
+}
+
+type CertificateResponse struct {
+	Certificate interface{} `json:"certificate"`
+}
+
+type TrustStoresResponse struct {
+	TrustStores interface{} `json:"trust_stores"`
+	Count       int         `json:"count"`
+}
+
 // NewHandler creates a new mTLS handler
 func NewHandler(service *Service) *Handler {
 	return &Handler{
@@ -28,16 +61,12 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterCertificate(c forge.Context) error {
 	var req RegisterCertificateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, map[string]string{
-			"error": "invalid request",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "invalid request",})
 	}
 
 	cert, err := h.service.RegisterCertificate(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(400, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(400, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(201, cert)
@@ -48,17 +77,13 @@ func (h *Handler) RegisterCertificate(c forge.Context) error {
 func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 	// Get certificate from TLS connection
 	if c.Request().TLS == nil || len(c.Request().TLS.PeerCertificates) == 0 {
-		return c.JSON(400, map[string]string{
-			"error": "no client certificate provided",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "no client certificate provided",})
 	}
 
 	// Get organization ID from query parameter
 	orgID := c.Query("organizationId")
 	if orgID == "" {
-		return c.JSON(400, map[string]string{
-			"error": "organization ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "organization ID required",})
 	}
 
 	// Get certificate PEM
@@ -67,9 +92,7 @@ func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 
 	result, err := h.service.AuthenticateWithCertificate(c.Request().Context(), certPEM, orgID)
 	if err != nil {
-		return c.JSON(500, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	if !result.Success {
@@ -91,16 +114,12 @@ func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 func (h *Handler) GetCertificate(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(400, map[string]string{
-			"error": "certificate ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "certificate ID required",})
 	}
 
 	cert, err := h.service.GetCertificate(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(404, map[string]string{
-			"error": "certificate not found",
-		})
+		return c.JSON(404, &ErrorResponse{Error: "certificate not found",})
 	}
 
 	return c.JSON(200, cert)
@@ -131,9 +150,7 @@ func (h *Handler) ListCertificates(c forge.Context) error {
 
 	certs, err := h.service.ListCertificates(c.Request().Context(), filters)
 	if err != nil {
-		return c.JSON(500, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -147,24 +164,18 @@ func (h *Handler) ListCertificates(c forge.Context) error {
 func (h *Handler) RevokeCertificate(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(400, map[string]interface{}{
-			"error": "certificate ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "certificate ID required",})
 	}
 
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "invalid request",})
 	}
 
 	if err := h.service.RevokeCertificate(c.Request().Context(), id, req.Reason); err != nil {
-		return c.JSON(500, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -180,16 +191,12 @@ func (h *Handler) RevokeCertificate(c forge.Context) error {
 func (h *Handler) AddTrustAnchor(c forge.Context) error {
 	var req AddTrustAnchorRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "invalid request",})
 	}
 
 	anchor, err := h.service.AddTrustAnchor(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(400, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(400, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(201, anchor)
@@ -200,16 +207,12 @@ func (h *Handler) AddTrustAnchor(c forge.Context) error {
 func (h *Handler) GetTrustAnchors(c forge.Context) error {
 	orgID := c.Query("organizationId")
 	if orgID == "" {
-		return c.JSON(400, map[string]interface{}{
-			"error": "organization ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "organization ID required",})
 	}
 
 	anchors, err := h.service.GetTrustAnchors(c.Request().Context(), orgID)
 	if err != nil {
-		return c.JSON(500, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -225,16 +228,12 @@ func (h *Handler) GetTrustAnchors(c forge.Context) error {
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	var req CreatePolicyRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "invalid request",})
 	}
 
 	policy, err := h.service.CreatePolicy(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(400, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(400, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(201, policy)
@@ -245,16 +244,12 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 func (h *Handler) GetPolicy(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(400, map[string]interface{}{
-			"error": "policy ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "policy ID required",})
 	}
 
 	policy, err := h.service.GetPolicy(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(404, map[string]interface{}{
-			"error": "policy not found",
-		})
+		return c.JSON(404, &ErrorResponse{Error: "policy not found",})
 	}
 
 	return c.JSON(200, policy)
@@ -267,9 +262,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 func (h *Handler) GetAuthStats(c forge.Context) error {
 	orgID := c.Query("organizationId")
 	if orgID == "" {
-		return c.JSON(400, map[string]interface{}{
-			"error": "organization ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "organization ID required",})
 	}
 
 	// Default to last 30 days
@@ -283,9 +276,7 @@ func (h *Handler) GetAuthStats(c forge.Context) error {
 
 	stats, err := h.service.GetAuthEventStats(c.Request().Context(), orgID, since)
 	if err != nil {
-		return c.JSON(500, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, stats)
@@ -296,9 +287,7 @@ func (h *Handler) GetAuthStats(c forge.Context) error {
 func (h *Handler) GetExpiringCertificates(c forge.Context) error {
 	orgID := c.Query("organizationId")
 	if orgID == "" {
-		return c.JSON(400, map[string]interface{}{
-			"error": "organization ID required",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "organization ID required",})
 	}
 
 	days := 30 // Default to 30 days
@@ -310,9 +299,7 @@ func (h *Handler) GetExpiringCertificates(c forge.Context) error {
 
 	certs, err := h.service.GetExpiringCertificates(c.Request().Context(), orgID, days)
 	if err != nil {
-		return c.JSON(500, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -333,9 +320,7 @@ func (h *Handler) ValidateCertificate(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]interface{}{
-			"error": "invalid request",
-		})
+		return c.JSON(400, &ErrorResponse{Error: "invalid request",})
 	}
 
 	result, err := h.service.validator.ValidateCertificate(
@@ -345,9 +330,7 @@ func (h *Handler) ValidateCertificate(c forge.Context) error {
 	)
 
 	if err != nil {
-		return c.JSON(500, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(200, map[string]interface{}{

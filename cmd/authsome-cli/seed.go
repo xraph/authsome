@@ -22,7 +22,7 @@ var seedCmd = &cobra.Command{
 var seedBasicCmd = &cobra.Command{
 	Use:   "basic",
 	Short: "Seed basic test data",
-	Long:  `Seed basic test data including organizations, users, and roles.`,
+	Long:  `Seed basic test data including apps, users, and roles.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db, err := connectSeedDB()
 		if err != nil {
@@ -41,7 +41,7 @@ var seedUsersCmd = &cobra.Command{
 	Long:  `Seed a specified number of test users.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := cmd.Flags().GetInt("count")
-		orgID, _ := cmd.Flags().GetString("org")
+		appID, _ := cmd.Flags().GetString("app")
 
 		db, err := connectSeedDB()
 		if err != nil {
@@ -49,15 +49,15 @@ var seedUsersCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		return seedUsers(db, count, orgID)
+		return seedUsers(db, count, appID)
 	},
 }
 
-// seedOrgsCmd seeds test organizations
-var seedOrgsCmd = &cobra.Command{
-	Use:   "orgs",
-	Short: "Seed test organizations",
-	Long:  `Seed a specified number of test organizations.`,
+// seedAppsCmd seeds test apps
+var seedAppsCmd = &cobra.Command{
+	Use:   "apps",
+	Short: "Seed test apps",
+	Long:  `Seed a specified number of test apps.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := cmd.Flags().GetInt("count")
 
@@ -67,7 +67,7 @@ var seedOrgsCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		return seedOrganizations(db, count)
+		return seedApps(db, count)
 	},
 }
 
@@ -97,15 +97,15 @@ func init() {
 	// Add subcommands
 	seedCmd.AddCommand(seedBasicCmd)
 	seedCmd.AddCommand(seedUsersCmd)
-	seedCmd.AddCommand(seedOrgsCmd)
+	seedCmd.AddCommand(seedAppsCmd)
 	seedCmd.AddCommand(seedClearCmd)
 
 	// Flags for users command
 	seedUsersCmd.Flags().Int("count", 10, "Number of users to create")
-	seedUsersCmd.Flags().String("org", "", "Organization ID to add users to")
+	seedUsersCmd.Flags().String("app", "", "App ID to add users to")
 
-	// Flags for orgs command
-	seedOrgsCmd.Flags().Int("count", 5, "Number of organizations to create")
+	// Flags for apps command
+	seedAppsCmd.Flags().Int("count", 5, "Number of apps to create")
 
 	// Flags for clear command
 	seedClearCmd.Flags().Bool("confirm", false, "Confirm deletion of all seeded data")
@@ -122,38 +122,39 @@ func seedBasicData(db *bun.DB) error {
 
 	fmt.Println("Seeding basic test data...")
 
-	// Create platform organization
-	platformOrgID := xid.New()
+	// Create platform app
+	platformAppID := xid.New()
 	systemID := xid.New() // System user for CLI operations
 
-	platformOrg := &schema.Organization{
-		ID:   platformOrgID,
-		Name: "Platform",
-		Slug: "platform",
+	platformApp := &schema.App{
+		ID:         platformAppID,
+		Name:       "Platform",
+		Slug:       "platform",
+		IsPlatform: true,
 	}
-	platformOrg.AuditableModel.ID = platformOrgID
-	platformOrg.AuditableModel.CreatedBy = systemID
-	platformOrg.AuditableModel.UpdatedBy = systemID
+	platformApp.AuditableModel.ID = platformAppID
+	platformApp.AuditableModel.CreatedBy = systemID
+	platformApp.AuditableModel.UpdatedBy = systemID
 
-	_, err := db.NewInsert().Model(platformOrg).Exec(ctx)
+	_, err := db.NewInsert().Model(platformApp).Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create platform organization: %w", err)
+		return fmt.Errorf("failed to create platform app: %w", err)
 	}
 
-	// Create default organization
-	defaultOrgID := xid.New()
-	defaultOrg := &schema.Organization{
-		ID:   defaultOrgID,
-		Name: "Default Organization",
+	// Create default app
+	defaultAppID := xid.New()
+	defaultApp := &schema.App{
+		ID:   defaultAppID,
+		Name: "Default App",
 		Slug: "default",
 	}
-	defaultOrg.AuditableModel.ID = defaultOrgID
-	defaultOrg.AuditableModel.CreatedBy = systemID
-	defaultOrg.AuditableModel.UpdatedBy = systemID
+	defaultApp.AuditableModel.ID = defaultAppID
+	defaultApp.AuditableModel.CreatedBy = systemID
+	defaultApp.AuditableModel.UpdatedBy = systemID
 
-	_, err = db.NewInsert().Model(defaultOrg).Exec(ctx)
+	_, err = db.NewInsert().Model(defaultApp).Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create default organization: %w", err)
+		return fmt.Errorf("failed to create default app: %w", err)
 	}
 
 	// Create admin user
@@ -183,10 +184,10 @@ func seedBasicData(db *bun.DB) error {
 	// Create admin member
 	adminMemberID := xid.New()
 	adminMember := &schema.Member{
-		ID:             adminMemberID,
-		OrganizationID: defaultOrgID,
-		UserID:         adminUserID,
-		Role:           "admin",
+		ID:     adminMemberID,
+		AppID:  defaultAppID,
+		UserID: adminUserID,
+		Role:   schema.MemberRoleAdmin,
 	}
 	adminMember.AuditableModel.ID = adminMemberID
 	adminMember.AuditableModel.CreatedBy = systemID
@@ -200,22 +201,25 @@ func seedBasicData(db *bun.DB) error {
 	// Create roles
 	roles := []*schema.Role{
 		{
-			ID:             xid.New(),
-			OrganizationID: &defaultOrgID,
-			Name:           "admin",
-			Description:    "Administrator role with full access",
+			ID:          xid.New(),
+			AppID:       &defaultAppID,
+			Name:        "admin",
+			Description: "Administrator role with full access",
+			IsTemplate:  true,
 		},
 		{
-			ID:             xid.New(),
-			OrganizationID: &defaultOrgID,
-			Name:           "user",
-			Description:    "Standard user role",
+			ID:          xid.New(),
+			AppID:       &defaultAppID,
+			Name:        "user",
+			Description: "Standard user role",
+			IsTemplate:  true,
 		},
 		{
-			ID:             xid.New(),
-			OrganizationID: &defaultOrgID,
-			Name:           "viewer",
-			Description:    "Read-only access role",
+			ID:          xid.New(),
+			AppID:       &defaultAppID,
+			Name:        "viewer",
+			Description: "Read-only access role",
+			IsTemplate:  true,
 		},
 	}
 
@@ -232,7 +236,7 @@ func seedBasicData(db *bun.DB) error {
 	}
 
 	fmt.Println("✓ Basic test data seeded successfully")
-	fmt.Printf("✓ Created organizations: %s, %s\n", platformOrgID, defaultOrgID)
+	fmt.Printf("✓ Created apps: %s, %s\n", platformAppID, defaultAppID)
 	fmt.Printf("✓ Created admin user: %s (admin@example.com / admin123)\n", adminUserID)
 	fmt.Println("✓ Created roles: admin, user, viewer")
 
@@ -240,7 +244,7 @@ func seedBasicData(db *bun.DB) error {
 }
 
 // seedUsers seeds test users
-func seedUsers(db *bun.DB, count int, orgID string) error {
+func seedUsers(db *bun.DB, count int, appID string) error {
 	ctx := context.Background()
 
 	fmt.Printf("Seeding %d test users...\n", count)
@@ -248,22 +252,22 @@ func seedUsers(db *bun.DB, count int, orgID string) error {
 	// Use system ID for created_by/updated_by
 	systemID := xid.New() // System user for CLI operations
 
-	// Parse organization ID
-	var targetOrgID xid.ID
-	if orgID != "" {
-		parsedID, err := xid.FromString(orgID)
+	// Parse app ID
+	var targetAppID xid.ID
+	if appID != "" {
+		parsedID, err := xid.FromString(appID)
 		if err != nil {
-			return fmt.Errorf("invalid organization ID: %w", err)
+			return fmt.Errorf("invalid app ID: %w", err)
 		}
-		targetOrgID = parsedID
+		targetAppID = parsedID
 	} else {
-		// Use default organization
-		var org schema.Organization
-		err := db.NewSelect().Model(&org).Where("slug = ?", "default").Scan(ctx)
+		// Use default app
+		var app schema.App
+		err := db.NewSelect().Model(&app).Where("slug = ?", "default").Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to find default organization: %w", err)
+			return fmt.Errorf("failed to find default app: %w", err)
 		}
-		targetOrgID = org.ID
+		targetAppID = app.ID
 	}
 
 	// Create users
@@ -290,10 +294,10 @@ func seedUsers(db *bun.DB, count int, orgID string) error {
 		// Create member
 		memberID := xid.New()
 		member := &schema.Member{
-			ID:             memberID,
-			OrganizationID: targetOrgID,
-			UserID:         userID,
-			Role:           "user",
+			ID:     memberID,
+			AppID:  targetAppID,
+			UserID: userID,
+			Role:   schema.MemberRoleMember,
 		}
 
 		// Set audit fields
@@ -313,37 +317,37 @@ func seedUsers(db *bun.DB, count int, orgID string) error {
 	return nil
 }
 
-// seedOrganizations seeds test organizations
-func seedOrganizations(db *bun.DB, count int) error {
+// seedApps seeds test apps
+func seedApps(db *bun.DB, count int) error {
 	ctx := context.Background()
 
-	fmt.Printf("Seeding %d test organizations...\n", count)
+	fmt.Printf("Seeding %d test apps...\n", count)
 
 	// Use system ID for created_by/updated_by
 	systemID := xid.New() // System user for CLI operations
 
 	for i := 1; i <= count; i++ {
-		orgID := xid.New()
-		org := &schema.Organization{
-			ID:   orgID,
-			Name: fmt.Sprintf("Test Organization %d", i),
-			Slug: fmt.Sprintf("test-org-%d", i),
+		appID := xid.New()
+		app := &schema.App{
+			ID:   appID,
+			Name: fmt.Sprintf("Test App %d", i),
+			Slug: fmt.Sprintf("test-app-%d", i),
 		}
 
 		// Set audit fields
-		org.AuditableModel.ID = orgID
-		org.AuditableModel.CreatedBy = systemID
-		org.AuditableModel.UpdatedBy = systemID
+		app.AuditableModel.ID = appID
+		app.AuditableModel.CreatedBy = systemID
+		app.AuditableModel.UpdatedBy = systemID
 
-		_, err := db.NewInsert().Model(org).Exec(ctx)
+		_, err := db.NewInsert().Model(app).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to create organization %d: %w", i, err)
+			return fmt.Errorf("failed to create app %d: %w", i, err)
 		}
 
-		fmt.Printf("✓ Created organization %d: %s (%s)\n", i, org.Name, orgID)
+		fmt.Printf("✓ Created app %d: %s (%s)\n", i, app.Name, appID)
 	}
 
-	fmt.Printf("✓ Successfully seeded %d organizations\n", count)
+	fmt.Printf("✓ Successfully seeded %d apps\n", count)
 	return nil
 }
 
@@ -354,7 +358,7 @@ func clearSeedData(db *bun.DB) error {
 	fmt.Println("Clearing all seeded data...")
 
 	// Delete in reverse order of dependencies
-	tables := []string{"members", "roles", "users", "organizations"}
+	tables := []string{"members", "roles", "users", "apps"}
 
 	for _, table := range tables {
 		result, err := db.NewDelete().Table(table).Where("1 = 1").Exec(ctx)

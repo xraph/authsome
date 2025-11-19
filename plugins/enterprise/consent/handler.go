@@ -13,6 +13,17 @@ type Handler struct {
 	service *Service
 }
 
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+
+
+type ConsentsResponse struct {
+	Consents interface{} `json:"consents"`
+	Count    int         `json:"count"`
+}
+
 // NewHandler creates a new consent handler
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
@@ -34,25 +45,19 @@ func getString(c forge.Context, key string) string {
 func (h *Handler) CreateConsent(c forge.Context) error {
 	var req CreateConsentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	userID := getString(c, "userID")
 	orgID := getString(c, "orgID")
 
 	if userID == "" || orgID == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",})
 	}
 
 	consent, err := h.service.CreateConsent(c.Request().Context(), orgID, userID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusCreated, consent)
@@ -62,16 +67,12 @@ func (h *Handler) CreateConsent(c forge.Context) error {
 func (h *Handler) GetConsent(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	consent, err := h.service.GetConsent(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, consent)
@@ -83,16 +84,12 @@ func (h *Handler) ListConsentsByUser(c forge.Context) error {
 	orgID := getString(c, "orgID")
 
 	if userID == "" || orgID == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",})
 	}
 
 	consents, err := h.service.ListConsentsByUser(c.Request().Context(), userID, orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, consents)
@@ -102,16 +99,12 @@ func (h *Handler) ListConsentsByUser(c forge.Context) error {
 func (h *Handler) UpdateConsent(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	var req UpdateConsentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	userID := getString(c, "userID")
@@ -119,9 +112,7 @@ func (h *Handler) UpdateConsent(c forge.Context) error {
 
 	consent, err := h.service.UpdateConsent(c.Request().Context(), id, orgID, userID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, consent)
@@ -131,16 +122,12 @@ func (h *Handler) UpdateConsent(c forge.Context) error {
 func (h *Handler) RevokeConsent(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	var req UpdateConsentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	userID := getString(c, "userID")
@@ -151,23 +138,17 @@ func (h *Handler) RevokeConsent(c forge.Context) error {
 
 	_, err := h.service.UpdateConsent(c.Request().Context(), id, orgID, userID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Consent revoked successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "Consent revoked successfully",})
 }
 
 // CreateConsentPolicy handles POST /consent/policies
 func (h *Handler) CreateConsentPolicy(c forge.Context) error {
 	var req CreatePolicyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	orgID := getString(c, "orgID")
@@ -175,9 +156,7 @@ func (h *Handler) CreateConsentPolicy(c forge.Context) error {
 
 	policy, err := h.service.CreatePolicy(c.Request().Context(), orgID, userID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusCreated, policy)
@@ -187,16 +166,12 @@ func (h *Handler) CreateConsentPolicy(c forge.Context) error {
 func (h *Handler) GetConsentPolicy(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	policy, err := h.service.GetPolicy(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, policy)
@@ -206,9 +181,7 @@ func (h *Handler) GetConsentPolicy(c forge.Context) error {
 func (h *Handler) RecordCookieConsent(c forge.Context) error {
 	var req CookieConsentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	userID := getString(c, "userID")
@@ -216,9 +189,7 @@ func (h *Handler) RecordCookieConsent(c forge.Context) error {
 
 	consent, err := h.service.RecordCookieConsent(c.Request().Context(), orgID, userID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusCreated, consent)
@@ -231,9 +202,7 @@ func (h *Handler) GetCookieConsent(c forge.Context) error {
 
 	consent, err := h.service.GetCookieConsent(c.Request().Context(), userID, orgID)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, consent)
@@ -243,9 +212,7 @@ func (h *Handler) GetCookieConsent(c forge.Context) error {
 func (h *Handler) RequestDataExport(c forge.Context) error {
 	var req DataExportRequestInput
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	userID := getString(c, "userID")
@@ -253,9 +220,7 @@ func (h *Handler) RequestDataExport(c forge.Context) error {
 
 	exportReq, err := h.service.RequestDataExport(c.Request().Context(), userID, orgID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusAccepted, exportReq)
@@ -265,17 +230,13 @@ func (h *Handler) RequestDataExport(c forge.Context) error {
 func (h *Handler) GetDataExport(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	userID := getString(c, "userID")
 	exportReq, err := h.service.repo.GetExportRequest(c.Request().Context(), id)
 	if err != nil || exportReq.UserID != userID {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Export request not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "Export request not found",})
 	}
 
 	return c.JSON(http.StatusOK, exportReq)
@@ -285,17 +246,13 @@ func (h *Handler) GetDataExport(c forge.Context) error {
 func (h *Handler) DownloadDataExport(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	userID := getString(c, "userID")
 	exportReq, err := h.service.repo.GetExportRequest(c.Request().Context(), id)
 	if err != nil || exportReq.UserID != userID || exportReq.Status != string(StatusCompleted) {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Export not ready or not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "Export not ready or not found",})
 	}
 
 	// Return file download (forge's File method equivalent)
@@ -310,9 +267,7 @@ func (h *Handler) DownloadDataExport(c forge.Context) error {
 func (h *Handler) RequestDataDeletion(c forge.Context) error {
 	var req DataDeletionRequestInput
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	userID := getString(c, "userID")
@@ -320,9 +275,7 @@ func (h *Handler) RequestDataDeletion(c forge.Context) error {
 
 	deletionReq, err := h.service.RequestDataDeletion(c.Request().Context(), userID, orgID, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusAccepted, deletionReq)
@@ -332,16 +285,12 @@ func (h *Handler) RequestDataDeletion(c forge.Context) error {
 func (h *Handler) GetDataDeletion(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	deletionReq, err := h.service.repo.GetDeletionRequest(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, deletionReq)
@@ -351,9 +300,7 @@ func (h *Handler) GetDataDeletion(c forge.Context) error {
 func (h *Handler) ApproveDeletionRequest(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "ID parameter is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
 	}
 
 	approverID := getString(c, "userID")
@@ -361,14 +308,10 @@ func (h *Handler) ApproveDeletionRequest(c forge.Context) error {
 
 	err := h.service.ApproveDeletionRequest(c.Request().Context(), id, orgID, approverID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Deletion request approved",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "Deletion request approved",})
 }
 
 // GetPrivacySettings handles GET /consent/privacy-settings
@@ -377,9 +320,7 @@ func (h *Handler) GetPrivacySettings(c forge.Context) error {
 
 	settings, err := h.service.GetPrivacySettings(c.Request().Context(), orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, settings)
@@ -389,9 +330,7 @@ func (h *Handler) GetPrivacySettings(c forge.Context) error {
 func (h *Handler) UpdatePrivacySettings(c forge.Context) error {
 	var req PrivacySettingsRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	orgID := getString(c, "orgID")
@@ -399,9 +338,7 @@ func (h *Handler) UpdatePrivacySettings(c forge.Context) error {
 
 	settings, err := h.service.UpdatePrivacySettings(c.Request().Context(), orgID, updatedBy, &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, settings)
@@ -429,9 +366,7 @@ func (h *Handler) GenerateConsentReport(c forge.Context) error {
 
 	report, err := h.service.GenerateConsentReport(c.Request().Context(), orgID, startDate, endDate)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
 	}
 
 	return c.JSON(http.StatusOK, report)

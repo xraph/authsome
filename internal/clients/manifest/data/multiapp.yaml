@@ -1,0 +1,109 @@
+plugin_id: multiapp
+version: 1.0.0
+routes:
+    - name: CreateApp
+      description: CreateApp handles app creation requests
+      method: POST
+      path: /createapp
+    - name: GetApp
+      description: GetApp handles get app requests
+      method: GET
+      path: /:appId
+    - name: UpdateApp
+      description: UpdateApp handles app update requests
+      method: PUT
+      path: /:appId
+    - name: DeleteApp
+      description: DeleteApp handles app deletion requests
+      method: DELETE
+      path: /:appId
+    - name: ListApps
+      description: ListApps handles list apps requests
+      method: GET
+      path: /listapps
+    - name: RemoveMember
+      description: RemoveMember handles removing a member from an organization
+      method: DELETE
+      path: /:memberId
+    - name: ListMembers
+      description: ListMembers handles listing app members
+      method: GET
+      path: /listmembers
+    - name: InviteMember
+      description: InviteMember handles inviting a member to an organization
+      method: POST
+      path: /invite
+    - name: UpdateMember
+      description: UpdateMember handles updating a member in an organization
+      method: PUT
+      path: /:memberId
+    - name: GetInvitation
+      description: GetInvitation handles getting an invitation by token
+      method: GET
+      path: /:token
+    - name: AcceptInvitation
+      description: AcceptInvitation handles accepting an invitation
+      method: POST
+      path: /:token/accept
+    - name: DeclineInvitation
+      description: DeclineInvitation handles declining an invitation
+      method: POST
+      path: /:token/decline
+    - name: CreateTeam
+      description: CreateTeam handles team creation requests
+      method: POST
+      path: /createteam
+    - name: GetTeam
+      description: GetTeam handles team retrieval requests
+      method: GET
+      path: /:teamId
+    - name: UpdateTeam
+      description: UpdateTeam handles team update requests
+      method: PUT
+      path: /:teamId
+    - name: DeleteTeam
+      description: DeleteTeam handles team deletion requests
+      method: DELETE
+      path: /:teamId
+    - name: ListTeams
+      description: ListTeams handles team listing requests
+      method: GET
+      path: /listteams
+    - name: AddTeamMember
+      description: AddTeamMember handles adding a member to a team
+      method: POST
+      path: /:teamId/members
+      request:
+        member_id: xid.ID!
+        role: string!
+    - name: RemoveTeamMember
+      description: RemoveTeamMember handles removing a member from a team
+      method: DELETE
+      path: /:teamId/members/:memberId
+types:
+    - name: MemberHandler
+      fields:
+        "": '*coreapp.ServiceImpl'
+    - name: AddMember_req
+      fields:
+        role: string!
+        user_id: string!
+    - name: TeamHandler
+      fields:
+        "": '*app.ServiceImpl'
+    - name: AddTeamMember_req
+      fields:
+        member_id: xid.ID!
+        role: string!
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: AppHandler
+      fields:
+        "": '*coreapp.ServiceImpl'

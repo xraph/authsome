@@ -16,6 +16,24 @@ type Handler struct {
 	policyEngine *PolicyEngine
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
 // NewHandler creates a new compliance handler
 func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 	return &Handler{
@@ -31,9 +49,7 @@ func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 func (h *Handler) CreateProfile(c forge.Context) error {
 	var req CreateProfileRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	profile, err := h.service.CreateProfile(c.Request().Context(), &req)
@@ -53,9 +69,7 @@ func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	profile, err := h.service.CreateProfileFromTemplate(c.Request().Context(), req.AppID, req.Standard)
@@ -99,9 +113,7 @@ func (h *Handler) UpdateProfile(c forge.Context) error {
 
 	var req UpdateProfileRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	profile, err := h.service.UpdateProfile(c.Request().Context(), id, &req)
@@ -204,9 +216,7 @@ func (h *Handler) RunCheck(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	check, err := h.service.RunCheck(c.Request().Context(), profileID, req.CheckType)
@@ -365,9 +375,7 @@ func (h *Handler) GenerateReport(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	// Create report record
@@ -460,9 +468,7 @@ func (h *Handler) DownloadReport(c forge.Context) error {
 	}
 
 	if report.Status != "ready" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Report is not ready for download",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Report is not ready for download",})
 	}
 
 	// In real implementation, this would stream the file from storage
@@ -492,9 +498,7 @@ func (h *Handler) CreateEvidence(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	// Get profile
@@ -605,9 +609,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	// Get profile
@@ -702,9 +704,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	policy, err := h.service.repo.GetPolicy(c.Request().Context(), id)
@@ -759,9 +759,7 @@ func (h *Handler) CreateTraining(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	// Get profile
@@ -854,9 +852,7 @@ func (h *Handler) CompleteTraining(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
 	}
 
 	training, err := h.service.repo.GetTraining(c.Request().Context(), id)
@@ -905,9 +901,7 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 
 	template, ok := GetTemplate(standard)
 	if !ok {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Template not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "Template not found",})
 	}
 
 	return c.JSON(http.StatusOK, template)
@@ -918,14 +912,9 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 func handleError(c forge.Context, err error) error {
 	// Handle structured AuthsomeError
 	if authErr, ok := err.(*errs.AuthsomeError); ok {
-		return c.JSON(authErr.HTTPStatus, map[string]interface{}{
-			"error": authErr.Message,
-			"code":  authErr.Code,
-		})
+		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	// Fallback for unexpected errors
-	return c.JSON(http.StatusInternalServerError, map[string]string{
-		"error": "Internal server error",
-	})
+	return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "Internal server error"})
 }

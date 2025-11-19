@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/forge"
@@ -17,7 +18,7 @@ type Plugin struct {
 	defaultConfig   Config
 	db              *bun.DB
 	server          *Server
-	auth            interface{} // Will be *authsome.Auth
+	auth            core.Authsome
 	logger          forge.Logger
 	serviceRegistry *registry.ServiceRegistry
 }
@@ -35,7 +36,7 @@ func WithDefaultConfig(cfg Config) PluginOption {
 // WithTransport sets the MCP transport type
 func WithTransport(transport string) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.Transport = transport
+		p.defaultConfig.Transport = Transport(transport)
 	}
 }
 
@@ -66,7 +67,7 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 		// Set built-in defaults
 		defaultConfig: Config{
 			Enabled:       true,
-			Transport:     "stdio",
+			Transport:     TransportStdio,
 			Port:          0,
 			ExposeSecrets: false,
 		},
@@ -89,28 +90,16 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with auth instance
-func (p *Plugin) Init(auth interface{}) error {
+func (p *Plugin) Init(auth core.Authsome) error {
 	p.auth = auth
 
-	// Extract database and forge app from auth instance
-	type authInstance interface {
-		GetDB() *bun.DB
-		GetServiceRegistry() *registry.ServiceRegistry
-		GetForgeApp() forge.App
-	}
-
-	authInst, ok := auth.(authInstance)
-	if !ok {
-		return fmt.Errorf("mcp plugin requires auth instance with required methods")
-	}
-
 	// Get dependencies
-	p.db = authInst.GetDB()
+	p.db = auth.GetDB()
 	if p.db == nil {
 		return fmt.Errorf("database not available for mcp plugin")
 	}
 
-	forgeApp := authInst.GetForgeApp()
+	forgeApp := auth.GetForgeApp()
 	if forgeApp == nil {
 		return fmt.Errorf("forge app not available for mcp plugin")
 	}
@@ -127,7 +116,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		p.config = p.defaultConfig
 	}
 
-	p.serviceRegistry = authInst.GetServiceRegistry()
+	p.serviceRegistry = auth.GetServiceRegistry()
 
 	if !p.config.Enabled {
 		p.logger.Info("MCP plugin initialized but disabled")

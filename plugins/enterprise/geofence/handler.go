@@ -14,6 +14,30 @@ type Handler struct {
 	config  *Config
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+type RulesResponse struct {
+	Rules interface{} `json:"rules"`
+	Count int         `json:"count"`
+}
+
 // NewHandler creates a new geofencing handler
 func NewHandler(service *Service, config *Config) *Handler {
 	return &Handler{
@@ -26,9 +50,7 @@ func NewHandler(service *Service, config *Config) *Handler {
 func (h *Handler) CreateRule(c forge.Context) error {
 	var req GeofenceRule
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	// Get organization ID from context (set by auth middleware)
@@ -40,9 +62,7 @@ func (h *Handler) CreateRule(c forge.Context) error {
 	req.CreatedBy = userID
 
 	if err := h.service.repo.CreateRule(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to create rule",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to create rule",})
 	}
 
 	return c.JSON(http.StatusCreated, req)
@@ -54,9 +74,7 @@ func (h *Handler) ListRules(c forge.Context) error {
 
 	rules, err := h.service.repo.GetRulesByOrganization(c.Context(), orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to list rules",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list rules",})
 	}
 
 	return c.JSON(http.StatusOK, rules)
@@ -67,16 +85,12 @@ func (h *Handler) GetRule(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid rule ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid rule ID",})
 	}
 
 	rule, err := h.service.repo.GetRule(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "rule not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "rule not found",})
 	}
 
 	return c.JSON(http.StatusOK, rule)
@@ -87,16 +101,12 @@ func (h *Handler) UpdateRule(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid rule ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid rule ID",})
 	}
 
 	var req GeofenceRule
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	req.ID = id
@@ -106,9 +116,7 @@ func (h *Handler) UpdateRule(c forge.Context) error {
 	req.UpdatedBy = &userID
 
 	if err := h.service.repo.UpdateRule(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to update rule",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to update rule",})
 	}
 
 	return c.JSON(http.StatusOK, req)
@@ -119,20 +127,14 @@ func (h *Handler) DeleteRule(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid rule ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid rule ID",})
 	}
 
 	if err := h.service.repo.DeleteRule(c.Context(), id); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to delete rule",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to delete rule",})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "rule deleted successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "rule deleted successfully",})
 }
 
 // CheckLocation performs a geofence check
@@ -145,9 +147,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	orgID := c.Get("organization_id").(xid.ID)
@@ -156,9 +156,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	if req.UserID != "" {
 		id, err := xid.FromString(req.UserID)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"error": "invalid user ID",
-			})
+			return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid user ID",})
 		}
 		userID = id
 	} else {
@@ -175,9 +173,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 
 	result, err := h.service.CheckLocation(c.Context(), checkReq)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to check location",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to check location",})
 	}
 
 	return c.JSON(http.StatusOK, result)
@@ -189,9 +185,7 @@ func (h *Handler) LookupIP(c forge.Context) error {
 
 	geoData, err := h.service.GetGeolocation(c.Context(), ip)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to lookup IP",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to lookup IP",})
 	}
 
 	detection, _ := h.service.GetDetection(c.Context(), ip)
@@ -216,9 +210,7 @@ func (h *Handler) ListLocationEvents(c forge.Context) error {
 
 	events, err := h.service.repo.GetUserLocationHistory(c.Context(), userID, limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to list location events",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list location events",})
 	}
 
 	return c.JSON(http.StatusOK, events)
@@ -229,16 +221,12 @@ func (h *Handler) GetLocationEvent(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid event ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid event ID",})
 	}
 
 	event, err := h.service.repo.GetLocationEvent(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "event not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "event not found",})
 	}
 
 	return c.JSON(http.StatusOK, event)
@@ -251,9 +239,7 @@ func (h *Handler) ListTravelAlerts(c forge.Context) error {
 
 	alerts, err := h.service.repo.GetUserTravelAlerts(c.Context(), userID, status)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to list travel alerts",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list travel alerts",})
 	}
 
 	return c.JSON(http.StatusOK, alerts)
@@ -264,16 +250,12 @@ func (h *Handler) GetTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid alert ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid alert ID",})
 	}
 
 	alert, err := h.service.repo.GetTravelAlert(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "alert not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "alert not found",})
 	}
 
 	return c.JSON(http.StatusOK, alert)
@@ -284,22 +266,16 @@ func (h *Handler) ApproveTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid alert ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid alert ID",})
 	}
 
 	userID := c.Get("user_id").(xid.ID)
 
 	if err := h.service.repo.ApproveTravel(c.Context(), id, userID); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to approve travel alert",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to approve travel alert",})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "travel alert approved",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert approved",})
 }
 
 // DenyTravelAlert denies a travel alert
@@ -307,31 +283,23 @@ func (h *Handler) DenyTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid alert ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid alert ID",})
 	}
 
 	userID := c.Get("user_id").(xid.ID)
 
 	if err := h.service.repo.DenyTravel(c.Context(), id, userID); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to deny travel alert",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to deny travel alert",})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "travel alert denied",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert denied",})
 }
 
 // CreateTrustedLocation creates a trusted location
 func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 	var req TrustedLocation
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	orgID := c.Get("organization_id").(xid.ID)
@@ -341,9 +309,7 @@ func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 	req.UserID = userID
 
 	if err := h.service.repo.CreateTrustedLocation(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to create trusted location",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to create trusted location",})
 	}
 
 	return c.JSON(http.StatusCreated, req)
@@ -355,9 +321,7 @@ func (h *Handler) ListTrustedLocations(c forge.Context) error {
 
 	locations, err := h.service.repo.GetUserTrustedLocations(c.Context(), userID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to list trusted locations",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list trusted locations",})
 	}
 
 	return c.JSON(http.StatusOK, locations)
@@ -368,16 +332,12 @@ func (h *Handler) GetTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid location ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid location ID",})
 	}
 
 	location, err := h.service.repo.GetTrustedLocation(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "location not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "location not found",})
 	}
 
 	return c.JSON(http.StatusOK, location)
@@ -388,24 +348,18 @@ func (h *Handler) UpdateTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid location ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid location ID",})
 	}
 
 	var req TrustedLocation
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	req.ID = id
 
 	if err := h.service.repo.UpdateTrustedLocation(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to update trusted location",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to update trusted location",})
 	}
 
 	return c.JSON(http.StatusOK, req)
@@ -416,20 +370,14 @@ func (h *Handler) DeleteTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid location ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid location ID",})
 	}
 
 	if err := h.service.repo.DeleteTrustedLocation(c.Context(), id); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to delete trusted location",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to delete trusted location",})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "trusted location deleted",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "trusted location deleted",})
 }
 
 // ListViolations lists geofence violations
@@ -446,9 +394,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 
 	violations, err := h.service.repo.GetUserViolations(c.Context(), userID, limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to list violations",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list violations",})
 	}
 
 	return c.JSON(http.StatusOK, violations)
@@ -459,16 +405,12 @@ func (h *Handler) GetViolation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid violation ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid violation ID",})
 	}
 
 	violation, err := h.service.repo.GetViolation(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": "violation not found",
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "violation not found",})
 	}
 
 	return c.JSON(http.StatusOK, violation)
@@ -479,53 +421,39 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid violation ID",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid violation ID",})
 	}
 
 	var req struct {
 		Resolution string `json:"resolution"`
 	}
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	userID := c.Get("user_id").(xid.ID)
 
 	if err := h.service.repo.ResolveViolation(c.Context(), id, userID, req.Resolution); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "failed to resolve violation",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to resolve violation",})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "violation resolved",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation resolved",})
 }
 
 // GetMetrics returns geofencing metrics
 func (h *Handler) GetMetrics(c forge.Context) error {
 	// TODO: Implement metrics aggregation
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "metrics endpoint - to be implemented",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "metrics endpoint - to be implemented",})
 }
 
 // GetLocationAnalytics returns location analytics
 func (h *Handler) GetLocationAnalytics(c forge.Context) error {
 	// TODO: Implement location analytics
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "location analytics endpoint - to be implemented",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "location analytics endpoint - to be implemented",})
 }
 
 // GetViolationAnalytics returns violation analytics
 func (h *Handler) GetViolationAnalytics(c forge.Context) error {
 	// TODO: Implement violation analytics
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "violation analytics endpoint - to be implemented",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation analytics endpoint - to be implemented",})
 }

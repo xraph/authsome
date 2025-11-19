@@ -1,0 +1,50 @@
+plugin_id: anonymous
+version: 1.0.0
+routes:
+    - name: SignIn
+      description: SignIn creates a guest user and session
+      method: POST
+      path: /anonymous/signin
+    - name: Link
+      description: Link upgrades an anonymous session to a real account
+      method: POST
+      path: /anonymous/link
+      request:
+        email: string!
+        name: string!
+        password: string!
+types:
+    - name: Service
+      fields:
+        "": '*session.Service'
+    - name: SignIn_body
+      fields: {}
+    - name: Plugin
+      fields:
+        "": '*Service'
+    - name: Config
+      fields:
+        autoConvert: bool!
+        cleanupIntervalHours: int!
+        enableAnonymous: bool!
+        sessionExpiryHours: int!
+    - name: AnonymousErrorResponse
+      fields:
+        error: string!
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: AnonymousAuthResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Link_body
+      fields:
+        email: string!
+        name: string!
+        password: string!
+    - name: AnonymousSignInResponse
+      fields:
+        session: '!'
+        token: string!

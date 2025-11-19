@@ -50,6 +50,24 @@ type Handler struct {
 	extensionRegistry *ExtensionRegistry  // For rendering extension navigation items and widgets
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
 // NewHandler creates a new dashboard handler
 func NewHandler(
 	assets embed.FS,
@@ -2086,7 +2104,7 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 
 	// Security: prevent directory traversal
 	if strings.Contains(path, "..") {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid path"})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid path"})
 	}
 
 	// Read file from embedded assets
@@ -2095,7 +2113,7 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 	content, err := fs.ReadFile(h.assets, fullPath)
 	if err != nil {
 		fmt.Println("error", err)
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "asset not found"})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "asset not found"})
 	}
 
 	// Set content type

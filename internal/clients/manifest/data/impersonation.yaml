@@ -1,0 +1,136 @@
+plugin_id: impersonation
+version: 1.0.0
+routes:
+    - name: StartImpersonation
+      description: StartImpersonation handles POST /impersonation/start
+      method: POST
+      path: /start
+      request:
+        duration_minutes: int
+        reason: string!
+        target_user_id: string!
+        ticket_number: string
+      response:
+        error: string!
+    - name: EndImpersonation
+      description: EndImpersonation handles POST /impersonation/end
+      method: POST
+      path: /end
+      request:
+        impersonation_id: string!
+        reason: string
+      response:
+        error: string!
+    - name: GetImpersonation
+      description: GetImpersonation handles GET /impersonation/:id
+      method: GET
+      path: /:id
+      response:
+        error: string!
+    - name: ListImpersonations
+      description: ListImpersonations handles GET /impersonation
+      method: GET
+      path: /
+      response:
+        error: string!
+    - name: ListAuditEvents
+      description: ListAuditEvents handles GET /impersonation/audit
+      method: GET
+      path: /audit
+      response:
+        error: string!
+    - name: VerifyImpersonation
+      description: VerifyImpersonation handles GET /impersonation/verify/:sessionId
+      method: POST
+      path: /verify
+      response:
+        error: string!
+types:
+    - name: EndImpersonation_reqBody
+      fields:
+        impersonation_id: string!
+        reason: string
+    - name: ImpersonationVerifyResponse
+      fields:
+        impersonator_id: string!
+        is_impersonating: bool!
+        target_user_id: string!
+    - name: Handler
+      fields:
+        "": Config
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: mockForgeContext
+      fields:
+        "": '*http.Request'
+    - name: ImpersonationContext
+      fields:
+        impersonation_id: '*xid.ID!'
+        impersonator_id: '*xid.ID!'
+        indicator_message: string!
+        is_impersonating: bool!
+        target_user_id: '*xid.ID!'
+    - name: Plugin
+      fields:
+        "": ""
+    - name: ImpersonationSession
+      fields: {}
+    - name: mockImpersonationRepository
+      fields:
+        "": ""
+    - name: mockSessionService
+      fields:
+        "": ""
+    - name: Config
+      fields:
+        audit_all_actions: bool!
+        auto_cleanup_enabled: bool!
+        cleanup_interval: time.Duration!
+        default_duration_minutes: int!
+        impersonate_permission: string!
+        indicator_message: string!
+        max_duration_minutes: int!
+        min_duration_minutes: int!
+        min_reason_length: int!
+        require_permission: bool!
+        require_reason: bool!
+        require_ticket: bool!
+        show_indicator: bool!
+        webhook_on_end: bool!
+        webhook_on_start: bool!
+        webhook_urls: '[]string!'
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: ImpersonationMiddleware
+      fields:
+        "": Config
+    - name: ImpersonationStartResponse
+      fields:
+        impersonator_id: string!
+        session_id: string!
+        started_at: string!
+        target_user_id: string!
+    - name: mockUserService
+      fields:
+        "": ""
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: ImpersonationErrorResponse
+      fields:
+        error: string!
+    - name: ImpersonationEndResponse
+      fields:
+        ended_at: string!
+        status: string!
+    - name: SuccessResponse
+      fields:
+        success: bool!
+    - name: StartImpersonation_reqBody
+      fields:
+        duration_minutes: int
+        reason: string!
+        target_user_id: string!
+        ticket_number: string

@@ -15,6 +15,38 @@ type Handler struct {
 	service *Service
 }
 
+// Response types
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type SuccessResponse struct {
+	Success bool `json:"success"`
+}
+
+
+
+type VerificationResponse struct {
+	Verification interface{} `json:"verification"`
+}
+
+type VerificationsResponse struct {
+	Verifications interface{} `json:"verifications"`
+	Count         int         `json:"count"`
+}
+
+type DocumentTypesResponse struct {
+	DocumentTypes []string `json:"document_types"`
+}
+
 // NewHandler creates a new identity verification handler
 func NewHandler(service *Service) *Handler {
 	return &Handler{
@@ -35,17 +67,13 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
 	}
 
 	// Get user from context (set by auth middleware)
 	userID := c.Get("user_id")
 	if userID == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-			"error": "unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "unauthorized",})
 	}
 
 	orgID := c.Get("organization_id")
@@ -80,9 +108,7 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 func (h *Handler) GetVerificationSession(c forge.Context) error {
 	sessionID := c.Param("id")
 	if sessionID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "session ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "session ID is required",})
 	}
 
 	session, err := h.service.GetVerificationSession(c.Context(), sessionID)
@@ -100,9 +126,7 @@ func (h *Handler) GetVerificationSession(c forge.Context) error {
 func (h *Handler) GetVerification(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "verification ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "verification ID is required",})
 	}
 
 	verification, err := h.service.GetVerification(c.Context(), id)
@@ -110,9 +134,7 @@ func (h *Handler) GetVerification(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"verification": verification,
-	})
+	return c.JSON(http.StatusOK, &VerificationResponse{Verification: verification})
 }
 
 // GetUserVerifications retrieves all verifications for the current user
@@ -120,9 +142,7 @@ func (h *Handler) GetVerification(c forge.Context) error {
 func (h *Handler) GetUserVerifications(c forge.Context) error {
 	userID := c.Get("user_id")
 	if userID == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-			"error": "unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "unauthorized",})
 	}
 
 	limit := 20
@@ -157,9 +177,7 @@ func (h *Handler) GetUserVerifications(c forge.Context) error {
 func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 	userID := c.Get("user_id")
 	if userID == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-			"error": "unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "unauthorized",})
 	}
 
 	status, err := h.service.GetUserVerificationStatus(c.Context(), userID.(string))
@@ -167,9 +185,7 @@ func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": status,
-	})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: status,})
 }
 
 // RequestReverification requests re-verification for the current user
@@ -177,9 +193,7 @@ func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 func (h *Handler) RequestReverification(c forge.Context) error {
 	userID := c.Get("user_id")
 	if userID == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-			"error": "unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "unauthorized",})
 	}
 
 	orgID := c.Get("organization_id")
@@ -197,9 +211,7 @@ func (h *Handler) RequestReverification(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "reverification requested",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "reverification requested",})
 }
 
 // HandleWebhook handles provider webhook callbacks
@@ -207,17 +219,13 @@ func (h *Handler) RequestReverification(c forge.Context) error {
 func (h *Handler) HandleWebhook(c forge.Context) error {
 	provider := c.Param("provider")
 	if provider == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "provider is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "provider is required",})
 	}
 
 	// Read body
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "failed to read request body",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "failed to read request body",})
 	}
 
 	// Get signature from header
@@ -234,9 +242,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 
 	// Process webhook
 	if err := h.processWebhook(c, provider, signature, body); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "webhook processing failed",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "webhook processing failed",})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -250,16 +256,12 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 // POST /verification/admin/users/:userId/block
 func (h *Handler) AdminBlockUser(c forge.Context) error {
 	if !h.isAdmin(c) {
-		return c.JSON(http.StatusForbidden, map[string]interface{}{
-			"error": "forbidden",
-		})
+		return c.JSON(http.StatusForbidden, &ErrorResponse{Error: "forbidden",})
 	}
 
 	userID := c.Param("userId")
 	if userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "user ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "user ID is required",})
 	}
 
 	orgID := c.Get("organization_id")
@@ -279,25 +281,19 @@ func (h *Handler) AdminBlockUser(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "user blocked",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "user blocked",})
 }
 
 // AdminUnblockUser unblocks a user (admin only)
 // POST /verification/admin/users/:userId/unblock
 func (h *Handler) AdminUnblockUser(c forge.Context) error {
 	if !h.isAdmin(c) {
-		return c.JSON(http.StatusForbidden, map[string]interface{}{
-			"error": "forbidden",
-		})
+		return c.JSON(http.StatusForbidden, &ErrorResponse{Error: "forbidden",})
 	}
 
 	userID := c.Param("userId")
 	if userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "user ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "user ID is required",})
 	}
 
 	orgID := c.Get("organization_id")
@@ -309,25 +305,19 @@ func (h *Handler) AdminUnblockUser(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "user unblocked",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "user unblocked",})
 }
 
 // AdminGetUserVerificationStatus retrieves verification status for any user (admin only)
 // GET /verification/admin/users/:userId/status
 func (h *Handler) AdminGetUserVerificationStatus(c forge.Context) error {
 	if !h.isAdmin(c) {
-		return c.JSON(http.StatusForbidden, map[string]interface{}{
-			"error": "forbidden",
-		})
+		return c.JSON(http.StatusForbidden, &ErrorResponse{Error: "forbidden",})
 	}
 
 	userID := c.Param("userId")
 	if userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "user ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "user ID is required",})
 	}
 
 	status, err := h.service.GetUserVerificationStatus(c.Context(), userID)
@@ -335,25 +325,19 @@ func (h *Handler) AdminGetUserVerificationStatus(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": status,
-	})
+	return c.JSON(http.StatusOK, &StatusResponse{Status: status,})
 }
 
 // AdminGetUserVerifications retrieves all verifications for any user (admin only)
 // GET /verification/admin/users/:userId/verifications
 func (h *Handler) AdminGetUserVerifications(c forge.Context) error {
 	if !h.isAdmin(c) {
-		return c.JSON(http.StatusForbidden, map[string]interface{}{
-			"error": "forbidden",
-		})
+		return c.JSON(http.StatusForbidden, &ErrorResponse{Error: "forbidden",})
 	}
 
 	userID := c.Param("userId")
 	if userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error": "user ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "user ID is required",})
 	}
 
 	limit := 20
@@ -466,34 +450,22 @@ func (h *Handler) isAdmin(c forge.Context) bool {
 func handleError(c forge.Context, err error) error {
 	switch err {
 	case ErrVerificationNotFound, ErrSessionNotFound, ErrDocumentNotFound:
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
 
 	case ErrVerificationBlocked, ErrMaxAttemptsReached, ErrRateLimitExceeded:
-		return c.JSON(http.StatusTooManyRequests, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusTooManyRequests, &ErrorResponse{Error: err.Error(),})
 
 	case ErrHighRiskDetected, ErrSanctionsListMatch, ErrPEPDetected, ErrAgeBelowMinimum:
-		return c.JSON(http.StatusForbidden, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusForbidden, &ErrorResponse{Error: err.Error(),})
 
 	case ErrVerificationExpired, ErrSessionExpired, ErrDocumentExpired:
-		return c.JSON(http.StatusGone, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusGone, &ErrorResponse{Error: err.Error(),})
 
 	case ErrDocumentNotSupported, ErrCountryNotSupported:
-		return c.JSON(http.StatusUnprocessableEntity, map[string]interface{}{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusUnprocessableEntity, &ErrorResponse{Error: err.Error(),})
 
 	default:
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error": "internal server error",
-		})
+		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "internal server error",})
 	}
 }
 

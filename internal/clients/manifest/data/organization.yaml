@@ -1,242 +1,170 @@
 plugin_id: organization
 version: 1.0.0
-description: Organization and team management
-base_path: /api/auth
-
-types:
-  - name: Organization
-    description: Organization
-    fields:
-      id: string!
-      name: string!
-      slug: string!
-      metadata: object
-      createdAt: string!
-      updatedAt: string!
-
-  - name: Member
-    description: Organization member
-    fields:
-      id: string!
-      userId: string!
-      organizationId: string!
-      role: string!
-      createdAt: string!
-
-  - name: Team
-    description: Team within organization
-    fields:
-      id: string!
-      organizationId: string!
-      name: string!
-      description: string
-      createdAt: string!
-
-  - name: TeamMember
-    description: Team member
-    fields:
-      id: string!
-      teamId: string!
-      userId: string!
-      role: string!
-      createdAt: string!
-
-  - name: Role
-    description: User role
-    fields:
-      id: string!
-      organizationId: string!
-      name: string!
-      description: string
-      permissions: string[]!
-      createdAt: string!
-
-  - name: Policy
-    description: Access policy
-    fields:
-      id: string!
-      organizationId: string!
-      name: string!
-      effect: string!
-      actions: string[]!
-      resources: string[]!
-      conditions: object
-
 routes:
-  - name: CreateOrganization
-    description: Create a new organization
-    method: POST
-    path: /orgs
-    auth: true
-    request:
-      name: string!
-      slug: string!
-      metadata: object
-    response:
-      organization: Organization!
-    errors:
-      - code: 400
-        description: Invalid request data
-      - code: 401
-        description: Not authenticated
-      - code: 409
-        description: Slug already exists
-
-  - name: GetOrganizations
-    description: List user organizations
-    method: GET
-    path: /orgs
-    auth: true
-    response:
-      organizations: Organization[]!
-    errors:
-      - code: 401
-        description: Not authenticated
-
-  - name: GetOrganizationByID
-    description: Get organization by ID
-    method: GET
-    path: /orgs/{id}
-    auth: true
-    params:
-      id: string!
-    response:
-      organization: Organization!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Organization not found
-
-  - name: UpdateOrganization
-    description: Update organization
-    method: POST
-    path: /orgs/update
-    auth: true
-    request:
-      organizationId: string!
-      name: string
-      metadata: object
-    response:
-      organization: Organization!
-    errors:
-      - code: 400
-        description: Invalid request data
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Organization not found
-
-  - name: DeleteOrganization
-    description: Delete organization
-    method: POST
-    path: /orgs/delete
-    auth: true
-    request:
-      organizationId: string!
-    response:
-      success: boolean!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Organization not found
-
-  - name: CreateMember
-    description: Add member to organization
-    method: POST
-    path: /orgs/members
-    auth: true
-    request:
-      organizationId: string!
-      userId: string!
-      role: string!
-    response:
-      member: Member!
-    errors:
-      - code: 400
-        description: Invalid request data
-      - code: 401
-        description: Not authenticated
-      - code: 409
-        description: Member already exists
-
-  - name: GetMembers
-    description: List organization members
-    method: GET
-    path: /orgs/members
-    auth: true
-    query:
-      organizationId: string!
-    response:
-      members: Member[]!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Organization not found
-
-  - name: UpdateMember
-    description: Update member role
-    method: POST
-    path: /orgs/members/update
-    auth: true
-    request:
-      memberId: string!
-      role: string!
-    response:
-      member: Member!
-    errors:
-      - code: 400
-        description: Invalid request data
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Member not found
-
-  - name: DeleteMember
-    description: Remove member from organization
-    method: POST
-    path: /orgs/members/delete
-    auth: true
-    request:
-      memberId: string!
-    response:
-      success: boolean!
-    errors:
-      - code: 401
-        description: Not authenticated
-      - code: 404
-        description: Member not found
-
-  - name: CreateRole
-    description: Create a new role
-    method: POST
-    path: /orgs/roles
-    auth: true
-    request:
-      organizationId: string!
-      name: string!
-      description: string
-      permissions: string[]!
-    response:
-      role: Role!
-    errors:
-      - code: 400
-        description: Invalid request data
-      - code: 401
-        description: Not authenticated
-
-  - name: GetRoles
-    description: List organization roles
-    method: GET
-    path: /orgs/roles
-    auth: true
-    query:
-      organizationId: string!
-    response:
-      roles: Role[]!
-    errors:
-      - code: 401
-        description: Not authenticated
-
+    - name: CreateOrganization
+      description: CreateOrganization handles organization creation
+      method: POST
+      path: /createorganization
+    - name: UpdateOrganization
+      description: UpdateOrganization handles organization updates
+      method: PATCH
+      path: /:id
+    - name: DeleteOrganization
+      description: DeleteOrganization handles organization deletion
+      method: DELETE
+      path: /:id
+    - name: InviteMember
+      description: InviteMember handles member invitation
+      method: POST
+      path: /invite
+    - name: RemoveMember
+      description: RemoveMember handles member removal
+      method: DELETE
+      path: /:memberId
+    - name: CreateTeam
+      description: CreateTeam handles team creation
+      method: POST
+      path: /createteam
+    - name: UpdateTeam
+      description: UpdateTeam handles team updates
+      method: PATCH
+      path: /:teamId
+    - name: DeleteTeam
+      description: DeleteTeam handles team deletion
+      method: DELETE
+      path: /:teamId
+    - name: CreateOrganization
+      description: CreateOrganization handles organization creation requests
+      method: POST
+      path: /createorganization
+      response:
+        error: string!
+    - name: GetOrganization
+      description: GetOrganization handles get organization requests
+      method: GET
+      path: /:id
+      response:
+        error: string!
+    - name: ListOrganizations
+      description: ListOrganizations handles list organizations requests (user's organizations)
+      method: GET
+      path: /listorganizations
+      response:
+        error: string!
+    - name: UpdateOrganization
+      description: UpdateOrganization handles organization update requests
+      method: PATCH
+      path: /:id
+      response:
+        error: string!
+    - name: DeleteOrganization
+      description: DeleteOrganization handles organization deletion requests
+      method: DELETE
+      path: /:id
+      response:
+        error: string!
+    - name: GetOrganizationBySlug
+      description: GetOrganizationBySlug handles get organization by slug requests
+      method: GET
+      path: /slug/:slug
+      response:
+        error: string!
+    - name: ListMembers
+      description: ListMembers handles list organization members requests
+      method: GET
+      path: /listmembers
+      response:
+        error: string!
+    - name: InviteMember
+      description: InviteMember handles member invitation requests
+      method: POST
+      path: /invite
+      response:
+        error: string!
+    - name: UpdateMember
+      description: UpdateMember handles member update requests
+      method: PATCH
+      path: /:memberId
+      response:
+        error: string!
+    - name: RemoveMember
+      description: RemoveMember handles member removal requests
+      method: DELETE
+      path: /:memberId
+      response:
+        error: string!
+    - name: AcceptInvitation
+      description: AcceptInvitation handles invitation acceptance requests
+      method: POST
+      path: /:token/accept
+      response:
+        error: string!
+    - name: DeclineInvitation
+      description: DeclineInvitation handles invitation decline requests
+      method: POST
+      path: /:token/decline
+      response:
+        status: string!
+    - name: ListTeams
+      description: ListTeams handles list teams requests
+      method: GET
+      path: /listteams
+      response:
+        error: string!
+    - name: CreateTeam
+      description: CreateTeam handles team creation requests
+      method: POST
+      path: /createteam
+      response:
+        error: string!
+    - name: UpdateTeam
+      description: UpdateTeam handles team update requests
+      method: PATCH
+      path: /:teamId
+      response:
+        error: string!
+    - name: DeleteTeam
+      description: DeleteTeam handles team deletion requests
+      method: DELETE
+      path: /:teamId
+      response:
+        error: string!
+types:
+    - name: MessageResponse
+      fields:
+        message: string!
+    - name: MembersResponse
+      fields:
+        members: '[]*organization.Member!'
+        total: int!
+    - name: InvitationResponse
+      fields:
+        invitation: '*organization.Invitation!'
+        message: string!
+    - name: TeamsResponse
+      fields:
+        teams: '[]*organization.Team!'
+        total: int!
+    - name: MockService
+      fields:
+        "": error
+    - name: DashboardExtension
+      fields:
+        "": string
+    - name: Plugin
+      fields:
+        "": '*OrganizationHandler'
+    - name: ErrorResponse
+      fields:
+        error: string!
+    - name: StatusResponse
+      fields:
+        status: string!
+    - name: AddCustomPermission_req
+      fields:
+        category: string!
+        description: string!
+        name: string!
+    - name: OrganizationHandler
+      fields:
+        "": '*organization.Service'

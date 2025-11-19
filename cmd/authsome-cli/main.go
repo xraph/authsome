@@ -23,7 +23,7 @@ This tool provides commands for:
 - Database migrations
 - Code generation
 - Data seeding
-- Organization management
+- App management
 - User management
 - Configuration management`,
 	Version: "1.0.0",
@@ -49,7 +49,7 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(seedCmd)
-	rootCmd.AddCommand(orgCmd)
+	rootCmd.AddCommand(appCmd)
 	rootCmd.AddCommand(userCmd)
 	rootCmd.AddCommand(configCmd)
 }

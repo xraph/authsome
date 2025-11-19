@@ -15,6 +15,50 @@ type Handler struct {
 	service *Service
 }
 
+// Response types
+type AuthURLResponse struct {
+	URL string `json:"url"`
+}
+
+type CallbackResponse struct {
+	User    interface{} `json:"user"`
+	Session interface{} `json:"session"`
+	Token   string      `json:"token"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type ConnectionResponse struct {
+	Connection interface{} `json:"connection"`
+}
+
+type ConnectionsResponse struct {
+	Connections interface{} `json:"connections"`
+}
+
+type CallbackDataResponse struct {
+	User      interface{} `json:"user"`
+	IsNewUser bool        `json:"isNewUser"`
+	Action    string      `json:"action"`
+}
+
+type ProvidersResponse struct {
+	Providers interface{} `json:"providers"`
+}
+
+type ProvidersAppResponse struct {
+	Providers interface{} `json:"providers"`
+	AppID     string      `json:"appId"`
+}
+
+type ProviderConfigResponse struct {
+	Message  string `json:"message"`
+	Provider string `json:"provider"`
+	AppID    string `json:"appId"`
+}
+
 // NewHandler creates a new social OAuth handler
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
@@ -66,9 +110,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 		return handleError(c, err, "AUTH_URL_FAILED", "Failed to generate authorization URL", http.StatusBadRequest)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"url": authURL,
-	})
+	return c.JSON(http.StatusOK, &AuthURLResponse{URL: authURL})
 }
 
 // Callback handles OAuth provider callback
@@ -106,10 +148,10 @@ func (h *Handler) Callback(c forge.Context) error {
 
 	// In production, create session and redirect to app
 	// For now, return user data
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"user":      result.User,
-		"isNewUser": result.IsNewUser,
-		"action":    result.Action,
+	return c.JSON(http.StatusOK, &CallbackDataResponse{
+		User:      result.User,
+		IsNewUser: result.IsNewUser,
+		Action:    result.Action,
 	})
 }
 
@@ -150,9 +192,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 		return handleError(c, err, "LINK_ACCOUNT_FAILED", "Failed to generate link account URL", http.StatusBadRequest)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"url": authURL,
-	})
+	return c.JSON(http.StatusOK, &AuthURLResponse{URL: authURL})
 }
 
 // UnlinkAccount unlinks a social provider from the current user
@@ -177,18 +217,14 @@ func (h *Handler) UnlinkAccount(c forge.Context) error {
 		return handleError(c, err, "UNLINK_ACCOUNT_FAILED", "Failed to unlink account", http.StatusInternalServerError)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Account unlinked successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "Account unlinked successfully"})
 }
 
 // ListProviders returns available OAuth providers
 // GET /api/auth/providers
 func (h *Handler) ListProviders(c forge.Context) error {
 	providers := h.service.ListProviders()
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"providers": providers,
-	})
+	return c.JSON(http.StatusOK, &ProvidersResponse{Providers: providers})
 }
 
 // =============================================================================
@@ -240,9 +276,9 @@ func (h *Handler) AdminListProviders(c forge.Context) error {
 
 	// TODO: Load app-specific configuration from database
 	// For now, return available providers
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"providers": providers,
-		"appId":     appID.String(),
+	return c.JSON(http.StatusOK, &ProvidersAppResponse{
+		Providers: providers,
+		AppID:     appID.String(),
 	})
 }
 
@@ -284,10 +320,10 @@ func (h *Handler) AdminAddProvider(c forge.Context) error {
 	// 2. Store encrypted credentials in app-specific config
 	// 3. Log the admin action to audit service
 
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"message":  "Provider configured successfully",
-		"provider": req.Provider,
-		"appId":    appID.String(),
+	return c.JSON(http.StatusCreated, &ProviderConfigResponse{
+		Message:  "Provider configured successfully",
+		Provider: req.Provider,
+		AppID:    appID.String(),
 	})
 }
 
@@ -326,10 +362,10 @@ func (h *Handler) AdminUpdateProvider(c forge.Context) error {
 	// 3. Store encrypted credentials
 	// 4. Log the admin action to audit service
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message":  "Provider updated successfully",
-		"provider": provider,
-		"appId":    appID.String(),
+	return c.JSON(http.StatusOK, &ProviderConfigResponse{
+		Message:  "Provider updated successfully",
+		Provider: provider,
+		AppID:    appID.String(),
 	})
 }
 
@@ -362,9 +398,9 @@ func (h *Handler) AdminDeleteProvider(c forge.Context) error {
 	// 2. Delete provider config
 	// 3. Log the admin action to audit service
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message":  "Provider removed successfully",
-		"provider": provider,
-		"appId":    appID.String(),
+	return c.JSON(http.StatusOK, &ProviderConfigResponse{
+		Message:  "Provider removed successfully",
+		Provider: provider,
+		AppID:    appID.String(),
 	})
 }

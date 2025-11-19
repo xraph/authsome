@@ -1,0 +1,64 @@
+plugin_id: emailotp
+version: 1.0.0
+routes:
+    - name: Send
+      description: Send handles sending of OTP to email
+      method: POST
+      path: /email-otp/send
+      request:
+        email: string!
+    - name: Verify
+      description: Verify checks the OTP and creates a session on success
+      method: POST
+      path: /email-otp/verify
+      request:
+        email: string!
+        otp: string!
+        remember: bool!
+      response:
+        session: '!'
+        token: string!
+        user: '!'
+types:
+    - name: Send_body
+      fields:
+        email: string!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: EmailOTPErrorResponse
+      fields:
+        error: string!
+    - name: EmailOTPVerifyResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Verify_body
+      fields:
+        email: string!
+        otp: string!
+        remember: bool!
+    - name: Config
+      fields:
+        allowImplicitSignup: bool!
+        devExposeOTP: bool!
+        expiryMinutes: int!
+        maxAttempts: int!
+        otpLength: int!
+        rateLimitPerHour: int!
+    - name: EmailOTPSendResponse
+      fields:
+        dev_otp: string!
+        status: string!
+    - name: Service
+      fields:
+        "": '*repo.EmailOTPRepository'
+    - name: Handler
+      fields:
+        "": '*rl.Service'
+    - name: VerifyResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'

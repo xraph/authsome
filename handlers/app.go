@@ -30,7 +30,6 @@ type AppHandler struct {
 	policyRepo  *repo.PolicyRepository
 	enforceRBAC bool
 }
-
 func NewAppHandler(s *app.ServiceImpl, rlsvc *rl.Service, sess session.ServiceInterface, rbacsvc *rbac.Service, roles *repo.UserRoleRepository, roleRepo *repo.RoleRepository, policyRepo *repo.PolicyRepository, enforce bool) *AppHandler {
 	return &AppHandler{app: s, rl: rlsvc, sess: sess, rbac: rbacsvc, roles: roles, roleRepo: roleRepo, policyRepo: policyRepo, enforceRBAC: enforce}
 }
@@ -231,7 +230,7 @@ func (h *AppHandler) DeleteOrganization(c forge.Context) error {
 	if err := h.app.DeleteApp(c.Request().Context(), body.ID); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(200, map[string]string{"status": "deleted"})
+	return c.JSON(200, &StatusResponse{Status: "deleted"})
 }
 
 // DeleteOrganizationByID deletes an organization using path param id
@@ -257,7 +256,7 @@ func (h *AppHandler) DeleteOrganizationByID(c forge.Context) error {
 	if err := h.app.DeleteApp(c.Request().Context(), id); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(200, map[string]string{"status": "deleted"})
+	return c.JSON(200, &StatusResponse{Status: "deleted"})
 }
 
 // checkRBAC enforces RBAC when enabled; returns true when allowed
@@ -420,7 +419,7 @@ func (h *AppHandler) DeleteMember(c forge.Context) error {
 	if err := h.app.DeleteMember(c.Request().Context(), body.ID); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(200, map[string]string{"status": "deleted"})
+	return c.JSON(200, &StatusResponse{Status: "deleted"})
 }
 
 // CreateTeam creates a new team
@@ -536,7 +535,7 @@ func (h *AppHandler) DeleteTeam(c forge.Context) error {
 	if err := h.app.DeleteTeam(c.Request().Context(), body.ID); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(200, map[string]string{"status": "deleted"})
+	return c.JSON(200, &StatusResponse{Status: "deleted"})
 }
 
 // AddTeamMember adds a member to a team
@@ -591,7 +590,7 @@ func (h *AppHandler) RemoveTeamMember(c forge.Context) error {
 	if err := h.app.RemoveTeamMember(c.Request().Context(), body.TeamID, body.MemberID); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(200, map[string]string{"status": "removed"})
+	return c.JSON(200, &StatusResponse{Status: "removed"})
 }
 
 // GetTeamMembers lists members of a team
@@ -692,7 +691,7 @@ func (h *AppHandler) CreatePolicy(c forge.Context) error {
 	if h.rbac != nil {
 		_ = h.rbac.LoadPolicies(c.Request().Context(), h.policyRepo)
 	}
-	return c.JSON(201, map[string]string{"status": "created"})
+	return c.JSON(201, &StatusResponse{Status: "created"})
 }
 
 // GetPolicies lists stored RBAC policy expressions
@@ -753,7 +752,7 @@ func (h *AppHandler) DeletePolicy(c forge.Context) error {
 	if h.rbac != nil {
 		_ = h.rbac.LoadPolicies(c.Request().Context(), h.policyRepo)
 	}
-	return c.JSON(200, map[string]string{"status": "deleted"})
+	return c.JSON(200, &StatusResponse{Status: "deleted"})
 }
 
 // UpdatePolicy updates an existing RBAC policy expression by ID
@@ -781,7 +780,7 @@ func (h *AppHandler) UpdatePolicy(c forge.Context) error {
 	// Validate expression syntax using RBAC parser
 	parser := rbac.NewParser()
 	if _, err := parser.Parse(body.Expression); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid expression: " + err.Error()})
+		return c.JSON(400, &ErrorResponse{Error: "invalid expression: " + err.Error()})
 	}
 	if err := h.policyRepo.Update(c.Request().Context(), body.ID, body.Expression); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
@@ -790,7 +789,7 @@ func (h *AppHandler) UpdatePolicy(c forge.Context) error {
 	if h.rbac != nil {
 		_ = h.rbac.LoadPolicies(c.Request().Context(), h.policyRepo)
 	}
-	return c.JSON(200, map[string]string{"status": "updated"})
+	return c.JSON(200, &StatusResponse{Status: "updated"})
 }
 
 // CreateRole creates a role, optionally scoped to an organization
@@ -886,7 +885,7 @@ func (h *AppHandler) AssignUserRole(c forge.Context) error {
 	if err := h.roles.Assign(c.Request().Context(), body.UserID, body.RoleID, body.AppID); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(201, map[string]string{"status": "assigned"})
+	return c.JSON(201, &StatusResponse{Status: "assigned"})
 }
 
 // RemoveUserRole removes a role assignment from a user within an organization
@@ -908,7 +907,7 @@ func (h *AppHandler) RemoveUserRole(c forge.Context) error {
 	if err := h.roles.Unassign(c.Request().Context(), body.UserID, body.RoleID, body.AppID); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)
 	}
-	return c.JSON(200, map[string]string{"status": "removed"})
+	return c.JSON(200, &StatusResponse{Status: "removed"})
 }
 
 // GetUserRoles lists roles assigned to a user, optionally filtered by organization
