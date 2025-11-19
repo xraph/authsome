@@ -1,6 +1,6 @@
 module github.com/xraph/authsome
 
-go 1.25.0
+go 1.25.3
 
 require (
 	github.com/beevik/etree v1.5.0
@@ -25,7 +25,7 @@ require (
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.15
 	github.com/uptrace/bun/driver/pgdriver v1.2.8
 	github.com/uptrace/bun/driver/sqliteshim v1.2.15
-	github.com/xraph/forge v0.0.0-00010101000000-000000000000
+	github.com/xraph/forge v0.6.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/oauth2 v0.32.0
 	golang.org/x/time v0.12.0
@@ -153,5 +153,3 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 )
-
-replace github.com/xraph/forge => ../forge
