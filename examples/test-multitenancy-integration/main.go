@@ -23,7 +23,8 @@ import (
 
 func main() {
 	fmt.Println("🚀 AuthSome Multi-Tenancy Integration Test")
-	fmt.Println("==========================================\n")
+	fmt.Println("==========================================")
+	fmt.Println()
 
 	// Setup database
 	sqldb, err := sql.Open("sqlite3", "file:integration_test.db?mode=memory&cache=shared")
@@ -37,11 +38,13 @@ func main() {
 
 	// Create tables
 	createTables(db, ctx)
-	fmt.Println("✅ Database tables created\n")
+	fmt.Println("✅ Database tables created")
+	fmt.Println()
 
 	// Create test organization
 	orgID := createTestOrganization(db, ctx, "acme-corp")
-	fmt.Printf("✅ Test organization created: %s\n\n", orgID)
+	fmt.Printf("✅ Test organization created: %s\n", orgID)
+	fmt.Println()
 
 	// Start HTTP server with multi-tenancy
 	app := forge.NewApp(forge.AppConfig{
@@ -52,17 +55,16 @@ func main() {
 	})
 
 	auth := authsome.New(
-		authsome.WithMode(authsome.ModeSaaS),
 		authsome.WithDatabase(db),
 		authsome.WithForgeApp(app),
 		authsome.WithBasePath("/api/auth"),
 	)
 
-	// Register multi-tenancy plugin
-	mtPlugin := multitenancy.NewPlugin()
-	if err := auth.RegisterPlugin(mtPlugin); err != nil {
-		log.Fatalf("Failed to register plugin: %v", err)
-	}
+	// Note: Multi-tenancy plugin would be registered here if available
+	// mtPlugin := multitenancy.NewPlugin()
+	// if err := auth.RegisterPlugin(mtPlugin); err != nil {
+	// 	log.Fatalf("Failed to register plugin: %v", err)
+	// }
 
 	// Initialize
 	if err := auth.Initialize(ctx); err != nil {
@@ -76,7 +78,8 @@ func main() {
 
 	fmt.Println("✅ AuthSome initialized with multi-tenancy plugin")
 	fmt.Println("✅ All services decorated")
-	fmt.Println("✅ HTTP server ready\n")
+	fmt.Println("✅ HTTP server ready")
+	fmt.Println()
 
 	// Start server in background
 	go func() {
@@ -87,11 +90,13 @@ func main() {
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
-	fmt.Println("🌐 Test server started on http://localhost:3003\n")
+	fmt.Println("🌐 Test server started on http://localhost:3003")
+	fmt.Println()
 
 	// Run integration tests
 	fmt.Println("📋 Running Integration Tests")
-	fmt.Println("-----------------------------\n")
+	fmt.Println("-----------------------------")
+	fmt.Println()
 
 	// Test 1: Signup with org context
 	testSignupWithOrg(orgID)

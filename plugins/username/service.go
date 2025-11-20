@@ -4,31 +4,49 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/errs"
+	repo "github.com/xraph/authsome/repository"
 )
 
 // Service provides username-based auth operations backed by core services
 type Service struct {
-	users  *user.Service
-	auth   *auth.Service
-	config Config
+	users        *user.Service
+	auth         *auth.Service
+	audit        *audit.Service
+	usernameRepo *repo.UsernameRepository
+	config       Config
 }
 
-func NewService(users *user.Service, authSvc *auth.Service, config Config) *Service {
-	return &Service{users: users, auth: authSvc, config: config}
+func NewService(users *user.Service, authSvc *auth.Service, auditSvc *audit.Service, usernameRepo *repo.UsernameRepository, config Config) *Service {
+	return &Service{
+		users:        users,
+		auth:         authSvc,
+		audit:        auditSvc,
+		usernameRepo: usernameRepo,
+		config:       config,
+	}
 }
+
+// =============================================================================
+// PASSWORD VALIDATION
+// =============================================================================
 
 // ValidatePassword validates password against configured requirements
 func (s *Service) ValidatePassword(password string) error {
 	if len(password) < s.config.MinPasswordLength {
-		return fmt.Errorf("password must be at least %d characters", s.config.MinPasswordLength)
+		return errs.WeakPassword(fmt.Sprintf("password must be at least %d characters", s.config.MinPasswordLength))
 	}
 	if len(password) > s.config.MaxPasswordLength {
-		return fmt.Errorf("password must be at most %d characters", s.config.MaxPasswordLength)
+		return errs.WeakPassword(fmt.Sprintf("password must be at most %d characters", s.config.MaxPasswordLength))
 	}
 
 	if s.config.RequireUppercase {
@@ -40,7 +58,7 @@ func (s *Service) ValidatePassword(password string) error {
 			}
 		}
 		if !hasUpper {
-			return fmt.Errorf("password must contain at least one uppercase letter")
+			return errs.WeakPassword("password must contain at least one uppercase letter")
 		}
 	}
 
@@ -53,7 +71,7 @@ func (s *Service) ValidatePassword(password string) error {
 			}
 		}
 		if !hasLower {
-			return fmt.Errorf("password must contain at least one lowercase letter")
+			return errs.WeakPassword("password must contain at least one lowercase letter")
 		}
 	}
 
@@ -66,7 +84,7 @@ func (s *Service) ValidatePassword(password string) error {
 			}
 		}
 		if !hasNumber {
-			return fmt.Errorf("password must contain at least one number")
+			return errs.WeakPassword("password must contain at least one number")
 		}
 	}
 
@@ -80,55 +98,465 @@ func (s *Service) ValidatePassword(password string) error {
 			}
 		}
 		if !hasSpecial {
-			return fmt.Errorf("password must contain at least one special character")
+			return errs.WeakPassword("password must contain at least one special character")
 		}
 	}
 
 	return nil
 }
 
-// SignUpWithUsername is not supported due to email non-null constraint
-func (s *Service) SignUpWithUsername(ctx context.Context, username, password string) error {
+// =============================================================================
+// ACCOUNT LOCKOUT METHODS
+// =============================================================================
+
+// checkAccountLockout verifies if a user account is locked
+func (s *Service) checkAccountLockout(ctx context.Context, userID xid.ID) error {
+	if !s.config.LockoutEnabled {
+		return nil
+	}
+
+	locked, lockedUntil, err := s.usernameRepo.IsAccountLocked(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to check account lockout: %w", err)
+	}
+
+	if locked && lockedUntil != nil {
+		minutesLeft := int(time.Until(*lockedUntil).Minutes())
+		if minutesLeft < 0 {
+			minutesLeft = 0
+		}
+		
+		return &AccountLockoutError{
+			LockedUntil:   *lockedUntil,
+			LockedMinutes: minutesLeft,
+		}
+	}
+
+	return nil
+}
+
+// recordFailedLoginAttempt logs a failed login attempt
+func (s *Service) recordFailedLoginAttempt(ctx context.Context, username string, appID xid.ID, ip, ua string) error {
+	if !s.config.LockoutEnabled {
+		return nil
+	}
+
+	return s.usernameRepo.RecordFailedAttempt(ctx, username, appID, ip, ua)
+}
+
+// handleAccountLockout checks failed attempts and locks account if threshold exceeded
+func (s *Service) handleAccountLockout(ctx context.Context, userID xid.ID, username string, appID xid.ID) error {
+	if !s.config.LockoutEnabled {
+		return nil
+	}
+
+	// Count failed attempts within the window
+	since := time.Now().Add(-s.config.FailedAttemptWindow)
+	count, err := s.usernameRepo.GetFailedAttempts(ctx, username, appID, since)
+	if err != nil {
+		return fmt.Errorf("failed to get failed attempts: %w", err)
+	}
+
+	if count >= s.config.MaxFailedAttempts {
+		// Lock the account
+		reason := fmt.Sprintf("Too many failed login attempts (%d)", count)
+		if err := s.usernameRepo.LockAccount(ctx, userID, s.config.LockoutDuration, reason); err != nil {
+			return fmt.Errorf("failed to lock account: %w", err)
+		}
+
+		// Audit the lockout
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, &userID, "username_account_locked_auto",
+				fmt.Sprintf("username:%s attempts:%d", username, count),
+				"", "",
+				fmt.Sprintf(`{"username":"%s","attempts":%d,"lockout_minutes":%d}`,
+					username, count, int(s.config.LockoutDuration.Minutes())))
+		}
+
+		return fmt.Errorf("account locked due to too many failed attempts")
+	}
+
+	return nil
+}
+
+// clearFailedAttempts removes all failed attempts for a username
+func (s *Service) clearFailedAttempts(ctx context.Context, username string, appID xid.ID) error {
+	if !s.config.LockoutEnabled {
+		return nil
+	}
+
+	return s.usernameRepo.ClearFailedAttempts(ctx, username, appID)
+}
+
+// =============================================================================
+// PASSWORD HISTORY METHODS
+// =============================================================================
+
+// validatePasswordHistory checks if password is in user's history
+func (s *Service) validatePasswordHistory(ctx context.Context, userID xid.ID, password string) error {
+	if !s.config.PreventPasswordReuse || s.config.PasswordHistorySize == 0 {
+		return nil
+	}
+
+	inHistory, err := s.usernameRepo.CheckPasswordInHistory(ctx, userID, password, s.config.PasswordHistorySize)
+	if err != nil {
+		return fmt.Errorf("failed to check password history: %w", err)
+	}
+
+	if inHistory {
+		return errs.WeakPassword(fmt.Sprintf("password was recently used, please choose a different password (last %d passwords are tracked)", s.config.PasswordHistorySize))
+	}
+
+	return nil
+}
+
+// savePasswordHistory saves a password hash to history
+func (s *Service) savePasswordHistory(ctx context.Context, userID xid.ID, passwordHash string) error {
+	if !s.config.PreventPasswordReuse || s.config.PasswordHistorySize == 0 {
+		return nil
+	}
+
+	if err := s.usernameRepo.SavePasswordHistory(ctx, userID, passwordHash); err != nil {
+		return fmt.Errorf("failed to save password history: %w", err)
+	}
+
+	// Cleanup old history entries
+	if err := s.usernameRepo.CleanupOldPasswordHistory(ctx, userID, s.config.PasswordHistorySize); err != nil {
+		// Log error but don't fail
+		fmt.Printf("Failed to cleanup old password history: %v\n", err)
+	}
+
+	return nil
+}
+
+// =============================================================================
+// PASSWORD EXPIRY METHODS
+// =============================================================================
+
+// checkPasswordExpiry checks if user's password has expired
+// Note: Uses account creation date as password change date is not tracked in current schema
+func (s *Service) checkPasswordExpiry(ctx context.Context, u *user.User) error {
+	if !s.config.PasswordExpiryEnabled {
+		return nil
+	}
+
+	// Use creation date as reference (password change tracking not in current schema)
+	daysSinceCreation := int(time.Since(u.CreatedAt).Hours() / 24)
+	if daysSinceCreation > s.config.PasswordExpiryDays {
+		return errs.PasswordExpired()
+	}
+
+	return nil
+}
+
+// isPasswordExpired checks if password is expired (no error, just bool)
+// Note: Uses account creation date as password change date is not tracked in current schema
+func (s *Service) isPasswordExpired(u *user.User) bool {
+	if !s.config.PasswordExpiryEnabled {
+		return false
+	}
+
+	daysSinceCreation := int(time.Since(u.CreatedAt).Hours() / 24)
+	return daysSinceCreation > s.config.PasswordExpiryDays
+}
+
+// daysUntilPasswordExpiry returns days until password expires
+// Note: Uses account creation date as password change date is not tracked in current schema
+func (s *Service) daysUntilPasswordExpiry(u *user.User) int {
+	if !s.config.PasswordExpiryEnabled {
+		return -1 // Never expires
+	}
+
+	daysSinceCreation := int(time.Since(u.CreatedAt).Hours() / 24)
+	remaining := s.config.PasswordExpiryDays - daysSinceCreation
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+// =============================================================================
+// SIGNUP METHOD
+// =============================================================================
+
+// SignUpWithUsername creates a new user with username and password
+func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip, ua string) error {
+	// Get app and org from context
+	appID, _ := contexts.GetAppID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	// Normalize and validate inputs
 	disp := strings.TrimSpace(username)
+	canonical := strings.ToLower(disp)
+	
 	if disp == "" || strings.TrimSpace(password) == "" {
-		return fmt.Errorf("missing fields")
+		// Audit attempt
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "username_signup_failed",
+				"reason:missing_fields", ip, ua,
+				fmt.Sprintf(`{"username":"%s","reason":"missing_fields"}`, disp))
+		}
+		return errs.RequiredField("username and password")
+	}
+
+	// Audit signup attempt
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, nil, "username_signup_attempt",
+			fmt.Sprintf("username:%s", canonical), ip, ua,
+			fmt.Sprintf(`{"username":"%s","app_id":"%s"}`, canonical, appID.String()))
+	}
+
+	// Check if username already exists
+	existing, _ := s.users.FindByUsername(ctx, canonical)
+	if existing != nil {
+		// Audit username collision
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "username_already_exists",
+				fmt.Sprintf("username:%s", canonical), ip, ua,
+				fmt.Sprintf(`{"username":"%s"}`, canonical))
+		}
+		return errs.UsernameAlreadyExists(canonical)
 	}
 
 	// Validate password against configured requirements
 	if err := s.ValidatePassword(password); err != nil {
+		// Audit weak password
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "username_weak_password",
+				fmt.Sprintf("username:%s", canonical), ip, ua,
+				fmt.Sprintf(`{"username":"%s","reason":"%s"}`, canonical, err.Error()))
+		}
 		return err
 	}
 
-	canonical := strings.ToLower(disp)
 	// Generate a temporary, unique email to satisfy non-null/unique constraints
+	// Scoped to app to prevent collisions across apps
 	id := xid.New()
-	tempEmail := fmt.Sprintf("u-%s@temp.local", id.String())
+	tempEmail := fmt.Sprintf("u-%s@%s.temp.local", id.String(), appID.String())
+	
 	// Create user via core user service to reuse password hashing and validations
-	u, err := s.users.Create(ctx, &user.CreateUserRequest{Email: tempEmail, Password: password, Name: disp})
+	u, err := s.users.Create(ctx, &user.CreateUserRequest{
+		Email:    tempEmail,
+		Password: password,
+		Name:     disp,
+	})
 	if err != nil {
-		return err
+		// Audit creation failure
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "username_signup_failed",
+				fmt.Sprintf("username:%s error:%s", canonical, err.Error()), ip, ua,
+				fmt.Sprintf(`{"username":"%s","error":"%s"}`, canonical, err.Error()))
+		}
+		return fmt.Errorf("failed to create user: %w", err)
 	}
+
 	// Update canonical and display username
 	req := &user.UpdateUserRequest{Username: &canonical, DisplayUsername: &disp}
 	if _, err := s.users.Update(ctx, u, req); err != nil {
-		return err
+		// Audit update failure
+		if s.audit != nil {
+			uid := u.ID
+			_ = s.audit.Log(ctx, &uid, "username_signup_failed",
+				fmt.Sprintf("username:%s user_id:%s error:%s", canonical, uid.String(), err.Error()),
+				ip, ua,
+				fmt.Sprintf(`{"username":"%s","user_id":"%s","error":"%s"}`, canonical, uid.String(), err.Error()))
+		}
+		return fmt.Errorf("failed to update username: %w", err)
 	}
+
+	// Save password to history
+	if err := s.savePasswordHistory(ctx, u.ID, u.PasswordHash); err != nil {
+		// Log error but don't fail signup
+		fmt.Printf("Failed to save initial password history: %v\n", err)
+	}
+
+	// Audit successful signup
+	if s.audit != nil {
+		uid := u.ID
+		_ = s.audit.Log(ctx, &uid, "username_signup_success",
+			fmt.Sprintf("username:%s user_id:%s", canonical, uid.String()),
+			ip, ua,
+			fmt.Sprintf(`{"username":"%s","user_id":"%s","app_id":"%s","org_id":"%s"}`,
+				canonical, uid.String(), appID.String(), func() string {
+					if orgID != xid.NilID() {
+						return orgID.String()
+					}
+					return ""
+				}()))
+	}
+
 	return nil
 }
 
+// =============================================================================
+// SIGNIN METHOD
+// =============================================================================
+
 // SignInWithUsername authenticates by username and password
-func (s *Service) SignInWithUsername(ctx context.Context, username, password string) (*auth.AuthResponse, error) {
+func (s *Service) SignInWithUsername(ctx context.Context, username, password string, remember bool, ip, ua string) (*responses.AuthResponse, error) {
+	// Get app and org from context
+	appID, _ := contexts.GetAppID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	un := strings.ToLower(strings.TrimSpace(username))
 	if un == "" || password == "" {
-		return nil, fmt.Errorf("missing fields")
+		return nil, errs.RequiredField("username and password")
 	}
+
+	// Audit signin attempt
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, nil, "username_signin_attempt",
+			fmt.Sprintf("username:%s", un), ip, ua,
+			fmt.Sprintf(`{"username":"%s","app_id":"%s"}`, un, appID.String()))
+	}
+
+	// Find user by username
 	u, err := s.users.FindByUsername(ctx, un)
 	if err != nil || u == nil {
-		return nil, fmt.Errorf("invalid credentials")
+		// Record failed attempt
+		if s.config.LockoutEnabled {
+			_ = s.recordFailedLoginAttempt(ctx, un, appID, ip, ua)
+		}
+
+		// Audit invalid credentials
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "username_invalid_credentials",
+				fmt.Sprintf("username:%s reason:user_not_found", un), ip, ua,
+				fmt.Sprintf(`{"username":"%s","reason":"user_not_found"}`, un))
+		}
+
+		return nil, errs.InvalidCredentials()
 	}
+
+	// Check account lockout
+	if err := s.checkAccountLockout(ctx, u.ID); err != nil {
+		// Check if it's an AccountLockoutError
+		if lockoutErr, ok := err.(*AccountLockoutError); ok {
+			// Audit lockout attempt
+			if s.audit != nil {
+				uid := u.ID
+				_ = s.audit.Log(ctx, &uid, "username_account_locked",
+					fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
+					fmt.Sprintf(`{"username":"%s","user_id":"%s","locked_until":"%s"}`,
+						un, uid.String(), lockoutErr.LockedUntil.Format(time.RFC3339)))
+			}
+
+			return nil, errs.AccountLocked(fmt.Sprintf("locked for %d minutes", lockoutErr.LockedMinutes))
+		}
+		return nil, fmt.Errorf("lockout check failed: %w", err)
+	}
+
+	// Check password expiry
+	if err := s.checkPasswordExpiry(ctx, u); err != nil {
+		// Audit password expired
+		if s.audit != nil {
+			uid := u.ID
+			_ = s.audit.Log(ctx, &uid, "username_password_expired",
+				fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
+				fmt.Sprintf(`{"username":"%s","user_id":"%s"}`, un, uid.String()))
+		}
+		return nil, err
+	}
+
+	// Verify password
 	if ok := crypto.CheckPassword(password, u.PasswordHash); !ok {
-		return nil, fmt.Errorf("invalid credentials")
+		// Record failed attempt
+		if s.config.LockoutEnabled {
+			_ = s.recordFailedLoginAttempt(ctx, un, appID, ip, ua)
+			
+			// Check if we should lock the account
+			if err := s.handleAccountLockout(ctx, u.ID, un, appID); err != nil {
+				// Account was locked
+				if s.audit != nil {
+					uid := u.ID
+					_ = s.audit.Log(ctx, &uid, "username_signin_failed",
+						fmt.Sprintf("username:%s user_id:%s reason:invalid_password_locked", un, uid.String()),
+						ip, ua,
+						fmt.Sprintf(`{"username":"%s","user_id":"%s","reason":"invalid_password","locked":true}`,
+							un, uid.String()))
+				}
+				return nil, errs.InvalidCredentials()
+			}
+
+			// Audit failed attempt recorded
+			if s.audit != nil {
+				uid := u.ID
+				_ = s.audit.Log(ctx, &uid, "username_failed_attempt_recorded",
+					fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
+					fmt.Sprintf(`{"username":"%s","user_id":"%s"}`, un, uid.String()))
+			}
+		}
+
+		// Audit invalid credentials
+		if s.audit != nil {
+			uid := u.ID
+			_ = s.audit.Log(ctx, &uid, "username_invalid_credentials",
+				fmt.Sprintf("username:%s user_id:%s reason:invalid_password", un, uid.String()),
+				ip, ua,
+				fmt.Sprintf(`{"username":"%s","user_id":"%s","reason":"invalid_password"}`, un, uid.String()))
+		}
+
+		return nil, errs.InvalidCredentials()
 	}
-	return s.auth.CreateSessionForUser(ctx, u, false, "", "username-plugin")
+
+	// Password is correct - clear failed attempts
+	if s.config.LockoutEnabled {
+		if err := s.clearFailedAttempts(ctx, un, appID); err != nil {
+			// Log error but don't fail signin
+			fmt.Printf("Failed to clear failed attempts: %v\n", err)
+		} else {
+			// Audit cleared attempts
+			if s.audit != nil {
+				uid := u.ID
+				_ = s.audit.Log(ctx, &uid, "username_failed_attempts_cleared",
+					fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
+					fmt.Sprintf(`{"username":"%s","user_id":"%s"}`, un, uid.String()))
+			}
+		}
+	}
+
+	// Create session
+	res, err := s.auth.CreateSessionForUser(ctx, u, remember, ip, ua)
+	if err != nil {
+		// Audit session creation failure
+		if s.audit != nil {
+			uid := u.ID
+			_ = s.audit.Log(ctx, &uid, "username_signin_failed",
+				fmt.Sprintf("username:%s user_id:%s error:%s", un, uid.String(), err.Error()),
+				ip, ua,
+				fmt.Sprintf(`{"username":"%s","user_id":"%s","error":"%s"}`, un, uid.String(), err.Error()))
+		}
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Audit successful signin
+	if s.audit != nil {
+		uid := u.ID
+		_ = s.audit.Log(ctx, &uid, "username_signin_success",
+			fmt.Sprintf("username:%s user_id:%s session_id:%s", un, uid.String(), res.Session.ID.String()),
+			ip, ua,
+			fmt.Sprintf(`{"username":"%s","user_id":"%s","session_id":"%s","remember":%t,"app_id":"%s","org_id":"%s"}`,
+				un, uid.String(), res.Session.ID.String(), remember, appID.String(), func() string {
+					if orgID != xid.NilID() {
+						return orgID.String()
+					}
+					return ""
+				}()))
+	}
+
+	return res, nil
+}
+
+// =============================================================================
+// ERROR TYPES
+// =============================================================================
+
+// AccountLockoutError represents an account lockout error
+type AccountLockoutError struct {
+	LockedUntil   time.Time
+	LockedMinutes int
+}
+
+func (e *AccountLockoutError) Error() string {
+	return fmt.Sprintf("account locked until %s (%d minutes)", e.LockedUntil.Format(time.RFC3339), e.LockedMinutes)
 }

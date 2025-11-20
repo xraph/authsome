@@ -31,7 +31,6 @@ func main() {
 
 	// Initialize components
 	config := &Config{
-		Mode:        authsome.ModeStandalone,
 		DatabaseURL: getEnv("DATABASE_URL", "file:test.db?cache=shared&mode=rwc"),
 		Port:        getEnv("PORT", "8082"),
 		EnableDebug: getEnv("DEBUG", "false") == "true",
@@ -64,7 +63,6 @@ func main() {
 }
 
 type Config struct {
-	Mode        authsome.Mode
 	DatabaseURL string
 	Port        string
 	EnableDebug bool
@@ -99,7 +97,6 @@ func (app *ServeMuxTestApp) initAuthSome(config *Config) error {
 	log.Println("🔐 Initializing AuthSome...")
 
 	app.auth = authsome.New(
-		authsome.WithMode(config.Mode),
 		authsome.WithDatabase(app.db),
 		authsome.WithForgeApp(app.app),
 	)

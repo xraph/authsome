@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/rs/xid"
@@ -32,6 +33,9 @@ func (r *OAuthTokenRepository) FindByAccessToken(ctx context.Context, accessToke
 		Model(token).
 		Where("access_token = ?", accessToken).
 		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +49,25 @@ func (r *OAuthTokenRepository) FindByRefreshToken(ctx context.Context, refreshTo
 		Model(token).
 		Where("refresh_token = ?", refreshToken).
 		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+// FindByJTI retrieves a token by its JWT ID
+func (r *OAuthTokenRepository) FindByJTI(ctx context.Context, jti string) (*schema.OAuthToken, error) {
+	token := &schema.OAuthToken{}
+	err := r.db.NewSelect().
+		Model(token).
+		Where("jti = ?", jti).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +100,70 @@ func (r *OAuthTokenRepository) RevokeByRefreshToken(ctx context.Context, refresh
 	return err
 }
 
+// RevokeByJTI marks a token as revoked by JWT ID
+func (r *OAuthTokenRepository) RevokeByJTI(ctx context.Context, jti string) error {
+	now := time.Now()
+	_, err := r.db.NewUpdate().
+		Model((*schema.OAuthToken)(nil)).
+		Set("revoked = ?", true).
+		Set("revoked_at = ?", now).
+		Set("updated_at = ?", now).
+		Where("jti = ?", jti).
+		Exec(ctx)
+	return err
+}
+
+// RevokeBySession revokes all tokens associated with a session (cascade revocation)
+func (r *OAuthTokenRepository) RevokeBySession(ctx context.Context, sessionID xid.ID) error {
+	now := time.Now()
+	_, err := r.db.NewUpdate().
+		Model((*schema.OAuthToken)(nil)).
+		Set("revoked = ?", true).
+		Set("revoked_at = ?", now).
+		Set("updated_at = ?", now).
+		Where("session_id = ?", sessionID).
+		Where("revoked = ?", false). // Only revoke non-revoked tokens
+		Exec(ctx)
+	return err
+}
+
+// RevokeAllForUser revokes all tokens for a user in an org
+func (r *OAuthTokenRepository) RevokeAllForUser(ctx context.Context, userID xid.ID, appID, envID xid.ID, orgID *xid.ID) error {
+	now := time.Now()
+	query := r.db.NewUpdate().
+		Model((*schema.OAuthToken)(nil)).
+		Set("revoked = ?", true).
+		Set("revoked_at = ?", now).
+		Set("updated_at = ?", now).
+		Where("user_id = ?", userID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("revoked = ?", false)
+	
+	if orgID != nil && !orgID.IsNil() {
+		query = query.Where("organization_id = ?", orgID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+	
+	_, err := query.Exec(ctx)
+	return err
+}
+
+// RevokeAllForClient revokes all tokens for a client
+func (r *OAuthTokenRepository) RevokeAllForClient(ctx context.Context, clientID string) error {
+	now := time.Now()
+	_, err := r.db.NewUpdate().
+		Model((*schema.OAuthToken)(nil)).
+		Set("revoked = ?", true).
+		Set("revoked_at = ?", now).
+		Set("updated_at = ?", now).
+		Where("client_id = ?", clientID).
+		Where("revoked = ?", false).
+		Exec(ctx)
+	return err
+}
+
 // FindByUserAndClient retrieves tokens for a specific user and client
 func (r *OAuthTokenRepository) FindByUserAndClient(ctx context.Context, userID xid.ID, clientID string) ([]*schema.OAuthToken, error) {
 	var tokens []*schema.OAuthToken
@@ -86,6 +173,27 @@ func (r *OAuthTokenRepository) FindByUserAndClient(ctx context.Context, userID x
 		Where("revoked = ?", false).
 		Order("created_at DESC").
 		Scan(ctx)
+	return tokens, err
+}
+
+// FindByUserInOrg retrieves all active tokens for a user in an organization
+func (r *OAuthTokenRepository) FindByUserInOrg(ctx context.Context, userID xid.ID, appID, envID xid.ID, orgID *xid.ID) ([]*schema.OAuthToken, error) {
+	var tokens []*schema.OAuthToken
+	query := r.db.NewSelect().
+		Model(&tokens).
+		Where("user_id = ?", userID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("revoked = ?", false).
+		Order("created_at DESC")
+	
+	if orgID != nil && !orgID.IsNil() {
+		query = query.Where("organization_id = ?", orgID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+	
+	err := query.Scan(ctx)
 	return tokens, err
 }
 
@@ -107,5 +215,11 @@ func (r *OAuthTokenRepository) UpdateRefreshToken(ctx context.Context, accessTok
 		Set("updated_at = ?", time.Now()).
 		Where("access_token = ?", accessToken).
 		Exec(ctx)
+	return err
+}
+
+// Update updates an existing OAuth token
+func (r *OAuthTokenRepository) Update(ctx context.Context, token *schema.OAuthToken) error {
+	_, err := r.db.NewUpdate().Model(token).WherePK().Exec(ctx)
 	return err
 }

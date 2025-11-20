@@ -7,6 +7,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -16,9 +18,8 @@ type OrganizationHandler struct {
 }
 
 // Response types
-type MessageResponse struct {
-	Message string `json:"message"`
-}
+// Use shared response type
+type MessageResponse = responses.MessageResponse
 
 type MembersResponse struct {
 	Members []*organization.Member `json:"members"`
@@ -46,7 +47,7 @@ func NewOrganizationHandler(orgService *organization.Service) *OrganizationHandl
 func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 	var req CreateOrganizationRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(400, errs.BadRequest("invalid request"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -60,7 +61,7 @@ func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 
 	org, err := h.orgService.CreateOrganization(c.Request().Context(), &req, userID, appID, environmentID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(201, org)
@@ -70,17 +71,17 @@ func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 
 	orgID, err := xid.FromString(id)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	org, err := h.orgService.FindOrganizationByID(c.Request().Context(), orgID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "organization not found"})
+		return c.JSON(404, errs.OrganizationNotFound())
 	}
 
 	return c.JSON(200, org)
@@ -108,7 +109,7 @@ func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 
 	orgs, err := h.orgService.ListUserOrganizations(c.Request().Context(), userID, filter)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, orgs)
@@ -118,22 +119,22 @@ func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 	idStr := c.Param("id")
 	if idStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 
 	orgID, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	var req UpdateOrganizationRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(400, errs.BadRequest("invalid request"))
 	}
 
 	org, err := h.orgService.UpdateOrganization(c.Request().Context(), orgID, &req)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, org)
@@ -143,12 +144,12 @@ func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 	idStr := c.Param("id")
 	if idStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 
 	orgID, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -156,7 +157,7 @@ func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 
 	err = h.orgService.DeleteOrganization(c.Request().Context(), orgID, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(204, nil)
@@ -166,7 +167,7 @@ func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 	slug := c.Param("slug")
 	if slug == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization slug is required"})
+		return c.JSON(400, errs.RequiredField("organization_slug"))
 	}
 
 	// TODO: Get app ID from context/middleware
@@ -177,7 +178,7 @@ func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 
 	org, err := h.orgService.FindOrganizationBySlug(c.Request().Context(), appID, environmentID, slug)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "organization not found"})
+		return c.JSON(404, errs.OrganizationNotFound())
 	}
 
 	return c.JSON(200, org)
@@ -187,11 +188,11 @@ func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 	orgIDStr := c.Param("id")
 	if orgIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 	orgID, err := xid.FromString(orgIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	// Parse pagination parameters
@@ -223,7 +224,7 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 
 	members, err := h.orgService.ListMembers(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, members)
@@ -233,16 +234,16 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 	orgIDStr := c.Param("id")
 	if orgIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 	orgID, err := xid.FromString(orgIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	var req InviteMemberRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(400, errs.BadRequest("invalid request"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -250,7 +251,7 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 
 	invitation, err := h.orgService.InviteMember(c.Request().Context(), orgID, &req, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(201, invitation)
@@ -260,16 +261,16 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
 	memberIDStr := c.Param("memberId")
 	if memberIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "member ID is required"})
+		return c.JSON(400, errs.RequiredField("member_id"))
 	}
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid member ID"})
+		return c.JSON(400, errs.BadRequest("invalid member ID"))
 	}
 
 	var req UpdateMemberRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(400, errs.BadRequest("invalid request"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -277,7 +278,7 @@ func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
 
 	member, err := h.orgService.UpdateMember(c.Request().Context(), memberID, &req, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, member)
@@ -287,11 +288,11 @@ func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
 func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 	memberIDStr := c.Param("memberId")
 	if memberIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "member ID is required"})
+		return c.JSON(400, errs.RequiredField("member_id"))
 	}
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid member ID"})
+		return c.JSON(400, errs.BadRequest("invalid member ID"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -299,7 +300,7 @@ func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 
 	err = h.orgService.RemoveMember(c.Request().Context(), memberID, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(204, nil)
@@ -309,7 +310,7 @@ func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 func (h *OrganizationHandler) AcceptInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
-		return c.JSON(400, &ErrorResponse{Error: "invitation token is required"})
+		return c.JSON(400, errs.RequiredField("invitation_token"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -317,7 +318,7 @@ func (h *OrganizationHandler) AcceptInvitation(c forge.Context) error {
 
 	member, err := h.orgService.AcceptInvitation(c.Request().Context(), token, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, member)
@@ -327,12 +328,12 @@ func (h *OrganizationHandler) AcceptInvitation(c forge.Context) error {
 func (h *OrganizationHandler) DeclineInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
-		return c.JSON(400, &ErrorResponse{Error: "invitation token is required"})
+		return c.JSON(400, errs.RequiredField("invitation_token"))
 	}
 
 	err := h.orgService.DeclineInvitation(c.Request().Context(), token)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, &StatusResponse{Status: "declined"})
@@ -342,11 +343,11 @@ func (h *OrganizationHandler) DeclineInvitation(c forge.Context) error {
 func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 	orgIDStr := c.Param("id")
 	if orgIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 	orgID, err := xid.FromString(orgIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	// Parse pagination parameters
@@ -378,7 +379,7 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 
 	teams, err := h.orgService.ListTeams(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, teams)
@@ -388,16 +389,16 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 	orgIDStr := c.Param("id")
 	if orgIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "organization ID is required"})
+		return c.JSON(400, errs.RequiredField("organization_id"))
 	}
 	orgID, err := xid.FromString(orgIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid organization ID"})
+		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
 
 	var req CreateTeamRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(400, errs.BadRequest("invalid request"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -405,7 +406,7 @@ func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 
 	team, err := h.orgService.CreateTeam(c.Request().Context(), orgID, &req, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(201, team)
@@ -415,16 +416,16 @@ func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 	teamIDStr := c.Param("teamId")
 	if teamIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "team ID is required"})
+		return c.JSON(400, errs.RequiredField("team_id"))
 	}
 	teamID, err := xid.FromString(teamIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid team ID"})
+		return c.JSON(400, errs.BadRequest("invalid team ID"))
 	}
 
 	var req UpdateTeamRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(400, errs.BadRequest("invalid request"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -432,7 +433,7 @@ func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 
 	team, err := h.orgService.UpdateTeam(c.Request().Context(), teamID, &req, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, team)
@@ -442,11 +443,11 @@ func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 	teamIDStr := c.Param("teamId")
 	if teamIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "team ID is required"})
+		return c.JSON(400, errs.RequiredField("team_id"))
 	}
 	teamID, err := xid.FromString(teamIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid team ID"})
+		return c.JSON(400, errs.BadRequest("invalid team ID"))
 	}
 
 	// TODO: Get user ID from session/context
@@ -454,7 +455,7 @@ func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 
 	err = h.orgService.DeleteTeam(c.Request().Context(), teamID, userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(204, nil)

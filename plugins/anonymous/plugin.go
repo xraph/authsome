@@ -145,28 +145,36 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	// Router is already scoped to the correct basePath
+
 	h := NewHandler(p.service)
+
+	// Sign in as anonymous
 	router.POST("/anonymous/signin", h.SignIn,
 		forge.WithName("anonymous.signin"),
 		forge.WithSummary("Sign in as anonymous user"),
-		forge.WithDescription("Creates a guest user and session for anonymous access. Returns session token for subsequent requests"),
-		forge.WithResponseSchema(200, "Anonymous session created", AnonymousSignInResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", AnonymousErrorResponse{}),
+		forge.WithDescription("Creates a guest user and session for anonymous access"),
+		forge.WithRequestSchema(SignInRequest{}),
+		forge.WithResponseSchema(200, "Anonymous session created", SignInResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(500, "Server error", ErrorResponse{}),
 		forge.WithTags("Anonymous", "Authentication"),
 		forge.WithValidation(true),
 	)
+
+	// Link anonymous account to real account
+	router.POST("/anonymous/link", h.Link,
+		forge.WithName("anonymous.link"),
+		forge.WithSummary("Link anonymous account"),
+		forge.WithDescription("Upgrades an anonymous session to a registered account with email/password"),
+		forge.WithRequestSchema(LinkRequest{}),
+		forge.WithResponseSchema(200, "Account linked successfully", LinkResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithTags("Anonymous", "Authentication"),
+		forge.WithValidation(true),
+	)
+
 	return nil
-}
-
-// Response types for anonymous routes
-type AnonymousErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-type AnonymousSignInResponse struct {
-	Token   string      `json:"token" example:"session_token_abc123"`
-	Session interface{} `json:"session"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

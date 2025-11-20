@@ -5,7 +5,10 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	rl "github.com/xraph/authsome/core/ratelimit"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
@@ -15,14 +18,28 @@ type Handler struct {
 	rl  *rl.Service
 }
 
-// Response types
-type VerifyResponse struct {
-	User    interface{} `json:"user"`
-	Session interface{} `json:"session"`
-	Token   string      `json:"token"`
+func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
+
+// Request types
+type SendRequest struct {
+	Email string `json:"email" validate:"required,email" example:"user@example.com"`
 }
 
-func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
+type VerifyRequest struct {
+	Email    string `json:"email" validate:"required,email" example:"user@example.com"`
+	OTP      string `json:"otp" validate:"required" example:"123456"`
+	Remember bool   `json:"remember" example:"false"`
+}
+
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type VerifyResponse = responses.VerifyResponse
+
+// Plugin-specific response
+type SendResponse struct {
+	Status string `json:"status" example:"sent"`
+	DevOTP string `json:"dev_otp,omitempty" example:"123456"`
+}
 
 // handleError returns the error in a structured format
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
@@ -34,15 +51,20 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 
 // Send handles sending of OTP to email
 func (h *Handler) Send(c forge.Context) error {
-	var body struct {
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
+	var req SendRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
+
+	// Get app context
+	appID, ok := contexts.GetAppID(c.Request().Context())
+	if !ok || appID.IsNil() {
+		return handleError(c, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest), "APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest)
+	}
+
 	// Basic rate limit: per email for the send path
 	if h.rl != nil {
-		key := "emailotp:send:" + body.Email
+		key := "emailotp:send:" + req.Email
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, "/api/auth/email-otp/send")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errs.New("RATE_LIMIT_ERROR", "Rate limit check failed", http.StatusInternalServerError).WithError(err))
@@ -51,44 +73,67 @@ func (h *Handler) Send(c forge.Context) error {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests, please try again later", http.StatusTooManyRequests))
 		}
 	}
+
 	ip := c.Request().RemoteAddr
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
 	ua := c.Request().UserAgent()
-	otp, err := h.svc.SendOTP(c.Request().Context(), body.Email, ip, ua)
+
+	otp, err := h.svc.SendOTP(c.Request().Context(), appID, req.Email, ip, ua)
 	if err != nil {
 		return handleError(c, err, "SEND_OTP_FAILED", "Failed to send OTP", http.StatusBadRequest)
 	}
-	// In dev mode we may expose otp
-	res := map[string]interface{}{"status": "sent"}
-	if otp != "" {
-		res["dev_otp"] = otp
+
+	// Return structured response
+	response := SendResponse{
+		Status: "sent",
 	}
-	return c.JSON(http.StatusOK, res)
+	if otp != "" {
+		response.DevOTP = otp
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 // Verify checks the OTP and creates a session on success
 func (h *Handler) Verify(c forge.Context) error {
-	var body struct {
-		Email    string `json:"email"`
-		OTP      string `json:"otp"`
-		Remember bool   `json:"remember"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
+	var req VerifyRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
+
+	// Get app and environment context
+	appID, ok := contexts.GetAppID(c.Request().Context())
+	if !ok || appID.IsNil() {
+		return handleError(c, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest), "APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest)
+	}
+
+	envID, ok := contexts.GetEnvironmentID(c.Request().Context())
+	if !ok || envID.IsNil() {
+		return handleError(c, errs.New("ENVIRONMENT_CONTEXT_REQUIRED", "Environment context required", http.StatusBadRequest), "ENVIRONMENT_CONTEXT_REQUIRED", "Environment context required", http.StatusBadRequest)
+	}
+
+	// Get optional organization context
+	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
 	ip := c.Request().RemoteAddr
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
 	ua := c.Request().UserAgent()
-	res, err := h.svc.VerifyOTP(c.Request().Context(), body.Email, body.OTP, body.Remember, ip, ua)
+
+	res, err := h.svc.VerifyOTP(c.Request().Context(), appID, envID, orgIDPtr, req.Email, req.OTP, req.Remember, ip, ua)
 	if err != nil {
 		return handleError(c, err, "VERIFY_OTP_FAILED", "Failed to verify OTP", http.StatusBadRequest)
 	}
-	if res == nil {
-		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_OTP", "Invalid or expired OTP code", http.StatusUnauthorized))
-	}
-	return c.JSON(http.StatusOK, &VerifyResponse{User: res.User, Session: res.Session, Token: res.Token})
+
+	return c.JSON(http.StatusOK, VerifyResponse{
+		User:    res.User,
+		Session: res.Session,
+		Token:   res.Token,
+	})
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/ui"
 	orgrepo "github.com/xraph/authsome/repository/organization"
 	"github.com/xraph/authsome/schema"
@@ -458,17 +459,9 @@ func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	return p.dashboardExtension
 }
 
-// DTOs for organization routes
-
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-// StatusResponse represents a status response
-type StatusResponse struct {
-	Status string `json:"status" example:"success"`
-}
+// DTOs for organization routes - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type StatusResponse = responses.StatusResponse
 
 // OrganizationsListResponse represents a list of organizations
 type OrganizationsListResponse []schema.Organization

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -14,22 +16,11 @@ type Handler struct {
 	config  *Config
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
+type SuccessResponse = responses.SuccessResponse
 
 
 
@@ -76,7 +67,7 @@ type EvaluateRequest struct {
 func (h *Handler) Evaluate(c forge.Context) error {
 	var req EvaluateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(400, errs.BadRequest("Invalid request body"))
 	}
 
 	// Extract user context
@@ -85,7 +76,7 @@ func (h *Handler) Evaluate(c forge.Context) error {
 	sessionID := c.Get("session_id")
 
 	if userID == nil || userID == "" {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	// Build evaluation context
@@ -107,7 +98,7 @@ func (h *Handler) Evaluate(c forge.Context) error {
 
 	result, err := h.service.EvaluateRequirement(c.Request().Context(), evalCtx)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to evaluate requirement",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to evaluate requirement"))
 	}
 
 	return c.JSON(200, result)
@@ -117,7 +108,7 @@ func (h *Handler) Evaluate(c forge.Context) error {
 func (h *Handler) Verify(c forge.Context) error {
 	var req VerifyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(400, errs.BadRequest("Invalid request body"))
 	}
 
 	// Set IP and User Agent from request
@@ -131,7 +122,7 @@ func (h *Handler) Verify(c forge.Context) error {
 
 	response, err := h.service.VerifyStepUp(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Verification failed",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Verification failed"))
 	}
 
 	if !response.Success {
@@ -145,18 +136,18 @@ func (h *Handler) Verify(c forge.Context) error {
 func (h *Handler) GetRequirement(c forge.Context) error {
 	requirementID := c.Param("id")
 	if requirementID == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Requirement ID is required",})
+		return c.JSON(400, errs.RequiredField("requirement_id"))
 	}
 
 	requirement, err := h.service.repo.GetRequirement(c.Request().Context(), requirementID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "Requirement not found",})
+		return c.JSON(404, errs.NotFound("Requirement not found"))
 	}
 
 	// Verify ownership
 	userID := c.Get("user_id")
 	if userID == nil || requirement.UserID != userID.(string) {
-		return c.JSON(403, &ErrorResponse{Error: "Access denied",})
+		return c.JSON(403, errs.PermissionDenied("access", "step-up"))
 	}
 
 	return c.JSON(200, requirement)
@@ -168,7 +159,7 @@ func (h *Handler) ListPendingRequirements(c forge.Context) error {
 	orgID := c.Get("org_id")
 
 	if userID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	requirements, err := h.service.repo.ListPendingRequirements(
@@ -177,7 +168,7 @@ func (h *Handler) ListPendingRequirements(c forge.Context) error {
 		getStringOrEmpty(orgID),
 	)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to list requirements",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list requirements"))
 	}
 
 	return c.JSON(200, &RequirementsResponse{Requirements: requirements, Count: len(requirements)})
@@ -189,7 +180,7 @@ func (h *Handler) ListVerifications(c forge.Context) error {
 	orgID := c.Get("org_id")
 
 	if userID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	// Parse pagination
@@ -214,7 +205,7 @@ func (h *Handler) ListVerifications(c forge.Context) error {
 		offset,
 	)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to list verifications",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list verifications"))
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -231,7 +222,7 @@ func (h *Handler) ListRememberedDevices(c forge.Context) error {
 	orgID := c.Get("org_id")
 
 	if userID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	devices, err := h.service.repo.ListRememberedDevices(
@@ -240,7 +231,7 @@ func (h *Handler) ListRememberedDevices(c forge.Context) error {
 		getStringOrEmpty(orgID),
 	)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to list remembered devices",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list remembered devices"))
 	}
 
 	return c.JSON(200, &StepUpDevicesResponse{Devices: devices, Count: len(devices)})
@@ -250,14 +241,14 @@ func (h *Handler) ListRememberedDevices(c forge.Context) error {
 func (h *Handler) ForgetDevice(c forge.Context) error {
 	deviceID := c.Param("id")
 	if deviceID == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Device ID is required",})
+		return c.JSON(400, errs.RequiredField("device_id"))
 	}
 
 	userID := c.Get("user_id")
 	orgID := c.Get("org_id")
 
 	if userID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	err := h.service.ForgetDevice(
@@ -267,7 +258,7 @@ func (h *Handler) ForgetDevice(c forge.Context) error {
 		deviceID,
 	)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.InternalError(err))
 	}
 
 	return c.JSON(200, &ForgetDeviceResponse{Success: true, Message: "Device forgotten successfully"})
@@ -277,13 +268,13 @@ func (h *Handler) ForgetDevice(c forge.Context) error {
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	var policy StepUpPolicy
 	if err := json.NewDecoder(c.Request().Body).Decode(&policy); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(400, errs.BadRequest("Invalid request body"))
 	}
 
 	// Set org ID from context
 	orgID := c.Get("org_id")
 	if orgID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Organization context required",})
+		return c.JSON(401, errs.UnauthorizedWithMessage("Organization context required"))
 	}
 	policy.OrgID = orgID.(string)
 
@@ -293,7 +284,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	}
 
 	if err := h.service.repo.CreatePolicy(c.Request().Context(), &policy); err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to create policy",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to create policy"))
 	}
 
 	return c.JSON(201, policy)
@@ -303,12 +294,12 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 func (h *Handler) ListPolicies(c forge.Context) error {
 	orgID := c.Get("org_id")
 	if orgID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Organization context required",})
+		return c.JSON(401, errs.UnauthorizedWithMessage("Organization context required"))
 	}
 
 	policies, err := h.service.repo.ListPolicies(c.Request().Context(), orgID.(string))
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to list policies",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list policies"))
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -321,18 +312,18 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 func (h *Handler) GetPolicy(c forge.Context) error {
 	policyID := c.Param("id")
 	if policyID == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Policy ID is required",})
+		return c.JSON(400, errs.RequiredField("policy_id"))
 	}
 
 	policy, err := h.service.repo.GetPolicy(c.Request().Context(), policyID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "Policy not found",})
+		return c.JSON(404, errs.NotFound("Policy not found"))
 	}
 
 	// Verify organization access
 	orgID := c.Get("org_id")
 	if orgID == nil || policy.OrgID != orgID.(string) {
-		return c.JSON(403, &ErrorResponse{Error: "Access denied",})
+		return c.JSON(403, errs.PermissionDenied("access", "step-up"))
 	}
 
 	return c.JSON(200, policy)
@@ -342,25 +333,25 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	policyID := c.Param("id")
 	if policyID == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Policy ID is required",})
+		return c.JSON(400, errs.RequiredField("policy_id"))
 	}
 
 	// Get existing policy
 	existing, err := h.service.repo.GetPolicy(c.Request().Context(), policyID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "Policy not found",})
+		return c.JSON(404, errs.NotFound("Policy not found"))
 	}
 
 	// Verify organization access
 	orgID := c.Get("org_id")
 	if orgID == nil || existing.OrgID != orgID.(string) {
-		return c.JSON(403, &ErrorResponse{Error: "Access denied",})
+		return c.JSON(403, errs.PermissionDenied("access", "step-up"))
 	}
 
 	// Decode updates
 	var updates StepUpPolicy
 	if err := json.NewDecoder(c.Request().Body).Decode(&updates); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(400, errs.BadRequest("Invalid request body"))
 	}
 
 	// Preserve immutable fields
@@ -369,7 +360,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	updates.CreatedAt = existing.CreatedAt
 
 	if err := h.service.repo.UpdatePolicy(c.Request().Context(), &updates); err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to update policy",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to update policy"))
 	}
 
 	return c.JSON(200, updates)
@@ -379,23 +370,23 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	policyID := c.Param("id")
 	if policyID == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Policy ID is required",})
+		return c.JSON(400, errs.RequiredField("policy_id"))
 	}
 
 	// Get existing policy
 	existing, err := h.service.repo.GetPolicy(c.Request().Context(), policyID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "Policy not found",})
+		return c.JSON(404, errs.NotFound("Policy not found"))
 	}
 
 	// Verify organization access
 	orgID := c.Get("org_id")
 	if orgID == nil || existing.OrgID != orgID.(string) {
-		return c.JSON(403, &ErrorResponse{Error: "Access denied",})
+		return c.JSON(403, errs.PermissionDenied("access", "step-up"))
 	}
 
 	if err := h.service.repo.DeletePolicy(c.Request().Context(), policyID); err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to delete policy",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to delete policy"))
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -410,7 +401,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 	orgID := c.Get("org_id")
 
 	if userID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	// Parse pagination
@@ -435,7 +426,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 		offset,
 	)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: "Failed to list audit logs",})
+		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list audit logs"))
 	}
 
 	return c.JSON(200, map[string]interface{}{
@@ -452,7 +443,7 @@ func (h *Handler) Status(c forge.Context) error {
 	orgID := c.Get("org_id")
 
 	if userID == nil {
-		return c.JSON(401, &ErrorResponse{Error: "Authentication required",})
+		return c.JSON(401, errs.Unauthorized())
 	}
 
 	// Build evaluation context for current request

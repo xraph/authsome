@@ -1,22 +1,23 @@
 package bearer
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/xraph/authsome/core"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
 // Plugin implements bearer token authentication middleware
 type Plugin struct {
-	sessionSvc    *session.Service
-	userSvc       *user.Service
+	sessionSvc    session.ServiceInterface
+	userSvc       user.ServiceInterface
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
@@ -115,16 +116,8 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Get services from registry
 	serviceRegistry := authInst.GetServiceRegistry()
-	if sessSvc := serviceRegistry.Get("session"); sessSvc != nil {
-		if svc, ok := sessSvc.(*session.Service); ok {
-			p.sessionSvc = svc
-		}
-	}
-	if userSvc := serviceRegistry.Get("user"); userSvc != nil {
-		if svc, ok := userSvc.(*user.Service); ok {
-			p.userSvc = svc
-		}
-	}
+	p.sessionSvc = serviceRegistry.SessionService()
+	p.userSvc = serviceRegistry.UserService()
 
 	if p.sessionSvc == nil || p.userSvc == nil {
 		return fmt.Errorf("bearer plugin requires session and user services")
@@ -156,12 +149,20 @@ func (p *Plugin) AuthenticateHandler(next func(forge.Context) error) func(forge.
 			return next(c)
 		}
 
-		// Check if it's a bearer token
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			return next(c)
+		// Check if it's a bearer token with configured prefix
+		prefix := p.config.TokenPrefix + " "
+		if !p.config.CaseSensitive {
+			if len(authHeader) < len(prefix) || !strings.EqualFold(authHeader[:len(prefix)], prefix) {
+				return next(c)
+			}
+		} else {
+			if !strings.HasPrefix(authHeader, prefix) {
+				return next(c)
+			}
 		}
 
-		token := strings.TrimPrefix(authHeader, "Bearer ")
+		token := strings.TrimPrefix(authHeader, prefix)
+		token = strings.TrimSpace(token)
 		if token == "" {
 			return next(c)
 		}
@@ -169,24 +170,64 @@ func (p *Plugin) AuthenticateHandler(next func(forge.Context) error) func(forge.
 		// Validate the token using session service
 		sess, err := p.sessionSvc.FindByToken(c.Request().Context(), token)
 		if err != nil {
+			p.logger.Debug("failed to find session by token",
+				forge.F("error", err.Error()))
 			return next(c)
 		}
 
 		// Check if session is valid and not expired
-		if sess == nil || time.Now().After(sess.ExpiresAt) {
+		if sess == nil {
+			return next(c)
+		}
+
+		if time.Now().After(sess.ExpiresAt) {
+			p.logger.Debug("session expired",
+				forge.F("session_id", sess.ID.String()),
+				forge.F("expires_at", sess.ExpiresAt))
 			return next(c)
 		}
 
 		// Get user information
-		user, err := p.userSvc.FindByID(c.Request().Context(), sess.UserID)
+		usr, err := p.userSvc.FindByID(c.Request().Context(), sess.UserID)
 		if err != nil {
+			p.logger.Warn("failed to find user for session",
+				forge.F("user_id", sess.UserID.String()),
+				forge.F("error", err.Error()))
 			return next(c)
 		}
 
-		// Store user and session in request context
-		ctx := context.WithValue(c.Request().Context(), "user", user)
-		ctx = context.WithValue(ctx, "session", sess)
-		ctx = context.WithValue(ctx, "authenticated", true)
+		if usr == nil {
+			p.logger.Warn("user not found for valid session",
+				forge.F("user_id", sess.UserID.String()))
+			return next(c)
+		}
+
+		// Build AuthContext
+		authCtx := &contexts.AuthContext{
+			Session:         sess,
+			User:            usr,
+			AppID:           sess.AppID,
+			EnvironmentID:   *sess.EnvironmentID,
+			OrganizationID:  sess.OrganizationID,
+			Method:          contexts.AuthMethodSession,
+			IsAuthenticated: true,
+			IsUserAuth:      true,
+			IPAddress:       c.Request().RemoteAddr,
+			UserAgent:       c.Request().Header.Get("User-Agent"),
+		}
+
+		// Store auth context in request context
+		ctx := contexts.SetAuthContext(c.Request().Context(), authCtx)
+
+		// Also set the individual context values for backward compatibility
+		ctx = contexts.SetAppID(ctx, sess.AppID)
+		if sess.EnvironmentID != nil {
+			ctx = contexts.SetEnvironmentID(ctx, *sess.EnvironmentID)
+		}
+		if sess.OrganizationID != nil {
+			ctx = contexts.SetOrganizationID(ctx, *sess.OrganizationID)
+		}
+		ctx = contexts.SetUserID(ctx, usr.ID)
 
 		// Update request with new context
 		*c.Request() = *c.Request().WithContext(ctx)
@@ -199,36 +240,15 @@ func (p *Plugin) AuthenticateHandler(next func(forge.Context) error) func(forge.
 func (p *Plugin) RequireAuthHandler(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		// Check if user is authenticated
-		if c.Request().Context().Value("authenticated") != true {
-			return c.JSON(401, map[string]string{
-				"error": "Authentication required",
+		if _, err := contexts.RequireUser(c.Request().Context()); err != nil {
+			authErr := errs.Unauthorized().
+				WithContext("plugin", "bearer").
+				WithContext("reason", "authentication_required")
+			return c.JSON(authErr.HTTPStatus, map[string]interface{}{
+				"error":   authErr.Code,
+				"message": authErr.Message,
 			})
 		}
 		return next(c)
 	}
-}
-
-// GetUser extracts the authenticated user from context
-func GetUser(c forge.Context) *user.User {
-	if u := c.Request().Context().Value("user"); u != nil {
-		if user, ok := u.(*user.User); ok {
-			return user
-		}
-	}
-	return nil
-}
-
-// GetSession extracts the session from context
-func GetSession(c forge.Context) *session.Session {
-	if s := c.Request().Context().Value("session"); s != nil {
-		if sess, ok := s.(*session.Session); ok {
-			return sess
-		}
-	}
-	return nil
-}
-
-// IsAuthenticated checks if the request is authenticated
-func IsAuthenticated(c forge.Context) bool {
-	return c.Request().Context().Value("authenticated") == true
 }

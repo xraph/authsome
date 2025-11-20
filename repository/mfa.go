@@ -273,10 +273,18 @@ func (r *MFARepository) CleanupExpiredDevices(ctx context.Context) (int, error) 
 
 // ==================== Policy Operations ====================
 
-// GetPolicy retrieves the MFA policy for an organization
-func (r *MFARepository) GetPolicy(ctx context.Context, orgID xid.ID) (*schema.MFAPolicy, error) {
+// GetPolicy retrieves the MFA policy for an app/organization
+func (r *MFARepository) GetPolicy(ctx context.Context, appID xid.ID, orgID *xid.ID) (*schema.MFAPolicy, error) {
 	policy := new(schema.MFAPolicy)
-	err := r.db.NewSelect().Model(policy).Where("organization_id = ?", orgID).Scan(ctx)
+	query := r.db.NewSelect().Model(policy).Where("app_id = ?", appID)
+	
+	if orgID != nil && !orgID.IsNil() {
+		query = query.Where("organization_id = ?", orgID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+	
+	err := query.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -287,9 +295,15 @@ func (r *MFARepository) GetPolicy(ctx context.Context, orgID xid.ID) (*schema.MF
 func (r *MFARepository) UpsertPolicy(ctx context.Context, policy *schema.MFAPolicy) error {
 	// Try to find existing policy
 	existing := new(schema.MFAPolicy)
-	err := r.db.NewSelect().Model(existing).
-		Where("organization_id = ?", policy.OrganizationID).
-		Scan(ctx)
+	query := r.db.NewSelect().Model(existing).Where("app_id = ?", policy.AppID)
+	
+	if policy.OrganizationID != nil && !policy.OrganizationID.IsNil() {
+		query = query.Where("organization_id = ?", policy.OrganizationID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+	
+	err := query.Scan(ctx)
 
 	if err == sql.ErrNoRows {
 		// Create new
@@ -387,4 +401,40 @@ func (r *MFARepository) GetRiskAssessmentBySession(ctx context.Context, sessionI
 		return nil, nil
 	}
 	return assessment, err
+}
+
+// ==================== MFA Bypass ====================
+
+// CreateBypass creates a new MFA bypass
+func (r *MFARepository) CreateBypass(ctx context.Context, bypass *schema.MFABypass) error {
+	_, err := r.db.NewInsert().Model(bypass).Exec(ctx)
+	return err
+}
+
+// GetActiveBypass retrieves an active bypass for a user
+func (r *MFARepository) GetActiveBypass(ctx context.Context, appID, userID xid.ID) (*schema.MFABypass, error) {
+	bypass := new(schema.MFABypass)
+	err := r.db.NewSelect().Model(bypass).
+		Where("app_id = ?", appID).
+		Where("user_id = ?", userID).
+		Where("expires_at > ?", time.Now()).
+		Where("revoked_at IS NULL").
+		Order("created_at DESC").
+		Limit(1).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return bypass, err
+}
+
+// RevokeBypass revokes an MFA bypass
+func (r *MFARepository) RevokeBypass(ctx context.Context, bypassID, revokedBy xid.ID) error {
+	now := time.Now()
+	_, err := r.db.NewUpdate().Model((*schema.MFABypass)(nil)).
+		Set("revoked_at = ?", now).
+		Set("revoked_by = ?", revokedBy).
+		Where("id = ?", bypassID).
+		Exec(ctx)
+	return err
 }

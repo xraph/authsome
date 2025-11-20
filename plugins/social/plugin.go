@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/social/providers"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
@@ -18,6 +20,7 @@ import (
 type Plugin struct {
 	db            *bun.DB
 	service       *Service
+	handler       *Handler
 	config        Config
 	defaultConfig Config
 	authInst      core.Authsome
@@ -36,15 +39,26 @@ func WithDefaultConfig(cfg Config) PluginOption {
 // WithProvider adds a provider configuration
 func WithProvider(name string, clientID, clientSecret, callbackURL string, scopes []string) PluginOption {
 	return func(p *Plugin) {
-		if p.defaultConfig.Providers == nil {
-			p.defaultConfig.Providers = make(map[string]providers.ProviderConfig)
-		}
-		p.defaultConfig.Providers[name] = providers.ProviderConfig{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			CallbackURL:  callbackURL,
-			Scopes:       scopes,
-			Enabled:      true,
+		// ProvidersConfig is a struct, not a map - no nil check needed
+		// Just set the provider directly based on name
+		switch name {
+		case "google":
+			p.defaultConfig.Providers.Google = &providers.ProviderConfig{
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				RedirectURL:  callbackURL,
+				Scopes:       scopes,
+				Enabled:      true,
+			}
+		case "github":
+			p.defaultConfig.Providers.GitHub = &providers.ProviderConfig{
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				RedirectURL:  callbackURL,
+				Scopes:       scopes,
+				Enabled:      true,
+			}
+			// Add more providers as needed
 		}
 	}
 }
@@ -124,12 +138,57 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	}
 
 	// Create repositories
+	socialRepo := authInst.Repository().SocialAccount()
+	userRepo := authInst.Repository().User()
 
 	// Create user service (simplified - in production, get from registry)
-	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil)
+	userSvc := user.NewService(userRepo, user.Config{}, nil)
+
+	// Create audit service
+	auditSvc := authInst.GetServiceRegistry().AuditService()
+
+	// Create state store
+	var stateStore StateStore
+	if p.config.StateStorage.UseRedis {
+		// Create Redis client
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     p.config.StateStorage.RedisAddr,
+			Password: p.config.StateStorage.RedisPassword,
+			DB:       p.config.StateStorage.RedisDB,
+		})
+
+		// Test Redis connection
+		ctx := context.Background()
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			fmt.Printf("[Social] Warning: failed to connect to Redis, falling back to memory storage: %v\n", err)
+			stateStore = NewMemoryStateStore()
+		} else {
+			stateStore = NewRedisStateStore(redisClient)
+			fmt.Printf("[Social] Using Redis for OAuth state storage\n")
+		}
+	} else {
+		stateStore = NewMemoryStateStore()
+		fmt.Printf("[Social] Using in-memory OAuth state storage\n")
+	}
 
 	// Create social service
-	p.service = NewService(p.config, authInst.Repository().SocialAccount(), userSvc)
+	p.service = NewService(p.config, socialRepo, userSvc, stateStore, auditSvc)
+
+	// Create rate limiter (only if Redis is available)
+	var rateLimiter *RateLimiter
+	if p.config.StateStorage.UseRedis {
+		// Create Redis client for rate limiting
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     p.config.StateStorage.RedisAddr,
+			Password: p.config.StateStorage.RedisPassword,
+			DB:       p.config.StateStorage.RedisDB,
+		})
+		rateLimiter = NewRateLimiter(redisClient)
+		fmt.Printf("[Social] Rate limiting enabled with Redis\n")
+	}
+
+	// Create handler
+	p.handler = NewHandler(p.service, rateLimiter)
 
 	return nil
 }
@@ -137,28 +196,50 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 // SetConfig allows setting configuration after plugin creation
 func (p *Plugin) SetConfig(config Config) {
 	p.config = config
-	if p.service != nil {
+	if p.service != nil && p.authInst != nil {
 		// Reinitialize service with new config
 		userSvc := user.NewService(p.authInst.Repository().User(), user.Config{}, nil)
-		p.service = NewService(config, p.authInst.Repository().SocialAccount(), userSvc)
+		auditSvc := p.authInst.GetServiceRegistry().AuditService()
+
+		// Recreate state store
+		var stateStore StateStore
+		if config.StateStorage.UseRedis {
+			redisClient := redis.NewClient(&redis.Options{
+				Addr:     config.StateStorage.RedisAddr,
+				Password: config.StateStorage.RedisPassword,
+				DB:       config.StateStorage.RedisDB,
+			})
+			ctx := context.Background()
+			if err := redisClient.Ping(ctx).Err(); err == nil {
+				stateStore = NewRedisStateStore(redisClient)
+			} else {
+				stateStore = NewMemoryStateStore()
+			}
+		} else {
+			stateStore = NewMemoryStateStore()
+		}
+
+		p.service = NewService(config, p.authInst.Repository().SocialAccount(), userSvc, stateStore, auditSvc)
 	}
 }
 
 // RegisterRoutes registers the plugin's HTTP routes
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
-	if p.service == nil {
+	if p.service == nil || p.handler == nil {
 		return fmt.Errorf("social plugin not initialized")
 	}
 
-	handler := NewHandler(p.service)
+	// Use the handler created during Init()
+	handler := p.handler
 
 	// Router is already scoped to the correct basePath
 	router.POST("/signin/social", handler.SignIn,
 		forge.WithName("social.signin"),
 		forge.WithSummary("Sign in with social provider"),
 		forge.WithDescription("Initiate OAuth sign-in flow with a social provider (Google, GitHub, Facebook, etc.)"),
-		forge.WithResponseSchema(200, "OAuth redirect URL", SocialSignInResponse{}),
-		forge.WithResponseSchema(400, "Invalid provider", SocialErrorResponse{}),
+		forge.WithRequestSchema(SignInRequest{}),
+		forge.WithResponseSchema(200, "OAuth redirect URL", AuthURLResponse{}),
+		forge.WithResponseSchema(400, "Invalid provider", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 		forge.WithValidation(true),
 	)
@@ -166,16 +247,18 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("social.callback"),
 		forge.WithSummary("OAuth callback"),
 		forge.WithDescription("Handle OAuth provider callback and complete authentication"),
-		forge.WithResponseSchema(200, "Authentication successful", SocialCallbackResponse{}),
-		forge.WithResponseSchema(400, "OAuth error", SocialErrorResponse{}),
+		forge.WithResponseSchema(200, "Authentication successful", CallbackDataResponse{}),
+		forge.WithResponseSchema(400, "OAuth error", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 	)
 	router.POST("/account/link", handler.LinkAccount,
 		forge.WithName("social.link"),
 		forge.WithSummary("Link social account"),
 		forge.WithDescription("Link a social provider account to existing user account"),
-		forge.WithResponseSchema(200, "Account linked", SocialLinkResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", SocialErrorResponse{}),
+		forge.WithRequestSchema(LinkAccountRequest{}),
+		forge.WithResponseSchema(200, "Link account URL", AuthURLResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
 		forge.WithValidation(true),
 	)
@@ -183,15 +266,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("social.unlink"),
 		forge.WithSummary("Unlink social account"),
 		forge.WithDescription("Unlink a social provider account from user account"),
-		forge.WithResponseSchema(200, "Account unlinked", SocialStatusResponse{}),
-		forge.WithResponseSchema(404, "Provider not linked", SocialErrorResponse{}),
+		forge.WithResponseSchema(200, "Account unlinked", MessageResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Provider not linked", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
 	)
 	router.GET("/providers", handler.ListProviders,
 		forge.WithName("social.providers.list"),
 		forge.WithSummary("List available providers"),
 		forge.WithDescription("List all configured social authentication providers"),
-		forge.WithResponseSchema(200, "Providers list", SocialProvidersResponse{}),
+		forge.WithResponseSchema(200, "Providers list", ProvidersResponse{}),
 		forge.WithTags("Social", "Configuration"),
 	)
 	return nil
@@ -263,28 +347,5 @@ func (p *Plugin) GetService() *Service {
 	return p.service
 }
 
-// DTOs for social routes
-type SocialErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-type SocialStatusResponse struct {
-	Status string `json:"status" example:"success"`
-}
-
-type SocialSignInResponse struct {
-	RedirectURL string `json:"redirect_url" example:"https://accounts.google.com/o/oauth2/v2/auth?..."`
-}
-
-type SocialCallbackResponse struct {
-	Token string      `json:"token" example:"eyJhbGci..."`
-	User  interface{} `json:"user"`
-}
-
-type SocialLinkResponse struct {
-	Linked bool `json:"linked" example:"true"`
-}
-
-type SocialProvidersResponse struct {
-	Providers []string `json:"providers" example:"[\"google\",\"github\",\"facebook\"]"`
-}
+// Type alias for error responses
+type ErrorResponse = errs.AuthsomeError

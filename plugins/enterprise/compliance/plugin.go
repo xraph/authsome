@@ -8,6 +8,7 @@ import (
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/forge"
@@ -141,6 +142,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.profiles.create"),
 			forge.WithSummary("Create compliance profile"),
 			forge.WithDescription("Create a new compliance profile for an organization"),
+			forge.WithRequestSchema(CreateProfileRequest{}),
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
@@ -149,6 +151,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.profiles.create.template"),
 			forge.WithSummary("Create profile from template"),
 			forge.WithDescription("Create a compliance profile from a predefined template (GDPR, HIPAA, SOC2, etc.)"),
+			forge.WithRequestSchema(CreateProfileFromTemplateRequest{}),
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
@@ -171,6 +174,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.profiles.update"),
 			forge.WithSummary("Update compliance profile"),
 			forge.WithDescription("Update an existing compliance profile"),
+			forge.WithRequestSchema(UpdateProfileRequest{}),
 			forge.WithResponseSchema(200, "Profile updated", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
@@ -204,6 +208,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.checks.run"),
 			forge.WithSummary("Run compliance check"),
 			forge.WithDescription("Execute a compliance check for a profile"),
+			forge.WithRequestSchema(RunCheckRequest{}),
 			forge.WithResponseSchema(200, "Check started", ComplianceCheckResponse{}),
 			forge.WithTags("Compliance", "Checks"),
 			forge.WithValidation(true),
@@ -242,6 +247,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.violations.resolve"),
 			forge.WithSummary("Resolve compliance violation"),
 			forge.WithDescription("Mark a compliance violation as resolved"),
+			forge.WithRequestSchema(ResolveViolationRequest{}),
 			forge.WithResponseSchema(200, "Violation resolved", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Violations"),
 			forge.WithValidation(true),
@@ -252,6 +258,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.reports.generate"),
 			forge.WithSummary("Generate compliance report"),
 			forge.WithDescription("Generate a compliance report for an organization"),
+			forge.WithRequestSchema(GenerateReportRequest{}),
 			forge.WithResponseSchema(200, "Report generated", ComplianceReportResponse{}),
 			forge.WithTags("Compliance", "Reports"),
 			forge.WithValidation(true),
@@ -283,6 +290,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.evidence.create"),
 			forge.WithSummary("Create evidence record"),
 			forge.WithDescription("Create a new compliance evidence record"),
+			forge.WithRequestSchema(CreateEvidenceRequest{}),
 			forge.WithResponseSchema(200, "Evidence created", ComplianceEvidenceResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
 			forge.WithValidation(true),
@@ -314,6 +322,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.policies.create"),
 			forge.WithSummary("Create compliance policy"),
 			forge.WithDescription("Create a new compliance policy document"),
+			forge.WithRequestSchema(CreatePolicyRequest{}),
 			forge.WithResponseSchema(200, "Policy created", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
@@ -336,6 +345,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.policies.update"),
 			forge.WithSummary("Update compliance policy"),
 			forge.WithDescription("Update an existing compliance policy"),
+			forge.WithRequestSchema(UpdatePolicyRequest{}),
 			forge.WithResponseSchema(200, "Policy updated", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
@@ -353,6 +363,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("compliance.training.create"),
 			forge.WithSummary("Create training module"),
 			forge.WithDescription("Create a compliance training module"),
+			forge.WithRequestSchema(CreateTrainingRequest{}),
 			forge.WithResponseSchema(200, "Training created", ComplianceTrainingResponse{}),
 			forge.WithTags("Compliance", "Training"),
 			forge.WithValidation(true),
@@ -373,6 +384,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 		complianceGroup.PUT("/training/:id/complete", p.handler.CompleteTraining,
 			forge.WithName("compliance.training.complete"),
+			forge.WithRequestSchema(CompleteTrainingRequest{}),
 			forge.WithSummary("Complete training"),
 			forge.WithDescription("Mark a training module as completed"),
 			forge.WithResponseSchema(200, "Training completed", ComplianceStatusResponse{}),
@@ -461,7 +473,7 @@ func (p *Plugin) onBeforeSignIn(ctx context.Context, req *auth.SignInRequest) er
 	return nil
 }
 
-func (p *Plugin) onAfterSignIn(ctx context.Context, response *auth.AuthResponse) error {
+func (p *Plugin) onAfterSignIn(ctx context.Context, response *responses.AuthResponse) error {
 	if p.service == nil {
 		return nil
 	}

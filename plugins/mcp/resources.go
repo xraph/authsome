@@ -83,19 +83,16 @@ func (r *ConfigResource) Describe() ResourceDescription {
 }
 
 func (r *ConfigResource) Read(ctx context.Context, uri string, plugin *Plugin) (string, error) {
-	// Get auth instance
-	type configGetter interface {
-		GetConfig() interface{}
-		GetMode() interface{}
-	}
-
-	authConfig, ok := plugin.auth.(configGetter)
-	if !ok {
-		return "", fmt.Errorf("cannot get config from auth")
-	}
+	// Get auth instance config
+	authConfig := plugin.auth.GetConfig()
 
 	config := map[string]interface{}{
-		"mode":       fmt.Sprintf("%v", authConfig.GetMode()),
+		"authsome": map[string]interface{}{
+			"base_path":        authConfig.BasePath,
+			"rbac_enforce":     authConfig.RBACEnforce,
+			"database_schema":  authConfig.DatabaseSchema,
+			"trusted_origins":  authConfig.TrustedOrigins,
+		},
 		"mcp_plugin": plugin.config,
 		// Add more config sections as needed
 	}

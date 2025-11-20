@@ -3,6 +3,8 @@ package idverification
 import (
 	"context"
 	"testing"
+
+	"github.com/rs/xid"
 )
 
 func TestOnfidoProvider_New(t *testing.T) {
@@ -47,8 +49,14 @@ func TestOnfidoProvider_CreateSession(t *testing.T) {
 	provider, _ := NewOnfidoProvider(config)
 	ctx := context.Background()
 
+	userID := xid.New()
+	appID := xid.New()
+	orgID := xid.New()
+
 	req := &ProviderSessionRequest{
-		UserID:         "user_123",
+		AppID:          appID,
+		OrganizationID: orgID,
+		UserID:         userID,
 		RequiredChecks: []string{"document", "liveness"},
 		SuccessURL:     "https://example.com/success",
 		CancelURL:      "https://example.com/cancel",
@@ -157,8 +165,14 @@ func TestJumioProvider_CreateSession(t *testing.T) {
 	provider, _ := NewJumioProvider(config)
 	ctx := context.Background()
 
+	userID := xid.New()
+	appID := xid.New()
+	orgID := xid.New()
+
 	req := &ProviderSessionRequest{
-		UserID:         "user_123",
+		AppID:          appID,
+		OrganizationID: orgID,
+		UserID:         userID,
 		RequiredChecks: []string{"document", "liveness"},
 	}
 
@@ -217,9 +231,14 @@ func TestStripeIdentityProvider_CreateSession(t *testing.T) {
 	provider, _ := NewStripeIdentityProvider(config)
 	ctx := context.Background()
 
+	userID := xid.New()
+	appID := xid.New()
+	orgID := xid.New()
+
 	req := &ProviderSessionRequest{
-		UserID:         "user_123",
-		OrganizationID: "org_456",
+		AppID:          appID,
+		OrganizationID: orgID,
+		UserID:         userID,
 		RequiredChecks: []string{"document"},
 	}
 

@@ -220,6 +220,36 @@ type VerificationResponse struct {
 	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
 }
 
+// ChallengeStatusResponse contains the current status of an MFA challenge
+type ChallengeStatusResponse struct {
+	SessionID        xid.ID     `json:"sessionId"`
+	Status           string     `json:"status"` // pending, completed, expired
+	FactorsRequired  int        `json:"factorsRequired"`
+	FactorsVerified  int        `json:"factorsVerified"`
+	FactorsRemaining int        `json:"factorsRemaining"`
+	ExpiresAt        time.Time  `json:"expiresAt"`
+	CompletedAt      *time.Time `json:"completedAt,omitempty"`
+}
+
+// MFAPolicyResponse contains MFA policy details
+type MFAPolicyResponse struct {
+	ID                  xid.ID   `json:"id"`
+	AppID               xid.ID   `json:"appId"`
+	OrganizationID      *xid.ID  `json:"organizationId,omitempty"`
+	Enabled             bool     `json:"enabled"`
+	RequiredFactorCount int      `json:"requiredFactorCount"`
+	AllowedFactorTypes  []string `json:"allowedFactorTypes"`
+	GracePeriodDays     int      `json:"gracePeriodDays"`
+}
+
+// MFABypassResponse contains MFA bypass details
+type MFABypassResponse struct {
+	ID        xid.ID    `json:"id"`
+	UserID    xid.ID    `json:"userId"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	Reason    string    `json:"reason"`
+}
+
 // MFAStatus represents overall MFA status for a user
 type MFAStatus struct {
 	Enabled         bool         `json:"enabled"`

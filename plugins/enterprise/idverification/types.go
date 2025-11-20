@@ -3,33 +3,79 @@ package idverification
 import (
 	"context"
 	"time"
+
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/schema"
 )
+
+// =============================================================================
+// REQUEST DTOs - V2 Architecture (App → Environment → Organization)
+// =============================================================================
 
 // CreateSessionRequest represents a request to create a verification session
 type CreateSessionRequest struct {
-	UserID         string
-	OrganizationID string
+	// V2 Context
+	AppID          xid.ID
+	EnvironmentID  *xid.ID
+	OrganizationID xid.ID
+	UserID         xid.ID
+
+	// Session configuration
 	Provider       string   // onfido, jumio, stripe_identity
 	RequiredChecks []string // document, liveness, age, aml
 	SuccessURL     string
 	CancelURL      string
 	Config         map[string]interface{}
 	Metadata       map[string]interface{}
-	IPAddress      string
-	UserAgent      string
+
+	// Tracking
+	IPAddress string
+	UserAgent string
 }
 
 // CreateVerificationRequest represents a request to create a verification
 type CreateVerificationRequest struct {
-	UserID           string
-	OrganizationID   string
+	// V2 Context
+	AppID          xid.ID
+	EnvironmentID  *xid.ID
+	OrganizationID xid.ID
+	UserID         xid.ID
+
+	// Verification details
 	Provider         string
 	ProviderCheckID  string
 	VerificationType string
 	DocumentType     string
 	Metadata         map[string]interface{}
-	IPAddress        string
-	UserAgent        string
+
+	// Tracking
+	IPAddress string
+	UserAgent string
+}
+
+// ReverifyRequest represents a request for re-verification
+type ReverifyRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// BlockUserRequest represents admin request to block a user
+type BlockUserRequest struct {
+	Reason string `json:"reason"`
+}
+
+// UnblockUserRequest represents admin request to unblock a user
+type UnblockUserRequest struct {
+	// No fields needed, user ID comes from URL
+}
+
+// CreateSessionHTTPRequest represents the HTTP request body for session creation
+type CreateSessionHTTPRequest struct {
+	Provider       string                 `json:"provider"`
+	RequiredChecks []string               `json:"requiredChecks,omitempty"`
+	SuccessURL     string                 `json:"successUrl,omitempty"`
+	CancelURL      string                 `json:"cancelUrl,omitempty"`
+	Config         map[string]interface{} `json:"config,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // VerificationResult represents the result from a provider
@@ -62,6 +108,39 @@ type VerificationResult struct {
 	IsLive        bool
 }
 
+// =============================================================================
+// RESPONSE DTOs - Structured responses replacing map[string]interface{}
+// =============================================================================
+
+// VerificationSessionResponse represents a single verification session response
+type VerificationSessionResponse struct {
+	Session *schema.IdentityVerificationSession `json:"session"`
+}
+
+// VerificationResponse represents a single verification response
+type VerificationResponse struct {
+	Verification *schema.IdentityVerification `json:"verification"`
+}
+
+// VerificationListResponse represents a list of verifications with pagination
+type VerificationListResponse struct {
+	Verifications []*schema.IdentityVerification `json:"verifications"`
+	Limit         int                            `json:"limit"`
+	Offset        int                            `json:"offset"`
+	Total         int                            `json:"total,omitempty"`
+}
+
+// UserVerificationStatusResponse represents a user's verification status
+type UserVerificationStatusResponse struct {
+	Status *schema.UserVerificationStatus `json:"status"`
+}
+
+// WebhookResponse represents a webhook processing response
+type WebhookResponse struct {
+	Received  bool   `json:"received"`
+	ProcessedStatus string `json:"status,omitempty"`
+}
+
 // Provider interface for KYC providers
 type Provider interface {
 	// CreateSession creates a verification session with the provider
@@ -85,8 +164,13 @@ type Provider interface {
 
 // ProviderSessionRequest represents a provider session creation request
 type ProviderSessionRequest struct {
-	UserID         string
-	OrganizationID string
+	// V2 Context
+	AppID          xid.ID
+	EnvironmentID  *xid.ID
+	OrganizationID xid.ID
+	UserID         xid.ID
+
+	// Session configuration
 	RequiredChecks []string
 	SuccessURL     string
 	CancelURL      string

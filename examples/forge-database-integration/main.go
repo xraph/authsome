@@ -62,7 +62,6 @@ func main() {
 	auth1 := authsome.New(
 		authsome.WithForgeApp(app),
 		authsome.WithDatabaseFromForge(),
-		authsome.WithMode(authsome.ModeStandalone),
 	)
 
 	if err := auth1.Initialize(ctx); err != nil {
@@ -79,7 +78,6 @@ func main() {
 	auth2 := authsome.New(
 		authsome.WithForgeApp(app),
 		authsome.WithDatabaseManager(manager, "default"),
-		authsome.WithMode(authsome.ModeStandalone),
 	)
 
 	if err := auth2.Initialize(ctx); err != nil {
@@ -96,7 +94,6 @@ func main() {
 	auth3 := authsome.New(
 		authsome.WithForgeApp(app),
 		authsome.WithDatabase(db),
-		authsome.WithMode(authsome.ModeStandalone),
 	)
 
 	if err := auth3.Initialize(ctx); err != nil {

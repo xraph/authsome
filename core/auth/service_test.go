@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
@@ -153,7 +154,7 @@ func TestService_SignUp(t *testing.T) {
 		setup   func(*MockUserService, *MockSessionService)
 		wantErr bool
 		errMsg  string
-		check   func(*testing.T, *AuthResponse)
+		check   func(*testing.T, *responses.AuthResponse)
 	}{
 		{
 			name: "successful signup without email verification",
@@ -189,7 +190,7 @@ func TestService_SignUp(t *testing.T) {
 				ms.On("Create", mock.Anything, mock.AnythingOfType("*session.CreateSessionRequest")).Return(createdSession, nil)
 			},
 			wantErr: false,
-			check: func(t *testing.T, resp *AuthResponse) {
+			check: func(t *testing.T, resp *responses.AuthResponse) {
 				assert.NotNil(t, resp.User)
 				assert.NotNil(t, resp.Session)
 				assert.NotEmpty(t, resp.Token)
@@ -219,7 +220,7 @@ func TestService_SignUp(t *testing.T) {
 				// Session should NOT be created when verification is required
 			},
 			wantErr: false,
-			check: func(t *testing.T, resp *AuthResponse) {
+			check: func(t *testing.T, resp *responses.AuthResponse) {
 				assert.NotNil(t, resp.User)
 				assert.Nil(t, resp.Session) // No session when verification required
 				assert.Empty(t, resp.Token)
@@ -324,7 +325,7 @@ func TestService_SignIn(t *testing.T) {
 		setup   func(*MockUserService, *MockSessionService)
 		wantErr bool
 		errMsg  string
-		check   func(*testing.T, *AuthResponse)
+		check   func(*testing.T, *responses.AuthResponse)
 	}{
 		{
 			name: "successful signin",
@@ -353,7 +354,7 @@ func TestService_SignIn(t *testing.T) {
 				ms.On("Create", mock.Anything, mock.AnythingOfType("*session.CreateSessionRequest")).Return(createdSession, nil)
 			},
 			wantErr: false,
-			check: func(t *testing.T, resp *AuthResponse) {
+			check: func(t *testing.T, resp *responses.AuthResponse) {
 				assert.NotNil(t, resp.User)
 				assert.NotNil(t, resp.Session)
 				assert.NotEmpty(t, resp.Token)
@@ -386,7 +387,7 @@ func TestService_SignIn(t *testing.T) {
 				ms.On("Create", mock.Anything, mock.AnythingOfType("*session.CreateSessionRequest")).Return(createdSession, nil)
 			},
 			wantErr: false,
-			check: func(t *testing.T, resp *AuthResponse) {
+			check: func(t *testing.T, resp *responses.AuthResponse) {
 				assert.NotNil(t, resp.User)
 				assert.NotNil(t, resp.Session)
 				// Verify session has extended TTL
@@ -604,7 +605,7 @@ func TestService_GetSession(t *testing.T) {
 		setup   func(*MockUserService, *MockSessionService)
 		wantErr bool
 		errMsg  string
-		check   func(*testing.T, *AuthResponse)
+		check   func(*testing.T, *responses.AuthResponse)
 	}{
 		{
 			name:  "valid session",
@@ -626,7 +627,7 @@ func TestService_GetSession(t *testing.T) {
 				mu.On("FindByID", mock.Anything, userID).Return(existingUser, nil)
 			},
 			wantErr: false,
-			check: func(t *testing.T, resp *AuthResponse) {
+			check: func(t *testing.T, resp *responses.AuthResponse) {
 				assert.NotNil(t, resp.User)
 				assert.NotNil(t, resp.Session)
 				assert.Equal(t, validToken, resp.Token)

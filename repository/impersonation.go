@@ -82,8 +82,12 @@ func (r *ImpersonationRepository) ListSessions(ctx context.Context, filter *impe
 		Where("organization_id = ?", filter.AppID)
 
 	// Apply filters
-	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
-		query = query.Where("user_organization_id = ?", *filter.UserOrganizationID)
+	if filter.EnvironmentID != nil && !filter.EnvironmentID.IsNil() {
+		query = query.Where("environment_id = ?", *filter.EnvironmentID)
+	}
+
+	if filter.OrganizationID != nil && !filter.OrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *filter.OrganizationID)
 	}
 
 	if filter.ImpersonatorID != nil {
@@ -105,8 +109,12 @@ func (r *ImpersonationRepository) ListSessions(ctx context.Context, filter *impe
 		Model((*schema.ImpersonationSession)(nil)).
 		Where("organization_id = ?", filter.AppID)
 
-	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
-		countQuery = countQuery.Where("user_organization_id = ?", *filter.UserOrganizationID)
+	if filter.EnvironmentID != nil && !filter.EnvironmentID.IsNil() {
+		countQuery = countQuery.Where("environment_id = ?", *filter.EnvironmentID)
+	}
+
+	if filter.OrganizationID != nil && !filter.OrganizationID.IsNil() {
+		countQuery = countQuery.Where("user_organization_id = ?", *filter.OrganizationID)
 	}
 
 	if filter.ImpersonatorID != nil {
@@ -208,8 +216,12 @@ func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, filter *i
 		Where("organization_id = ?", filter.AppID)
 
 	// Apply filters
-	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
-		query = query.Where("user_organization_id = ?", *filter.UserOrganizationID)
+	if filter.EnvironmentID != nil && !filter.EnvironmentID.IsNil() {
+		query = query.Where("environment_id = ?", *filter.EnvironmentID)
+	}
+
+	if filter.OrganizationID != nil && !filter.OrganizationID.IsNil() {
+		query = query.Where("user_organization_id = ?", *filter.OrganizationID)
 	}
 
 	if filter.ImpersonationID != nil {
@@ -241,8 +253,12 @@ func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, filter *i
 		Model((*schema.ImpersonationAuditEvent)(nil)).
 		Where("organization_id = ?", filter.AppID)
 
-	if filter.UserOrganizationID != nil && !filter.UserOrganizationID.IsNil() {
-		countQuery = countQuery.Where("user_organization_id = ?", *filter.UserOrganizationID)
+	if filter.EnvironmentID != nil && !filter.EnvironmentID.IsNil() {
+		countQuery = countQuery.Where("environment_id = ?", *filter.EnvironmentID)
+	}
+
+	if filter.OrganizationID != nil && !filter.OrganizationID.IsNil() {
+		countQuery = countQuery.Where("user_organization_id = ?", *filter.OrganizationID)
 	}
 
 	if filter.ImpersonationID != nil {

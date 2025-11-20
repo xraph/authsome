@@ -11,6 +11,9 @@ import (
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/environment"
+	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -18,27 +21,35 @@ import (
 
 func TestNewHandler(t *testing.T) {
 	assets := embed.FS{}
-	userSvc := &user.Service{}
-	sessionSvc := &session.Service{}
+	var appService app.Service = nil              // Use interface
+	var userSvc user.ServiceInterface = nil       // Use interface
+	var sessionSvc session.ServiceInterface = nil // Use interface
 	auditSvc := &audit.Service{}
 	rbacSvc := &rbac.Service{}
 	apikeyService := &apikey.Service{}
-	orgService := &app.ServiceImpl{}
+	orgService := &organization.Service{}
+	var envService environment.EnvironmentService = nil // Use interface
 	db := &bun.DB{}
 	isSaaSMode := false
 	basePath := "/api/auth"
+	enabledPlugins := map[string]bool{"test": true}
+	hookRegistry := &hooks.HookRegistry{}
 
 	handler := NewHandler(
 		assets,
+		appService,
 		userSvc,
 		sessionSvc,
 		auditSvc,
 		rbacSvc,
 		apikeyService,
 		orgService,
+		envService,
 		db,
 		isSaaSMode,
 		basePath,
+		enabledPlugins,
+		hookRegistry,
 	)
 
 	require.NotNil(t, handler)
@@ -47,9 +58,13 @@ func TestNewHandler(t *testing.T) {
 	assert.Equal(t, auditSvc, handler.auditSvc)
 	assert.Equal(t, rbacSvc, handler.rbacSvc)
 	assert.Equal(t, apikeyService, handler.apikeyService)
+	assert.Equal(t, appService, handler.appService)
 	assert.Equal(t, orgService, handler.orgService)
+	assert.Equal(t, envService, handler.envService)
 	assert.Equal(t, basePath, handler.basePath)
 	assert.Equal(t, isSaaSMode, handler.isMultiApp)
+	assert.Equal(t, enabledPlugins, handler.enabledPlugins)
+	assert.Equal(t, hookRegistry, handler.hookRegistry)
 }
 
 func TestGetContentType(t *testing.T) {

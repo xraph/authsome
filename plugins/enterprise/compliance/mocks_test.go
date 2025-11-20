@@ -3,6 +3,9 @@ package compliance
 import (
 	"context"
 	"sync"
+
+	"github.com/google/uuid"
+	"github.com/xraph/authsome/core/pagination"
 )
 
 // MockRepository implements Repository interface for testing
@@ -35,6 +38,9 @@ func NewMockRepository() *MockRepository {
 func (m *MockRepository) CreateProfile(ctx context.Context, profile *ComplianceProfile) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if profile.ID == "" {
+		profile.ID = uuid.New().String()
+	}
 	m.profiles[profile.ID] = profile
 	return nil
 }
@@ -44,7 +50,7 @@ func (m *MockRepository) GetProfile(ctx context.Context, id string) (*Compliance
 	defer m.mu.RUnlock()
 	profile, ok := m.profiles[id]
 	if !ok {
-		return nil, ErrProfileNotFound
+		return nil, ProfileNotFound(id)
 	}
 	return profile, nil
 }
@@ -53,7 +59,7 @@ func (m *MockRepository) UpdateProfile(ctx context.Context, profile *ComplianceP
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.profiles[profile.ID]; !ok {
-		return ErrProfileNotFound
+		return ProfileNotFound(profile.ID)
 	}
 	m.profiles[profile.ID] = profile
 	return nil
@@ -63,21 +69,38 @@ func (m *MockRepository) DeleteProfile(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.profiles[id]; !ok {
-		return ErrProfileNotFound
+		return ProfileNotFound(id)
 	}
 	delete(m.profiles, id)
 	return nil
 }
 
-func (m *MockRepository) GetProfileByOrganization(ctx context.Context, orgID string) (*ComplianceProfile, error) {
+func (m *MockRepository) GetProfileByApp(ctx context.Context, appID string) (*ComplianceProfile, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, profile := range m.profiles {
-		if profile.OrganizationID == orgID {
+		if profile.AppID == appID {
 			return profile, nil
 		}
 	}
-	return nil, ErrProfileNotFound
+	return nil, ProfileNotFound(appID)
+}
+
+func (m *MockRepository) ListProfiles(ctx context.Context, filter *ListProfilesFilter) (*pagination.PageResponse[*ComplianceProfile], error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var profiles []*ComplianceProfile
+	for _, profile := range m.profiles {
+		if filter.AppID != nil && profile.AppID != *filter.AppID {
+			continue
+		}
+		profiles = append(profiles, profile)
+	}
+	
+	return &pagination.PageResponse[*ComplianceProfile]{
+		Data: profiles,
+	}, nil
 }
 
 // Check methods
@@ -85,6 +108,9 @@ func (m *MockRepository) GetProfileByOrganization(ctx context.Context, orgID str
 func (m *MockRepository) CreateCheck(ctx context.Context, check *ComplianceCheck) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if check.ID == "" {
+		check.ID = uuid.New().String()
+	}
 	m.checks[check.ID] = check
 	return nil
 }
@@ -94,25 +120,41 @@ func (m *MockRepository) GetCheck(ctx context.Context, id string) (*ComplianceCh
 	defer m.mu.RUnlock()
 	check, ok := m.checks[id]
 	if !ok {
-		return nil, ErrCheckNotFound
+		return nil, CheckNotFound(id)
 	}
 	return check, nil
 }
 
-func (m *MockRepository) ListChecks(ctx context.Context, filters CheckFilters) ([]*ComplianceCheck, error) {
+func (m *MockRepository) UpdateCheck(ctx context.Context, check *ComplianceCheck) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.checks[check.ID] = check
+	return nil
+}
+
+func (m *MockRepository) ListChecks(ctx context.Context, filter *ListChecksFilter) (*pagination.PageResponse[*ComplianceCheck], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var result []*ComplianceCheck
+	
+	var checks []*ComplianceCheck
 	for _, check := range m.checks {
-		if filters.ProfileID != "" && check.ProfileID != filters.ProfileID {
-			continue
-		}
-		if filters.CheckType != "" && check.CheckType != filters.CheckType {
-			continue
-		}
-		result = append(result, check)
+		checks = append(checks, check)
 	}
-	return result, nil
+	
+	return &pagination.PageResponse[*ComplianceCheck]{
+		Data: checks,
+	}, nil
+}
+
+func (m *MockRepository) GetDueChecks(ctx context.Context) ([]*ComplianceCheck, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var checks []*ComplianceCheck
+	for _, check := range m.checks {
+		checks = append(checks, check)
+	}
+	return checks, nil
 }
 
 // Violation methods
@@ -120,6 +162,9 @@ func (m *MockRepository) ListChecks(ctx context.Context, filters CheckFilters) (
 func (m *MockRepository) CreateViolation(ctx context.Context, violation *ComplianceViolation) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if violation.ID == "" {
+		violation.ID = uuid.New().String()
+	}
 	m.violations[violation.ID] = violation
 	return nil
 }
@@ -129,40 +174,55 @@ func (m *MockRepository) GetViolation(ctx context.Context, id string) (*Complian
 	defer m.mu.RUnlock()
 	violation, ok := m.violations[id]
 	if !ok {
-		return nil, ErrViolationNotFound
+		return nil, ViolationNotFound(id)
 	}
 	return violation, nil
 }
 
-func (m *MockRepository) ListViolations(ctx context.Context, filters ViolationFilters) ([]*ComplianceViolation, error) {
+func (m *MockRepository) ListViolations(ctx context.Context, filter *ListViolationsFilter) (*pagination.PageResponse[*ComplianceViolation], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var result []*ComplianceViolation
+	
+	var violations []*ComplianceViolation
 	for _, violation := range m.violations {
-		if filters.OrganizationID != "" && violation.OrganizationID != filters.OrganizationID {
-			continue
-		}
-		if filters.ViolationType != "" && violation.ViolationType != filters.ViolationType {
-			continue
-		}
-		if filters.Status != "" && violation.Status != filters.Status {
-			continue
-		}
-		result = append(result, violation)
+		violations = append(violations, violation)
 	}
-	return result, nil
+	
+	return &pagination.PageResponse[*ComplianceViolation]{
+		Data: violations,
+	}, nil
 }
 
-func (m *MockRepository) ResolveViolation(ctx context.Context, id, resolvedBy string) error {
+func (m *MockRepository) UpdateViolation(ctx context.Context, violation *ComplianceViolation) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.violations[violation.ID] = violation
+	return nil
+}
+
+func (m *MockRepository) ResolveViolation(ctx context.Context, id string, resolvedBy string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	violation, ok := m.violations[id]
 	if !ok {
-		return ErrViolationNotFound
+		return ViolationNotFound(id)
 	}
 	violation.Status = "resolved"
 	violation.ResolvedBy = resolvedBy
 	return nil
+}
+
+func (m *MockRepository) CountViolations(ctx context.Context, appID string, status string) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	count := 0
+	for _, violation := range m.violations {
+		if violation.AppID == appID && (status == "" || violation.Status == status) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // Report methods
@@ -170,6 +230,9 @@ func (m *MockRepository) ResolveViolation(ctx context.Context, id, resolvedBy st
 func (m *MockRepository) CreateReport(ctx context.Context, report *ComplianceReport) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if report.ID == "" {
+		report.ID = uuid.New().String()
+	}
 	m.reports[report.ID] = report
 	return nil
 }
@@ -179,25 +242,37 @@ func (m *MockRepository) GetReport(ctx context.Context, id string) (*ComplianceR
 	defer m.mu.RUnlock()
 	report, ok := m.reports[id]
 	if !ok {
-		return nil, ErrReportNotFound
+		return nil, ReportNotFound(id)
 	}
 	return report, nil
 }
 
-func (m *MockRepository) ListReports(ctx context.Context, filters ReportFilters) ([]*ComplianceReport, error) {
+func (m *MockRepository) ListReports(ctx context.Context, filter *ListReportsFilter) (*pagination.PageResponse[*ComplianceReport], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var result []*ComplianceReport
+	
+	var reports []*ComplianceReport
 	for _, report := range m.reports {
-		if filters.OrganizationID != "" && report.OrganizationID != filters.OrganizationID {
-			continue
-		}
-		if filters.Standard != "" && report.Standard != filters.Standard {
-			continue
-		}
-		result = append(result, report)
+		reports = append(reports, report)
 	}
-	return result, nil
+	
+	return &pagination.PageResponse[*ComplianceReport]{
+		Data: reports,
+	}, nil
+}
+
+func (m *MockRepository) UpdateReport(ctx context.Context, report *ComplianceReport) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reports[report.ID] = report
+	return nil
+}
+
+func (m *MockRepository) DeleteReport(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.reports, id)
+	return nil
 }
 
 // Evidence methods
@@ -205,6 +280,9 @@ func (m *MockRepository) ListReports(ctx context.Context, filters ReportFilters)
 func (m *MockRepository) CreateEvidence(ctx context.Context, evidence *ComplianceEvidence) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if evidence.ID == "" {
+		evidence.ID = uuid.New().String()
+	}
 	m.evidence[evidence.ID] = evidence
 	return nil
 }
@@ -214,35 +292,30 @@ func (m *MockRepository) GetEvidence(ctx context.Context, id string) (*Complianc
 	defer m.mu.RUnlock()
 	evidence, ok := m.evidence[id]
 	if !ok {
-		return nil, ErrEvidenceNotFound
+		return nil, EvidenceNotFound(id)
 	}
 	return evidence, nil
-}
-
-func (m *MockRepository) ListEvidence(ctx context.Context, filters EvidenceFilters) ([]*ComplianceEvidence, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	var result []*ComplianceEvidence
-	for _, evidence := range m.evidence {
-		if filters.ProfileID != "" && evidence.ProfileID != filters.ProfileID {
-			continue
-		}
-		if filters.Category != "" && evidence.Category != filters.Category {
-			continue
-		}
-		result = append(result, evidence)
-	}
-	return result, nil
 }
 
 func (m *MockRepository) DeleteEvidence(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.evidence[id]; !ok {
-		return ErrEvidenceNotFound
-	}
 	delete(m.evidence, id)
 	return nil
+}
+
+func (m *MockRepository) ListEvidence(ctx context.Context, filter *ListEvidenceFilter) (*pagination.PageResponse[*ComplianceEvidence], error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var evidenceList []*ComplianceEvidence
+	for _, evidence := range m.evidence {
+		evidenceList = append(evidenceList, evidence)
+	}
+	
+	return &pagination.PageResponse[*ComplianceEvidence]{
+		Data: evidenceList,
+	}, nil
 }
 
 // Policy methods
@@ -250,6 +323,9 @@ func (m *MockRepository) DeleteEvidence(ctx context.Context, id string) error {
 func (m *MockRepository) CreatePolicy(ctx context.Context, policy *CompliancePolicy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if policy.ID == "" {
+		policy.ID = uuid.New().String()
+	}
 	m.policies[policy.ID] = policy
 	return nil
 }
@@ -259,33 +335,14 @@ func (m *MockRepository) GetPolicy(ctx context.Context, id string) (*ComplianceP
 	defer m.mu.RUnlock()
 	policy, ok := m.policies[id]
 	if !ok {
-		return nil, ErrPolicyNotFound
+		return nil, PolicyNotFound(id)
 	}
 	return policy, nil
-}
-
-func (m *MockRepository) ListPolicies(ctx context.Context, filters PolicyFilters) ([]*CompliancePolicy, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	var result []*CompliancePolicy
-	for _, policy := range m.policies {
-		if filters.OrganizationID != "" && policy.OrganizationID != filters.OrganizationID {
-			continue
-		}
-		if filters.PolicyType != "" && policy.PolicyType != filters.PolicyType {
-			continue
-		}
-		result = append(result, policy)
-	}
-	return result, nil
 }
 
 func (m *MockRepository) UpdatePolicy(ctx context.Context, policy *CompliancePolicy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.policies[policy.ID]; !ok {
-		return ErrPolicyNotFound
-	}
 	m.policies[policy.ID] = policy
 	return nil
 }
@@ -293,11 +350,35 @@ func (m *MockRepository) UpdatePolicy(ctx context.Context, policy *CompliancePol
 func (m *MockRepository) DeletePolicy(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.policies[id]; !ok {
-		return ErrPolicyNotFound
-	}
 	delete(m.policies, id)
 	return nil
+}
+
+func (m *MockRepository) ListPolicies(ctx context.Context, filter *ListPoliciesFilter) (*pagination.PageResponse[*CompliancePolicy], error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var policies []*CompliancePolicy
+	for _, policy := range m.policies {
+		policies = append(policies, policy)
+	}
+	
+	return &pagination.PageResponse[*CompliancePolicy]{
+		Data: policies,
+	}, nil
+}
+
+func (m *MockRepository) GetActivePolicies(ctx context.Context, appID string) ([]*CompliancePolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var policies []*CompliancePolicy
+	for _, policy := range m.policies {
+		if policy.AppID == appID && policy.Status == "active" {
+			policies = append(policies, policy)
+		}
+	}
+	return policies, nil
 }
 
 // Training methods
@@ -305,6 +386,9 @@ func (m *MockRepository) DeletePolicy(ctx context.Context, id string) error {
 func (m *MockRepository) CreateTraining(ctx context.Context, training *ComplianceTraining) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if training.ID == "" {
+		training.ID = uuid.New().String()
+	}
 	m.training[training.ID] = training
 	return nil
 }
@@ -314,132 +398,87 @@ func (m *MockRepository) GetTraining(ctx context.Context, id string) (*Complianc
 	defer m.mu.RUnlock()
 	training, ok := m.training[id]
 	if !ok {
-		return nil, ErrTrainingNotFound
+		return nil, TrainingNotFound(id)
 	}
 	return training, nil
 }
 
-func (m *MockRepository) ListTraining(ctx context.Context, filters TrainingFilters) ([]*ComplianceTraining, error) {
+func (m *MockRepository) UpdateTraining(ctx context.Context, training *ComplianceTraining) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.training[training.ID] = training
+	return nil
+}
+
+func (m *MockRepository) GetUserTrainingStatus(ctx context.Context, userID string) ([]*ComplianceTraining, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	
 	var result []*ComplianceTraining
 	for _, training := range m.training {
-		if filters.OrganizationID != "" && training.OrganizationID != filters.OrganizationID {
-			continue
+		if training.UserID == userID {
+			result = append(result, training)
 		}
-		if filters.UserID != "" && training.UserID != filters.UserID {
-			continue
-		}
-		if filters.Status != "" && training.Status != filters.Status {
-			continue
-		}
-		result = append(result, training)
 	}
 	return result, nil
 }
 
-func (m *MockRepository) CompleteTraining(ctx context.Context, id, completedBy string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	training, ok := m.training[id]
-	if !ok {
-		return ErrTrainingNotFound
+func (m *MockRepository) ListTraining(ctx context.Context, filter *ListTrainingFilter) (*pagination.PageResponse[*ComplianceTraining], error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var trainingList []*ComplianceTraining
+	for _, training := range m.training {
+		trainingList = append(trainingList, training)
 	}
-	training.Status = "completed"
-	return nil
+	
+	return &pagination.PageResponse[*ComplianceTraining]{
+		Data: trainingList,
+	}, nil
 }
 
-// Mock service adapters
-
-// MockAuditService simulates audit logging
-type MockAuditService struct {
-	mu     sync.Mutex
-	events []*AuditEvent
-}
-
-func NewMockAuditService() *MockAuditService {
-	return &MockAuditService{
-		events: make([]*AuditEvent, 0),
+func (m *MockRepository) GetOverdueTraining(ctx context.Context, appID string) ([]*ComplianceTraining, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var trainingList []*ComplianceTraining
+	for _, training := range m.training {
+		if training.AppID == appID {
+			trainingList = append(trainingList, training)
+		}
 	}
+	return trainingList, nil
 }
+
+// MockAuditService implements AuditService for testing
+type MockAuditService struct{}
 
 func (m *MockAuditService) LogEvent(ctx context.Context, event *AuditEvent) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.events = append(m.events, event)
 	return nil
 }
 
-func (m *MockAuditService) GetOldestLog(ctx context.Context, orgID string) (*AuditLog, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.events) == 0 {
-		return nil, nil
-	}
-	return &AuditLog{}, nil
+func (m *MockAuditService) GetOldestLog(ctx context.Context, appID string) (*AuditLog, error) {
+	return nil, nil
 }
 
-// MockUserService simulates user operations
-type MockUserService struct {
-	mu    sync.Mutex
-	users []*User
+// MockUserService implements UserService for testing
+type MockUserService struct{}
+
+func (m *MockUserService) ListByApp(ctx context.Context, appID string) ([]*User, error) {
+	return []*User{}, nil
 }
 
-func NewMockUserService() *MockUserService {
-	return &MockUserService{
-		users: make([]*User, 0),
-	}
+// MockAppService implements AppService for testing
+type MockAppService struct{}
+
+func (m *MockAppService) Get(ctx context.Context, id string) (*App, error) {
+	return &App{}, nil
 }
 
-func (m *MockUserService) ListByOrganization(ctx context.Context, orgID string) ([]*User, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.users, nil
-}
-
-// MockOrganizationService simulates org operations
-type MockOrganizationService struct {
-	mu   sync.Mutex
-	orgs map[string]*Organization
-}
-
-func NewMockOrganizationService() *MockOrganizationService {
-	return &MockOrganizationService{
-		orgs: make(map[string]*Organization),
-	}
-}
-
-func (m *MockOrganizationService) Get(ctx context.Context, id string) (*Organization, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	org, ok := m.orgs[id]
-	if !ok {
-		return nil, ErrOrganizationNotFound
-	}
-	return org, nil
-}
-
-// MockEmailService simulates email sending
-type MockEmailService struct {
-	mu   sync.Mutex
-	sent []*Email
-}
-
-func NewMockEmailService() *MockEmailService {
-	return &MockEmailService{
-		sent: make([]*Email, 0),
-	}
-}
+// MockEmailService implements EmailService for testing
+type MockEmailService struct{}
 
 func (m *MockEmailService) SendEmail(ctx context.Context, email *Email) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.sent = append(m.sent, email)
 	return nil
 }
 
-func (m *MockEmailService) GetSentEmails() []*Email {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.sent
-}

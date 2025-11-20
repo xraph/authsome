@@ -1,14 +1,9 @@
 package handlers
 
-// Shared response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
+// Re-export shared response types from core/responses for backward compatibility
+// This allows handlers to use responses without importing core/responses directly
+import "github.com/xraph/authsome/core/responses"
 
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse

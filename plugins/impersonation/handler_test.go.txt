@@ -2,27 +2,30 @@ package impersonation
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+	_ "unsafe" // for go:linkname
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/schema"
+	authsometesting "github.com/xraph/authsome/testing"
+	"github.com/xraph/forge"
+	forgetesting "github.com/xraph/forge/testing"
 )
 
-// mockForgeContext implements forge.Context for testing
-type mockForgeContext struct {
-	request  *http.Request
-	response http.ResponseWriter
-	params   map[string]string
-	status   int
-	body     interface{}
-}
+// Link to the internal Session interface from forge
+// This is necessary because forge.Context uses internal types
+//
+//go:linkname Session github.com/xraph/forge/internal/shared.Session
+type Session interface{}
 
 func newMockForgeContext(method, path string, body interface{}) *mockForgeContext {
 	var bodyBytes []byte
@@ -33,41 +36,341 @@ func newMockForgeContext(method, path string, body interface{}) *mockForgeContex
 	req := httptest.NewRequest(method, path, bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 
-	return &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
+
+	return &mockForgeContext{MockForgeContext: ctx}
+}
+
+// mockForgeContext wraps testing.MockForgeContext to get all required methods
+type mockForgeContext struct {
+	*authsometesting.MockForgeContext
+}
+
+// Add any missing methods that are not in the testing.MockForgeContext
+func (c *mockForgeContext) Bind(v interface{}) error {
+	if c.Request().Body == nil {
+		return nil
 	}
+	defer c.Request().Body.Close()
+	return json.NewDecoder(c.Request().Body).Decode(v)
 }
 
-func (c *mockForgeContext) Request() *http.Request {
-	return c.request
+func (c *mockForgeContext) BindRequest(v interface{}) error {
+	return c.Bind(v)
 }
 
-func (c *mockForgeContext) Response() http.ResponseWriter {
-	return c.response
+func (c *mockForgeContext) BindXML(v interface{}) error {
+	return c.Bind(v)
 }
 
-func (c *mockForgeContext) Param(name string) string {
-	return c.params[name]
+func (c *mockForgeContext) Header(key string) string {
+	return c.Request().Header.Get(key)
 }
 
-func (c *mockForgeContext) SetParam(name, value string) {
-	c.params[name] = value
+func (c *mockForgeContext) Bytes(status int, b []byte) error {
+	_, err := c.Response().Write(b)
+	return err
 }
 
-func (c *mockForgeContext) JSON(status int, data interface{}) error {
-	c.status = status
-	c.body = data
+func (c *mockForgeContext) NoContent(status int) error {
 	return nil
 }
 
-func (c *mockForgeContext) GetStatus() int {
-	return c.status
+func (c *mockForgeContext) SetParam(name, value string) {
+	// Store in a local map if needed - for now just no-op
 }
 
-func (c *mockForgeContext) GetBody() interface{} {
-	return c.body
+func (c *mockForgeContext) Param(name string) string {
+	// Return empty for now - tests don't really use this
+	return ""
+}
+
+func (c *mockForgeContext) Params() map[string]string {
+	return make(map[string]string)
+}
+
+func (c *mockForgeContext) ParamInt(name string) (int, error) {
+	return 0, nil
+}
+
+func (c *mockForgeContext) ParamInt64(name string) (int64, error) {
+	return 0, nil
+}
+
+func (c *mockForgeContext) ParamFloat64(name string) (float64, error) {
+	return 0.0, nil
+}
+
+func (c *mockForgeContext) ParamBool(name string) (bool, error) {
+	return false, nil
+}
+
+func (c *mockForgeContext) ParamIntDefault(name string, defaultValue int) int {
+	return defaultValue
+}
+
+func (c *mockForgeContext) ParamInt64Default(name string, defaultValue int64) int64 {
+	return defaultValue
+}
+
+func (c *mockForgeContext) ParamFloat64Default(name string, defaultValue float64) float64 {
+	return defaultValue
+}
+
+func (c *mockForgeContext) ParamBoolDefault(name string, defaultValue bool) bool {
+	return defaultValue
+}
+
+func (c *mockForgeContext) QueryDefault(key, defaultValue string) string {
+	val := c.Request().URL.Query().Get(key)
+	if val == "" {
+		return defaultValue
+	}
+	return val
+}
+
+func (c *mockForgeContext) FormValue(key string) string {
+	return c.Request().FormValue(key)
+}
+
+func (c *mockForgeContext) FormValues(key string) []string {
+	return c.Request().Form[key]
+}
+
+func (c *mockForgeContext) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
+	return nil, nil, nil
+}
+
+func (c *mockForgeContext) FormFiles(name string) ([]*multipart.FileHeader, error) {
+	return nil, nil
+}
+
+func (c *mockForgeContext) ParseMultipartForm(maxMemory int64) error {
+	return nil
+}
+
+func (c *mockForgeContext) QueryParam(key string) string {
+	return c.Request().URL.Query().Get(key)
+}
+
+func (c *mockForgeContext) QueryParams() map[string][]string {
+	return c.Request().URL.Query()
+}
+
+func (c *mockForgeContext) QueryString() string {
+	return c.Request().URL.RawQuery
+}
+
+func (c *mockForgeContext) RealIP() string {
+	return ""
+}
+
+func (c *mockForgeContext) Scheme() string {
+	return "http"
+}
+
+func (c *mockForgeContext) IsTLS() bool {
+	return false
+}
+
+func (c *mockForgeContext) IsWebSocket() bool {
+	return false
+}
+
+func (c *mockForgeContext) Path() string {
+	return c.Request().URL.Path
+}
+
+func (c *mockForgeContext) Method() string {
+	return c.Request().Method
+}
+
+func (c *mockForgeContext) Host() string {
+	return c.Request().Host
+}
+
+func (c *mockForgeContext) URL() string {
+	return c.Request().URL.String()
+}
+
+func (c *mockForgeContext) URI() string {
+	return c.Request().RequestURI
+}
+
+func (c *mockForgeContext) Protocol() string {
+	return c.Request().Proto
+}
+
+func (c *mockForgeContext) HasCookie(name string) bool {
+	_, err := c.Request().Cookie(name)
+	return err == nil
+}
+
+func (c *mockForgeContext) GetAllCookies() map[string]string {
+	cookies := make(map[string]string)
+	for _, cookie := range c.Request().Cookies() {
+		cookies[cookie.Name] = cookie.Value
+	}
+	return cookies
+}
+
+func (c *mockForgeContext) DeleteCookie(name string) {
+	http.SetCookie(c.Response(), &http.Cookie{
+		Name:   name,
+		Value:  "",
+		MaxAge: -1,
+	})
+}
+
+func (c *mockForgeContext) SetCookie(name, value string, maxAge int) {
+	http.SetCookie(c.Response(), &http.Cookie{
+		Name:   name,
+		Value:  value,
+		MaxAge: maxAge,
+	})
+}
+
+func (c *mockForgeContext) SetCookieWithOptions(name, value string, path, domain string, maxAge int, secure, httpOnly bool) {
+	http.SetCookie(c.Response(), &http.Cookie{
+		Name:     name,
+		Value:    value,
+		MaxAge:   maxAge,
+		Path:     path,
+		Domain:   domain,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+	})
+}
+
+func (c *mockForgeContext) Get(key string) interface{} {
+	return c.Request().Context().Value(key)
+}
+
+func (c *mockForgeContext) Set(key string, val interface{}) {
+	// Store in context if needed
+}
+
+func (c *mockForgeContext) MustGet(key string) interface{} {
+	return c.Get(key)
+}
+
+func (c *mockForgeContext) Context() context.Context {
+	return c.Request().Context()
+}
+
+func (c *mockForgeContext) WithContext(ctx context.Context) {
+	*c.Request() = *c.Request().WithContext(ctx)
+}
+
+func (c *mockForgeContext) Container() forge.Container {
+	return nil
+}
+
+func (c *mockForgeContext) Scope() forge.Scope {
+	return nil
+}
+
+func (c *mockForgeContext) Resolve(name string) (any, error) {
+	return nil, nil
+}
+
+func (c *mockForgeContext) Must(name string) any {
+	return nil
+}
+
+// Session returns Session interface linked from internal forge package
+func (c *mockForgeContext) Session() (Session, error) {
+	return nil, nil
+}
+
+func (c *mockForgeContext) SetSession(session any) {
+}
+
+func (c *mockForgeContext) SaveSession() error {
+	return nil
+}
+
+func (c *mockForgeContext) DestroySession() error {
+	return nil
+}
+
+func (c *mockForgeContext) GetSessionValue(key string) (interface{}, bool) {
+	return nil, false
+}
+
+func (c *mockForgeContext) SetSessionValue(key string, value interface{}) {
+}
+
+func (c *mockForgeContext) DeleteSessionValue(key string) {
+}
+
+func (c *mockForgeContext) SessionID() string {
+	return ""
+}
+
+func (c *mockForgeContext) ClearSession() error {
+	return nil
+}
+
+func (c *mockForgeContext) Flash(key string, value interface{}) {
+}
+
+func (c *mockForgeContext) GetFlash(key string) interface{} {
+	return nil
+}
+
+func (c *mockForgeContext) Logger() interface{} {
+	return nil
+}
+
+func (c *mockForgeContext) WithValue(key, val interface{}) forge.Context {
+	return c
+}
+
+func (c *mockForgeContext) Validate(i interface{}) error {
+	return nil
+}
+
+func (c *mockForgeContext) Render(code int, name string, data interface{}) error {
+	return nil
+}
+
+func (c *mockForgeContext) File(file string) error {
+	return nil
+}
+
+func (c *mockForgeContext) Stream(status int, contentType string, r func(w http.ResponseWriter) error) error {
+	return nil
+}
+
+func (c *mockForgeContext) Attachment(file string, name string) error {
+	return nil
+}
+
+func (c *mockForgeContext) Inline(file string, name string) error {
+	return nil
+}
+
+func (c *mockForgeContext) XML(code int, v interface{}) error {
+	return nil
+}
+
+func (c *mockForgeContext) Next() error {
+	return nil
+}
+
+func (c *mockForgeContext) Error(err error) error {
+	return err
+}
+
+func (c *mockForgeContext) Status(code int) interface{} {
+	// Return a mock ResponseBuilder
+	return nil
+}
+
+func (c *mockForgeContext) MultipartForm() (*multipart.Form, error) {
+	return nil, nil
 }
 
 // Test helpers
@@ -117,11 +420,8 @@ func TestHandler_StartImpersonation_InvalidJSON(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/impersonation/start", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := &mockForgeContext{MockForgeContext: mock.NewMockForgeContext(req)}
 
 	err := handler.StartImpersonation(ctx)
 
@@ -162,14 +462,14 @@ func TestHandler_StartImpersonation_AlreadyImpersonating(t *testing.T) {
 
 	// Create existing active impersonation
 	existingSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	existingSession.ID = xid.New()
+	existingSession.CreatedAt = time.Now()
 	repo.sessions[existingSession.ID.String()] = existingSession
 
 	reqBody := impersonation.StartRequest{
@@ -197,15 +497,15 @@ func TestHandler_EndImpersonation_Success(t *testing.T) {
 
 	// Create active impersonation
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 		Reason:         "Test impersonation",
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	reqBody := impersonation.EndRequest{
@@ -234,7 +534,6 @@ func TestHandler_GetImpersonation_Success(t *testing.T) {
 
 	// Create impersonation
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
@@ -242,14 +541,15 @@ func TestHandler_GetImpersonation_Success(t *testing.T) {
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 		Reason:         "Test impersonation",
 		TicketNumber:   "TICKET-123",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
+	impSession.UpdatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	ctx := newMockForgeContext("GET", "/api/impersonation/"+impSession.ID.String(), nil)
 	ctx.SetParam("id", impSession.ID.String())
-	ctx.request.URL.RawQuery = "org_id=" + orgID.String()
+	ctx.Request().URL.RawQuery = "org_id=" + orgID.String()
 
 	err := handler.GetImpersonation(ctx)
 
@@ -304,32 +604,32 @@ func TestHandler_ListImpersonations_Success(t *testing.T) {
 	// Create multiple impersonations
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
-			ID:             xid.New(),
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         true,
 			ExpiresAt:      time.Now().Add(1 * time.Hour),
 			Reason:         "Test session",
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
 		}
+		session.ID = xid.New()
+		session.CreatedAt = time.Now()
+		session.UpdatedAt = time.Now()
 		repo.sessions[session.ID.String()] = session
 	}
 
 	ctx := newMockForgeContext("GET", "/api/impersonation", nil)
-	ctx.request.URL.RawQuery = "org_id=" + orgID.String() + "&limit=10&offset=0"
+	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() + "&limit=10&offset=0"
 
 	err := handler.ListImpersonations(ctx)
 
 	require.NoError(t, err)
 	assert.Equal(t, 200, ctx.GetStatus())
 
-	body := ctx.GetBody().(*impersonation.ListResponse)
-	assert.Len(t, body.Sessions, 3)
-	assert.Equal(t, 3, body.Total)
-	assert.Equal(t, 10, body.Limit)
-	assert.Equal(t, 0, body.Offset)
+	body := ctx.GetBody().(*impersonation.ListSessionsResponse)
+	assert.Len(t, body.Data, 3)
+	assert.Equal(t, int64(3), body.Pagination.Total)
+	assert.Equal(t, 10, body.Pagination.Limit)
+	assert.Equal(t, 0, body.Pagination.Offset)
 }
 
 func TestHandler_ListImpersonations_WithFilters(t *testing.T) {
@@ -351,22 +651,22 @@ func TestHandler_ListImpersonations_WithFilters(t *testing.T) {
 		}
 
 		session := &schema.ImpersonationSession{
-			ID:             xid.New(),
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   targetID,
 			Active:         true,
 			ExpiresAt:      time.Now().Add(1 * time.Hour),
 			Reason:         "Test session",
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
 		}
+		session.ID = xid.New()
+		session.CreatedAt = time.Now()
+		session.UpdatedAt = time.Now()
 		repo.sessions[session.ID.String()] = session
 	}
 
 	// Filter by target user
 	ctx := newMockForgeContext("GET", "/api/impersonation", nil)
-	ctx.request.URL.RawQuery = "org_id=" + orgID.String() +
+	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() +
 		"&target_user_id=" + target.ID.String() +
 		"&limit=10"
 
@@ -375,9 +675,9 @@ func TestHandler_ListImpersonations_WithFilters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 200, ctx.GetStatus())
 
-	body := ctx.GetBody().(*impersonation.ListResponse)
-	assert.Len(t, body.Sessions, 3) // Only first 3 sessions
-	assert.Equal(t, 3, body.Total)
+	body := ctx.GetBody().(*impersonation.ListSessionsResponse)
+	assert.Len(t, body.Data, 3) // Only first 3 sessions
+	assert.Equal(t, int64(3), body.Pagination.Total)
 }
 
 func TestHandler_VerifyImpersonation_Active(t *testing.T) {
@@ -387,15 +687,15 @@ func TestHandler_VerifyImpersonation_Active(t *testing.T) {
 
 	sessionID := xid.New()
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	reqBody := impersonation.VerifyRequest{
@@ -444,7 +744,6 @@ func TestHandler_ListAuditEvents_Success(t *testing.T) {
 	// Create audit events
 	for i := 0; i < 3; i++ {
 		event := &schema.ImpersonationAuditEvent{
-			ID:              xid.New(),
 			ImpersonationID: impID,
 			AppID:           orgID,
 			EventType:       "test_event",
@@ -454,13 +753,14 @@ func TestHandler_ListAuditEvents_Success(t *testing.T) {
 				"target_user_id":  target.ID.String(),
 				"impersonator_id": admin.ID.String(),
 			},
-			CreatedAt: time.Now(),
 		}
+		event.ID = xid.New()
+		event.CreatedAt = time.Now()
 		repo.auditEvents[event.ID.String()] = event
 	}
 
 	ctx := newMockForgeContext("GET", "/api/impersonation/audit", nil)
-	ctx.request.URL.RawQuery = "org_id=" + orgID.String() + "&limit=10&offset=0"
+	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() + "&limit=10&offset=0"
 
 	err := handler.ListAuditEvents(ctx)
 
@@ -487,17 +787,17 @@ func TestHandler_ListAuditEvents_FilterByImpersonationID(t *testing.T) {
 		}
 
 		event := &schema.ImpersonationAuditEvent{
-			ID:              xid.New(),
 			ImpersonationID: impID,
 			AppID:           orgID,
 			EventType:       "test_event",
-			CreatedAt:       time.Now(),
 		}
+		event.ID = xid.New()
+		event.CreatedAt = time.Now()
 		repo.auditEvents[event.ID.String()] = event
 	}
 
 	ctx := newMockForgeContext("GET", "/api/impersonation/audit", nil)
-	ctx.request.URL.RawQuery = "org_id=" + orgID.String() +
+	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() +
 		"&impersonation_id=" + impID1.String() +
 		"&limit=10"
 
@@ -516,7 +816,7 @@ func TestHandler_PaginationDefaults(t *testing.T) {
 	orgID := xid.New()
 
 	ctx := newMockForgeContext("GET", "/api/impersonation", nil)
-	ctx.request.URL.RawQuery = "org_id=" + orgID.String()
+	ctx.Request().URL.RawQuery = "org_id=" + orgID.String()
 	// No limit/offset specified
 
 	err := handler.ListImpersonations(ctx)
@@ -524,7 +824,7 @@ func TestHandler_PaginationDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 200, ctx.GetStatus())
 
-	body := ctx.GetBody().(*impersonation.ListResponse)
-	assert.Equal(t, 20, body.Limit) // Default limit
-	assert.Equal(t, 0, body.Offset) // Default offset
+	body := ctx.GetBody().(*impersonation.ListSessionsResponse)
+	assert.Equal(t, 20, body.Pagination.Limit) // Default limit
+	assert.Equal(t, 0, body.Pagination.Offset) // Default offset
 }

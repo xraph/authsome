@@ -26,7 +26,7 @@ func NewAuditHandler(service *audit.Service) *AuditHandler {
 // Query params: limit, offset, userId, action, resource, ipAddress, since, until, sortBy, sortOrder
 func (h *AuditHandler) ListEvents(c forge.Context) error {
 	if h.service == nil {
-		return c.JSON(http.StatusNotImplemented, &ErrorResponse{Error: "audit service not available",})
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
 	}
 
 	q := c.Request().URL.Query()
@@ -96,7 +96,7 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "Failed to list audit events",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to list audit events"))
 	}
 
 	// Set pagination headers for backward compatibility

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/forge"
 	"golang.org/x/time/rate"
 )
@@ -48,7 +48,15 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 				})
 			}
 
-			// Store organization context (3-tier architecture) and token info in forge context values
+			// Store organization context (3-tier architecture) and token info
+			// Set in both contexts package AND forge context for compatibility
+			ctx := c.Request().Context()
+			ctx = contexts.SetAppID(ctx, provToken.AppID)
+			ctx = contexts.SetEnvironmentID(ctx, provToken.EnvironmentID)
+			ctx = contexts.SetOrganizationID(ctx, provToken.OrganizationID)
+			c.Request().WithContext(ctx)
+			
+			// Also store in Forge context for backwards compatibility with other middleware
 			c.Set("app_id", provToken.AppID)
 			c.Set("environment_id", provToken.EnvironmentID)
 			c.Set("organization_id", provToken.OrganizationID)
@@ -65,15 +73,17 @@ func (p *Plugin) OrgResolutionMiddleware() func(func(forge.Context) error) func(
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
 			// Organization context should already be set by AuthMiddleware (3-tier: app, env, org)
-			appID := c.Get("app_id")
-			envID := c.Get("environment_id")
-			orgID := c.Get("organization_id")
+			ctx := c.Request().Context()
+			appID, hasApp := contexts.GetAppID(ctx)
+			envID, hasEnv := contexts.GetEnvironmentID(ctx)
+			orgID, hasOrg := contexts.GetOrganizationID(ctx)
 
-			if appID == nil || envID == nil || orgID == nil {
+			// Check if all required context IDs are present and valid
+			if !hasApp || !hasEnv || !hasOrg || appID.IsNil() || envID.IsNil() || orgID.IsNil() {
 				return c.JSON(http.StatusForbidden, &ErrorResponse{
 					Schemas: []string{SchemaError},
 					Status:  http.StatusForbidden,
-					Detail:  "Organization context not found",
+					Detail:  "Organization context required for SCIM operations",
 				})
 			}
 
@@ -96,16 +106,16 @@ func (p *Plugin) RateLimitMiddleware() func(func(forge.Context) error) func(forg
 
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			orgID := c.Get("organization_id") // Updated to organization_id for 3-tier architecture
-			if orgID == nil {
-				// No org ID, skip rate limiting
+			// Get organization ID from context
+			ctx := c.Request().Context()
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				// No valid org ID, skip rate limiting
 				return next(c)
 			}
 
-			orgIDStr := orgID.(xid.ID)
-
 			// Get or create rate limiter for this organization
-			limiterInterface, _ := limiters.LoadOrStore(orgIDStr.String(), rate.NewLimiter(
+			limiterInterface, _ := limiters.LoadOrStore(orgID.String(), rate.NewLimiter(
 				rate.Limit(float64(p.config.RateLimit.RequestsPerMin)/60.0), // Per second rate
 				p.config.RateLimit.BurstSize,
 			))
@@ -180,11 +190,16 @@ func (p *Plugin) LoggingMiddleware() func(func(forge.Context) error) func(forge.
 
 			duration := time.Since(start)
 
-			// Log the operation
-			orgID := c.Get("organization_id") // Updated to organization_id for 3-tier architecture
-			if orgID != nil {
-				// TODO: Create provisioning log entry
-				_ = duration // Use duration for logging
+			// Log the operation with organization context
+			ctx := c.Request().Context()
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if ok && !orgID.IsNil() {
+				// Record metrics
+				metrics.RecordRequestDuration(c.Request().Method+" "+c.Request().URL.Path, duration)
+				
+				// TODO: Create provisioning log entry in database
+				// This would call service.CreateProvisioningLog() with operation details
+				_ = orgID // Use orgID for logging
 			}
 
 			return err

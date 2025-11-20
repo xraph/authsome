@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/schema"
+	authsometesting "github.com/xraph/authsome/testing"
 )
 
 func TestMiddleware_Handle_WithImpersonation(t *testing.T) {
@@ -30,7 +31,6 @@ func TestMiddleware_Handle_WithImpersonation(t *testing.T) {
 	sessionSvc.sessions[sessionID.String()] = session
 
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
@@ -38,8 +38,9 @@ func TestMiddleware_Handle_WithImpersonation(t *testing.T) {
 		SessionToken:   sessionToken,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	config := DefaultConfig()
@@ -53,11 +54,8 @@ func TestMiddleware_Handle_WithImpersonation(t *testing.T) {
 		Value: sessionID.String(),
 	})
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.Handle()
 	err := handler(ctx)
@@ -95,11 +93,8 @@ func TestMiddleware_Handle_WithoutImpersonation(t *testing.T) {
 		Value: sessionID.String(),
 	})
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.Handle()
 	err := handler(ctx)
@@ -120,11 +115,8 @@ func TestMiddleware_RequireNoImpersonation_Allowed(t *testing.T) {
 
 	// Create context without impersonation
 	req := httptest.NewRequest("GET", "/test", nil)
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.RequireNoImpersonation()
 	err := handler(ctx)
@@ -150,11 +142,8 @@ func TestMiddleware_RequireNoImpersonation_Blocked(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.RequireNoImpersonation()
 	err := handler(ctx)
@@ -181,11 +170,8 @@ func TestMiddleware_RequireImpersonation_Allowed(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.RequireImpersonation()
 	err := handler(ctx)
@@ -201,11 +187,8 @@ func TestMiddleware_RequireImpersonation_Blocked(t *testing.T) {
 
 	// Create context without impersonation
 	req := httptest.NewRequest("GET", "/test", nil)
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.RequireImpersonation()
 	err := handler(ctx)
@@ -230,11 +213,8 @@ func TestMiddleware_GetImpersonationContext(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	retrieved := GetImpersonationContext(ctx)
 
@@ -248,11 +228,8 @@ func TestMiddleware_GetImpersonationContext(t *testing.T) {
 
 func TestMiddleware_GetImpersonationContext_NotPresent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	retrieved := GetImpersonationContext(ctx)
 
@@ -293,15 +270,12 @@ func TestMiddleware_IsImpersonating(t *testing.T) {
 			if tt.context != nil {
 				reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, tt.context)
 				req = req.WithContext(reqCtx)
-			}
+		}
 
-			ctx := &mockForgeContext{
-				request:  req,
-				response: httptest.NewRecorder(),
-				params:   make(map[string]string),
-			}
+		mock := authsometesting.Mock{}
+		ctx := mock.NewMockForgeContext(req)
 
-			result := IsImpersonating(ctx)
+		result := IsImpersonating(ctx)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -319,11 +293,8 @@ func TestMiddleware_GetImpersonatorID(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	result := GetImpersonatorID(ctx)
 
@@ -333,11 +304,8 @@ func TestMiddleware_GetImpersonatorID(t *testing.T) {
 
 func TestMiddleware_GetImpersonatorID_NotImpersonating(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	result := GetImpersonatorID(ctx)
 
@@ -356,11 +324,8 @@ func TestMiddleware_GetTargetUserID(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	result := GetTargetUserID(ctx)
 
@@ -384,11 +349,8 @@ func TestMiddleware_AuditImpersonationAction(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.AuditImpersonationAction()
 	err := handler(ctx)
@@ -416,11 +378,8 @@ func TestMiddleware_AuditImpersonationAction_Disabled(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	handler := middleware.AuditImpersonationAction()
 	err := handler(ctx)
@@ -451,7 +410,6 @@ func TestMiddleware_IndicatorMessage_Custom(t *testing.T) {
 	sessionSvc.sessions[sessionID.String()] = session
 
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
@@ -459,8 +417,9 @@ func TestMiddleware_IndicatorMessage_Custom(t *testing.T) {
 		SessionToken:   sessionToken,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	config := DefaultConfig()
@@ -482,11 +441,8 @@ func TestMiddleware_IndicatorMessage_Custom(t *testing.T) {
 	reqCtx := context.WithValue(req.Context(), ImpersonationContextKey, impCtx)
 	req = req.WithContext(reqCtx)
 
-	ctx := &mockForgeContext{
-		request:  req,
-		response: httptest.NewRecorder(),
-		params:   make(map[string]string),
-	}
+	mock := authsometesting.Mock{}
+	ctx := mock.NewMockForgeContext(req)
 
 	retrieved := GetImpersonationContext(ctx)
 	require.NotNil(t, retrieved)

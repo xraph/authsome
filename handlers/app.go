@@ -780,7 +780,7 @@ func (h *AppHandler) UpdatePolicy(c forge.Context) error {
 	// Validate expression syntax using RBAC parser
 	parser := rbac.NewParser()
 	if _, err := parser.Parse(body.Expression); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid expression: " + err.Error()})
+		return c.JSON(400, errs.InvalidPolicy("invalid expression: "+err.Error()))
 	}
 	if err := h.policyRepo.Update(c.Request().Context(), body.ID, body.Expression); err != nil {
 		return handleError(c, err, "BAD_REQUEST", "Bad request", http.StatusBadRequest)

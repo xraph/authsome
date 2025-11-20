@@ -6,24 +6,17 @@ import (
 	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
 type Handler struct{ svc *Service }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
 
 type SessionsResponse struct {
 	Sessions interface{} `json:"sessions"`

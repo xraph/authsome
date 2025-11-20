@@ -179,7 +179,7 @@ func TestNewService(t *testing.T) {
 
 	assert.NotNil(t, service)
 	assert.NotNil(t, service.globalConfig)
-	assert.NotNil(t, service.orgConfigs)
+	assert.NotNil(t, service.appConfigs)
 }
 
 func TestService_SetAndGet(t *testing.T) {
@@ -188,19 +188,19 @@ func TestService_SetAndGet(t *testing.T) {
 
 	service := NewService(mockConfig)
 
-	// Set org-specific override
-	err := service.Set("org-123", "auth.test.key", "org-value")
+	// Set app-specific override
+	err := service.Set("app-123", "auth.test.key", "app-value")
 	require.NoError(t, err)
 
-	// Get org-specific value
-	value := service.Get("org-123", "auth.test.key")
-	assert.Equal(t, "org-value", value)
+	// Get app-specific value
+	value := service.Get("app-123", "auth.test.key")
+	assert.Equal(t, "app-value", value)
 
-	// Get global value for different org
-	value = service.Get("org-456", "auth.test.key")
+	// Get global value for different app
+	value = service.Get("app-456", "auth.test.key")
 	assert.Equal(t, "global-value", value)
 
-	// Get global value with no org
+	// Get global value with no app
 	value = service.Get("", "auth.test.key")
 	assert.Equal(t, "global-value", value)
 }
@@ -211,16 +211,16 @@ func TestService_GetString(t *testing.T) {
 
 	service := NewService(mockConfig)
 
-	// Set org-specific override
-	err := service.Set("org-123", "auth.client.id", "custom-client")
+	// Set app-specific override
+	err := service.Set("app-123", "auth.client.id", "custom-client")
 	require.NoError(t, err)
 
-	// Test org-specific value
-	clientId := service.GetString("org-123", "auth.client.id")
+	// Test app-specific value
+	clientId := service.GetString("app-123", "auth.client.id")
 	assert.Equal(t, "custom-client", clientId)
 
 	// Test fallback to global
-	clientId = service.GetString("org-456", "auth.client.id")
+	clientId = service.GetString("app-456", "auth.client.id")
 	assert.Equal(t, "default-client", clientId)
 }
 
@@ -230,16 +230,16 @@ func TestService_GetInt(t *testing.T) {
 
 	service := NewService(mockConfig)
 
-	// Set org-specific override
-	err := service.Set("org-123", "auth.session.timeout", 120)
+	// Set app-specific override
+	err := service.Set("app-123", "auth.session.timeout", 120)
 	require.NoError(t, err)
 
-	// Test org-specific value
-	timeout := service.GetInt("org-123", "auth.session.timeout")
+	// Test app-specific value
+	timeout := service.GetInt("app-123", "auth.session.timeout")
 	assert.Equal(t, 120, timeout)
 
 	// Test fallback to global
-	timeout = service.GetInt("org-456", "auth.session.timeout")
+	timeout = service.GetInt("app-456", "auth.session.timeout")
 	assert.Equal(t, 60, timeout)
 }
 
@@ -249,16 +249,16 @@ func TestService_GetBool(t *testing.T) {
 
 	service := NewService(mockConfig)
 
-	// Set org-specific override
-	err := service.Set("org-123", "auth.features.enabled", false)
+	// Set app-specific override
+	err := service.Set("app-123", "auth.features.enabled", false)
 	require.NoError(t, err)
 
-	// Test org-specific value
-	enabled := service.GetBool("org-123", "auth.features.enabled")
+	// Test app-specific value
+	enabled := service.GetBool("app-123", "auth.features.enabled")
 	assert.False(t, enabled)
 
 	// Test fallback to global
-	enabled = service.GetBool("org-456", "auth.features.enabled")
+	enabled = service.GetBool("app-456", "auth.features.enabled")
 	assert.True(t, enabled)
 }
 
@@ -272,84 +272,84 @@ func TestService_IsSet(t *testing.T) {
 	assert.True(t, service.IsSet("", "auth.key1"))
 	assert.False(t, service.IsSet("", "auth.key2"))
 
-	// Set org-specific key
-	err := service.Set("org-123", "auth.key2", "value2")
+	// Set app-specific key
+	err := service.Set("app-123", "auth.key2", "value2")
 	require.NoError(t, err)
 
-	// Test org-specific key
-	assert.True(t, service.IsSet("org-123", "auth.key2"))
-	assert.False(t, service.IsSet("org-456", "auth.key2"))
+	// Test app-specific key
+	assert.True(t, service.IsSet("app-123", "auth.key2"))
+	assert.False(t, service.IsSet("app-456", "auth.key2"))
 }
 
-func TestService_LoadOrganizationConfig(t *testing.T) {
+func TestService_LoadAppConfig(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	service := NewService(mockConfig)
 
-	orgConfig := map[string]interface{}{
+	appConfig := map[string]interface{}{
 		"auth": map[string]interface{}{
 			"oauth": map[string]interface{}{
 				"google": map[string]interface{}{
-					"clientId": "org-client-id",
+					"clientId": "app-client-id",
 					"enabled":  true,
 				},
 			},
 		},
 	}
 
-	err := service.LoadOrganizationConfig("org-123", orgConfig)
+	err := service.LoadAppConfig("app-123", appConfig)
 	require.NoError(t, err)
 
 	// Test nested key access
-	clientId := service.GetString("org-123", "auth.oauth.google.clientId")
-	assert.Equal(t, "org-client-id", clientId)
+	clientId := service.GetString("app-123", "auth.oauth.google.clientId")
+	assert.Equal(t, "app-client-id", clientId)
 
-	enabled := service.GetBool("org-123", "auth.oauth.google.enabled")
+	enabled := service.GetBool("app-123", "auth.oauth.google.enabled")
 	assert.True(t, enabled)
 }
 
-func TestService_RemoveOrganizationConfig(t *testing.T) {
+func TestService_RemoveAppConfig(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	mockConfig.Set("auth.test.key", "global-value")
 
 	service := NewService(mockConfig)
 
-	// Set org-specific config
-	err := service.Set("org-123", "auth.test.key", "org-value")
+	// Set app-specific config
+	err := service.Set("app-123", "auth.test.key", "app-value")
 	require.NoError(t, err)
 
-	// Verify org-specific value
-	value := service.GetString("org-123", "auth.test.key")
-	assert.Equal(t, "org-value", value)
+	// Verify app-specific value
+	value := service.GetString("app-123", "auth.test.key")
+	assert.Equal(t, "app-value", value)
 
-	// Remove org config
-	service.RemoveOrganizationConfig("org-123")
+	// Remove app config
+	service.RemoveAppConfig("app-123")
 
 	// Should now fall back to global
-	value = service.GetString("org-123", "auth.test.key")
+	value = service.GetString("app-123", "auth.test.key")
 	assert.Equal(t, "global-value", value)
 }
 
-func TestService_GetOrganizationConfig(t *testing.T) {
+func TestService_GetAppConfig(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	service := NewService(mockConfig)
 
-	orgConfig := map[string]interface{}{
+	appConfig := map[string]interface{}{
 		"key1": "value1",
 		"key2": 123,
 		"key3": true,
 	}
 
-	err := service.LoadOrganizationConfig("org-123", orgConfig)
+	err := service.LoadAppConfig("app-123", appConfig)
 	require.NoError(t, err)
 
-	// Get org config
-	retrieved := service.GetOrganizationConfig("org-123")
+	// Get app config
+	retrieved := service.GetAppConfig("app-123")
 	assert.Equal(t, "value1", retrieved["key1"])
 	assert.Equal(t, 123, retrieved["key2"])
 	assert.Equal(t, true, retrieved["key3"])
 
-	// Test non-existent org
-	emptyConfig := service.GetOrganizationConfig("org-456")
+	// Test non-existent app
+	emptyConfig := service.GetAppConfig("app-456")
 	assert.Empty(t, emptyConfig)
 }
 
@@ -358,16 +358,16 @@ func TestService_NestedKeyOperations(t *testing.T) {
 	service := NewService(mockConfig)
 
 	// Test setting nested keys
-	err := service.Set("org-123", "level1.level2.level3.key", "deep-value")
+	err := service.Set("app-123", "level1.level2.level3.key", "deep-value")
 	require.NoError(t, err)
 
 	// Verify the value was set
-	value := service.GetString("org-123", "level1.level2.level3.key")
+	value := service.GetString("app-123", "level1.level2.level3.key")
 	assert.Equal(t, "deep-value", value)
 
 	// Verify nested structure was created
-	orgConfig := service.GetOrganizationConfig("org-123")
-	assert.NotNil(t, orgConfig["level1"])
+	appConfig := service.GetAppConfig("app-123")
+	assert.NotNil(t, appConfig["level1"])
 }
 
 func TestService_ConcurrentAccess(t *testing.T) {
@@ -380,9 +380,9 @@ func TestService_ConcurrentAccess(t *testing.T) {
 	// Writer goroutines
 	for i := 0; i < 10; i++ {
 		go func(id int) {
-			orgID := "org-" + string(rune('A'+id))
+			appID := "app-" + string(rune('A'+id))
 			for j := 0; j < 100; j++ {
-				_ = service.Set(orgID, "auth.test.key", j)
+				_ = service.Set(appID, "auth.test.key", j)
 			}
 			done <- true
 		}(i)
@@ -391,9 +391,9 @@ func TestService_ConcurrentAccess(t *testing.T) {
 	// Reader goroutines
 	for i := 0; i < 10; i++ {
 		go func(id int) {
-			orgID := "org-" + string(rune('A'+id))
+			appID := "app-" + string(rune('A'+id))
 			for j := 0; j < 100; j++ {
-				_ = service.GetString(orgID, "auth.test.key")
+				_ = service.GetString(appID, "auth.test.key")
 			}
 			done <- true
 		}(i)
@@ -408,22 +408,22 @@ func TestService_ConcurrentAccess(t *testing.T) {
 	assert.True(t, true)
 }
 
-func TestService_SetRequiresOrgID(t *testing.T) {
+func TestService_SetRequiresAppID(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	service := NewService(mockConfig)
 
-	// Setting without org ID should fail
+	// Setting without app ID should fail
 	err := service.Set("", "auth.test.key", "value")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "organization ID is required")
+	assert.Contains(t, err.Error(), "app ID is required")
 }
 
-func TestService_LoadOrganizationConfigRequiresOrgID(t *testing.T) {
+func TestService_LoadAppConfigRequiresAppID(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	service := NewService(mockConfig)
 
-	// Loading config without org ID should fail
-	err := service.LoadOrganizationConfig("", map[string]interface{}{})
+	// Loading config without app ID should fail
+	err := service.LoadAppConfig("", map[string]interface{}{})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "organization ID is required")
+	assert.Contains(t, err.Error(), "app ID is required")
 }

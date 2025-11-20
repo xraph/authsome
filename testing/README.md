@@ -2,15 +2,27 @@
 
 A comprehensive testing package for developers building applications with AuthSome authentication. This package provides mocked services, helpers, and utilities to test your integration without requiring a full AuthSome setup.
 
+**✨ Version 2.0** - Now with full multi-tenancy support, `core/contexts` integration, and Forge HTTP handler testing.
+
 ## Overview
 
 The testing package allows you to:
-- Create mock users, organizations, and sessions
-- Simulate authenticated contexts
+- Create mock users, organizations, apps, and environments
+- Simulate authenticated contexts with full multi-tenant hierarchy
 - Test authorization scenarios (roles, permissions)
 - Verify session handling and expiration
-- Test multi-tenancy scenarios
+- Test multi-tenancy scenarios across apps and environments
 - Use pre-configured common scenarios
+- Test HTTP handlers with mock Forge contexts
+
+## What's New in v2.0
+
+- **Multi-Tenancy Support**: Full App → Environment → Organization hierarchy
+- **Core Contexts Integration**: Uses AuthSome's actual context system from `core/contexts`
+- **Forge HTTP Testing**: Mock Forge contexts for testing HTTP handlers
+- **Builder Pattern**: Fluent API for creating complex test data
+- **OrganizationService Mock**: Complete organization service implementation
+- **Updated API**: All methods now use `xid.ID` instead of strings
 
 ## Quick Start
 
@@ -25,7 +37,7 @@ func TestMyHandler(t *testing.T) {
     mock := authsometesting.NewMock(t)
     defer mock.Reset()
 
-    // Quick setup: create authenticated context
+    // Quick setup: create authenticated context with full tenant hierarchy
     ctx := mock.NewTestContext()
 
     // Your test code here
@@ -40,21 +52,46 @@ func TestMyHandler(t *testing.T) {
 
 The `Mock` struct is the main entry point for testing. It provides:
 - Mock user, session, and organization services
-- In-memory storage for test data
+- In-memory storage for test data (Apps, Environments, Organizations, Users, Sessions)
 - Helper methods for creating test scenarios
 - Context manipulation utilities
+- Default entities (app, environment, organization) auto-created
 
 ```go
 mock := authsometesting.NewMock(t)
 defer mock.Reset() // Clean up after tests
+
+// Access default entities
+defaultApp := mock.GetDefaultApp()
+defaultEnv := mock.GetDefaultEnvironment()
+defaultOrg := mock.GetDefaultOrg()
 ```
 
-### Creating Test Data
+### Multi-Tenancy Architecture
+
+The testing framework mirrors AuthSome's multi-tenant architecture:
+
+```
+App (e.g., "My SaaS Platform")
+  └── Environment (e.g., "production", "staging")
+      └── Organization (e.g., "Acme Corp", "TechStart Inc")
+          └── Users/Members
+```
+
+Every authenticated context includes:
+- **App ID**: Top-level tenant
+- **Environment ID**: Per-app environment
+- **Organization ID**: User-created workspace
+- **User ID**: Individual user
+
+## Creating Test Data
+
+### Simple Methods
 
 #### Users
 
 ```go
-// Create a basic user
+// Create a basic user (auto-added to default org)
 user := mock.CreateUser("user@example.com", "Test User")
 
 // Create a user with specific role
@@ -62,6 +99,18 @@ adminUser := mock.CreateUserWithRole("admin@example.com", "Admin", "admin")
 
 // Get user
 user, err := mock.GetUser(userID)
+```
+
+#### Apps and Environments
+
+```go
+// Get defaults (auto-created)
+app := mock.GetDefaultApp()
+env := mock.GetDefaultEnvironment()
+
+// Access via getters
+app, err := mock.GetApp(appID)
+env, err := mock.GetEnvironment(envID)
 ```
 
 #### Organizations
@@ -73,8 +122,14 @@ org := mock.GetDefaultOrg()
 // Create additional organization
 org := mock.CreateOrganization("My Org", "my-org")
 
+// Get organization
+org, err := mock.GetOrganization(orgID)
+
 // Add user to organization
 member := mock.AddUserToOrg(userID, orgID, "member")
+
+// Get user's organizations
+orgs, err := mock.GetUserOrgs(userID)
 ```
 
 #### Sessions
@@ -90,12 +145,46 @@ expiredSession := mock.CreateExpiredSession(userID, orgID)
 session, err := mock.GetSession(sessionID)
 ```
 
-### Working with Context
+### Builder Pattern (Fluent API)
 
-#### Authenticated Context
+For more complex test data creation:
 
 ```go
-// Method 1: Quick way - creates user, org, and session automatically
+// Build a custom app
+app := mock.NewApp().
+    WithName("Custom App").
+    WithSlug("custom-app").
+    Build()
+
+// Build a custom environment
+env := mock.NewEnvironment(app.ID).
+    WithName("staging").
+    WithSlug("staging").
+    Build()
+
+// Build a custom organization
+org := mock.NewOrganization().
+    WithName("Acme Corp").
+    WithSlug("acme").
+    WithApp(app.ID).
+    WithEnvironment(env.ID).
+    Build()
+
+// Build a custom user
+user := mock.NewUser().
+    WithEmail("john@acme.com").
+    WithName("John Doe").
+    WithRole("admin").
+    WithEmailVerified(true).
+    Build()
+```
+
+## Working with Context
+
+### Creating Authenticated Contexts
+
+```go
+// Method 1: Quick way - creates user, org, session with all tenant levels
 ctx := mock.NewTestContext()
 
 // Method 2: With specific user
@@ -106,37 +195,43 @@ ctx := mock.NewTestContextWithUser(user)
 user := mock.CreateUser("user@example.com", "Test User")
 session := mock.CreateSession(user.ID, mock.GetDefaultOrg().ID)
 ctx := context.Background()
+ctx = mock.WithApp(ctx, mock.GetDefaultApp().ID)
+ctx = mock.WithEnvironment(ctx, mock.GetDefaultEnvironment().ID)
+ctx = mock.WithOrganization(ctx, mock.GetDefaultOrg().ID)
 ctx = mock.WithSession(ctx, session.ID)
-ctx = mock.WithUser(ctx, user.ID)
-ctx = mock.WithOrg(ctx, mock.GetDefaultOrg().ID)
 ```
 
-#### Retrieving from Context
+### Retrieving from Context
+
+The testing package uses AuthSome's actual context system (`core/contexts`):
 
 ```go
-// Get logged-in user
-user, ok := authsometesting.GetLoggedInUser(ctx)
-if !ok {
+// Get user ID
+userID, ok := authsometesting.GetUserID(ctx)
+if !ok || userID.IsNil() {
     // Not authenticated
 }
 
-// Get user ID
-userID, ok := authsometesting.GetLoggedInUserID(ctx)
+// Get app ID
+appID, ok := authsometesting.GetAppID(ctx)
 
-// Get current organization
-org, ok := authsometesting.GetCurrentOrg(ctx)
+// Get environment ID
+envID, ok := authsometesting.GetEnvironmentID(ctx)
 
 // Get organization ID
-orgID, ok := authsometesting.GetCurrentOrgID(ctx)
+orgID, ok := authsometesting.GetOrganizationID(ctx)
 
 // Get session
-session, ok := authsometesting.GetCurrentSession(ctx)
+session, ok := authsometesting.GetSession(ctx)
 
-// Get session ID
-sessionID, ok := authsometesting.GetCurrentSessionID(ctx)
+// Get full entities from context using Mock
+user, err := mock.GetUserFromContext(ctx)
+app, err := mock.GetAppFromContext(ctx)
+env, err := mock.GetEnvironmentFromContext(ctx)
+org, err := mock.GetOrganizationFromContext(ctx)
 ```
 
-### Authorization Helpers
+## Authorization Helpers
 
 ```go
 // Require authentication
@@ -158,65 +253,14 @@ if err != nil {
 }
 ```
 
-### Common Test Errors
-
-The package provides standard test errors:
-
-```go
-authsometesting.ErrNotAuthenticated        // User not authenticated
-authsometesting.ErrInvalidSession          // Session invalid or expired
-authsometesting.ErrUserNotFound            // User not found
-authsometesting.ErrUserInactive            // User account inactive
-authsometesting.ErrOrgNotFound             // Organization not found
-authsometesting.ErrNotOrgMember            // User not a member
-authsometesting.ErrInsufficientPermissions // User lacks required role
-```
-
-## Common Scenarios
-
-The package includes pre-configured scenarios for typical test cases:
-
-```go
-scenarios := mock.NewCommonScenarios()
-
-// Authenticated user with verified email
-scenario := scenarios.AuthenticatedUser()
-
-// Admin user with elevated privileges
-scenario := scenarios.AdminUser()
-
-// User with unverified email
-scenario := scenarios.UnverifiedUser()
-
-// User belonging to multiple organizations
-scenario := scenarios.MultiOrgUser()
-
-// User with expired session
-scenario := scenarios.ExpiredSession()
-
-// No authentication
-scenario := scenarios.UnauthenticatedUser()
-
-// Inactive user account
-scenario := scenarios.InactiveUser()
-
-// Use scenario in tests
-user := scenario.User
-org := scenario.Org
-session := scenario.Session
-ctx := scenario.Context
-```
-
 ## Mock Services
-
-The package provides mock implementations of core services:
 
 ### UserService
 
 ```go
 // Create user
 user, err := mock.UserService.Create(ctx, &user.CreateUserRequest{
-    Email: "user@example.com",
+    Email: "test@example.com",
     Name:  "Test User",
 })
 
@@ -224,7 +268,7 @@ user, err := mock.UserService.Create(ctx, &user.CreateUserRequest{
 user, err := mock.UserService.GetByID(ctx, userID)
 
 // Get user by email
-user, err := mock.UserService.GetByEmail(ctx, "user@example.com")
+user, err := mock.UserService.GetByEmail(ctx, "test@example.com")
 
 // Update user
 user, err := mock.UserService.Update(ctx, userID, &user.UpdateUserRequest{
@@ -260,35 +304,25 @@ err := mock.SessionService.Delete(ctx, sessionID)
 ### OrganizationService
 
 ```go
-// Create organization
-org, err := mock.OrganizationService.Create(ctx, &organization.CreateOrganizationRequest{
-    Name: "My Org",
-    Slug: "my-org",
-})
-
 // Get organization by ID
 org, err := mock.OrganizationService.GetByID(ctx, orgID)
 
 // Get organization by slug
 org, err := mock.OrganizationService.GetBySlug(ctx, "my-org")
 
-// Add member
-member, err := mock.OrganizationService.AddMember(ctx, &organization.AddMemberRequest{
-    OrganizationID: orgID,
-    UserID:         userID,
-    Role:           "member",
-})
+// List organizations
+orgsResp, err := mock.OrganizationService.ListOrganizations(ctx, filter)
 
 // Get members
-members, err := mock.OrganizationService.GetMembers(ctx, orgID)
+membersResp, err := mock.OrganizationService.GetMembers(ctx, orgID)
 
 // Get user organizations
 orgs, err := mock.OrganizationService.GetUserOrganizations(ctx, userID)
 ```
 
-## Testing Forge Handlers
+## Testing HTTP Handlers
 
-For testing HTTP handlers that use Forge context:
+### Mock Forge Contexts
 
 ```go
 import (
@@ -302,18 +336,75 @@ func TestHandler(t *testing.T) {
 
     // Create test user
     user := mock.CreateUser("user@example.com", "Test User")
-    org := mock.GetDefaultOrg()
-    session := mock.CreateSession(user.ID, org.ID)
 
-    // Create authenticated request
+    // Quick authenticated Forge context
+    forgeCtx := mock.QuickAuthenticatedForgeContext("GET", "/api/profile")
+
+    // Or with specific user
+    forgeCtx := mock.QuickAuthenticatedForgeContextWithUser("POST", "/api/data", user)
+
+    // Or full control
     req := httptest.NewRequest("GET", "/api/profile", nil)
-    forgeCtx := mock.MockAuthenticatedForgeContext(req, user, org, session)
+    session := mock.CreateSession(user.ID, mock.GetDefaultOrg().ID)
+    forgeCtx := mock.MockAuthenticatedForgeContext(
+        req,
+        user,
+        mock.GetDefaultApp(),
+        mock.GetDefaultEnvironment(),
+        mock.GetDefaultOrg(),
+        session,
+    )
 
     // Test your handler
     err := yourHandler.HandleProfile(forgeCtx)
     assert.NoError(t, err)
+    assert.Equal(t, 200, forgeCtx.GetStatus())
 }
 ```
+
+## Common Scenarios
+
+Pre-configured scenarios for common testing needs:
+
+```go
+scenarios := mock.CommonScenarios()
+
+// Authenticated user
+scenario := scenarios.AuthenticatedUser()
+ctx := scenario.Context
+user := scenario.User
+app := scenario.App
+env := scenario.Environment
+org := scenario.Org
+
+// Admin user
+scenario := scenarios.AdminUser()
+
+// Unverified user
+scenario := scenarios.UnverifiedUser()
+
+// Multi-org user
+scenario := scenarios.MultiOrgUser()
+
+// Expired session
+scenario := scenarios.ExpiredSession()
+
+// Unauthenticated (no auth data)
+scenario := scenarios.UnauthenticatedUser()
+
+// Inactive user (deleted/suspended)
+scenario := scenarios.InactiveUser()
+```
+
+Each scenario includes:
+- `Name`: Scenario identifier
+- `Description`: What the scenario represents
+- `User`: Test user (if applicable)
+- `App`: Test app
+- `Environment`: Test environment
+- `Org`: Test organization
+- `Session`: Test session (if applicable)
+- `Context`: Pre-configured context
 
 ## Complete Examples
 
@@ -324,70 +415,21 @@ func TestGetUserProfile(t *testing.T) {
     mock := authsometesting.NewMock(t)
     defer mock.Reset()
 
-    // Handler being tested
-    getUserProfile := func(ctx context.Context) (map[string]string, error) {
-        user, ok := authsometesting.GetLoggedInUser(ctx)
-        if !ok {
-            return nil, authsometesting.ErrNotAuthenticated
-        }
-        return map[string]string{
-            "id":    user.ID,
-            "email": user.Email,
-            "name":  user.Name,
-        }, nil
-    }
+    // Create test data
+    user := mock.CreateUser("john@example.com", "John Doe")
+    ctx := mock.NewTestContextWithUser(user)
 
-    t.Run("authenticated user", func(t *testing.T) {
-        ctx := mock.NewTestContext()
-        profile, err := getUserProfile(ctx)
-        require.NoError(t, err)
-        assert.NotEmpty(t, profile["id"])
-    })
+    // Test handler
+    profile, err := getUserProfile(ctx, mock)
 
-    t.Run("unauthenticated", func(t *testing.T) {
-        ctx := context.Background()
-        _, err := getUserProfile(ctx)
-        assert.Equal(t, authsometesting.ErrNotAuthenticated, err)
-    })
+    // Assertions
+    require.NoError(t, err)
+    assert.Equal(t, "John Doe", profile.Name)
+    assert.Equal(t, "john@example.com", profile.Email)
 }
 ```
 
-### Example 2: Testing Role-Based Access
-
-```go
-func TestAdminOnlyAction(t *testing.T) {
-    mock := authsometesting.NewMock(t)
-    defer mock.Reset()
-
-    // Handler requiring admin role
-    adminAction := func(ctx context.Context) error {
-        user, err := mock.RequireAuth(ctx)
-        if err != nil {
-            return err
-        }
-
-        orgID, _ := authsometesting.GetCurrentOrgID(ctx)
-        _, err = mock.RequireOrgRole(ctx, orgID, "admin")
-        return err
-    }
-
-    t.Run("admin user succeeds", func(t *testing.T) {
-        scenarios := mock.NewCommonScenarios()
-        scenario := scenarios.AdminUser()
-        err := adminAction(scenario.Context)
-        assert.NoError(t, err)
-    })
-
-    t.Run("regular user fails", func(t *testing.T) {
-        scenarios := mock.NewCommonScenarios()
-        scenario := scenarios.AuthenticatedUser()
-        err := adminAction(scenario.Context)
-        assert.Equal(t, authsometesting.ErrInsufficientPermissions, err)
-    })
-}
-```
-
-### Example 3: Testing Multi-Org Scenarios
+### Example 2: Testing Multi-Org Scenario
 
 ```go
 func TestMultiOrgAccess(t *testing.T) {
@@ -398,32 +440,35 @@ func TestMultiOrgAccess(t *testing.T) {
     user := mock.CreateUser("user@example.com", "Test User")
     org1 := mock.GetDefaultOrg()
     org2 := mock.CreateOrganization("Second Org", "second-org")
-    org3 := mock.CreateOrganization("Third Org", "third-org")
-
-    // Add to different orgs with different roles
+    
+    // Add user to second org as admin
     mock.AddUserToOrg(user.ID, org2.ID, "admin")
-    mock.AddUserToOrg(user.ID, org3.ID, "viewer")
 
-    // Test access to each org
-    orgs, err := mock.GetUserOrgs(user.ID)
+    // Test access to org1 (as member)
+    ctx1 := context.Background()
+    ctx1 = mock.WithApp(ctx1, mock.GetDefaultApp().ID)
+    ctx1 = mock.WithEnvironment(ctx1, mock.GetDefaultEnvironment().ID)
+    ctx1 = mock.WithOrganization(ctx1, org1.ID)
+    ctx1 = mock.WithUser(ctx1, user.ID)
+    
+    member, err := mock.RequireOrgMember(ctx1, org1.ID)
     require.NoError(t, err)
-    assert.Len(t, orgs, 3)
+    assert.Equal(t, "member", member.Role)
 
-    // Verify roles
-    ctx := mock.NewTestContextWithUser(user)
+    // Test access to org2 (as admin)
+    ctx2 := context.Background()
+    ctx2 = mock.WithApp(ctx2, mock.GetDefaultApp().ID)
+    ctx2 = mock.WithEnvironment(ctx2, mock.GetDefaultEnvironment().ID)
+    ctx2 = mock.WithOrganization(ctx2, org2.ID)
+    ctx2 = mock.WithUser(ctx2, user.ID)
     
-    _, err = mock.RequireOrgRole(ctx, org1.ID, "member")
-    assert.NoError(t, err)
-    
-    _, err = mock.RequireOrgRole(ctx, org2.ID, "admin")
-    assert.NoError(t, err)
-    
-    _, err = mock.RequireOrgRole(ctx, org3.ID, "admin")
-    assert.Error(t, err) // User is only a viewer
+    member, err = mock.RequireOrgRole(ctx2, org2.ID, "admin")
+    require.NoError(t, err)
+    assert.Equal(t, "admin", member.Role)
 }
 ```
 
-### Example 4: Testing Session Expiration
+### Example 3: Testing Session Expiration
 
 ```go
 func TestSessionExpiration(t *testing.T) {
@@ -431,140 +476,139 @@ func TestSessionExpiration(t *testing.T) {
     defer mock.Reset()
 
     user := mock.CreateUser("user@example.com", "Test User")
+    expiredSession := mock.CreateExpiredSession(user.ID, mock.GetDefaultOrg().ID)
 
-    t.Run("valid session", func(t *testing.T) {
-        session := mock.CreateSession(user.ID, mock.GetDefaultOrg().ID)
-        validated, err := mock.SessionService.Validate(context.Background(), session.Token)
-        require.NoError(t, err)
-        assert.Equal(t, session.ID, validated.ID)
+    // Try to use expired session
+    _, err := mock.SessionService.Validate(context.Background(), expiredSession.Token)
+    assert.Error(t, err)
+    assert.Contains(t, err.Error(), "expired")
+}
+```
+
+### Example 4: Testing with Builder Pattern
+
+```go
+func TestComplexScenario(t *testing.T) {
+    mock := authsometesting.NewMock(t)
+    defer mock.Reset()
+
+    // Build custom app structure
+    app := mock.NewApp().
+        WithName("Production App").
+        WithSlug("prod-app").
+        Build()
+
+    env := mock.NewEnvironment(app.ID).
+        WithName("production").
+        WithSlug("prod").
+        Build()
+
+    org := mock.NewOrganization().
+        WithName("Enterprise Corp").
+        WithSlug("enterprise").
+        WithApp(app.ID).
+        WithEnvironment(env.ID).
+        Build()
+
+    user := mock.NewUser().
+        WithEmail("cto@enterprise.com").
+        WithName("Jane Smith").
+        WithRole("owner").
+        Build()
+
+    // Create context with all custom entities
+    session := mock.CreateSession(user.ID, org.ID)
+    ctx := context.Background()
+    ctx = mock.WithApp(ctx, app.ID)
+    ctx = mock.WithEnvironment(ctx, env.ID)
+    ctx = mock.WithOrganization(ctx, org.ID)
+    ctx = mock.WithSession(ctx, session.ID)
+
+    // Test your application logic
+    // ...
+}
+```
+
+## Error Constants
+
+Common errors you can test against:
+
+```go
+authsometesting.ErrNotAuthenticated      // User not authenticated
+authsometesting.ErrInvalidSession        // Session invalid or expired
+authsometesting.ErrUserNotFound          // User doesn't exist
+authsometesting.ErrOrgNotFound          // Organization doesn't exist
+authsometesting.ErrNotOrgMember         // User not member of org
+authsometesting.ErrInsufficientPermissions // User lacks required permissions
+authsometesting.ErrUserInactive         // User account inactive/deleted
+```
+
+## Thread Safety
+
+All Mock operations are thread-safe and can be used in concurrent tests:
+
+```go
+func TestConcurrent(t *testing.T) {
+    mock := authsometesting.NewMock(t)
+    defer mock.Reset()
+
+    t.Run("user1", func(t *testing.T) {
+        t.Parallel()
+        user := mock.CreateUser("user1@example.com", "User 1")
+        // ... test with user1
     })
 
-    t.Run("expired session", func(t *testing.T) {
-        session := mock.CreateExpiredSession(user.ID, mock.GetDefaultOrg().ID)
-        _, err := mock.SessionService.Validate(context.Background(), session.Token)
-        assert.Error(t, err)
-        assert.Contains(t, err.Error(), "expired")
+    t.Run("user2", func(t *testing.T) {
+        t.Parallel()
+        user := mock.CreateUser("user2@example.com", "User 2")
+        // ... test with user2
     })
 }
 ```
 
 ## Best Practices
 
-### 1. Always Reset Between Tests
+1. **Always call Reset()**: Use `defer mock.Reset()` to ensure test isolation
+2. **Use scenarios for common cases**: Leverage `CommonScenarios()` for standard tests
+3. **Test full hierarchy**: When testing multi-tenancy, include App/Environment/Organization
+4. **Use builders for complex data**: Builder pattern makes complex test data readable
+5. **Verify contexts**: Always check context retrieval with `ok` return values
+6. **Test error paths**: Use error constants to test failure scenarios
+7. **Parallel tests**: Mock is thread-safe, use `t.Parallel()` where appropriate
+
+## Migration from v1.x
+
+If you're upgrading from v1.x:
+
+### API Changes
 
 ```go
-func TestSomething(t *testing.T) {
-    mock := authsometesting.NewMock(t)
-    defer mock.Reset() // Clean up
-    
-    // Your test code
-}
+// Old (v1.x)
+user.ID.String()                       // String IDs
+authsometesting.GetLoggedInUser(ctx)   // Old context helpers
+mock.WithOrg(ctx, orgID)               // Old method name
+
+// New (v2.0)
+user.ID                                // xid.ID directly
+authsometesting.GetUserID(ctx)         // New context helpers
+mock.WithOrganization(ctx, orgID)      // New method name
 ```
 
-### 2. Use Common Scenarios for Typical Cases
+### New Features
 
-```go
-// Instead of manually creating everything
-scenarios := mock.NewCommonScenarios()
-scenario := scenarios.AuthenticatedUser()
+- App and Environment support
+- Builder pattern for test data
+- Forge context mocking
+- OrganizationService mock
+- Core contexts integration
 
-// Use the pre-configured scenario
-result := myHandler(scenario.Context)
-```
+### Breaking Changes
 
-### 3. Test Both Success and Failure Cases
-
-```go
-t.Run("success", func(t *testing.T) {
-    ctx := mock.NewTestContext()
-    // Test success case
-})
-
-t.Run("unauthenticated", func(t *testing.T) {
-    ctx := context.Background()
-    // Test failure case
-})
-```
-
-### 4. Use Table-Driven Tests for Multiple Scenarios
-
-```go
-tests := []struct {
-    name     string
-    setup    func() context.Context
-    wantErr  error
-}{
-    {
-        name:    "authenticated",
-        setup:   func() context.Context { return mock.NewTestContext() },
-        wantErr: nil,
-    },
-    {
-        name:    "unauthenticated",
-        setup:   func() context.Context { return context.Background() },
-        wantErr: authsometesting.ErrNotAuthenticated,
-    },
-}
-
-for _, tt := range tests {
-    t.Run(tt.name, func(t *testing.T) {
-        ctx := tt.setup()
-        err := myHandler(ctx)
-        assert.Equal(t, tt.wantErr, err)
-    })
-}
-```
-
-### 5. Verify Context Values
-
-```go
-ctx := mock.NewTestContext()
-
-// Always verify context has what you expect
-user, ok := authsometesting.GetLoggedInUser(ctx)
-require.True(t, ok, "expected user in context")
-assert.NotNil(t, user)
-```
-
-## Thread Safety
-
-The mock implementation uses `sync.RWMutex` for thread-safe operations. You can safely use the same mock instance across multiple goroutines in your tests:
-
-```go
-mock := authsometesting.NewMock(t)
-defer mock.Reset()
-
-var wg sync.WaitGroup
-for i := 0; i < 10; i++ {
-    wg.Add(1)
-    go func(i int) {
-        defer wg.Done()
-        user := mock.CreateUser(fmt.Sprintf("user%d@example.com", i), "User")
-        // ... test code
-    }(i)
-}
-wg.Wait()
-```
-
-## Limitations
-
-This testing package provides mocks for common scenarios but does not:
-- Connect to a real database
-- Implement full RBAC policy evaluation
-- Support all AuthSome plugins
-- Provide rate limiting or caching
-- Validate complex business logic
-
-For integration testing with real services, see the [Integration Testing Guide](../docs/INTEGRATION_TESTING.md).
+- All ID parameters now use `xid.ID` instead of `string`
+- Context helpers renamed to match `core/contexts`
+- `WithOrg` renamed to `WithOrganization`
+- Member storage now uses `OrganizationMember` schema
 
 ## Support
 
-For questions, issues, or contributions:
-- GitHub Issues: https://github.com/xraph/authsome/issues
-- Documentation: https://github.com/xraph/authsome/docs
-- Examples: https://github.com/xraph/authsome/examples
-
-## License
-
-Same as AuthSome - see LICENSE file in repository root.
-
+For issues, questions, or contributions, please visit the [AuthSome repository](https://github.com/xraph/authsome).

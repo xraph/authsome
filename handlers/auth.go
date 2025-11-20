@@ -10,11 +10,11 @@ import (
 
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
-	"github.com/xraph/authsome/core/base"
 	"github.com/xraph/authsome/core/device"
 	dev "github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/pagination"
 	rl "github.com/xraph/authsome/core/ratelimit"
+	"github.com/xraph/authsome/core/responses"
 	sec "github.com/xraph/authsome/core/security"
 	coreuser "github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
@@ -31,16 +31,9 @@ type AuthHandler struct {
 	twofaRepo *repo.TwoFARepository
 }
 
-type TwoFARequiredResponse struct {
-	User         *coreuser.User `json:"user"`
-	RequireTwoFA bool           `json:"require_twofa"`
-	DeviceID     string         `json:"device_id"`
-}
-
-type SessionResponse struct {
-	User    *coreuser.User `json:"user"`
-	Session *base.Session  `json:"session"`
-}
+// Use shared response types
+type TwoFARequiredResponse = responses.TwoFARequiredResponse
+type SessionResponse = responses.SessionResponse
 
 func NewAuthHandler(a auth.ServiceInterface, rlsvc *rl.Service, dsvc *dev.Service, ssvc *sec.Service, asvc *aud.Service, tfrepo *repo.TwoFARepository) *AuthHandler {
 	return &AuthHandler{auth: a, rl: rlsvc, dev: dsvc, sec: ssvc, aud: asvc, twofaRepo: tfrepo}
@@ -64,7 +57,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 		// Geo-based restrictions if configured
 		if ok := h.sec.CheckCountryAllowed(c.Request().Context(), ip); !ok {
 			_ = h.sec.LogEvent(c.Request().Context(), "country_blocked_signup", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(http.StatusForbidden, &ErrorResponse{Error: "geo restriction"})
+			return c.JSON(http.StatusForbidden, errs.New("GEO_RESTRICTED", "Geographic restriction", http.StatusForbidden))
 		}
 	}
 	var req auth.SignUpRequest
@@ -106,7 +99,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		}
 		if ok := h.sec.CheckCountryAllowed(c.Request().Context(), ip); !ok {
 			_ = h.sec.LogEvent(c.Request().Context(), "country_blocked_signin", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(http.StatusForbidden, &ErrorResponse{Error: "geo restriction"})
+			return c.JSON(http.StatusForbidden, errs.New("GEO_RESTRICTED", "Geographic restriction", http.StatusForbidden))
 		}
 	}
 	var req auth.SignInRequest
@@ -121,7 +114,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		}
 		if h.sec.IsLockedOut(c.Request().Context(), lockKey) {
 			_ = h.sec.LogEvent(c.Request().Context(), "lockout_active", nil, ip, c.Request().UserAgent(), "")
-			return c.JSON(423, &ErrorResponse{Error: "account temporarily locked"})
+			return c.JSON(423, errs.AccountLocked("too many failed attempts"))
 		}
 	}
 	req.IPAddress = ip
@@ -214,12 +207,12 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 	// Require authentication via session cookie
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid session"})
+		return c.JSON(http.StatusUnauthorized, errs.SessionInvalid())
 	}
 	// Parse request
 	var body struct {
@@ -317,7 +310,7 @@ func (h *AuthHandler) SignOut(c forge.Context) error {
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil || body.Token == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "missing token"})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("token"))
 	}
 	if err := h.auth.SignOut(c.Request().Context(), &auth.SignOutRequest{Token: body.Token}); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
@@ -339,7 +332,7 @@ func (h *AuthHandler) GetSession(c forge.Context) error {
 	}
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
@@ -368,12 +361,12 @@ func (h *AuthHandler) ListDevices(c forge.Context) error {
 	}
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid session"})
+		return c.JSON(http.StatusUnauthorized, errs.SessionInvalid())
 	}
 	list, err := h.dev.ListDevices(c.Request().Context(), &device.ListDevicesFilter{
 		UserID: res.User.ID,
@@ -404,12 +397,12 @@ func (h *AuthHandler) RevokeDevice(c forge.Context) error {
 	}
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "not authenticated"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 	token := cookie.Value
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "invalid session"})
+		return c.JSON(http.StatusUnauthorized, errs.SessionInvalid())
 	}
 	var body struct {
 		Fingerprint string `json:"fingerprint"`

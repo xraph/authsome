@@ -42,6 +42,7 @@ func (m *mockAuth) GetBasePath() string                              { return ""
 func (m *mockAuth) GetPluginRegistry() core.PluginRegistry           { return nil }
 func (m *mockAuth) IsPluginEnabled(pluginID string) bool             { return false }
 func (m *mockAuth) Repository() repository.Repository                { return nil }
+func (m *mockAuth) Logger() forge.Logger                             { return nil }
 
 func TestPluginID(t *testing.T) {
 	plugin := NewPlugin(WithDefaultConfig(DefaultConfig()))

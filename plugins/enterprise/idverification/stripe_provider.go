@@ -82,8 +82,8 @@ func (p *StripeIdentityProvider) CreateSession(ctx context.Context, req *Provide
 		}
 	}
 	// Add standard metadata
-	params.AddMetadata("user_id", req.UserID)
-	params.AddMetadata("organization_id", req.OrganizationID)
+	params.AddMetadata("user_id", req.UserID.String())
+	params.AddMetadata("organization_id", req.OrganizationID.String())
 
 	// Create verification session via Stripe API
 	session, err := verificationsession.New(params)

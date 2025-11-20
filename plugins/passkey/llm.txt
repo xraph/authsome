@@ -1,63 +1,126 @@
 # Passkey Plugin
 
+## Status
+✅ **PRODUCTION READY** - Full WebAuthn/FIDO2 implementation with cryptographic verification
+
 ## Purpose
-WebAuthn/FIDO2 passwordless authentication using passkeys, security keys, and biometrics.
+Passwordless authentication using WebAuthn/FIDO2 passkeys with support for platform authenticators (Touch ID, Windows Hello) and cross-platform authenticators (YubiKey, etc.)
 
-## Features
-- Platform authenticators (Face ID, Touch ID, Windows Hello)
-- Roaming authenticators (YubiKey, security keys)
-- Passwordless login
-- Multi-device credentials
-- Credential management
+## Supported Authentication Modes
+- **Standalone**: Direct passwordless login
+- **MFA Factor**: Passkeys as second factor via MFA plugin
+- **Discoverable Credentials**: Usernameless authentication with autofill
 
-## Flow
-### Registration
-1. User initiates passkey setup
-2. Generate challenge
-3. Browser prompts for authenticator
-4. User verifies (biometric/PIN)
-5. Store public key credential
+## Key Files
+- **config.go**: WebAuthn configuration structure
+- **service.go**: Core WebAuthn operations with cryptographic verification
+- **handlers.go**: HTTP endpoints with BindRequest validation
+- **webauthn.go**: WebAuthn library wrapper
+- **user_adapter.go**: WebAuthn User interface implementation
+- **challenge_store.go**: Challenge session management with timeout
+- **request_types.go**: Validated request DTOs
+- **response_types.go**: Structured response DTOs
+- **plugin.go**: Plugin registration and initialization
 
-### Authentication
-1. User initiates passkey login
-2. Generate challenge
-3. Browser prompts for credential
-4. User verifies
-5. Validate signature
-6. Create session
+## Registration Flow
+1. Client requests registration options → BeginRegistration
+2. WebAuthn generates cryptographic challenge
+3. User authenticates with device (biometric/PIN)
+4. Client sends credential attestation → FinishRegistration
+5. Server verifies attestation and stores public key
+
+## Authentication Flow
+1. Client requests authentication options → BeginLogin
+2. WebAuthn generates challenge
+3. User authenticates with passkey
+4. Client sends credential assertion → FinishLogin
+5. Server verifies signature, checks sign count, creates session
+
+## Security Features
+- Cryptographic challenge generation (32+ bytes)
+- Attestation verification during registration
+- Signature verification with stored public keys
+- Sign count tracking for replay attack detection
+- Challenge timeout (5 minutes default)
+- App and organization scoping
 
 ## Public API
 ```go
-// Registration
-options, err := passkeySvc.BeginRegistration(ctx, userID)
-credential, err := passkeySvc.FinishRegistration(ctx, userID, response)
-
-// Authentication
-options, err := passkeySvc.BeginLogin(ctx, email)
-user, session, err := passkeySvc.FinishLogin(ctx, response)
-
-// Management
-credentials, err := passkeySvc.ListCredentials(ctx, userID)
-err := passkeySvc.DeleteCredential(ctx, credentialID)
+// Service methods
+BeginRegistration(ctx, userID, req) → challenge options
+FinishRegistration(ctx, userID, credentialResponse, name, ip, ua) → passkey info
+BeginLogin(ctx, userID, req) → challenge options
+FinishLogin(ctx, credentialResponse, remember, ip, ua) → session
+BeginDiscoverableLogin(ctx, req) → challenge options (usernameless)
+List(ctx, userID) → passkeys list
+Update(ctx, passkeyID, name) → updated info
+Delete(ctx, passkeyID, ip, ua) → nil
 ```
 
 ## Configuration
 ```yaml
 auth:
-  plugins:
-    passkey:
-      enabled: true
-      rpName: "MyApp"
-      rpID: "example.com"
-      rpOrigins: ["https://example.com"]
-      requireResidentKey: false
-      userVerification: "preferred"
+  passkey:
+    rpid: "example.com"              # Relying Party ID
+    rpname: "My Application"         # Display name
+    rporigins:                       # Allowed origins
+      - "https://example.com"
+    timeout: 300000                  # Challenge timeout (ms)
+    userverification: "preferred"    # required/preferred/discouraged
+    attestationtype: "none"          # none/indirect/direct
+    requireresidentkey: false        # Require resident keys
+    authenticatorattachment: ""      # platform/cross-platform/empty
+    challengestorage: "memory"       # memory/redis
 ```
 
-## Dependencies
-- **core/user**: User management
-- **core/session**: Session creation
-- **WebAuthn library**: FIDO2 implementation
+## Routes
+- `POST /passkey/register/begin` - Begin passkey registration
+- `POST /passkey/register/finish` - Complete registration
+- `POST /passkey/login/begin` - Begin authentication
+- `POST /passkey/login/finish` - Complete authentication
+- `GET /passkey/list` - List user passkeys
+- `PUT /passkey/:id` - Update passkey metadata
+- `DELETE /passkey/:id` - Delete passkey
 
-See: `README.md`
+## MFA Integration
+The WebAuthnFactorAdapter in plugins/mfa integrates passkeys as an MFA factor:
+- Enrollment via BeginRegistration/FinishRegistration
+- Verification via BeginLogin/FinishLogin
+- Maintains compatibility with standalone mode
 
+## Multi-Tenancy
+Passkeys are scoped to:
+- **App ID**: Platform tenant (required)
+- **Organization ID**: User workspace (optional)
+
+## Database Schema
+```go
+type Passkey struct {
+    ID                 xid.ID
+    UserID             xid.ID
+    CredentialID       string   // Unique WebAuthn credential ID
+    PublicKey          []byte   // COSE encoded public key
+    AAGUID             []byte   // Authenticator identifier
+    SignCount          uint32   // Replay attack prevention
+    AuthenticatorType  string   // platform/cross-platform
+    Name               string   // User-friendly name
+    IsResidentKey      bool     // Discoverable credential
+    LastUsedAt         *time.Time
+    AppID              xid.ID
+    UserOrganizationID *xid.ID
+}
+```
+
+## Browser Support
+- Chrome/Edge 67+
+- Safari 14+
+- Firefox 60+
+- Conditional UI: Chrome 108+, Safari 16+
+
+## Testing
+Comprehensive test suite covers:
+- Registration and authentication flows
+- Challenge timeout validation
+- Sign count tracking
+- App/org scoping
+- User adapter functionality

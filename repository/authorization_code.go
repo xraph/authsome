@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/schema"
 )
@@ -31,6 +33,33 @@ func (r *AuthorizationCodeRepository) FindByCode(ctx context.Context, code strin
 		Model(authCode).
 		Where("code = ?", code).
 		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return authCode, nil
+}
+
+// FindByCodeWithContext retrieves an authorization code with context filtering
+func (r *AuthorizationCodeRepository) FindByCodeWithContext(ctx context.Context, code string, appID, envID xid.ID, orgID *xid.ID) (*schema.AuthorizationCode, error) {
+	authCode := &schema.AuthorizationCode{}
+	query := r.db.NewSelect().Model(authCode).
+		Where("code = ?", code).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID)
+	
+	if orgID != nil && !orgID.IsNil() {
+		query = query.Where("organization_id = ?", orgID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+	
+	err := query.Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +89,7 @@ func (r *AuthorizationCodeRepository) DeleteExpired(ctx context.Context) error {
 }
 
 // FindByUserAndClient retrieves authorization codes for a specific user and client
-func (r *AuthorizationCodeRepository) FindByUserAndClient(ctx context.Context, userID, clientID string) ([]*schema.AuthorizationCode, error) {
+func (r *AuthorizationCodeRepository) FindByUserAndClient(ctx context.Context, userID xid.ID, clientID string) ([]*schema.AuthorizationCode, error) {
 	var codes []*schema.AuthorizationCode
 	err := r.db.NewSelect().
 		Model(&codes).
@@ -68,4 +97,24 @@ func (r *AuthorizationCodeRepository) FindByUserAndClient(ctx context.Context, u
 		Order("created_at DESC").
 		Scan(ctx)
 	return codes, err
+}
+
+// FindBySession retrieves authorization codes for a specific session
+func (r *AuthorizationCodeRepository) FindBySession(ctx context.Context, sessionID xid.ID) ([]*schema.AuthorizationCode, error) {
+	var codes []*schema.AuthorizationCode
+	err := r.db.NewSelect().
+		Model(&codes).
+		Where("session_id = ?", sessionID).
+		Order("created_at DESC").
+		Scan(ctx)
+	return codes, err
+}
+
+// DeleteBySession removes authorization codes associated with a session
+func (r *AuthorizationCodeRepository) DeleteBySession(ctx context.Context, sessionID xid.ID) error {
+	_, err := r.db.NewDelete().
+		Model((*schema.AuthorizationCode)(nil)).
+		Where("session_id = ?", sessionID).
+		Exec(ctx)
+	return err
 }

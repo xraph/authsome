@@ -8,7 +8,6 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/rbac"
-	"github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -21,12 +20,12 @@ type Permission struct {
 // PermissionChecker provides a fast, expressive API for checking permissions
 type PermissionChecker struct {
 	rbacSvc      *rbac.Service
-	userRoleRepo *repository.UserRoleRepository
+	userRoleRepo rbac.UserRoleRepository
 	roleCache    *permissionCache
 }
 
 // NewPermissionChecker creates a new permission checker
-func NewPermissionChecker(rbacSvc *rbac.Service, userRoleRepo *repository.UserRoleRepository) *PermissionChecker {
+func NewPermissionChecker(rbacSvc *rbac.Service, userRoleRepo rbac.UserRoleRepository) *PermissionChecker {
 	return &PermissionChecker{
 		rbacSvc:      rbacSvc,
 		userRoleRepo: userRoleRepo,
@@ -440,7 +439,7 @@ func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
 
 // EnsureFirstUserIsAdmin assigns admin role to the first user
 // DEPRECATED: Use EnsureFirstUserIsSuperAdmin for first user setup
-func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo *repository.UserRoleRepository, roleRepo *repository.RoleRepository) error {
+func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo rbac.UserRoleRepository, roleRepo rbac.RoleRepository) error {
 	// Check if admin role exists in the platform organization
 	orgIDStr := orgID.String()
 	roles, err := roleRepo.ListByOrg(ctx, &orgIDStr)
@@ -482,7 +481,7 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 
 // EnsureFirstUserIsSuperAdmin assigns superadmin role to the first user
 // This makes them the platform owner with full system access
-func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo *repository.UserRoleRepository, roleRepo *repository.RoleRepository) error {
+func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo rbac.UserRoleRepository, roleRepo rbac.RoleRepository) error {
 	fmt.Printf("[Dashboard] EnsureFirstUserIsSuperAdmin called - userID: %s, orgID: %s\n", userID.String(), orgID.String())
 
 	// Check if superadmin role exists in the platform organization

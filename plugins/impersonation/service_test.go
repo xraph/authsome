@@ -9,6 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/impersonation"
+	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/session"
+	coreuser "github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -52,29 +55,36 @@ func (r *mockImpersonationRepository) Update(ctx context.Context, session *schem
 	return nil
 }
 
-func (r *mockImpersonationRepository) List(ctx context.Context, req *impersonation.ListRequest) ([]*schema.ImpersonationSession, error) {
+func (r *mockImpersonationRepository) ListSessions(ctx context.Context, filter *impersonation.ListSessionsFilter) (*pagination.PageResponse[*schema.ImpersonationSession], error) {
 	var sessions []*schema.ImpersonationSession
 	for _, session := range r.sessions {
-		if session.AppID != req.AppID {
+		if session.AppID != filter.AppID {
 			continue
 		}
-		if req.ActiveOnly && (!session.Active || session.IsExpired()) {
+		if filter.ActiveOnly != nil && *filter.ActiveOnly && (!session.Active || session.IsExpired()) {
 			continue
 		}
-		if req.ImpersonatorID != nil && session.ImpersonatorID != *req.ImpersonatorID {
+		if filter.ImpersonatorID != nil && session.ImpersonatorID != *filter.ImpersonatorID {
 			continue
 		}
-		if req.TargetUserID != nil && session.TargetUserID != *req.TargetUserID {
+		if filter.TargetUserID != nil && session.TargetUserID != *filter.TargetUserID {
 			continue
 		}
 		sessions = append(sessions, session)
 	}
-	return sessions, nil
-}
 
-func (r *mockImpersonationRepository) Count(ctx context.Context, req *impersonation.ListRequest) (int, error) {
-	sessions, _ := r.List(ctx, req)
-	return len(sessions), nil
+	return &pagination.PageResponse[*schema.ImpersonationSession]{
+		Data: sessions,
+		Pagination: &pagination.PageMeta{
+			Total:       int64(len(sessions)),
+			Limit:       len(sessions),
+			Offset:      0,
+			CurrentPage: 1,
+			TotalPages:  1,
+			HasNext:     false,
+			HasPrev:     false,
+		},
+	}, nil
 }
 
 func (r *mockImpersonationRepository) GetActive(ctx context.Context, impersonatorID xid.ID, orgID xid.ID) (*schema.ImpersonationSession, error) {
@@ -108,23 +118,30 @@ func (r *mockImpersonationRepository) CreateAuditEvent(ctx context.Context, even
 	return nil
 }
 
-func (r *mockImpersonationRepository) ListAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) ([]*schema.ImpersonationAuditEvent, error) {
+func (r *mockImpersonationRepository) ListAuditEvents(ctx context.Context, filter *impersonation.ListAuditEventsFilter) (*pagination.PageResponse[*schema.ImpersonationAuditEvent], error) {
 	var events []*schema.ImpersonationAuditEvent
 	for _, event := range r.auditEvents {
-		if event.AppID != req.AppID {
+		if event.AppID != filter.AppID {
 			continue
 		}
-		if req.ImpersonationID != nil && event.ImpersonationID != *req.ImpersonationID {
+		if filter.ImpersonationID != nil && event.ImpersonationID != *filter.ImpersonationID {
 			continue
 		}
 		events = append(events, event)
 	}
-	return events, nil
-}
 
-func (r *mockImpersonationRepository) CountAuditEvents(ctx context.Context, req *impersonation.AuditListRequest) (int, error) {
-	events, _ := r.ListAuditEvents(ctx, req)
-	return len(events), nil
+	return &pagination.PageResponse[*schema.ImpersonationAuditEvent]{
+		Data: events,
+		Pagination: &pagination.PageMeta{
+			Total:       int64(len(events)),
+			Limit:       len(events),
+			Offset:      0,
+			CurrentPage: 1,
+			TotalPages:  1,
+			HasNext:     false,
+			HasPrev:     false,
+		},
+	}, nil
 }
 
 // mockUserService is a simple mock for testing
@@ -138,27 +155,31 @@ func newMockUserService() *mockUserService {
 	}
 }
 
-func (s *mockUserService) FindByID(ctx context.Context, id xid.ID) (*schema.User, error) {
+func (s *mockUserService) FindByID(ctx context.Context, id xid.ID) (*coreuser.User, error) {
 	user, ok := s.users[id.String()]
 	if !ok {
 		return nil, impersonation.ErrUserNotFound
 	}
-	return user, nil
+	return coreuser.FromSchemaUser(user), nil
 }
 
-func (s *mockUserService) Create(ctx context.Context, req interface{}) (*schema.User, error) {
+func (s *mockUserService) Create(ctx context.Context, req *coreuser.CreateUserRequest) (*coreuser.User, error) {
 	return nil, nil
 }
 
-func (s *mockUserService) FindByEmail(ctx context.Context, email string) (*schema.User, error) {
+func (s *mockUserService) FindByEmail(ctx context.Context, email string) (*coreuser.User, error) {
 	return nil, nil
 }
 
-func (s *mockUserService) FindByUsername(ctx context.Context, username string) (*schema.User, error) {
+func (s *mockUserService) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*coreuser.User, error) {
 	return nil, nil
 }
 
-func (s *mockUserService) Update(ctx context.Context, u *schema.User, req interface{}) (*schema.User, error) {
+func (s *mockUserService) FindByUsername(ctx context.Context, username string) (*coreuser.User, error) {
+	return nil, nil
+}
+
+func (s *mockUserService) Update(ctx context.Context, user *coreuser.User, req *coreuser.UpdateUserRequest) (*coreuser.User, error) {
 	return nil, nil
 }
 
@@ -166,8 +187,16 @@ func (s *mockUserService) Delete(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-func (s *mockUserService) List(ctx context.Context, opts interface{}) ([]*schema.User, int, error) {
-	return nil, 0, nil
+func (s *mockUserService) List(ctx context.Context, filter *coreuser.ListUsersFilter) (*pagination.PageResponse[*coreuser.User], error) {
+	return nil, nil
+}
+
+func (s *mockUserService) CountUsers(ctx context.Context, filter *coreuser.CountUsersFilter) (int, error) {
+	return 0, nil
+}
+
+func (s *mockUserService) ListUsers(ctx context.Context, filter *coreuser.ListUsersFilter) (*pagination.PageResponse[*coreuser.User], error) {
+	return nil, nil
 }
 
 // mockSessionService is a simple mock for testing
@@ -181,33 +210,50 @@ func newMockSessionService() *mockSessionService {
 	}
 }
 
-func (s *mockSessionService) Create(ctx context.Context, req interface{}) (*schema.Session, error) {
-	session := &schema.Session{
+func (s *mockSessionService) Create(ctx context.Context, req *session.CreateSessionRequest) (*session.Session, error) {
+	schemaSession := &schema.Session{
 		ID:        xid.New(),
 		Token:     "token_" + xid.New().String(),
 		ExpiresAt: time.Now().Add(24 * time.Hour),
+		UserID:    req.UserID,
 	}
-	s.sessions[session.ID.String()] = session
-	return session, nil
+	s.sessions[schemaSession.ID.String()] = schemaSession
+	return session.FromSchemaSession(schemaSession), nil
 }
 
-func (s *mockSessionService) FindByToken(ctx context.Context, token string) (*schema.Session, error) {
-	for _, session := range s.sessions {
-		if session.Token == token {
-			return session, nil
+func (s *mockSessionService) FindByToken(ctx context.Context, token string) (*session.Session, error) {
+	for _, sess := range s.sessions {
+		if sess.Token == token {
+			return session.FromSchemaSession(sess), nil
 		}
 	}
 	return nil, impersonation.ErrSessionNotFound
 }
 
 func (s *mockSessionService) Revoke(ctx context.Context, token string) error {
-	for id, session := range s.sessions {
-		if session.Token == token {
+	for id, sess := range s.sessions {
+		if sess.Token == token {
 			delete(s.sessions, id)
 			return nil
 		}
 	}
 	return nil
+}
+
+func (s *mockSessionService) FindByID(ctx context.Context, id xid.ID) (*session.Session, error) {
+	return nil, nil
+}
+
+func (s *mockSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
+	return nil
+}
+
+func (s *mockSessionService) List(ctx context.Context, filter *session.ListSessionsFilter) (*pagination.PageResponse[*session.Session], error) {
+	return nil, nil
+}
+
+func (s *mockSessionService) ListSessions(ctx context.Context, filter *session.ListSessionsFilter) (*pagination.PageResponse[*session.Session], error) {
+	return nil, nil
 }
 
 // Test helpers
@@ -319,14 +365,14 @@ func TestService_Start_AlreadyImpersonating(t *testing.T) {
 
 	// Create existing active impersonation
 	existingSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	existingSession.ID = xid.New()
+	existingSession.CreatedAt = time.Now()
 	repo.sessions[existingSession.ID.String()] = existingSession
 
 	// Try to start another impersonation
@@ -369,7 +415,6 @@ func TestService_End_Success(t *testing.T) {
 	sessionID := xid.New()
 	sessionToken := "token_test"
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
@@ -378,8 +423,9 @@ func TestService_End_Success(t *testing.T) {
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 		Reason:         "Test impersonation",
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	req := &impersonation.EndRequest{
@@ -433,14 +479,14 @@ func TestService_End_WrongImpersonator(t *testing.T) {
 
 	// Create active impersonation
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	// Try to end with different user
@@ -464,37 +510,40 @@ func TestService_List_Success(t *testing.T) {
 	// Create multiple impersonation sessions
 	for i := 0; i < 5; i++ {
 		session := &schema.ImpersonationSession{
-			ID:             xid.New(),
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         i < 3, // First 3 active, last 2 inactive
 			ExpiresAt:      time.Now().Add(1 * time.Hour),
 			Reason:         "Test session",
-			CreatedAt:      time.Now(),
 		}
+		session.ID = xid.New()
+		session.CreatedAt = time.Now()
 		repo.sessions[session.ID.String()] = session
 	}
 
 	// List all sessions
-	req := &impersonation.ListRequest{
-		AppID: orgID,
-		Limit: 10,
+	activeOnly := false
+	filter := &impersonation.ListSessionsFilter{
+		AppID:      orgID,
+		ActiveOnly: &activeOnly,
 	}
+	filter.Limit = 10
 
-	resp, err := service.List(context.Background(), req)
+	resp, err := service.List(context.Background(), filter)
 
 	require.NoError(t, err)
-	assert.Len(t, resp.Sessions, 5)
-	assert.Equal(t, 5, resp.Total)
+	assert.Len(t, resp.Data, 5)
+	assert.Equal(t, int64(5), resp.Pagination.Total)
 
 	// List only active sessions
-	req.ActiveOnly = true
-	resp, err = service.List(context.Background(), req)
+	activeOnlyTrue := true
+	filter.ActiveOnly = &activeOnlyTrue
+	resp, err = service.List(context.Background(), filter)
 
 	require.NoError(t, err)
-	assert.Len(t, resp.Sessions, 3)
-	assert.Equal(t, 3, resp.Total)
+	assert.Len(t, resp.Data, 3)
+	assert.Equal(t, int64(3), resp.Pagination.Total)
 }
 
 func TestService_Verify_Active(t *testing.T) {
@@ -504,15 +553,15 @@ func TestService_Verify_Active(t *testing.T) {
 
 	sessionID := xid.New()
 	impSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		NewSessionID:   &sessionID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
-		CreatedAt:      time.Now(),
 	}
+	impSession.ID = xid.New()
+	impSession.CreatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
 	req := &impersonation.VerifyRequest{
@@ -551,27 +600,27 @@ func TestService_ExpireSessions(t *testing.T) {
 	// Create expired sessions
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
-			ID:             xid.New(),
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         true,
 			ExpiresAt:      time.Now().Add(-1 * time.Hour), // Expired
-			CreatedAt:      time.Now(),
 		}
+		session.ID = xid.New()
+		session.CreatedAt = time.Now()
 		repo.sessions[session.ID.String()] = session
 	}
 
 	// Create active non-expired session
 	activeSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour), // Not expired
-		CreatedAt:      time.Now(),
 	}
+	activeSession.ID = xid.New()
+	activeSession.CreatedAt = time.Now()
 	repo.sessions[activeSession.ID.String()] = activeSession
 
 	count, err := service.ExpireSessions(context.Background())

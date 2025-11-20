@@ -13,35 +13,14 @@ func TestPlugin_ID(t *testing.T) {
 }
 
 func TestPlugin_Init(t *testing.T) {
-	tests := []struct {
-		name    string
-		dep     interface{}
-		wantErr bool
-	}{
-		{
-			name:    "nil dependency",
-			dep:     nil,
-			wantErr: true,
-		},
-		{
-			name:    "invalid dependency type",
-			dep:     "invalid",
-			wantErr: true,
-		},
-		// TODO: Add test with valid auth instance once we have a mock
-	}
+	t.Run("nil dependency", func(t *testing.T) {
+		p := NewPlugin()
+		err := p.Init(nil)
+		assert.Error(t, err, "Init should return an error when auth instance is nil")
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewPlugin()
-			err := p.Init(tt.dep)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	// TODO: Add test with valid auth instance once we have a mock
+	// The type safety for invalid types is enforced at compile time
 }
 
 func TestPlugin_RegisterHooks(t *testing.T) {

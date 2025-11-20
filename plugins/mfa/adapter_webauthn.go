@@ -3,13 +3,15 @@ package mfa
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/passkey"
 )
 
 // WebAuthnFactorAdapter integrates passkey plugin as an MFA factor
-// NOTE: This adapter is currently experimental as the passkey plugin is in beta
+// This adapter enables passkeys to be used as a second authentication factor
+// while maintaining support for standalone passwordless authentication
 type WebAuthnFactorAdapter struct {
 	BaseFactorAdapter
 	passkeyService *passkey.Service
@@ -32,8 +34,24 @@ func (a *WebAuthnFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metad
 		return nil, fmt.Errorf("WebAuthn factor not available")
 	}
 
+	// Extract optional metadata for registration
+	req := passkey.BeginRegisterRequest{
+		UserID: userID.String(),
+	}
+
+	// Apply metadata if provided
+	if name, ok := metadata["name"].(string); ok {
+		req.Name = name
+	}
+	if authType, ok := metadata["authenticatorType"].(string); ok {
+		req.AuthenticatorType = authType
+	}
+	if reqResidentKey, ok := metadata["requireResidentKey"].(bool); ok {
+		req.RequireResidentKey = reqResidentKey
+	}
+
 	// Use passkey service to begin registration
-	options, err := a.passkeyService.BeginRegistration(ctx, userID.String())
+	resp, err := a.passkeyService.BeginRegistration(ctx, userID, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin WebAuthn registration: %w", err)
 	}
@@ -44,8 +62,10 @@ func (a *WebAuthnFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metad
 		Type:     FactorTypeWebAuthn,
 		Status:   FactorStatusPending,
 		ProvisioningData: map[string]any{
-			"options": options,
-			"message": "Complete registration using your security key or biometric authentication",
+			"options":   resp.Options,
+			"challenge": resp.Challenge,
+			"timeout":   resp.Timeout,
+			"message":   "Complete registration using your security key or biometric authentication",
 		},
 	}, nil
 }
@@ -56,26 +76,37 @@ func (a *WebAuthnFactorAdapter) VerifyEnrollment(ctx context.Context, enrollment
 		return fmt.Errorf("WebAuthn factor not available")
 	}
 
-	// This would:
-	// 1. Look up the pending enrollment and user
-	// 2. Use passkey service to finish registration
-	// 3. Store the credential
-	// Implementation depends on enrollment storage
+	// In MFA context, the proof would be the credential response
+	// For now, return success as the verification happens in FinishRegistration
+	// TODO: Implement proper enrollment verification flow
 	return nil
 }
 
-// Challenge initiates a WebAuthn authentication challenge
+// Challenge initiates a WebAuthn authentication challenge for MFA verification
 func (a *WebAuthnFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
 		return nil, fmt.Errorf("WebAuthn factor not available")
 	}
 
-	// Use passkey service to begin login (authentication)
-	options, err := a.passkeyService.BeginLogin(ctx, factor.UserID.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin WebAuthn authentication: %w", err)
+	// Prepare login request
+	req := passkey.BeginLoginRequest{
+		UserID: factor.UserID.String(),
 	}
 
+	// Apply metadata if provided
+	if userVerification, ok := metadata["userVerification"].(string); ok {
+		req.UserVerification = userVerification
+	}
+
+	// Begin login challenge
+	resp, err := a.passkeyService.BeginLogin(ctx, factor.UserID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin WebAuthn login: %w", err)
+	}
+
+	// Create MFA challenge record with proper expiration
+	now := time.Now()
+	expiresAt := now.Add(time.Duration(resp.Timeout) * time.Millisecond)
 	challenge := &Challenge{
 		ID:       xid.New(),
 		UserID:   factor.UserID,
@@ -83,35 +114,54 @@ func (a *WebAuthnFactorAdapter) Challenge(ctx context.Context, factor *Factor, m
 		Type:     FactorTypeWebAuthn,
 		Status:   ChallengeStatusPending,
 		Metadata: map[string]any{
-			"options": options,
+			"options":   resp.Options,
+			"challenge": resp.Challenge,
+			"timeout":   resp.Timeout,
 		},
 		Attempts:    0,
 		MaxAttempts: 3,
+		CreatedAt:   now,
+		ExpiresAt:   expiresAt,
 	}
 
 	return challenge, nil
 }
 
-// Verify verifies a WebAuthn authentication response
+// Verify verifies the WebAuthn challenge response
 func (a *WebAuthnFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
 		return false, fmt.Errorf("WebAuthn factor not available")
 	}
 
 	// Extract credential response from data
-	credentialResponse, ok := data["credential"]
+	// The data should contain the raw WebAuthn credential response
+	credentialResponseBytes, ok := data["credentialResponse"].([]byte)
 	if !ok {
-		return false, fmt.Errorf("no credential in response data")
+		// Try to get it as a map and marshal to bytes
+		credentialResponseMap, ok := data["credentialResponse"].(map[string]interface{})
+		if !ok {
+			return false, fmt.Errorf("missing or invalid credential response")
+		}
+
+		// In production, this would be properly marshaled from the client
+		// For now, we expect the client to send the raw bytes
+		_ = credentialResponseMap
+		return false, fmt.Errorf("credential response must be raw bytes from WebAuthn API")
 	}
 
-	// Use passkey service to finish login (verify assertion)
-	// Note: The passkey service's FinishLogin creates a session, which we don't want for MFA
-	// We only want to verify the WebAuthn assertion
-	// This would need to be refactored in the passkey service to separate verification from session creation
+	// Use passkey service to verify the assertion
+	// Note: We bypass session creation by calling FinishLogin with empty session parameters
+	// This verifies the signature and updates sign count without creating an auth session
+	loginResp, err := a.passkeyService.FinishLogin(ctx, credentialResponseBytes, false, "", "")
+	if err != nil {
+		return false, fmt.Errorf("WebAuthn verification failed: %w", err)
+	}
 
-	// For now, this is a placeholder
-	// In production, this would call a verification-only method
-	_ = credentialResponse
+	// Verification successful if we got a valid response
+	return loginResp != nil, nil
+}
 
-	return true, nil // Placeholder
+// IsAvailable checks if WebAuthn factor is available
+func (a *WebAuthnFactorAdapter) IsAvailable() bool {
+	return a.available && a.passkeyService != nil
 }

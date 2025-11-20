@@ -40,6 +40,8 @@ type Config struct {
 	AllowImplicitSignup bool `json:"allowImplicitSignup"`
 	// RateLimitPerHour is the max requests per hour per user
 	RateLimitPerHour int `json:"rateLimitPerHour"`
+
+	DevExposeURL bool `json:"devExposeURL"`
 }
 
 // DefaultConfig returns the default magic link plugin configuration
@@ -149,7 +151,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	sessionSvc := session.NewService(sessRepo, session.Config{}, nil)
 	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
 	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
-	p.service = NewService(mr, userSvc, authSvc, auditSvc, p.notifAdapter, p.config)
+	p.service = NewService(mr, userSvc, sessionSvc, authSvc, auditSvc, p.notifAdapter, p.config)
 
 	p.logger.Info("magic link plugin initialized",
 		forge.F("expiry_minutes", p.config.ExpiryMinutes),
@@ -170,37 +172,22 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("magiclink.send"),
 		forge.WithSummary("Send magic link"),
 		forge.WithDescription("Sends a passwordless authentication link to the specified email address. Rate limited to 5 requests per minute per email"),
-		forge.WithResponseSchema(200, "Magic link sent", MagicLinkSendResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", MagicLinkErrorResponse{}),
-		forge.WithResponseSchema(429, "Too many requests", MagicLinkErrorResponse{}),
+		forge.WithRequestSchema(SendRequest{}),
+		forge.WithResponseSchema(200, "Magic link sent", SendResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many requests", ErrorResponse{}),
 		forge.WithTags("MagicLink", "Authentication"),
 		forge.WithValidation(true),
 	)
 	router.GET("/magic-link/verify", h.Verify,
 		forge.WithName("magiclink.verify"),
 		forge.WithSummary("Verify magic link"),
-		forge.WithDescription("Verifies the magic link token from email and creates a user session on success. Supports implicit signup if enabled"),
-		forge.WithResponseSchema(200, "Magic link verified", MagicLinkVerifyResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", MagicLinkErrorResponse{}),
+		forge.WithDescription("Verifies the magic link token from email and creates a user session on success. Supports implicit signup if enabled. Query params: token (required), remember (optional)"),
+		forge.WithResponseSchema(200, "Magic link verified", VerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("MagicLink", "Authentication"),
 	)
 	return nil
-}
-
-// Response types for magic link routes
-type MagicLinkErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-type MagicLinkSendResponse struct {
-	Status string `json:"status" example:"sent"`
-	DevURL string `json:"dev_url,omitempty" example:"http://localhost:3000/magic-link/verify?token=abc123"`
-}
-
-type MagicLinkVerifyResponse struct {
-	User    interface{} `json:"user"`
-	Session interface{} `json:"session"`
-	Token   string      `json:"token" example:"session_token_abc123"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

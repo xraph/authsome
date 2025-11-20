@@ -574,6 +574,11 @@ func (a *Auth) GetBasePath() string {
 	return a.config.BasePath
 }
 
+// Logger returns the logger for AuthSome
+func (a *Auth) Logger() forge.Logger {
+	return a.logger
+}
+
 // GetPluginRegistry returns the plugin registry
 func (a *Auth) GetPluginRegistry() plugins.PluginRegistry {
 	return a.pluginRegistry

@@ -1,9 +1,6 @@
 package auth
 
-import (
-	"github.com/xraph/authsome/core/session"
-	"github.com/xraph/authsome/core/user"
-)
+import "github.com/xraph/authsome/core/responses"
 
 // SignUpRequest represents a signup request
 type SignUpRequest struct {
@@ -31,10 +28,5 @@ type SignOutRequest struct {
 	Token string
 }
 
-// AuthResponse represents the auth response containing user/session
-type AuthResponse struct {
-	User         *user.User
-	Session      *session.Session
-	Token        string
-	RequireTwoFA bool
-}
+// AuthResponse represents an authentication response
+type AuthResponse = responses.AuthResponse

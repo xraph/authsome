@@ -187,23 +187,29 @@ func startMockServer(port int, handler http.Handler) {
 func testSuccessfulDelivery(endpoint *MockWebhookEndpoint) {
 	endpoint.Reset()
 
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	// Create webhook configuration
 	webhookConfig := &webhook.Webhook{
-		ID:             xid.New(),
-		OrganizationID: "test-org",
-		URL:            endpoint.URL,
-		Events:         []string{webhook.EventUserCreated, webhook.EventUserUpdated},
-		Enabled:        true,
-		Secret:         "test-secret-key",
-		MaxRetries:     3,
-		RetryBackoff:   webhook.RetryBackoffLinear,
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		URL:           endpoint.URL,
+		Events:        []string{webhook.EventUserCreated, webhook.EventUserUpdated},
+		Enabled:       true,
+		Secret:        "test-secret-key",
+		MaxRetries:    3,
+		RetryBackoff:  webhook.RetryBackoffLinear,
 	}
 
 	// Create test event
 	event := &webhook.Event{
-		ID:             xid.New(),
-		Type:           webhook.EventUserCreated,
-		OrganizationID: "test-org",
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		Type:          webhook.EventUserCreated,
 		Data: map[string]interface{}{
 			"user_id": "user-123",
 			"email":   "test@example.com",
@@ -232,21 +238,27 @@ func testSuccessfulDelivery(endpoint *MockWebhookEndpoint) {
 func testFailedDelivery(endpoint *MockWebhookEndpoint) {
 	endpoint.Reset()
 
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	webhookConfig := &webhook.Webhook{
-		ID:             xid.New(),
-		OrganizationID: "test-org",
-		URL:            endpoint.URL,
-		Events:         []string{webhook.EventUserDeleted},
-		Enabled:        true,
-		Secret:         "test-secret-key",
-		MaxRetries:     3,
-		RetryBackoff:   webhook.RetryBackoffLinear,
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		URL:           endpoint.URL,
+		Events:        []string{webhook.EventUserDeleted},
+		Enabled:       true,
+		Secret:        "test-secret-key",
+		MaxRetries:    3,
+		RetryBackoff:  webhook.RetryBackoffLinear,
 	}
 
 	event := &webhook.Event{
-		ID:             xid.New(),
-		Type:           webhook.EventUserDeleted,
-		OrganizationID: "test-org",
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		Type:          webhook.EventUserDeleted,
 		Data: map[string]interface{}{
 			"user_id": "user-456",
 		},
@@ -272,21 +284,27 @@ func testFailedDelivery(endpoint *MockWebhookEndpoint) {
 func testTimeoutHandling(endpoint *MockWebhookEndpoint) {
 	endpoint.Reset()
 
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	webhookConfig := &webhook.Webhook{
-		ID:             xid.New(),
-		OrganizationID: "test-org",
-		URL:            endpoint.URL,
-		Events:         []string{webhook.EventSessionCreated},
-		Enabled:        true,
-		Secret:         "test-secret-key",
-		MaxRetries:     1,
-		RetryBackoff:   webhook.RetryBackoffLinear,
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		URL:           endpoint.URL,
+		Events:        []string{webhook.EventSessionCreated},
+		Enabled:       true,
+		Secret:        "test-secret-key",
+		MaxRetries:    1,
+		RetryBackoff:  webhook.RetryBackoffLinear,
 	}
 
 	event := &webhook.Event{
-		ID:             xid.New(),
-		Type:           webhook.EventSessionCreated,
-		OrganizationID: "test-org",
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		Type:          webhook.EventSessionCreated,
 		Data: map[string]interface{}{
 			"session_id": "session-789",
 		},
@@ -311,21 +329,27 @@ func testTimeoutHandling(endpoint *MockWebhookEndpoint) {
 func testIntermittentFailures(endpoint *IntermittentEndpoint) {
 	endpoint.Reset()
 
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	webhookConfig := &webhook.Webhook{
-		ID:             xid.New(),
-		OrganizationID: "test-org",
-		URL:            endpoint.URL,
-		Events:         []string{webhook.EventOrgUpdated},
-		Enabled:        true,
-		Secret:         "test-secret-key",
-		MaxRetries:     3,
-		RetryBackoff:   webhook.RetryBackoffLinear,
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		URL:           endpoint.URL,
+		Events:        []string{webhook.EventOrgUpdated},
+		Enabled:       true,
+		Secret:        "test-secret-key",
+		MaxRetries:    3,
+		RetryBackoff:  webhook.RetryBackoffLinear,
 	}
 
 	event := &webhook.Event{
-		ID:             xid.New(),
-		Type:           webhook.EventOrgUpdated,
-		OrganizationID: "test-org",
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		Type:          webhook.EventOrgUpdated,
 		Data: map[string]interface{}{
 			"organization_id": "org-123",
 		},
@@ -350,33 +374,40 @@ func testMultipleWebhooks(successEndpoint, failureEndpoint *MockWebhookEndpoint)
 	successEndpoint.Reset()
 	failureEndpoint.Reset()
 
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	webhooks := []*webhook.Webhook{
 		{
-			ID:             xid.New(),
-			OrganizationID: "test-org",
-			URL:            successEndpoint.URL,
-			Events:         []string{webhook.EventUserLogin},
-			Enabled:        true,
-			Secret:         "secret-1",
-			MaxRetries:     2,
-			RetryBackoff:   webhook.RetryBackoffLinear,
+			ID:            xid.New(),
+			AppID:         testAppID,
+			EnvironmentID: testEnvID,
+			URL:           successEndpoint.URL,
+			Events:        []string{webhook.EventUserLogin},
+			Enabled:       true,
+			Secret:        "secret-1",
+			MaxRetries:    2,
+			RetryBackoff:  webhook.RetryBackoffLinear,
 		},
 		{
-			ID:             xid.New(),
-			OrganizationID: "test-org",
-			URL:            failureEndpoint.URL,
-			Events:         []string{webhook.EventUserLogin},
-			Enabled:        true,
-			Secret:         "secret-2",
-			MaxRetries:     1,
-			RetryBackoff:   webhook.RetryBackoffLinear,
+			ID:            xid.New(),
+			AppID:         testAppID,
+			EnvironmentID: testEnvID,
+			URL:           failureEndpoint.URL,
+			Events:        []string{webhook.EventUserLogin},
+			Enabled:       true,
+			Secret:        "secret-2",
+			MaxRetries:    1,
+			RetryBackoff:  webhook.RetryBackoffLinear,
 		},
 	}
 
 	event := &webhook.Event{
-		ID:             xid.New(),
-		Type:           webhook.EventUserLogin,
-		OrganizationID: "test-org",
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		Type:          webhook.EventUserLogin,
 		Data: map[string]interface{}{
 			"user_id": "user-999",
 			"ip":      "192.168.1.1",
@@ -407,16 +438,21 @@ func testMultipleWebhooks(successEndpoint, failureEndpoint *MockWebhookEndpoint)
 func testWebhookConfiguration() {
 	fmt.Println("    Testing webhook configuration validation...")
 
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	// Test valid configuration
 	validConfig := &webhook.Webhook{
-		ID:             xid.New(),
-		OrganizationID: "test-org",
-		URL:            "https://example.com/webhook",
-		Events:         []string{webhook.EventUserCreated, webhook.EventUserUpdated},
-		Enabled:        true,
-		Secret:         "valid-secret-key",
-		MaxRetries:     3,
-		RetryBackoff:   webhook.RetryBackoffExponential,
+		ID:            xid.New(),
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		URL:           "https://example.com/webhook",
+		Events:        []string{webhook.EventUserCreated, webhook.EventUserUpdated},
+		Enabled:       true,
+		Secret:        "valid-secret-key",
+		MaxRetries:    3,
+		RetryBackoff:  webhook.RetryBackoffExponential,
 	}
 
 	if err := validateWebhookConfig(validConfig); err == nil {
@@ -445,15 +481,20 @@ func testWebhookConfiguration() {
 
 // testWebhookEventTypes tests different webhook event types
 func testWebhookEventTypes() {
+	// V2 Architecture: Create test app and environment IDs
+	testAppID := xid.New()
+	testEnvID := xid.New()
+
 	events := webhook.AllEventTypes()
 
 	fmt.Printf("    Testing %d webhook event types...\n", len(events))
 
 	for _, eventType := range events {
 		event := &webhook.Event{
-			ID:             xid.New(),
-			Type:           eventType,
-			OrganizationID: "test-org",
+			ID:            xid.New(),
+			AppID:         testAppID,
+			EnvironmentID: testEnvID,
+			Type:          eventType,
 			Data: map[string]interface{}{
 				"test": true,
 			},
@@ -461,8 +502,8 @@ func testWebhookEventTypes() {
 			CreatedAt:  time.Now(),
 		}
 
-		// Validate event structure
-		if event.ID.IsNil() || event.Type == "" || event.OrganizationID == "" {
+		// Validate event structure (V2 architecture)
+		if event.ID.IsNil() || event.Type == "" || event.AppID.IsNil() || event.EnvironmentID.IsNil() {
 			fmt.Printf("    ❌ Invalid event structure for %s\n", eventType)
 		}
 	}

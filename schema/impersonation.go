@@ -15,6 +15,7 @@ type ImpersonationSession struct {
 
 	// Core fields
 	AppID           xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appID"`                       // Platform app (required)
+	EnvironmentID   *xid.ID `bun:"environment_id,type:varchar(20)" json:"environmentID,omitempty"`     // Environment (optional)
 	OrganizationID  *xid.ID `bun:"organization_id,type:varchar(20)" json:"organizationID,omitempty"`   // User-created organization (optional)
 	ImpersonatorID  xid.ID  `bun:"impersonator_id,notnull,type:varchar(20)" json:"impersonatorID"`     // Admin who is impersonating
 	TargetUserID    xid.ID  `bun:"target_user_id,notnull,type:varchar(20)" json:"targetUserID"`        // User being impersonated
@@ -38,8 +39,9 @@ type ImpersonationSession struct {
 	// Relationships (for joins)
 	Impersonator *User         `bun:"rel:belongs-to,join:impersonator_id=id" json:"impersonator,omitempty"`
 	TargetUser   *User         `bun:"rel:belongs-to,join:target_user_id=id" json:"targetUser,omitempty"`
-	App          *App          `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`                   // Platform app
-	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"` // User-created org (optional)
+	App          *App          `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`                         // Platform app
+	Environment  *Environment  `bun:"rel:belongs-to,join:environment_id=id" json:"environment,omitempty"`         // Environment (optional)
+	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`       // User-created org (optional)
 }
 
 // IsExpired checks if the impersonation session has expired
@@ -60,6 +62,7 @@ type ImpersonationAuditEvent struct {
 	ID              xid.ID            `bun:"id,pk,type:varchar(20)" json:"id"`
 	ImpersonationID xid.ID            `bun:"impersonation_id,notnull,type:varchar(20)" json:"impersonationID"`
 	AppID           xid.ID            `bun:"app_id,notnull,type:varchar(20)" json:"appID"`                     // Platform app (required)
+	EnvironmentID   *xid.ID           `bun:"environment_id,type:varchar(20)" json:"environmentID,omitempty"`   // Environment (optional)
 	OrganizationID  *xid.ID           `bun:"organization_id,type:varchar(20)" json:"organizationID,omitempty"` // User-created organization (optional)
 	EventType       string            `bun:"event_type,notnull,type:varchar(50)" json:"eventType"`             // started, ended, action_performed, expired
 	Action          string            `bun:"action,type:varchar(100)" json:"action,omitempty"`                 // Specific action performed during impersonation
@@ -72,5 +75,6 @@ type ImpersonationAuditEvent struct {
 	// Relationships
 	ImpersonationSession *ImpersonationSession `bun:"rel:belongs-to,join:impersonation_id=id" json:"impersonationSession,omitempty"`
 	App                  *App                  `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`
+	Environment          *Environment          `bun:"rel:belongs-to,join:environment_id=id" json:"environment,omitempty"`
 	Organization         *Organization         `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 }

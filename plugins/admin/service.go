@@ -359,8 +359,8 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 
 	// Create ban request
 	banReq := &user.BanRequest{
-		UserID:    req.UserID.String(),
-		BannedBy:  req.AdminID.String(),
+		UserID:    req.UserID,
+		BannedBy:  req.AdminID,
 		Reason:    req.Reason,
 		ExpiresAt: req.ExpiresAt,
 	}
@@ -395,8 +395,8 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 
 	// Create unban request
 	unbanReq := &user.UnbanRequest{
-		UserID:     req.UserID.String(),
-		UnbannedBy: req.AdminID.String(),
+		UserID:     req.UserID,
+		UnbannedBy: req.AdminID,
 	}
 
 	// Unban user

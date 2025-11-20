@@ -5,7 +5,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
@@ -16,23 +18,11 @@ type Handler struct {
 	policyEngine *PolicyEngine
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
-
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
+type SuccessResponse = responses.SuccessResponse
 
 // NewHandler creates a new compliance handler
 func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
@@ -47,12 +37,27 @@ func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 // CreateProfile creates a new compliance profile
 // POST /auth/compliance/profiles
 func (h *Handler) CreateProfile(c forge.Context) error {
-	var req CreateProfileRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
 	}
 
-	profile, err := h.service.CreateProfile(c.Request().Context(), &req)
+	var req CreateProfileRequest
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	}
+
+	// Set appID from context
+	req.AppID = appID.String()
+
+	profile, err := h.service.CreateProfile(ctx, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -63,16 +68,27 @@ func (h *Handler) CreateProfile(c forge.Context) error {
 // CreateProfileFromTemplate creates a profile from a template
 // POST /auth/compliance/profiles/from-template
 func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+
 	var req struct {
-		AppID    string             `json:"appId" validate:"required"`
 		Standard ComplianceStandard `json:"standard" validate:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
-	profile, err := h.service.CreateProfileFromTemplate(c.Request().Context(), req.AppID, req.Standard)
+	profile, err := h.service.CreateProfileFromTemplate(ctx, appID.String(), req.Standard)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -96,9 +112,19 @@ func (h *Handler) GetProfile(c forge.Context) error {
 // GetAppProfile retrieves the compliance profile for an app
 // GET /auth/compliance/apps/:appId/profile
 func (h *Handler) GetAppProfile(c forge.Context) error {
-	appID := c.Param("appId")
+	ctx := c.Request().Context()
 
-	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+
+	profile, err := h.service.GetProfileByApp(ctx, appID.String())
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -113,7 +139,7 @@ func (h *Handler) UpdateProfile(c forge.Context) error {
 
 	var req UpdateProfileRequest
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	profile, err := h.service.UpdateProfile(c.Request().Context(), id, &req)
@@ -141,9 +167,19 @@ func (h *Handler) DeleteProfile(c forge.Context) error {
 // GetComplianceStatus gets overall compliance status for an app
 // GET /auth/compliance/apps/:appId/status
 func (h *Handler) GetComplianceStatus(c forge.Context) error {
-	appID := c.Param("appId")
+	ctx := c.Request().Context()
 
-	status, err := h.service.GetComplianceStatus(c.Request().Context(), appID)
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+
+	status, err := h.service.GetComplianceStatus(ctx, appID.String())
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -154,17 +190,28 @@ func (h *Handler) GetComplianceStatus(c forge.Context) error {
 // GetDashboard gets compliance dashboard data
 // GET /auth/compliance/apps/:appId/dashboard
 func (h *Handler) GetDashboard(c forge.Context) error {
-	appID := c.Param("appId")
 	ctx := c.Request().Context()
 
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+
+	appIDStr := appID.String()
+
 	// Get profile
-	profile, err := h.service.GetProfileByApp(ctx, appID)
+	profile, err := h.service.GetProfileByApp(ctx, appIDStr)
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	// Get status
-	status, _ := h.service.GetComplianceStatus(ctx, appID)
+	status, _ := h.service.GetComplianceStatus(ctx, appIDStr)
 
 	// Get recent checks
 	profileIDFilter := profile.ID
@@ -179,7 +226,7 @@ func (h *Handler) GetDashboard(c forge.Context) error {
 	// Get open violations
 	violationsFilter := &ListViolationsFilter{
 		PaginationParams: pagination.PaginationParams{Limit: 10, Offset: 0},
-		AppID:            &appID,
+		AppID:            &appIDStr,
 		Status:           &statusOpen,
 	}
 	violationsResp, _ := h.service.ListViolations(ctx, violationsFilter)
@@ -188,7 +235,7 @@ func (h *Handler) GetDashboard(c forge.Context) error {
 	// Get recent reports
 	reportsFilter := &ListReportsFilter{
 		PaginationParams: pagination.PaginationParams{Limit: 5, Offset: 0},
-		AppID:            &appID,
+		AppID:            &appIDStr,
 	}
 	reportsResp, _ := h.service.ListReports(ctx, reportsFilter)
 	reports := reportsResp.Data
@@ -216,7 +263,7 @@ func (h *Handler) RunCheck(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	check, err := h.service.RunCheck(c.Request().Context(), profileID, req.CheckType)
@@ -230,6 +277,7 @@ func (h *Handler) RunCheck(c forge.Context) error {
 // ListChecks lists compliance checks
 // GET /auth/compliance/profiles/:profileId/checks
 func (h *Handler) ListChecks(c forge.Context) error {
+	ctx := c.Request().Context()
 	q := c.Request().URL.Query()
 
 	// Parse pagination
@@ -261,7 +309,7 @@ func (h *Handler) ListChecks(c forge.Context) error {
 		filter.Status = &status
 	}
 
-	resp, err := h.service.ListChecks(c.Request().Context(), filter)
+	resp, err := h.service.ListChecks(ctx, filter)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -287,6 +335,19 @@ func (h *Handler) GetCheck(c forge.Context) error {
 // ListViolations lists compliance violations
 // GET /auth/compliance/apps/:appId/violations
 func (h *Handler) ListViolations(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	appIDStr := appID.String()
+
 	q := c.Request().URL.Query()
 
 	// Parse pagination
@@ -302,12 +363,10 @@ func (h *Handler) ListViolations(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
+		AppID: &appIDStr,
 	}
 
 	// Parse optional filters
-	if appID := c.Param("appId"); appID != "" {
-		filter.AppID = &appID
-	}
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
@@ -324,7 +383,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 		filter.Status = &status
 	}
 
-	resp, err := h.service.ListViolations(c.Request().Context(), filter)
+	resp, err := h.service.ListViolations(ctx, filter)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -348,14 +407,24 @@ func (h *Handler) GetViolation(c forge.Context) error {
 // ResolveViolation resolves a compliance violation
 // PUT /auth/compliance/violations/:id/resolve
 func (h *Handler) ResolveViolation(c forge.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
-	resolvedBy := c.Get("user_id").(string) // From auth middleware
 
-	if err := h.service.repo.ResolveViolation(c.Request().Context(), id, resolvedBy); err != nil {
+	// Get userID from context
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"USER_CONTEXT_REQUIRED",
+			"User context required",
+			http.StatusForbidden,
+		))
+	}
+
+	if err := h.service.repo.ResolveViolation(ctx, id, userID.String()); err != nil {
 		return handleError(c, err)
 	}
 
-	violation, _ := h.service.repo.GetViolation(c.Request().Context(), id)
+	violation, _ := h.service.repo.GetViolation(ctx, id)
 
 	return c.JSON(http.StatusOK, violation)
 }
@@ -365,7 +434,17 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 // GenerateReport generates a compliance report
 // POST /auth/compliance/apps/:appId/reports
 func (h *Handler) GenerateReport(c forge.Context) error {
-	appID := c.Param("appId")
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
 
 	var req struct {
 		ReportType string             `json:"reportType" validate:"required"`
@@ -375,21 +454,24 @@ func (h *Handler) GenerateReport(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
+
+	// Get userID from context
+	userID, _ := contexts.GetUserID(ctx)
 
 	// Create report record
 	report := &ComplianceReport{
-		AppID:       appID,
+		AppID:       appID.String(),
 		ReportType:  req.ReportType,
 		Standard:    req.Standard,
 		Period:      req.Period,
 		Format:      req.Format,
 		Status:      "generating",
-		GeneratedBy: c.Get("user_id").(string),
+		GeneratedBy: userID.String(),
 	}
 
-	if err := h.service.repo.CreateReport(c.Request().Context(), report); err != nil {
+	if err := h.service.repo.CreateReport(ctx, report); err != nil {
 		return handleError(c, err)
 	}
 
@@ -402,6 +484,19 @@ func (h *Handler) GenerateReport(c forge.Context) error {
 // ListReports lists compliance reports
 // GET /auth/compliance/apps/:appId/reports
 func (h *Handler) ListReports(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	appIDStr := appID.String()
+
 	q := c.Request().URL.Query()
 
 	// Parse pagination
@@ -417,12 +512,10 @@ func (h *Handler) ListReports(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
+		AppID: &appIDStr,
 	}
 
 	// Parse optional filters
-	if appID := c.Param("appId"); appID != "" {
-		filter.AppID = &appID
-	}
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
@@ -436,7 +529,7 @@ func (h *Handler) ListReports(c forge.Context) error {
 		filter.Format = &format
 	}
 
-	resp, err := h.service.ListReports(c.Request().Context(), filter)
+	resp, err := h.service.ListReports(ctx, filter)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -468,7 +561,7 @@ func (h *Handler) DownloadReport(c forge.Context) error {
 	}
 
 	if report.Status != "ready" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Report is not ready for download",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Report is not ready for download"))
 	}
 
 	// In real implementation, this would stream the file from storage
@@ -486,7 +579,17 @@ func (h *Handler) generateReportAsync(report *ComplianceReport) {
 // CreateEvidence creates compliance evidence
 // POST /auth/compliance/apps/:appId/evidence
 func (h *Handler) CreateEvidence(c forge.Context) error {
-	appID := c.Param("appId")
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
 
 	var req struct {
 		EvidenceType string             `json:"evidenceType" validate:"required"`
@@ -498,28 +601,31 @@ func (h *Handler) CreateEvidence(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Get profile
-	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
+	profile, err := h.service.GetProfileByApp(ctx, appID.String())
 	if err != nil {
 		return handleError(c, err)
 	}
 
+	// Get userID from context
+	userID, _ := contexts.GetUserID(ctx)
+
 	evidence := &ComplianceEvidence{
 		ProfileID:    profile.ID,
-		AppID:        appID,
+		AppID:        appID.String(),
 		EvidenceType: req.EvidenceType,
 		Standard:     req.Standard,
 		ControlID:    req.ControlID,
 		Title:        req.Title,
 		Description:  req.Description,
 		FileURL:      req.FileURL,
-		CollectedBy:  c.Get("user_id").(string),
+		CollectedBy:  userID.String(),
 	}
 
-	if err := h.service.repo.CreateEvidence(c.Request().Context(), evidence); err != nil {
+	if err := h.service.repo.CreateEvidence(ctx, evidence); err != nil {
 		return handleError(c, err)
 	}
 
@@ -529,6 +635,19 @@ func (h *Handler) CreateEvidence(c forge.Context) error {
 // ListEvidence lists compliance evidence
 // GET /auth/compliance/apps/:appId/evidence
 func (h *Handler) ListEvidence(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	appIDStr := appID.String()
+
 	q := c.Request().URL.Query()
 
 	// Parse pagination
@@ -544,12 +663,10 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
+		AppID: &appIDStr,
 	}
 
 	// Parse optional filters
-	if appID := c.Param("appId"); appID != "" {
-		filter.AppID = &appID
-	}
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
@@ -560,7 +677,7 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 		filter.ControlID = &controlID
 	}
 
-	resp, err := h.service.ListEvidence(c.Request().Context(), filter)
+	resp, err := h.service.ListEvidence(ctx, filter)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -598,7 +715,17 @@ func (h *Handler) DeleteEvidence(c forge.Context) error {
 // CreatePolicy creates a compliance policy
 // POST /auth/compliance/apps/:appId/policies
 func (h *Handler) CreatePolicy(c forge.Context) error {
-	appID := c.Param("appId")
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
 
 	var req struct {
 		PolicyType string             `json:"policyType" validate:"required"`
@@ -609,18 +736,18 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Get profile
-	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
+	profile, err := h.service.GetProfileByApp(ctx, appID.String())
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	policy := &CompliancePolicy{
 		ProfileID:  profile.ID,
-		AppID:      appID,
+		AppID:      appID.String(),
 		PolicyType: req.PolicyType,
 		Standard:   req.Standard,
 		Title:      req.Title,
@@ -629,7 +756,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 		Status:     "draft",
 	}
 
-	if err := h.service.repo.CreatePolicy(c.Request().Context(), policy); err != nil {
+	if err := h.service.repo.CreatePolicy(ctx, policy); err != nil {
 		return handleError(c, err)
 	}
 
@@ -639,6 +766,19 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 // ListPolicies lists compliance policies
 // GET /auth/compliance/apps/:appId/policies
 func (h *Handler) ListPolicies(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	appIDStr := appID.String()
+
 	q := c.Request().URL.Query()
 
 	// Parse pagination
@@ -654,12 +794,10 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
+		AppID: &appIDStr,
 	}
 
 	// Parse optional filters
-	if appID := c.Param("appId"); appID != "" {
-		filter.AppID = &appID
-	}
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
@@ -670,7 +808,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 		filter.Status = &status
 	}
 
-	resp, err := h.service.ListPolicies(c.Request().Context(), filter)
+	resp, err := h.service.ListPolicies(ctx, filter)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -704,7 +842,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	policy, err := h.service.repo.GetPolicy(c.Request().Context(), id)
@@ -750,7 +888,17 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 // CreateTraining creates a training record
 // POST /auth/compliance/apps/:appId/training
 func (h *Handler) CreateTraining(c forge.Context) error {
-	appID := c.Param("appId")
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
 
 	var req struct {
 		UserID       string             `json:"userId" validate:"required"`
@@ -759,25 +907,25 @@ func (h *Handler) CreateTraining(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Get profile
-	profile, err := h.service.GetProfileByApp(c.Request().Context(), appID)
+	profile, err := h.service.GetProfileByApp(ctx, appID.String())
 	if err != nil {
 		return handleError(c, err)
 	}
 
 	training := &ComplianceTraining{
 		ProfileID:    profile.ID,
-		AppID:        appID,
+		AppID:        appID.String(),
 		UserID:       req.UserID,
 		TrainingType: req.TrainingType,
 		Standard:     req.Standard,
 		Status:       "required",
 	}
 
-	if err := h.service.repo.CreateTraining(c.Request().Context(), training); err != nil {
+	if err := h.service.repo.CreateTraining(ctx, training); err != nil {
 		return handleError(c, err)
 	}
 
@@ -787,6 +935,19 @@ func (h *Handler) CreateTraining(c forge.Context) error {
 // ListTraining lists training records
 // GET /auth/compliance/apps/:appId/training
 func (h *Handler) ListTraining(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Get appID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	appIDStr := appID.String()
+
 	q := c.Request().URL.Query()
 
 	// Parse pagination
@@ -802,12 +963,10 @@ func (h *Handler) ListTraining(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
+		AppID: &appIDStr,
 	}
 
 	// Parse optional filters
-	if appID := c.Param("appId"); appID != "" {
-		filter.AppID = &appID
-	}
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
@@ -821,7 +980,7 @@ func (h *Handler) ListTraining(c forge.Context) error {
 		filter.Status = &status
 	}
 
-	resp, err := h.service.ListTraining(c.Request().Context(), filter)
+	resp, err := h.service.ListTraining(ctx, filter)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -852,7 +1011,7 @@ func (h *Handler) CompleteTraining(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	training, err := h.service.repo.GetTraining(c.Request().Context(), id)
@@ -901,7 +1060,7 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 
 	template, ok := GetTemplate(standard)
 	if !ok {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "Template not found",})
+		return c.JSON(http.StatusNotFound, errs.NotFound("Template not found"))
 	}
 
 	return c.JSON(http.StatusOK, template)
@@ -916,5 +1075,5 @@ func handleError(c forge.Context, err error) error {
 	}
 
 	// Fallback for unexpected errors
-	return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "Internal server error"})
+	return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Internal server error"))
 }

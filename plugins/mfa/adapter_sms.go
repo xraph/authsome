@@ -5,6 +5,10 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	"github.com/xraph/authsome/plugins/phone"
 )
 
@@ -12,28 +16,30 @@ import (
 type SMSFactorAdapter struct {
 	BaseFactorAdapter
 	phoneService *phone.Service
+	notifAdapter *notificationPlugin.Adapter
 }
 
 // NewSMSFactorAdapter creates a new SMS factor adapter
-func NewSMSFactorAdapter(phoneService *phone.Service, enabled bool) *SMSFactorAdapter {
+func NewSMSFactorAdapter(phoneService *phone.Service, notifAdapter *notificationPlugin.Adapter, enabled bool) *SMSFactorAdapter {
 	return &SMSFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
 			factorType: FactorTypeSMS,
-			available:  enabled && phoneService != nil,
+			available:  enabled && (phoneService != nil || notifAdapter != nil),
 		},
 		phoneService: phoneService,
+		notifAdapter: notifAdapter,
 	}
 }
 
 // Enroll registers a phone number for MFA
 func (a *SMSFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("SMS factor not available")
+		return nil, errs.BadRequest("SMS MFA factor not available")
 	}
 
 	phone, ok := metadata["phone"].(string)
 	if !ok || phone == "" {
-		return nil, fmt.Errorf("phone number required in metadata")
+		return nil, errs.RequiredField("phone")
 	}
 
 	// Store phone for this factor
@@ -55,7 +61,7 @@ func (a *SMSFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata m
 // VerifyEnrollment sends a test code to verify phone works
 func (a *SMSFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	if !a.IsAvailable() {
-		return fmt.Errorf("SMS factor not available")
+		return errs.BadRequest("SMS MFA factor not available")
 	}
 
 	// This would:
@@ -69,24 +75,65 @@ func (a *SMSFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xi
 // Challenge sends an SMS OTP code for MFA verification
 func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("SMS factor not available")
+		return nil, errs.BadRequest("SMS MFA factor not available")
 	}
 
 	// Extract phone from factor metadata
 	phoneNumber, ok := factor.Metadata["phone"].(string)
 	if !ok || phoneNumber == "" {
-		return nil, fmt.Errorf("no phone number configured for this factor")
+		return nil, errs.BadRequest("No phone number configured for this factor")
+	}
+
+	// Get app context for notifications
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return nil, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400)
 	}
 
 	// Extract IP and user agent from metadata
 	ip, _ := metadata["ip"].(string)
 	ua, _ := metadata["user_agent"].(string)
 
-	// Use phone service to send the code
-	// Note: We're using it for MFA, not primary auth
-	code, err := a.phoneService.SendCode(ctx, phoneNumber, ip, ua)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send SMS code: %w", err)
+	// Generate OTP code
+	code := fmt.Sprintf("%06d", xid.New().Time().Unix()%1000000)
+
+	// Try to send via notification plugin first
+	if a.notifAdapter != nil {
+		err := a.notifAdapter.SendMFACode(ctx, appID, phoneNumber, code, 10, notification.NotificationTypeSMS)
+		if err != nil {
+			// Log error but try fallback
+			fmt.Printf("Failed to send SMS code via notification plugin: %v\n", err)
+			// Fall through to phone service fallback
+		} else {
+			// Successfully sent via notification
+			challenge := &Challenge{
+				ID:       xid.New(),
+				UserID:   factor.UserID,
+				FactorID: factor.ID,
+				Type:     FactorTypeSMS,
+				Status:   ChallengeStatusPending,
+				Code:     code,
+				Metadata: map[string]any{
+					"phone": maskPhone(phoneNumber),
+				},
+				Attempts:    0,
+				MaxAttempts: 5,
+				IPAddress:   ip,
+				UserAgent:   ua,
+			}
+			return challenge, nil
+		}
+	}
+
+	// Fallback to direct phone service if available
+	if a.phoneService != nil {
+		sentCode, err := a.phoneService.SendCode(ctx, phoneNumber, ip, ua)
+		if err != nil {
+			return nil, errs.Wrap(err, "SEND_SMS_CODE_FAILED", "Failed to send SMS code", 500)
+		}
+		if sentCode != "" {
+			code = sentCode
+		}
 	}
 
 	challenge := &Challenge{
@@ -95,7 +142,7 @@ func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metada
 		FactorID: factor.ID,
 		Type:     FactorTypeSMS,
 		Status:   ChallengeStatusPending,
-		Code:     code, // Store for verification (hashed in production)
+		Code:     code,
 		Metadata: map[string]any{
 			"phone": maskPhone(phoneNumber),
 		},
@@ -111,7 +158,7 @@ func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metada
 // Verify verifies an SMS OTP code
 func (a *SMSFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
-		return false, fmt.Errorf("SMS factor not available")
+		return false, errs.BadRequest("SMS MFA factor not available")
 	}
 
 	// Simple code comparison (in production, this should use hashed comparison)

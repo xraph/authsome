@@ -1,6 +1,8 @@
 package social
 
 import (
+	"time"
+
 	"github.com/xraph/authsome/plugins/social/providers"
 )
 
@@ -17,6 +19,23 @@ type Config struct {
 	AutoCreateUser       bool `json:"autoCreateUser" yaml:"autoCreateUser"`             // Auto-create user on OAuth sign-in
 	RequireEmailVerified bool `json:"requireEmailVerified" yaml:"requireEmailVerified"` // Require email verification from provider
 	TrustEmailVerified   bool `json:"trustEmailVerified" yaml:"trustEmailVerified"`     // Trust email verification from provider
+
+	// State storage configuration
+	StateStorage StateStorageConfig `json:"stateStorage" yaml:"stateStorage"`
+}
+
+// StateStorageConfig holds configuration for OAuth state storage
+type StateStorageConfig struct {
+	// UseRedis enables Redis-backed state storage (recommended for production)
+	UseRedis bool `json:"useRedis" yaml:"useRedis"`
+	// RedisAddr is the Redis server address
+	RedisAddr string `json:"redisAddr" yaml:"redisAddr"`
+	// RedisPassword is the Redis password (optional)
+	RedisPassword string `json:"redisPassword" yaml:"redisPassword"`
+	// RedisDB is the Redis database number
+	RedisDB int `json:"redisDb" yaml:"redisDb"`
+	// StateTTL is the state expiration time
+	StateTTL time.Duration `json:"stateTtl" yaml:"stateTtl"`
 }
 
 // ProvidersConfig holds configuration for each provider
@@ -48,5 +67,12 @@ func DefaultConfig() Config {
 		AutoCreateUser:       true,
 		RequireEmailVerified: false,
 		Providers:            ProvidersConfig{},
+		StateStorage: StateStorageConfig{
+			UseRedis:      false,
+			RedisAddr:     "localhost:6379",
+			RedisPassword: "",
+			RedisDB:       0,
+			StateTTL:      15 * time.Minute,
+		},
 	}
 }

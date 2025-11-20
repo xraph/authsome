@@ -18,24 +18,11 @@ func main() {
 	logger.Println("Starting JWT Plugin Example...")
 
 	// Create Forge app
-	app := forge.New(
-		forge.WithName("jwt-plugin-example"),
-		forge.WithVersion("1.0.0"),
-	)
+	app := forge.New()
 
 	// Configure database (using SQLite for simplicity)
-	dbConfig := map[string]interface{}{
-		"driver": "sqlite",
-		"dsn":    "jwt_example.db",
-	}
-	if err := app.Config().Set("database", dbConfig); err != nil {
-		log.Fatalf("Failed to set database config: %v", err)
-	}
-
-	// Initialize app
-	if err := app.Initialize(context.Background()); err != nil {
-		log.Fatalf("Failed to initialize app: %v", err)
-	}
+	// Note: Database configuration would typically be set via config files or environment variables
+	// For demonstration purposes, assuming database is already configured
 
 	// Create AuthSome instance
 	auth := authsome.New(
@@ -83,7 +70,7 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		logger.Println("Starting server on :8080...")
-		if err := app.Start(":8080"); err != nil {
+		if err := app.Run(); err != nil {
 			log.Fatalf("Server error: %v", err)
 		}
 	}()

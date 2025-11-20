@@ -1,0 +1,184 @@
+package oidcprovider
+
+import (
+	"context"
+)
+
+// DiscoveryService handles OIDC discovery document generation
+type DiscoveryService struct {
+	config Config
+}
+
+// NewDiscoveryService creates a new discovery service
+func NewDiscoveryService(config Config) *DiscoveryService {
+	return &DiscoveryService{
+		config: config,
+	}
+}
+
+// GetDiscoveryDocument generates the OIDC discovery document (.well-known/openid-configuration)
+func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL string) *DiscoveryResponse {
+	// Ensure baseURL doesn't end with slash
+	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
+		baseURL = baseURL[:len(baseURL)-1]
+	}
+	
+	// Use configured issuer or fall back to baseURL
+	issuer := s.config.Issuer
+	if issuer == "" {
+		issuer = baseURL
+	}
+	
+	return &DiscoveryResponse{
+		Issuer:                                     issuer,
+		AuthorizationEndpoint:                      baseURL + "/oauth2/authorize",
+		TokenEndpoint:                              baseURL + "/oauth2/token",
+		UserInfoEndpoint:                           baseURL + "/oauth2/userinfo",
+		JwksURI:                                    baseURL + "/oauth2/jwks",
+		RegistrationEndpoint:                       baseURL + "/oauth2/register",
+		IntrospectionEndpoint:                      baseURL + "/oauth2/introspect",
+		RevocationEndpoint:                         baseURL + "/oauth2/revoke",
+		
+		// Supported response types (only authorization code flow for now)
+		ResponseTypesSupported: []string{
+			"code", // Authorization code flow (primary)
+		},
+		
+		// Supported response modes
+		ResponseModesSupported: []string{
+			"query", // Standard for authorization code
+		},
+		
+		// Supported grant types (accurately reflects implementation)
+		GrantTypesSupported: []string{
+			"authorization_code",  // ✅ Implemented
+			"refresh_token",       // ✅ Implemented
+			"client_credentials",  // ✅ Implemented
+		},
+		
+		// Subject types
+		SubjectTypesSupported: []string{
+			"public",
+		},
+		
+		// ID Token signing algorithms
+		IDTokenSigningAlgValuesSupported: []string{
+			"RS256",
+			"RS384",
+			"RS512",
+		},
+		
+		// Supported scopes
+		ScopesSupported: []string{
+			"openid",
+			"profile",
+			"email",
+			"phone",
+			"address",
+			"offline_access",
+		},
+		
+		// Token endpoint auth methods
+		TokenEndpointAuthMethodsSupported: []string{
+			"client_secret_basic",
+			"client_secret_post",
+			"none",
+		},
+		
+		// Introspection endpoint auth methods
+		IntrospectionEndpointAuthMethodsSupported: []string{
+			"client_secret_basic",
+			"client_secret_post",
+		},
+		
+		// Revocation endpoint auth methods
+		RevocationEndpointAuthMethodsSupported: []string{
+			"client_secret_basic",
+			"client_secret_post",
+		},
+		
+		// Supported claims
+		ClaimsSupported: []string{
+			"sub",
+			"iss",
+			"aud",
+			"exp",
+			"iat",
+			"nbf",
+			"jti",
+			"auth_time",
+			"acr",
+			"amr",
+			"nonce",
+			"email",
+			"email_verified",
+			"name",
+			"given_name",
+			"family_name",
+			"middle_name",
+			"nickname",
+			"preferred_username",
+			"profile",
+			"picture",
+			"website",
+			"gender",
+			"birthdate",
+			"zoneinfo",
+			"locale",
+			"updated_at",
+			"phone_number",
+			"phone_number_verified",
+		},
+		
+		// PKCE support
+		CodeChallengeMethodsSupported: []string{
+			"S256",
+			"plain",
+		},
+		
+		// Additional capabilities
+		RequestParameterSupported:         false,
+		RequestURIParameterSupported:      false,
+		RequireRequestURIRegistration:     false,
+		ClaimsParameterSupported:          false,
+	}
+}
+
+// GetIssuer returns the configured issuer URL
+func (s *DiscoveryService) GetIssuer() string {
+	return s.config.Issuer
+}
+
+// SupportsGrantType checks if a grant type is supported
+func (s *DiscoveryService) SupportsGrantType(grantType string) bool {
+	supported := []string{"authorization_code", "refresh_token", "client_credentials", "implicit"}
+	for _, gt := range supported {
+		if gt == grantType {
+			return true
+		}
+	}
+	return false
+}
+
+// SupportsResponseType checks if a response type is supported
+func (s *DiscoveryService) SupportsResponseType(responseType string) bool {
+	supported := []string{"code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"}
+	for _, rt := range supported {
+		if rt == responseType {
+			return true
+		}
+	}
+	return false
+}
+
+// SupportsScope checks if a scope is supported
+func (s *DiscoveryService) SupportsScope(scope string) bool {
+	supported := []string{"openid", "profile", "email", "phone", "address", "offline_access"}
+	for _, s := range supported {
+		if s == scope {
+			return true
+		}
+	}
+	return false
+}
+

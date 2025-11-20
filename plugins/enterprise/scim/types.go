@@ -409,3 +409,96 @@ type GroupMapping struct {
 	CreatedAt      time.Time `bun:"created_at,notnull"`
 	UpdatedAt      time.Time `bun:"updated_at,notnull"`
 }
+
+// API Request/Response Types for SCIM Admin Endpoints
+
+// CreateTokenRequest is the request body for creating a provisioning token
+type CreateTokenRequest struct {
+	Name        string     `json:"name" validate:"required"`
+	Description string     `json:"description"`
+	Scopes      []string   `json:"scopes" validate:"required,min=1"`
+	ExpiresAt   *time.Time `json:"expiresAt"`
+}
+
+// TokenResponse is the response for token creation
+type TokenResponse struct {
+	Token   string `json:"token"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
+
+// TokenListResponse represents a list of provisioning tokens (without actual token values)
+type TokenListResponse struct {
+	Tokens []ProvisioningTokenInfo `json:"tokens"`
+	Total  int                     `json:"total"`
+}
+
+// ProvisioningTokenInfo contains token metadata without the actual token
+type ProvisioningTokenInfo struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Scopes      []string   `json:"scopes"`
+	ExpiresAt   *time.Time `json:"expiresAt"`
+	LastUsedAt  *time.Time `json:"lastUsedAt"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	RevokedAt   *time.Time `json:"revokedAt,omitempty"`
+}
+
+// UpdateAttributeMappingsRequest is the request body for updating attribute mappings
+type UpdateAttributeMappingsRequest struct {
+	Mappings map[string]string `json:"mappings" validate:"required"`
+}
+
+// AttributeMappingsResponse is the response for attribute mappings
+type AttributeMappingsResponse struct {
+	ID       string            `json:"id"`
+	Mappings map[string]string `json:"mappings"`
+}
+
+// SearchRequest represents a SCIM search request (RFC 7644 Section 3.4.3)
+type SearchRequest struct {
+	Schemas            []string `json:"schemas"`
+	Attributes         []string `json:"attributes,omitempty"`
+	ExcludedAttributes []string `json:"excludedAttributes,omitempty"`
+	Filter             string   `json:"filter,omitempty"`
+	SortBy             string   `json:"sortBy,omitempty"`
+	SortOrder          string   `json:"sortOrder,omitempty"` // ascending, descending
+	StartIndex         int      `json:"startIndex,omitempty"`
+	Count              int      `json:"count,omitempty"`
+}
+
+// LogsResponse represents a list of provisioning logs
+type LogsResponse struct {
+	Logs  []ProvisioningLog `json:"logs"`
+	Total int               `json:"total"`
+	Page  int               `json:"page"`
+	Limit int               `json:"limit"`
+}
+
+// StatsResponse represents provisioning statistics
+type StatsResponse struct {
+	TotalOperations int                `json:"totalOperations"`
+	SuccessCount    int                `json:"successCount"`
+	FailureCount    int                `json:"failureCount"`
+	SuccessRate     float64            `json:"successRate"`
+	ByOperation     map[string]int     `json:"byOperation"`
+	ByResourceType  map[string]int     `json:"byResourceType"`
+	ByStatus        map[string]int     `json:"byStatus"`
+	Recent          []ProvisioningLog  `json:"recent"`
+	StartDate       *time.Time         `json:"startDate,omitempty"`
+	EndDate         *time.Time         `json:"endDate,omitempty"`
+}
+
+// UsersResponse wraps user list response for clarity
+type UsersResponse struct {
+	Users []SCIMUser `json:"users"`
+	Total int        `json:"total"`
+}
+
+// GroupsResponse wraps group list response for clarity
+type GroupsResponse struct {
+	Groups []SCIMGroup `json:"groups"`
+	Total  int         `json:"total"`
+}

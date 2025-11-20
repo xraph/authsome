@@ -9,6 +9,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/forge"
 )
 
@@ -19,36 +20,12 @@ type Handler struct {
 	metrics *Metrics
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
+// Response types - use shared responses from core
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
+type SuccessResponse = responses.SuccessResponse
 
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
-
-
-
-type UsersResponse struct {
-	Resources   interface{} `json:"Resources"`
-	TotalResults int        `json:"totalResults"`
-	StartIndex   int        `json:"startIndex"`
-	ItemsPerPage int        `json:"itemsPerPage"`
-}
-
-type GroupsResponse struct {
-	Resources   interface{} `json:"Resources"`
-	TotalResults int        `json:"totalResults"`
-}
+// Note: All SCIM-specific request/response types are defined in types.go
 
 // NewHandler creates a new SCIM handler
 func NewHandler(service *Service, config *Config) *Handler {
@@ -59,7 +36,9 @@ func NewHandler(service *Service, config *Config) *Handler {
 	}
 }
 
-// Service Provider Configuration endpoints (RFC 7643 Section 5)
+// =============================================================================
+// SERVICE PROVIDER CONFIGURATION ENDPOINTS (RFC 7643 Section 5)
+// =============================================================================
 
 // GetServiceProviderConfig returns the service provider configuration
 func (h *Handler) GetServiceProviderConfig(c forge.Context) error {
@@ -105,7 +84,9 @@ func (h *Handler) GetServiceProviderConfig(c forge.Context) error {
 	return c.JSON(http.StatusOK, config)
 }
 
-// Resource Type endpoints (RFC 7643 Section 6)
+// =============================================================================
+// RESOURCE TYPE ENDPOINTS (RFC 7643 Section 6)
+// =============================================================================
 
 // GetResourceTypes returns all supported resource types
 func (h *Handler) GetResourceTypes(c forge.Context) error {
@@ -191,13 +172,15 @@ func (h *Handler) GetResourceType(c forge.Context) error {
 			},
 		}
 	default:
-		return h.errorResponse(c, http.StatusNotFound, "invalidValue", "Resource type not found")
+		return c.JSON(http.StatusNotFound, h.scimError(http.StatusNotFound, "invalidValue", "Resource type not found"))
 	}
 
 	return c.JSON(http.StatusOK, resourceType)
 }
 
-// Schema endpoints (RFC 7643 Section 7)
+// =============================================================================
+// SCHEMA ENDPOINTS (RFC 7643 Section 7)
+// =============================================================================
 
 // GetSchemas returns all supported schemas
 func (h *Handler) GetSchemas(c forge.Context) error {
@@ -230,17 +213,21 @@ func (h *Handler) GetSchemas(c forge.Context) error {
 func (h *Handler) GetSchema(c forge.Context) error {
 	id := c.Param("id")
 
-	// For simplicity, return a basic response
-	// In production, implement full schema definitions
+	// Return basic schema response
+	// TODO: Implement full RFC 7643 schema definitions with attributes
+	schema := &Schema{
+		ID:          id,
+		Name:        "Schema",
+		Description: "SCIM Schema",
+		Attributes:  []Attribute{}, // TODO: Populate with actual schema attributes
+	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"id":          id,
-		"name":        "Schema",
-		"description": "SCIM Schema",
-	})
+	return c.JSON(http.StatusOK, schema)
 }
 
-// User endpoints (RFC 7644 Section 3)
+// =============================================================================
+// USER ENDPOINTS (RFC 7644 Section 3)
+// =============================================================================
 
 // CreateUser creates a new user
 func (h *Handler) CreateUser(c forge.Context) error {
@@ -249,21 +236,30 @@ func (h *Handler) CreateUser(c forge.Context) error {
 		h.metrics.RecordRequestDuration("POST /Users", time.Since(start))
 	}()
 
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse request body
 	var scimUser SCIMUser
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimUser); err != nil {
 		h.metrics.RecordError("invalid_json")
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	// Get organization ID from context (set by middleware)
-	orgID := contexts.GetOrganizationID(c.Request().Context())
-
-	createdUser, err := h.service.CreateUser(c.Request().Context(), &scimUser, orgID)
+	// Create user via service
+	createdUser, err := h.service.CreateUser(ctx, &scimUser, orgID)
 	if err != nil {
 		h.metrics.RecordError("user_creation_failed")
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordUserOperation("create")
 	return c.JSON(http.StatusCreated, createdUser)
 }
 
@@ -274,285 +270,441 @@ func (h *Handler) ListUsers(c forge.Context) error {
 		h.metrics.RecordRequestDuration("GET /Users", time.Since(start))
 	}()
 
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
 	// Parse query parameters
-	filter := c.Request().URL.Query().Get("filter")
-	startIndex := parseIntParam(c.Request().URL.Query().Get("startIndex"), 1)
-	count := parseIntParam(c.Request().URL.Query().Get("count"), h.config.Search.DefaultResults)
+	filter := c.Query("filter")
+	startIndex := parseIntParam(c.Query("startIndex"), 1)
+	count := parseIntParam(c.Query("count"), h.config.Search.DefaultResults)
 
 	// Enforce max results
 	if count > h.config.Search.MaxResults {
 		count = h.config.Search.MaxResults
 	}
 
-	listResponse, err := h.service.ListUsers(c.Request().Context(), orgID, filter, startIndex, count)
+	// List users via service
+	listResponse, err := h.service.ListUsers(ctx, orgID, filter, startIndex, count)
 	if err != nil {
 		h.metrics.RecordError("user_list_failed")
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordUserOperation("list")
 	return c.JSON(http.StatusOK, listResponse)
 }
 
 // GetUser retrieves a specific user
 func (h *Handler) GetUser(c forge.Context) error {
-	id := c.Param("id")
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
+	// Parse user ID from path
+	id := c.Param("id")
 	userID, err := xid.FromString(id)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_user_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid user ID format"))
 	}
 
-	scimUser, err := h.service.GetUser(c.Request().Context(), userID, orgID)
+	// Get user via service
+	scimUser, err := h.service.GetUser(ctx, userID, orgID)
 	if err != nil {
-		return h.errorResponse(c, http.StatusNotFound, "", "User not found")
+		h.metrics.RecordError("user_get_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordUserOperation("read")
 	return c.JSON(http.StatusOK, scimUser)
 }
 
 // ReplaceUser replaces a user (PUT)
 func (h *Handler) ReplaceUser(c forge.Context) error {
-	id := c.Param("id")
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
+	// Parse user ID from path
+	id := c.Param("id")
 	userID, err := xid.FromString(id)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_user_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid user ID format"))
 	}
 
+	// Parse request body
 	var scimUser SCIMUser
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimUser); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	updatedUser, err := h.service.ReplaceUser(c.Request().Context(), userID, orgID, &scimUser)
+	// Replace user via service
+	updatedUser, err := h.service.ReplaceUser(ctx, userID, orgID, &scimUser)
 	if err != nil {
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		h.metrics.RecordError("user_replace_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordUserOperation("replace")
 	return c.JSON(http.StatusOK, updatedUser)
 }
 
 // UpdateUser updates a user (PATCH)
 func (h *Handler) UpdateUser(c forge.Context) error {
-	id := c.Param("id")
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
+	// Parse user ID from path
+	id := c.Param("id")
 	userID, err := xid.FromString(id)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_user_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid user ID format"))
 	}
 
+	// Parse patch operations
 	var patch PatchOp
 	if err := json.NewDecoder(c.Request().Body).Decode(&patch); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	updatedUser, err := h.service.UpdateUser(c.Request().Context(), userID, orgID, &patch)
+	// Validate patch operations
+	if len(patch.Operations) == 0 {
+		h.metrics.RecordError("empty_patch_operations")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "No patch operations provided"))
+	}
+
+	// Update user via service
+	updatedUser, err := h.service.UpdateUser(ctx, userID, orgID, &patch)
 	if err != nil {
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		h.metrics.RecordError("user_update_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordUserOperation("update")
 	return c.JSON(http.StatusOK, updatedUser)
 }
 
 // DeleteUser deletes a user
 func (h *Handler) DeleteUser(c forge.Context) error {
-	id := c.Param("id")
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
+	// Parse user ID from path
+	id := c.Param("id")
 	userID, err := xid.FromString(id)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_user_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid user ID format"))
 	}
 
-	if err := h.service.DeleteUser(c.Request().Context(), userID, orgID); err != nil {
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+	// Delete user via service
+	if err := h.service.DeleteUser(ctx, userID, orgID); err != nil {
+		h.metrics.RecordError("user_delete_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordUserOperation("delete")
 	return c.NoContent(http.StatusNoContent)
 }
 
-// Group endpoints (RFC 7644 Section 3)
+// =============================================================================
+// GROUP ENDPOINTS (RFC 7644 Section 3)
+// =============================================================================
 
 // CreateGroup creates a new group
 func (h *Handler) CreateGroup(c forge.Context) error {
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse request body
 	var scimGroup SCIMGroup
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimGroup); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	orgID := c.Get("organization_id").(xid.ID)
-
-	createdGroup, err := h.service.CreateGroup(c.Request().Context(), &scimGroup, orgID)
+	// Create group via service
+	createdGroup, err := h.service.CreateGroup(ctx, &scimGroup, orgID)
 	if err != nil {
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		h.metrics.RecordError("group_creation_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordGroupOperation("create")
 	return c.JSON(http.StatusCreated, createdGroup)
 }
 
 // ListGroups lists groups
 func (h *Handler) ListGroups(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
-	// Get query parameters
+	// Parse query parameters
 	filter := c.Query("filter")
-	startIndex := 1
-	if si := c.Query("startIndex"); si != "" {
-		fmt.Sscanf(si, "%d", &startIndex)
+	startIndex := parseIntParam(c.Query("startIndex"), 1)
+	count := parseIntParam(c.Query("count"), h.config.Search.DefaultResults)
+
+	// Enforce max results
+	if count > h.config.Search.MaxResults {
+		count = h.config.Search.MaxResults
 	}
 
-	count := 100
-	if cnt := c.Query("count"); cnt != "" {
-		fmt.Sscanf(cnt, "%d", &count)
-	}
-
-	result, err := h.service.ListGroups(c.Request().Context(), orgID, filter, startIndex, count)
+	// List groups via service
+	result, err := h.service.ListGroups(ctx, orgID, filter, startIndex, count)
 	if err != nil {
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		h.metrics.RecordError("group_list_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordGroupOperation("list")
 	return c.JSON(http.StatusOK, result)
 }
 
 // GetGroup retrieves a specific group
 func (h *Handler) GetGroup(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
-	groupIDStr := c.Param("id")
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
+	// Parse group ID from path
+	groupIDStr := c.Param("id")
 	groupID, err := xid.FromString(groupIDStr)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_group_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid group ID format"))
 	}
 
-	group, err := h.service.GetGroup(c.Request().Context(), groupID, orgID)
+	// Get group via service
+	group, err := h.service.GetGroup(ctx, groupID, orgID)
 	if err != nil {
-		return h.errorResponse(c, http.StatusNotFound, "", err.Error())
+		h.metrics.RecordError("group_get_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordGroupOperation("read")
 	return c.JSON(http.StatusOK, group)
 }
 
 // ReplaceGroup replaces a group (PUT)
 func (h *Handler) ReplaceGroup(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse group ID from path
 	groupIDStr := c.Param("id")
 	groupID, err := xid.FromString(groupIDStr)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_group_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid group ID format"))
 	}
 
+	// Parse request body
 	var scimGroup SCIMGroup
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimGroup); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidValue", "Invalid request body")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	updatedGroup, err := h.service.ReplaceGroup(c.Request().Context(), groupID, orgID, &scimGroup)
+	// Replace group via service
+	updatedGroup, err := h.service.ReplaceGroup(ctx, groupID, orgID, &scimGroup)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "", err.Error())
+		h.metrics.RecordError("group_replace_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordGroupOperation("replace")
 	return c.JSON(http.StatusOK, updatedGroup)
 }
 
 // UpdateGroup updates a group (PATCH)
 func (h *Handler) UpdateGroup(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse group ID from path
 	groupIDStr := c.Param("id")
 	groupID, err := xid.FromString(groupIDStr)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_group_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid group ID format"))
 	}
 
+	// Parse patch operations
 	var patch PatchOp
 	if err := json.NewDecoder(c.Request().Body).Decode(&patch); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidValue", "Invalid request body")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	updatedGroup, err := h.service.UpdateGroup(c.Request().Context(), groupID, orgID, &patch)
+	// Validate patch operations
+	if len(patch.Operations) == 0 {
+		h.metrics.RecordError("empty_patch_operations")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "No patch operations provided"))
+	}
+
+	// Update group via service
+	updatedGroup, err := h.service.UpdateGroup(ctx, groupID, orgID, &patch)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "", err.Error())
+		h.metrics.RecordError("group_update_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
+	h.metrics.RecordGroupOperation("update")
 	return c.JSON(http.StatusOK, updatedGroup)
 }
 
 // DeleteGroup deletes a group
 func (h *Handler) DeleteGroup(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse group ID from path
 	groupIDStr := c.Param("id")
 	groupID, err := xid.FromString(groupIDStr)
 	if err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_group_id")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid group ID format"))
 	}
 
-	if err := h.service.DeleteGroup(c.Request().Context(), groupID, orgID); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "", err.Error())
+	// Delete group via service
+	if err := h.service.DeleteGroup(ctx, groupID, orgID); err != nil {
+		h.metrics.RecordError("group_delete_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	return c.JSON(http.StatusNoContent, nil)
+	h.metrics.RecordGroupOperation("delete")
+	return c.NoContent(http.StatusNoContent)
 }
 
-// Bulk operations (RFC 7644 Section 3.7)
+// =============================================================================
+// BULK OPERATIONS (RFC 7644 Section 3.7)
+// =============================================================================
 
 // BulkOperation handles bulk operations
 func (h *Handler) BulkOperation(c forge.Context) error {
 	if !h.config.BulkOperations.Enabled {
-		return h.errorResponse(c, http.StatusNotImplemented, "", "Bulk operations are disabled")
+		return c.JSON(http.StatusNotImplemented, h.scimError(http.StatusNotImplemented, "", "Bulk operations are disabled"))
 	}
 
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse bulk request
 	var bulkReq BulkRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&bulkReq); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
 	// Validate operation count
 	if len(bulkReq.Operations) > h.config.BulkOperations.MaxOperations {
-		return h.errorResponse(c, http.StatusRequestEntityTooLarge, "tooMany",
-			fmt.Sprintf("Maximum %d operations allowed", h.config.BulkOperations.MaxOperations))
+		return c.JSON(http.StatusRequestEntityTooLarge, h.scimError(http.StatusRequestEntityTooLarge, "tooMany",
+			fmt.Sprintf("Maximum %d operations allowed", h.config.BulkOperations.MaxOperations)))
 	}
 
-	// Process each operation
-	results := make([]BulkOperationResult, 0, len(bulkReq.Operations))
-	errorCount := 0
-
-	for _, op := range bulkReq.Operations {
-		result := h.processBulkOperation(c, &op)
-		results = append(results, result)
-
-		if result.Status >= 400 {
-			errorCount++
-			if bulkReq.FailOnErrors > 0 && errorCount >= bulkReq.FailOnErrors {
-				break
-			}
-		}
+	// Process bulk operations via service
+	bulkResp, err := h.service.ProcessBulkOperation(ctx, &bulkReq, orgID)
+	if err != nil {
+		h.metrics.RecordError("bulk_operation_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	bulkResp := &BulkResponse{
-		Schemas:    []string{SchemaBulkResponse},
-		Operations: results,
-	}
-
+	h.metrics.RecordBulkOperation(len(bulkReq.Operations))
 	return c.JSON(http.StatusOK, bulkResp)
 }
 
-// Search endpoint (RFC 7644 Section 3.4.3)
+// =============================================================================
+// SEARCH ENDPOINT (RFC 7644 Section 3.4.3)
+// =============================================================================
 
 // Search handles the /.search endpoint
 func (h *Handler) Search(c forge.Context) error {
-	var searchReq struct {
-		Schemas    []string `json:"schemas"`
-		Filter     string   `json:"filter"`
-		StartIndex int      `json:"startIndex"`
-		Count      int      `json:"count"`
+	// Get context IDs
+	ctx := c.Request().Context()
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
+	// Parse search request
+	var searchReq SearchRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&searchReq); err != nil {
-		return h.errorResponse(c, http.StatusBadRequest, "invalidSyntax", "Invalid JSON")
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
 	// Default values
@@ -562,48 +714,60 @@ func (h *Handler) Search(c forge.Context) error {
 	if searchReq.Count == 0 {
 		searchReq.Count = h.config.Search.DefaultResults
 	}
+	if searchReq.Count > h.config.Search.MaxResults {
+		searchReq.Count = h.config.Search.MaxResults
+	}
 
-	orgID := c.Get("organization_id").(xid.ID)
-
-	listResponse, err := h.service.ListUsers(c.Request().Context(), orgID, searchReq.Filter, searchReq.StartIndex, searchReq.Count)
+	// Perform search via service (default to users)
+	listResponse, err := h.service.ListUsers(ctx, orgID, searchReq.Filter, searchReq.StartIndex, searchReq.Count)
 	if err != nil {
-		return h.errorResponse(c, http.StatusInternalServerError, "", err.Error())
+		h.metrics.RecordError("search_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, listResponse)
 }
 
-// Admin endpoints (non-standard, for provisioning management)
+// =============================================================================
+// ADMIN ENDPOINTS (NON-STANDARD, FOR PROVISIONING MANAGEMENT)
+// =============================================================================
 
 // CreateProvisioningToken creates a new provisioning token
 func (h *Handler) CreateProvisioningToken(c forge.Context) error {
-	var req struct {
-		Name        string     `json:"name"`
-		Description string     `json:"description"`
-		Scopes      []string   `json:"scopes"`
-		ExpiresAt   *time.Time `json:"expires_at"`
-	}
-
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request"})
-	}
-
-	// Get 3-tier architecture context
+	// Get context IDs (3-tier architecture)
 	ctx := c.Request().Context()
-	appIDVal := contexts.GetAppID(ctx)
-	envIDVal := contexts.GetEnvironmentID(ctx)
-	orgIDVal := contexts.GetOrganizationID(ctx)
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+	orgID, ok := contexts.GetOrganizationID(ctx)
 
-	// If orgID is not set, this is an error
-	if orgIDVal.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Organization context required",})
+	// Validate organization context
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
+	// Parse request
+	var req CreateTokenRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
+	}
+
+	// Validate request
+	if req.Name == "" {
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Token name is required"))
+	}
+	if len(req.Scopes) == 0 {
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "At least one scope is required"))
+	}
+
+	// Create token via service
 	token, provToken, err := h.service.CreateProvisioningToken(
-		c.Request().Context(),
-		appIDVal,
-		envIDVal,
-		orgIDVal,
+		ctx,
+		appID,
+		envID,
+		orgID,
 		req.Name,
 		req.Description,
 		req.Scopes,
@@ -611,184 +775,294 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 	)
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error()})
+		h.metrics.RecordError("token_creation_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"token":   token,
-		"id":      provToken.ID.String(),
-		"name":    provToken.Name,
-		"message": "Store this token securely. It will not be shown again.",
-	})
+	response := &TokenResponse{
+		Token:   token,
+		ID:      provToken.ID.String(),
+		Name:    provToken.Name,
+		Message: "Store this token securely. It will not be shown again.",
+	}
+
+	h.metrics.RecordTokenCreation()
+	return c.JSON(http.StatusCreated, response)
 }
 
 // ListProvisioningTokens lists provisioning tokens
 func (h *Handler) ListProvisioningTokens(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs (3-tier architecture)
+	ctx := c.Request().Context()
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+	orgID, ok := contexts.GetOrganizationID(ctx)
 
-	// Get pagination parameters
-	limit := 50
-	if l := c.Query("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
-	offset := 0
-	if o := c.Query("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-	}
+	// Parse pagination parameters
+	limit := parseIntParam(c.Query("limit"), 50)
+	offset := parseIntParam(c.Query("offset"), 0)
 
-	// Get 3-tier architecture context
-	appID := c.Get("app_id").(xid.ID)
-	envID := c.Get("environment_id").(xid.ID)
-
-	tokens, total, err := h.service.ListProvisioningTokens(c.Request().Context(), appID, envID, orgID, limit, offset)
+	// List tokens via service
+	tokens, total, err := h.service.ListProvisioningTokens(ctx, appID, envID, orgID, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		h.metrics.RecordError("token_list_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	// Remove sensitive data from response
-	safeTokens := make([]map[string]interface{}, 0, len(tokens))
+	// Build response (remove sensitive data)
+	tokenList := make([]ProvisioningTokenInfo, 0, len(tokens))
 	for _, token := range tokens {
-		safeTokens = append(safeTokens, map[string]interface{}{
-			"id":           token.ID.String(),
-			"name":         token.Name,
-			"description":  token.Description,
-			"scopes":       token.Scopes,
-			"created_at":   token.CreatedAt,
-			"updated_at":   token.UpdatedAt,
-			"last_used_at": token.LastUsedAt,
-			"expires_at":   token.ExpiresAt,
-			"revoked_at":   token.RevokedAt,
+		tokenList = append(tokenList, ProvisioningTokenInfo{
+			ID:          token.ID.String(),
+			Name:        token.Name,
+			Description: token.Description,
+			Scopes:      token.Scopes,
+			CreatedAt:   token.CreatedAt,
+			LastUsedAt:  token.LastUsedAt,
+			ExpiresAt:   token.ExpiresAt,
+			RevokedAt:   token.RevokedAt,
 		})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"tokens": safeTokens,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
-	})
+	response := &TokenListResponse{
+		Tokens: tokenList,
+		Total:  total,
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 // RevokeProvisioningToken revokes a provisioning token
 func (h *Handler) RevokeProvisioningToken(c forge.Context) error {
 	tokenID := c.Param("id")
 
+	// Revoke token via service
 	if err := h.service.RevokeProvisioningToken(c.Request().Context(), tokenID); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),})
+		h.metrics.RecordError("token_revocation_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "Token revoked successfully",})
+	response := &MessageResponse{Message: "Token revoked successfully"}
+	return c.JSON(http.StatusOK, response)
 }
 
 // GetAttributeMappings gets attribute mappings
 func (h *Handler) GetAttributeMappings(c forge.Context) error {
-	// Get 3-tier architecture context
+	// Get context IDs (3-tier architecture)
 	ctx := c.Request().Context()
-	appID := contexts.GetAppID(ctx)
-	envID := contexts.GetEnvironmentID(ctx)
-	orgID := contexts.GetOrganizationID(ctx)
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
 
-	mappings, err := h.service.GetAttributeMappings(c.Request().Context(), appID, envID, orgID)
+	// Get mappings via service
+	mappings, err := h.service.GetAttributeMappings(ctx, appID, envID, orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		h.metrics.RecordError("mapping_get_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"mappings": mappings,
-	})
+	response := &AttributeMappingsResponse{Mappings: mappings}
+	return c.JSON(http.StatusOK, response)
 }
 
 // UpdateAttributeMappings updates attribute mappings
 func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
-	// Get 3-tier architecture context
+	// Get context IDs (3-tier architecture)
 	ctx := c.Request().Context()
-	appID := contexts.GetAppID(ctx)
-	envID := contexts.GetEnvironmentID(ctx)
-	orgID := contexts.GetOrganizationID(ctx)
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
 
-	var req struct {
-		Mappings map[string]string `json:"mappings"`
-	}
-
+	// Parse request
+	var req UpdateAttributeMappingsRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+		h.metrics.RecordError("invalid_json")
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidSyntax", "Invalid JSON in request body"))
 	}
 
-	if err := h.service.UpdateAttributeMappings(c.Request().Context(), appID, envID, orgID, req.Mappings); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+	// Validate request
+	if len(req.Mappings) == 0 {
+		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Mappings cannot be empty"))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "Attribute mappings updated successfully",})
+	// Update mappings via service
+	if err := h.service.UpdateAttributeMappings(ctx, appID, envID, orgID, req.Mappings); err != nil {
+		h.metrics.RecordError("mapping_update_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
+	}
+
+	response := &MessageResponse{Message: "Attribute mappings updated successfully"}
+	return c.JSON(http.StatusOK, response)
 }
 
 // GetProvisioningLogs gets provisioning logs
 func (h *Handler) GetProvisioningLogs(c forge.Context) error {
-	orgID := c.Get("organization_id").(xid.ID)
+	// Get context IDs (3-tier architecture)
+	ctx := c.Request().Context()
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+	orgID, ok := contexts.GetOrganizationID(ctx)
 
-	// Get pagination and filter parameters
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
+
+	// Parse query parameters
 	action := c.Query("action")
+	limit := parseIntParam(c.Query("limit"), 50)
+	offset := parseIntParam(c.Query("offset"), 0)
 
-	limit := 50
-	if l := c.Query("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
-	}
-
-	offset := 0
-	if o := c.Query("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-	}
-
-	// Get 3-tier architecture context
-	appID := c.Get("app_id").(xid.ID)
-	envID := c.Get("environment_id").(xid.ID)
-
-	logs, total, err := h.service.GetProvisioningLogs(c.Request().Context(), appID, envID, orgID, action, limit, offset)
+	// Get logs via service
+	logs, total, err := h.service.GetProvisioningLogs(ctx, appID, envID, orgID, action, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		h.metrics.RecordError("logs_retrieval_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"logs":   logs,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
-	})
+	// Build response using ProvisioningLog directly
+	// Convert []*ProvisioningLog to []ProvisioningLog
+	logList := make([]ProvisioningLog, 0, len(logs))
+	for _, log := range logs {
+		logList = append(logList, *log)
+	}
+
+	response := &LogsResponse{
+		Logs:  logList,
+		Total: total,
+		Page:  offset/limit + 1,
+		Limit: limit,
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 // GetProvisioningStats gets provisioning statistics
 func (h *Handler) GetProvisioningStats(c forge.Context) error {
-	// Return real-time metrics from the metrics system
-	stats := h.metrics.GetStats()
+	// Get context IDs
+	ctx := c.Request().Context()
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		h.metrics.RecordError("missing_app_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "App context required"))
+	}
+	envID, ok := contexts.GetEnvironmentID(ctx)
+	if !ok || envID.IsNil() {
+		h.metrics.RecordError("missing_environment_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Environment context required"))
+	}
+	orgID, ok := contexts.GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		h.metrics.RecordError("missing_organization_context")
+		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
+	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"scim_metrics": stats,
-	})
+	// Get statistics from service
+	logs, total, err := h.service.GetProvisioningLogs(ctx, appID, envID, orgID, "", 10, 0)
+	if err != nil {
+		h.metrics.RecordError("stats_retrieval_failed")
+		status, scimType := h.mapServiceErrorToSCIMError(err)
+		return c.JSON(status, h.scimError(status, scimType, err.Error()))
+	}
+
+	// Calculate statistics
+	successCount := 0
+	failureCount := 0
+	byOperation := make(map[string]int)
+	byResourceType := make(map[string]int)
+	byStatus := make(map[string]int)
+
+	// Convert to []ProvisioningLog for response
+	recentLogs := make([]ProvisioningLog, 0, len(logs))
+	for _, log := range logs {
+		recentLogs = append(recentLogs, *log)
+		if log.Success {
+			successCount++
+		} else {
+			failureCount++
+		}
+		byOperation[log.Operation]++
+		byResourceType[log.ResourceType]++
+		statusKey := fmt.Sprintf("%d", log.StatusCode)
+		byStatus[statusKey]++
+	}
+
+	successRate := 0.0
+	if total > 0 {
+		successRate = float64(successCount) / float64(total) * 100
+	}
+
+	response := &StatsResponse{
+		TotalOperations: total,
+		SuccessCount:    successCount,
+		FailureCount:    failureCount,
+		SuccessRate:     successRate,
+		ByOperation:     byOperation,
+		ByResourceType:  byResourceType,
+		ByStatus:        byStatus,
+		Recent:          recentLogs,
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
-// Helper methods
+// =============================================================================
+// HELPER METHODS
+// =============================================================================
 
-func (h *Handler) errorResponse(c forge.Context, status int, scimType, detail string) error {
-	errResp := &ErrorResponse{
+// scimError creates a SCIM-compliant error response
+func (h *Handler) scimError(status int, scimType, detail string) *ErrorResponse {
+	return &ErrorResponse{
 		Schemas:  []string{SchemaError},
 		Status:   status,
 		ScimType: scimType,
 		Detail:   detail,
 	}
-	return c.JSON(status, errResp)
 }
 
-func (h *Handler) processBulkOperation(c forge.Context, op *BulkOperation) BulkOperationResult {
-	result := BulkOperationResult{
-		Method: op.Method,
-		BulkID: op.BulkID,
+// mapServiceErrorToSCIMError maps service errors to SCIM error codes and HTTP status
+func (h *Handler) mapServiceErrorToSCIMError(err error) (status int, scimType string) {
+	errMsg := err.Error()
+
+	// Check for specific error patterns
+	switch {
+	case contains(errMsg, "not found"):
+		return http.StatusNotFound, "invalidValue"
+	case contains(errMsg, "already exists"), contains(errMsg, "duplicate"):
+		return http.StatusConflict, "uniqueness"
+	case contains(errMsg, "invalid"), contains(errMsg, "required"):
+		return http.StatusBadRequest, "invalidValue"
+	case contains(errMsg, "unauthorized"), contains(errMsg, "permission"):
+		return http.StatusForbidden, "invalidValue"
+	case contains(errMsg, "disabled"):
+		return http.StatusServiceUnavailable, "invalidValue"
+	default:
+		return http.StatusInternalServerError, ""
 	}
+}
 
-	// TODO: Implement bulk operation processing
-	result.Status = http.StatusNotImplemented
-	result.Response = &ErrorResponse{Error: "Not implemented"}
+// contains is a case-insensitive string contains check
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsSubstring(s, substr)))
+}
 
-	return result
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func parseIntParam(val string, defaultVal int) int {

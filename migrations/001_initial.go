@@ -30,11 +30,13 @@ func init() {
 			"impersonation_audit",
 			"impersonation_sessions",
 			"mfa_risk_assessments",
+			"mfa_bypasses",
 			"mfa_attempts",
 			"mfa_trusted_devices",
 			"mfa_sessions",
 			"mfa_challenges",
 			"mfa_factors",
+			"mfa_policies",
 			"phone_verifications",
 			"email_otps",
 			"passkeys",
@@ -225,6 +227,9 @@ func init() {
 			return err
 		}
 		if _, err := db.NewCreateTable().Model((*schema.MFAPolicy)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.MFABypass)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
 		if _, err := db.NewCreateTable().Model((*schema.MFAAttempt)(nil)).IfNotExists().Exec(ctx); err != nil {
@@ -635,11 +640,13 @@ func init() {
 			"impersonation_audit",
 			"impersonation_sessions",
 			"mfa_risk_assessments",
+			"mfa_bypasses",
 			"mfa_attempts",
 			"mfa_trusted_devices",
 			"mfa_sessions",
 			"mfa_challenges",
 			"mfa_factors",
+			"mfa_policies",
 			"phone_verifications",
 			"email_otps",
 			"passkeys",

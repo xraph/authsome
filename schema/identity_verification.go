@@ -11,9 +11,13 @@ type IdentityVerification struct {
 	AuditableModel
 	bun.BaseModel `bun:"table:identity_verifications,alias:iv"`
 
-	ID             string `bun:"id,pk,type:varchar(255)" json:"id"`
-	UserID         string `bun:"user_id,notnull,type:varchar(255)" json:"userId"`
-	OrganizationID string `bun:"organization_id,notnull,type:varchar(255)" json:"organizationId"`
+	ID string `bun:"id,pk,type:varchar(255)" json:"id"`
+
+	// V2 Multi-tenant context (App → Environment → Organization)
+	AppID          string  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID  *string `bun:"environment_id,type:varchar(20)" json:"environmentId,omitempty"`
+	OrganizationID string  `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	UserID         string  `bun:"user_id,notnull,type:varchar(20)" json:"userId"`
 
 	// Provider information
 	Provider        string `bun:"provider,notnull,type:varchar(50)" json:"provider"` // onfido, jumio, stripe_identity
@@ -68,7 +72,7 @@ type IdentityVerification struct {
 	// Webhook tracking
 	WebhookDeliveryStatus string     `bun:"webhook_delivery_status,type:varchar(50)" json:"webhookDeliveryStatus,omitempty"`
 	WebhookDeliveredAt    *time.Time `bun:"webhook_delivered_at,type:timestamptz" json:"webhookDeliveredAt,omitempty"`
-	
+
 	// Relations
 	User         *User         `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
 	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
@@ -80,6 +84,11 @@ type IdentityVerificationDocument struct {
 
 	ID             string `bun:"id,pk,type:varchar(255)" json:"id"`
 	VerificationID string `bun:"verification_id,notnull,type:varchar(255)" json:"verificationId"`
+
+	// V2 Multi-tenant context (inherited from parent verification)
+	AppID          string  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID  *string `bun:"environment_id,type:varchar(20)" json:"environmentId,omitempty"`
+	OrganizationID string  `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
 
 	// Document details
 	DocumentSide string `bun:"document_side,type:varchar(20)" json:"documentSide"` // front, back, selfie
@@ -109,9 +118,13 @@ type IdentityVerificationDocument struct {
 type IdentityVerificationSession struct {
 	bun.BaseModel `bun:"table:identity_verification_sessions,alias:ivs"`
 
-	ID             string `bun:"id,pk,type:varchar(255)" json:"id"`
-	UserID         string `bun:"user_id,notnull,type:varchar(255)" json:"userId"`
-	OrganizationID string `bun:"organization_id,notnull,type:varchar(255)" json:"organizationId"`
+	ID string `bun:"id,pk,type:varchar(255)" json:"id"`
+
+	// V2 Multi-tenant context (App → Environment → Organization)
+	AppID          string  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID  *string `bun:"environment_id,type:varchar(20)" json:"environmentId,omitempty"`
+	OrganizationID string  `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	UserID         string  `bun:"user_id,notnull,type:varchar(20)" json:"userId"`
 
 	// Session details
 	Provider     string `bun:"provider,notnull,type:varchar(50)" json:"provider"`
@@ -147,9 +160,13 @@ type IdentityVerificationSession struct {
 type UserVerificationStatus struct {
 	bun.BaseModel `bun:"table:user_verification_status,alias:uvs"`
 
-	ID             string `bun:"id,pk,type:varchar(255)" json:"id"`
-	UserID         string `bun:"user_id,notnull,unique,type:varchar(255)" json:"userId"`
-	OrganizationID string `bun:"organization_id,notnull,type:varchar(255)" json:"organizationId"`
+	ID string `bun:"id,pk,type:varchar(255)" json:"id"`
+
+	// V2 Multi-tenant context (App → Environment → Organization)
+	AppID          string  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID  *string `bun:"environment_id,type:varchar(20)" json:"environmentId,omitempty"`
+	OrganizationID string  `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	UserID         string  `bun:"user_id,notnull,type:varchar(20)" json:"userId"`
 
 	// Overall verification status
 	IsVerified             bool       `bun:"is_verified,default:false" json:"isVerified"`

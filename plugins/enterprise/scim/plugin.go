@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
@@ -61,24 +62,14 @@ func (p *Plugin) Description() string {
 }
 
 // Init initializes the plugin with dependencies from the Auth instance
-func (p *Plugin) Init(auth interface{}) error {
-	// Extract service registry using interface methods
-	type serviceRegistryGetter interface {
-		GetServiceRegistry() *registry.ServiceRegistry
-		GetDB() *bun.DB
-	}
-
-	srGetter, ok := auth.(serviceRegistryGetter)
-	if !ok {
-		return fmt.Errorf("SCIM plugin requires auth instance with GetServiceRegistry and GetDB")
-	}
-
-	serviceRegistry := srGetter.GetServiceRegistry()
+func (p *Plugin) Init(auth core.Authsome) error {
+	// Get service registry and database from auth instance
+	serviceRegistry := auth.GetServiceRegistry()
 	if serviceRegistry == nil {
 		return fmt.Errorf("service registry not available")
 	}
 
-	p.db = srGetter.GetDB()
+	p.db = auth.GetDB()
 	if p.db == nil {
 		return fmt.Errorf("database not available for SCIM plugin - ensure database is properly initialized before authsome")
 	}
@@ -216,6 +207,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("scim.users.create"),
 		forge.WithSummary("Create user"),
 		forge.WithDescription("Creates a new user via SCIM 2.0 provisioning. Supports core user attributes and enterprise extension"),
+		forge.WithRequestSchema(SCIMUser{}),
 		forge.WithResponseSchema(201, "User created", SCIMUser{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
@@ -247,6 +239,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.PUT("/Users/:id", scimChain(p.handler.ReplaceUser),
 		forge.WithName("scim.users.replace"),
 		forge.WithSummary("Replace user"),
+		forge.WithRequestSchema(SCIMUser{}),
 		forge.WithDescription("Replaces all user attributes with the provided values (full update)"),
 		forge.WithResponseSchema(200, "User updated", SCIMUser{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
@@ -259,6 +252,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.PATCH("/Users/:id", scimChain(p.handler.UpdateUser),
 		forge.WithName("scim.users.update"),
 		forge.WithSummary("Update user"),
+		forge.WithRequestSchema(PatchOp{}),
 		forge.WithDescription("Partially updates user attributes using SCIM PATCH operations (add, remove, replace)"),
 		forge.WithResponseSchema(200, "User updated", SCIMUser{}),
 		forge.WithResponseSchema(400, "Invalid patch operation", ErrorResponse{}),
@@ -282,6 +276,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.POST("/Groups", scimChain(p.handler.CreateGroup),
 		forge.WithName("scim.groups.create"),
 		forge.WithSummary("Create group"),
+		forge.WithRequestSchema(SCIMGroup{}),
 		forge.WithDescription("Creates a new group via SCIM 2.0 provisioning with optional member references"),
 		forge.WithResponseSchema(201, "Group created", SCIMGroup{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
@@ -314,6 +309,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.PUT("/Groups/:id", scimChain(p.handler.ReplaceGroup),
 		forge.WithName("scim.groups.replace"),
 		forge.WithSummary("Replace group"),
+		forge.WithRequestSchema(SCIMGroup{}),
 		forge.WithDescription("Replaces all group attributes and members with the provided values (full update)"),
 		forge.WithResponseSchema(200, "Group updated", SCIMGroup{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
@@ -326,6 +322,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.PATCH("/Groups/:id", scimChain(p.handler.UpdateGroup),
 		forge.WithName("scim.groups.update"),
 		forge.WithSummary("Update group"),
+		forge.WithRequestSchema(PatchOp{}),
 		forge.WithDescription("Partially updates group attributes and members using SCIM PATCH operations (add, remove, replace)"),
 		forge.WithResponseSchema(200, "Group updated", SCIMGroup{}),
 		forge.WithResponseSchema(400, "Invalid patch operation", ErrorResponse{}),
@@ -349,6 +346,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.POST("/Bulk", scimChain(p.handler.BulkOperation),
 		forge.WithName("scim.bulk.operation"),
 		forge.WithSummary("Bulk operations"),
+		forge.WithRequestSchema(BulkRequest{}),
 		forge.WithDescription("Performs multiple SCIM operations in a single request. Supports create, update, and delete operations on users and groups"),
 		forge.WithResponseSchema(200, "Bulk operation results", BulkResponse{}),
 		forge.WithResponseSchema(400, "Invalid bulk request", ErrorResponse{}),
@@ -362,6 +360,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup.POST("/.search", scimChain(p.handler.Search),
 		forge.WithName("scim.search"),
 		forge.WithSummary("Search resources"),
+		forge.WithRequestSchema(SearchRequest{}),
 		forge.WithDescription("Advanced search endpoint for users and groups with complex filter expressions and pagination"),
 		forge.WithResponseSchema(200, "Search results", ListResponse{}),
 		forge.WithResponseSchema(400, "Invalid search request", ErrorResponse{}),
@@ -382,6 +381,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	adminGroup.POST("/tokens", adminChain(p.handler.CreateProvisioningToken),
 		forge.WithName("scim.admin.tokens.create"),
 		forge.WithSummary("Create provisioning token"),
+		forge.WithRequestSchema(CreateTokenRequest{}),
 		forge.WithDescription("Creates a new SCIM provisioning token (Bearer token) for authenticating SCIM requests. Token is shown only once"),
 		forge.WithResponseSchema(201, "Token created", SCIMTokenResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", SCIMErrorResponse{}),
@@ -428,6 +428,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("scim.admin.mappings.update"),
 		forge.WithSummary("Update attribute mappings"),
 		forge.WithDescription("Updates custom attribute mappings for SCIM attributes to AuthSome fields. Used for custom field mapping"),
+		forge.WithRequestSchema(UpdateAttributeMappingsRequest{}),
 		forge.WithResponseSchema(200, "Mappings updated", SCIMStatusResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", SCIMErrorResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),

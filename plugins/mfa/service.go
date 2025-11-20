@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 )
@@ -18,6 +20,7 @@ type Service struct {
 	adapterRegistry *FactorAdapterRegistry
 	riskEngine      *RiskEngine
 	rateLimiter     *RateLimiter
+	notifAdapter    *notificationPlugin.Adapter
 	config          *Config
 }
 
@@ -25,6 +28,7 @@ type Service struct {
 func NewService(
 	repo *repository.MFARepository,
 	adapterRegistry *FactorAdapterRegistry,
+	notifAdapter *notificationPlugin.Adapter,
 	config *Config,
 ) *Service {
 	// Validate config
@@ -35,6 +39,7 @@ func NewService(
 		adapterRegistry: adapterRegistry,
 		riskEngine:      NewRiskEngine(&config.AdaptiveMFA, repo),
 		rateLimiter:     NewRateLimiter(&config.RateLimit, repo),
+		notifAdapter:    notifAdapter,
 		config:          config,
 	}
 }
@@ -45,24 +50,24 @@ func NewService(
 func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEnrollmentRequest) (*FactorEnrollmentResponse, error) {
 	// Check if factor type is allowed
 	if !s.config.IsFactorAllowed(req.Type) {
-		return nil, fmt.Errorf("factor type %s not allowed", req.Type)
+		return nil, errs.BadRequest(fmt.Sprintf("factor type %s not allowed", req.Type))
 	}
 
 	// Get adapter for this factor type
 	adapter, err := s.adapterRegistry.Get(req.Type)
 	if err != nil {
-		return nil, fmt.Errorf("factor type not supported: %w", err)
+		return nil, errs.Wrap(err, "FACTOR_TYPE_NOT_SUPPORTED", "Factor type not supported", 400)
 	}
 
 	// Check if adapter is available
 	if !adapter.IsAvailable() {
-		return nil, fmt.Errorf("factor type %s not available", req.Type)
+		return nil, errs.BadRequest(fmt.Sprintf("factor type %s not available", req.Type))
 	}
 
 	// Use adapter to initiate enrollment
 	resp, err := adapter.Enroll(ctx, userID, req.Metadata)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll factor: %w", err)
+		return nil, errs.Wrap(err, "ENROLL_FACTOR_FAILED", "Failed to enroll factor", 400)
 	}
 
 	// Set defaults
@@ -89,7 +94,7 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 		// Encrypt secret before storing
 		encrypted, err := s.encryptSecret(secret)
 		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt secret: %w", err)
+			return nil, errs.Wrap(err, "ENCRYPT_SECRET_FAILED", "Failed to encrypt secret", 500)
 		}
 		factor.Secret = encrypted
 	}
@@ -100,7 +105,7 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 
 	// Save to database
 	if err := s.repo.CreateFactor(ctx, factor); err != nil {
-		return nil, fmt.Errorf("failed to save factor: %w", err)
+		return nil, errs.Wrap(err, "SAVE_FACTOR_FAILED", "Failed to save factor", 500)
 	}
 
 	return resp, nil
@@ -111,15 +116,15 @@ func (s *Service) VerifyEnrollment(ctx context.Context, factorID xid.ID, proof s
 	// Get the factor
 	factor, err := s.repo.GetFactor(ctx, factorID)
 	if err != nil {
-		return fmt.Errorf("failed to get factor: %w", err)
+		return errs.Wrap(err, "GET_FACTOR_FAILED", "Failed to get factor", 500)
 	}
 	if factor == nil {
-		return fmt.Errorf("factor not found")
+		return errs.NotFound("MFA factor not found")
 	}
 
 	// Check if already verified
 	if factor.Status == string(FactorStatusActive) {
-		return fmt.Errorf("factor already verified")
+		return errs.Conflict("Factor already verified")
 	}
 
 	// Get adapter
@@ -130,7 +135,7 @@ func (s *Service) VerifyEnrollment(ctx context.Context, factorID xid.ID, proof s
 
 	// Verify enrollment
 	if err := adapter.VerifyEnrollment(ctx, factorID, proof); err != nil {
-		return fmt.Errorf("verification failed: %w", err)
+		return errs.Wrap(err, "VERIFICATION_FAILED", "Factor verification failed", 400)
 	}
 
 	// Update factor status
@@ -170,7 +175,7 @@ func (s *Service) GetFactor(ctx context.Context, factorID xid.ID) (*Factor, erro
 		return nil, err
 	}
 	if schemaFactor == nil {
-		return nil, fmt.Errorf("factor not found")
+		return nil, errs.NotFound("MFA factor not found")
 	}
 
 	return s.convertSchemaFactor(schemaFactor), nil
@@ -183,7 +188,7 @@ func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map
 		return err
 	}
 	if factor == nil {
-		return fmt.Errorf("factor not found")
+		return errs.NotFound("MFA factor not found")
 	}
 
 	// Apply updates
@@ -209,7 +214,7 @@ func (s *Service) DeleteFactor(ctx context.Context, factorID xid.ID) error {
 		return err
 	}
 	if factor == nil {
-		return fmt.Errorf("factor not found")
+		return errs.NotFound("MFA factor not found")
 	}
 
 	// Check if this is the last active factor
@@ -219,7 +224,7 @@ func (s *Service) DeleteFactor(ctx context.Context, factorID xid.ID) error {
 	}
 
 	if len(activeFactors) <= 1 {
-		return fmt.Errorf("cannot delete last active factor")
+		return errs.BadRequest("Cannot delete last active factor")
 	}
 
 	return s.repo.DeleteFactor(ctx, factorID)
@@ -235,7 +240,11 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 		return nil, err
 	}
 	if !limitResult.Allowed {
-		return nil, fmt.Errorf("rate limit exceeded, try again in %v", limitResult.RetryAfter)
+		retryAfter := time.Duration(0)
+		if limitResult.RetryAfter != nil {
+			retryAfter = *limitResult.RetryAfter
+		}
+		return nil, errs.RateLimitExceeded(retryAfter)
 	}
 
 	// Perform risk assessment
@@ -249,7 +258,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 
 	riskAssessment, err := s.riskEngine.AssessRisk(ctx, riskCtx)
 	if err != nil {
-		return nil, fmt.Errorf("risk assessment failed: %w", err)
+		return nil, errs.Wrap(err, "RISK_ASSESSMENT_FAILED", "Risk assessment failed", 500)
 	}
 
 	// Save risk assessment
@@ -284,7 +293,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	}
 
 	if len(factors) == 0 {
-		return nil, fmt.Errorf("no factors enrolled")
+		return nil, errs.BadRequest("No MFA factors enrolled")
 	}
 
 	// Filter by requested factor types if specified
@@ -313,7 +322,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	}
 
 	if len(availableFactors) == 0 {
-		return nil, fmt.Errorf("no suitable factors available")
+		return nil, errs.BadRequest("No suitable MFA factors available")
 	}
 
 	// Create MFA session
@@ -340,7 +349,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	session.AuditableModel.UpdatedBy = req.UserID
 
 	if err := s.repo.CreateSession(ctx, session); err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
+		return nil, errs.Wrap(err, "CREATE_SESSION_FAILED", "Failed to create MFA session", 500)
 	}
 
 	return &ChallengeResponse{
@@ -360,12 +369,12 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		return nil, err
 	}
 	if session == nil {
-		return nil, fmt.Errorf("invalid session")
+		return nil, errs.SessionInvalid()
 	}
 
 	// Check if session expired
 	if time.Now().After(session.ExpiresAt) {
-		return nil, fmt.Errorf("session expired")
+		return nil, errs.SessionExpired()
 	}
 
 	// Check rate limits
@@ -374,7 +383,11 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		return nil, err
 	}
 	if !limitResult.Allowed {
-		return nil, fmt.Errorf("rate limit exceeded")
+		retryAfter := time.Duration(0)
+		if limitResult.RetryAfter != nil {
+			retryAfter = *limitResult.RetryAfter
+		}
+		return nil, errs.RateLimitExceeded(retryAfter)
 	}
 
 	// Get the factor
@@ -383,12 +396,12 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		return nil, err
 	}
 	if factor == nil {
-		return nil, fmt.Errorf("factor not found")
+		return nil, errs.NotFound("MFA factor not found")
 	}
 
 	// Verify factor belongs to user
 	if factor.UserID != session.UserID {
-		return nil, fmt.Errorf("factor does not belong to user")
+		return nil, errs.PermissionDenied("verify", "factor")
 	}
 
 	// Get adapter
@@ -413,7 +426,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		_ = s.rateLimiter.RecordAttempt(ctx, session.UserID, &req.FactorID, FactorType(factor.Type), false, map[string]string{
 			"failure_reason": err.Error(),
 		})
-		return nil, fmt.Errorf("verification failed: %w", err)
+		return nil, errs.Wrap(err, "VERIFICATION_FAILED", "Factor verification failed", 400)
 	}
 
 	if !valid {
@@ -468,12 +481,159 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	return resp, nil
 }
 
+// GetChallengeStatus retrieves the current status of an MFA challenge/session
+func (s *Service) GetChallengeStatus(ctx context.Context, sessionID xid.ID, userID xid.ID) (*ChallengeStatusResponse, error) {
+	// Get the session
+	session, err := s.repo.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, errs.Wrap(err, "GET_SESSION_FAILED", "Failed to get MFA session", 500)
+	}
+	if session == nil {
+		return nil, errs.NotFound("MFA session not found")
+	}
+
+	// Verify session belongs to user
+	if session.UserID != userID {
+		return nil, errs.PermissionDenied("access", "session")
+	}
+
+	// Determine status
+	status := "pending"
+	if session.CompletedAt != nil {
+		status = "completed"
+	} else if time.Now().After(session.ExpiresAt) {
+		status = "expired"
+	}
+
+	return &ChallengeStatusResponse{
+		SessionID:        session.ID,
+		Status:           status,
+		FactorsRequired:  session.FactorsRequired,
+		FactorsVerified:  session.FactorsVerified,
+		FactorsRemaining: session.FactorsRequired - session.FactorsVerified,
+		ExpiresAt:        session.ExpiresAt,
+		CompletedAt:      session.CompletedAt,
+	}, nil
+}
+
+// ==================== Admin Operations ====================
+
+// UpdatePolicy updates the MFA policy for an app/organization
+func (s *Service) UpdatePolicy(ctx context.Context, appID xid.ID, orgID *xid.ID, updatedBy xid.ID, req *AdminPolicyRequest) (*MFAPolicyResponse, error) {
+	// Get existing policy or create new one
+	policy, err := s.repo.GetPolicy(ctx, appID, orgID)
+	if err != nil {
+		return nil, errs.Wrap(err, "GET_POLICY_FAILED", "Failed to get MFA policy", 500)
+	}
+
+	if policy == nil {
+		// Create new policy
+		policy = &schema.MFAPolicy{
+			ID:             xid.New(),
+			AppID:          appID,
+			OrganizationID: orgID,
+		}
+		policy.AuditableModel.CreatedBy = updatedBy
+		policy.AuditableModel.UpdatedBy = updatedBy
+	} else {
+		policy.AuditableModel.UpdatedBy = updatedBy
+	}
+
+	// Update fields
+	policy.Enabled = req.Enabled
+	policy.RequiredFactorCount = req.RequiredFactors
+	policy.GracePeriodDays = req.GracePeriod / 86400 // Convert seconds to days
+
+	// Convert allowed types
+	if len(req.AllowedTypes) > 0 {
+		policy.AllowedFactorTypes = schema.StringArray(req.AllowedTypes)
+	}
+
+	// Upsert policy
+	if err := s.repo.UpsertPolicy(ctx, policy); err != nil {
+		return nil, errs.Wrap(err, "UPSERT_POLICY_FAILED", "Failed to save MFA policy", 500)
+	}
+
+	return &MFAPolicyResponse{
+		ID:                  policy.ID,
+		AppID:               policy.AppID,
+		OrganizationID:      policy.OrganizationID,
+		Enabled:             policy.Enabled,
+		RequiredFactorCount: policy.RequiredFactorCount,
+		AllowedFactorTypes:  req.AllowedTypes,
+		GracePeriodDays:     policy.GracePeriodDays,
+	}, nil
+}
+
+// GrantBypass grants temporary MFA bypass for a user
+func (s *Service) GrantBypass(ctx context.Context, appID, userID, grantedBy xid.ID, durationSeconds int, reason string) (*MFABypassResponse, error) {
+	if reason == "" {
+		return nil, errs.RequiredField("reason")
+	}
+
+	if durationSeconds <= 0 || durationSeconds > 86400*7 {
+		return nil, errs.BadRequest("Duration must be between 1 second and 7 days")
+	}
+
+	bypass := &schema.MFABypass{
+		ID:        xid.New(),
+		AppID:     appID,
+		UserID:    userID,
+		GrantedBy: grantedBy,
+		Reason:    reason,
+		ExpiresAt: time.Now().Add(time.Duration(durationSeconds) * time.Second),
+	}
+	bypass.AuditableModel.CreatedBy = grantedBy
+	bypass.AuditableModel.UpdatedBy = grantedBy
+
+	if err := s.repo.CreateBypass(ctx, bypass); err != nil {
+		return nil, errs.Wrap(err, "CREATE_BYPASS_FAILED", "Failed to create MFA bypass", 500)
+	}
+
+	return &MFABypassResponse{
+		ID:        bypass.ID,
+		UserID:    bypass.UserID,
+		ExpiresAt: bypass.ExpiresAt,
+		Reason:    bypass.Reason,
+	}, nil
+}
+
+// ResetUserMFA resets all MFA factors and devices for a user
+func (s *Service) ResetUserMFA(ctx context.Context, appID, userID, adminID xid.ID) error {
+	// Get all active factors for the user
+	factors, err := s.repo.ListUserFactors(ctx, userID)
+	if err != nil {
+		return errs.Wrap(err, "LIST_FACTORS_FAILED", "Failed to list user factors", 500)
+	}
+
+	// Delete all factors
+	for _, factor := range factors {
+		if err := s.repo.DeleteFactor(ctx, factor.ID); err != nil {
+			return errs.Wrap(err, "DELETE_FACTOR_FAILED", "Failed to delete factor", 500)
+		}
+	}
+
+	// Revoke all trusted devices
+	devices, err := s.repo.ListTrustedDevices(ctx, userID)
+	if err != nil {
+		return errs.Wrap(err, "LIST_DEVICES_FAILED", "Failed to list trusted devices", 500)
+	}
+
+	for _, device := range devices {
+		if err := s.repo.DeleteTrustedDevice(ctx, device.ID); err != nil {
+			return errs.Wrap(err, "DELETE_DEVICE_FAILED", "Failed to delete trusted device", 500)
+		}
+	}
+
+	return nil
+}
+
 // ==================== Trusted Devices ====================
 
 // TrustDevice marks a device as trusted
 func (s *Service) TrustDevice(ctx context.Context, userID xid.ID, deviceInfo *DeviceInfo) error {
 	if !s.config.TrustedDevices.Enabled {
-		return fmt.Errorf("trusted devices not enabled")
+		return errs.BadRequest("Trusted devices not enabled")
 	}
 
 	// Check if device already trusted

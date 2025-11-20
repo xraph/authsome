@@ -21,9 +21,15 @@ import (
 )
 
 const (
-	baseURL    = "http://localhost:3001"
-	testOrgID  = "test-org-123"
-	testUserID = "user-456"
+	baseURL = "http://localhost:3001"
+)
+
+// V2 Architecture: Generate test IDs
+var (
+	testAppID  = xid.New()
+	testEnvID  = xid.New()
+	testOrgID  = xid.New() // User organization (optional in V2)
+	testUserID = xid.New()
 )
 
 // TestResult represents the result of a test
@@ -151,21 +157,24 @@ func checkServerHealth() bool {
 
 // testAPIKeyManagement tests API key management endpoints
 func testAPIKeyManagement(ts *TestSuite) {
-	// Test 1: Create API Key
+	// Test 1: Create API Key (V2 Architecture)
 	expiresAt := time.Now().Add(24 * time.Hour)
 	createReq := apikey.CreateAPIKeyRequest{
-		OrgID:       testOrgID,
-		UserID:      testUserID,
-		Name:        "Test API Key",
-		Description: "Integration test key",
-		Scopes:      []string{"read", "write"},
-		ExpiresAt:   &expiresAt,
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		OrgID:         &testOrgID,
+		UserID:        testUserID,
+		Name:          "Test API Key",
+		Description:   "Integration test key",
+		KeyType:       apikey.KeyTypeSecret,
+		Scopes:        []string{"read", "write"},
+		ExpiresAt:     &expiresAt,
 	}
 
 	apiKeyResp, err := makeRequest[apikey.CreateAPIKeyRequest, map[string]interface{}](
 		"POST", "/api/keys", createReq, map[string]string{
-			"X-Org-ID":  testOrgID,
-			"X-User-ID": testUserID,
+			"X-Org-ID":  testOrgID.String(),
+			"X-User-ID": testUserID.String(),
 		})
 
 	if err != nil {
@@ -186,13 +195,13 @@ func testAPIKeyManagement(ts *TestSuite) {
 
 	// Test 2: List API Keys
 	_, err = makeRequest[interface{}, map[string]interface{}](
-		"GET", "/api/keys?org_id="+testOrgID+"&user_id="+testUserID, nil, nil)
+		"GET", "/api/keys?org_id="+testOrgID.String()+"&user_id="+testUserID.String(), nil, nil)
 
 	ts.AddResult("API Key Listing", err == nil, "List API keys endpoint", err)
 
 	// Test 3: Get API Key
 	_, err = makeRequest[interface{}, map[string]interface{}](
-		"GET", "/api/keys/"+apiKeyID+"?org_id="+testOrgID+"&user_id="+testUserID, nil, nil)
+		"GET", "/api/keys/"+apiKeyID+"?org_id="+testOrgID.String()+"&user_id="+testUserID.String(), nil, nil)
 
 	ts.AddResult("API Key Retrieval", err == nil, "Get specific API key", err)
 
@@ -205,7 +214,7 @@ func testAPIKeyManagement(ts *TestSuite) {
 	}
 
 	_, err = makeRequest[apikey.UpdateAPIKeyRequest, map[string]interface{}](
-		"PUT", "/api/keys/"+apiKeyID+"?org_id="+testOrgID+"&user_id="+testUserID, updateReq, nil)
+		"PUT", "/api/keys/"+apiKeyID+"?org_id="+testOrgID.String()+"&user_id="+testUserID.String(), updateReq, nil)
 
 	ts.AddResult("API Key Update", err == nil, "Update API key", err)
 
@@ -222,7 +231,7 @@ func testAPIKeyManagement(ts *TestSuite) {
 
 	// Test 6: Delete API Key
 	_, err = makeRequest[interface{}, map[string]interface{}](
-		"DELETE", "/api/keys/"+apiKeyID+"?org_id="+testOrgID+"&user_id="+testUserID, nil, nil)
+		"DELETE", "/api/keys/"+apiKeyID+"?org_id="+testOrgID.String()+"&user_id="+testUserID.String(), nil, nil)
 
 	ts.AddResult("API Key Deletion", err == nil, "Delete API key", err)
 }
@@ -231,8 +240,8 @@ func testAPIKeyManagement(ts *TestSuite) {
 func testJWTTokens(ts *TestSuite) {
 	// Test 1: Generate JWT Token
 	generateReq := jwt.GenerateTokenRequest{
-		UserID:    testUserID,
-		OrgID:     testOrgID,
+		UserID:    testUserID.String(),
+		AppID:     testAppID,
 		TokenType: "access",
 		ExpiresIn: 3600 * time.Second, // 1 hour
 		Scopes:    []string{"read", "write"},
@@ -260,7 +269,7 @@ func testJWTTokens(ts *TestSuite) {
 	// Test 2: Verify JWT Token
 	verifyReq := jwt.VerifyTokenRequest{
 		Token: token,
-		OrgID: testOrgID,
+		AppID: testAppID,
 	}
 
 	_, err = makeRequest[jwt.VerifyTokenRequest, map[string]interface{}](
@@ -273,11 +282,12 @@ func testJWTTokens(ts *TestSuite) {
 func testWebhookManagement(ts *TestSuite) {
 	// Test 1: Create Webhook
 	createReq := webhook.CreateWebhookRequest{
-		OrganizationID: testOrgID,
-		URL:            "https://example.com/webhook",
-		Events:         []string{webhook.EventUserCreated, webhook.EventUserUpdated},
-		MaxRetries:     3,
-		RetryBackoff:   webhook.RetryBackoffExponential,
+		AppID:         testAppID,
+		EnvironmentID: testEnvID,
+		URL:           "https://example.com/webhook",
+		Events:        []string{webhook.EventUserCreated, webhook.EventUserUpdated},
+		MaxRetries:    3,
+		RetryBackoff:  webhook.RetryBackoffExponential,
 	}
 
 	webhookResp, err := makeRequest[webhook.CreateWebhookRequest, map[string]interface{}](
@@ -301,7 +311,7 @@ func testWebhookManagement(ts *TestSuite) {
 
 	// Test 2: List Webhooks
 	_, err = makeRequest[interface{}, map[string]interface{}](
-		"GET", "/webhooks?organization_id="+testOrgID, nil, nil)
+		"GET", "/webhooks?organization_id="+testOrgID.String(), nil, nil)
 
 	ts.AddResult("Webhook Listing", err == nil, "List webhooks endpoint", err)
 
@@ -339,11 +349,11 @@ func testWebhookManagement(ts *TestSuite) {
 func testNotifications(ts *TestSuite) {
 	// Test 1: Send Notification
 	sendReq := notification.SendRequest{
-		Type:           notification.NotificationTypeEmail,
-		Recipient:      "test@example.com",
-		Subject:        "Test Notification",
-		Body:           "This is a test notification",
-		OrganizationID: testOrgID,
+		Type:      notification.NotificationTypeEmail,
+		Recipient: "test@example.com",
+		Subject:   "Test Notification",
+		Body:      "This is a test notification",
+		AppID:     testAppID,
 		Variables: map[string]interface{}{
 			"user_name": "Test User",
 			"code":      "123456",
@@ -357,17 +367,17 @@ func testNotifications(ts *TestSuite) {
 
 	// Test 2: List Notifications
 	_, err = makeRequest[interface{}, map[string]interface{}](
-		"GET", "/notifications?organization_id="+testOrgID, nil, nil)
+		"GET", "/notifications?organization_id="+testOrgID.String(), nil, nil)
 
 	ts.AddResult("Notification Listing", err == nil, "List notifications", err)
 
 	// Test 3: Create Template
 	createTemplateReq := notification.CreateTemplateRequest{
-		Name:           "test-template",
-		Type:           notification.NotificationTypeEmail,
-		Subject:        "Test Template",
-		Body:           "Hello {{.user_name}}, your code is {{.code}}",
-		OrganizationID: testOrgID,
+		Name:    "test-template",
+		Type:    notification.NotificationTypeEmail,
+		Subject: "Test Template",
+		Body:    "Hello {{.user_name}}, your code is {{.code}}",
+		AppID:   testAppID,
 	}
 
 	templateResp, err := makeRequest[notification.CreateTemplateRequest, map[string]interface{}](
@@ -388,7 +398,7 @@ func testNotifications(ts *TestSuite) {
 
 	// Test 4: List Templates
 	_, err = makeRequest[interface{}, map[string]interface{}](
-		"GET", "/notifications/templates?organization_id="+testOrgID, nil, nil)
+		"GET", "/notifications/templates?organization_id="+testOrgID.String(), nil, nil)
 
 	ts.AddResult("Template Listing", err == nil, "List templates", err)
 
@@ -453,15 +463,15 @@ func testProviders(ts *TestSuite) {
 
 	// Test sending with mock provider
 	testNotification := &notification.Notification{
-		ID:             xid.New(),
-		OrganizationID: testOrgID,
-		Type:           notification.NotificationTypeSMS,
-		Recipient:      "+1234567890",
-		Subject:        "Test SMS",
-		Body:           "This is a test SMS",
-		Status:         notification.NotificationStatusPending,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:        xid.New(),
+		AppID:     testAppID,
+		Type:      notification.NotificationTypeSMS,
+		Recipient: "+1234567890",
+		Subject:   "Test SMS",
+		Body:      "This is a test SMS",
+		Status:    notification.NotificationStatusPending,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	err := mockProvider.Send(context.Background(), testNotification)

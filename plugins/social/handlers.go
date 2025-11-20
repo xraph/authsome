@@ -6,62 +6,97 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
 // Handler handles HTTP requests for social OAuth
 type Handler struct {
-	service *Service
+	service     *Service
+	rateLimiter *RateLimiter
 }
 
-// Response types
+// Request types
+type SignInRequest struct {
+	Provider    string   `json:"provider" validate:"required" example:"google"`
+	Scopes      []string `json:"scopes,omitempty" example:"[\"email\",\"profile\"]"`
+	RedirectURL string   `json:"redirectUrl,omitempty" example:"https://example.com/auth/callback"`
+}
+
+type LinkAccountRequest struct {
+	Provider string   `json:"provider" validate:"required" example:"github"`
+	Scopes   []string `json:"scopes,omitempty" example:"[\"user:email\"]"`
+}
+
+type AdminAddProviderRequest struct {
+	AppID        xid.ID   `json:"appId" validate:"required"`
+	Provider     string   `json:"provider" validate:"required" example:"google"`
+	ClientID     string   `json:"clientId" validate:"required"`
+	ClientSecret string   `json:"clientSecret" validate:"required"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      bool     `json:"enabled"`
+}
+
+type AdminUpdateProviderRequest struct {
+	ClientID     *string  `json:"clientId,omitempty"`
+	ClientSecret *string  `json:"clientSecret,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+}
+
+// Response types - properly typed
 type AuthURLResponse struct {
-	URL string `json:"url"`
+	URL string `json:"url" example:"https://accounts.google.com/o/oauth2/v2/auth?..."`
 }
 
 type CallbackResponse struct {
-	User    interface{} `json:"user"`
-	Session interface{} `json:"session"`
-	Token   string      `json:"token"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type ConnectionResponse struct {
-	Connection interface{} `json:"connection"`
-}
-
-type ConnectionsResponse struct {
-	Connections interface{} `json:"connections"`
+	User    *user.User       `json:"user"`
+	Session *session.Session `json:"session"`
+	Token   string           `json:"token" example:"session_token_abc123"`
 }
 
 type CallbackDataResponse struct {
-	User      interface{} `json:"user"`
-	IsNewUser bool        `json:"isNewUser"`
-	Action    string      `json:"action"`
+	User      *schema.User `json:"user"`
+	IsNewUser bool         `json:"isNewUser" example:"false"`
+	Action    string       `json:"action" example:"signin"` // "signin", "signup", "linked"
+}
+
+type ConnectionResponse struct {
+	Connection *schema.SocialAccount `json:"connection"`
+}
+
+type ConnectionsResponse struct {
+	Connections []*schema.SocialAccount `json:"connections"`
 }
 
 type ProvidersResponse struct {
-	Providers interface{} `json:"providers"`
+	Providers []string `json:"providers" example:"[\"google\",\"github\",\"facebook\"]"`
 }
 
 type ProvidersAppResponse struct {
-	Providers interface{} `json:"providers"`
-	AppID     string      `json:"appId"`
+	Providers []string `json:"providers"`
+	AppID     string   `json:"appId"`
 }
 
 type ProviderConfigResponse struct {
-	Message  string `json:"message"`
-	Provider string `json:"provider"`
-	AppID    string `json:"appId"`
+	Message  string `json:"message" example:"Provider configured successfully"`
+	Provider string `json:"provider" example:"google"`
+	AppID    string `json:"appId" example:"c9h7b3j2k1m4n5p6"`
 }
 
+// Use shared response type
+type MessageResponse = responses.MessageResponse
+
 // NewHandler creates a new social OAuth handler
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, rateLimiter *RateLimiter) *Handler {
+	return &Handler{
+		service:     service,
+		rateLimiter: rateLimiter,
+	}
 }
 
 // handleError returns the error in a structured format
@@ -72,22 +107,19 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// SignInRequest represents a social sign-in request
-type SignInRequest struct {
-	Provider    string   `json:"provider"`
-	Scopes      []string `json:"scopes,omitempty"`
-	RedirectURL string   `json:"redirectUrl,omitempty"`
-}
-
-// LinkAccountRequest represents a request to link a social account
-type LinkAccountRequest struct {
-	Provider string   `json:"provider"`
-	Scopes   []string `json:"scopes,omitempty"`
-}
-
 // SignIn initiates OAuth flow for sign-in
 // POST /api/auth/signin/social
 func (h *Handler) SignIn(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Rate limiting
+	if h.rateLimiter != nil {
+		clientIP := c.Request().RemoteAddr
+		if err := h.rateLimiter.Allow(ctx, "oauth_signin", clientIP); err != nil {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests", http.StatusTooManyRequests))
+		}
+	}
+
 	var req SignInRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
@@ -98,14 +130,14 @@ func (h *Handler) SignIn(c forge.Context) error {
 	}
 
 	// Get app and org from context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	appID, _ := contexts.GetAppID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
 	}
 
-	authURL, err := h.service.GetAuthorizationURL(c.Request().Context(), req.Provider, appID, userOrgID, req.Scopes)
+	authURL, err := h.service.GetAuthorizationURL(ctx, req.Provider, appID, userOrgID, req.Scopes)
 	if err != nil {
 		return handleError(c, err, "AUTH_URL_FAILED", "Failed to generate authorization URL", http.StatusBadRequest)
 	}
@@ -116,6 +148,16 @@ func (h *Handler) SignIn(c forge.Context) error {
 // Callback handles OAuth provider callback
 // GET /api/auth/callback/:provider
 func (h *Handler) Callback(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Rate limiting (more lenient than signin)
+	if h.rateLimiter != nil {
+		clientIP := c.Request().RemoteAddr
+		if err := h.rateLimiter.Allow(ctx, "oauth_callback", clientIP); err != nil {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests", http.StatusTooManyRequests))
+		}
+	}
+
 	provider := c.Param("provider")
 	query := c.Request().URL.Query()
 	state := query.Get("state")
@@ -141,7 +183,7 @@ func (h *Handler) Callback(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_STATE", "State parameter is required", http.StatusBadRequest))
 	}
 
-	result, err := h.service.HandleCallback(c.Request().Context(), provider, state, code)
+	result, err := h.service.HandleCallback(ctx, provider, state, code)
 	if err != nil {
 		return handleError(c, err, "CALLBACK_FAILED", "Failed to handle OAuth callback", http.StatusUnauthorized)
 	}
@@ -158,6 +200,16 @@ func (h *Handler) Callback(c forge.Context) error {
 // LinkAccount links a social provider to the current user
 // POST /api/auth/account/link
 func (h *Handler) LinkAccount(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Rate limiting
+	if h.rateLimiter != nil {
+		clientIP := c.Request().RemoteAddr
+		if err := h.rateLimiter.Allow(ctx, "oauth_link", clientIP); err != nil {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests", http.StatusTooManyRequests))
+		}
+	}
+
 	// Get current user from session - in production, extract from JWT/session
 	// For now, require user_id to be passed (or get from session cookie)
 	userIDStr := c.Request().Header.Get("X-User-ID")
@@ -171,8 +223,8 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 	}
 
 	// Get app and org from context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+	appID, _ := contexts.GetAppID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -187,7 +239,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_PROVIDER", "Provider is required", http.StatusBadRequest))
 	}
 
-	authURL, err := h.service.GetLinkAccountURL(c.Request().Context(), req.Provider, userID, appID, userOrgID, req.Scopes)
+	authURL, err := h.service.GetLinkAccountURL(ctx, req.Provider, userID, appID, userOrgID, req.Scopes)
 	if err != nil {
 		return handleError(c, err, "LINK_ACCOUNT_FAILED", "Failed to generate link account URL", http.StatusBadRequest)
 	}
@@ -198,6 +250,16 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 // UnlinkAccount unlinks a social provider from the current user
 // DELETE /api/auth/account/unlink/:provider
 func (h *Handler) UnlinkAccount(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Rate limiting
+	if h.rateLimiter != nil {
+		clientIP := c.Request().RemoteAddr
+		if err := h.rateLimiter.Allow(ctx, "oauth_unlink", clientIP); err != nil {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests", http.StatusTooManyRequests))
+		}
+	}
+
 	userIDStr := c.Request().Header.Get("X-User-ID")
 	if userIDStr == "" {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "User not authenticated", http.StatusUnauthorized))
@@ -213,7 +275,7 @@ func (h *Handler) UnlinkAccount(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_PROVIDER", "Provider is required", http.StatusBadRequest))
 	}
 
-	if err := h.service.UnlinkAccount(c.Request().Context(), userID, provider); err != nil {
+	if err := h.service.UnlinkAccount(ctx, userID, provider); err != nil {
 		return handleError(c, err, "UNLINK_ACCOUNT_FAILED", "Failed to unlink account", http.StatusInternalServerError)
 	}
 
@@ -230,29 +292,6 @@ func (h *Handler) ListProviders(c forge.Context) error {
 // =============================================================================
 // ADMIN ENDPOINTS
 // =============================================================================
-
-// AdminListProvidersRequest represents a request to list configured OAuth providers
-type AdminListProvidersRequest struct {
-	AppID xid.ID `json:"appId"`
-}
-
-// AdminAddProviderRequest represents a request to add/configure an OAuth provider
-type AdminAddProviderRequest struct {
-	AppID        xid.ID   `json:"appId"`
-	Provider     string   `json:"provider"`
-	ClientID     string   `json:"clientId"`
-	ClientSecret string   `json:"clientSecret"`
-	Scopes       []string `json:"scopes,omitempty"`
-	Enabled      bool     `json:"enabled"`
-}
-
-// AdminUpdateProviderRequest represents a request to update OAuth provider config
-type AdminUpdateProviderRequest struct {
-	ClientID     *string  `json:"clientId,omitempty"`
-	ClientSecret *string  `json:"clientSecret,omitempty"`
-	Scopes       []string `json:"scopes,omitempty"`
-	Enabled      *bool    `json:"enabled,omitempty"`
-}
 
 // AdminListProviders handles GET /social/admin/providers
 // Lists configured OAuth providers for an app

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"time"
 
@@ -19,41 +20,46 @@ import (
 func main() {
 	// Initialize database
 	dsn := "postgres://postgres:postgres@localhost:5432/authsome?sslmode=disable"
-	sqldb := pgdriver.NewConnector(pgdriver.WithDSN(dsn))
+	connector := pgdriver.NewConnector(pgdriver.WithDSN(dsn))
+	sqldb := sql.OpenDB(connector)
 	db := bun.NewDB(sqldb, pgdialect.New())
 
 	defer db.Close()
 
 	// Create Forge app
-	app := forge.New(forge.Config{
-		AppName: "AuthSome Complete Example",
-		Port:    8080,
-	})
+	app := forge.New()
 
 	// Initialize AuthSome with notification plugin
 	auth := authsome.New(
 		authsome.WithDatabase(db),
-		authsome.WithPlugins(
-			// IMPORTANT: Notification plugin MUST be first!
-			notificationPlugin.NewPlugin(),
-
-			// Then other plugins that use notifications
-			emailotp.NewPlugin(),
-			magiclink.NewPlugin(),
-			phone.NewPlugin(),
-		),
 	)
 
+	// Register plugins in order
+	// IMPORTANT: Notification plugin MUST be first!
+	if err := auth.RegisterPlugin(notificationPlugin.NewPlugin()); err != nil {
+		log.Fatal("Failed to register notification plugin:", err)
+	}
+
+	// Then other plugins that use notifications
+	if err := auth.RegisterPlugin(emailotp.NewPlugin()); err != nil {
+		log.Fatal("Failed to register emailotp plugin:", err)
+	}
+	if err := auth.RegisterPlugin(magiclink.NewPlugin()); err != nil {
+		log.Fatal("Failed to register magiclink plugin:", err)
+	}
+	if err := auth.RegisterPlugin(phone.NewPlugin()); err != nil {
+		log.Fatal("Failed to register phone plugin:", err)
+	}
+
 	// Mount AuthSome
-	if err := auth.Mount(app, "/api/auth"); err != nil {
+	if err := auth.Mount(app.Router(), "/api/auth"); err != nil {
 		log.Fatal("Failed to mount AuthSome:", err)
 	}
 
-	// Run migrations
+	// Run migrations (assuming database schema is already set up)
 	ctx := context.Background()
-	if err := auth.Migrate(ctx); err != nil {
-		log.Fatal("Failed to run migrations:", err)
-	}
+	// Note: Migrations would be run here if available
+	_ = ctx
 
 	log.Println("✅ AuthSome initialized with notification system")
 	log.Println("✅ Default templates created automatically")

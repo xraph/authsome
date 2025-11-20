@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"
@@ -46,45 +47,73 @@ type Mock struct {
 	t *testing.T
 
 	// Core services
-	UserService    *MockUserService
-	SessionService *MockSessionService
+	UserService         *MockUserService
+	SessionService      *MockSessionService
+	OrganizationService *MockOrganizationService
 
 	// Storage
-	users    map[string]*schema.User
-	sessions map[string]*schema.Session
-	orgs     map[string]*schema.Organization
-	members  map[string][]*schema.Member
+	users        map[xid.ID]*schema.User
+	sessions     map[xid.ID]*schema.Session
+	apps         map[xid.ID]*schema.App
+	environments map[xid.ID]*schema.Environment
+	orgs         map[xid.ID]*schema.Organization
+	members      map[xid.ID][]*schema.OrganizationMember // Organization members
 
-	// Default organization (created automatically)
+	// Default entities (created automatically)
+	defaultApp *schema.App
+	defaultEnv *schema.Environment
 	defaultOrg *schema.Organization
 
 	mu sync.RWMutex
 }
 
 // NewMock creates a new mock Authsome instance for testing.
-// It automatically creates a default organization and sets up basic services.
+// It automatically creates default app, environment, and organization.
 func NewMock(t *testing.T) *Mock {
 	t.Helper()
 
+	// Create default app
+	defaultApp := &schema.App{
+		ID:   xid.New(),
+		Name: "Test App",
+		Slug: "test-app",
+	}
+
+	// Create default environment
+	defaultEnv := &schema.Environment{
+		ID:    xid.New(),
+		AppID: defaultApp.ID,
+		Name:  "test",
+		Slug:  "test",
+	}
+
+	// Create default organization
 	defaultOrg := &schema.Organization{
-		ID:       xid.New(),
-		Name:     "Test Organization",
-		Slug:     "test-org",
-		Metadata: map[string]interface{}{},
+		ID:            xid.New(),
+		AppID:         defaultApp.ID,
+		EnvironmentID: defaultEnv.ID,
+		Name:          "Test Organization",
+		Slug:          "test-org",
+		Metadata:      map[string]interface{}{},
 	}
 
 	m := &Mock{
-		t:          t,
-		users:      make(map[string]*schema.User),
-		sessions:   make(map[string]*schema.Session),
-		orgs:       map[string]*schema.Organization{defaultOrg.ID.String(): defaultOrg},
-		members:    make(map[string][]*schema.Member),
-		defaultOrg: defaultOrg,
+		t:            t,
+		users:        make(map[xid.ID]*schema.User),
+		sessions:     make(map[xid.ID]*schema.Session),
+		apps:         map[xid.ID]*schema.App{defaultApp.ID: defaultApp},
+		environments: map[xid.ID]*schema.Environment{defaultEnv.ID: defaultEnv},
+		orgs:         map[xid.ID]*schema.Organization{defaultOrg.ID: defaultOrg},
+		members:      make(map[xid.ID][]*schema.OrganizationMember),
+		defaultApp:   defaultApp,
+		defaultEnv:   defaultEnv,
+		defaultOrg:   defaultOrg,
 	}
 
 	// Initialize mock services
 	m.UserService = &MockUserService{mock: m}
 	m.SessionService = &MockSessionService{mock: m}
+	m.OrganizationService = &MockOrganizationService{mock: m}
 
 	return m
 }
@@ -103,16 +132,17 @@ func (m *Mock) CreateUser(email, name string) *schema.User {
 		EmailVerified: true,
 	}
 
-	m.users[user.ID.String()] = user
+	m.users[user.ID] = user
 
 	// Add to default org
-	member := &schema.Member{
-		ID:     xid.New(),
-		AppID:  m.defaultOrg.ID,
-		UserID: user.ID,
-		Role:   schema.MemberRoleMember,
+	member := &schema.OrganizationMember{
+		ID:             xid.New(),
+		OrganizationID: m.defaultOrg.ID,
+		UserID:         user.ID,
+		Role:           "member",
+		Status:         "active",
 	}
-	m.members[m.defaultOrg.ID.String()] = append(m.members[m.defaultOrg.ID.String()], member)
+	m.members[m.defaultOrg.ID] = append(m.members[m.defaultOrg.ID], member)
 
 	return user
 }
@@ -130,16 +160,17 @@ func (m *Mock) CreateUserWithRole(email, name, role string) *schema.User {
 		EmailVerified: true,
 	}
 
-	m.users[user.ID.String()] = user
+	m.users[user.ID] = user
 
 	// Add to default org with specified role
-	member := &schema.Member{
-		ID:     xid.New(),
-		AppID:  m.defaultOrg.ID,
-		UserID: user.ID,
-		Role:   schema.MemberRole(role),
+	member := &schema.OrganizationMember{
+		ID:             xid.New(),
+		OrganizationID: m.defaultOrg.ID,
+		UserID:         user.ID,
+		Role:           role,
+		Status:         "active",
 	}
-	m.members[m.defaultOrg.ID.String()] = append(m.members[m.defaultOrg.ID.String()], member)
+	m.members[m.defaultOrg.ID] = append(m.members[m.defaultOrg.ID], member)
 
 	return user
 }
@@ -151,31 +182,30 @@ func (m *Mock) CreateOrganization(name, slug string) *schema.Organization {
 	defer m.mu.Unlock()
 
 	org := &schema.Organization{
-		ID:       xid.New(),
-		Name:     name,
-		Slug:     slug,
-		Metadata: map[string]interface{}{},
+		ID:            xid.New(),
+		AppID:         m.defaultApp.ID,
+		EnvironmentID: m.defaultEnv.ID,
+		Name:          name,
+		Slug:          slug,
+		Metadata:      map[string]interface{}{},
 	}
 
-	m.orgs[org.ID.String()] = org
+	m.orgs[org.ID] = org
 	return org
 }
 
 // AddUserToOrg adds a user to an organization with the specified role.
-func (m *Mock) AddUserToOrg(userID, orgID, role string) *schema.Member {
+func (m *Mock) AddUserToOrg(userID, orgID xid.ID, role string) *schema.OrganizationMember {
 	m.t.Helper()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Parse IDs
-	uid, _ := xid.FromString(userID)
-	oid, _ := xid.FromString(orgID)
-
-	member := &schema.Member{
-		ID:     xid.New(),
-		AppID:  oid,
-		UserID: uid,
-		Role:   schema.MemberRole(role),
+	member := &schema.OrganizationMember{
+		ID:             xid.New(),
+		OrganizationID: orgID,
+		UserID:         userID,
+		Role:           role,
+		Status:         "active",
 	}
 
 	m.members[orgID] = append(m.members[orgID], member)
@@ -183,42 +213,36 @@ func (m *Mock) AddUserToOrg(userID, orgID, role string) *schema.Member {
 }
 
 // CreateSession creates a test session for the given user and organization.
-func (m *Mock) CreateSession(userID, orgID string) *schema.Session {
+func (m *Mock) CreateSession(userID, orgID xid.ID) *schema.Session {
 	m.t.Helper()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Parse IDs
-	uid, _ := xid.FromString(userID)
-
 	session := &schema.Session{
 		ID:        xid.New(),
 		Token:     "session_" + xid.New().String(),
-		UserID:    uid,
+		UserID:    userID,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 
-	m.sessions[session.ID.String()] = session
+	m.sessions[session.ID] = session
 	return session
 }
 
 // CreateExpiredSession creates an expired session for testing expiration scenarios.
-func (m *Mock) CreateExpiredSession(userID, orgID string) *schema.Session {
+func (m *Mock) CreateExpiredSession(userID, orgID xid.ID) *schema.Session {
 	m.t.Helper()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Parse IDs
-	uid, _ := xid.FromString(userID)
-
 	session := &schema.Session{
 		ID:        xid.New(),
 		Token:     "session_" + xid.New().String(),
-		UserID:    uid,
+		UserID:    userID,
 		ExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
 	}
 
-	m.sessions[session.ID.String()] = session
+	m.sessions[session.ID] = session
 	return session
 }
 
@@ -228,7 +252,7 @@ func (m *Mock) GetDefaultOrg() *schema.Organization {
 }
 
 // GetUser retrieves a user by ID.
-func (m *Mock) GetUser(userID string) (*schema.User, error) {
+func (m *Mock) GetUser(userID xid.ID) (*schema.User, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -240,7 +264,7 @@ func (m *Mock) GetUser(userID string) (*schema.User, error) {
 }
 
 // GetSession retrieves a session by ID.
-func (m *Mock) GetSession(sessionID string) (*schema.Session, error) {
+func (m *Mock) GetSession(sessionID xid.ID) (*schema.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -251,8 +275,32 @@ func (m *Mock) GetSession(sessionID string) (*schema.Session, error) {
 	return session, nil
 }
 
+// GetApp retrieves an app by ID.
+func (m *Mock) GetApp(appID xid.ID) (*schema.App, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	app, ok := m.apps[appID]
+	if !ok {
+		return nil, fmt.Errorf("app not found: %s", appID)
+	}
+	return app, nil
+}
+
+// GetEnvironment retrieves an environment by ID.
+func (m *Mock) GetEnvironment(envID xid.ID) (*schema.Environment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	env, ok := m.environments[envID]
+	if !ok {
+		return nil, fmt.Errorf("environment not found: %s", envID)
+	}
+	return env, nil
+}
+
 // GetOrganization retrieves an organization by ID.
-func (m *Mock) GetOrganization(orgID string) (*schema.Organization, error) {
+func (m *Mock) GetOrganization(orgID xid.ID) (*schema.Organization, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -264,14 +312,14 @@ func (m *Mock) GetOrganization(orgID string) (*schema.Organization, error) {
 }
 
 // GetUserOrgs returns all organizations a user is a member of.
-func (m *Mock) GetUserOrgs(userID string) ([]*schema.Organization, error) {
+func (m *Mock) GetUserOrgs(userID xid.ID) ([]*schema.Organization, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var orgs []*schema.Organization
 	for orgID, members := range m.members {
 		for _, member := range members {
-			if member.UserID.String() == userID {
+			if member.UserID == userID {
 				if org, ok := m.orgs[orgID]; ok {
 					orgs = append(orgs, org)
 				}
@@ -282,68 +330,72 @@ func (m *Mock) GetUserOrgs(userID string) ([]*schema.Organization, error) {
 	return orgs, nil
 }
 
-// WithSession adds a session to the context for testing authenticated requests.
-// This is useful for testing handlers that require authentication.
-func (m *Mock) WithSession(ctx context.Context, sessionID string) context.Context {
+// GetDefaultApp returns the default test app.
+func (m *Mock) GetDefaultApp() *schema.App {
+	return m.defaultApp
+}
+
+// GetDefaultEnvironment returns the default test environment.
+func (m *Mock) GetDefaultEnvironment() *schema.Environment {
+	return m.defaultEnv
+}
+
+// WithUser sets user in context using core/contexts
+func (m *Mock) WithUser(ctx context.Context, userID xid.ID) context.Context {
+	return contexts.SetUserID(ctx, userID)
+}
+
+// WithApp sets app in context using core/contexts
+func (m *Mock) WithApp(ctx context.Context, appID xid.ID) context.Context {
+	return contexts.SetAppID(ctx, appID)
+}
+
+// WithEnvironment sets environment in context using core/contexts
+func (m *Mock) WithEnvironment(ctx context.Context, envID xid.ID) context.Context {
+	return contexts.SetEnvironmentID(ctx, envID)
+}
+
+// WithOrganization sets organization in context using core/contexts
+func (m *Mock) WithOrganization(ctx context.Context, orgID xid.ID) context.Context {
+	return contexts.SetOrganizationID(ctx, orgID)
+}
+
+// WithSession adds session and user to context
+func (m *Mock) WithSession(ctx context.Context, sessionID xid.ID) context.Context {
 	session, err := m.GetSession(sessionID)
 	if err != nil {
 		m.t.Fatalf("failed to get session: %v", err)
 	}
-
-	ctx = context.WithValue(ctx, "session", session)
-	ctx = context.WithValue(ctx, "user_id", session.UserID.String())
-
-	return ctx
+	ctx = contexts.SetUserID(ctx, session.UserID)
+	// Store session object separately for retrieval
+	return context.WithValue(ctx, sessionContextKey, session)
 }
 
-// WithUser adds a user to the context for testing.
-func (m *Mock) WithUser(ctx context.Context, userID string) context.Context {
-	user, err := m.GetUser(userID)
-	if err != nil {
-		m.t.Fatalf("failed to get user: %v", err)
-	}
-
-	ctx = context.WithValue(ctx, "user", user)
-	ctx = context.WithValue(ctx, "user_id", user.ID.String())
-
-	return ctx
-}
-
-// WithOrg adds an organization to the context for testing.
-func (m *Mock) WithOrg(ctx context.Context, orgID string) context.Context {
-	org, err := m.GetOrganization(orgID)
-	if err != nil {
-		m.t.Fatalf("failed to get organization: %v", err)
-	}
-
-	ctx = context.WithValue(ctx, "organization", org)
-	ctx = context.WithValue(ctx, "org_id", org.ID.String())
-
-	return ctx
-}
-
-// NewTestContext creates a fully authenticated context with user, org, and session.
-// This is a convenience method that combines WithSession, WithUser, and WithOrg.
+// NewTestContext creates fully authenticated context with all tenancy levels
 func (m *Mock) NewTestContext() context.Context {
 	user := m.CreateUser("test@example.com", "Test User")
-	session := m.CreateSession(user.ID.String(), m.defaultOrg.ID.String())
+	session := m.CreateSession(user.ID, m.defaultOrg.ID)
 
 	ctx := context.Background()
-	ctx = m.WithSession(ctx, session.ID.String())
-	ctx = m.WithUser(ctx, user.ID.String())
-	ctx = m.WithOrg(ctx, m.defaultOrg.ID.String())
+	ctx = contexts.SetAppID(ctx, m.defaultApp.ID)
+	ctx = contexts.SetEnvironmentID(ctx, m.defaultEnv.ID)
+	ctx = contexts.SetOrganizationID(ctx, m.defaultOrg.ID)
+	ctx = contexts.SetUserID(ctx, user.ID)
+	ctx = context.WithValue(ctx, sessionContextKey, session)
 
 	return ctx
 }
 
-// NewTestContextWithUser creates an authenticated context for a specific user.
+// NewTestContextWithUser creates authenticated context for specific user
 func (m *Mock) NewTestContextWithUser(user *schema.User) context.Context {
-	session := m.CreateSession(user.ID.String(), m.defaultOrg.ID.String())
+	session := m.CreateSession(user.ID, m.defaultOrg.ID)
 
 	ctx := context.Background()
-	ctx = m.WithSession(ctx, session.ID.String())
-	ctx = m.WithUser(ctx, user.ID.String())
-	ctx = m.WithOrg(ctx, m.defaultOrg.ID.String())
+	ctx = contexts.SetAppID(ctx, m.defaultApp.ID)
+	ctx = contexts.SetEnvironmentID(ctx, m.defaultEnv.ID)
+	ctx = contexts.SetOrganizationID(ctx, m.defaultOrg.ID)
+	ctx = contexts.SetUserID(ctx, user.ID)
+	ctx = context.WithValue(ctx, sessionContextKey, session)
 
 	return ctx
 }
@@ -353,18 +405,37 @@ func (m *Mock) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Recreate default org
-	m.defaultOrg = &schema.Organization{
-		ID:       xid.New(),
-		Name:     "Test Organization",
-		Slug:     "test-org",
-		Metadata: map[string]interface{}{},
+	// Recreate default app
+	m.defaultApp = &schema.App{
+		ID:   xid.New(),
+		Name: "Test App",
+		Slug: "test-app",
 	}
 
-	m.users = make(map[string]*schema.User)
-	m.sessions = make(map[string]*schema.Session)
-	m.orgs = map[string]*schema.Organization{m.defaultOrg.ID.String(): m.defaultOrg}
-	m.members = make(map[string][]*schema.Member)
+	// Recreate default environment
+	m.defaultEnv = &schema.Environment{
+		ID:    xid.New(),
+		AppID: m.defaultApp.ID,
+		Name:  "test",
+		Slug:  "test",
+	}
+
+	// Recreate default org
+	m.defaultOrg = &schema.Organization{
+		ID:            xid.New(),
+		AppID:         m.defaultApp.ID,
+		EnvironmentID: m.defaultEnv.ID,
+		Name:          "Test Organization",
+		Slug:          "test-org",
+		Metadata:      map[string]interface{}{},
+	}
+
+	m.users = make(map[xid.ID]*schema.User)
+	m.sessions = make(map[xid.ID]*schema.Session)
+	m.apps = map[xid.ID]*schema.App{m.defaultApp.ID: m.defaultApp}
+	m.environments = map[xid.ID]*schema.Environment{m.defaultEnv.ID: m.defaultEnv}
+	m.orgs = map[xid.ID]*schema.Organization{m.defaultOrg.ID: m.defaultOrg}
+	m.members = make(map[xid.ID][]*schema.OrganizationMember)
 }
 
 // MockUserService implements core user service methods for testing.
@@ -383,11 +454,11 @@ func (s *MockUserService) Create(ctx context.Context, req *user.CreateUserReques
 		EmailVerified: false,
 	}
 
-	s.mock.users[user.ID.String()] = user
+	s.mock.users[user.ID] = user
 	return user, nil
 }
 
-func (s *MockUserService) GetByID(ctx context.Context, userID string) (*schema.User, error) {
+func (s *MockUserService) GetByID(ctx context.Context, userID xid.ID) (*schema.User, error) {
 	return s.mock.GetUser(userID)
 }
 
@@ -403,7 +474,7 @@ func (s *MockUserService) GetByEmail(ctx context.Context, email string) (*schema
 	return nil, fmt.Errorf("user not found with email: %s", email)
 }
 
-func (s *MockUserService) Update(ctx context.Context, userID string, req *user.UpdateUserRequest) (*schema.User, error) {
+func (s *MockUserService) Update(ctx context.Context, userID xid.ID, req *user.UpdateUserRequest) (*schema.User, error) {
 	s.mock.mu.Lock()
 	defer s.mock.mu.Unlock()
 
@@ -422,7 +493,7 @@ func (s *MockUserService) Update(ctx context.Context, userID string, req *user.U
 	return user, nil
 }
 
-func (s *MockUserService) Delete(ctx context.Context, userID string) error {
+func (s *MockUserService) Delete(ctx context.Context, userID xid.ID) error {
 	s.mock.mu.Lock()
 	defer s.mock.mu.Unlock()
 
@@ -436,11 +507,10 @@ type MockSessionService struct {
 }
 
 func (s *MockSessionService) Create(ctx context.Context, req *session.CreateSessionRequest) (*schema.Session, error) {
-	// For testing, we just use the userID as string
-	return s.mock.CreateSession(req.UserID.String(), ""), nil
+	return s.mock.CreateSession(req.UserID, xid.NilID()), nil
 }
 
-func (s *MockSessionService) GetByID(ctx context.Context, sessionID string) (*schema.Session, error) {
+func (s *MockSessionService) GetByID(ctx context.Context, sessionID xid.ID) (*schema.Session, error) {
 	return s.mock.GetSession(sessionID)
 }
 
@@ -456,7 +526,7 @@ func (s *MockSessionService) GetByToken(ctx context.Context, token string) (*sch
 	return nil, fmt.Errorf("session not found with token")
 }
 
-func (s *MockSessionService) Delete(ctx context.Context, sessionID string) error {
+func (s *MockSessionService) Delete(ctx context.Context, sessionID xid.ID) error {
 	s.mock.mu.Lock()
 	defer s.mock.mu.Unlock()
 

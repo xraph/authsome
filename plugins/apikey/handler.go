@@ -7,6 +7,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
@@ -24,9 +25,8 @@ type CreateAPIKeyResponse struct {
 	Message string         `json:"message"`
 }
 
-type MessageResponse struct {
-	Message string `json:"message"`
-}
+// Use shared response type
+type MessageResponse = responses.MessageResponse
 
 type RotateAPIKeyResponse struct {
 	APIKey  *apikey.APIKey `json:"api_key"`

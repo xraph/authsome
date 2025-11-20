@@ -5,35 +5,41 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/emailotp"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 )
 
 // EmailFactorAdapter integrates emailotp plugin as an MFA factor (not primary auth)
 type EmailFactorAdapter struct {
 	BaseFactorAdapter
 	emailOTPService *emailotp.Service
+	notifAdapter    *notificationPlugin.Adapter
 }
 
 // NewEmailFactorAdapter creates a new email factor adapter
-func NewEmailFactorAdapter(emailOTPService *emailotp.Service, enabled bool) *EmailFactorAdapter {
+func NewEmailFactorAdapter(emailOTPService *emailotp.Service, notifAdapter *notificationPlugin.Adapter, enabled bool) *EmailFactorAdapter {
 	return &EmailFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
 			factorType: FactorTypeEmail,
-			available:  enabled && emailOTPService != nil,
+			available:  enabled && (emailOTPService != nil || notifAdapter != nil),
 		},
 		emailOTPService: emailOTPService,
+		notifAdapter:    notifAdapter,
 	}
 }
 
 // Enroll registers an email address for MFA
 func (a *EmailFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("email factor not available")
+		return nil, errs.BadRequest("Email MFA factor not available")
 	}
 
 	email, ok := metadata["email"].(string)
 	if !ok || email == "" {
-		return nil, fmt.Errorf("email required in metadata")
+		return nil, errs.RequiredField("email")
 	}
 
 	// Store email for this factor
@@ -55,7 +61,7 @@ func (a *EmailFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata
 // VerifyEnrollment sends a test code to verify email works
 func (a *EmailFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	if !a.IsAvailable() {
-		return fmt.Errorf("email factor not available")
+		return errs.BadRequest("Email MFA factor not available")
 	}
 
 	// This would:
@@ -69,24 +75,65 @@ func (a *EmailFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID 
 // Challenge sends an email OTP code for MFA verification
 func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("email factor not available")
+		return nil, errs.BadRequest("Email MFA factor not available")
 	}
 
 	// Extract email from factor metadata
 	email, ok := factor.Metadata["email"].(string)
 	if !ok || email == "" {
-		return nil, fmt.Errorf("no email configured for this factor")
+		return nil, errs.BadRequest("No email configured for this factor")
+	}
+
+	// Get app context for notifications
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return nil, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400)
 	}
 
 	// Extract IP and user agent from metadata
 	ip, _ := metadata["ip"].(string)
 	ua, _ := metadata["user_agent"].(string)
 
-	// Use emailotp service to send the code
-	// Note: We're using it for MFA, not primary auth
-	code, err := a.emailOTPService.SendOTP(ctx, email, ip, ua)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send email OTP: %w", err)
+	// Generate OTP code
+	code := fmt.Sprintf("%06d", xid.New().Time().Unix()%1000000)
+
+	// Try to send via notification plugin first
+	if a.notifAdapter != nil {
+		err := a.notifAdapter.SendMFACode(ctx, appID, email, code, 10, notification.NotificationTypeEmail)
+		if err != nil {
+			// Log error but try fallback
+			fmt.Printf("Failed to send MFA code via notification plugin: %v\n", err)
+			// Fall through to emailotp fallback
+		} else {
+			// Successfully sent via notification
+			challenge := &Challenge{
+				ID:       xid.New(),
+				UserID:   factor.UserID,
+				FactorID: factor.ID,
+				Type:     FactorTypeEmail,
+				Status:   ChallengeStatusPending,
+				Code:     code,
+				Metadata: map[string]any{
+					"email": maskEmail(email),
+				},
+				Attempts:    0,
+				MaxAttempts: 5,
+				IPAddress:   ip,
+				UserAgent:   ua,
+			}
+			return challenge, nil
+		}
+	}
+
+	// Fallback to direct emailotp service if available
+	if a.emailOTPService != nil {
+		sentCode, err := a.emailOTPService.SendOTP(ctx, appID, email, ip, ua)
+		if err != nil {
+			return nil, errs.Wrap(err, "SEND_EMAIL_OTP_FAILED", "Failed to send email OTP", 500)
+		}
+		if sentCode != "" {
+			code = sentCode
+		}
 	}
 
 	challenge := &Challenge{
@@ -95,7 +142,7 @@ func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, meta
 		FactorID: factor.ID,
 		Type:     FactorTypeEmail,
 		Status:   ChallengeStatusPending,
-		Code:     code, // Store for verification (hashed in production)
+		Code:     code,
 		Metadata: map[string]any{
 			"email": maskEmail(email),
 		},
@@ -111,7 +158,7 @@ func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, meta
 // Verify verifies an email OTP code
 func (a *EmailFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
-		return false, fmt.Errorf("email factor not available")
+		return false, errs.BadRequest("Email MFA factor not available")
 	}
 
 	// Simple code comparison (in production, this should use hashed comparison)

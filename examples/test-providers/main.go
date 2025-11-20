@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/providers/email"
 	"github.com/xraph/authsome/providers/sms"
@@ -122,12 +123,13 @@ func testEmailProvider() {
 	fmt.Printf("  ✅ Provider Type: %s\n", provider.Type())
 
 	// Test notification request creation (without actually sending)
+	testAppID := xid.New()
 	notificationReq := &notification.SendRequest{
-		OrganizationID: "test-org",
-		Type:           notification.NotificationTypeEmail,
-		Recipient:      "user@example.com",
-		Subject:        "Test Email",
-		Body:           "Hello World\n\nThis is a test email.",
+		AppID:     testAppID,
+		Type:      notification.NotificationTypeEmail,
+		Recipient: "user@example.com",
+		Subject:   "Test Email",
+		Body:      "Hello World\n\nThis is a test email.",
 	}
 
 	fmt.Printf("  ✅ Notification request created for: %s\n", notificationReq.Recipient)
@@ -152,11 +154,12 @@ func testSMSProvider() {
 	fmt.Printf("  ✅ Provider Type: %s\n", provider.Type())
 
 	// Test SMS notification request creation (without actually sending)
+	testSMSAppID := xid.New()
 	notificationReq := &notification.SendRequest{
-		OrganizationID: "test-org",
-		Type:           notification.NotificationTypeSMS,
-		Recipient:      "+1987654321",
-		Body:           "Hello! This is a test SMS from AuthSome.",
+		AppID:     testSMSAppID,
+		Type:      notification.NotificationTypeSMS,
+		Recipient: "+1987654321",
+		Body:      "Hello! This is a test SMS from AuthSome.",
 	}
 
 	fmt.Printf("  ✅ SMS notification request created for: %s\n", notificationReq.Recipient)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/authsome/schema"
@@ -67,20 +67,21 @@ func NewService(
 	return s, nil
 }
 
-// CreateVerificationSession creates a new verification session for a user
+// CreateVerificationSession creates a new verification session for a user with V2 context
 func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSessionRequest) (*schema.IdentityVerificationSession, error) {
 	// Check if user exists and is not blocked
-	status, err := s.repo.GetUserVerificationStatus(ctx, req.UserID)
-	if err == nil && status.IsBlocked {
-		s.audit(ctx, "verification_session_blocked", req.UserID, req.OrganizationID, map[string]interface{}{
+	status, err := s.repo.GetUserVerificationStatus(ctx, req.AppID, req.OrganizationID, req.UserID)
+	if err == nil && status != nil && status.IsBlocked {
+		s.audit(ctx, "verification_session_blocked", req.UserID.String(), req.OrganizationID.String(), map[string]interface{}{
 			"reason": status.BlockReason,
+			"app_id": req.AppID.String(),
 		})
 		return nil, ErrVerificationBlocked
 	}
 
 	// Check rate limits
 	if s.config.RateLimitEnabled {
-		count, err := s.repo.CountVerificationsByUser(ctx, req.UserID, time.Now().Add(-24*time.Hour))
+		count, err := s.repo.CountVerificationsByUser(ctx, req.AppID, req.UserID, time.Now().Add(-24*time.Hour))
 		if err != nil {
 			return nil, fmt.Errorf("failed to check rate limit: %w", err)
 		}
@@ -95,8 +96,11 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 		return nil, err
 	}
 
-	// Create provider session
+	// Create provider session with V2 context
 	providerSession, err := provider.CreateSession(ctx, &ProviderSessionRequest{
+		AppID:          req.AppID,
+		EnvironmentID:  req.EnvironmentID,
+		OrganizationID: req.OrganizationID,
 		UserID:         req.UserID,
 		RequiredChecks: req.RequiredChecks,
 		SuccessURL:     req.SuccessURL,
@@ -107,11 +111,20 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 		return nil, fmt.Errorf("provider session creation failed: %w", err)
 	}
 
-	// Create session record
+	// Convert environment ID to string pointer for schema
+	var envIDStr *string
+	if req.EnvironmentID != nil && !req.EnvironmentID.IsNil() {
+		str := req.EnvironmentID.String()
+		envIDStr = &str
+	}
+
+	// Create session record with V2 context
 	session := &schema.IdentityVerificationSession{
-		ID:             uuid.New().String(),
-		UserID:         req.UserID,
-		OrganizationID: req.OrganizationID,
+		ID:             xid.New().String(),
+		AppID:          req.AppID.String(),
+		EnvironmentID:  envIDStr,
+		OrganizationID: req.OrganizationID.String(),
+		UserID:         req.UserID.String(),
 		Provider:       req.Provider,
 		SessionURL:     providerSession.URL,
 		SessionToken:   providerSession.Token,
@@ -131,18 +144,19 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	s.audit(ctx, "verification_session_created", req.UserID, req.OrganizationID, map[string]interface{}{
+	s.audit(ctx, "verification_session_created", req.UserID.String(), req.OrganizationID.String(), map[string]interface{}{
 		"session_id": session.ID,
 		"provider":   req.Provider,
 		"checks":     req.RequiredChecks,
+		"app_id":     req.AppID.String(),
 	})
 
 	return session, nil
 }
 
-// GetVerificationSession retrieves a verification session
-func (s *Service) GetVerificationSession(ctx context.Context, sessionID string) (*schema.IdentityVerificationSession, error) {
-	session, err := s.repo.GetSessionByID(ctx, sessionID)
+// GetVerificationSession retrieves a verification session with V2 context
+func (s *Service) GetVerificationSession(ctx context.Context, appID xid.ID, sessionID string) (*schema.IdentityVerificationSession, error) {
+	session, err := s.repo.GetSessionByID(ctx, appID, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
@@ -164,17 +178,17 @@ func (s *Service) GetVerificationSession(ctx context.Context, sessionID string) 
 	return session, nil
 }
 
-// CreateVerification creates a new verification record
+// CreateVerification creates a new verification record with V2 context
 func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificationRequest) (*schema.IdentityVerification, error) {
 	// Check if user is blocked
-	status, err := s.repo.GetUserVerificationStatus(ctx, req.UserID)
-	if err == nil && status.IsBlocked {
+	status, err := s.repo.GetUserVerificationStatus(ctx, req.AppID, req.OrganizationID, req.UserID)
+	if err == nil && status != nil && status.IsBlocked {
 		return nil, ErrVerificationBlocked
 	}
 
 	// Check max attempts
 	if s.config.MaxVerificationAttempts > 0 {
-		count, err := s.repo.CountVerificationsByUser(ctx, req.UserID, time.Now().Add(-24*time.Hour))
+		count, err := s.repo.CountVerificationsByUser(ctx, req.AppID, req.UserID, time.Now().Add(-24*time.Hour))
 		if err != nil {
 			return nil, fmt.Errorf("failed to check attempts: %w", err)
 		}
@@ -183,10 +197,19 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 		}
 	}
 
+	// Convert environment ID to string pointer for schema
+	var envIDStr *string
+	if req.EnvironmentID != nil && !req.EnvironmentID.IsNil() {
+		str := req.EnvironmentID.String()
+		envIDStr = &str
+	}
+
 	verification := &schema.IdentityVerification{
-		ID:               uuid.New().String(),
-		UserID:           req.UserID,
-		OrganizationID:   req.OrganizationID,
+		ID:               xid.New().String(),
+		AppID:            req.AppID.String(),
+		EnvironmentID:    envIDStr,
+		OrganizationID:   req.OrganizationID.String(),
+		UserID:           req.UserID.String(),
 		Provider:         req.Provider,
 		ProviderCheckID:  req.ProviderCheckID,
 		VerificationType: req.VerificationType,
@@ -195,8 +218,6 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 		Metadata:         req.Metadata,
 		IPAddress:        req.IPAddress,
 		UserAgent:        req.UserAgent,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
 	}
 
 	if s.config.VerificationExpiry > 0 {
@@ -208,18 +229,19 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 		return nil, fmt.Errorf("failed to create verification: %w", err)
 	}
 
-	s.audit(ctx, "verification_created", req.UserID, req.OrganizationID, map[string]interface{}{
+	s.audit(ctx, "verification_created", req.UserID.String(), req.OrganizationID.String(), map[string]interface{}{
 		"verification_id": verification.ID,
 		"type":            req.VerificationType,
 		"provider":        req.Provider,
+		"app_id":          req.AppID.String(),
 	})
 
 	return verification, nil
 }
 
-// ProcessVerificationResult processes the result from a provider
-func (s *Service) ProcessVerificationResult(ctx context.Context, verificationID string, result *VerificationResult) error {
-	verification, err := s.repo.GetVerificationByID(ctx, verificationID)
+// ProcessVerificationResult processes the result from a provider with V2 context
+func (s *Service) ProcessVerificationResult(ctx context.Context, appID xid.ID, verificationID string, result *VerificationResult) error {
+	verification, err := s.repo.GetVerificationByID(ctx, appID, verificationID)
 	if err != nil {
 		return fmt.Errorf("failed to get verification: %w", err)
 	}
@@ -305,9 +327,9 @@ func (s *Service) ProcessVerificationResult(ctx context.Context, verificationID 
 	return nil
 }
 
-// GetVerification retrieves a verification by ID
-func (s *Service) GetVerification(ctx context.Context, id string) (*schema.IdentityVerification, error) {
-	verification, err := s.repo.GetVerificationByID(ctx, id)
+// GetVerification retrieves a verification by ID with V2 context
+func (s *Service) GetVerification(ctx context.Context, appID xid.ID, id string) (*schema.IdentityVerification, error) {
+	verification, err := s.repo.GetVerificationByID(ctx, appID, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get verification: %w", err)
 	}
@@ -319,23 +341,26 @@ func (s *Service) GetVerification(ctx context.Context, id string) (*schema.Ident
 	return verification, nil
 }
 
-// GetUserVerifications retrieves all verifications for a user
-func (s *Service) GetUserVerifications(ctx context.Context, userID string, limit, offset int) ([]*schema.IdentityVerification, error) {
-	return s.repo.GetVerificationsByUserID(ctx, userID, limit, offset)
+// GetUserVerifications retrieves all verifications for a user with V2 context
+func (s *Service) GetUserVerifications(ctx context.Context, appID xid.ID, userID xid.ID, limit, offset int) ([]*schema.IdentityVerification, error) {
+	return s.repo.GetVerificationsByUserID(ctx, appID, userID, limit, offset)
 }
 
-// GetUserVerificationStatus retrieves the verification status for a user
-func (s *Service) GetUserVerificationStatus(ctx context.Context, userID string) (*schema.UserVerificationStatus, error) {
-	status, err := s.repo.GetUserVerificationStatus(ctx, userID)
+// GetUserVerificationStatus retrieves the verification status for a user with V2 context
+func (s *Service) GetUserVerificationStatus(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID) (*schema.UserVerificationStatus, error) {
+	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user status: %w", err)
 	}
 
 	if status == nil {
-		// Create default status
+		// Create default status with V2 context
 		status = &schema.UserVerificationStatus{
-			ID:                uuid.New().String(),
-			UserID:            userID,
+			ID:                xid.New().String(),
+			AppID:             appID.String(),
+			EnvironmentID:     nil, // Will be set when first verification is created
+			OrganizationID:    orgID.String(),
+			UserID:            userID.String(),
 			IsVerified:        false,
 			VerificationLevel: "none",
 			OverallRiskLevel:  "unknown",
@@ -347,13 +372,13 @@ func (s *Service) GetUserVerificationStatus(ctx context.Context, userID string) 
 	return status, nil
 }
 
-// RequestReverification initiates a re-verification for a user
-func (s *Service) RequestReverification(ctx context.Context, userID, orgID string, reason string) error {
+// RequestReverification initiates a re-verification for a user with V2 context
+func (s *Service) RequestReverification(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID, reason string) error {
 	if !s.config.EnableReverification {
 		return fmt.Errorf("reverification is not enabled")
 	}
 
-	status, err := s.repo.GetUserVerificationStatus(ctx, userID)
+	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get user status: %w", err)
 	}
@@ -369,25 +394,28 @@ func (s *Service) RequestReverification(ctx context.Context, userID, orgID strin
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
-	s.audit(ctx, "reverification_requested", userID, orgID, map[string]interface{}{
+	s.audit(ctx, "reverification_requested", userID.String(), orgID.String(), map[string]interface{}{
 		"reason": reason,
+		"app_id": appID.String(),
 	})
 
 	return nil
 }
 
-// BlockUser blocks a user from verification
-func (s *Service) BlockUser(ctx context.Context, userID, orgID, reason string) error {
-	status, err := s.repo.GetUserVerificationStatus(ctx, userID)
+// BlockUser blocks a user from verification with V2 context
+func (s *Service) BlockUser(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID, reason string) error {
+	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get user status: %w", err)
 	}
 
 	if status == nil {
 		status = &schema.UserVerificationStatus{
-			ID:        uuid.New().String(),
-			UserID:    userID,
-			CreatedAt: time.Now(),
+			ID:             xid.New().String(),
+			AppID:          appID.String(),
+			OrganizationID: orgID.String(),
+			UserID:         userID.String(),
+			CreatedAt:      time.Now(),
 		}
 	}
 
@@ -407,16 +435,17 @@ func (s *Service) BlockUser(ctx context.Context, userID, orgID, reason string) e
 		}
 	}
 
-	s.audit(ctx, "user_blocked", userID, orgID, map[string]interface{}{
+	s.audit(ctx, "user_blocked", userID.String(), orgID.String(), map[string]interface{}{
 		"reason": reason,
+		"app_id": appID.String(),
 	})
 
 	return nil
 }
 
-// UnblockUser unblocks a user
-func (s *Service) UnblockUser(ctx context.Context, userID, orgID string) error {
-	status, err := s.repo.GetUserVerificationStatus(ctx, userID)
+// UnblockUser unblocks a user with V2 context
+func (s *Service) UnblockUser(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID) error {
+	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get user status: %w", err)
 	}
@@ -434,7 +463,9 @@ func (s *Service) UnblockUser(ctx context.Context, userID, orgID string) error {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
-	s.audit(ctx, "user_unblocked", userID, orgID, nil)
+	s.audit(ctx, "user_unblocked", userID.String(), orgID.String(), map[string]interface{}{
+		"app_id": appID.String(),
+	})
 
 	return nil
 }
@@ -512,16 +543,23 @@ func (s *Service) applyBusinessRules(verification *schema.IdentityVerification) 
 }
 
 func (s *Service) updateUserVerificationStatus(ctx context.Context, verification *schema.IdentityVerification) error {
-	status, err := s.repo.GetUserVerificationStatus(ctx, verification.UserID)
+	// Convert string IDs to xid.ID for repository call
+	appID, _ := xid.FromString(verification.AppID)
+	orgID, _ := xid.FromString(verification.OrganizationID)
+	userID, _ := xid.FromString(verification.UserID)
+
+	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
 		return err
 	}
 
 	if status == nil {
 		status = &schema.UserVerificationStatus{
-			ID:                uuid.New().String(),
-			UserID:            verification.UserID,
+			ID:                xid.New().String(),
+			AppID:             verification.AppID,
+			EnvironmentID:     verification.EnvironmentID,
 			OrganizationID:    verification.OrganizationID,
+			UserID:            verification.UserID,
 			VerificationLevel: "none",
 			CreatedAt:         time.Now(),
 		}

@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xraph/authsome"
 	authext "github.com/xraph/authsome/extension"
 	"github.com/xraph/authsome/plugins/dashboard"
 	"github.com/xraph/forge"
@@ -45,7 +44,6 @@ func main() {
 
 	// Option 2: With configuration and plugins
 	app.RegisterExtension(authext.NewExtension(
-		authext.WithMode(authsome.ModeStandalone),
 		authext.WithBasePath("/api/auth"),
 		authext.WithSecret("demo-secret-key-change-in-production"),
 		authext.WithRBACEnforcement(false),

@@ -570,39 +570,93 @@ func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*Compl
 
 // Helper structs and interfaces
 type CreateProfileRequest struct {
-	AppID                 string
-	Name                  string
-	Standards             []ComplianceStandard
-	MFARequired           bool
-	PasswordMinLength     int
-	PasswordRequireUpper  bool
-	PasswordRequireLower  bool
-	PasswordRequireNumber bool
-	PasswordRequireSymbol bool
-	PasswordExpiryDays    int
-	SessionMaxAge         int
-	SessionIdleTimeout    int
-	SessionIPBinding      bool
-	RetentionDays         int
-	AuditLogExport        bool
-	DetailedAuditTrail    bool
-	DataResidency         string
-	EncryptionAtRest      bool
-	EncryptionInTransit   bool
-	RBACRequired          bool
-	LeastPrivilege        bool
-	RegularAccessReview   bool
-	ComplianceContact     string
-	DPOContact            string
-	Metadata              map[string]interface{}
+	AppID                 string                 `json:"appId"`
+	Name                  string                 `json:"name" validate:"required"`
+	Standards             []ComplianceStandard   `json:"standards"`
+	MFARequired           bool                   `json:"mfaRequired"`
+	PasswordMinLength     int                    `json:"passwordMinLength"`
+	PasswordRequireUpper  bool                   `json:"passwordRequireUpper"`
+	PasswordRequireLower  bool                   `json:"passwordRequireLower"`
+	PasswordRequireNumber bool                   `json:"passwordRequireNumber"`
+	PasswordRequireSymbol bool                   `json:"passwordRequireSymbol"`
+	PasswordExpiryDays    int                    `json:"passwordExpiryDays"`
+	SessionMaxAge         int                    `json:"sessionMaxAge"`
+	SessionIdleTimeout    int                    `json:"sessionIdleTimeout"`
+	SessionIPBinding      bool                   `json:"sessionIpBinding"`
+	RetentionDays         int                    `json:"retentionDays"`
+	AuditLogExport        bool                   `json:"auditLogExport"`
+	DetailedAuditTrail    bool                   `json:"detailedAuditTrail"`
+	DataResidency         string                 `json:"dataResidency"`
+	EncryptionAtRest      bool                   `json:"encryptionAtRest"`
+	EncryptionInTransit   bool                   `json:"encryptionInTransit"`
+	RBACRequired          bool                   `json:"rbacRequired"`
+	LeastPrivilege        bool                   `json:"leastPrivilege"`
+	RegularAccessReview   bool                   `json:"regularAccessReview"`
+	ComplianceContact     string                 `json:"complianceContact"`
+	DPOContact            string                 `json:"dpoContact"`
+	Metadata              map[string]interface{} `json:"metadata"`
 }
 
 type UpdateProfileRequest struct {
-	Name          *string
-	Status        *string
-	MFARequired   *bool
-	RetentionDays *int
+	Name          *string `json:"name"`
+	Status        *string `json:"status"`
+	MFARequired   *bool   `json:"mfaRequired"`
+	RetentionDays *int    `json:"retentionDays"`
 	// Add other updatable fields
+}
+
+type CreateProfileFromTemplateRequest struct {
+	Standard ComplianceStandard `json:"standard" validate:"required"`
+}
+
+type RunCheckRequest struct {
+	CheckType string `json:"checkType" validate:"required"`
+}
+
+type ResolveViolationRequest struct {
+	Resolution string `json:"resolution"`
+	Notes      string `json:"notes"`
+}
+
+type GenerateReportRequest struct {
+	ReportType string             `json:"reportType" validate:"required"`
+	Standard   ComplianceStandard `json:"standard"`
+	Period     string             `json:"period" validate:"required"`
+	Format     string             `json:"format" validate:"required"`
+}
+
+type CreateEvidenceRequest struct {
+	EvidenceType string             `json:"evidenceType" validate:"required"`
+	Standard     ComplianceStandard `json:"standard"`
+	ControlID    string             `json:"controlId"`
+	Title        string             `json:"title" validate:"required"`
+	Description  string             `json:"description"`
+	FileURL      string             `json:"fileUrl"`
+}
+
+type CreatePolicyRequest struct {
+	PolicyType string             `json:"policyType" validate:"required"`
+	Standard   ComplianceStandard `json:"standard"`
+	Title      string             `json:"title" validate:"required"`
+	Version    string             `json:"version" validate:"required"`
+	Content    string             `json:"content" validate:"required"`
+}
+
+type UpdatePolicyRequest struct {
+	Title   *string `json:"title"`
+	Version *string `json:"version"`
+	Content *string `json:"content"`
+	Status  *string `json:"status"`
+}
+
+type CreateTrainingRequest struct {
+	UserID       string             `json:"userId" validate:"required"`
+	TrainingType string             `json:"trainingType" validate:"required"`
+	Standard     ComplianceStandard `json:"standard"`
+}
+
+type CompleteTrainingRequest struct {
+	Score int `json:"score"`
 }
 
 // External service interfaces

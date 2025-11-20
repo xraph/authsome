@@ -2,9 +2,13 @@ package mfa
 
 import (
 	"encoding/json"
-	"fmt"
+	"net"
+	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -13,24 +17,8 @@ type Handler struct {
 	service *Service
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
-
-
+// Response types - use shared responses from core
+type MessageResponse = responses.MessageResponse
 
 type FactorsResponse struct {
 	Factors interface{} `json:"factors"`
@@ -60,27 +48,27 @@ func (h *Handler) EnrollFactor(c forge.Context) error {
 	// Get user ID from context (set by auth middleware)
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	var req FactorEnrollmentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	resp, err := h.service.EnrollFactor(c.Request().Context(), userID, &req)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "ENROLL_FACTOR_FAILED", "Failed to enroll factor", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, resp)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ListFactors handles GET /mfa/factors
 func (h *Handler) ListFactors(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	// Check for active_only query param
@@ -88,135 +76,135 @@ func (h *Handler) ListFactors(c forge.Context) error {
 
 	factors, err := h.service.ListFactors(c.Request().Context(), userID, activeOnly)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "LIST_FACTORS_FAILED", "Failed to list factors", http.StatusInternalServerError)
 	}
 
-	return c.JSON(200, &FactorsResponse{Factors: factors, Count: len(factors)})
+	return c.JSON(http.StatusOK, &FactorsResponse{Factors: factors, Count: len(factors)})
 }
 
 // GetFactor handles GET /mfa/factors/:id
 func (h *Handler) GetFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid factor ID"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
 
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "factor not found"})
+		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
 
 	// Verify factor belongs to user
 	if factor.UserID != userID {
-		return c.JSON(403, &ErrorResponse{Error: "forbidden"})
+		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
 
-	return c.JSON(200, factor)
+	return c.JSON(http.StatusOK, factor)
 }
 
 // UpdateFactor handles PUT /mfa/factors/:id
 func (h *Handler) UpdateFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid factor ID"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
 
 	// First verify factor belongs to user
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "factor not found"})
+		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
 	if factor.UserID != userID {
-		return c.JSON(403, &ErrorResponse{Error: "forbidden"})
+		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(c.Request().Body).Decode(&updates); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	if err := h.service.UpdateFactor(c.Request().Context(), factorID, updates); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "UPDATE_FACTOR_FAILED", "Failed to update factor", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, &MessageResponse{Message: "factor updated"})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "factor updated"})
 }
 
 // DeleteFactor handles DELETE /mfa/factors/:id
 func (h *Handler) DeleteFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid factor ID"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
 
 	// Verify factor belongs to user
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "factor not found"})
+		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
 	if factor.UserID != userID {
-		return c.JSON(403, &ErrorResponse{Error: "forbidden"})
+		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
 
 	if err := h.service.DeleteFactor(c.Request().Context(), factorID); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "DELETE_FACTOR_FAILED", "Failed to delete factor", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, &MessageResponse{Message: "factor deleted"})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "factor deleted"})
 }
 
 // VerifyFactor handles POST /mfa/factors/:id/verify
 func (h *Handler) VerifyFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	factorIDStr := c.Param("id")
 	factorID, err := xid.FromString(factorIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid factor ID"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
 
 	// Verify factor belongs to user
 	factor, err := h.service.GetFactor(c.Request().Context(), factorID)
 	if err != nil {
-		return c.JSON(404, &ErrorResponse{Error: "factor not found"})
+		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
 	if factor.UserID != userID {
-		return c.JSON(403, &ErrorResponse{Error: "forbidden"})
+		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
 
 	var req struct {
 		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	if err := h.service.VerifyEnrollment(c.Request().Context(), factorID, req.Code); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "VERIFY_ENROLLMENT_FAILED", "Failed to verify factor enrollment", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, &MessageResponse{Message: "factor verified"})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "factor verified"})
 }
 
 // ==================== Challenge & Verification ====================
@@ -225,7 +213,7 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 func (h *Handler) InitiateChallenge(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	var req ChallengeRequest
@@ -241,50 +229,67 @@ func (h *Handler) InitiateChallenge(c forge.Context) error {
 	if req.Metadata == nil {
 		req.Metadata = make(map[string]any)
 	}
-	req.Metadata["ip_address"] = c.Request().RemoteAddr
+	ip := c.Request().RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+	req.Metadata["ip_address"] = ip
 	req.Metadata["user_agent"] = c.Request().UserAgent()
 
 	resp, err := h.service.InitiateChallenge(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "INITIATE_CHALLENGE_FAILED", "Failed to initiate MFA challenge", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, resp)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // VerifyChallenge handles POST /mfa/verify
 func (h *Handler) VerifyChallenge(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	var req VerificationRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	// Verify challenge belongs to user (done in service)
 	resp, err := h.service.VerifyChallenge(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "VERIFY_CHALLENGE_FAILED", "Failed to verify MFA challenge", http.StatusBadRequest)
 	}
 
 	_ = userID // Verify in service layer
 
-	return c.JSON(200, resp)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetChallengeStatus handles GET /mfa/challenge/:id
 func (h *Handler) GetChallengeStatus(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	_ = userID // TODO: Implement challenge status lookup
+	sessionIDStr := c.Param("id")
+	if sessionIDStr == "" {
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("sessionId"))
+	}
 
-	return c.JSON(501, &ErrorResponse{Error: "not implemented"})
+	sessionID, err := xid.FromString(sessionIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid session ID"))
+	}
+
+	status, err := h.service.GetChallengeStatus(c.Request().Context(), sessionID, userID)
+	if err != nil {
+		return handleError(c, err, "GET_CHALLENGE_STATUS_FAILED", "Failed to get challenge status", http.StatusInternalServerError)
+	}
+
+	return c.JSON(http.StatusOK, status)
 }
 
 // ==================== Trusted Devices ====================
@@ -293,57 +298,57 @@ func (h *Handler) GetChallengeStatus(c forge.Context) error {
 func (h *Handler) TrustDevice(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	var deviceInfo DeviceInfo
 	if err := json.NewDecoder(c.Request().Body).Decode(&deviceInfo); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	if err := h.service.TrustDevice(c.Request().Context(), userID, &deviceInfo); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "TRUST_DEVICE_FAILED", "Failed to trust device", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, &MessageResponse{Message: "device trusted"})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "device trusted"})
 }
 
 // ListTrustedDevices handles GET /mfa/devices
 func (h *Handler) ListTrustedDevices(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	devices, err := h.service.ListTrustedDevices(c.Request().Context(), userID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "LIST_DEVICES_FAILED", "Failed to list trusted devices", http.StatusInternalServerError)
 	}
 
-	return c.JSON(200, &DevicesResponse{Devices: devices, Count: len(devices)})
+	return c.JSON(http.StatusOK, &DevicesResponse{Devices: devices, Count: len(devices)})
 }
 
 // RevokeTrustedDevice handles DELETE /mfa/devices/:id
 func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	deviceIDStr := c.Param("id")
 	deviceID, err := xid.FromString(deviceIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid device ID"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid device ID"))
 	}
 
 	// TODO: Verify device belongs to user
 	_ = userID
 
 	if err := h.service.RevokeTrustedDevice(c.Request().Context(), deviceID); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "REVOKE_DEVICE_FAILED", "Failed to revoke trusted device", http.StatusBadRequest)
 	}
 
-	return c.JSON(200, &MessageResponse{Message: "device revoked"})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "device revoked"})
 }
 
 // ==================== Status & Info ====================
@@ -352,17 +357,17 @@ func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 func (h *Handler) GetStatus(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	deviceID := c.Request().URL.Query().Get("device_id")
 
 	status, err := h.service.GetMFAStatus(c.Request().Context(), userID, deviceID)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error()})
+		return handleError(c, err, "GET_STATUS_FAILED", "Failed to get MFA status", http.StatusInternalServerError)
 	}
 
-	return c.JSON(200, status)
+	return c.JSON(http.StatusOK, status)
 }
 
 // GetPolicy handles GET /mfa/policy
@@ -370,9 +375,16 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 	// TODO: Get organization ID from context
 	// For now, return config-based policy
 
-	return c.JSON(200, &MFAConfigResponse{Enabled: h.service.config.Enabled, RequiredFactorCount: h.service.config.RequiredFactorCount, AllowedFactorTypes: h.service.config.AllowedFactorTypes,
-		"grace_period_days":     h.service.config.GracePeriodDays,
-		"adaptive_mfa_enabled":  h.service.config.AdaptiveMFA.Enabled,
+	// Convert []FactorType to []string
+	allowedTypes := make([]string, len(h.service.config.AllowedFactorTypes))
+	for i, ft := range h.service.config.AllowedFactorTypes {
+		allowedTypes[i] = string(ft)
+	}
+
+	return c.JSON(http.StatusOK, &MFAConfigResponse{
+		Enabled:             h.service.config.Enabled,
+		RequiredFactorCount: h.service.config.RequiredFactorCount,
+		AllowedFactorTypes:  allowedTypes,
 	})
 }
 
@@ -401,16 +413,16 @@ func (h *Handler) AdminGetPolicy(c forge.Context) error {
 	// Get app context
 	appID := getUserAppID(c)
 	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "app context required"})
+		return c.JSON(http.StatusBadRequest, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest))
 	}
 
 	// TODO: Check admin permission via RBAC
 	// userID, err := getUserIDFromContext(c)
 	// if err != nil {
-	//     return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
+	//     return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	// }
 	// if !h.rbacService.HasPermission(ctx, userID, "mfa:admin") {
-	//     return c.JSON(403, &ErrorResponse{Error: "admin role required"})
+	//     return c.JSON(http.StatusForbidden, errs.PermissionDenied("mfa:admin", "policy"))
 	// }
 
 	// TODO: Load policy from database for this app
@@ -423,49 +435,55 @@ func (h *Handler) AdminGetPolicy(c forge.Context) error {
 		"enabled":         true,
 	}
 
-	return c.JSON(200, policy)
+	return c.JSON(http.StatusOK, policy)
 }
 
 // AdminUpdatePolicy handles PUT /mfa/admin/policy
 // Updates the MFA policy for an app (admin only)
 func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
-	_ = c.Request().Context() // ctx for future use
+	ctx := c.Request().Context()
 
 	// Get app context
-	appID := getUserAppID(c)
-	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "app context required"})
+	appID, err := contexts.RequireAppID(ctx)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest))
+	}
+
+	// Get org context (optional)
+	orgID, _ := contexts.GetOrganizationID(ctx)
+	var orgIDPtr *xid.ID
+	if !orgID.IsNil() {
+		orgIDPtr = &orgID
+	}
+
+	// Get admin user ID
+	adminID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	// TODO: Check admin permission via RBAC
-	// userID, err := getUserIDFromContext(c)
-	// if err != nil {
-	//     return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
-	// }
-	// if !h.rbacService.HasPermission(ctx, userID, "mfa:admin") {
-	//     return c.JSON(403, &ErrorResponse{Error: "admin role required"})
+	// if !h.rbacService.HasPermission(ctx, adminID, "mfa:admin") {
+	//     return c.JSON(http.StatusForbidden, errs.PermissionDenied("mfa:admin", "policy"))
 	// }
 
 	var req AdminPolicyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	// Validate policy
 	if req.RequiredFactors < 0 || req.RequiredFactors > 3 {
-		return c.JSON(400, &ErrorResponse{Error: "requiredFactors must be between 0 and 3"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("requiredFactors must be between 0 and 3"))
 	}
 
-	// TODO: Store policy in database for this app
-	// For now, return success response
-	// In production, this would:
-	// 1. Validate allowedTypes against supported factor types
-	// 2. Store policy in app-specific configuration
-	// 3. Log the admin action to audit service
+	// Update policy via service
+	policy, err := h.service.UpdatePolicy(ctx, appID, orgIDPtr, adminID, &req)
+	if err != nil {
+		return handleError(c, err, "UPDATE_POLICY_FAILED", "Failed to update MFA policy", http.StatusInternalServerError)
+	}
 
-	return c.JSON(200, &MessageResponse{Message: "MFA policy updated successfully",
-		"appId":   appID.String(),
-		"policy":  req,})
+	return c.JSON(http.StatusOK, policy)
 }
 
 // AdminGrantBypass handles POST /mfa/admin/bypass
@@ -474,50 +492,47 @@ func (h *Handler) AdminGrantBypass(c forge.Context) error {
 	ctx := c.Request().Context()
 
 	// Get app context
-	appID := getUserAppID(c)
-	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "app context required"})
+	appID, err := contexts.RequireAppID(ctx)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest))
+	}
+
+	// Get admin user ID
+	adminID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	// TODO: Check admin permission via RBAC
-	// adminID, err := getUserIDFromContext(c)
-	// if err != nil {
-	//     return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
-	// }
 	// if !h.rbacService.HasPermission(ctx, adminID, "mfa:admin") {
-	//     return c.JSON(403, &ErrorResponse{Error: "admin role required"})
+	//     return c.JSON(http.StatusForbidden, errs.PermissionDenied("mfa:admin", "bypass"))
 	// }
 
 	var req AdminBypassRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid request"})
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	// Validate request
 	if req.UserID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "userId is required"})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("userId"))
 	}
 
 	if req.Duration <= 0 || req.Duration > 86400*7 { // Max 7 days
-		return c.JSON(400, &ErrorResponse{Error: "duration must be between 1 second and 7 days"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("duration must be between 1 second and 7 days"))
 	}
 
 	if req.Reason == "" {
-		return c.JSON(400, &ErrorResponse{Error: "reason is required"})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("reason"))
 	}
 
-	// TODO: Store MFA bypass in database
-	// For now, return success response
-	// In production, this would:
-	// 1. Store bypass with expiry timestamp
-	// 2. Log the admin action with reason to audit service
-	// 3. Optionally notify the user via email
+	// Grant bypass via service
+	bypass, err := h.service.GrantBypass(ctx, appID, req.UserID, adminID, req.Duration, req.Reason)
+	if err != nil {
+		return handleError(c, err, "GRANT_BYPASS_FAILED", "Failed to grant MFA bypass", http.StatusInternalServerError)
+	}
 
-	_ = ctx // Use ctx to avoid unused variable error
-
-	return c.JSON(200, &MessageResponse{Message: "MFA bypass granted successfully",
-		"userId":    req.UserID.String(),
-		"expiresAt": fmt.Sprintf("+%d seconds", req.Duration),})
+	return c.JSON(http.StatusOK, bypass)
 }
 
 // AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
@@ -526,71 +541,70 @@ func (h *Handler) AdminResetUserMFA(c forge.Context) error {
 	ctx := c.Request().Context()
 
 	// Get app context
-	appID := getUserAppID(c)
-	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "app context required"})
+	appID, err := contexts.RequireAppID(ctx)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest))
 	}
 
 	userIDStr := c.Param("id")
 	if userIDStr == "" {
-		return c.JSON(400, &ErrorResponse{Error: "user ID is required"})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("userId"))
 	}
 
 	userID, err := xid.FromString(userIDStr)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "invalid user ID"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
+	}
+
+	// Get admin user ID
+	adminID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	// TODO: Check admin permission via RBAC
-	// adminID, err := getUserIDFromContext(c)
-	// if err != nil {
-	//     return c.JSON(401, &ErrorResponse{Error: "unauthorized"})
-	// }
 	// if !h.rbacService.HasPermission(ctx, adminID, "mfa:admin") {
-	//     return c.JSON(403, &ErrorResponse{Error: "admin role required"})
+	//     return c.JSON(http.StatusForbidden, errs.PermissionDenied("mfa:admin", "reset"))
 	// }
 
-	// TODO: Reset all MFA factors for this user
-	// For now, return success response
-	// In production, this would:
-	// 1. Delete all enrolled factors for the user
-	// 2. Invalidate all active MFA sessions
-	// 3. Log the admin action to audit service
-	// 4. Optionally notify the user via email
+	// Reset MFA via service
+	if err := h.service.ResetUserMFA(ctx, appID, userID, adminID); err != nil {
+		return handleError(c, err, "RESET_MFA_FAILED", "Failed to reset user MFA", http.StatusInternalServerError)
+	}
 
-	_ = ctx // Use ctx to avoid unused variable error
-
-	return c.JSON(200, &MessageResponse{Message: "MFA reset successfully",
+	response := map[string]interface{}{
+		"message": "MFA reset successfully",
 		"userId":  userID.String(),
-		"appId":   appID.String(),})
+		"appId":   appID.String(),
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 // getUserAppID extracts app ID from request context
 func getUserAppID(c forge.Context) xid.ID {
-	if appID, ok := c.Get("app_id").(xid.ID); ok {
-		return appID
+	appID, ok := contexts.GetAppID(c.Request().Context())
+	if !ok {
+		return xid.NilID()
 	}
-	if appIDStr, ok := c.Get("app_id").(string); ok {
-		if id, err := xid.FromString(appIDStr); err == nil {
-			return id
-		}
-	}
-	return xid.NilID()
+	return appID
 }
 
 // ==================== Helper Functions ====================
 
+// handleError returns the error in a structured format
+func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
+	if authErr, ok := err.(*errs.AuthsomeError); ok {
+		return c.JSON(authErr.HTTPStatus, authErr)
+	}
+	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
+}
+
 // getUserIDFromContext extracts user ID from request context
 func getUserIDFromContext(c forge.Context) (xid.ID, error) {
-	// Try to get from context value
-	if userID, ok := c.Get("user_id").(xid.ID); ok {
-		return userID, nil
+	userID, err := contexts.RequireUserID(c.Request().Context())
+	if err != nil {
+		return xid.NilID(), err
 	}
-
-	// Try to get from string
-	if userIDStr, ok := c.Get("user_id").(string); ok {
-		return xid.FromString(userIDStr)
-	}
-
-	return xid.ID{}, fmt.Errorf("user_id not found in context")
+	return userID, nil
 }

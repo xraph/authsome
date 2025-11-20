@@ -978,8 +978,8 @@ func (s *Service) isCommonAnswer(answer string) bool {
 // ===== Context Helpers =====
 
 func (s *Service) getAppAndOrgFromContext(ctx context.Context) (xid.ID, *xid.ID) {
-	appID := contexts.GetAppID(ctx)
-	orgID := contexts.GetOrganizationID(ctx)
+	appID, _ := contexts.GetAppID(ctx)
+	orgID, _ := contexts.GetOrganizationID(ctx)
 	// Convert to pointer, returning nil if it's NilID
 	if orgID == xid.NilID() {
 		return appID, nil

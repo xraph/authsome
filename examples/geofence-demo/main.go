@@ -10,7 +10,8 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Geofencing Plugin Demo ===\n")
+	fmt.Println("=== Geofencing Plugin Demo ===")
+	fmt.Println()
 
 	// Create a new plugin
 	plugin := geofence.NewPlugin()
@@ -31,7 +32,7 @@ func main() {
 	if err := config.Validate(); err != nil {
 		log.Fatal("Config validation failed:", err)
 	}
-	fmt.Println("✓ Configuration validated successfully\n")
+	fmt.Println("✓ Configuration validated successfully")
 
 	// Test haversine distance calculation
 	fmt.Println("=== Distance Calculations ===")

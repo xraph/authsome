@@ -1,279 +1,130 @@
 # Social OAuth Plugin
 
-Comprehensive social authentication plugin for AuthSome, supporting 17+ OAuth providers including Google, GitHub, Microsoft, Apple, Facebook, Discord, and more.
-
-## Supported Providers
-
-- ✅ **Google** - OAuth 2.0 with refresh tokens
-- ✅ **GitHub** - OAuth 2.0
-- ✅ **Microsoft** - Azure AD OAuth 2.0
-- ✅ **Apple** - Sign in with Apple
-- ✅ **Facebook** - OAuth 2.0
-- ✅ **Discord** - OAuth 2.0
-- ✅ **Twitter/X** - OAuth 2.0
-- ✅ **LinkedIn** - OAuth 2.0
-- ✅ **Spotify** - OAuth 2.0
-- ✅ **Twitch** - OAuth 2.0
-- ✅ **Dropbox** - OAuth 2.0
-- ✅ **GitLab** - OAuth 2.0
-- ✅ **LINE** - OAuth 2.0 / OpenID Connect
-- ✅ **Reddit** - OAuth 2.0
-- ✅ **Slack** - OAuth 2.0
-- ✅ **Bitbucket** - OAuth 2.0
-- ✅ **Notion** - OAuth 2.0
+Enterprise-grade social authentication plugin for AuthSome, providing OAuth 2.0 integration with popular identity providers.
 
 ## Features
 
-- 🔐 **Production-ready** - Complete OAuth 2.0 implementation
-- 🏢 **Multi-tenant** - Organization-scoped provider configurations
-- 🔗 **Account Linking** - Link multiple providers to one user
-- 🔄 **Token Refresh** - Automatic token refresh for supported providers
-- 📊 **Scope Management** - Dynamic scope requests (like better-auth)
-- 🎯 **ID Token Support** - Direct sign-in with ID tokens (Google One Tap)
-- 🛡️ **Security** - CSRF protection via state parameter
+✅ **Multi-Provider Support**
+- Google, GitHub, Facebook, Microsoft, Apple, and more
+- Extensible provider system
+- Dynamic provider configuration per app
 
-## Installation
+✅ **Account Management**
+- OAuth sign-in and sign-up
+- Account linking (multiple providers per user)
+- Account unlinking
+- Provider discovery
 
-The social plugin is included in AuthSome. Simply enable it in your configuration:
+✅ **Enterprise Features**
+- Redis-backed OAuth state storage
+- Distributed rate limiting
+- Comprehensive audit logging
+- Multi-tenancy support (apps & orgs)
+- CSRF protection via state tokens
+- Email verification checks
+
+✅ **Production Ready**
+- Type-safe request/response handling
+- Graceful error handling
+- Connection pooling
+- Horizontal scaling support
+- Zero-downtime configuration updates
+
+## Quick Start
+
+### 1. Configure Providers
+
+```yaml
+auth:
+  social:
+    baseUrl: "https://your-domain.com"
+    allowAccountLinking: true
+    autoCreateUser: true
+    requireEmailVerified: false
+    trustEmailVerified: true
+    
+    # State storage configuration
+    stateStorage:
+      useRedis: true
+      redisAddr: "localhost:6379"
+      redisPassword: ""
+      redisDb: 0
+      stateTtl: "15m"
+    
+    # Provider configurations
+    providers:
+      google:
+        clientId: "${GOOGLE_CLIENT_ID}"
+        clientSecret: "${GOOGLE_CLIENT_SECRET}"
+        redirectUrl: "https://your-domain.com/api/auth/callback/google"
+        scopes: ["email", "profile"]
+        enabled: true
+        
+      github:
+        clientId: "${GITHUB_CLIENT_ID}"
+        clientSecret: "${GITHUB_CLIENT_SECRET}"
+        redirectUrl: "https://your-domain.com/api/auth/callback/github"
+        scopes: ["user:email"]
+        enabled: true
+```
+
+### 2. Register Plugin
 
 ```go
 import (
     "github.com/xraph/authsome"
     "github.com/xraph/authsome/plugins/social"
+    "github.com/xraph/authsome/plugins/social/providers"
 )
 
-auth := authsome.New(
-    authsome.WithDatabase(db),
-    authsome.WithPlugins(
-        social.NewPlugin(),
+// Create AuthSome instance
+auth := authsome.New(db, config)
+
+// Create and register social plugin
+socialPlugin := social.NewPlugin(
+    social.WithProvider("google", 
+        os.Getenv("GOOGLE_CLIENT_ID"),
+        os.Getenv("GOOGLE_CLIENT_SECRET"),
+        "https://your-domain.com/api/auth/callback/google",
+        []string{"email", "profile"},
     ),
+    social.WithAutoCreateUser(true),
+    social.WithAllowLinking(true),
+    social.WithTrustEmailVerified(true),
 )
+
+auth.RegisterPlugin(socialPlugin)
 ```
 
-## Configuration
+### 3. Use in Application
 
-### YAML Configuration
-
-```yaml
-auth:
-  social:
-    baseUrl: "https://your-app.com"
-    allowAccountLinking: true
-    autoCreateUser: true
-    requireEmailVerified: false
-    providers:
-      google:
-        enabled: true
-        clientId: "${GOOGLE_CLIENT_ID}"
-        clientSecret: "${GOOGLE_CLIENT_SECRET}"
-        accessType: "offline"  # For refresh tokens
-        prompt: "select_account consent"
-      github:
-        enabled: true
-        clientId: "${GITHUB_CLIENT_ID}"
-        clientSecret: "${GITHUB_CLIENT_SECRET}"
-      microsoft:
-        enabled: true
-        clientId: "${MICROSOFT_CLIENT_ID}"
-        clientSecret: "${MICROSOFT_CLIENT_SECRET}"
-```
-
-### Programmatic Configuration
-
-```go
-config := social.Config{
-    BaseURL:              "https://your-app.com",
-    AllowAccountLinking:  true,
-    AutoCreateUser:       true,
-    RequireEmailVerified: false,
-    Providers: social.ProvidersConfig{
-        Google: &providers.ProviderConfig{
-            ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-            ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-            Enabled:      true,
-            AccessType:   "offline",
-            Prompt:       "select_account consent",
-        },
-        GitHub: &providers.ProviderConfig{
-            ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-            ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-            Enabled:      true,
-        },
-    },
-}
-
-plugin := social.NewPlugin()
-plugin.SetConfig(config)
-```
-
-## Provider Setup Instructions
-
-### Google
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Navigate to **APIs & Services > Credentials**
-4. Click **Create Credentials > OAuth 2.0 Client ID**
-5. Set application type to **Web application**
-6. Add authorized redirect URI: `https://your-app.com/api/auth/callback/google`
-7. Copy the Client ID and Client Secret
-
-**Scopes:**
-- `openid` - Required for OIDC
-- `https://www.googleapis.com/auth/userinfo.email` - Email address
-- `https://www.googleapis.com/auth/userinfo.profile` - Profile info
-
-**Getting Refresh Tokens:**
-```yaml
-google:
-  accessType: "offline"
-  prompt: "select_account consent"
-```
-
-### GitHub
-
-1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
-2. Click **New OAuth App**
-3. Set **Authorization callback URL**: `https://your-app.com/api/auth/callback/github`
-4. Copy the Client ID and generate a Client Secret
-
-**Scopes:**
-- `user:email` - Read user email
-- `read:user` - Read user profile
-
-### Microsoft
-
-1. Go to [Azure Portal](https://portal.azure.com/)
-2. Navigate to **Azure Active Directory > App registrations**
-3. Click **New registration**
-4. Set redirect URI: `https://your-app.com/api/auth/callback/microsoft`
-5. Go to **Certificates & secrets** and create a new client secret
-6. Note the Application (client) ID and client secret
-
-**Scopes:**
-- `User.Read` - Read user profile
-- `openid` - OpenID Connect
-- `profile` - Profile info
-- `email` - Email address
-
-### Apple
-
-1. Go to [Apple Developer Portal](https://developer.apple.com/account/)
-2. Navigate to **Certificates, Identifiers & Profiles**
-3. Create a new **Services ID**
-4. Enable **Sign in with Apple**
-5. Configure domains and redirect URLs: `https://your-app.com/api/auth/callback/apple`
-6. Create a **Key** for Sign in with Apple
-7. Download the private key and note the Key ID and Team ID
-
-**Note:** Apple requires JWT-based client secrets. Use the `GenerateAppleClientSecret` helper.
-
-### Facebook
-
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create a new app
-3. Add **Facebook Login** product
-4. Configure **Valid OAuth Redirect URIs**: `https://your-app.com/api/auth/callback/facebook`
-5. Copy the App ID and App Secret
-
-**Scopes:**
-- `email` - User email
-- `public_profile` - Public profile info
-
-### Discord
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Navigate to **OAuth2**
-4. Add redirect: `https://your-app.com/api/auth/callback/discord`
-5. Copy the Client ID and Client Secret
-
-**Scopes:**
-- `identify` - User profile
-- `email` - User email
-
-### Twitter/X
-
-1. Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-2. Create a new app
-3. Navigate to **User authentication settings**
-4. Set **Callback URI**: `https://your-app.com/api/auth/callback/twitter`
-5. Copy the Client ID and Client Secret
-
-**Note:** Use OAuth 2.0, not OAuth 1.0a
-
-### LinkedIn
-
-1. Go to [LinkedIn Developers](https://www.linkedin.com/developers/)
-2. Create a new app
-3. Add **Sign In with LinkedIn** product
-4. Set redirect URLs: `https://your-app.com/api/auth/callback/linkedin`
-5. Copy the Client ID and Client Secret
-
-**Scopes:**
-- `r_liteprofile` - Basic profile
-- `r_emailaddress` - Email address
-
-### Spotify
-
-1. Go to [Spotify Dashboard](https://developer.spotify.com/dashboard/)
-2. Create a new app
-3. Set **Redirect URIs**: `https://your-app.com/api/auth/callback/spotify`
-4. Copy the Client ID and Client Secret
-
-### Twitch
-
-1. Go to [Twitch Developers](https://dev.twitch.tv/console/apps)
-2. Register a new application
-3. Set **OAuth Redirect URLs**: `https://your-app.com/api/auth/callback/twitch`
-4. Copy the Client ID and Client Secret
-
-### Other Providers
-
-Similar setup steps apply for:
-- **Dropbox**: [Dropbox App Console](https://www.dropbox.com/developers/apps)
-- **GitLab**: [GitLab Applications](https://gitlab.com/-/profile/applications)
-- **LINE**: [LINE Developers](https://developers.line.biz/)
-- **Reddit**: [Reddit Apps](https://www.reddit.com/prefs/apps)
-- **Slack**: [Slack Apps](https://api.slack.com/apps)
-- **Bitbucket**: [Bitbucket OAuth](https://confluence.atlassian.com/bitbucket/oauth-on-bitbucket-cloud-238027431.html)
-- **Notion**: [Notion Integrations](https://www.notion.so/my-integrations)
-
-## API Endpoints
-
-### Sign In with Social Provider
-
-**Request:**
-```http
+#### Sign In with Google
+```bash
 POST /api/auth/signin/social
 Content-Type: application/json
 
 {
   "provider": "google",
-  "scopes": ["additional-scope"]  // Optional
+  "scopes": ["email", "profile"],
+  "redirectUrl": "https://app.example.com/auth/callback"
 }
-```
 
-**Response:**
-```json
+# Response
 {
-  "url": "https://accounts.google.com/o/oauth2/v2/auth?..."
+  "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
 }
 ```
 
-### OAuth Callback
+#### OAuth Callback
+```bash
+GET /api/auth/callback/google?code=xxx&state=yyy
 
-**Request:**
-```http
-GET /api/auth/callback/google?code=...&state=...
-```
-
-**Response:**
-```json
+# Response
 {
   "user": {
-    "id": "...",
+    "id": "c9h7b3j2k1m4n5p6",
     "email": "user@example.com",
+    "emailVerified": true,
     "name": "John Doe"
   },
   "isNewUser": true,
@@ -281,318 +132,291 @@ GET /api/auth/callback/google?code=...&state=...
 }
 ```
 
-### Link Social Account
-
-**Request:**
-```http
+#### Link Account
+```bash
 POST /api/auth/account/link
-Authorization: Bearer <session-token>
 Content-Type: application/json
+X-User-ID: c9h7b3j2k1m4n5p6
 
 {
   "provider": "github",
-  "scopes": ["repo"]  // Optional: request additional scopes
+  "scopes": ["user:email"]
+}
+
+# Response
+{
+  "url": "https://github.com/login/oauth/authorize?..."
 }
 ```
 
-### Unlink Social Account
-
-**Request:**
-```http
+#### Unlink Account
+```bash
 DELETE /api/auth/account/unlink/github
-Authorization: Bearer <session-token>
+X-User-ID: c9h7b3j2k1m4n5p6
+
+# Response
+{
+  "message": "Account unlinked successfully"
+}
 ```
 
-### List Available Providers
-
-**Request:**
-```http
+#### List Providers
+```bash
 GET /api/auth/providers
-```
 
-**Response:**
-```json
+# Response
 {
-  "providers": ["google", "github", "microsoft", "discord"]
+  "providers": ["google", "github", "facebook"]
 }
 ```
 
-## Admin Endpoints
+## Architecture
 
-Requires admin role and `social:admin` permission.
+### State Management
 
-### List Configured Providers
+OAuth state tokens are stored for CSRF protection and callback validation:
 
-**Request:**
-```http
-GET /social/admin/providers
-Authorization: Bearer <admin-token>
-```
-
-**Response:**
-```json
-{
-  "providers": ["google", "github", "microsoft", "discord"],
-  "appId": "app_123"
-}
-```
-
-### Add/Configure Provider
-
-**Request:**
-```http
-POST /social/admin/providers
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "appId": "app_123",
-  "provider": "google",
-  "clientId": "your-client-id",
-  "clientSecret": "your-client-secret",
-  "scopes": ["openid", "email", "profile"],
-  "enabled": true
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Provider configured successfully",
-  "provider": "google",
-  "appId": "app_123"
-}
-```
-
-### Update Provider Configuration
-
-**Request:**
-```http
-PUT /social/admin/providers/google
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "clientId": "new-client-id",
-  "clientSecret": "new-client-secret",
-  "enabled": true
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Provider updated successfully",
-  "provider": "google",
-  "appId": "app_123"
-}
-```
-
-### Remove Provider Configuration
-
-**Request:**
-```http
-DELETE /social/admin/providers/google
-Authorization: Bearer <admin-token>
-```
-
-**Response:**
-```json
-{
-  "message": "Provider removed successfully",
-  "provider": "google",
-  "appId": "app_123"
-}
-```
-
-**Note:** Admin endpoints are currently placeholders. Full implementation requires:
-- Database schema for app-specific provider configurations
-- RBAC integration for permission checks
-- Credential encryption for secure storage
-- Audit logging for administrative actions
-
-See [Plugin Admin Endpoint Guidelines](../../docs/PLUGIN_ADMIN_ENDPOINTS.md) for implementation details.
-
-## Usage Examples
-
-### Client-Side (React/Next.js)
-
-```typescript
-// Sign in with Google
-const signInWithGoogle = async () => {
-  const response = await fetch('/api/auth/signin/social', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider: 'google' })
-  });
-  
-  const { url } = await response.json();
-  window.location.href = url; // Redirect to Google
-};
-
-// Link GitHub account (for logged-in users)
-const linkGitHub = async () => {
-  const response = await fetch('/api/auth/account/link', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${sessionToken}`
-    },
-    body: JSON.stringify({ 
-      provider: 'github',
-      scopes: ['repo', 'read:org'] // Request additional scopes
-    })
-  });
-  
-  const { url } = await response.json();
-  window.location.href = url;
-};
-```
-
-### Go Client
+- **Development**: In-memory storage (single instance)
+- **Production**: Redis-backed storage (distributed)
+- **TTL**: 15 minutes (configurable)
+- **One-time use**: State deleted after verification
 
 ```go
-// Get authorization URL
-authURL, err := socialService.GetAuthorizationURL(
-    ctx,
-    "google",
-    organizationID,
-    []string{"https://www.googleapis.com/auth/drive.file"}, // Extra scopes
+type StateStore interface {
+    Set(ctx context.Context, key string, state *OAuthState, ttl time.Duration) error
+    Get(ctx context.Context, key string) (*OAuthState, error)
+    Delete(ctx context.Context, key string) error
+}
+```
+
+### Rate Limiting
+
+Distributed rate limiting via Redis:
+
+| Action | Limit | Window |
+|--------|-------|--------|
+| `oauth_signin` | 10 requests | 1 minute |
+| `oauth_callback` | 20 requests | 1 minute |
+| `oauth_link` | 5 requests | 1 minute |
+| `oauth_unlink` | 5 requests | 1 minute |
+
+Rate limits are customizable:
+```go
+rateLimiter.SetLimit("oauth_signin", 20, 2*time.Minute)
+```
+
+### Audit Logging
+
+Comprehensive audit events:
+- `social_signin_initiated` - OAuth flow started
+- `social_callback_received` - Callback received
+- `social_state_invalid` - Invalid/expired state
+- `social_token_exchange_success` - Token exchanged
+- `social_userinfo_fetched` - User info retrieved
+- `social_link_initiated` - Account linking started
+- `social_provider_not_found` - Provider not configured
+
+## Supported Providers
+
+### Built-in Providers
+- ✅ Google
+- ✅ GitHub
+- ✅ Facebook
+- ✅ Microsoft
+- ✅ Apple
+- ✅ Twitter/X
+- ✅ LinkedIn
+- ✅ Discord
+
+### Adding Custom Providers
+
+```go
+package providers
+
+import (
+    "context"
+    "golang.org/x/oauth2"
 )
 
-// Handle callback
-result, err := socialService.HandleCallback(ctx, "google", state, code)
-if err != nil {
-    log.Fatal(err)
+type CustomProvider struct {
+    config *oauth2.Config
 }
 
-fmt.Printf("User: %+v\n", result.User)
-fmt.Printf("Is new user: %v\n", result.IsNewUser)
-fmt.Printf("Action: %s\n", result.Action) // "signin", "signup", or "linked"
+func NewCustomProvider(config *ProviderConfig) Provider {
+    return &CustomProvider{
+        config: &oauth2.Config{
+            ClientID:     config.ClientID,
+            ClientSecret: config.ClientSecret,
+            RedirectURL:  config.RedirectURL,
+            Scopes:       config.Scopes,
+            Endpoint: oauth2.Endpoint{
+                AuthURL:  "https://provider.com/oauth/authorize",
+                TokenURL: "https://provider.com/oauth/token",
+            },
+        },
+    }
+}
+
+func (p *CustomProvider) GetOAuth2Config() *oauth2.Config {
+    return p.config
+}
+
+func (p *CustomProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
+    // Fetch user info from provider API
+    // ...
+    return &UserInfo{
+        ProviderUserID: "...",
+        Email:          "...",
+        EmailVerified:  true,
+        Name:           "...",
+        Picture:        "...",
+    }, nil
+}
 ```
 
-## Multi-Tenancy
+## Configuration Options
 
-The social plugin is multi-tenant aware. Organizations can have their own OAuth configurations:
+### Plugin Configuration
 
-```yaml
-# Default configuration
-auth:
-  social:
-    providers:
-      google:
-        clientId: "default-client-id"
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseUrl` | string | `http://localhost:3000` | Base URL for OAuth callbacks |
+| `allowAccountLinking` | bool | `true` | Allow users to link multiple providers |
+| `autoCreateUser` | bool | `true` | Auto-create user on OAuth sign-in |
+| `requireEmailVerified` | bool | `false` | Require email verification from provider |
+| `trustEmailVerified` | bool | `true` | Trust email verification from provider |
 
-# Organization-specific override
-orgs:
-  org_acme:
-    auth:
-      social:
-        providers:
-          google:
-            clientId: "acme-specific-client-id"
-            clientSecret: "acme-specific-secret"
-```
+### State Storage Configuration
 
-## Security Considerations
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `useRedis` | bool | `false` | Use Redis for state storage |
+| `redisAddr` | string | `localhost:6379` | Redis server address |
+| `redisPassword` | string | `""` | Redis password |
+| `redisDb` | int | `0` | Redis database number |
+| `stateTtl` | duration | `15m` | State expiration time |
 
-1. **State Parameter**: CSRF protection via cryptographically secure random state
-2. **HTTPS Only**: Always use HTTPS in production
-3. **Token Storage**: Tokens are encrypted at rest in the database
-4. **Scope Validation**: Validate requested scopes against allowed list
-5. **Email Verification**: Option to require verified emails from providers
-6. **Account Linking**: Optional - can be disabled for security
+### Provider Configuration
 
-## Database Schema
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `clientId` | string | ✅ | OAuth client ID |
+| `clientSecret` | string | ✅ | OAuth client secret |
+| `redirectUrl` | string | ✅ | OAuth callback URL |
+| `scopes` | []string | ❌ | OAuth scopes (default: provider-specific) |
+| `enabled` | bool | ❌ | Enable/disable provider (default: `true`) |
 
-```sql
-CREATE TABLE social_accounts (
-    id VARCHAR(20) PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    user_id VARCHAR(20) NOT NULL,
-    organization_id VARCHAR(20) NOT NULL,
-    provider VARCHAR(50) NOT NULL,
-    provider_id VARCHAR(255) NOT NULL,
-    email VARCHAR(255),
-    name VARCHAR(255),
-    avatar TEXT,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT,
-    token_type VARCHAR(50) DEFAULT 'Bearer',
-    expires_at TIMESTAMP,
-    refresh_expires_at TIMESTAMP,
-    scope TEXT,
-    id_token TEXT,
-    raw_user_info JSONB,
-    revoked BOOLEAN DEFAULT FALSE,
-    revoked_at TIMESTAMP
-);
+## Security
 
-CREATE INDEX idx_social_accounts_user_id ON social_accounts(user_id);
-CREATE INDEX idx_social_accounts_provider ON social_accounts(provider);
-CREATE INDEX idx_social_accounts_provider_provider_id_org ON social_accounts(provider, provider_id, organization_id);
-```
+### CSRF Protection
+- Crypto-secure random state tokens (32 bytes)
+- One-time use state tokens
+- State expiration (15 minutes)
+- State-provider binding validation
+
+### Rate Limiting
+- Distributed via Redis
+- Per-IP rate limiting
+- Configurable limits per action
+- Graceful degradation
+
+### Email Verification
+- Configurable email verification checks
+- Trust provider email verification
+- Optional manual verification flow
+
+### Audit Logging
+- All OAuth events logged
+- User attribution
+- Error tracking
+- Compliance support
 
 ## Testing
 
-Run the migration:
 ```bash
-./authsome migrate
+# Run all tests
+go test ./plugins/social/... -v
+
+# Run with coverage
+go test ./plugins/social/... -cover
+
+# Run specific test
+go test ./plugins/social/... -run TestService_ListProviders -v
+
+# Run rate limiter tests
+go test ./plugins/social/... -run TestRateLimiter -v
 ```
 
-Test with a provider:
+### Test Coverage
+
+- ✅ Request/response serialization
+- ✅ State store operations (memory & Redis)
+- ✅ State expiration
+- ✅ Rate limiting
+- ✅ Configuration validation
+- ✅ Handler logic
+- ✅ Mock implementations
+
+## Performance
+
+### Benchmarks
+
 ```bash
-# Set environment variables
-export GOOGLE_CLIENT_ID="your-client-id"
-export GOOGLE_CLIENT_SECRET="your-client-secret"
-
-# Start server
-go run cmd/dev/main.go
-
-# Open browser to http://localhost:3000/api/auth/signin/social
+go test ./plugins/social/... -bench=. -benchmem
 ```
 
-## Roadmap
+### Optimization Tips
 
-- [ ] OAuth 1.0a support (legacy Twitter)
-- [ ] PKCE support for public clients
-- [ ] Token refresh automation
-- [ ] Redis-based state storage (for distributed systems)
-- [ ] Webhooks for provider events
-- [ ] Admin UI for provider configuration
-- [ ] Provider health monitoring
+1. **Use Redis for state storage** in production
+2. **Enable rate limiting** to prevent abuse
+3. **Configure connection pooling** for Redis
+4. **Use async audit logging** for high-volume scenarios
+5. **Cache provider configurations** per app
 
 ## Troubleshooting
 
-### "Provider not configured"
-Ensure the provider is enabled in your configuration and environment variables are set.
+### Common Issues
 
-### "State not found" or "State expired"
-State tokens expire after 15 minutes. In production, use Redis for distributed state storage.
+#### "state not found or expired"
+- Check Redis connectivity
+- Verify `stateTtl` configuration
+- Check clock synchronization across servers
 
-### "Email not verified"
-If `requireEmailVerified: true`, the provider must confirm email verification. Some providers (Twitter) don't provide email verification status.
+#### "rate limit exceeded"
+- Increase rate limits in configuration
+- Check Redis for stuck keys
+- Verify client IP extraction
 
-### "User with email already exists"
-If `allowAccountLinking: false`, users cannot link providers to existing accounts. Enable it or handle manually.
+#### "provider not configured"
+- Verify provider credentials
+- Check provider `enabled` flag
+- Verify app-specific configuration
+
+### Debug Mode
+
+Enable debug logging:
+```go
+socialPlugin.SetLogLevel("debug")
+```
+
+## Migration from v1
+
+See [MIGRATION_SUMMARY.md](./MIGRATION_SUMMARY.md) for detailed migration guide.
 
 ## License
 
-Part of the AuthSome project. See main LICENSE file.
+See [LICENSE](../../LICENSE) file in the root directory.
+
+## Support
+
+- **Documentation**: https://docs.authsome.dev/plugins/social
+- **GitHub Issues**: https://github.com/xraph/authsome/issues
+- **Discord**: https://discord.gg/authsome
 
 ## Contributing
 
-Contributions welcome! To add a new provider:
+Contributions welcome! Please see [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
-1. Create `providers/<provider>.go`
-2. Implement the `Provider` interface
-3. Add configuration to `ProvidersConfig`
-4. Initialize in `service.go`
-5. Add setup instructions to this README
-6. Submit PR
+## Changelog
 
----
-
-**Need help?** Check the [main AuthSome documentation](../../README.md) or open an issue.
-
+See [CHANGELOG.md](./CHANGELOG.md) for version history.

@@ -78,13 +78,14 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "admin_can_access_any_document",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Admin Access",
-				Expression:   `principal.roles.exists(r, r == "admin")`,
-				ResourceType: "document",
-				Actions:      []string{"read"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Admin Access",
+				Expression:         `principal.roles.exists(r, r == "admin")`,
+				ResourceType:       "document",
+				Actions:            []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				// Only provide minimal info - resolver will fetch the rest
@@ -103,13 +104,14 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "non_admin_cannot_access",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Admin Only",
-				Expression:   `principal.roles.exists(r, r == "admin")`,
-				ResourceType: "document",
-				Actions:      []string{"read"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Admin Only",
+				Expression:         `principal.roles.exists(r, r == "admin")`,
+				ResourceType:       "document",
+				Actions:            []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{
@@ -127,13 +129,14 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "owner_can_access_their_document",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Owner Access",
-				Expression:   `resource.owner == principal.id`,
-				ResourceType: "document",
-				Actions:      []string{"read", "write"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Owner Access",
+				Expression:         `resource.owner == principal.id`,
+				ResourceType:       "document",
+				Actions:            []string{"read", "write"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{
@@ -151,13 +154,14 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "non_owner_cannot_access",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Owner Only",
-				Expression:   `resource.owner == principal.id`,
-				ResourceType: "document",
-				Actions:      []string{"read"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Owner Only",
+				Expression:         `resource.owner == principal.id`,
+				ResourceType:       "document",
+				Actions:            []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{
@@ -175,13 +179,14 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "same_org_members_can_view_internal_docs",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Org Internal Access",
-				Expression:   `resource.confidential == "internal" && principal.org_id == resource.org_id`,
-				ResourceType: "document",
-				Actions:      []string{"read"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Org Internal Access",
+				Expression:         `resource.confidential == "internal" && principal.org_id == resource.org_id`,
+				ResourceType:       "document",
+				Actions:            []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{
@@ -199,13 +204,14 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "admin_or_owner_can_write",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Admin or Owner Write",
-				Expression:   `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
-				ResourceType: "document",
-				Actions:      []string{"write"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Admin or Owner Write",
+				Expression:         `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
+				ResourceType:       "document",
+				Actions:            []string{"write"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
@@ -14,6 +15,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/authsome/storage"
@@ -37,14 +39,46 @@ type Config struct {
 	ExpiryMinutes int `json:"expiryMinutes"`
 	// MaxAttempts is the maximum verification attempts
 	MaxAttempts int `json:"maxAttempts"`
-	// RateLimitPerHour is the max SMS requests per hour
-	RateLimitPerHour int `json:"rateLimitPerHour"`
 	// AllowImplicitSignup allows creating users if they don't exist
 	AllowImplicitSignup bool `json:"allowImplicitSignup"`
 	// SMSProvider is the SMS provider to use (twilio, etc.)
 	SMSProvider string `json:"smsProvider"`
 	// DevExposeCode exposes the code in dev mode (for testing)
 	DevExposeCode bool `json:"devExposeCode"`
+	
+	// Rate limiting configuration
+	RateLimit RateLimitConfig `json:"rateLimit"`
+}
+
+// RateLimitConfig holds rate limiting configuration
+type RateLimitConfig struct {
+	// Enabled enables rate limiting
+	Enabled bool `json:"enabled"`
+	// UseRedis uses Redis for distributed rate limiting (recommended for production)
+	UseRedis bool `json:"useRedis"`
+	// RedisAddr is the Redis server address (e.g., "localhost:6379")
+	RedisAddr string `json:"redisAddr"`
+	// RedisPassword is the Redis password (optional)
+	RedisPassword string `json:"redisPassword"`
+	// RedisDB is the Redis database number
+	RedisDB int `json:"redisDb"`
+	
+	// SendCodePerPhone limits send code requests per phone number
+	SendCodePerPhone RateLimitRule `json:"sendCodePerPhone"`
+	// SendCodePerIP limits send code requests per IP address
+	SendCodePerIP RateLimitRule `json:"sendCodePerIp"`
+	// VerifyPerPhone limits verify requests per phone number
+	VerifyPerPhone RateLimitRule `json:"verifyPerPhone"`
+	// VerifyPerIP limits verify requests per IP address
+	VerifyPerIP RateLimitRule `json:"verifyPerIp"`
+}
+
+// RateLimitRule defines a rate limit rule
+type RateLimitRule struct {
+	// Window is the time window for the rate limit (e.g., "1m", "1h")
+	Window time.Duration `json:"window"`
+	// Max is the maximum number of requests in the window
+	Max int `json:"max"`
 }
 
 // DefaultConfig returns the default phone plugin configuration
@@ -53,10 +87,31 @@ func DefaultConfig() Config {
 		CodeLength:          6,
 		ExpiryMinutes:       10,
 		MaxAttempts:         5,
-		RateLimitPerHour:    10,
 		AllowImplicitSignup: true,
 		SMSProvider:         "twilio",
 		DevExposeCode:       false,
+		RateLimit: RateLimitConfig{
+			Enabled:   true,
+			UseRedis:  false, // Use memory by default, set to true for production
+			RedisAddr: "localhost:6379",
+			RedisDB:   0,
+			SendCodePerPhone: RateLimitRule{
+				Window: 1 * time.Minute,
+				Max:    3, // 3 requests per minute per phone
+			},
+			SendCodePerIP: RateLimitRule{
+				Window: 1 * time.Hour,
+				Max:    20, // 20 requests per hour per IP
+			},
+			VerifyPerPhone: RateLimitRule{
+				Window: 5 * time.Minute,
+				Max:    10, // 10 verify attempts per 5 minutes per phone
+			},
+			VerifyPerIP: RateLimitRule{
+				Window: 1 * time.Hour,
+				Max:    50, // 50 verify attempts per hour per IP
+			},
+		},
 	}
 }
 
@@ -91,10 +146,10 @@ func WithMaxAttempts(max int) PluginOption {
 	}
 }
 
-// WithRateLimitPerHour sets the rate limit per hour
-func WithRateLimitPerHour(limit int) PluginOption {
+// WithRateLimitSendCodePerPhone sets the send code rate limit per phone
+func WithRateLimitSendCodePerPhone(window time.Duration, max int) PluginOption {
 	return func(p *Plugin) {
-		p.defaultConfig.RateLimitPerHour = limit
+		p.defaultConfig.RateLimit.SendCodePerPhone = RateLimitRule{Window: window, Max: max}
 	}
 }
 
@@ -167,10 +222,21 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Register Bun models
 	p.db.RegisterModel((*schema.PhoneVerification)(nil))
 
-	// TODO: Get notification adapter from service registry when available
-	// For now, plugins will work without notification adapter (graceful degradation)
-	// The notification plugin should be registered first and will set up its services
-	p.notifAdapter = authInst.GetServiceRegistry().Get("notification").(*notificationPlugin.Adapter)
+	// Get notification adapter from service registry (graceful degradation if not available)
+	svcRegistry := authInst.GetServiceRegistry()
+	if svcRegistry != nil {
+		notifSvc, ok := svcRegistry.Get("notification")
+		if ok && notifSvc != nil {
+			if adapter, ok := notifSvc.(*notificationPlugin.Adapter); ok {
+				p.notifAdapter = adapter
+				p.logger.Info("notification adapter loaded for phone plugin")
+			}
+		}
+	}
+	
+	if p.notifAdapter == nil {
+		p.logger.Warn("notification adapter not available, SMS sending will be skipped")
+	}
 
 	pr := authInst.Repository().Phone()
 	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil)
@@ -191,16 +257,66 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	// Router is already scoped to the correct basePath
-	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/phone/send-code": {Window: time.Minute, Max: 5}}})
+	
+	// Setup rate limiting storage
+	var rateLimitStorage rl.Storage
+	if p.config.RateLimit.Enabled {
+		if p.config.RateLimit.UseRedis {
+			// Create Redis client for distributed rate limiting
+			redisClient := redis.NewClient(&redis.Options{
+				Addr:     p.config.RateLimit.RedisAddr,
+				Password: p.config.RateLimit.RedisPassword,
+				DB:       p.config.RateLimit.RedisDB,
+			})
+			
+			// Test Redis connection
+			ctx := context.Background()
+			if err := redisClient.Ping(ctx).Err(); err != nil {
+				p.logger.Error("failed to connect to Redis, falling back to memory storage",
+					forge.F("error", err.Error()))
+				rateLimitStorage = storage.NewMemoryStorage()
+			} else {
+				rateLimitStorage = storage.NewRedisStorage(redisClient)
+				p.logger.Info("using Redis for rate limiting",
+					forge.F("addr", p.config.RateLimit.RedisAddr))
+			}
+		} else {
+			rateLimitStorage = storage.NewMemoryStorage()
+			p.logger.Info("using in-memory storage for rate limiting")
+		}
+	} else {
+		rateLimitStorage = storage.NewMemoryStorage()
+	}
+	
+	// Configure rate limiting rules
+	rules := map[string]rl.Rule{
+		"/phone/send-code": {
+			Window: p.config.RateLimit.SendCodePerPhone.Window,
+			Max:    p.config.RateLimit.SendCodePerPhone.Max,
+		},
+		"/phone/verify": {
+			Window: p.config.RateLimit.VerifyPerPhone.Window,
+			Max:    p.config.RateLimit.VerifyPerPhone.Max,
+		},
+		"/phone/signin": {
+			Window: p.config.RateLimit.VerifyPerPhone.Window,
+			Max:    p.config.RateLimit.VerifyPerPhone.Max,
+		},
+	}
+	
+	rls := rl.NewService(rateLimitStorage, rl.Config{
+		Enabled: p.config.RateLimit.Enabled,
+		Rules:   rules,
+	})
 	h := NewHandler(p.service, rls)
 	router.POST("/phone/send-code", h.SendCode,
 		forge.WithName("phone.sendcode"),
 		forge.WithSummary("Send phone verification code"),
 		forge.WithDescription("Sends a verification code via SMS to the specified phone number. Rate limited to 5 requests per minute per phone"),
-		forge.WithResponseSchema(200, "Code sent", PhoneSendCodeResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", PhoneErrorResponse{}),
-		forge.WithResponseSchema(429, "Too many requests", PhoneErrorResponse{}),
+		forge.WithRequestSchema(SendCodeRequest{}),
+		forge.WithResponseSchema(200, "Code sent", SendCodeResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many requests", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
 	)
@@ -208,9 +324,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("phone.verify"),
 		forge.WithSummary("Verify phone code"),
 		forge.WithDescription("Verifies the phone verification code and creates a user session on success. Supports implicit signup if enabled"),
+		forge.WithRequestSchema(VerifyRequest{}),
 		forge.WithResponseSchema(200, "Code verified", PhoneVerifyResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", PhoneErrorResponse{}),
-		forge.WithResponseSchema(401, "Invalid code", PhoneErrorResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid code", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
 	)
@@ -218,9 +335,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("phone.signin"),
 		forge.WithSummary("Sign in with phone"),
 		forge.WithDescription("Alias for phone verification. Verifies the phone code and creates a user session"),
+		forge.WithRequestSchema(VerifyRequest{}),
 		forge.WithResponseSchema(200, "Sign in successful", PhoneVerifyResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", PhoneErrorResponse{}),
-		forge.WithResponseSchema(401, "Invalid code", PhoneErrorResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid code", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
 	)
@@ -240,18 +358,5 @@ func (p *Plugin) Migrate() error {
 	return err
 }
 
-// Response types for phone routes
-type PhoneErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-type PhoneSendCodeResponse struct {
-	Status  string `json:"status" example:"sent"`
-	DevCode string `json:"dev_code,omitempty" example:"123456"`
-}
-
-type PhoneVerifyResponse struct {
-	User    interface{} `json:"user"`
-	Session interface{} `json:"session"`
-	Token   string      `json:"token" example:"session_token_abc123"`
-}
+// Type alias for route registration
+type ErrorResponse = errs.AuthsomeError

@@ -50,7 +50,7 @@ func main() {
 
 	// Run the backfill migration
 	if *dryRun {
-		fmt.Println("=== DRY RUN MODE - No changes will be made ===\n")
+		fmt.Println("=== DRY RUN MODE - No changes will be made ===")
 		if err := backfillMemberRolesDryRun(ctx, db); err != nil {
 			log.Fatalf("Dry run failed: %v", err)
 		}
@@ -114,7 +114,7 @@ func backfillMemberRolesDryRun(ctx context.Context, db *bun.DB) error {
 
 	for _, member := range members {
 		stats.total++
-		
+
 		// Map member role to RBAC role name
 		rbacRoleName := mapMemberRoleToRBAC(string(member.Role))
 
@@ -183,15 +183,15 @@ func backfillMemberRoles(ctx context.Context, db *bun.DB) error {
 
 	// Track statistics
 	stats := struct {
-		total       int
-		created     int
-		skipped     int
-		errors      int
+		total   int
+		created int
+		skipped int
+		errors  int
 	}{}
 
 	for _, member := range members {
 		stats.total++
-		
+
 		// Map member role to RBAC role name
 		rbacRoleName := mapMemberRoleToRBAC(string(member.Role))
 
@@ -276,4 +276,3 @@ func mapMemberRoleToRBAC(memberRole string) string {
 		return rbac.RoleMember // Default to member
 	}
 }
-

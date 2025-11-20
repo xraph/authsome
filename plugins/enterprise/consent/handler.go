@@ -1,10 +1,12 @@
 package consent
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -13,9 +15,8 @@ type Handler struct {
 	service *Service
 }
 
-type MessageResponse struct {
-	Message string `json:"message"`
-}
+// Response types - use shared responses from core
+type MessageResponse = responses.MessageResponse
 
 
 
@@ -29,35 +30,33 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-// Helper function to extract string from context
-func getString(c forge.Context, key string) string {
-	val := c.Get(key)
-	if val == nil {
-		return ""
-	}
-	if strVal, ok := val.(string); ok {
-		return strVal
-	}
-	return ""
-}
-
 // CreateConsent handles POST /consent/records
 func (h *Handler) CreateConsent(c forge.Context) error {
+	ctx := c.Request().Context()
+	
+	// Get appID and userID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
+	}
+	
 	var req CreateConsentRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
-
-	if userID == "" || orgID == "" {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",})
-	}
-
-	consent, err := h.service.CreateConsent(c.Request().Context(), orgID, userID, &req)
+	consent, err := h.service.CreateConsent(ctx, appID.String(), userID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusCreated, consent)
@@ -67,12 +66,12 @@ func (h *Handler) CreateConsent(c forge.Context) error {
 func (h *Handler) GetConsent(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
 	}
 
 	consent, err := h.service.GetConsent(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusNotFound, errs.NotFound(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, consent)
@@ -80,16 +79,25 @@ func (h *Handler) GetConsent(c forge.Context) error {
 
 // ListConsentsByUser handles GET /consent/records/user
 func (h *Handler) ListConsentsByUser(c forge.Context) error {
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
-
-	if userID == "" || orgID == "" {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",})
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	consents, err := h.service.ListConsentsByUser(c.Request().Context(), userID, orgID)
+	consents, err := h.service.ListConsentsByUser(ctx, userID.String(), appID.String())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, consents)
@@ -97,22 +105,35 @@ func (h *Handler) ListConsentsByUser(c forge.Context) error {
 
 // UpdateConsent handles PATCH /consent/records/:id
 func (h *Handler) UpdateConsent(c forge.Context) error {
+	ctx := c.Request().Context()
+	
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
+	}
+
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	var req UpdateConsentRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
-
-	consent, err := h.service.UpdateConsent(c.Request().Context(), id, orgID, userID, &req)
+	consent, err := h.service.UpdateConsent(ctx, id, appID.String(), userID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, consent)
@@ -120,25 +141,38 @@ func (h *Handler) UpdateConsent(c forge.Context) error {
 
 // RevokeConsent handles POST /consent/records/:id/revoke
 func (h *Handler) RevokeConsent(c forge.Context) error {
+	ctx := c.Request().Context()
+	
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
+	}
+
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	var req UpdateConsentRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
-
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
 
 	granted := false
 	req.Granted = &granted
 
-	_, err := h.service.UpdateConsent(c.Request().Context(), id, orgID, userID, &req)
+	_, err := h.service.UpdateConsent(ctx, id, appID.String(), userID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "Consent revoked successfully",})
@@ -146,17 +180,30 @@ func (h *Handler) RevokeConsent(c forge.Context) error {
 
 // CreateConsentPolicy handles POST /consent/policies
 func (h *Handler) CreateConsentPolicy(c forge.Context) error {
-	var req CreatePolicyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	orgID := getString(c, "orgID")
-	userID := getString(c, "userID")
+	var req CreatePolicyRequest
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	}
 
-	policy, err := h.service.CreatePolicy(c.Request().Context(), orgID, userID, &req)
+	policy, err := h.service.CreatePolicy(ctx, appID.String(), userID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusCreated, policy)
@@ -166,12 +213,12 @@ func (h *Handler) CreateConsentPolicy(c forge.Context) error {
 func (h *Handler) GetConsentPolicy(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
 	}
 
 	policy, err := h.service.GetPolicy(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusNotFound, errs.NotFound(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, policy)
@@ -179,17 +226,30 @@ func (h *Handler) GetConsentPolicy(c forge.Context) error {
 
 // RecordCookieConsent handles POST /consent/cookies
 func (h *Handler) RecordCookieConsent(c forge.Context) error {
-	var req CookieConsentRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
+	var req CookieConsentRequest
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	}
 
-	consent, err := h.service.RecordCookieConsent(c.Request().Context(), orgID, userID, &req)
+	consent, err := h.service.RecordCookieConsent(ctx, appID.String(), userID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusCreated, consent)
@@ -197,12 +257,25 @@ func (h *Handler) RecordCookieConsent(c forge.Context) error {
 
 // GetCookieConsent handles GET /consent/cookies
 func (h *Handler) GetCookieConsent(c forge.Context) error {
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
+	}
 
-	consent, err := h.service.GetCookieConsent(c.Request().Context(), userID, orgID)
+	consent, err := h.service.GetCookieConsent(ctx, userID.String(), appID.String())
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusNotFound, errs.NotFound(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, consent)
@@ -210,17 +283,30 @@ func (h *Handler) GetCookieConsent(c forge.Context) error {
 
 // RequestDataExport handles POST /consent/data-exports
 func (h *Handler) RequestDataExport(c forge.Context) error {
-	var req DataExportRequestInput
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
+	var req DataExportRequestInput
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	}
 
-	exportReq, err := h.service.RequestDataExport(c.Request().Context(), userID, orgID, &req)
+	exportReq, err := h.service.RequestDataExport(ctx, userID.String(), appID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusAccepted, exportReq)
@@ -228,15 +314,21 @@ func (h *Handler) RequestDataExport(c forge.Context) error {
 
 // GetDataExport handles GET /consent/data-exports/:id
 func (h *Handler) GetDataExport(c forge.Context) error {
+	ctx := c.Request().Context()
+	
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
 	}
 
-	userID := getString(c, "userID")
-	exportReq, err := h.service.repo.GetExportRequest(c.Request().Context(), id)
-	if err != nil || exportReq.UserID != userID {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "Export request not found",})
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
+	}
+	
+	exportReq, err := h.service.repo.GetExportRequest(ctx, id)
+	if err != nil || exportReq.UserID != userID.String() {
+		return c.JSON(http.StatusNotFound, errs.NotFound("Export request not found"))
 	}
 
 	return c.JSON(http.StatusOK, exportReq)
@@ -244,15 +336,21 @@ func (h *Handler) GetDataExport(c forge.Context) error {
 
 // DownloadDataExport handles GET /consent/data-exports/:id/download
 func (h *Handler) DownloadDataExport(c forge.Context) error {
+	ctx := c.Request().Context()
+	
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
 	}
 
-	userID := getString(c, "userID")
-	exportReq, err := h.service.repo.GetExportRequest(c.Request().Context(), id)
-	if err != nil || exportReq.UserID != userID || exportReq.Status != string(StatusCompleted) {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "Export not ready or not found",})
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
+	}
+	
+	exportReq, err := h.service.repo.GetExportRequest(ctx, id)
+	if err != nil || exportReq.UserID != userID.String() || exportReq.Status != string(StatusCompleted) {
+		return c.JSON(http.StatusNotFound, errs.NotFound("Export not ready or not found"))
 	}
 
 	// Return file download (forge's File method equivalent)
@@ -265,17 +363,30 @@ func (h *Handler) DownloadDataExport(c forge.Context) error {
 
 // RequestDataDeletion handles POST /consent/data-deletions
 func (h *Handler) RequestDataDeletion(c forge.Context) error {
-	var req DataDeletionRequestInput
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	userID := getString(c, "userID")
-	orgID := getString(c, "orgID")
+	var req DataDeletionRequestInput
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	}
 
-	deletionReq, err := h.service.RequestDataDeletion(c.Request().Context(), userID, orgID, &req)
+	deletionReq, err := h.service.RequestDataDeletion(ctx, userID.String(), appID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusAccepted, deletionReq)
@@ -283,14 +394,16 @@ func (h *Handler) RequestDataDeletion(c forge.Context) error {
 
 // GetDataDeletion handles GET /consent/data-deletions/:id
 func (h *Handler) GetDataDeletion(c forge.Context) error {
+	ctx := c.Request().Context()
+	
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
 	}
 
-	deletionReq, err := h.service.repo.GetDeletionRequest(c.Request().Context(), id)
+	deletionReq, err := h.service.repo.GetDeletionRequest(ctx, id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusNotFound, errs.NotFound(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, deletionReq)
@@ -298,17 +411,30 @@ func (h *Handler) GetDataDeletion(c forge.Context) error {
 
 // ApproveDeletionRequest handles POST /consent/data-deletions/:id/approve (Admin only)
 func (h *Handler) ApproveDeletionRequest(c forge.Context) error {
+	ctx := c.Request().Context()
+	
 	id := c.Param("id")
 	if id == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "ID parameter is required",})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("id"))
 	}
 
-	approverID := getString(c, "userID")
-	orgID := getString(c, "orgID")
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
+	}
 
-	err := h.service.ApproveDeletionRequest(c.Request().Context(), id, orgID, approverID)
+	err := h.service.ApproveDeletionRequest(ctx, id, appID.String(), userID.String())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "Deletion request approved",})
@@ -316,11 +442,20 @@ func (h *Handler) ApproveDeletionRequest(c forge.Context) error {
 
 // GetPrivacySettings handles GET /consent/privacy-settings
 func (h *Handler) GetPrivacySettings(c forge.Context) error {
-	orgID := getString(c, "orgID")
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
 
-	settings, err := h.service.GetPrivacySettings(c.Request().Context(), orgID)
+	settings, err := h.service.GetPrivacySettings(ctx, appID.String())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, settings)
@@ -328,17 +463,30 @@ func (h *Handler) GetPrivacySettings(c forge.Context) error {
 
 // UpdatePrivacySettings handles PATCH /consent/privacy-settings (Admin only)
 func (h *Handler) UpdatePrivacySettings(c forge.Context) error {
-	var req PrivacySettingsRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",})
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
+	
+	userID, ok := contexts.GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	orgID := getString(c, "orgID")
-	updatedBy := getString(c, "userID")
+	var req PrivacySettingsRequest
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	}
 
-	settings, err := h.service.UpdatePrivacySettings(c.Request().Context(), orgID, updatedBy, &req)
+	settings, err := h.service.UpdatePrivacySettings(ctx, appID.String(), userID.String(), &req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, settings)
@@ -348,9 +496,6 @@ func (h *Handler) UpdatePrivacySettings(c forge.Context) error {
 func (h *Handler) GetConsentAuditLogs(c forge.Context) error {
 	// Get audit logs - simplified for now
 	// TODO: Implement proper repository method for user-filtered audit logs
-	// userID := getString(c, "userID")
-	// orgID := getString(c, "orgID")
-	// limitStr := c.Query("limit")
 	logs := []ConsentAuditLog{}
 
 	return c.JSON(http.StatusOK, logs)
@@ -358,15 +503,24 @@ func (h *Handler) GetConsentAuditLogs(c forge.Context) error {
 
 // GenerateConsentReport handles GET /consent/reports
 func (h *Handler) GenerateConsentReport(c forge.Context) error {
-	orgID := getString(c, "orgID")
+	ctx := c.Request().Context()
+	
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusForbidden, errs.New(
+			"APP_CONTEXT_REQUIRED",
+			"App context required",
+			http.StatusForbidden,
+		))
+	}
 
 	// Parse date range from query params (simplified)
 	startDate := time.Now().AddDate(0, -1, 0) // Last month
 	endDate := time.Now()
 
-	report, err := h.service.GenerateConsentReport(c.Request().Context(), orgID, startDate, endDate)
+	report, err := h.service.GenerateConsentReport(ctx, appID.String(), startDate, endDate)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, report)

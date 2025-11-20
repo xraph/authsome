@@ -1,6 +1,9 @@
 package mfa
 
-import "github.com/xraph/forge"
+import (
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/forge"
+)
 
 // RegisterRoutes registers all MFA routes with OpenAPI documentation
 func RegisterRoutes(router forge.Router, handler *Handler) {
@@ -11,10 +14,10 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Enroll MFA factor"),
 		forge.WithDescription("Initiates enrollment of a new multi-factor authentication method (TOTP, SMS, Email, WebAuthn, etc.)"),
 		forge.WithTags("MFA", "Factor Management"),
-		forge.WithRequestSchema(&EnrollFactorRequest{}),
-		forge.WithResponseSchema(200, "Factor enrolled successfully", &FactorEnrollmentResponse{}),
-		forge.WithResponseSchema(400, "Invalid request or enrollment failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
+		forge.WithRequestSchema(FactorEnrollmentRequest{}),
+		forge.WithResponseSchema(200, "Factor enrolled successfully", FactorEnrollmentResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or enrollment failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -23,10 +26,9 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("List MFA factors"),
 		forge.WithDescription("Retrieves all MFA factors enrolled by the authenticated user"),
 		forge.WithTags("MFA", "Factor Management"),
-		forge.WithRequestSchema(&ListFactorsRequest{}),
-		forge.WithResponseSchema(200, "Factors retrieved successfully", &ListFactorsResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(500, "Internal server error", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Factors retrieved successfully", FactorsResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -35,12 +37,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Get MFA factor"),
 		forge.WithDescription("Retrieves details of a specific enrolled MFA factor"),
 		forge.WithTags("MFA", "Factor Management"),
-		forge.WithRequestSchema(&GetFactorRequest{}),
-		forge.WithResponseSchema(200, "Factor retrieved successfully", &Factor{}),
-		forge.WithResponseSchema(400, "Invalid factor ID", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "Factor not found", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Factor retrieved successfully", Factor{}),
+		forge.WithResponseSchema(400, "Invalid factor ID", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "Factor not found", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -49,12 +50,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Update MFA factor"),
 		forge.WithDescription("Updates properties of an enrolled MFA factor (name, priority, status)"),
 		forge.WithTags("MFA", "Factor Management"),
-		forge.WithRequestSchema(&UpdateFactorRequest{}),
-		forge.WithResponseSchema(200, "Factor updated successfully", &SuccessResponse{}),
-		forge.WithResponseSchema(400, "Invalid request or update failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "Factor not found", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Factor updated successfully", responses.MessageResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or update failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "Factor not found", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -63,12 +63,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Delete MFA factor"),
 		forge.WithDescription("Removes an enrolled MFA factor from the user's account"),
 		forge.WithTags("MFA", "Factor Management"),
-		forge.WithRequestSchema(&DeleteFactorRequest{}),
-		forge.WithResponseSchema(200, "Factor deleted successfully", &SuccessResponse{}),
-		forge.WithResponseSchema(400, "Invalid request or deletion failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "Factor not found", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Factor deleted successfully", responses.MessageResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or deletion failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "Factor not found", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -77,12 +76,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Verify enrolled factor"),
 		forge.WithDescription("Verifies and activates a newly enrolled MFA factor by providing a valid code"),
 		forge.WithTags("MFA", "Factor Management"),
-		forge.WithRequestSchema(&VerifyEnrolledFactorRequest{}),
-		forge.WithResponseSchema(200, "Factor verified and activated", &SuccessResponse{}),
-		forge.WithResponseSchema(400, "Invalid code or verification failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "Factor not found", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Factor verified and activated", responses.MessageResponse{}),
+		forge.WithResponseSchema(400, "Invalid code or verification failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - factor belongs to another user", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "Factor not found", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -93,10 +91,10 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Initiate MFA challenge"),
 		forge.WithDescription("Starts a new MFA challenge session requiring verification of one or more factors"),
 		forge.WithTags("MFA", "Authentication"),
-		forge.WithRequestSchema(&InitiateChallengeRequest{}),
-		forge.WithResponseSchema(200, "Challenge initiated successfully", &ChallengeResponse{}),
-		forge.WithResponseSchema(400, "Invalid request or no enrolled factors", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
+		forge.WithRequestSchema(ChallengeRequest{}),
+		forge.WithResponseSchema(200, "Challenge initiated successfully", ChallengeResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or no enrolled factors", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -105,11 +103,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Verify MFA challenge"),
 		forge.WithDescription("Verifies an MFA challenge by providing the required authentication code or data"),
 		forge.WithTags("MFA", "Authentication"),
-		forge.WithRequestSchema(&VerifyChallengeRequest{}),
-		forge.WithResponseSchema(200, "Challenge verified successfully", &VerificationResponse{}),
-		forge.WithResponseSchema(400, "Invalid code or verification failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(429, "Too many failed attempts - account locked", &ErrorResponse{}),
+		forge.WithRequestSchema(VerificationRequest{}),
+		forge.WithResponseSchema(200, "Challenge verified successfully", VerificationResponse{}),
+		forge.WithResponseSchema(400, "Invalid code or verification failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many failed attempts - account locked", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -118,12 +116,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Get challenge status"),
 		forge.WithDescription("Retrieves the current status and details of an MFA challenge"),
 		forge.WithTags("MFA", "Authentication"),
-		forge.WithRequestSchema(&GetChallengeStatusRequest{}),
-		forge.WithResponseSchema(200, "Challenge status retrieved", &GetChallengeStatusResponse{}),
-		forge.WithResponseSchema(400, "Invalid challenge ID", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "Challenge not found or expired", &ErrorResponse{}),
-		forge.WithResponseSchema(501, "Not implemented", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Challenge status retrieved", ChallengeStatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid challenge ID", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - challenge belongs to another user", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "Challenge not found or expired", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -134,10 +131,10 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Trust device"),
 		forge.WithDescription("Marks the current device as trusted to skip MFA for future authentications within the trust period"),
 		forge.WithTags("MFA", "Trusted Devices"),
-		forge.WithRequestSchema(&TrustDeviceRequest{}),
-		forge.WithResponseSchema(200, "Device trusted successfully", &SuccessResponse{}),
-		forge.WithResponseSchema(400, "Invalid request or trust failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
+		forge.WithRequestSchema(DeviceInfo{}),
+		forge.WithResponseSchema(200, "Device trusted successfully", responses.MessageResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or trust failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -146,9 +143,9 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("List trusted devices"),
 		forge.WithDescription("Retrieves all devices currently trusted by the authenticated user"),
 		forge.WithTags("MFA", "Trusted Devices"),
-		forge.WithResponseSchema(200, "Trusted devices retrieved", &ListTrustedDevicesResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(500, "Internal server error", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Trusted devices retrieved", DevicesResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -157,12 +154,11 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Revoke trusted device"),
 		forge.WithDescription("Removes trust status from a device, requiring MFA for future authentications"),
 		forge.WithTags("MFA", "Trusted Devices"),
-		forge.WithRequestSchema(&RevokeTrustedDeviceRequest{}),
-		forge.WithResponseSchema(200, "Device revoked successfully", &SuccessResponse{}),
-		forge.WithResponseSchema(400, "Invalid device ID or revocation failed", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - device belongs to another user", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "Device not found", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Device revoked successfully", responses.MessageResponse{}),
+		forge.WithResponseSchema(400, "Invalid device ID or revocation failed", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - device belongs to another user", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "Device not found", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -173,10 +169,9 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Get MFA status"),
 		forge.WithDescription("Retrieves the current MFA enrollment and policy status for the authenticated user"),
 		forge.WithTags("MFA", "Status"),
-		forge.WithRequestSchema(&GetStatusRequest{}),
-		forge.WithResponseSchema(200, "MFA status retrieved", &MFAStatus{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(500, "Internal server error", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "MFA status retrieved", MFAStatus{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
@@ -185,39 +180,37 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 		forge.WithSummary("Get MFA policy"),
 		forge.WithDescription("Retrieves the organization's MFA policy configuration"),
 		forge.WithTags("MFA", "Policy"),
-		forge.WithResponseSchema(200, "MFA policy retrieved", &MFAPolicy{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "MFA policy retrieved", MFAConfigResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
 	// ==================== Admin Endpoints ====================
 
 	// PUT /mfa/policy - Update MFA policy (admin only)
-	router.PUT("/mfa/policy", handler.UpdatePolicy,
+	router.PUT("/mfa/policy", handler.AdminUpdatePolicy,
 		forge.WithSummary("Update MFA policy"),
 		forge.WithDescription("Updates the organization's MFA policy configuration (requires admin privileges)"),
 		forge.WithTags("MFA", "Policy", "Admin"),
-		forge.WithRequestSchema(&UpdatePolicyRequest{}),
-		forge.WithResponseSchema(200, "Policy updated successfully", &MFAPolicy{}),
-		forge.WithResponseSchema(400, "Invalid request", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - admin privileges required", &ErrorResponse{}),
-		forge.WithResponseSchema(501, "Not implemented", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "Policy updated successfully", responses.StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - admin privileges required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(501, "Not implemented", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 
 	// POST /mfa/users/:id/reset - Reset user's MFA (admin only)
-	router.POST("/mfa/users/:id/reset", handler.ResetUserMFA,
+	router.POST("/mfa/users/:id/reset", handler.AdminResetUserMFA,
 		forge.WithSummary("Reset user MFA"),
 		forge.WithDescription("Resets all MFA factors and trusted devices for a user (requires admin privileges)"),
 		forge.WithTags("MFA", "Admin"),
-		forge.WithRequestSchema(&ResetUserMFARequest{}),
-		forge.WithResponseSchema(200, "User MFA reset successfully", &ResetUserMFAResponse{}),
-		forge.WithResponseSchema(400, "Invalid user ID", &ErrorResponse{}),
-		forge.WithResponseSchema(401, "Unauthorized - authentication required", &ErrorResponse{}),
-		forge.WithResponseSchema(403, "Forbidden - admin privileges required", &ErrorResponse{}),
-		forge.WithResponseSchema(404, "User not found", &ErrorResponse{}),
-		forge.WithResponseSchema(501, "Not implemented", &ErrorResponse{}),
+		forge.WithResponseSchema(200, "User MFA reset successfully", responses.MessageResponse{}),
+		forge.WithResponseSchema(400, "Invalid user ID", responses.ErrorResponse{}),
+		forge.WithResponseSchema(401, "Unauthorized - authentication required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(403, "Forbidden - admin privileges required", responses.ErrorResponse{}),
+		forge.WithResponseSchema(404, "User not found", responses.ErrorResponse{}),
+		forge.WithResponseSchema(501, "Not implemented", responses.ErrorResponse{}),
 		forge.WithValidation(true),
 	)
 }

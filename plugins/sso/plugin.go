@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
@@ -23,20 +26,26 @@ type Plugin struct {
 
 // Config holds the SSO plugin configuration
 type Config struct {
-	// AllowSAML enables SAML authentication
+	// Protocol enablement
 	AllowSAML bool `json:"allowSAML"`
-	// AllowOIDC enables OIDC authentication
 	AllowOIDC bool `json:"allowOIDC"`
-	// SAMLMetadataURL is the SP metadata URL
-	SAMLMetadataURL string `json:"samlMetadataURL"`
-	// SAMLACS is the assertion consumer service URL
-	SAMLACS string `json:"samlACS"`
-	// OIDCRedirectURL is the OIDC redirect URL
+
+	// JIT (Just-in-Time) user provisioning
+	AutoProvision    bool   `json:"autoProvision"`    // Automatically create users on first SSO login
+	UpdateAttributes bool   `json:"updateAttributes"` // Update existing user attributes from SSO
+	DefaultRole      string `json:"defaultRole"`      // Default role for provisioned users (e.g., "member")
+
+	// Attribute mapping from user fields to SSO attribute names
+	// Example: {"email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"}
+	AttributeMapping map[string]string `json:"attributeMapping"`
+
+	// SAML configuration
+	SAMLMetadataURL   string `json:"samlMetadataURL"`
+	SAMLACS           string `json:"samlACS"`           // Assertion Consumer Service URL
+	RequireEncryption bool   `json:"requireEncryption"` // Require encrypted SAML assertions
+
+	// OIDC configuration
 	OIDCRedirectURL string `json:"oidcRedirectURL"`
-	// RequireEncryption requires encrypted SAML assertions
-	RequireEncryption bool `json:"requireEncryption"`
-	// AutoProvision automatically provisions users from SSO
-	AutoProvision bool `json:"autoProvision"`
 }
 
 // DefaultConfig returns the default SSO plugin configuration
@@ -44,11 +53,14 @@ func DefaultConfig() Config {
 	return Config{
 		AllowSAML:         true,
 		AllowOIDC:         true,
+		AutoProvision:     true,
+		UpdateAttributes:  true,
+		DefaultRole:       "member",
+		AttributeMapping:  make(map[string]string),
 		SAMLMetadataURL:   "",
 		SAMLACS:           "",
-		OIDCRedirectURL:   "",
 		RequireEncryption: false,
-		AutoProvision:     true,
+		OIDCRedirectURL:   "",
 	}
 }
 
@@ -160,12 +172,45 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Register Bun models
 	p.db.RegisterModel((*schema.SSOProvider)(nil))
 
-	p.service = NewService(authInst.Repository().SSOProvider(), p.config)
+	// Get user and session services from DI container for JIT provisioning
+	container := forgeApp.Container()
+	if container == nil {
+		return fmt.Errorf("DI container not available for sso plugin")
+	}
+
+	// Resolve user service from container
+	userSvcRaw, err := container.Resolve(authsome.ServiceUser)
+	if err != nil {
+		return fmt.Errorf("failed to resolve user service: %w", err)
+	}
+	userSvc, ok := userSvcRaw.(user.ServiceInterface)
+	if !ok {
+		return fmt.Errorf("user service has invalid type")
+	}
+
+	// Resolve session service from container
+	sessionSvcRaw, err := container.Resolve(authsome.ServiceSession)
+	if err != nil {
+		return fmt.Errorf("failed to resolve session service: %w", err)
+	}
+	sessionSvc, ok := sessionSvcRaw.(session.ServiceInterface)
+	if !ok {
+		return fmt.Errorf("session service has invalid type")
+	}
+
+	// Initialize SSO service with all dependencies
+	p.service = NewService(
+		authInst.Repository().SSOProvider(),
+		p.config,
+		userSvc,
+		sessionSvc,
+	)
 
 	p.logger.Info("SSO plugin initialized",
 		forge.F("allow_saml", p.config.AllowSAML),
 		forge.F("allow_oidc", p.config.AllowOIDC),
-		forge.F("auto_provision", p.config.AutoProvision))
+		forge.F("auto_provision", p.config.AutoProvision),
+		forge.F("update_attributes", p.config.UpdateAttributes))
 
 	return nil
 }
@@ -177,50 +222,91 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 	// Router is already scoped to the auth basePath, create sso sub-group
 	grp := router.Group("/sso")
-	h := NewHandler(p.service)
+	h := NewHandlerWithLogger(p.service, p.logger)
+
+	// =============================================================================
+	// PROVIDER MANAGEMENT
+	// =============================================================================
+
 	grp.POST("/provider/register", h.RegisterProvider,
 		forge.WithName("sso.provider.register"),
 		forge.WithSummary("Register SSO provider"),
-		forge.WithDescription("Registers a new SSO provider (SAML or OIDC) with configuration for authentication"),
-		forge.WithResponseSchema(200, "Provider registered", SSOProviderResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", SSOErrorResponse{}),
-		forge.WithTags("SSO", "Providers"),
+		forge.WithDescription("Admin endpoint to register SAML or OIDC SSO provider with multi-tenant scoping"),
+		forge.WithRequestSchema(RegisterProviderRequest{}),
+		forge.WithResponseSchema(200, "Provider registered", ProviderRegisteredResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
+		forge.WithTags("SSO", "Admin", "Provider Management"),
 		forge.WithValidation(true),
 	)
+
+	// =============================================================================
+	// SAML ENDPOINTS
+	// =============================================================================
+
 	grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata,
-		forge.WithName("sso.saml2.sp.metadata"),
-		forge.WithSummary("SAML2 Service Provider metadata"),
-		forge.WithDescription("Returns SAML2 Service Provider metadata XML for IdP configuration"),
-		forge.WithResponseSchema(200, "SAML metadata", SSOSAMLMetadataResponse{}),
-		forge.WithTags("SSO", "SAML2"),
+		forge.WithName("sso.saml.metadata"),
+		forge.WithSummary("SAML SP metadata"),
+		forge.WithDescription("Returns SAML Service Provider metadata XML for IdP configuration"),
+		forge.WithResponseSchema(200, "Metadata XML", MetadataResponse{}),
+		forge.WithTags("SSO", "SAML", "Metadata"),
 	)
-	grp.GET("/saml2/login/{providerId}", h.SAMLLogin,
-		forge.WithName("sso.saml2.login"),
-		forge.WithSummary("Initiate SAML2 login"),
-		forge.WithDescription("Initiates SAML2 authentication flow by redirecting to Identity Provider"),
-		forge.WithResponseSchema(302, "Redirect to IdP", nil),
-		forge.WithResponseSchema(400, "Invalid request", SSOErrorResponse{}),
-		forge.WithResponseSchema(404, "Provider not found", SSOErrorResponse{}),
-		forge.WithTags("SSO", "SAML2", "Authentication"),
+
+	grp.POST("/saml2/login/:providerId", h.SAMLLogin,
+		forge.WithName("sso.saml.login"),
+		forge.WithSummary("Initiate SAML login"),
+		forge.WithDescription("Initiates SAML authentication flow by generating AuthnRequest and returning redirect URL"),
+		forge.WithRequestSchema(SAMLLoginRequest{}),
+		forge.WithResponseSchema(200, "Login URL generated", SAMLLoginResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
+		forge.WithTags("SSO", "SAML", "Authentication"),
+		forge.WithValidation(true),
 	)
-	grp.POST("/saml2/callback/{providerId}", h.SAMLCallback,
-		forge.WithName("sso.saml2.callback"),
-		forge.WithSummary("SAML2 callback"),
-		forge.WithDescription("Handles SAML2 authentication response from Identity Provider and creates user session"),
-		forge.WithResponseSchema(200, "SAML callback processed", SSOSAMLCallbackResponse{}),
-		forge.WithResponseSchema(400, "Invalid SAML response", SSOErrorResponse{}),
-		forge.WithResponseSchema(404, "Provider not found", SSOErrorResponse{}),
-		forge.WithTags("SSO", "SAML2", "Callback"),
+
+	grp.POST("/saml2/callback/:providerId", h.SAMLCallback,
+		forge.WithName("sso.saml.callback"),
+		forge.WithSummary("SAML callback"),
+		forge.WithDescription("Handles SAML assertion from IdP, validates it, provisions user (JIT), and creates session"),
+		forge.WithResponseSchema(200, "Authentication successful", SSOAuthResponse{}),
+		forge.WithResponseSchema(400, "Invalid SAML response", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
+		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
+		forge.WithTags("SSO", "SAML", "Authentication", "Callback"),
 	)
-	grp.GET("/oidc/callback/{providerId}", h.OIDCCallback,
+
+	// =============================================================================
+	// OIDC ENDPOINTS
+	// =============================================================================
+
+	grp.POST("/oidc/login/:providerId", h.OIDCLogin,
+		forge.WithName("sso.oidc.login"),
+		forge.WithSummary("Initiate OIDC login"),
+		forge.WithDescription("Initiates OIDC authentication flow with PKCE, generates authorization URL"),
+		forge.WithRequestSchema(OIDCLoginRequest{}),
+		forge.WithResponseSchema(200, "Authorization URL generated", OIDCLoginResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
+		forge.WithTags("SSO", "OIDC", "Authentication"),
+		forge.WithValidation(true),
+	)
+
+	grp.GET("/oidc/callback/:providerId", h.OIDCCallback,
 		forge.WithName("sso.oidc.callback"),
 		forge.WithSummary("OIDC callback"),
-		forge.WithDescription("Handles OIDC authentication callback from Identity Provider and creates user session"),
-		forge.WithResponseSchema(302, "Redirect after authentication", nil),
-		forge.WithResponseSchema(400, "Invalid OIDC response", SSOErrorResponse{}),
-		forge.WithResponseSchema(404, "Provider not found", SSOErrorResponse{}),
-		forge.WithTags("SSO", "OIDC", "Callback"),
+		forge.WithDescription("Handles OIDC callback, exchanges code for tokens, provisions user (JIT), and creates session"),
+		forge.WithResponseSchema(200, "Authentication successful", SSOAuthResponse{}),
+		forge.WithResponseSchema(400, "Invalid OIDC response", ErrorResponse{}),
+		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
+		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
+		forge.WithTags("SSO", "OIDC", "Authentication", "Callback"),
 	)
+
+	p.logger.Info("SSO plugin routes registered",
+		forge.F("saml_enabled", p.config.AllowSAML),
+		forge.F("oidc_enabled", p.config.AllowOIDC),
+		forge.F("auto_provision", p.config.AutoProvision))
+
 	return nil
 }
 
@@ -228,34 +314,57 @@ func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
 
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
-// Migrate creates required tables for SSO providers
+// Migrate creates required tables and indexes for SSO providers
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
 	ctx := context.Background()
-	_, err := p.db.NewCreateTable().Model((*schema.SSOProvider)(nil)).IfNotExists().Exec(ctx)
-	return err
+
+	// Create SSO providers table
+	_, err := p.db.NewCreateTable().
+		Model((*schema.SSOProvider)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create sso_providers table: %w", err)
+	}
+
+	// Create index for multi-tenant queries (app_id, environment_id, organization_id)
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.SSOProvider)(nil)).
+		Index("idx_sso_providers_tenant").
+		Column("app_id", "environment_id", "organization_id").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create tenant index: %w", err)
+	}
+
+	// Create unique constraint on provider_id within tenant scope
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.SSOProvider)(nil)).
+		Index("idx_sso_providers_unique").
+		Column("app_id", "environment_id", "organization_id", "provider_id").
+		Unique().
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create unique provider constraint: %w", err)
+	}
+
+	// Create index for domain-based provider discovery
+	_, err = p.db.NewCreateIndex().
+		Model((*schema.SSOProvider)(nil)).
+		Index("idx_sso_providers_domain").
+		Column("domain", "app_id", "environment_id").
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create domain index: %w", err)
+	}
+
+	p.logger.Info("SSO plugin migrations completed successfully")
+	return nil
 }
 
-// Response types for SSO routes
-type SSOErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-type SSOProviderResponse struct {
-	Status     string `json:"status" example:"registered"`
-	ProviderID string `json:"providerId" example:"provider_123"`
-}
-
-type SSOSAMLMetadataResponse struct {
-	Metadata string `json:"metadata" example:"<?xml version=\"1.0\"?>..."`
-}
-
-type SSOSAMLCallbackResponse struct {
-	Status     string                 `json:"status" example:"saml_callback_ok"`
-	Subject    string                 `json:"subject" example:"user@example.com"`
-	Issuer     string                 `json:"issuer" example:"https://idp.example.com"`
-	Attributes map[string]interface{} `json:"attributes"`
-	ProviderID string                 `json:"providerId" example:"provider_123"`
-}

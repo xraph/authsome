@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/forge"
 )
 
@@ -243,7 +244,5 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// ErrorResponse represents an error response for JWT operations
-type ErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
+// ErrorResponse represents an error response for JWT operations - use shared response from core
+type ErrorResponse = responses.ErrorResponse

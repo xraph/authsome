@@ -11,6 +11,7 @@ import (
 	"github.com/rs/xid"
 	"golang.org/x/oauth2"
 
+	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins/social/providers"
 	"github.com/xraph/authsome/repository"
@@ -23,28 +24,19 @@ type Service struct {
 	providers   map[string]providers.Provider
 	socialRepo  repository.SocialAccountRepository
 	userService *user.Service
-	stateStore  map[string]*OAuthState // In-memory state storage (use Redis in production)
-}
-
-// OAuthState stores temporary OAuth state data
-type OAuthState struct {
-	Provider           string
-	AppID              xid.ID  // Platform app (required)
-	UserOrganizationID *xid.ID // User-created org (optional)
-	RedirectURL        string
-	CreatedAt          time.Time
-	ExtraScopes        []string // Additional scopes requested
-	LinkUserID         *xid.ID  // If linking to existing user
+	stateStore  StateStore
+	audit       *audit.Service
 }
 
 // NewService creates a new social auth service
-func NewService(config Config, socialRepo repository.SocialAccountRepository, userSvc *user.Service) *Service {
+func NewService(config Config, socialRepo repository.SocialAccountRepository, userSvc *user.Service, stateStore StateStore, auditSvc *audit.Service) *Service {
 	s := &Service{
 		config:      config,
 		providers:   make(map[string]providers.Provider),
 		socialRepo:  socialRepo,
 		userService: userSvc,
-		stateStore:  make(map[string]*OAuthState),
+		stateStore:  stateStore,
+		audit:       auditSvc,
 	}
 
 	// Initialize configured providers
@@ -136,11 +128,18 @@ func (s *Service) initializeProviders() {
 func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string) (string, error) {
 	provider, ok := s.providers[providerName]
 	if !ok {
+		// Audit: provider not found
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "social_provider_not_found",
+				fmt.Sprintf("provider:%s app_id:%s", providerName, appID.String()),
+				"", "",
+				fmt.Sprintf(`{"provider":"%s","app_id":"%s"}`, providerName, appID.String()))
+		}
 		return "", fmt.Errorf("provider %s not configured", providerName)
 	}
 
 	// Generate secure state token
-	state, err := s.generateState(providerName, appID, userOrganizationID, extraScopes, nil)
+	state, err := s.generateState(ctx, providerName, appID, userOrganizationID, extraScopes, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
@@ -155,6 +154,22 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 	}
 
 	authURL := oauth2Config.AuthCodeURL(state)
+	
+	// Audit: OAuth flow initiated
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, nil, "social_signin_initiated",
+			fmt.Sprintf("provider:%s app_id:%s", providerName, appID.String()),
+			"", "",
+			fmt.Sprintf(`{"provider":"%s","app_id":"%s","scopes":%s}`,
+				providerName, appID.String(), func() string {
+					if len(extraScopes) > 0 {
+						b, _ := json.Marshal(extraScopes)
+						return string(b)
+					}
+					return "[]"
+				}()))
+	}
+	
 	return authURL, nil
 }
 
@@ -162,11 +177,17 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string) (string, error) {
 	provider, ok := s.providers[providerName]
 	if !ok {
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, &userID, "social_provider_not_found",
+				fmt.Sprintf("provider:%s user_id:%s", providerName, userID.String()),
+				"", "",
+				fmt.Sprintf(`{"provider":"%s","user_id":"%s","action":"link"}`, providerName, userID.String()))
+		}
 		return "", fmt.Errorf("provider %s not configured", providerName)
 	}
 
 	// Generate state with user linking
-	state, err := s.generateState(providerName, appID, userOrganizationID, extraScopes, &userID)
+	state, err := s.generateState(ctx, providerName, appID, userOrganizationID, extraScopes, &userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
@@ -179,18 +200,41 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 	}
 
 	authURL := oauth2Config.AuthCodeURL(state)
+	
+	// Audit: link flow initiated
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, &userID, "social_link_initiated",
+			fmt.Sprintf("provider:%s user_id:%s", providerName, userID.String()),
+			"", "",
+			fmt.Sprintf(`{"provider":"%s","user_id":"%s","app_id":"%s"}`, providerName, userID.String(), appID.String()))
+	}
+	
 	return authURL, nil
 }
 
 // HandleCallback processes the OAuth callback
 func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, code string) (*CallbackResult, error) {
+	// Audit: callback received
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, nil, "social_callback_received",
+			fmt.Sprintf("provider:%s", providerName),
+			"", "",
+			fmt.Sprintf(`{"provider":"%s"}`, providerName))
+	}
+
 	// Verify state
-	state, err := s.verifyState(stateToken)
+	state, err := s.verifyState(ctx, stateToken)
 	if err != nil {
 		return nil, fmt.Errorf("invalid state: %w", err)
 	}
 
 	if state.Provider != providerName {
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "social_state_provider_mismatch",
+				fmt.Sprintf("expected:%s got:%s", state.Provider, providerName),
+				"", "",
+				fmt.Sprintf(`{"expected":"%s","got":"%s"}`, state.Provider, providerName))
+		}
 		return nil, fmt.Errorf("state provider mismatch")
 	}
 
@@ -203,7 +247,22 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 	oauth2Config := provider.GetOAuth2Config()
 	token, err := oauth2Config.Exchange(ctx, code)
 	if err != nil {
+		// Audit: token exchange failed
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "social_token_exchange_failed",
+				fmt.Sprintf("provider:%s error:%s", providerName, err.Error()),
+				"", "",
+				fmt.Sprintf(`{"provider":"%s","error":"%s"}`, providerName, err.Error()))
+		}
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
+	}
+
+	// Audit: token exchange success
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, nil, "social_token_exchange_success",
+			fmt.Sprintf("provider:%s", providerName),
+			"", "",
+			fmt.Sprintf(`{"provider":"%s","app_id":"%s"}`, providerName, state.AppID.String()))
 	}
 
 	// Get user info from provider
@@ -212,8 +271,22 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
 
+	// Audit: user info fetched
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, nil, "social_userinfo_fetched",
+			fmt.Sprintf("provider:%s email:%s", providerName, userInfo.Email),
+			"", "",
+			fmt.Sprintf(`{"provider":"%s","email":"%s","verified":%t}`, providerName, userInfo.Email, userInfo.EmailVerified))
+	}
+
 	// Check email verification requirement
 	if s.config.RequireEmailVerified && !userInfo.EmailVerified {
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "social_email_not_verified",
+				fmt.Sprintf("provider:%s email:%s", providerName, userInfo.Email),
+				"", "",
+				fmt.Sprintf(`{"provider":"%s","email":"%s"}`, providerName, userInfo.Email))
+		}
 		return nil, fmt.Errorf("email not verified by provider")
 	}
 
@@ -368,14 +441,14 @@ func (s *Service) createSocialAccount(ctx context.Context, userID, appID xid.ID,
 }
 
 // generateState creates a secure state token
-func (s *Service) generateState(provider string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string, linkUserID *xid.ID) (string, error) {
+func (s *Service) generateState(ctx context.Context, provider string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string, linkUserID *xid.ID) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	state := base64.URLEncoding.EncodeToString(b)
+	stateToken := base64.URLEncoding.EncodeToString(b)
 
-	s.stateStore[state] = &OAuthState{
+	state := &OAuthState{
 		Provider:           provider,
 		AppID:              appID,
 		UserOrganizationID: userOrganizationID,
@@ -384,26 +457,35 @@ func (s *Service) generateState(provider string, appID xid.ID, userOrganizationI
 		LinkUserID:         linkUserID,
 	}
 
-	// TODO: Implement cleanup for old states (use Redis with TTL in production)
+	// Store state with TTL
+	ttl := s.config.StateStorage.StateTTL
+	if ttl == 0 {
+		ttl = 15 * time.Minute
+	}
+	
+	if err := s.stateStore.Set(ctx, stateToken, state, ttl); err != nil {
+		return "", fmt.Errorf("failed to store state: %w", err)
+	}
 
-	return state, nil
+	return stateToken, nil
 }
 
 // verifyState validates and retrieves the state
-func (s *Service) verifyState(stateToken string) (*OAuthState, error) {
-	state, ok := s.stateStore[stateToken]
-	if !ok {
-		return nil, fmt.Errorf("state not found")
+func (s *Service) verifyState(ctx context.Context, stateToken string) (*OAuthState, error) {
+	state, err := s.stateStore.Get(ctx, stateToken)
+	if err != nil {
+		// Audit: invalid state
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "social_state_invalid",
+				fmt.Sprintf("state_token:%s error:%s", stateToken[:10]+"...", err.Error()),
+				"", "",
+				fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+		}
+		return nil, err
 	}
 
-	// Check if state is expired (15 minutes)
-	if time.Since(state.CreatedAt) > 15*time.Minute {
-		delete(s.stateStore, stateToken)
-		return nil, fmt.Errorf("state expired")
-	}
-
-	// Delete state after use
-	delete(s.stateStore, stateToken)
+	// Delete state after use (one-time use)
+	_ = s.stateStore.Delete(ctx, stateToken)
 
 	return state, nil
 }

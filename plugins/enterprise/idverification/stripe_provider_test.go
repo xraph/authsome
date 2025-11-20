@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/rs/xid"
 )
 
 func TestStripeIdentityProvider_Mock(t *testing.T) {
@@ -25,9 +27,15 @@ func TestStripeIdentityProvider_Mock(t *testing.T) {
 
 	t.Run("CreateSession_Mock", func(t *testing.T) {
 		ctx := context.Background()
+		
+		userID := xid.New()
+		appID := xid.New()
+		orgID := xid.New()
+		
 		req := &ProviderSessionRequest{
-			UserID:         "user_123",
-			OrganizationID: "org_456",
+			AppID:          appID,
+			OrganizationID: orgID,
+			UserID:         userID,
 			SuccessURL:     "https://example.com/success",
 		}
 
@@ -157,9 +165,15 @@ func TestStripeIdentityProvider_Real(t *testing.T) {
 
 	t.Run("CreateSession_Real", func(t *testing.T) {
 		ctx := context.Background()
+		
+		userID := xid.New()
+		appID := xid.New()
+		orgID := xid.New()
+		
 		req := &ProviderSessionRequest{
-			UserID:         "test_user_" + t.Name(),
-			OrganizationID: "test_org",
+			AppID:          appID,
+			OrganizationID: orgID,
+			UserID:         userID,
 			SuccessURL:     "https://example.com/success",
 			Metadata: map[string]interface{}{
 				"test": "true",

@@ -8,255 +8,402 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/xid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
+	"github.com/uptrace/bun/driver/sqliteshim"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/core/webhook"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
-	"github.com/xraph/forge"
 )
 
-// setupTestApp initializes in-memory Bun DB, creates necessary tables, and mounts passkey routes
-func setupTestAppPK(t *testing.T) (*bun.DB, *http.ServeMux) {
-	t.Helper()
-	sqldb, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	db := bun.NewDB(sqldb, sqlitedialect.New())
+// TestHandler_BeginRegister tests the BeginRegister handler
+func TestHandler_BeginRegister(t *testing.T) {
+	db, service := setupTestService(t)
+	defer db.Close()
 
-	ctx := context.Background()
-	// Core and plugin tables
-	if _, err := db.NewCreateTable().Model((*schema.User)(nil)).IfNotExists().Exec(ctx); err != nil {
-		t.Fatalf("create users: %v", err)
-	}
-	if _, err := db.NewCreateTable().Model((*schema.Session)(nil)).IfNotExists().Exec(ctx); err != nil {
-		t.Fatalf("create sessions: %v", err)
-	}
-	if _, err := db.NewCreateTable().Model((*schema.Passkey)(nil)).IfNotExists().Exec(ctx); err != nil {
-		t.Fatalf("create passkeys: %v", err)
+	// Create test user
+	testUser := createTestUser(t, db)
+
+	// Create test request
+	req := BeginRegisterRequest{
+		UserID:             testUser.ID.String(),
+		Name:               "My Security Key",
+		AuthenticatorType:  "cross-platform",
+		RequireResidentKey: false,
+		UserVerification:   "preferred",
 	}
 
-	// Initialize plugin
-	p := NewPlugin()
-	if err := p.Init(db); err != nil {
-		t.Fatalf("plugin init: %v", err)
-	}
-	if err := p.Migrate(); err != nil {
-		t.Fatalf("plugin migrate: %v", err)
-	}
+	body, err := json.Marshal(req)
+	require.NoError(t, err)
 
-	mux := http.NewServeMux()
-	app := forge.NewApp(mux)
-	if err := p.RegisterRoutes(app); err != nil {
-		t.Fatalf("register routes: %v", err)
-	}
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
-	return db, mux
+	// Create HTTP request with app context
+	httpReq := httptest.NewRequest(http.MethodPost, "/passkey/register/begin", bytes.NewReader(body))
+	httpReq = httpReq.WithContext(contexts.SetAppID(context.Background(), xid.New()))
+
+	// Create test context (simplified - in real tests would use actual forge.Context)
+	// For this test, we'll test the service directly instead
+	resp, err := service.BeginRegistration(httpReq.Context(), testUser.ID, req)
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.NotEmpty(t, resp.Challenge)
+	assert.Equal(t, testUser.ID.String(), resp.UserID)
+	assert.Greater(t, resp.Timeout, 0)
 }
 
-func TestPasskey_RegisterFlowPersistsPasskey(t *testing.T) {
-	db, mux := setupTestAppPK(t)
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+// TestService_RegistrationFlow tests complete registration flow
+func TestService_RegistrationFlow(t *testing.T) {
+	db, service := setupTestService(t)
+	defer db.Close()
 
-	// Create audit and webhook services for dependencies
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(db), auditSvc)
-
-	// Create a user
-	uSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, webhookSvc)
-	u, err := uSvc.Create(context.Background(), &user.CreateUserRequest{
-		Email:    "pk.user@example.com",
-		Password: "password123",
-		Name:     "PK User",
-	})
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
+	// Create test user
+	testUser := createTestUser(t, db)
+	ctx := contexts.SetAppID(context.Background(), xid.New())
 
 	// Begin registration
-	beginBody := map[string]any{"user_id": u.ID.String()}
-	beginBuf, _ := json.Marshal(beginBody)
-	resp, err := http.Post(srv.URL+"/api/auth/passkey/register/begin", "application/json", bytes.NewReader(beginBuf))
-	if err != nil {
-		t.Fatalf("begin request error: %v", err)
-	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-	var beginOut map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&beginOut); err != nil {
-		t.Fatalf("decode begin: %v", err)
-	}
-	if _, ok := beginOut["challenge"]; !ok {
-		t.Fatalf("expected challenge in begin response")
-	}
-	if beginOut["userId"] != u.ID.String() {
-		t.Fatalf("expected userId %s, got %v", u.ID.String(), beginOut["userId"])
+	req := BeginRegisterRequest{
+		UserID: testUser.ID.String(),
+		Name:   "Test Passkey",
 	}
 
-	// Finish registration
-	credID := "cred-123"
-	finishBody := map[string]any{"user_id": u.ID.String(), "credential_id": credID}
-	finishBuf, _ := json.Marshal(finishBody)
-	resp2, err := http.Post(srv.URL+"/api/auth/passkey/register/finish", "application/json", bytes.NewReader(finishBuf))
-	if err != nil {
-		t.Fatalf("finish request error: %v", err)
-	}
-	if resp2.StatusCode != 200 {
-		t.Fatalf("expected 200 finish, got %d", resp2.StatusCode)
-	}
+	beginResp, err := service.BeginRegistration(ctx, testUser.ID, req)
+	require.NoError(t, err)
+	assert.NotNil(t, beginResp)
 
-	// List passkeys should include the new credential
-	resp3, err := http.Get(srv.URL + "/api/auth/passkey/list?user_id=" + u.ID.String())
-	if err != nil {
-		t.Fatalf("list request error: %v", err)
+	// In a real test, we would:
+	// 1. Use a WebAuthn client to generate a credential response
+	// 2. Call FinishRegistration with that response
+	// For now, we test that the challenge was created
+	assert.NotEmpty(t, beginResp.Challenge)
+}
+
+// TestService_List tests listing passkeys
+func TestService_List(t *testing.T) {
+	db, service := setupTestService(t)
+	defer db.Close()
+
+	// Create test user
+	testUser := createTestUser(t, db)
+	appID := xid.New()
+	ctx := contexts.SetAppID(context.Background(), appID)
+
+	// Create test passkeys
+	passkey1 := &schema.Passkey{
+		ID:                xid.New(),
+		UserID:            testUser.ID,
+		CredentialID:      "cred-1",
+		PublicKey:         []byte("public-key-1"),
+		Name:              "Security Key 1",
+		AuthenticatorType: "cross-platform",
+		SignCount:         0,
+		AppID:             appID,
 	}
-	if resp3.StatusCode != 200 {
-		t.Fatalf("expected 200 list, got %d", resp3.StatusCode)
+	passkey1.AuditableModel.CreatedBy = passkey1.ID
+	passkey1.AuditableModel.UpdatedBy = passkey1.ID
+
+	passkey2 := &schema.Passkey{
+		ID:                xid.New(),
+		UserID:            testUser.ID,
+		CredentialID:      "cred-2",
+		PublicKey:         []byte("public-key-2"),
+		Name:              "Security Key 2",
+		AuthenticatorType: "platform",
+		SignCount:         5,
+		AppID:             appID,
 	}
-	var listOut []map[string]any
-	if err := json.NewDecoder(resp3.Body).Decode(&listOut); err != nil {
-		t.Fatalf("decode list: %v", err)
-	}
-	if len(listOut) != 1 {
-		t.Fatalf("expected 1 passkey, got %d", len(listOut))
-	}
-	if listOut[0]["credentialID"] != credID {
-		t.Fatalf("expected credentialID=%s, got %v", credID, listOut[0]["credentialID"])
+	passkey2.AuditableModel.CreatedBy = passkey2.ID
+	passkey2.AuditableModel.UpdatedBy = passkey2.ID
+
+	_, err := db.NewInsert().Model(passkey1).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(passkey2).Exec(ctx)
+	require.NoError(t, err)
+
+	// List passkeys
+	resp, err := service.List(ctx, testUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resp.Count)
+	assert.Len(t, resp.Passkeys, 2)
+
+	// Verify passkey data
+	for _, pk := range resp.Passkeys {
+		assert.NotEmpty(t, pk.ID)
+		assert.NotEmpty(t, pk.Name)
+		assert.NotEmpty(t, pk.CredentialID)
 	}
 }
 
-func TestPasskey_LoginReturnsSession(t *testing.T) {
-	db, mux := setupTestAppPK(t)
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+// TestService_Update tests updating passkey metadata
+func TestService_Update(t *testing.T) {
+	db, service := setupTestService(t)
+	defer db.Close()
 
-	// Create audit and webhook services for dependencies
-	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(db), auditSvc)
+	// Create test user
+	testUser := createTestUser(t, db)
+	appID := xid.New()
+	ctx := contexts.SetAppID(context.Background(), appID)
 
-	// Create a user
-	uSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, webhookSvc)
-	u, err := uSvc.Create(context.Background(), &user.CreateUserRequest{
-		Email:    "pk.login@example.com",
-		Password: "password123",
-		Name:     "PK Login",
-	})
-	if err != nil {
-		t.Fatalf("create user: %v", err)
+	// Create test passkey
+	passkey := &schema.Passkey{
+		ID:                xid.New(),
+		UserID:            testUser.ID,
+		CredentialID:      "cred-test",
+		PublicKey:         []byte("public-key"),
+		Name:              "Old Name",
+		AuthenticatorType: "platform",
+		AppID:             appID,
 	}
+	passkey.AuditableModel.CreatedBy = passkey.ID
+	passkey.AuditableModel.UpdatedBy = passkey.ID
 
-	// Begin login
-	beginBody := map[string]any{"user_id": u.ID.String()}
-	beginBuf, _ := json.Marshal(beginBody)
-	resp, err := http.Post(srv.URL+"/api/auth/passkey/login/begin", "application/json", bytes.NewReader(beginBuf))
-	if err != nil {
-		t.Fatalf("begin login request error: %v", err)
-	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
+	_, err := db.NewInsert().Model(passkey).Exec(ctx)
+	require.NoError(t, err)
 
-	// Finish login
-	finishBody := map[string]any{"user_id": u.ID.String(), "remember": true}
-	finishBuf, _ := json.Marshal(finishBody)
-	resp2, err := http.Post(srv.URL+"/api/auth/passkey/login/finish", "application/json", bytes.NewReader(finishBuf))
-	if err != nil {
-		t.Fatalf("finish login request error: %v", err)
-	}
-	if resp2.StatusCode != 200 {
-		t.Fatalf("expected 200 finish, got %d", resp2.StatusCode)
-	}
-	var out map[string]any
-	if err := json.NewDecoder(resp2.Body).Decode(&out); err != nil {
-		t.Fatalf("decode finish: %v", err)
-	}
-	if _, ok := out["token"].(string); !ok {
-		t.Fatalf("expected token in finish response")
-	}
-	if _, ok := out["session"].(map[string]any); !ok {
-		t.Fatalf("expected session in finish response")
-	}
-	if userMap, ok := out["user"].(map[string]any); !ok || userMap["Email"] != "pk.login@example.com" {
-		t.Fatalf("expected user email pk.login@example.com, got %v", out["user"])
-	}
+	// Update name
+	newName := "New Security Key Name"
+	resp, err := service.Update(ctx, passkey.ID, newName)
+	require.NoError(t, err)
+	assert.Equal(t, passkey.ID.String(), resp.PasskeyID)
+	assert.Equal(t, newName, resp.Name)
+
+	// Verify database was updated
+	var updated schema.Passkey
+	err = db.NewSelect().Model(&updated).Where("id = ?", passkey.ID).Scan(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, newName, updated.Name)
 }
 
-func TestPasskey_DeleteRemovesCredential(t *testing.T) {
-	db, mux := setupTestAppPK(t)
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+// TestService_Delete tests deleting a passkey
+func TestService_Delete(t *testing.T) {
+	db, service := setupTestService(t)
+	defer db.Close()
 
-	// Create audit and webhook services for dependencies
+	// Create test user
+	testUser := createTestUser(t, db)
+	appID := xid.New()
+	ctx := contexts.SetAppID(context.Background(), appID)
+
+	// Create test passkey
+	passkey := &schema.Passkey{
+		ID:                xid.New(),
+		UserID:            testUser.ID,
+		CredentialID:      "cred-delete",
+		PublicKey:         []byte("public-key"),
+		Name:              "To Delete",
+		AuthenticatorType: "platform",
+		AppID:             appID,
+	}
+	passkey.AuditableModel.CreatedBy = passkey.ID
+	passkey.AuditableModel.UpdatedBy = passkey.ID
+
+	_, err := db.NewInsert().Model(passkey).Exec(ctx)
+	require.NoError(t, err)
+
+	// Delete passkey
+	err = service.Delete(ctx, passkey.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+
+	// Verify deletion
+	exists, err := db.NewSelect().Model((*schema.Passkey)(nil)).Where("id = ?", passkey.ID).Exists(ctx)
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+// TestService_AppOrgScoping tests that passkeys are properly scoped to app and org
+func TestService_AppOrgScoping(t *testing.T) {
+	db, service := setupTestService(t)
+	defer db.Close()
+
+	// Create test user
+	testUser := createTestUser(t, db)
+	app1 := xid.New()
+	app2 := xid.New()
+	org1 := xid.New()
+
+	// Create passkeys in different apps and orgs
+	passkey1 := &schema.Passkey{
+		ID:                 xid.New(),
+		UserID:             testUser.ID,
+		CredentialID:       "cred-app1",
+		PublicKey:          []byte("key1"),
+		AppID:              app1,
+		UserOrganizationID: nil,
+	}
+	passkey1.AuditableModel.CreatedBy = passkey1.ID
+	passkey1.AuditableModel.UpdatedBy = passkey1.ID
+
+	passkey2 := &schema.Passkey{
+		ID:                 xid.New(),
+		UserID:             testUser.ID,
+		CredentialID:       "cred-app1-org1",
+		PublicKey:          []byte("key2"),
+		AppID:              app1,
+		UserOrganizationID: &org1,
+	}
+	passkey2.AuditableModel.CreatedBy = passkey2.ID
+	passkey2.AuditableModel.UpdatedBy = passkey2.ID
+
+	passkey3 := &schema.Passkey{
+		ID:                 xid.New(),
+		UserID:             testUser.ID,
+		CredentialID:       "cred-app2",
+		PublicKey:          []byte("key3"),
+		AppID:              app2,
+		UserOrganizationID: nil,
+	}
+	passkey3.AuditableModel.CreatedBy = passkey3.ID
+	passkey3.AuditableModel.UpdatedBy = passkey3.ID
+
+	ctx := context.Background()
+	_, err := db.NewInsert().Model(passkey1).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(passkey2).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(passkey3).Exec(ctx)
+	require.NoError(t, err)
+
+	// Test app1 without org - should only see passkey1
+	ctx1 := contexts.SetAppID(context.Background(), app1)
+	resp1, err := service.List(ctx1, testUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp1.Count)
+
+	// Test app1 with org1 - should only see passkey2
+	ctx2 := contexts.WithAppAndOrganization(context.Background(), app1, org1)
+	resp2, err := service.List(ctx2, testUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp2.Count)
+
+	// Test app2 - should only see passkey3
+	ctx3 := contexts.SetAppID(context.Background(), app2)
+	resp3, err := service.List(ctx3, testUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp3.Count)
+}
+
+// TestChallengeStore tests challenge session storage and expiration
+func TestChallengeStore(t *testing.T) {
+	store := NewMemoryChallengeStore(100 * time.Millisecond) // 100ms timeout for testing
+	ctx := context.Background()
+
+	// Store a challenge
+	sessionID := "test-session"
+	challenge := &ChallengeSession{
+		Challenge: []byte("test-challenge"),
+		UserID:    xid.New(),
+		CreatedAt: time.Now(),
+	}
+
+	err := store.Store(ctx, sessionID, challenge)
+	require.NoError(t, err)
+
+	// Retrieve it immediately
+	retrieved, err := store.Get(ctx, sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, challenge.Challenge, retrieved.Challenge)
+
+	// Wait for expiration
+	time.Sleep(150 * time.Millisecond)
+
+	// Should be expired
+	_, err = store.Get(ctx, sessionID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expired")
+}
+
+// TestUserAdapter tests the WebAuthn user adapter
+func TestUserAdapter(t *testing.T) {
+	userID := xid.New()
+	userName := "test@example.com"
+	displayName := "Test User"
+
+	// Create passkeys
+	passkeys := []schema.Passkey{
+		{
+			ID:           xid.New(),
+			CredentialID: "cred-1",
+			PublicKey:    []byte("key-1"),
+			SignCount:    5,
+		},
+		{
+			ID:           xid.New(),
+			CredentialID: "cred-2",
+			PublicKey:    []byte("key-2"),
+			SignCount:    10,
+		},
+	}
+
+	adapter := NewUserAdapter(userID, userName, displayName, passkeys)
+
+	// Test WebAuthn interface methods
+	assert.Equal(t, []byte(userID.String()), adapter.WebAuthnID())
+	assert.Equal(t, userName, adapter.WebAuthnName())
+	assert.Equal(t, displayName, adapter.WebAuthnDisplayName())
+	assert.Len(t, adapter.WebAuthnCredentials(), 2)
+	assert.Empty(t, adapter.WebAuthnIcon())
+}
+
+// Helper functions
+
+func setupTestService(t *testing.T) (*bun.DB, *Service) {
+	// Create in-memory SQLite database
+	sqldb, err := sql.Open(sqliteshim.ShimName, ":memory:")
+	require.NoError(t, err)
+
+	db := bun.NewDB(sqldb, sqlitedialect.New())
+
+	// Create tables
+	ctx := context.Background()
+	_, err = db.NewCreateTable().Model((*schema.User)(nil)).IfNotExists().Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewCreateTable().Model((*schema.Session)(nil)).IfNotExists().Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewCreateTable().Model((*schema.Passkey)(nil)).IfNotExists().Exec(ctx)
+	require.NoError(t, err)
+
+	// Create services
+	userRepo := repo.NewUserRepository(db)
+	sessionRepo := repo.NewSessionRepository(db)
+	sessionSvc := session.NewService(sessionRepo, session.Config{}, nil)
+	userSvc := user.NewService(userRepo, user.Config{}, nil)
+	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
 	auditSvc := audit.NewService(repo.NewAuditRepository(db))
-	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(db), auditSvc)
 
-	// Create a user and register one passkey
-	uSvc := user.NewService(repo.NewUserRepository(db), user.Config{}, webhookSvc)
-	_ = session.NewService(repo.NewSessionRepository(db), session.Config{}, webhookSvc)
-	u, err := uSvc.Create(context.Background(), &user.CreateUserRequest{
-		Email:    "pk.delete@example.com",
-		Password: "password123",
-		Name:     "PK Delete",
-	})
-	if err != nil {
-		t.Fatalf("create user: %v", err)
+	// Create passkey service with test config
+	cfg := Config{
+		RPID:             "localhost",
+		RPName:           "Test App",
+		RPOrigins:        []string{"http://localhost"},
+		Timeout:          60000,
+		UserVerification: "preferred",
+		AttestationType:  "none",
 	}
 
-	credID := "cred-del-1"
-	finishBody := map[string]any{"user_id": u.ID.String(), "credential_id": credID}
-	finishBuf, _ := json.Marshal(finishBody)
-	resp, err := http.Post(srv.URL+"/api/auth/passkey/register/finish", "application/json", bytes.NewReader(finishBuf))
-	if err != nil {
-		t.Fatalf("finish request error: %v", err)
-	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("expected 200 finish, got %d", resp.StatusCode)
-	}
+	service, err := NewService(db, userSvc, authSvc, auditSvc, cfg)
+	require.NoError(t, err)
 
-	// List to get ID
-	resp2, err := http.Get(srv.URL + "/api/auth/passkey/list?user_id=" + u.ID.String())
-	if err != nil {
-		t.Fatalf("list request error: %v", err)
-	}
-	var listOut []map[string]any
-	if err := json.NewDecoder(resp2.Body).Decode(&listOut); err != nil {
-		t.Fatalf("decode list: %v", err)
-	}
-	if len(listOut) != 1 {
-		t.Fatalf("expected 1 passkey, got %d", len(listOut))
-	}
-	idStr, ok := listOut[0]["id"].(string)
-	if !ok || idStr == "" {
-		t.Fatalf("expected id string in list output")
-	}
+	return db, service
+}
 
-	// Delete via POST route and verify list is empty
-	req, _ := http.NewRequest("POST", srv.URL+"/api/auth/passkey/delete/"+idStr, nil)
-	resp3, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("delete request error: %v", err)
+func createTestUser(t *testing.T, db *bun.DB) *schema.User {
+	user := &schema.User{
+		ID:    xid.New(),
+		Email: "test@example.com",
+		Name:  "Test User",
 	}
-	if resp3.StatusCode != 200 {
-		t.Fatalf("expected 200 delete, got %d", resp3.StatusCode)
-	}
+	user.AuditableModel.CreatedBy = user.ID
+	user.AuditableModel.UpdatedBy = user.ID
 
-	resp4, err := http.Get(srv.URL + "/api/auth/passkey/list?user_id=" + u.ID.String())
-	if err != nil {
-		t.Fatalf("list request error: %v", err)
-	}
-	var listOut2 []map[string]any
-	if err := json.NewDecoder(resp4.Body).Decode(&listOut2); err != nil {
-		t.Fatalf("decode list2: %v", err)
-	}
-	if len(listOut2) != 0 {
-		t.Fatalf("expected 0 passkeys after delete, got %d", len(listOut2))
-	}
+	_, err := db.NewInsert().Model(user).Exec(context.Background())
+	require.NoError(t, err)
+
+	return user
 }

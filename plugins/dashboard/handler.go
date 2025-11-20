@@ -21,10 +21,12 @@ import (
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/authsome/plugins/dashboard/components/pages"
 	"github.com/xraph/forge"
@@ -50,22 +52,11 @@ type Handler struct {
 	extensionRegistry *ExtensionRegistry  // For rendering extension navigation items and widgets
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
+type SuccessResponse = responses.SuccessResponse
 
 
 // NewHandler creates a new dashboard handler
@@ -2104,7 +2095,7 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 
 	// Security: prevent directory traversal
 	if strings.Contains(path, "..") {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid path"})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid path"))
 	}
 
 	// Read file from embedded assets
@@ -2113,7 +2104,7 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 	content, err := fs.ReadFile(h.assets, fullPath)
 	if err != nil {
 		fmt.Println("error", err)
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "asset not found"})
+		return c.JSON(http.StatusNotFound, errs.NotFound("asset not found"))
 	}
 
 	// Set content type

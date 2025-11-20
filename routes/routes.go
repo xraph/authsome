@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/device"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/handlers"
 	"github.com/xraph/forge"
@@ -18,7 +19,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 		forge.WithSummary("User registration"),
 		forge.WithDescription("Register a new user account with email and password"),
 		forge.WithRequestSchema(auth.SignUpRequest{}),
-		forge.WithResponseSchema(200, "Registration successful", auth.AuthResponse{}),
+		forge.WithResponseSchema(200, "Registration successful", responses.AuthResponse{}),
 		forge.WithResponseSchema(400, "Invalid request or registration failed", ErrorResponse{}),
 		forge.WithResponseSchema(403, "IP or geo-restriction", ErrorResponse{}),
 		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
@@ -32,7 +33,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 		forge.WithSummary("User sign in"),
 		forge.WithDescription("Authenticate a user with email and password. May require 2FA verification if enabled."),
 		forge.WithRequestSchema(auth.SignInRequest{}),
-		forge.WithResponseSchema(200, "Sign in successful", auth.AuthResponse{}),
+		forge.WithResponseSchema(200, "Sign in successful", responses.AuthResponse{}),
 		forge.WithResponseSchema(401, "Invalid credentials", ErrorResponse{}),
 		forge.WithResponseSchema(403, "IP or geo-restriction", ErrorResponse{}),
 		forge.WithResponseSchema(423, "Account temporarily locked", ErrorResponse{}),

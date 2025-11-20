@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/emailotp"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	"github.com/xraph/authsome/plugins/phone"
 	"github.com/xraph/authsome/plugins/twofa"
 	repo "github.com/xraph/authsome/repository"
@@ -20,8 +23,10 @@ type Plugin struct {
 	db              *bun.DB
 	service         *Service
 	adapterRegistry *FactorAdapterRegistry
+	notifAdapter    *notificationPlugin.Adapter
 	config          *Config
 	defaultConfig   *Config
+	logger          forge.Logger
 
 	// Dependencies from other plugins
 	twofaService    *twofa.Service
@@ -128,38 +133,43 @@ func (p *Plugin) ID() string {
 }
 
 // Init initializes the plugin with dependencies
-func (p *Plugin) Init(auth interface{}) error {
-	// Extract database from auth instance
-	type authInterface interface {
-		GetDB() *bun.DB
-		GetServiceRegistry() *registry.ServiceRegistry
-		GetForgeApp() forge.App
-	}
-
-	authInstance, ok := auth.(authInterface)
-	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+func (p *Plugin) Init(authInstance core.Authsome) error {
+	if authInstance == nil {
+		return errs.InternalServerError("auth instance is nil", nil)
 	}
 
 	p.db = authInstance.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerError("database not available", nil)
 	}
 
 	// Get Forge app and config manager
 	forgeApp := authInstance.GetForgeApp()
 	if forgeApp != nil {
 		configManager := forgeApp.Config()
+		p.logger = forgeApp.Logger()
 
 		// Bind configuration using Forge ConfigManager with provided defaults
 		if err := configManager.BindWithDefault("auth.mfa", p.config, p.defaultConfig); err != nil {
 			// Log but don't fail - use defaults
-			fmt.Printf("[MFA] Warning: failed to bind config: %v\n", err)
+			p.logger.Warn("failed to bind config", forge.F("error", err.Error()))
 			p.config = p.defaultConfig
 		}
 	} else {
 		// Fallback to default config if no Forge app
 		p.config = p.defaultConfig
+	}
+
+	// Get notification adapter from service registry
+	svcRegistry := authInstance.GetServiceRegistry()
+	if svcRegistry != nil {
+		notifSvc, _ := svcRegistry.Get("notification")
+		if notifSvc != nil {
+			if adapter, ok := notifSvc.(*notificationPlugin.Adapter); ok {
+				p.notifAdapter = adapter
+				fmt.Println("[MFA] Notification adapter loaded for MFA plugin")
+			}
+		}
 	}
 
 	// Initialize adapter registry
@@ -169,25 +179,31 @@ func (p *Plugin) Init(auth interface{}) error {
 	mfaRepo := repo.NewMFARepository(p.db)
 
 	// Initialize dependent plugin services
-	p.initializeDependentServices(p.db)
+	p.initializeDependentServices(p.db, authInstance)
 
 	// Register factor adapters
 	p.registerFactorAdapters()
 
 	// Create MFA service
-	p.service = NewService(mfaRepo, p.adapterRegistry, p.config)
+	p.service = NewService(mfaRepo, p.adapterRegistry, p.notifAdapter, p.config)
 
-	fmt.Println("[MFA] Plugin initialized successfully")
-	fmt.Printf("[MFA] Registered %d factor adapters\n", len(p.adapterRegistry.List()))
+	p.logger.Info("plugin initialized successfully")
+	p.logger.Info("registered factor adapters", forge.F("count", len(p.adapterRegistry.List())))
 
 	return nil
 }
 
 // initializeDependentServices initializes services from other plugins
-func (p *Plugin) initializeDependentServices(db *bun.DB) {
+func (p *Plugin) initializeDependentServices(db *bun.DB, authInstance core.Authsome) {
 	// Initialize twofa service (for TOTP and backup codes)
 	twofaRepo := repo.NewTwoFARepository(db)
-	p.twofaService = twofa.NewService(twofaRepo)
+	p.twofaService = twofa.NewService(twofaRepo, twofa.Config{
+		TOTPIssuer:       "AuthSome",
+		BackupCodeCount:  10,
+		BackupCodeLength: 8,
+		TOTPPeriod:       30,
+		TOTPDigits:       6,
+	})
 
 	// Initialize emailotp service (for email factor)
 	// Note: In production, these would be injected rather than created here
@@ -195,16 +211,17 @@ func (p *Plugin) initializeDependentServices(db *bun.DB) {
 	emailOTPRepo := repo.NewEmailOTPRepository(db)
 	p.emailOTPService = emailotp.NewService(
 		emailOTPRepo,
-		nil, // userService - would need proper injection
-		nil, // authService
-		nil, // auditService
-		nil, // emailProvider
+		authInstance.GetServiceRegistry().UserService(),
+		authInstance.GetServiceRegistry().SessionService(),
+		authInstance.GetServiceRegistry().AuditService(),
+		nil, // notifAdapter
 		emailotp.Config{
 			OTPLength:     6,
 			ExpiryMinutes: 5 * 60, // 5 minutes
 			MaxAttempts:   5,
 			DevExposeOTP:  true,
 		},
+		nil, // logger
 	)
 
 	// Initialize phone service (for SMS factor)
@@ -241,14 +258,14 @@ func (p *Plugin) registerFactorAdapters() {
 	}
 
 	// Register email adapter
-	if p.config.Email.Enabled && p.emailOTPService != nil {
-		emailAdapter := NewEmailFactorAdapter(p.emailOTPService, true)
+	if p.config.Email.Enabled {
+		emailAdapter := NewEmailFactorAdapter(p.emailOTPService, p.notifAdapter, true)
 		p.adapterRegistry.Register(emailAdapter)
 	}
 
 	// Register SMS adapter
-	if p.config.SMS.Enabled && p.phoneService != nil {
-		smsAdapter := NewSMSFactorAdapter(p.phoneService, true)
+	if p.config.SMS.Enabled {
+		smsAdapter := NewSMSFactorAdapter(p.phoneService, p.notifAdapter, true)
 		p.adapterRegistry.Register(smsAdapter)
 	}
 

@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
 // Context keys for verification
-type contextKey string
+type verificationContextKey string
 
 const (
-	VerificationStatusContextKey contextKey = "verification_status"
-	VerificationLevelContextKey  contextKey = "verification_level"
+	VerificationStatusContextKey verificationContextKey = "verification_status"
+	VerificationLevelContextKey  verificationContextKey = "verification_level"
 )
 
 // Middleware handles identity verification checks
@@ -34,22 +35,34 @@ func NewMiddleware(service *Service) *Middleware {
 // but will not reject requests (use RequireVerified for that)
 func (m *Middleware) LoadVerificationStatus(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
+		ctx := c.Request().Context()
+
 		// Get user ID from context (set by auth middleware)
-		userID := getUserIDFromContext(c)
-		if userID == "" {
+		userID, ok := contexts.GetUserID(ctx)
+		if !ok || userID.IsNil() {
 			// No user in context, continue without verification status
 			return next(c)
 		}
 
+		// Get app and org IDs
+		appID, ok := contexts.GetAppID(ctx)
+		if !ok || appID.IsNil() {
+			return next(c)
+		}
+
+		orgID, ok := contexts.GetOrganizationID(ctx)
+		if !ok || orgID.IsNil() {
+			return next(c)
+		}
+
 		// Load verification status
-		status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+		status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 		if err != nil {
 			// Status not found, continue without it
 			return next(c)
 		}
 
 		// Inject verification status into context
-		ctx := c.Request().Context()
 		ctx = context.WithValue(ctx, VerificationStatusContextKey, status)
 		ctx = context.WithValue(ctx, VerificationLevelContextKey, status.VerificationLevel)
 
@@ -64,15 +77,33 @@ func (m *Middleware) LoadVerificationStatus(next func(forge.Context) error) func
 func (m *Middleware) RequireVerified() func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "app context required",
+					"code":  "APP_CONTEXT_REQUIRED",
+				})
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "organization context required",
+					"code":  "ORGANIZATION_CONTEXT_REQUIRED",
+				})
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "verification status not found",
@@ -116,15 +147,33 @@ func (m *Middleware) RequireVerified() func(next func(forge.Context) error) func
 func (m *Middleware) RequireVerificationLevel(level string) func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "app context required",
+					"code":  "APP_CONTEXT_REQUIRED",
+				})
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "organization context required",
+					"code":  "ORGANIZATION_CONTEXT_REQUIRED",
+				})
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "verification status not found",
@@ -160,15 +209,33 @@ func (m *Middleware) RequireVerificationLevel(level string) func(next func(forge
 func (m *Middleware) RequireDocumentVerified() func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "app context required",
+					"code":  "APP_CONTEXT_REQUIRED",
+				})
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "organization context required",
+					"code":  "ORGANIZATION_CONTEXT_REQUIRED",
+				})
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "verification status not found",
@@ -192,15 +259,33 @@ func (m *Middleware) RequireDocumentVerified() func(next func(forge.Context) err
 func (m *Middleware) RequireLivenessVerified() func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "app context required",
+					"code":  "APP_CONTEXT_REQUIRED",
+				})
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "organization context required",
+					"code":  "ORGANIZATION_CONTEXT_REQUIRED",
+				})
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "verification status not found",
@@ -224,15 +309,33 @@ func (m *Middleware) RequireLivenessVerified() func(next func(forge.Context) err
 func (m *Middleware) RequireAMLClear() func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "app context required",
+					"code":  "APP_CONTEXT_REQUIRED",
+				})
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "organization context required",
+					"code":  "ORGANIZATION_CONTEXT_REQUIRED",
+				})
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "verification status not found",
@@ -263,15 +366,33 @@ func (m *Middleware) RequireAMLClear() func(next func(forge.Context) error) func
 func (m *Middleware) RequireAge(minimumAge int) func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "app context required",
+					"code":  "APP_CONTEXT_REQUIRED",
+				})
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error": "organization context required",
+					"code":  "ORGANIZATION_CONTEXT_REQUIRED",
+				})
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "verification status not found",
@@ -295,15 +416,29 @@ func (m *Middleware) RequireAge(minimumAge int) func(next func(forge.Context) er
 func (m *Middleware) RequireNotBlocked() func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			userID := getUserIDFromContext(c)
-			if userID == "" {
+			ctx := c.Request().Context()
+
+			userID, ok := contexts.GetUserID(ctx)
+			if !ok || userID.IsNil() {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "authentication required",
 					"code":  "AUTHENTICATION_REQUIRED",
 				})
 			}
 
-			status, err := m.service.GetUserVerificationStatus(c.Request().Context(), userID)
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				// No app context means we can't check, allow request
+				return next(c)
+			}
+
+			orgID, ok := contexts.GetOrganizationID(ctx)
+			if !ok || orgID.IsNil() {
+				// No org context means we can't check, allow request
+				return next(c)
+			}
+
+			status, err := m.service.GetUserVerificationStatus(ctx, appID, orgID, userID)
 			if err != nil {
 				// No status means not blocked
 				return next(c)
@@ -323,24 +458,6 @@ func (m *Middleware) RequireNotBlocked() func(next func(forge.Context) error) fu
 }
 
 // Helper functions
-
-func getUserIDFromContext(c forge.Context) string {
-	// Try multiple context keys that might contain user ID
-	keys := []interface{}{"user_id", "userId", "user"}
-
-	for _, key := range keys {
-		if val := c.Request().Context().Value(key); val != nil {
-			switch v := val.(type) {
-			case string:
-				return v
-			case fmt.Stringer:
-				return v.String()
-			}
-		}
-	}
-
-	return ""
-}
 
 func meetsVerificationLevel(currentLevel, requiredLevel string) bool {
 	// Define level hierarchy: none < basic < enhanced < full

@@ -54,17 +54,18 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	// Step 2: Verify impersonation is active
 	t.Run("Verify", func(t *testing.T) {
 		// Get the impersonation session
-		listReq := &impersonation.ListRequest{
+		activeOnly := true
+		listFilter := &impersonation.ListSessionsFilter{
 			AppID:      orgID,
-			ActiveOnly: true,
-			Limit:      10,
+			ActiveOnly: &activeOnly,
 		}
+		listFilter.Limit = 10
 
-		listResp, err := service.List(ctx, listReq)
+		listResp, err := service.List(ctx, listFilter)
 		require.NoError(t, err)
-		require.Len(t, listResp.Sessions, 1)
+		require.Len(t, listResp.Data, 1)
 
-		impSession := listResp.Sessions[0]
+		impSession := listResp.Data[0]
 
 		// Verify the session
 		verifyReq := &impersonation.VerifyRequest{
@@ -82,34 +83,36 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 
 	// Step 3: List active impersonations
 	t.Run("List", func(t *testing.T) {
-		listReq := &impersonation.ListRequest{
+		activeOnly := true
+		listFilter := &impersonation.ListSessionsFilter{
 			AppID:      orgID,
-			ActiveOnly: true,
-			Limit:      10,
+			ActiveOnly: &activeOnly,
 		}
+		listFilter.Limit = 10
 
-		listResp, err := service.List(ctx, listReq)
+		listResp, err := service.List(ctx, listFilter)
 
 		require.NoError(t, err)
-		assert.Len(t, listResp.Sessions, 1)
-		assert.Equal(t, 1, listResp.Total)
+		assert.Len(t, listResp.Data, 1)
+		assert.Equal(t, int64(1), listResp.Pagination.Total)
 
-		session := listResp.Sessions[0]
-		assert.Equal(t, admin.Email, session.ImpersonatorEmail)
-		assert.Equal(t, target.Email, session.TargetEmail)
+		session := listResp.Data[0]
+		assert.Equal(t, admin.ID, session.ImpersonatorID)
+		assert.Equal(t, target.ID, session.TargetUserID)
 		assert.True(t, session.Active)
 	})
 
 	// Step 4: Get specific impersonation
 	t.Run("Get", func(t *testing.T) {
 		// Get ID from list
-		listReq := &impersonation.ListRequest{
+		activeOnly := true
+		listFilter := &impersonation.ListSessionsFilter{
 			AppID:      orgID,
-			ActiveOnly: true,
-			Limit:      1,
+			ActiveOnly: &activeOnly,
 		}
-		listResp, _ := service.List(ctx, listReq)
-		impID := listResp.Sessions[0].ID
+		listFilter.Limit = 1
+		listResp, _ := service.List(ctx, listFilter)
+		impID := listResp.Data[0].ID
 
 		getReq := &impersonation.GetRequest{
 			ImpersonationID: impID,
@@ -127,13 +130,14 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	// Step 5: End impersonation
 	t.Run("End", func(t *testing.T) {
 		// Get ID from list
-		listReq := &impersonation.ListRequest{
+		activeOnly := true
+		listFilter := &impersonation.ListSessionsFilter{
 			AppID:      orgID,
-			ActiveOnly: true,
-			Limit:      1,
+			ActiveOnly: &activeOnly,
 		}
-		listResp, _ := service.List(ctx, listReq)
-		impID := listResp.Sessions[0].ID
+		listFilter.Limit = 1
+		listResp, _ := service.List(ctx, listFilter)
+		impID := listResp.Data[0].ID
 
 		endReq := &impersonation.EndRequest{
 			ImpersonationID: impID,
@@ -150,19 +154,22 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 		assert.False(t, endResp.EndedAt.IsZero())
 
 		// Verify impersonation is no longer active
-		listReq.ActiveOnly = true
-		listResp, _ = service.List(ctx, listReq)
-		assert.Len(t, listResp.Sessions, 0) // No active sessions
+		activeOnly = true // Reuse the variable from earlier in this scope
+		listFilter.ActiveOnly = &activeOnly
+		listResp, _ = service.List(ctx, listFilter)
+		assert.Len(t, listResp.Data, 0) // No active sessions
 	})
 
 	// Step 6: Verify audit trail exists
 	t.Run("Audit", func(t *testing.T) {
-		auditReq := &impersonation.AuditListRequest{
+		auditFilter := &impersonation.ListAuditEventsFilter{
 			AppID: orgID,
-			Limit: 10,
 		}
+		auditFilter.Limit = 10
 
-		events, total, err := service.ListAuditEvents(ctx, auditReq)
+		auditResp, err := service.ListAuditEvents(ctx, auditFilter)
+		events := auditResp.Data
+		total := int(auditResp.Pagination.Total)
 
 		require.NoError(t, err)
 		assert.Greater(t, total, 0)
@@ -220,30 +227,32 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 	}
 	startResp2, err := service.Start(ctx, startReq2)
 	require.NoError(t, err)
+	assert.NotNil(t, startResp2)
 
 	// List org1 sessions - should only see org1
-	listReq1 := &impersonation.ListRequest{
+	activeOnly := true
+	listFilter1 := &impersonation.ListSessionsFilter{
 		AppID:      org1,
-		ActiveOnly: true,
-		Limit:      10,
+		ActiveOnly: &activeOnly,
 	}
-	listResp1, err := service.List(ctx, listReq1)
+	listFilter1.Limit = 10
+	listResp1, err := service.List(ctx, listFilter1)
 	require.NoError(t, err)
-	assert.Len(t, listResp1.Sessions, 1)
-	assert.Equal(t, org1, listResp1.Sessions[0].AppID)
-	assert.Equal(t, admin1.ID, listResp1.Sessions[0].ImpersonatorID)
+	assert.Len(t, listResp1.Data, 1)
+	assert.Equal(t, org1, listResp1.Data[0].AppID)
+	assert.Equal(t, admin1.ID, listResp1.Data[0].ImpersonatorID)
 
 	// List org2 sessions - should only see org2
-	listReq2 := &impersonation.ListRequest{
+	listFilter2 := &impersonation.ListSessionsFilter{
 		AppID:      org2,
-		ActiveOnly: true,
-		Limit:      10,
+		ActiveOnly: &activeOnly,
 	}
-	listResp2, err := service.List(ctx, listReq2)
+	listFilter2.Limit = 10
+	listResp2, err := service.List(ctx, listFilter2)
 	require.NoError(t, err)
-	assert.Len(t, listResp2.Sessions, 1)
-	assert.Equal(t, org2, listResp2.Sessions[0].AppID)
-	assert.Equal(t, admin2.ID, listResp2.Sessions[0].ImpersonatorID)
+	assert.Len(t, listResp2.Data, 1)
+	assert.Equal(t, org2, listResp2.Data[0].AppID)
+	assert.Equal(t, admin2.ID, listResp2.Data[0].ImpersonatorID)
 
 	// Try to get org1 session with org2 context - should fail
 	getReq := &impersonation.GetRequest{
@@ -304,20 +313,21 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	}
 
 	// List all active sessions
-	listReq := &impersonation.ListRequest{
+	activeOnly := true
+	listFilter := &impersonation.ListSessionsFilter{
 		AppID:      orgID,
-		ActiveOnly: true,
-		Limit:      10,
+		ActiveOnly: &activeOnly,
 	}
-	listResp, err := service.List(ctx, listReq)
+	listFilter.Limit = 10
+	listResp, err := service.List(ctx, listFilter)
 	require.NoError(t, err)
-	assert.Len(t, listResp.Sessions, 3)
+	assert.Len(t, listResp.Data, 3)
 
 	// Verify each admin can only end their own session
 	for i := 0; i < 3; i++ {
 		// Find this admin's session
 		var sessionID xid.ID
-		for _, session := range listResp.Sessions {
+		for _, session := range listResp.Data {
 			if session.ImpersonatorID == admins[i].ID {
 				sessionID = session.ID
 				break
@@ -342,8 +352,8 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	}
 
 	// Verify all sessions are ended
-	listResp, _ = service.List(ctx, listReq)
-	assert.Len(t, listResp.Sessions, 0)
+	listResp, _ = service.List(ctx, listFilter)
+	assert.Len(t, listResp.Data, 0)
 }
 
 // TestIntegration_AutoExpiry tests automatic session expiration
@@ -356,39 +366,40 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	// Create expired sessions
 	for i := 0; i < 3; i++ {
 		session := &schema.ImpersonationSession{
-			ID:             xid.New(),
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
 			TargetUserID:   target.ID,
 			Active:         true,
 			ExpiresAt:      time.Now().Add(-1 * time.Hour), // Already expired
 			Reason:         "Test expired session",
-			CreatedAt:      time.Now(),
 		}
+		session.ID = xid.New()
+		session.CreatedAt = time.Now()
 		repo.sessions[session.ID.String()] = session
 	}
 
 	// Create active non-expired session
 	activeSession := &schema.ImpersonationSession{
-		ID:             xid.New(),
 		AppID:          orgID,
 		ImpersonatorID: admin.ID,
 		TargetUserID:   target.ID,
 		Active:         true,
 		ExpiresAt:      time.Now().Add(1 * time.Hour), // Still valid
 		Reason:         "Test active session",
-		CreatedAt:      time.Now(),
 	}
+	activeSession.ID = xid.New()
+	activeSession.CreatedAt = time.Now()
 	repo.sessions[activeSession.ID.String()] = activeSession
 
 	// Before cleanup - should see 4 sessions (3 expired + 1 active)
-	listReq := &impersonation.ListRequest{
+	activeOnly := false
+	listFilter := &impersonation.ListSessionsFilter{
 		AppID:      orgID,
-		ActiveOnly: false,
-		Limit:      10,
+		ActiveOnly: &activeOnly,
 	}
-	listResp, _ := service.List(ctx, listReq)
-	assert.Len(t, listResp.Sessions, 4)
+	listFilter.Limit = 10
+	listResp, _ := service.List(ctx, listFilter)
+	assert.Len(t, listResp.Data, 4)
 
 	// Run cleanup
 	count, err := service.ExpireSessions(ctx)
@@ -396,16 +407,18 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	assert.Equal(t, 3, count)
 
 	// After cleanup - active session should still be active
-	listReq.ActiveOnly = true
-	listResp, _ = service.List(ctx, listReq)
-	assert.Len(t, listResp.Sessions, 1)
-	assert.Equal(t, activeSession.ID, listResp.Sessions[0].ID)
+	activeOnly = true // Reuse the variable from earlier
+	listFilter.ActiveOnly = &activeOnly
+	listResp, _ = service.List(ctx, listFilter)
+	assert.Len(t, listResp.Data, 1)
+	assert.Equal(t, activeSession.ID, listResp.Data[0].ID)
 
 	// Expired sessions should be marked as ended
-	listReq.ActiveOnly = false
-	listResp, _ = service.List(ctx, listReq)
+	inactiveOnly := false
+	listFilter.ActiveOnly = &inactiveOnly
+	listResp, _ = service.List(ctx, listFilter)
 	endedCount := 0
-	for _, session := range listResp.Sessions {
+	for _, session := range listResp.Data {
 		if !session.Active && session.EndedAt != nil && session.EndReason == "timeout" {
 			endedCount++
 		}
@@ -452,38 +465,39 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	}
 
 	// Filter by impersonator (admin1)
-	listReq := &impersonation.ListRequest{
+	activeOnly := true
+	listFilter := &impersonation.ListSessionsFilter{
 		AppID:          orgID,
 		ImpersonatorID: &admin1.ID,
-		ActiveOnly:     true,
-		Limit:          10,
+		ActiveOnly:     &activeOnly,
 	}
-	listResp, err := service.List(ctx, listReq)
+	listFilter.Limit = 10
+	listResp, err := service.List(ctx, listFilter)
 	require.NoError(t, err)
-	assert.Len(t, listResp.Sessions, 2) // admin1 -> target1 and admin1 -> target2
+	assert.Len(t, listResp.Data, 2) // admin1 -> target1 and admin1 -> target2
 
 	// Filter by target (target1)
-	listReq = &impersonation.ListRequest{
+	listFilter = &impersonation.ListSessionsFilter{
 		AppID:        orgID,
 		TargetUserID: &target1.ID,
-		ActiveOnly:   true,
-		Limit:        10,
+		ActiveOnly:   &activeOnly,
 	}
-	listResp, err = service.List(ctx, listReq)
+	listFilter.Limit = 10
+	listResp, err = service.List(ctx, listFilter)
 	require.NoError(t, err)
-	assert.Len(t, listResp.Sessions, 2) // admin1 -> target1 and admin2 -> target1
+	assert.Len(t, listResp.Data, 2) // admin1 -> target1 and admin2 -> target1
 
 	// Filter by both impersonator and target
-	listReq = &impersonation.ListRequest{
+	listFilter = &impersonation.ListSessionsFilter{
 		AppID:          orgID,
 		ImpersonatorID: &admin1.ID,
 		TargetUserID:   &target1.ID,
-		ActiveOnly:     true,
-		Limit:          10,
+		ActiveOnly:     &activeOnly,
 	}
-	listResp, err = service.List(ctx, listReq)
+	listFilter.Limit = 10
+	listResp, err = service.List(ctx, listFilter)
 	require.NoError(t, err)
-	assert.Len(t, listResp.Sessions, 1) // Only admin1 -> target1
-	assert.Equal(t, admin1.ID, listResp.Sessions[0].ImpersonatorID)
-	assert.Equal(t, target1.ID, listResp.Sessions[0].TargetUserID)
+	assert.Len(t, listResp.Data, 1) // Only admin1 -> target1
+	assert.Equal(t, admin1.ID, listResp.Data[0].ImpersonatorID)
+	assert.Equal(t, target1.ID, listResp.Data[0].TargetUserID)
 }

@@ -36,47 +36,70 @@ func TestCheckAdminPermission_ValidAdminID(t *testing.T) {
 }
 
 func TestCreateUserRequest_Validation(t *testing.T) {
-	// Test request structure
+	// Test request structure with V2 architecture: App → Environment → Organization
+	appID := xid.New()
+	userOrgID := xid.New()
+	adminID := xid.New()
+
 	req := &CreateUserRequest{
-		Email:          "test@example.com",
-		Password:       "SecurePass123!",
-		Name:           "Test User",
-		AdminID:        xid.New().String(),
-		OrganizationID: "org-123",
-		EmailVerified:  true,
+		Email:              "test@example.com",
+		Password:           "SecurePass123!",
+		Name:               "Test User",
+		AppID:              appID,      // Platform app (required)
+		UserOrganizationID: &userOrgID, // User-created org (optional)
+		AdminID:            adminID,    // Admin performing the action
+		EmailVerified:      true,
 	}
 
 	assert.NotEmpty(t, req.Email)
 	assert.NotEmpty(t, req.Password)
-	assert.NotEmpty(t, req.AdminID)
+	assert.False(t, req.AppID.IsNil(), "AppID is required")
+	assert.NotNil(t, req.UserOrganizationID, "UserOrganizationID is optional but should be set when provided")
+	assert.False(t, req.AdminID.IsNil())
 	assert.True(t, req.EmailVerified)
 }
 
 func TestBanUserRequest_Validation(t *testing.T) {
+	appID := xid.New()
+	userID := xid.New()
+	adminID := xid.New()
+
 	req := &BanUserRequest{
-		UserID:  xid.New().String(),
-		AdminID: xid.New().String(),
+		AppID:   appID, // Platform app (required)
+		UserID:  userID,
+		AdminID: adminID,
 		Reason:  "Violation of terms",
 	}
 
-	assert.NotEmpty(t, req.UserID)
-	assert.NotEmpty(t, req.AdminID)
+	assert.False(t, req.AppID.IsNil())
+	assert.False(t, req.UserID.IsNil())
+	assert.False(t, req.AdminID.IsNil())
 	assert.NotEmpty(t, req.Reason)
 }
 
 func TestUnbanUserRequest_Validation(t *testing.T) {
+	appID := xid.New()
+	userID := xid.New()
+	adminID := xid.New()
+
 	req := &UnbanUserRequest{
-		UserID:  xid.New().String(),
-		AdminID: xid.New().String(),
+		AppID:   appID, // Platform app (required)
+		UserID:  userID,
+		AdminID: adminID,
 	}
 
-	assert.NotEmpty(t, req.UserID)
-	assert.NotEmpty(t, req.AdminID)
+	assert.False(t, req.AppID.IsNil())
+	assert.False(t, req.UserID.IsNil())
+	assert.False(t, req.AdminID.IsNil())
 }
 
 func TestListUsersRequest_Defaults(t *testing.T) {
+	appID := xid.New()
+	adminID := xid.New()
+
 	req := &ListUsersRequest{
-		AdminID: xid.New().String(),
+		AppID:   appID, // Platform app (required)
+		AdminID: adminID,
 		Page:    0,
 		Limit:   0,
 	}
@@ -85,7 +108,8 @@ func TestListUsersRequest_Defaults(t *testing.T) {
 	// - Page defaults to 1 if <= 0
 	// - Limit defaults to 20 if <= 0 or > 100
 
-	assert.NotEmpty(t, req.AdminID)
+	assert.False(t, req.AppID.IsNil())
+	assert.False(t, req.AdminID.IsNil())
 
 	// Test default logic
 	page := req.Page
@@ -102,13 +126,18 @@ func TestListUsersRequest_Defaults(t *testing.T) {
 }
 
 func TestListSessionsRequest_Defaults(t *testing.T) {
+	appID := xid.New()
+	adminID := xid.New()
+
 	req := &ListSessionsRequest{
-		AdminID: xid.New().String(),
+		AppID:   appID, // Platform app (required)
+		AdminID: adminID,
 		Page:    0,
 		Limit:   0,
 	}
 
-	assert.NotEmpty(t, req.AdminID)
+	assert.False(t, req.AppID.IsNil())
+	assert.False(t, req.AdminID.IsNil())
 
 	// Test default logic
 	page := req.Page
@@ -125,28 +154,65 @@ func TestListSessionsRequest_Defaults(t *testing.T) {
 }
 
 func TestRoleAssignment_Validation(t *testing.T) {
-	// Test role assignment data validation
-	userID := xid.New().String()
-	adminID := xid.New().String()
+	// Test role assignment data validation with V2 architecture
+	appID := xid.New()
+	userOrgID := xid.New()
+	userID := xid.New()
+	adminID := xid.New()
 	role := "moderator"
-	orgID := "org-123"
 
-	assert.NotEmpty(t, userID)
-	assert.NotEmpty(t, adminID)
-	assert.NotEmpty(t, role)
-	assert.NotEmpty(t, orgID)
+	req := &SetUserRoleRequest{
+		AppID:              appID,      // Platform app (required)
+		UserOrganizationID: &userOrgID, // User-created org (optional)
+		UserID:             userID,
+		Role:               role,
+		AdminID:            adminID,
+	}
+
+	assert.False(t, req.AppID.IsNil())
+	assert.NotNil(t, req.UserOrganizationID)
+	assert.False(t, req.UserID.IsNil())
+	assert.False(t, req.AdminID.IsNil())
+	assert.NotEmpty(t, req.Role)
 }
 
 func TestRevokeSessionRequest_Validation(t *testing.T) {
-	sessionID := xid.New().String()
-	adminID := xid.New().String()
+	sessionID := xid.New()
+	adminID := xid.New()
 
 	// Verify both IDs are valid XIDs
-	_, err := xid.FromString(sessionID)
-	assert.NoError(t, err)
+	assert.False(t, sessionID.IsNil())
+	assert.False(t, adminID.IsNil())
 
-	_, err = xid.FromString(adminID)
+	// Test string conversion roundtrip
+	sessionIDStr := sessionID.String()
+	parsed, err := xid.FromString(sessionIDStr)
 	assert.NoError(t, err)
+	assert.Equal(t, sessionID, parsed)
+}
+
+func TestImpersonateUserRequest_Validation(t *testing.T) {
+	// Test impersonation request with V2 architecture
+	appID := xid.New()
+	userOrgID := xid.New()
+	userID := xid.New()
+	adminID := xid.New()
+
+	req := &ImpersonateUserRequest{
+		AppID:              appID,      // Platform app (required)
+		UserOrganizationID: &userOrgID, // User-created org (optional)
+		UserID:             userID,
+		AdminID:            adminID,
+		IPAddress:          "192.168.1.1",
+		UserAgent:          "Mozilla/5.0",
+	}
+
+	assert.False(t, req.AppID.IsNil())
+	assert.NotNil(t, req.UserOrganizationID)
+	assert.False(t, req.UserID.IsNil())
+	assert.False(t, req.AdminID.IsNil())
+	assert.NotEmpty(t, req.IPAddress)
+	assert.NotEmpty(t, req.UserAgent)
 }
 
 // Integration-level tests would require actual service dependencies

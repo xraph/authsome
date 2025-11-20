@@ -21,9 +21,10 @@ import (
 
 // Service handles OIDC operations
 type Service struct {
-	httpClient *http.Client
-	jwksCache  map[string]*CachedJWKS
-	cacheMutex sync.RWMutex
+	httpClient      *http.Client
+	jwksCache       map[string]*CachedJWKS
+	discoveryCache  map[string]*CachedDiscovery
+	cacheMutex      sync.RWMutex
 }
 
 // NewService creates a new OIDC service
@@ -32,7 +33,8 @@ func NewService() *Service {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		jwksCache: make(map[string]*CachedJWKS),
+		jwksCache:      make(map[string]*CachedJWKS),
+		discoveryCache: make(map[string]*CachedDiscovery),
 	}
 }
 
@@ -57,6 +59,34 @@ type JWK struct {
 // CachedJWKS represents cached JWKS with expiration
 type CachedJWKS struct {
 	JWKS      *JWKS
+	ExpiresAt time.Time
+}
+
+// OIDCDiscovery represents OIDC Provider Configuration
+// Reference: https://openid.net/specs/openid-connect-discovery-1_0.html
+type OIDCDiscovery struct {
+	Issuer                            string   `json:"issuer"`
+	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
+	TokenEndpoint                     string   `json:"token_endpoint"`
+	UserinfoEndpoint                  string   `json:"userinfo_endpoint,omitempty"`
+	JwksURI                           string   `json:"jwks_uri"`
+	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
+	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
+	ResponseTypesSupported            []string `json:"response_types_supported"`
+	ResponseModesSupported            []string `json:"response_modes_supported,omitempty"`
+	GrantTypesSupported               []string `json:"grant_types_supported,omitempty"`
+	SubjectTypesSupported             []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	ClaimsSupported                   []string `json:"claims_supported,omitempty"`
+	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported,omitempty"`
+	RevocationEndpoint                string   `json:"revocation_endpoint,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
+}
+
+// CachedDiscovery represents cached OIDC discovery document with expiration
+type CachedDiscovery struct {
+	Discovery *OIDCDiscovery
 	ExpiresAt time.Time
 }
 
@@ -148,6 +178,66 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, tokenEndpoint, clie
 	}
 
 	return &tokenResp, nil
+}
+
+// FetchDiscovery fetches OIDC Provider Configuration with caching
+// issuerURL should be the base issuer URL (e.g., "https://accounts.google.com")
+func (s *Service) FetchDiscovery(ctx context.Context, issuerURL string) (*OIDCDiscovery, error) {
+	// Check cache first
+	s.cacheMutex.RLock()
+	if cached, exists := s.discoveryCache[issuerURL]; exists && time.Now().Before(cached.ExpiresAt) {
+		s.cacheMutex.RUnlock()
+		return cached.Discovery, nil
+	}
+	s.cacheMutex.RUnlock()
+
+	// Construct discovery URL
+	discoveryURL := strings.TrimSuffix(issuerURL, "/") + "/.well-known/openid-configuration"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", discoveryURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create discovery request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch discovery document: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("discovery fetch failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var discovery OIDCDiscovery
+	if err := json.NewDecoder(resp.Body).Decode(&discovery); err != nil {
+		return nil, fmt.Errorf("failed to decode discovery document: %w", err)
+	}
+
+	// Validate required fields
+	if discovery.Issuer == "" {
+		return nil, fmt.Errorf("discovery document missing issuer")
+	}
+	if discovery.AuthorizationEndpoint == "" {
+		return nil, fmt.Errorf("discovery document missing authorization_endpoint")
+	}
+	if discovery.TokenEndpoint == "" {
+		return nil, fmt.Errorf("discovery document missing token_endpoint")
+	}
+	if discovery.JwksURI == "" {
+		return nil, fmt.Errorf("discovery document missing jwks_uri")
+	}
+
+	// Cache for 24 hours (discovery documents rarely change)
+	s.cacheMutex.Lock()
+	s.discoveryCache[issuerURL] = &CachedDiscovery{
+		Discovery: &discovery,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	s.cacheMutex.Unlock()
+
+	return &discovery, nil
 }
 
 // FetchJWKS fetches JWKS from the given URL with caching

@@ -2,46 +2,84 @@ package testing
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/schema"
 )
 
-// GetLoggedInUser retrieves the logged-in user from context.
-// This helper mimics what your actual application would do.
-func GetLoggedInUser(ctx context.Context) (*schema.User, bool) {
-	user, ok := ctx.Value("user").(*schema.User)
-	return user, ok
+// sessionContextKey is used to store the session object in context
+type contextKey string
+
+const sessionContextKey contextKey = "test_session"
+
+// Context helpers using core/contexts typed keys
+// These match the actual AuthSome context system
+
+// GetUserID retrieves the user ID from context using core/contexts
+func GetUserID(ctx context.Context) (xid.ID, bool) {
+	return contexts.GetUserID(ctx)
 }
 
-// GetLoggedInUserID retrieves the logged-in user ID from context.
-func GetLoggedInUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value("user_id").(string)
-	return userID, ok
+// GetAppID retrieves the app ID from context using core/contexts
+func GetAppID(ctx context.Context) (xid.ID, bool) {
+	return contexts.GetAppID(ctx)
 }
 
-// GetCurrentOrg retrieves the current organization from context.
-func GetCurrentOrg(ctx context.Context) (*schema.Organization, bool) {
-	org, ok := ctx.Value("organization").(*schema.Organization)
-	return org, ok
+// GetEnvironmentID retrieves the environment ID from context using core/contexts
+func GetEnvironmentID(ctx context.Context) (xid.ID, bool) {
+	return contexts.GetEnvironmentID(ctx)
 }
 
-// GetCurrentOrgID retrieves the current organization ID from context.
-func GetCurrentOrgID(ctx context.Context) (string, bool) {
-	orgID, ok := ctx.Value("org_id").(string)
-	return orgID, ok
+// GetOrganizationID retrieves the organization ID from context using core/contexts
+func GetOrganizationID(ctx context.Context) (xid.ID, bool) {
+	return contexts.GetOrganizationID(ctx)
 }
 
-// GetCurrentSession retrieves the current session from context.
-func GetCurrentSession(ctx context.Context) (*schema.Session, bool) {
-	session, ok := ctx.Value("session").(*schema.Session)
+// GetSession retrieves the session object from context
+func GetSession(ctx context.Context) (*schema.Session, bool) {
+	session, ok := ctx.Value(sessionContextKey).(*schema.Session)
 	return session, ok
 }
 
-// GetCurrentSessionID retrieves the current session ID from context.
-func GetCurrentSessionID(ctx context.Context) (string, bool) {
-	sessionID, ok := ctx.Value("session_id").(string)
-	return sessionID, ok
+// Convenience helpers that fetch full entities from Mock
+
+// GetUserFromContext retrieves the full user object from context using the Mock
+func (m *Mock) GetUserFromContext(ctx context.Context) (*schema.User, error) {
+	userID, ok := GetUserID(ctx)
+	if !ok || userID.IsNil() {
+		return nil, fmt.Errorf("user ID not found in context")
+	}
+	return m.GetUser(userID)
+}
+
+// GetAppFromContext retrieves the full app object from context using the Mock
+func (m *Mock) GetAppFromContext(ctx context.Context) (*schema.App, error) {
+	appID, ok := GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return nil, fmt.Errorf("app ID not found in context")
+	}
+	return m.GetApp(appID)
+}
+
+// GetEnvironmentFromContext retrieves the full environment object from context using the Mock
+func (m *Mock) GetEnvironmentFromContext(ctx context.Context) (*schema.Environment, error) {
+	envID, ok := GetEnvironmentID(ctx)
+	if !ok || envID.IsNil() {
+		return nil, fmt.Errorf("environment ID not found in context")
+	}
+	return m.GetEnvironment(envID)
+}
+
+// GetOrganizationFromContext retrieves the full organization object from context using the Mock
+func (m *Mock) GetOrganizationFromContext(ctx context.Context) (*schema.Organization, error) {
+	orgID, ok := GetOrganizationID(ctx)
+	if !ok || orgID.IsNil() {
+		return nil, fmt.Errorf("organization ID not found in context")
+	}
+	return m.GetOrganization(orgID)
 }
 
 // RequireAuth is a helper that mimics authentication middleware behavior.
@@ -49,31 +87,33 @@ func GetCurrentSessionID(ctx context.Context) (string, bool) {
 func (m *Mock) RequireAuth(ctx context.Context) (*schema.User, error) {
 	m.t.Helper()
 
-	sessionID, ok := GetCurrentSessionID(ctx)
+	// Get session from context
+	session, ok := GetSession(ctx)
 	if !ok {
-		// Try to get session directly
-		session, ok := GetCurrentSession(ctx)
-		if !ok {
-			return nil, ErrNotAuthenticated
-		}
-		sessionID = session.ID.String()
+		return nil, ErrNotAuthenticated
 	}
 
-	session, err := m.GetSession(sessionID)
-	if err != nil {
+	// Validate session
+	if time.Now().After(session.ExpiresAt) {
 		return nil, ErrInvalidSession
 	}
 
-	user, err := m.GetUser(session.UserID.String())
+	// Get user
+	user, err := m.GetUser(session.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound
+	}
+
+	// Check if user is active
+	if user.DeletedAt != nil {
+		return nil, ErrUserInactive
 	}
 
 	return user, nil
 }
 
 // RequireOrgMember checks if the user is a member of the specified organization.
-func (m *Mock) RequireOrgMember(ctx context.Context, orgID string) (*schema.Member, error) {
+func (m *Mock) RequireOrgMember(ctx context.Context, orgID xid.ID) (*schema.OrganizationMember, error) {
 	m.t.Helper()
 
 	user, err := m.RequireAuth(ctx)
@@ -93,7 +133,7 @@ func (m *Mock) RequireOrgMember(ctx context.Context, orgID string) (*schema.Memb
 	members := m.members[orgID]
 
 	for _, member := range members {
-		if member.UserID.String() == user.ID.String() {
+		if member.UserID == user.ID {
 			return member, nil
 		}
 	}
@@ -102,7 +142,7 @@ func (m *Mock) RequireOrgMember(ctx context.Context, orgID string) (*schema.Memb
 }
 
 // RequireOrgRole checks if the user has the specified role in the organization.
-func (m *Mock) RequireOrgRole(ctx context.Context, orgID, requiredRole string) (*schema.Member, error) {
+func (m *Mock) RequireOrgRole(ctx context.Context, orgID xid.ID, requiredRole string) (*schema.OrganizationMember, error) {
 	m.t.Helper()
 
 	member, err := m.RequireOrgMember(ctx, orgID)
@@ -110,7 +150,7 @@ func (m *Mock) RequireOrgRole(ctx context.Context, orgID, requiredRole string) (
 		return nil, err
 	}
 
-	if string(member.Role) != requiredRole {
+	if member.Role != requiredRole {
 		return nil, ErrInsufficientPermissions
 	}
 
@@ -143,6 +183,8 @@ type Scenario struct {
 	Name        string
 	Description string
 	User        *schema.User
+	App         *schema.App
+	Environment *schema.Environment
 	Org         *schema.Organization
 	Session     *schema.Session
 	Context     context.Context
@@ -161,13 +203,15 @@ func (m *Mock) NewCommonScenarios() *CommonScenarios {
 // AuthenticatedUser returns a scenario with a basic authenticated user.
 func (cs *CommonScenarios) AuthenticatedUser() *Scenario {
 	user := cs.mock.CreateUser("user@example.com", "Regular User")
-	session := cs.mock.CreateSession(user.ID.String(), cs.mock.defaultOrg.ID.String())
+	session := cs.mock.CreateSession(user.ID, cs.mock.defaultOrg.ID)
 	ctx := cs.mock.NewTestContextWithUser(user)
 
 	return &Scenario{
 		Name:        "authenticated_user",
 		Description: "A regular authenticated user",
 		User:        user,
+		App:         cs.mock.defaultApp,
+		Environment: cs.mock.defaultEnv,
 		Org:         cs.mock.defaultOrg,
 		Session:     session,
 		Context:     ctx,
@@ -177,13 +221,15 @@ func (cs *CommonScenarios) AuthenticatedUser() *Scenario {
 // AdminUser returns a scenario with an admin user.
 func (cs *CommonScenarios) AdminUser() *Scenario {
 	user := cs.mock.CreateUserWithRole("admin@example.com", "Admin User", "admin")
-	session := cs.mock.CreateSession(user.ID.String(), cs.mock.defaultOrg.ID.String())
+	session := cs.mock.CreateSession(user.ID, cs.mock.defaultOrg.ID)
 	ctx := cs.mock.NewTestContextWithUser(user)
 
 	return &Scenario{
 		Name:        "admin_user",
 		Description: "An admin user with elevated privileges",
 		User:        user,
+		App:         cs.mock.defaultApp,
+		Environment: cs.mock.defaultEnv,
 		Org:         cs.mock.defaultOrg,
 		Session:     session,
 		Context:     ctx,
@@ -194,13 +240,15 @@ func (cs *CommonScenarios) AdminUser() *Scenario {
 func (cs *CommonScenarios) UnverifiedUser() *Scenario {
 	user := cs.mock.CreateUser("unverified@example.com", "Unverified User")
 	user.EmailVerified = false
-	session := cs.mock.CreateSession(user.ID.String(), cs.mock.defaultOrg.ID.String())
+	session := cs.mock.CreateSession(user.ID, cs.mock.defaultOrg.ID)
 	ctx := cs.mock.NewTestContextWithUser(user)
 
 	return &Scenario{
 		Name:        "unverified_user",
 		Description: "A user with unverified email",
 		User:        user,
+		App:         cs.mock.defaultApp,
+		Environment: cs.mock.defaultEnv,
 		Org:         cs.mock.defaultOrg,
 		Session:     session,
 		Context:     ctx,
@@ -211,14 +259,16 @@ func (cs *CommonScenarios) UnverifiedUser() *Scenario {
 func (cs *CommonScenarios) MultiOrgUser() *Scenario {
 	user := cs.mock.CreateUser("multi@example.com", "Multi-Org User")
 	org2 := cs.mock.CreateOrganization("Second Org", "second-org")
-	cs.mock.AddUserToOrg(user.ID.String(), org2.ID.String(), "member")
-	session := cs.mock.CreateSession(user.ID.String(), cs.mock.defaultOrg.ID.String())
+	cs.mock.AddUserToOrg(user.ID, org2.ID, "member")
+	session := cs.mock.CreateSession(user.ID, cs.mock.defaultOrg.ID)
 	ctx := cs.mock.NewTestContextWithUser(user)
 
 	return &Scenario{
 		Name:        "multi_org_user",
 		Description: "A user belonging to multiple organizations",
 		User:        user,
+		App:         cs.mock.defaultApp,
+		Environment: cs.mock.defaultEnv,
 		Org:         cs.mock.defaultOrg,
 		Session:     session,
 		Context:     ctx,
@@ -228,13 +278,15 @@ func (cs *CommonScenarios) MultiOrgUser() *Scenario {
 // ExpiredSession returns a scenario with an expired session.
 func (cs *CommonScenarios) ExpiredSession() *Scenario {
 	user := cs.mock.CreateUser("expired@example.com", "Expired Session User")
-	session := cs.mock.CreateExpiredSession(user.ID.String(), cs.mock.defaultOrg.ID.String())
+	session := cs.mock.CreateExpiredSession(user.ID, cs.mock.defaultOrg.ID)
 	ctx := cs.mock.NewTestContextWithUser(user)
 
 	return &Scenario{
 		Name:        "expired_session",
 		Description: "A user with an expired session",
 		User:        user,
+		App:         cs.mock.defaultApp,
+		Environment: cs.mock.defaultEnv,
 		Org:         cs.mock.defaultOrg,
 		Session:     session,
 		Context:     ctx,
@@ -247,6 +299,8 @@ func (cs *CommonScenarios) UnauthenticatedUser() *Scenario {
 		Name:        "unauthenticated",
 		Description: "No authentication present",
 		User:        nil,
+		App:         nil,
+		Environment: nil,
 		Org:         nil,
 		Session:     nil,
 		Context:     context.Background(),
@@ -259,13 +313,15 @@ func (cs *CommonScenarios) InactiveUser() *Scenario {
 	// Mark user as deleted (soft delete)
 	now := time.Now()
 	user.DeletedAt = &now
-	session := cs.mock.CreateSession(user.ID.String(), cs.mock.defaultOrg.ID.String())
+	session := cs.mock.CreateSession(user.ID, cs.mock.defaultOrg.ID)
 	ctx := cs.mock.NewTestContextWithUser(user)
 
 	return &Scenario{
 		Name:        "inactive_user",
 		Description: "A user with inactive account",
 		User:        user,
+		App:         cs.mock.defaultApp,
+		Environment: cs.mock.defaultEnv,
 		Org:         cs.mock.defaultOrg,
 		Session:     session,
 		Context:     ctx,

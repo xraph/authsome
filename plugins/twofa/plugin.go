@@ -278,10 +278,6 @@ type TwoFAErrorResponse struct {
 	Error string `json:"error" example:"Error message"`
 }
 
-type TwoFAStatusResponse struct {
-	Status string `json:"status" example:"verified"`
-}
-
 type TwoFAEnableResponse struct {
 	Status  string `json:"status" example:"2fa_enabled"`
 	TOTPURI string `json:"totp_uri,omitempty" example:"otpauth://totp/AuthSome:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=AuthSome"`

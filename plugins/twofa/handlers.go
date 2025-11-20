@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
@@ -11,11 +12,10 @@ import (
 // Handler exposes HTTP endpoints for 2FA operations
 type Handler struct{ svc *Service }
 
-// Response types
-type StatusResponse struct {
-	Status string `json:"status"`
-}
+// Response types - use shared responses from core
+type StatusResponse = responses.StatusResponse
 
+// Plugin-specific responses
 type CodesResponse struct {
 	Codes []string `json:"codes"`
 }

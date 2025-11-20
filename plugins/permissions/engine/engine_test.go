@@ -29,13 +29,14 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 		{
 			name: "owner can access",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Owner access",
-				Expression:   `resource.owner == principal.id`,
-				ResourceType: "document",
-				Actions:      []string{"read", "write"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Owner access",
+				Expression:         `resource.owner == principal.id`,
+				ResourceType:       "document",
+				Actions:            []string{"read", "write"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{"id": "user_123"},
@@ -47,13 +48,14 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 		{
 			name: "non-owner cannot access",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Owner access",
-				Expression:   `resource.owner == principal.id`,
-				ResourceType: "document",
-				Actions:      []string{"read", "write"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Owner access",
+				Expression:         `resource.owner == principal.id`,
+				ResourceType:       "document",
+				Actions:            []string{"read", "write"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{"id": "user_456"},
@@ -65,10 +67,11 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 		{
 			name: "admin or owner can access",
 			policy: &core.Policy{
-				ID:          xid.New(),
-				OrgID:       xid.New(),
-				NamespaceID: xid.New(),
-				Name:        "Admin or owner",
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Admin or owner",
 				// Use CEL's native .exists() instead of has_role() for now
 				Expression:   `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
 				ResourceType: "document",
@@ -87,13 +90,14 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 		{
 			name: "team members can access",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Team access",
-				Expression:   `principal.team_id == resource.team_id`,
-				ResourceType: "project",
-				Actions:      []string{"read"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Team access",
+				Expression:         `principal.team_id == resource.team_id`,
+				ResourceType:       "project",
+				Actions:            []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{
@@ -111,13 +115,14 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 		{
 			name: "public resources accessible",
 			policy: &core.Policy{
-				ID:           xid.New(),
-				OrgID:        xid.New(),
-				NamespaceID:  xid.New(),
-				Name:         "Public access",
-				Expression:   `resource.visibility == "public"`,
-				ResourceType: "document",
-				Actions:      []string{"read"},
+				ID:                 xid.New(),
+				AppID:              xid.New(),
+				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+				NamespaceID:        xid.New(),
+				Name:               "Public access",
+				Expression:         `resource.visibility == "public"`,
+				ResourceType:       "document",
+				Actions:            []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				Principal: map[string]interface{}{"id": "user_123"},
@@ -199,20 +204,22 @@ func TestCompiler_CompileBatch(t *testing.T) {
 
 	policies := []*core.Policy{
 		{
-			ID:           xid.New(),
-			OrgID:        xid.New(),
-			NamespaceID:  xid.New(),
-			Expression:   `resource.owner == principal.id`,
-			ResourceType: "document",
-			Actions:      []string{"read"},
+			ID:                 xid.New(),
+			AppID:              xid.New(),
+			UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+			NamespaceID:        xid.New(),
+			Expression:         `resource.owner == principal.id`,
+			ResourceType:       "document",
+			Actions:            []string{"read"},
 		},
 		{
-			ID:           xid.New(),
-			OrgID:        xid.New(),
-			NamespaceID:  xid.New(),
-			Expression:   `has_role("admin")`,
-			ResourceType: "document",
-			Actions:      []string{"write"},
+			ID:                 xid.New(),
+			AppID:              xid.New(),
+			UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+			NamespaceID:        xid.New(),
+			Expression:         `has_role("admin")`,
+			ResourceType:       "document",
+			Actions:            []string{"write"},
 		},
 	}
 
@@ -230,18 +237,20 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 	// Create multiple policies
 	policies := []*core.Policy{
 		{
-			ID:           xid.New(),
-			OrgID:        xid.New(),
-			NamespaceID:  xid.New(),
-			Expression:   `resource.owner == principal.id`,
-			ResourceType: "document",
-			Actions:      []string{"read"},
-			Priority:     100,
+			ID:                 xid.New(),
+			AppID:              xid.New(),
+			UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+			NamespaceID:        xid.New(),
+			Expression:         `resource.owner == principal.id`,
+			ResourceType:       "document",
+			Actions:            []string{"read"},
+			Priority:           100,
 		},
 		{
-			ID:          xid.New(),
-			OrgID:       xid.New(),
-			NamespaceID: xid.New(),
+			ID:                 xid.New(),
+			AppID:              xid.New(),
+			UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+			NamespaceID:        xid.New(),
 			// Use CEL's native .exists() instead of has_role() for now
 			Expression:   `principal.roles.exists(r, r == "admin")`,
 			ResourceType: "document",
@@ -279,12 +288,13 @@ func BenchmarkEvaluator_SimplePolicy(b *testing.B) {
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
 
 	policy := &core.Policy{
-		ID:           xid.New(),
-		OrgID:        xid.New(),
-		NamespaceID:  xid.New(),
-		Expression:   `resource.owner == principal.id`,
-		ResourceType: "document",
-		Actions:      []string{"read"},
+		ID:                 xid.New(),
+		AppID:              xid.New(),
+		UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+		NamespaceID:        xid.New(),
+		Expression:         `resource.owner == principal.id`,
+		ResourceType:       "document",
+		Actions:            []string{"read"},
 	}
 
 	compiled, _ := compiler.Compile(policy)
@@ -308,12 +318,13 @@ func BenchmarkEvaluator_ComplexPolicy(b *testing.B) {
 	evaluator := NewEvaluator(DefaultEvaluatorConfig())
 
 	policy := &core.Policy{
-		ID:           xid.New(),
-		OrgID:        xid.New(),
-		NamespaceID:  xid.New(),
-		Expression:   `(resource.owner == principal.id || has_role("admin")) && resource.enabled == true && principal.department == "engineering"`,
-		ResourceType: "document",
-		Actions:      []string{"read"},
+		ID:                 xid.New(),
+		AppID:              xid.New(),
+		UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+		NamespaceID:        xid.New(),
+		Expression:         `(resource.owner == principal.id || has_role("admin")) && resource.enabled == true && principal.department == "engineering"`,
+		ResourceType:       "document",
+		Actions:            []string{"read"},
 	}
 
 	compiled, _ := compiler.Compile(policy)
@@ -347,12 +358,13 @@ func BenchmarkEvaluator_1000Policies(b *testing.B) {
 	policies := make([]*CompiledPolicy, 1000)
 	for i := 0; i < 1000; i++ {
 		policy := &core.Policy{
-			ID:           xid.New(),
-			OrgID:        xid.New(),
-			NamespaceID:  xid.New(),
-			Expression:   `resource.owner == principal.id`,
-			ResourceType: "document",
-			Actions:      []string{"read"},
+			ID:                 xid.New(),
+			AppID:              xid.New(),
+			UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
+			NamespaceID:        xid.New(),
+			Expression:         `resource.owner == principal.id`,
+			ResourceType:       "document",
+			Actions:            []string{"read"},
 		}
 		compiled, _ := compiler.Compile(policy)
 		policies[i] = compiled

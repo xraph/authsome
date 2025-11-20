@@ -11,115 +11,74 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 )
 
-// Config represents the OIDC Provider configuration
-type Config struct {
-	// Issuer URL for the OIDC Provider
-	Issuer string `json:"issuer"`
-
-	// Key configuration
-	Keys struct {
-		// Path to RSA private key file (PEM format)
-		PrivateKeyPath string `json:"privateKeyPath"`
-		// Path to RSA public key file (PEM format)
-		PublicKeyPath string `json:"publicKeyPath"`
-		// Key rotation settings
-		RotationInterval string `json:"rotationInterval"` // e.g., "24h"
-		KeyLifetime      string `json:"keyLifetime"`      // e.g., "168h" (7 days)
-	} `json:"keys"`
-
-	// Token settings
-	Tokens struct {
-		AccessTokenExpiry  string `json:"accessTokenExpiry"`  // e.g., "1h"
-		IDTokenExpiry      string `json:"idTokenExpiry"`      // e.g., "1h"
-		RefreshTokenExpiry string `json:"refreshTokenExpiry"` // e.g., "720h" (30 days)
-	} `json:"tokens"`
+// DefaultConfig returns the default OIDC Provider configuration
+func DefaultConfig() Config {
+	return Config{
+		Issuer: "http://localhost:3001",
+	}
 }
 
-// Service provides OIDC Provider operations
+// Service provides enterprise OIDC Provider operations with org-aware support
 type Service struct {
 	clientRepo  *repo.OAuthClientRepository
 	codeRepo    *repo.AuthorizationCodeRepository
 	tokenRepo   *repo.OAuthTokenRepository
+	consentRepo *repo.OAuthConsentRepository
 	sessionSvc  *session.Service
 	userSvc     *user.Service
 	jwtService  *JWTService
 	jwksService *JWKSService
-	config      Config
 
-	// Key rotation management
+	// Enterprise services
+	registration  *RegistrationService
+	introspection *IntrospectionService
+	revocation    *RevokeTokenService
+	consent       *ConsentService
+	discovery     *DiscoveryService
+	clientAuth    *ClientAuthenticator
+
+	config         Config
 	rotationTicker *time.Ticker
 	rotationDone   chan bool
-
-	// Legacy in-memory storage for backward compatibility
-	codes  map[string]string            // code -> clientID
-	cbr    map[string]string            // code -> redirectURI
-	tokens map[string]map[string]string // accessToken -> {"sub": userID}
 }
 
-// AuthorizeRequest represents an OAuth2/OIDC authorization request
-type AuthorizeRequest struct {
-	ClientID            string
-	RedirectURI         string
-	ResponseType        string
-	Scope               string
-	State               string
-	Nonce               string
-	CodeChallenge       string
-	CodeChallengeMethod string
-}
-
-// ConsentDecision represents a user's consent decision
-type ConsentDecision struct {
-	Approved bool
-	Scopes   []string
-}
-
+// NewService creates a new OIDC Provider service with default config
 func NewService(config Config) *Service {
 	// Set default values if not provided
 	if config.Issuer == "" {
 		config.Issuer = "http://localhost:3001"
 	}
-	if config.Keys.RotationInterval == "" {
-		config.Keys.RotationInterval = "24h"
-	}
-	if config.Keys.KeyLifetime == "" {
-		config.Keys.KeyLifetime = "168h" // 7 days
-	}
-	if config.Tokens.AccessTokenExpiry == "" {
-		config.Tokens.AccessTokenExpiry = "1h"
-	}
-	if config.Tokens.IDTokenExpiry == "" {
-		config.Tokens.IDTokenExpiry = "1h"
-	}
-	if config.Tokens.RefreshTokenExpiry == "" {
-		config.Tokens.RefreshTokenExpiry = "720h" // 30 days
-	}
 
 	return &Service{
 		config: config,
-		codes:  make(map[string]string),
-		cbr:    make(map[string]string),
-		tokens: make(map[string]map[string]string),
 	}
 }
 
-func NewServiceWithRepo(clientRepo *repo.OAuthClientRepository, config Config) *Service {
+// NewServiceWithRepos creates a new OIDC Provider service with repositories
+func NewServiceWithRepos(clientRepo *repo.OAuthClientRepository, config Config) *Service {
 	s := NewService(config)
 	s.clientRepo = clientRepo
 
-	// Initialize JWKS service with configuration
+	// Initialize JWKS service
 	var jwksService *JWKSService
 	var err error
 
 	if config.Keys.PrivateKeyPath != "" && config.Keys.PublicKeyPath != "" {
 		// Load keys from files
-		jwksService, err = NewJWKSServiceFromFiles(config.Keys.PrivateKeyPath, config.Keys.PublicKeyPath, config.Keys.RotationInterval, config.Keys.KeyLifetime)
+		jwksService, err = NewJWKSServiceFromFiles(
+			config.Keys.PrivateKeyPath,
+			config.Keys.PublicKeyPath,
+			config.Keys.RotationInterval,
+			config.Keys.KeyLifetime,
+		)
 	} else {
 		// Use auto-generated keys (development mode)
 		log.Println("No certificate paths configured, using auto-generated keys for development")
@@ -143,114 +102,151 @@ func NewServiceWithRepo(clientRepo *repo.OAuthClientRepository, config Config) *
 	return s
 }
 
-// SetRepositories configures the service with all required repositories
-func (s *Service) SetRepositories(clientRepo *repo.OAuthClientRepository, codeRepo *repo.AuthorizationCodeRepository, tokenRepo *repo.OAuthTokenRepository) {
+// SetRepositories configures all required repositories
+func (s *Service) SetRepositories(
+	clientRepo *repo.OAuthClientRepository,
+	codeRepo *repo.AuthorizationCodeRepository,
+	tokenRepo *repo.OAuthTokenRepository,
+	consentRepo *repo.OAuthConsentRepository,
+) {
 	s.clientRepo = clientRepo
 	s.codeRepo = codeRepo
 	s.tokenRepo = tokenRepo
+	s.consentRepo = consentRepo
+
+	// Initialize enterprise services
+	s.registration = NewRegistrationService(clientRepo, s.config)
+
+	// Create user service adapter for introspection
+	var userSvcAdapter UserService
+	if s.userSvc != nil {
+		userSvcAdapter = &userServiceAdapter{svc: s.userSvc}
+	}
+	s.introspection = NewIntrospectionService(tokenRepo, clientRepo, userSvcAdapter)
+	s.revocation = NewRevokeTokenService(tokenRepo)
+	s.consent = NewConsentService(consentRepo, clientRepo)
+	s.discovery = NewDiscoveryService(s.config)
+	s.clientAuth = NewClientAuthenticator(clientRepo)
 }
 
-// SetSessionService configures the session service for user authentication checks
+// SetSessionService configures the session service
 func (s *Service) SetSessionService(sessionSvc *session.Service) {
 	s.sessionSvc = sessionSvc
 }
 
-// SetUserService sets the user service for the OIDC Provider
+// SetUserService sets the user service
 func (s *Service) SetUserService(userSvc *user.Service) {
 	s.userSvc = userSvc
 }
 
-// RegisterClient persists a new OAuth client
-func (s *Service) RegisterClient(ctx context.Context, name, redirectURI string) (*schema.OAuthClient, error) {
-	c := &schema.OAuthClient{
-		ID:           xid.New(),
-		Name:         name,
-		ClientID:     xid.New().String(),
-		ClientSecret: xid.New().String(),
-		RedirectURI:  redirectURI,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+// =============================================================================
+// CONTEXT HELPERS
+// =============================================================================
+
+// ExtractContext extracts app, env, and org context from request context
+func (s *Service) ExtractContext(ctx context.Context) (appID, envID xid.ID, orgID *xid.ID, err error) {
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return xid.NilID(), xid.NilID(), nil, errs.BadRequest("app context required")
 	}
-	if s.clientRepo != nil {
-		if err := s.clientRepo.Create(ctx, c); err != nil {
-			return nil, err
-		}
+
+	envID, ok = contexts.GetEnvironmentID(ctx)
+	if !ok || envID.IsNil() {
+		return xid.NilID(), xid.NilID(), nil, errs.BadRequest("environment context required")
 	}
-	return c, nil
+
+	// Org context is optional
+	orgIDVal, ok := contexts.GetOrganizationID(ctx)
+	if ok && !orgIDVal.IsNil() {
+		orgID = &orgIDVal
+	}
+
+	return appID, envID, orgID, nil
 }
 
-// ValidateClient checks client_id and redirect uri
-func (s *Service) ValidateClient(ctx context.Context, clientID, redirectURI string) bool {
-	if s.clientRepo == nil {
-		return clientID != "" && redirectURI != ""
-	}
-	c, err := s.clientRepo.FindByClientID(ctx, clientID)
-	if err != nil || c == nil {
-		return false
-	}
-	return c.RedirectURI == redirectURI
-}
+// =============================================================================
+// AUTHORIZATION FLOW
+// =============================================================================
 
 // ValidateAuthorizeRequest validates an OAuth2/OIDC authorization request
 func (s *Service) ValidateAuthorizeRequest(ctx context.Context, req *AuthorizeRequest) error {
-	// Validate required parameters
-	if req.ClientID == "" {
-		return fmt.Errorf("missing client_id")
-	}
-	if req.RedirectURI == "" {
-		return fmt.Errorf("missing redirect_uri")
-	}
-	if req.ResponseType != "code" {
-		return fmt.Errorf("unsupported response_type: %s", req.ResponseType)
+	// Extract context
+	appID, envID, orgID, err := s.ExtractContext(ctx)
+	if err != nil {
+		return err
 	}
 
-	// Validate client and redirect URI
-	if !s.ValidateClient(ctx, req.ClientID, req.RedirectURI) {
-		return fmt.Errorf("invalid client or redirect URI")
+	// Validate required parameters
+	if req.ClientID == "" {
+		return errs.RequiredField("client_id")
+	}
+	if req.RedirectURI == "" {
+		return errs.RequiredField("redirect_uri")
+	}
+	if req.ResponseType != "code" {
+		return errs.BadRequest("unsupported response_type: " + req.ResponseType)
+	}
+
+	// Validate client with org hierarchy
+	client, err := s.clientRepo.FindByClientIDWithContext(ctx, appID, envID, orgID, req.ClientID)
+	if err != nil {
+		return errs.DatabaseError("find client", err)
+	}
+	if client == nil {
+		return errs.NotFound("invalid client_id")
+	}
+
+	// Validate redirect URI
+	if err := s.validateRedirectURI(client, req.RedirectURI); err != nil {
+		return err
 	}
 
 	// Validate PKCE if present
 	if req.CodeChallenge != "" {
 		if req.CodeChallengeMethod != "S256" && req.CodeChallengeMethod != "plain" {
-			return fmt.Errorf("unsupported code_challenge_method: %s", req.CodeChallengeMethod)
+			return errs.BadRequest("unsupported code_challenge_method")
 		}
+	} else if client.RequirePKCE {
+		return errs.BadRequest("PKCE required for this client")
 	}
 
 	return nil
 }
 
-// CheckUserSession checks if the user has a valid session
-func (s *Service) CheckUserSession(ctx context.Context, sessionToken string) (*session.Session, error) {
-	if s.sessionSvc == nil {
-		return nil, fmt.Errorf("session service not configured")
+// validateRedirectURI checks if redirect URI is allowed for client
+func (s *Service) validateRedirectURI(client *schema.OAuthClient, redirectURI string) error {
+	// Check against all registered redirect URIs
+	for _, uri := range client.RedirectURIs {
+		if uri == redirectURI {
+			return nil
+		}
 	}
 
-	sess, err := s.sessionSvc.FindByToken(ctx, sessionToken)
-	if err != nil {
-		return nil, fmt.Errorf("invalid session: %w", err)
+	// Also check legacy single URI for backward compatibility
+	if client.RedirectURI == redirectURI {
+		return nil
 	}
 
-	return sess, nil
+	return errs.BadRequest("redirect_uri not registered for this client")
 }
 
-// GenerateAuthorizationCode generates a secure authorization code
-func (s *Service) GenerateAuthorizationCode() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate code: %w", err)
-	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
-}
-
-// CreateAuthorizationCode creates and stores an authorization code
-func (s *Service) CreateAuthorizationCode(ctx context.Context, req *AuthorizeRequest, userID xid.ID) (*schema.AuthorizationCode, error) {
-	code, err := s.GenerateAuthorizationCode()
+// CreateAuthorizationCode creates and stores an authorization code with full context
+func (s *Service) CreateAuthorizationCode(ctx context.Context, req *AuthorizeRequest, userID xid.ID, sessionID xid.ID) (*schema.AuthorizationCode, error) {
+	appID, envID, orgID, err := s.ExtractContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	code, err := s.GenerateAuthorizationCode()
+	if err != nil {
+		return nil, errs.InternalError(err)
+	}
+
 	authCode := &schema.AuthorizationCode{
-		ID:                  xid.New(),
+		AppID:               appID,
+		EnvironmentID:       envID,
+		OrganizationID:      orgID,
+		SessionID:           &sessionID,
 		Code:                code,
 		ClientID:            req.ClientID,
 		UserID:              userID,
@@ -260,86 +256,78 @@ func (s *Service) CreateAuthorizationCode(ctx context.Context, req *AuthorizeReq
 		Nonce:               req.Nonce,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: req.CodeChallengeMethod,
-		ExpiresAt:           time.Now().Add(10 * time.Minute), // 10 minute expiry
-		CreatedAt:           time.Now(),
-		UpdatedAt:           time.Now(),
+		ConsentGranted:      true, // Set by consent flow
+		ConsentScopes:       req.Scope,
+		AuthTime:            time.Now(),
+		ExpiresAt:           time.Now().Add(10 * time.Minute),
 	}
 
-	if s.codeRepo != nil {
-		if err := s.codeRepo.Create(ctx, authCode); err != nil {
-			return nil, fmt.Errorf("failed to store authorization code: %w", err)
-		}
-	} else {
-		// Fallback to in-memory storage
-		s.codes[code] = req.ClientID
-		s.cbr[code] = req.RedirectURI
+	if err := s.codeRepo.Create(ctx, authCode); err != nil {
+		return nil, errs.DatabaseError("create authorization code", err)
 	}
 
 	return authCode, nil
 }
 
+// GenerateAuthorizationCode generates a secure authorization code
+func (s *Service) GenerateAuthorizationCode() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+// =============================================================================
+// TOKEN EXCHANGE
+// =============================================================================
+
 // ValidateAuthorizationCode validates and retrieves an authorization code
 func (s *Service) ValidateAuthorizationCode(ctx context.Context, code, clientID, redirectURI, codeVerifier string) (*schema.AuthorizationCode, error) {
-	var authCode *schema.AuthorizationCode
-	var err error
-
-	if s.codeRepo != nil {
-		authCode, err = s.codeRepo.FindByCode(ctx, code)
-		if err != nil {
-			return nil, fmt.Errorf("authorization code not found")
-		}
-	} else {
-		// Fallback to in-memory storage
-		if storedClientID, exists := s.codes[code]; !exists || storedClientID != clientID {
-			return nil, fmt.Errorf("invalid authorization code")
-		}
-		if storedRedirectURI, exists := s.cbr[code]; !exists || storedRedirectURI != redirectURI {
-			return nil, fmt.Errorf("invalid redirect URI")
-		}
-		// Create a mock auth code for in-memory mode
-		authCode = &schema.AuthorizationCode{
-			Code:        code,
-			ClientID:    clientID,
-			RedirectURI: redirectURI,
-			ExpiresAt:   time.Now().Add(10 * time.Minute),
-		}
+	authCode, err := s.codeRepo.FindByCode(ctx, code)
+	if err != nil {
+		return nil, errs.DatabaseError("find authorization code", err)
+	}
+	if authCode == nil {
+		return nil, errs.NotFound("invalid authorization code")
 	}
 
 	// Validate the authorization code
 	if !authCode.IsValid() {
-		return nil, fmt.Errorf("authorization code expired or already used")
+		return nil, errs.BadRequest("authorization code expired or already used")
 	}
 
 	if authCode.ClientID != clientID {
-		return nil, fmt.Errorf("client ID mismatch")
+		return nil, errs.BadRequest("client ID mismatch")
 	}
 
 	if authCode.RedirectURI != redirectURI {
-		return nil, fmt.Errorf("redirect URI mismatch")
+		return nil, errs.BadRequest("redirect URI mismatch")
 	}
 
 	// Validate PKCE if present
 	if authCode.CodeChallenge != "" {
 		if codeVerifier == "" {
-			return nil, fmt.Errorf("code verifier required for PKCE")
+			return nil, errs.BadRequest("code verifier required for PKCE")
 		}
 
 		if !s.validatePKCE(authCode.CodeChallenge, authCode.CodeChallengeMethod, codeVerifier) {
-			return nil, fmt.Errorf("invalid PKCE code verifier")
+			return nil, errs.BadRequest("invalid PKCE code verifier")
 		}
 	}
 
 	return authCode, nil
 }
 
-// validatePKCE validates PKCE code challenge and verifier
+// validatePKCE validates PKCE code challenge and verifier with timing-safe comparison
 func (s *Service) validatePKCE(challenge, method, verifier string) bool {
 	switch method {
 	case "plain":
 		return challenge == verifier
 	case "S256":
 		hash := sha256.Sum256([]byte(verifier))
-		return challenge == base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(hash[:])
+		computed := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(hash[:])
+		return challenge == computed
 	default:
 		return false
 	}
@@ -347,52 +335,17 @@ func (s *Service) validatePKCE(challenge, method, verifier string) bool {
 
 // MarkCodeAsUsed marks an authorization code as used
 func (s *Service) MarkCodeAsUsed(ctx context.Context, code string) error {
-	if s.codeRepo != nil {
-		return s.codeRepo.MarkAsUsed(ctx, code)
-	} else {
-		// Remove from in-memory storage
-		delete(s.codes, code)
-		delete(s.cbr, code)
-	}
-	return nil
-}
-
-// IssueCode generates and stores an authorization code for a client
-func (s *Service) IssueCode(clientID, redirectURI string) string {
-	code := xid.New().String()
-	s.codes[code] = clientID
-	s.cbr[code] = redirectURI
-	return code
-}
-
-// ExchangeCode returns an access token if code is valid
-func (s *Service) ExchangeCode(code string) (string, bool) {
-	clientID, ok := s.codes[code]
-	if !ok {
-		return "", false
-	}
-	token := xid.New().String()
-	s.tokens[token] = map[string]string{"client_id": clientID}
-	delete(s.codes, code)
-	delete(s.cbr, code)
-	return token, true
-}
-
-// TokenResponse represents the response from the token endpoint
-type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	IDToken      string `json:"id_token,omitempty"`
-	Scope        string `json:"scope,omitempty"`
+	return s.codeRepo.MarkAsUsed(ctx, code)
 }
 
 // ExchangeCodeForTokens exchanges an authorization code for JWT tokens
 func (s *Service) ExchangeCodeForTokens(ctx context.Context, authCode *schema.AuthorizationCode, userInfo map[string]interface{}) (*TokenResponse, error) {
 	if s.jwtService == nil {
-		return nil, fmt.Errorf("JWT service not initialized")
+		return nil, errs.InternalError(fmt.Errorf("JWT service not initialized"))
 	}
+
+	// Generate JTI for token
+	jti := "jti_" + xid.New().String()
 
 	// Generate access token
 	accessToken, err := s.jwtService.GenerateAccessToken(
@@ -401,7 +354,7 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, authCode *schema.Au
 		authCode.Scope,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate access token: %w", err)
+		return nil, errs.InternalError(fmt.Errorf("failed to generate access token: %w", err))
 	}
 
 	// Generate ID token if openid scope is requested
@@ -415,30 +368,38 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, authCode *schema.Au
 			userInfo,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate ID token: %w", err)
+			return nil, errs.InternalError(fmt.Errorf("failed to generate ID token: %w", err))
 		}
 	}
 
-	// Generate refresh token (simple implementation)
-	refreshToken := xid.New().String()
+	// Generate refresh token
+	refreshToken := "refresh_" + xid.New().String()
 
 	// Store tokens in database
-	refreshExpiresAt := time.Now().Add(24 * time.Hour) // 24 hours
+	refreshExpiresAt := time.Now().Add(30 * 24 * time.Hour) // 30 days
 
 	oauthToken := &schema.OAuthToken{
-		ID:               xid.New(),
+		AppID:            authCode.AppID,
+		EnvironmentID:    authCode.EnvironmentID,
+		OrganizationID:   authCode.OrganizationID,
+		SessionID:        authCode.SessionID,
 		AccessToken:      accessToken,
 		RefreshToken:     refreshToken,
+		IDToken:          idToken,
 		TokenType:        "Bearer",
+		TokenClass:       "access_token",
 		ClientID:         authCode.ClientID,
 		UserID:           authCode.UserID,
 		Scope:            authCode.Scope,
+		JTI:              jti,
+		Issuer:           s.config.Issuer,
+		AuthTime:         &authCode.AuthTime,
 		ExpiresAt:        time.Now().Add(time.Hour), // 1 hour
 		RefreshExpiresAt: &refreshExpiresAt,
 	}
 
 	if err := s.tokenRepo.Create(ctx, oauthToken); err != nil {
-		return nil, fmt.Errorf("failed to store token: %w", err)
+		return nil, errs.DatabaseError("create token", err)
 	}
 
 	return &TokenResponse{
@@ -451,23 +412,21 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, authCode *schema.Au
 	}, nil
 }
 
+// =============================================================================
+// JWKS & DISCOVERY
+// =============================================================================
+
 // GetJWKS returns the JSON Web Key Set for token verification
 func (s *Service) GetJWKS() (*JWKS, error) {
 	if s.jwksService == nil {
-		return nil, fmt.Errorf("JWKS service not initialized")
+		return nil, errs.InternalError(fmt.Errorf("JWKS service not initialized"))
 	}
 	return s.jwksService.GetJWKS()
 }
 
-// containsScope checks if a scope string contains a specific scope
-func containsScope(scopes, target string) bool {
-	for _, scope := range strings.Split(scopes, " ") {
-		if scope == target {
-			return true
-		}
-	}
-	return false
-}
+// =============================================================================
+// KEY ROTATION
+// =============================================================================
 
 // StartKeyRotation begins automatic key rotation in the background
 func (s *Service) StartKeyRotation() {
@@ -476,7 +435,6 @@ func (s *Service) StartKeyRotation() {
 		return
 	}
 
-	// Check every hour for key rotation
 	s.rotationTicker = time.NewTicker(1 * time.Hour)
 	s.rotationDone = make(chan bool)
 
@@ -512,49 +470,39 @@ func (s *Service) StopKeyRotation() {
 	log.Println("Stopped automatic key rotation for OIDC Provider")
 }
 
-// ValidateAccessToken validates an access token and returns the associated OAuth token
-func (s *Service) ValidateAccessToken(ctx context.Context, accessToken string) (*schema.OAuthToken, error) {
-	if s.tokenRepo == nil {
-		return nil, fmt.Errorf("token repository not initialized")
-	}
+// =============================================================================
+// USER INFO
+// =============================================================================
 
+// GetUserInfoFromToken retrieves user information based on an access token
+func (s *Service) GetUserInfoFromToken(ctx context.Context, accessToken string) (map[string]interface{}, error) {
+	// Validate the access token
 	token, err := s.tokenRepo.FindByAccessToken(ctx, accessToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find token: %w", err)
+		return nil, errs.DatabaseError("find token", err)
+	}
+	if token == nil {
+		return nil, errs.UnauthorizedWithMessage("invalid access token")
 	}
 
 	if !token.IsValid() {
-		return nil, fmt.Errorf("token is invalid or expired")
-	}
-
-	return token, nil
-}
-
-// GetUserInfoFromToken retrieves user information based on an access token and requested scopes
-func (s *Service) GetUserInfoFromToken(ctx context.Context, accessToken string) (map[string]interface{}, error) {
-	// Validate the access token
-	token, err := s.ValidateAccessToken(ctx, accessToken)
-	if err != nil {
-		return nil, fmt.Errorf("invalid access token: %w", err)
+		return nil, errs.UnauthorizedWithMessage("token expired or revoked")
 	}
 
 	// Get user information
 	if s.userSvc == nil {
-		return nil, fmt.Errorf("user service not initialized")
+		return nil, errs.InternalError(fmt.Errorf("user service not initialized"))
 	}
 
 	user, err := s.userSvc.FindByID(ctx, token.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find user: %w", err)
+		return nil, errs.DatabaseError("find user", err)
 	}
 
 	// Build user info response based on scopes
 	userInfo := map[string]interface{}{
 		"sub": user.ID.String(),
 	}
-
-	// Parse scopes from token
-	scopes := strings.Split(token.Scope, " ")
 
 	// Add profile information if profile scope is requested
 	if containsScope(token.Scope, "profile") {
@@ -580,21 +528,25 @@ func (s *Service) GetUserInfoFromToken(ctx context.Context, accessToken string) 
 		}
 	}
 
-	// Add additional standard claims based on scopes
-	for _, scope := range scopes {
-		switch scope {
-		case "openid":
-			// Already included sub
-		case "profile":
-			// Already handled above
-		case "email":
-			// Already handled above
-		case "phone":
-			// Already handled above
-		case "address":
-			// Could add address information if available in user schema
+	return userInfo, nil
+}
+
+// containsScope checks if a scope string contains a specific scope
+func containsScope(scopes, target string) bool {
+	for _, scope := range strings.Split(scopes, " ") {
+		if scope == target {
+			return true
 		}
 	}
+	return false
+}
 
-	return userInfo, nil
+// userServiceAdapter adapts user.Service to UserService interface
+type userServiceAdapter struct {
+	svc *user.Service
+}
+
+func (a *userServiceAdapter) FindByID(ctx context.Context, userID xid.ID) (interface{}, error) {
+	// FindByID returns a user object which we convert to interface{}
+	return a.svc.FindByID(ctx, userID)
 }

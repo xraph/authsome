@@ -8,6 +8,8 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
 )
@@ -18,14 +20,9 @@ type Handler struct {
 	service *Service
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
 
 type StatsResponse struct {
 	ActiveUsers    int    `json:"active_users"`
@@ -51,8 +48,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.RequiredField("app_id"))
 	}
 
 	var reqBody struct {
@@ -65,8 +61,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 		Metadata      map[string]string `json:"metadata,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -90,8 +85,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 
 	user, err := h.service.CreateUser(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	return c.JSON(http.StatusCreated, user)
@@ -105,8 +99,7 @@ func (h *Handler) ListUsers(c forge.Context) error {
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context required"))
 	}
 
 	// Parse query parameters
@@ -144,8 +137,7 @@ func (h *Handler) ListUsers(c forge.Context) error {
 
 	result, err := h.service.ListUsers(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, result)
@@ -157,31 +149,26 @@ func (h *Handler) DeleteUser(c forge.Context) error {
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if userID.IsNil() {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
 	// Parse target user ID from URL
 	targetUserIDStr := c.Param("id")
 	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "User ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
 	}
 
 	targetUserID, err := xid.FromString(targetUserIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid user ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}
 
 	err = h.service.DeleteUser(c.Request().Context(), targetUserID, userID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "User deleted successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "User deleted successfully"})
 }
 
 // BanUser handles POST /admin/users/:id/ban
@@ -192,21 +179,18 @@ func (h *Handler) BanUser(c forge.Context) error {
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context and user required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
 	// Parse target user ID from URL
 	targetUserIDStr := c.Param("id")
 	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "User ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
 	}
 
 	targetUserID, err := xid.FromString(targetUserIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid user ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}
 
 	var reqBody struct {
@@ -214,8 +198,7 @@ func (h *Handler) BanUser(c forge.Context) error {
 		ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -235,12 +218,10 @@ func (h *Handler) BanUser(c forge.Context) error {
 
 	err = h.service.BanUser(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "User banned successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "User banned successfully"})
 }
 
 // UnbanUser handles POST /admin/users/:id/unban
@@ -251,29 +232,25 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context and user required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
 	// Parse target user ID from URL
 	targetUserIDStr := c.Param("id")
 	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "User ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
 	}
 
 	targetUserID, err := xid.FromString(targetUserIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid user ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}
 
 	var reqBody struct {
 		Reason string `json:"reason,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -292,12 +269,10 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 
 	err = h.service.UnbanUser(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "User unbanned successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "User unbanned successfully"})
 }
 
 // ImpersonateUser handles POST /admin/users/:id/impersonate
@@ -308,29 +283,25 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context and user required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
 	// Parse target user ID from URL
 	targetUserIDStr := c.Param("id")
 	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "User ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
 	}
 
 	targetUserID, err := xid.FromString(targetUserIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid user ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}
 
 	var reqBody struct {
 		Duration time.Duration `json:"duration,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -351,8 +322,7 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 
 	session, err := h.service.ImpersonateUser(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, session)
@@ -366,29 +336,25 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context and user required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
 	// Parse target user ID from URL
 	targetUserIDStr := c.Param("id")
 	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "User ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
 	}
 
 	targetUserID, err := xid.FromString(targetUserIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid user ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}
 
 	var reqBody struct {
 		Role string `json:"role"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid request body",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -407,12 +373,10 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 
 	err = h.service.SetUserRole(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "User role updated successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "User role updated successfully"})
 }
 
 // ListSessions handles GET /admin/sessions
@@ -423,8 +387,7 @@ func (h *Handler) ListSessions(c forge.Context) error {
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() || adminID.IsNil() {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "App context and user required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
 	// Parse query parameters
@@ -464,8 +427,7 @@ func (h *Handler) ListSessions(c forge.Context) error {
 
 	result, err := h.service.ListSessions(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	return c.JSON(http.StatusOK, result)
@@ -477,31 +439,26 @@ func (h *Handler) RevokeSession(c forge.Context) error {
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 
 	if adminID.IsNil() {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
 	// Parse session ID from URL
 	sessionIDStr := c.Param("id")
 	if sessionIDStr == "" {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Session ID is required",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Session ID is required"))
 	}
 
 	sessionID, err := xid.FromString(sessionIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "Invalid session ID",
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid session ID"))
 	}
 
 	err = h.service.RevokeSession(c.Request().Context(), sessionID, adminID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "Session revoked successfully",
-	})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "Session revoked successfully"})
 }
 
 // GetStats handles GET /admin/stats
@@ -509,8 +466,7 @@ func (h *Handler) GetStats(c forge.Context) error {
 	// Get admin user from context
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 	if adminID.IsNil() {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
 	// For now, return basic stats
@@ -532,8 +488,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 	// Get admin user from context
 	adminID, _ := contexts.GetUserID(c.Request().Context())
 	if adminID.IsNil() {
-		return c.JSON(http.StatusUnauthorized, &ErrorResponse{Error: "Unauthorized",
-		})
+		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
 	// Parse query parameters

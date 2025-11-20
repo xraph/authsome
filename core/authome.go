@@ -43,6 +43,9 @@ type Authsome interface {
 	// GetPluginRegistry returns the plugin registry
 	GetPluginRegistry() PluginRegistry
 
+	// Logger returns the logger for AuthSome
+	Logger() forge.Logger
+
 	// IsPluginEnabled checks if a plugin is registered and enabled
 	IsPluginEnabled(pluginID string) bool
 

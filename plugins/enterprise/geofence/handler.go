@@ -5,6 +5,8 @@ import (
 	"strconv"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -14,22 +16,11 @@ type Handler struct {
 	config  *Config
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
+type SuccessResponse = responses.SuccessResponse
 
 
 
@@ -50,7 +41,7 @@ func NewHandler(service *Service, config *Config) *Handler {
 func (h *Handler) CreateRule(c forge.Context) error {
 	var req GeofenceRule
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
 	// Get organization ID from context (set by auth middleware)
@@ -62,7 +53,7 @@ func (h *Handler) CreateRule(c forge.Context) error {
 	req.CreatedBy = userID
 
 	if err := h.service.repo.CreateRule(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to create rule",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("failed to create rule"))
 	}
 
 	return c.JSON(http.StatusCreated, req)
@@ -74,7 +65,7 @@ func (h *Handler) ListRules(c forge.Context) error {
 
 	rules, err := h.service.repo.GetRulesByOrganization(c.Context(), orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list rules",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, rules)
@@ -85,12 +76,12 @@ func (h *Handler) GetRule(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid rule ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid rule ID"))
 	}
 
 	rule, err := h.service.repo.GetRule(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "rule not found",})
+		return c.JSON(http.StatusNotFound, errs.NotFound("rule not found"))
 	}
 
 	return c.JSON(http.StatusOK, rule)
@@ -101,12 +92,12 @@ func (h *Handler) UpdateRule(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid rule ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid rule ID"))
 	}
 
 	var req GeofenceRule
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
 	req.ID = id
@@ -116,7 +107,7 @@ func (h *Handler) UpdateRule(c forge.Context) error {
 	req.UpdatedBy = &userID
 
 	if err := h.service.repo.UpdateRule(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to update rule",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, req)
@@ -127,11 +118,11 @@ func (h *Handler) DeleteRule(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid rule ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid rule ID"))
 	}
 
 	if err := h.service.repo.DeleteRule(c.Context(), id); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to delete rule",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "rule deleted successfully",})
@@ -147,7 +138,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	}
 
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
 	orgID := c.Get("organization_id").(xid.ID)
@@ -156,7 +147,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	if req.UserID != "" {
 		id, err := xid.FromString(req.UserID)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid user ID",})
+			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid user ID"))
 		}
 		userID = id
 	} else {
@@ -173,7 +164,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 
 	result, err := h.service.CheckLocation(c.Context(), checkReq)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to check location",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, result)
@@ -185,7 +176,7 @@ func (h *Handler) LookupIP(c forge.Context) error {
 
 	geoData, err := h.service.GetGeolocation(c.Context(), ip)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to lookup IP",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	detection, _ := h.service.GetDetection(c.Context(), ip)
@@ -210,7 +201,7 @@ func (h *Handler) ListLocationEvents(c forge.Context) error {
 
 	events, err := h.service.repo.GetUserLocationHistory(c.Context(), userID, limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list location events",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, events)
@@ -221,12 +212,12 @@ func (h *Handler) GetLocationEvent(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid event ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid event ID"))
 	}
 
 	event, err := h.service.repo.GetLocationEvent(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "event not found",})
+		return c.JSON(http.StatusNotFound, errs.NotFound("event not found"))
 	}
 
 	return c.JSON(http.StatusOK, event)
@@ -239,7 +230,7 @@ func (h *Handler) ListTravelAlerts(c forge.Context) error {
 
 	alerts, err := h.service.repo.GetUserTravelAlerts(c.Context(), userID, status)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list travel alerts",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, alerts)
@@ -250,12 +241,12 @@ func (h *Handler) GetTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid alert ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid alert ID"))
 	}
 
 	alert, err := h.service.repo.GetTravelAlert(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "alert not found",})
+		return c.JSON(http.StatusNotFound, errs.NotFound("alert not found"))
 	}
 
 	return c.JSON(http.StatusOK, alert)
@@ -266,13 +257,13 @@ func (h *Handler) ApproveTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid alert ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid alert ID"))
 	}
 
 	userID := c.Get("user_id").(xid.ID)
 
 	if err := h.service.repo.ApproveTravel(c.Context(), id, userID); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to approve travel alert",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert approved",})
@@ -283,13 +274,13 @@ func (h *Handler) DenyTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid alert ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid alert ID"))
 	}
 
 	userID := c.Get("user_id").(xid.ID)
 
 	if err := h.service.repo.DenyTravel(c.Context(), id, userID); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to deny travel alert",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert denied",})
@@ -299,7 +290,7 @@ func (h *Handler) DenyTravelAlert(c forge.Context) error {
 func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 	var req TrustedLocation
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
 	orgID := c.Get("organization_id").(xid.ID)
@@ -309,7 +300,7 @@ func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 	req.UserID = userID
 
 	if err := h.service.repo.CreateTrustedLocation(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to create trusted location",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusCreated, req)
@@ -321,7 +312,7 @@ func (h *Handler) ListTrustedLocations(c forge.Context) error {
 
 	locations, err := h.service.repo.GetUserTrustedLocations(c.Context(), userID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list trusted locations",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, locations)
@@ -332,12 +323,12 @@ func (h *Handler) GetTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid location ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid location ID"))
 	}
 
 	location, err := h.service.repo.GetTrustedLocation(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "location not found",})
+		return c.JSON(http.StatusNotFound, errs.NotFound("location not found"))
 	}
 
 	return c.JSON(http.StatusOK, location)
@@ -348,18 +339,18 @@ func (h *Handler) UpdateTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid location ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid location ID"))
 	}
 
 	var req TrustedLocation
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
 	req.ID = id
 
 	if err := h.service.repo.UpdateTrustedLocation(c.Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to update trusted location",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, req)
@@ -370,11 +361,11 @@ func (h *Handler) DeleteTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid location ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid location ID"))
 	}
 
 	if err := h.service.repo.DeleteTrustedLocation(c.Context(), id); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to delete trusted location",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "trusted location deleted",})
@@ -394,7 +385,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 
 	violations, err := h.service.repo.GetUserViolations(c.Context(), userID, limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to list violations",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, violations)
@@ -405,12 +396,12 @@ func (h *Handler) GetViolation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid violation ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid violation ID"))
 	}
 
 	violation, err := h.service.repo.GetViolation(c.Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, &ErrorResponse{Error: "violation not found",})
+		return c.JSON(http.StatusNotFound, errs.NotFound("violation not found"))
 	}
 
 	return c.JSON(http.StatusOK, violation)
@@ -421,20 +412,20 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 	idStr := c.Param("id")
 	id, err := xid.FromString(idStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid violation ID",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid violation ID"))
 	}
 
 	var req struct {
 		Resolution string `json:"resolution"`
 	}
 	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, &ErrorResponse{Error: "invalid request body",})
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
 	userID := c.Get("user_id").(xid.ID)
 
 	if err := h.service.repo.ResolveViolation(c.Context(), id, userID, req.Resolution); err != nil {
-		return c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: "failed to resolve violation",})
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation resolved",})

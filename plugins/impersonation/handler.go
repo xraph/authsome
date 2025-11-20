@@ -8,6 +8,7 @@ import (
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
@@ -19,23 +20,11 @@ type Handler struct {
 	config  Config
 }
 
-// Response types
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type StatusResponse struct {
-	Status string `json:"status"`
-}
-
-type SuccessResponse struct {
-	Success bool `json:"success"`
-}
-
+// Response types - use shared responses from core
+type ErrorResponse = responses.ErrorResponse
+type MessageResponse = responses.MessageResponse
+type StatusResponse = responses.StatusResponse
+type SuccessResponse = responses.SuccessResponse
 
 // NewHandler creates a new impersonation handler
 func NewHandler(service *impersonation.Service, config Config) *Handler {
@@ -49,11 +38,12 @@ func NewHandler(service *impersonation.Service, config Config) *Handler {
 func (h *Handler) StartImpersonation(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "App context required",})
+		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
 	var reqBody struct {
@@ -63,31 +53,36 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 		DurationMinutes int    `json:"duration_minutes,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
 	// Parse target user ID
 	targetUserID, err := xid.FromString(reqBody.TargetUserID)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid target user ID",})
+		return c.JSON(400, errs.New("INVALID_USER_ID", "Invalid target user ID", 400))
 	}
 
 	// Build service request with V2 context
+	var envIDPtr *xid.ID
+	if !envID.IsNil() {
+		envIDPtr = &envID
+	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
 	}
 
 	req := &impersonation.StartRequest{
-		AppID:              appID,
-		UserOrganizationID: orgIDPtr,
-		ImpersonatorID:     userID,
-		TargetUserID:       targetUserID,
-		Reason:             reqBody.Reason,
-		TicketNumber:       reqBody.TicketNumber,
-		DurationMinutes:    reqBody.DurationMinutes,
-		IPAddress:          c.Request().RemoteAddr,
-		UserAgent:          c.Request().Header.Get("User-Agent"),
+		AppID:           appID,
+		EnvironmentID:   envIDPtr,
+		OrganizationID:  orgIDPtr,
+		ImpersonatorID:  userID,
+		TargetUserID:    targetUserID,
+		Reason:          reqBody.Reason,
+		TicketNumber:    reqBody.TicketNumber,
+		DurationMinutes: reqBody.DurationMinutes,
+		IPAddress:       c.Request().RemoteAddr,
+		UserAgent:       c.Request().Header.Get("User-Agent"),
 	}
 
 	// Start impersonation
@@ -95,12 +90,11 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	if err != nil {
 		// Handle structured errors
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
-			return c.JSON(authErr.HTTPStatus, &ErrorResponse{Error: authErr.Message,
-				"code":  authErr.Code,})
+			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.New("IMPERSONATION_START_FAILED", err.Error(), 500))
 	}
 
 	return c.JSON(200, resp)
@@ -110,11 +104,12 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 func (h *Handler) EndImpersonation(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "App context required",})
+		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
 	var reqBody struct {
@@ -122,39 +117,43 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 		Reason          string `json:"reason,omitempty"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid request body",})
+		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
 	// Parse impersonation ID
 	impersonationID, err := xid.FromString(reqBody.ImpersonationID)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid impersonation ID",})
+		return c.JSON(400, errs.New("INVALID_IMPERSONATION_ID", "Invalid impersonation ID", 400))
 	}
 
 	// Build service request with V2 context
+	var envIDPtr *xid.ID
+	if !envID.IsNil() {
+		envIDPtr = &envID
+	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
 	}
 
 	req := &impersonation.EndRequest{
-		ImpersonationID:    impersonationID,
-		AppID:              appID,
-		UserOrganizationID: orgIDPtr,
-		ImpersonatorID:     userID,
-		Reason:             reqBody.Reason,
+		ImpersonationID: impersonationID,
+		AppID:           appID,
+		EnvironmentID:   envIDPtr,
+		OrganizationID:  orgIDPtr,
+		ImpersonatorID:  userID,
+		Reason:          reqBody.Reason,
 	}
 
 	resp, err := h.service.End(c.Request().Context(), req)
 	if err != nil {
 		// Handle structured errors
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
-			return c.JSON(authErr.HTTPStatus, &ErrorResponse{Error: authErr.Message,
-				"code":  authErr.Code,})
+			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.New("IMPERSONATION_END_FAILED", err.Error(), 500))
 	}
 
 	return c.JSON(200, resp)
@@ -164,44 +163,49 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 func (h *Handler) GetImpersonation(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "App context required",})
+		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
 	idParam := c.Param("id")
 	if idParam == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Impersonation ID is required",})
+		return c.JSON(400, errs.New("IMPERSONATION_ID_REQUIRED", "Impersonation ID is required", 400))
 	}
 
 	id, err := xid.FromString(idParam)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid impersonation ID",})
+		return c.JSON(400, errs.New("INVALID_IMPERSONATION_ID", "Invalid impersonation ID", 400))
 	}
 
 	// Build service request with V2 context
+	var envIDPtr *xid.ID
+	if !envID.IsNil() {
+		envIDPtr = &envID
+	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
 	}
 
 	req := &impersonation.GetRequest{
-		ImpersonationID:    id,
-		AppID:              appID,
-		UserOrganizationID: orgIDPtr,
+		ImpersonationID: id,
+		AppID:           appID,
+		EnvironmentID:   envIDPtr,
+		OrganizationID:  orgIDPtr,
 	}
 
 	session, err := h.service.Get(c.Request().Context(), req)
 	if err != nil {
 		// Handle structured errors
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
-			return c.JSON(authErr.HTTPStatus, &ErrorResponse{Error: authErr.Message,
-				"code":  authErr.Code,})
+			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
 		// Fallback for unexpected errors
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.New("GET_IMPERSONATION_FAILED", err.Error(), 500))
 	}
 
 	return c.JSON(200, session)
@@ -211,10 +215,11 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 func (h *Handler) ListImpersonations(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "App context required",})
+		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
 	// Parse query parameters
@@ -250,6 +255,10 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	}
 
 	// Build service filter with V2 context
+	var envIDPtr *xid.ID
+	if !envID.IsNil() {
+		envIDPtr = &envID
+	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -260,16 +269,17 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
-		AppID:              appID,
-		UserOrganizationID: orgIDPtr,
-		ImpersonatorID:     impersonatorID,
-		TargetUserID:       targetUserID,
-		ActiveOnly:         activeOnly,
+		AppID:          appID,
+		EnvironmentID:  envIDPtr,
+		OrganizationID: orgIDPtr,
+		ImpersonatorID: impersonatorID,
+		TargetUserID:   targetUserID,
+		ActiveOnly:     activeOnly,
 	}
 
 	resp, err := h.service.List(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.New("LIST_IMPERSONATIONS_FAILED", err.Error(), 500))
 	}
 
 	return c.JSON(200, resp)
@@ -279,10 +289,11 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 func (h *Handler) ListAuditEvents(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
+	envID, _ := contexts.GetEnvironmentID(c.Request().Context())
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	if appID.IsNil() {
-		return c.JSON(400, &ErrorResponse{Error: "App context required",})
+		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
 	// Parse query parameters
@@ -309,6 +320,10 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 	}
 
 	// Build service filter with V2 context
+	var envIDPtr *xid.ID
+	if !envID.IsNil() {
+		envIDPtr = &envID
+	}
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -319,15 +334,16 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 			Limit:  limit,
 			Offset: offset,
 		},
-		AppID:              appID,
-		UserOrganizationID: orgIDPtr,
-		ImpersonationID:    impersonationID,
-		EventType:          eventTypePtr,
+		AppID:           appID,
+		EnvironmentID:   envIDPtr,
+		OrganizationID:  orgIDPtr,
+		ImpersonationID: impersonationID,
+		EventType:       eventTypePtr,
 	}
 
 	resp, err := h.service.ListAuditEvents(c.Request().Context(), filter)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.New("LIST_AUDIT_EVENTS_FAILED", err.Error(), 500))
 	}
 
 	return c.JSON(200, resp)
@@ -337,12 +353,12 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 func (h *Handler) VerifyImpersonation(c forge.Context) error {
 	sessionIDParam := c.Param("sessionId")
 	if sessionIDParam == "" {
-		return c.JSON(400, &ErrorResponse{Error: "Session ID is required",})
+		return c.JSON(400, errs.New("SESSION_ID_REQUIRED", "Session ID is required", 400))
 	}
 
 	sessionID, err := xid.FromString(sessionIDParam)
 	if err != nil {
-		return c.JSON(400, &ErrorResponse{Error: "Invalid session ID",})
+		return c.JSON(400, errs.New("INVALID_SESSION_ID", "Invalid session ID", 400))
 	}
 
 	req := &impersonation.VerifyRequest{
@@ -351,7 +367,7 @@ func (h *Handler) VerifyImpersonation(c forge.Context) error {
 
 	resp, err := h.service.Verify(c.Request().Context(), req)
 	if err != nil {
-		return c.JSON(500, &ErrorResponse{Error: err.Error(),})
+		return c.JSON(500, errs.New("VERIFY_IMPERSONATION_FAILED", err.Error(), 500))
 	}
 
 	return c.JSON(200, resp)

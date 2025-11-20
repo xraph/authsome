@@ -12,8 +12,11 @@ type AuthorizationCode struct {
 	AuditableModel
 	bun.BaseModel `bun:"table:authorization_codes"`
 
-	// App context
-	AppID xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appID"`
+	// Context fields
+	AppID          xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appID"`
+	EnvironmentID  xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentID"`
+	OrganizationID *xid.ID `bun:"organization_id,type:varchar(20)" json:"organizationID,omitempty"` // Optional org context
+	SessionID      *xid.ID `bun:"session_id,type:varchar(20)" json:"sessionID,omitempty"`           // Link to user session
 
 	// OAuth2/OIDC fields
 	Code                string     `bun:"code,unique,notnull" json:"code"`                            // The authorization code
@@ -25,12 +28,24 @@ type AuthorizationCode struct {
 	Nonce               string     `bun:"nonce" json:"nonce,omitempty"`                               // Nonce for OIDC
 	CodeChallenge       string     `bun:"code_challenge" json:"codeChallenge,omitempty"`              // PKCE code challenge
 	CodeChallengeMethod string     `bun:"code_challenge_method" json:"codeChallengeMethod,omitempty"` // PKCE challenge method (S256, plain)
-	ExpiresAt           time.Time  `bun:"expires_at,notnull" json:"expiresAt"`                        // Code expiration (typically 10 minutes)
-	Used                bool       `bun:"used,notnull,default:false" json:"used"`                     // Whether code has been exchanged
-	UsedAt              *time.Time `bun:"used_at" json:"usedAt,omitempty"`                            // When code was used
+	
+	// Consent tracking
+	ConsentGranted bool   `bun:"consent_granted,default:false" json:"consentGranted"`
+	ConsentScopes  string `bun:"consent_scopes" json:"consentScopes,omitempty"` // Scopes user consented to
+	
+	// Authentication context
+	AuthTime time.Time `bun:"auth_time,notnull" json:"authTime"` // When user authenticated (for max_age checks)
+	
+	// Lifecycle
+	ExpiresAt time.Time  `bun:"expires_at,notnull" json:"expiresAt"` // Code expiration (typically 10 minutes)
+	Used      bool       `bun:"used,notnull,default:false" json:"used"`
+	UsedAt    *time.Time `bun:"used_at" json:"usedAt,omitempty"`
 
 	// Relations
-	App *App `bun:"rel:belongs-to,join:app_id=id"`
+	App          *App          `bun:"rel:belongs-to,join:app_id=id"`
+	Environment  *Environment  `bun:"rel:belongs-to,join:environment_id=id"`
+	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id"`
+	Session      *Session      `bun:"rel:belongs-to,join:session_id=id"`
 }
 
 // IsExpired checks if the authorization code has expired

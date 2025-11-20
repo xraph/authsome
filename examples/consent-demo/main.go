@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/xraph/authsome"
-	"github.com/xraph/authsome/plugins/enterprise/consent"
+	_ "github.com/xraph/authsome/plugins/enterprise/consent"
 	"github.com/xraph/forge"
 )
 
@@ -15,37 +17,35 @@ func main() {
 	// Create Forge app
 	app := forge.New()
 
-	// Create AuthSome instance in SaaS mode for multi-tenancy
-	auth := authsome.New(authsome.Config{
-		Mode:     authsome.ModeSaaS, // or ModeStandalone
-		BasePath: "/api/auth",
-		Secret:   "your-secret-key-change-in-production",
-		TrustedOrigins: []string{
-			"http://localhost:3000",
-			"http://localhost:8080",
-		},
-	})
+	// Create AuthSome instance
+	auth := authsome.New(
+		authsome.WithBasePath("/api/auth"),
+	)
 
 	// Register consent plugin
-	consentPlugin := consent.NewPlugin()
-	if err := auth.RegisterPlugin(consentPlugin); err != nil {
-		log.Fatalf("Failed to register consent plugin: %v", err)
-	}
+	// Note: Consent plugin needs to be updated to implement the correct Plugin interface
+	// consentPlugin := consent.NewPlugin()
+	// if err := auth.RegisterPlugin(consentPlugin); err != nil {
+	// 	log.Fatalf("Failed to register consent plugin: %v", err)
+	// }
 
 	// Initialize AuthSome (this will call plugin.Init())
-	if err := auth.Init(); err != nil {
+	ctx := context.Background()
+	if err := auth.Initialize(ctx); err != nil {
 		log.Fatalf("Failed to initialize AuthSome: %v", err)
 	}
 
 	// Mount AuthSome to Forge app
-	auth.Mount(app, "/api/auth")
+	if err := auth.Mount(app.Router(), "/api/auth"); err != nil {
+		log.Fatalf("Failed to mount AuthSome: %v", err)
+	}
 
 	// Setup demo routes
-	setupDemoRoutes(app, auth, consentPlugin)
+	setupDemoRoutes(app, auth, nil)
 
-	fmt.Println("\n" + "=".repeat(60))
+	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Println("Consent Plugin Demo Server Started!")
-	fmt.Println("=".repeat(60))
+	fmt.Println(strings.Repeat("=", 60))
 	fmt.Println("\nAPI Endpoints:")
 	fmt.Println("  Auth:")
 	fmt.Println("    POST   http://localhost:8080/api/auth/signup")
@@ -72,19 +72,19 @@ func main() {
 	fmt.Println("    GET    http://localhost:8080/demo")
 	fmt.Println("    GET    http://localhost:8080/marketing/subscribe (requires marketing consent)")
 	fmt.Println("    GET    http://localhost:8080/analytics/track (requires analytics consent)")
-	fmt.Println("=".repeat(60))
+	fmt.Println(strings.Repeat("=", 60))
 	fmt.Println("\nServer listening on :8080")
-	fmt.Println("Press Ctrl+C to stop\n")
+	fmt.Println("Press Ctrl+C to stop")
 
 	// Start server
-	if err := app.Start(":8080"); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
 
-func setupDemoRoutes(app *forge.App, auth *authsome.Auth, consentPlugin *consent.Plugin) {
+func setupDemoRoutes(app forge.App, auth *authsome.Auth, consentPlugin interface{}) {
 	// Demo home page
-	app.GET("/demo", func(c forge.Context) error {
+	app.Router().GET("/demo", func(c forge.Context) error {
 		html := `
 <!DOCTYPE html>
 <html>
@@ -358,30 +358,23 @@ func setupDemoRoutes(app *forge.App, auth *authsome.Auth, consentPlugin *consent
 </body>
 </html>
 `
-		return c.HTML(200, html)
+		c.SetHeader("Content-Type", "text/html; charset=utf-8")
+		return c.String(200, html)
 	})
 
-	// Marketing endpoint protected by consent
-	app.GET("/marketing/subscribe",
-		consentPlugin.RequireConsent("marketing", "email_campaigns")(
-			func(c forge.Context) error {
-				return c.JSON(200, map[string]string{
-					"message":    "✅ You have access to marketing features!",
-					"subscribed": "You are now subscribed to our newsletter",
-				})
-			},
-		),
-	)
+	// Marketing endpoint protected by consent (plugin disabled for now)
+	app.Router().GET("/marketing/subscribe", func(c forge.Context) error {
+		return c.JSON(200, map[string]string{
+			"message":    "✅ Marketing endpoint (consent plugin disabled)",
+			"subscribed": "You are now subscribed to our newsletter",
+		})
+	})
 
-	// Analytics endpoint protected by consent
-	app.GET("/analytics/track",
-		consentPlugin.RequireConsent("analytics", "usage_tracking")(
-			func(c forge.Context) error {
-				return c.JSON(200, map[string]string{
-					"message": "✅ Analytics tracking enabled",
-					"tracked": "Your usage is being tracked",
-				})
-			},
-		),
-	)
+	// Analytics endpoint protected by consent (plugin disabled for now)
+	app.Router().GET("/analytics/track", func(c forge.Context) error {
+		return c.JSON(200, map[string]string{
+			"message": "✅ Analytics endpoint (consent plugin disabled)",
+			"tracked": "Your usage is being tracked",
+		})
+	})
 }

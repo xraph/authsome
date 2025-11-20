@@ -13,6 +13,7 @@ import (
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/responses"
 	sec "github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -94,7 +95,7 @@ type (
 	SignUpRequest = auth.SignUpRequest
 
 	// AuthResponse is the response from authentication operations
-	AuthResponse = auth.AuthResponse
+	AuthResponse = responses.AuthResponse
 )
 
 // User Package Exports

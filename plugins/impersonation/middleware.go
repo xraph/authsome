@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/impersonation"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -94,9 +95,9 @@ func (m *ImpersonationMiddleware) RequireNoImpersonation() func(forge.Context) e
 	return func(c forge.Context) error {
 		impCtx := GetImpersonationContext(c)
 		if impCtx != nil && impCtx.IsImpersonating {
-			return c.JSON(403, map[string]string{
-				"error": "This action is not allowed during impersonation",
-			})
+			return c.JSON(403, errs.New("IMPERSONATION_NOT_ALLOWED",
+				"This action is not allowed during impersonation",
+				403))
 		}
 		return nil
 	}
@@ -108,9 +109,9 @@ func (m *ImpersonationMiddleware) RequireImpersonation() func(forge.Context) err
 	return func(c forge.Context) error {
 		impCtx := GetImpersonationContext(c)
 		if impCtx == nil || !impCtx.IsImpersonating {
-			return c.JSON(403, map[string]string{
-				"error": "This action requires an active impersonation session",
-			})
+			return c.JSON(403, errs.New("IMPERSONATION_REQUIRED",
+				"This action requires an active impersonation session",
+				403))
 		}
 		return nil
 	}

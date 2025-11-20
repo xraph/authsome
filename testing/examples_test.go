@@ -24,18 +24,23 @@ func TestExample_BasicAuth(t *testing.T) {
 	assert.True(t, user.EmailVerified)
 
 	// Create a session
-	session := mock.CreateSession(user.ID.String(), mock.GetDefaultOrg().ID.String())
+	session := mock.CreateSession(user.ID, mock.GetDefaultOrg().ID)
 	assert.NotNil(t, session)
-	assert.Equal(t, user.ID.String(), session.UserID.String())
+	assert.Equal(t, user.ID, session.UserID)
 
 	// Create authenticated context
-	ctx := mock.WithSession(context.Background(), session.ID.String())
-	ctx = mock.WithUser(ctx, user.ID.String())
+	ctx := mock.WithSession(context.Background(), session.ID)
+	ctx = mock.WithUser(ctx, user.ID)
 
 	// Verify user can be retrieved from context
-	retrievedUser, ok := authsometesting.GetLoggedInUser(ctx)
+	userID, ok := authsometesting.GetUserID(ctx)
 	require.True(t, ok)
-	assert.Equal(t, user.ID.String(), retrievedUser.ID.String())
+	assert.Equal(t, user.ID, userID)
+
+	// Verify we can get the full user from context
+	retrievedUser, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, retrievedUser.ID)
 }
 
 // Example: Using NewTestContext convenience method
@@ -46,18 +51,18 @@ func TestExample_QuickAuth(t *testing.T) {
 	// Quick way to get a fully authenticated context
 	ctx := mock.NewTestContext()
 
-	// Get user from context
-	user, ok := authsometesting.GetLoggedInUser(ctx)
+	// Get user ID from context
+	userID, ok := authsometesting.GetUserID(ctx)
 	require.True(t, ok)
-	assert.NotNil(t, user)
+	assert.False(t, userID.IsNil())
 
-	// Get org from context
-	org, ok := authsometesting.GetCurrentOrg(ctx)
+	// Get org ID from context
+	orgID, ok := authsometesting.GetOrganizationID(ctx)
 	require.True(t, ok)
-	assert.NotNil(t, org)
+	assert.False(t, orgID.IsNil())
 
 	// Get session from context
-	session, ok := authsometesting.GetCurrentSession(ctx)
+	session, ok := authsometesting.GetSession(ctx)
 	require.True(t, ok)
 	assert.NotNil(t, session)
 }
@@ -73,30 +78,30 @@ func TestExample_MultiOrg(t *testing.T) {
 	org2 := mock.CreateOrganization("Second Org", "second-org")
 
 	// Add user to second org with admin role
-	mock.AddUserToOrg(user.ID.String(), org2.ID.String(), "admin")
+	mock.AddUserToOrg(user.ID, org2.ID, "admin")
 
 	// Verify user is in both orgs
-	orgs, err := mock.GetUserOrgs(user.ID.String())
+	orgs, err := mock.GetUserOrgs(user.ID)
 	require.NoError(t, err)
 	assert.Len(t, orgs, 2)
 
 	// Create session for first org
-	session1 := mock.CreateSession(user.ID.String(), org1.ID.String())
-	ctx1 := mock.WithSession(context.Background(), session1.ID.String())
-	ctx1 = mock.WithOrg(ctx1, org1.ID.String())
+	session1 := mock.CreateSession(user.ID, org1.ID)
+	ctx1 := mock.WithSession(context.Background(), session1.ID)
+	ctx1 = mock.WithOrganization(ctx1, org1.ID)
 
-	orgID1, ok := authsometesting.GetCurrentOrgID(ctx1)
+	orgID1, ok := authsometesting.GetOrganizationID(ctx1)
 	require.True(t, ok)
-	assert.Equal(t, org1.ID.String(), orgID1)
+	assert.Equal(t, org1.ID, orgID1)
 
 	// Create session for second org
-	session2 := mock.CreateSession(user.ID.String(), org2.ID.String())
-	ctx2 := mock.WithSession(context.Background(), session2.ID.String())
-	ctx2 = mock.WithOrg(ctx2, org2.ID.String())
+	session2 := mock.CreateSession(user.ID, org2.ID)
+	ctx2 := mock.WithSession(context.Background(), session2.ID)
+	ctx2 = mock.WithOrganization(ctx2, org2.ID)
 
-	orgID2, ok := authsometesting.GetCurrentOrgID(ctx2)
+	orgID2, ok := authsometesting.GetOrganizationID(ctx2)
 	require.True(t, ok)
-	assert.Equal(t, org2.ID.String(), orgID2)
+	assert.Equal(t, org2.ID, orgID2)
 }
 
 // Example: Testing authorization with roles
@@ -113,14 +118,14 @@ func TestExample_RoleBasedAuth(t *testing.T) {
 	// Test admin access
 	adminCtx := mock.NewTestContextWithUser(adminUser)
 
-	member, err := mock.RequireOrgRole(adminCtx, org.ID.String(), "admin")
+	member, err := mock.RequireOrgRole(adminCtx, org.ID, "admin")
 	require.NoError(t, err)
 	assert.Equal(t, "admin", member.Role)
 
 	// Test member access (should fail for admin role)
 	memberCtx := mock.NewTestContextWithUser(memberUser)
 
-	_, err = mock.RequireOrgRole(memberCtx, org.ID.String(), "admin")
+	_, err = mock.RequireOrgRole(memberCtx, org.ID, "admin")
 	assert.Error(t, err)
 	assert.Equal(t, authsometesting.ErrInsufficientPermissions, err)
 }
@@ -133,7 +138,7 @@ func TestExample_SessionExpiration(t *testing.T) {
 	user := mock.CreateUser("user@example.com", "Test User")
 
 	// Create an expired session
-	expiredSession := mock.CreateExpiredSession(user.ID.String(), mock.GetDefaultOrg().ID.String())
+	expiredSession := mock.CreateExpiredSession(user.ID, mock.GetDefaultOrg().ID)
 
 	// Try to validate the expired session
 	_, err := mock.SessionService.Validate(context.Background(), expiredSession.Token)
@@ -169,7 +174,7 @@ func TestExample_CommonScenarios(t *testing.T) {
 
 	t.Run("multi-org user", func(t *testing.T) {
 		scenario := scenarios.MultiOrgUser()
-		orgs, err := mock.GetUserOrgs(scenario.User.ID.String())
+		orgs, err := mock.GetUserOrgs(scenario.User.ID)
 		require.NoError(t, err)
 		assert.Len(t, orgs, 2)
 	})
@@ -184,8 +189,9 @@ func TestExample_CommonScenarios(t *testing.T) {
 		scenario := scenarios.UnauthenticatedUser()
 		assert.Nil(t, scenario.User)
 		assert.Nil(t, scenario.Session)
-		_, ok := authsometesting.GetLoggedInUser(scenario.Context)
+		userID, ok := authsometesting.GetUserID(scenario.Context)
 		assert.False(t, ok)
+		assert.True(t, userID.IsNil())
 	})
 
 	t.Run("inactive user", func(t *testing.T) {
@@ -216,35 +222,35 @@ func TestExample_ServiceMethods(t *testing.T) {
 		assert.Equal(t, created.ID.String(), user.ID.String())
 
 		// Get by ID
-		user, err = mock.UserService.GetByID(ctx, created.ID.String())
+		user, err = mock.UserService.GetByID(ctx, created.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "test@example.com", user.Email)
 	})
 
 	t.Run("session service", func(t *testing.T) {
 		user := mock.CreateUser("session@example.com", "Session User")
-		session := mock.CreateSession(user.ID.String(), mock.GetDefaultOrg().ID.String())
+		session := mock.CreateSession(user.ID, mock.GetDefaultOrg().ID)
 
 		// Get by ID
-		retrieved, err := mock.SessionService.GetByID(ctx, session.ID.String())
+		retrieved, err := mock.SessionService.GetByID(ctx, session.ID)
 		require.NoError(t, err)
-		assert.Equal(t, session.ID.String(), retrieved.ID.String())
+		assert.Equal(t, session.ID, retrieved.ID)
 
 		// Get by token
 		retrieved, err = mock.SessionService.GetByToken(ctx, session.Token)
 		require.NoError(t, err)
-		assert.Equal(t, session.ID.String(), retrieved.ID.String())
+		assert.Equal(t, session.ID, retrieved.ID)
 
 		// Validate
 		validated, err := mock.SessionService.Validate(ctx, session.Token)
 		require.NoError(t, err)
-		assert.Equal(t, session.ID.String(), validated.ID.String())
+		assert.Equal(t, session.ID, validated.ID)
 
 		// Delete
-		err = mock.SessionService.Delete(ctx, session.ID.String())
+		err = mock.SessionService.Delete(ctx, session.ID)
 		require.NoError(t, err)
 
-		_, err = mock.SessionService.GetByID(ctx, session.ID.String())
+		_, err = mock.SessionService.GetByID(ctx, session.ID)
 		assert.Error(t, err)
 	})
 
@@ -253,27 +259,27 @@ func TestExample_ServiceMethods(t *testing.T) {
 		org := mock.CreateOrganization("Test Org", "test-org-2")
 
 		// Get by ID
-		retrieved, err := mock.OrganizationService.GetByID(ctx, org.ID.String())
+		retrieved, err := mock.OrganizationService.GetByID(ctx, org.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "Test Org", retrieved.Name)
 
 		// Get by slug
 		retrieved, err = mock.OrganizationService.GetBySlug(ctx, "test-org-2")
 		require.NoError(t, err)
-		assert.Equal(t, org.ID.String(), retrieved.ID.String())
+		assert.Equal(t, org.ID, retrieved.ID)
 
 		// Add member
 		user := mock.CreateUser("member@example.com", "Member User")
-		member := mock.AddUserToOrg(user.ID.String(), org.ID.String(), "member")
+		member := mock.AddUserToOrg(user.ID, org.ID, "member")
 		assert.NotNil(t, member)
 
 		// Get members
-		members, err := mock.OrganizationService.GetMembers(ctx, org.ID.String())
+		membersResp, err := mock.OrganizationService.GetMembers(ctx, org.ID)
 		require.NoError(t, err)
-		assert.Len(t, members, 1)
+		assert.Len(t, membersResp.Data, 1)
 
 		// Get user organizations
-		orgs, err := mock.OrganizationService.GetUserOrganizations(ctx, user.ID.String())
+		orgs, err := mock.OrganizationService.GetUserOrganizations(ctx, user.ID)
 		require.NoError(t, err)
 		// User should be in default org and the new org
 		assert.GreaterOrEqual(t, len(orgs), 2)
@@ -286,14 +292,19 @@ func TestExample_HandlerWithAuth(t *testing.T) {
 	defer mock.Reset()
 
 	// Your application handler
-	getUserProfile := func(ctx context.Context) (map[string]interface{}, error) {
-		user, ok := authsometesting.GetLoggedInUser(ctx)
-		if !ok {
+	getUserProfile := func(ctx context.Context, mock *authsometesting.Mock) (map[string]interface{}, error) {
+		userID, ok := authsometesting.GetUserID(ctx)
+		if !ok || userID.IsNil() {
 			return nil, authsometesting.ErrNotAuthenticated
 		}
 
-		org, ok := authsometesting.GetCurrentOrg(ctx)
-		if !ok {
+		user, err := mock.GetUserFromContext(ctx)
+		if err != nil {
+			return nil, authsometesting.ErrUserNotFound
+		}
+
+		org, err := mock.GetOrganizationFromContext(ctx)
+		if err != nil {
 			return nil, authsometesting.ErrOrgNotFound
 		}
 
@@ -311,7 +322,7 @@ func TestExample_HandlerWithAuth(t *testing.T) {
 		ctx := mock.NewTestContextWithUser(user)
 
 		// Call handler
-		profile, err := getUserProfile(ctx)
+		profile, err := getUserProfile(ctx, mock)
 		require.NoError(t, err)
 		assert.Equal(t, user.ID.String(), profile["user_id"])
 		assert.Equal(t, "Test User", profile["user_name"])
@@ -322,7 +333,7 @@ func TestExample_HandlerWithAuth(t *testing.T) {
 		ctx := context.Background()
 
 		// Should fail
-		_, err := getUserProfile(ctx)
+		_, err := getUserProfile(ctx, mock)
 		assert.Error(t, err)
 		assert.Equal(t, authsometesting.ErrNotAuthenticated, err)
 	})
@@ -350,7 +361,8 @@ func TestExample_Metadata(t *testing.T) {
 // Benchmark: Test performance of mock operations
 
 func BenchmarkMock_CreateUser(b *testing.B) {
-	mock := authsometesting.NewMock(&testing.T{})
+	t := &testing.T{}
+	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	b.ResetTimer()
@@ -359,20 +371,22 @@ func BenchmarkMock_CreateUser(b *testing.B) {
 	}
 }
 
-func BenchmarkMock_GetLoggedInUser(b *testing.B) {
-	mock := authsometesting.NewMock(&testing.T{})
+func BenchmarkMock_GetUserID(b *testing.B) {
+	t := &testing.T{}
+	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		authsometesting.GetLoggedInUser(ctx)
+		authsometesting.GetUserID(ctx)
 	}
 }
 
 func BenchmarkMock_RequireAuth(b *testing.B) {
-	mock := authsometesting.NewMock(&testing.T{})
+	t := &testing.T{}
+	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()

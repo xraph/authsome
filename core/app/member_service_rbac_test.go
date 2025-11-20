@@ -26,6 +26,24 @@ func (m *MockRoleRepository) Create(ctx context.Context, role *schema.Role) erro
 	return args.Error(0)
 }
 
+func (m *MockRoleRepository) Update(ctx context.Context, role *schema.Role) error {
+	args := m.Called(ctx, role)
+	return args.Error(0)
+}
+
+func (m *MockRoleRepository) Delete(ctx context.Context, roleID xid.ID) error {
+	args := m.Called(ctx, roleID)
+	return args.Error(0)
+}
+
+func (m *MockRoleRepository) FindByID(ctx context.Context, roleID xid.ID) (*schema.Role, error) {
+	args := m.Called(ctx, roleID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.Role), args.Error(1)
+}
+
 func (m *MockRoleRepository) FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*schema.Role, error) {
 	args := m.Called(ctx, name, appID)
 	if args.Get(0) == nil {
@@ -37,6 +55,46 @@ func (m *MockRoleRepository) FindByNameAndApp(ctx context.Context, name string, 
 func (m *MockRoleRepository) ListByOrg(ctx context.Context, orgID *string) ([]schema.Role, error) {
 	args := m.Called(ctx, orgID)
 	return args.Get(0).([]schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error) {
+	args := m.Called(ctx, appID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error) {
+	args := m.Called(ctx, appID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error) {
+	args := m.Called(ctx, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*schema.Role, error) {
+	args := m.Called(ctx, roleID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID xid.ID, customName *string) (*schema.Role, error) {
+	args := m.Called(ctx, templateID, orgID, customName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
 type MockUserRoleRepository struct {
@@ -651,4 +709,3 @@ func TestMemberService_getRoleIDByName_RoleNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "role admin not found")
 	roleRepo.AssertExpectations(t)
 }
-

@@ -20,8 +20,7 @@ import (
 func ExamplePlugin_basic() {
 	// Create AuthSome instance
 	auth := authsome.New(
-		authsome.WithMode(authsome.ModeSaaS),
-		// ... other options
+		// Configure with valid options
 	)
 
 	// Register SCIM plugin
@@ -46,10 +45,15 @@ func ExampleService_CreateProvisioningToken() {
 	// Get SCIM service
 	// scimService := scimPlugin.Service()
 
-	// Create token for Okta integration
+	// Create token for Okta integration (3-tier architecture)
+	// appID := xid.New()
+	// envID := xid.New()
+	// orgID := xid.New()
 	// token, provToken, err := scimService.CreateProvisioningToken(
 	// 	ctx,
-	// 	"org_cm3abc123",                           // Organization ID
+	// 	appID,                                     // App ID
+	// 	envID,                                     // Environment ID
+	// 	orgID,                                     // Organization ID
 	// 	"Okta Production",                         // Token name
 	// 	"SCIM token for Okta prod environment",   // Description
 	// 	[]string{"scim:read", "scim:write"},      // Scopes
@@ -93,14 +97,18 @@ func TestSCIMProvisioningFlow(t *testing.T) {
 	// Setup
 	ctx := context.Background()
 
-	// Create provisioning token
-	orgID := xid.New().String()
+	// Create 3-tier architecture IDs
+	appID := xid.New()
+	envID := xid.New()
+	orgID := xid.New()
 
 	// Mock service (in real test, use actual service)
 	var mockService *scim.Service
 
 	token, provToken, err := mockService.CreateProvisioningToken(
 		ctx,
+		appID,
+		envID,
 		orgID,
 		"Test Token",
 		"Token for testing",
@@ -110,7 +118,7 @@ func TestSCIMProvisioningFlow(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
-	assert.Equal(t, orgID, provToken.OrgID.String())
+	assert.Equal(t, orgID.String(), provToken.OrganizationID.String())
 
 	// Create SCIM user request
 	scimUser := &scim.SCIMUser{
@@ -136,8 +144,12 @@ func TestSCIMProvisioningFlow(t *testing.T) {
 	assert.NotEmpty(t, createdUser.ID)
 	assert.Equal(t, "testuser@example.com", createdUser.UserName)
 
+	// Convert string ID to xid.ID for API calls
+	userID, err := xid.FromString(createdUser.ID)
+	require.NoError(t, err)
+
 	// Verify user can be retrieved
-	retrievedUser, err := mockService.GetUser(ctx, createdUser.ID, orgID)
+	retrievedUser, err := mockService.GetUser(ctx, userID, orgID)
 	require.NoError(t, err)
 	assert.Equal(t, createdUser.ID, retrievedUser.ID)
 
@@ -153,12 +165,12 @@ func TestSCIMProvisioningFlow(t *testing.T) {
 		},
 	}
 
-	updatedUser, err := mockService.UpdateUser(ctx, createdUser.ID, orgID, patch)
+	updatedUser, err := mockService.UpdateUser(ctx, userID, orgID, patch)
 	require.NoError(t, err)
 	assert.False(t, updatedUser.Active)
 
 	// Delete user
-	err = mockService.DeleteUser(ctx, createdUser.ID, orgID)
+	err = mockService.DeleteUser(ctx, userID, orgID)
 	require.NoError(t, err)
 }
 
@@ -302,7 +314,7 @@ func TestGroupSynchronization(t *testing.T) {
 
 	// Mock service
 	var mockService *scim.Service
-	orgID := xid.New().String()
+	orgID := xid.New()
 
 	// Create group (syncs to team)
 	createdGroup, err := mockService.CreateGroup(ctx, scimGroup, orgID)
@@ -350,6 +362,8 @@ func TestProvisioningLogs(t *testing.T) {
 	t.Skip("Example test - skipped in CI")
 
 	ctx := context.Background()
+	appID := xid.New()
+	envID := xid.New()
 	orgID := xid.New()
 
 	// Mock repository
@@ -357,20 +371,22 @@ func TestProvisioningLogs(t *testing.T) {
 
 	// Create provisioning log
 	log := &scim.ProvisioningLog{
-		ID:           xid.New(),
-		OrgID:        orgID,
-		Operation:    "CREATE_USER",
-		ResourceType: "User",
-		ResourceID:   "cm3xyz789",
-		ExternalID:   "okta_user_12345",
-		Method:       "POST",
-		Path:         "/scim/v2/Users",
-		StatusCode:   201,
-		Success:      true,
-		IPAddress:    "203.0.113.1",
-		UserAgent:    "Okta-SCIM/1.0",
-		DurationMS:   125,
-		CreatedAt:    time.Now(),
+		ID:             xid.New(),
+		AppID:          appID,
+		EnvironmentID:  envID,
+		OrganizationID: orgID,
+		Operation:      "CREATE_USER",
+		ResourceType:   "User",
+		ResourceID:     "cm3xyz789",
+		ExternalID:     "okta_user_12345",
+		Method:         "POST",
+		Path:           "/scim/v2/Users",
+		StatusCode:     201,
+		Success:        true,
+		IPAddress:      "203.0.113.1",
+		UserAgent:      "Okta-SCIM/1.0",
+		DurationMS:     125,
+		CreatedAt:      time.Now(),
 	}
 
 	err := mockRepo.CreateProvisioningLog(ctx, log)
@@ -382,7 +398,7 @@ func TestProvisioningLogs(t *testing.T) {
 		"success":   true,
 	}
 
-	logs, err := mockRepo.ListProvisioningLogs(ctx, orgID, filters, 50, 0)
+	logs, err := mockRepo.ListProvisioningLogs(ctx, appID, envID, orgID, filters, 50, 0)
 	require.NoError(t, err)
 	assert.Greater(t, len(logs), 0)
 }
@@ -393,7 +409,7 @@ func BenchmarkUserCreation(b *testing.B) {
 
 	// Setup
 	ctx := context.Background()
-	orgID := xid.New().String()
+	orgID := xid.New()
 
 	// Mock service
 	var mockService *scim.Service

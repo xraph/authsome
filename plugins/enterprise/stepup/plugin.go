@@ -494,8 +494,6 @@ type StepUpRequirementsResponse struct {
 type StepUpVerificationsResponse struct {
 	Verifications []interface{} `json:"verifications"`
 }
- `json:"devices"`
-}
 
 type StepUpPolicyResponse struct {
 	ID string `json:"id" example:"policy_123"`

@@ -18,10 +18,10 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 
 	// Create authenticated context
 	ctx := mock.NewTestContext()
-	user, ok := authsometesting.GetLoggedInUser(ctx)
-	require.True(t, ok, "Should have user in context")
-	org, ok := authsometesting.GetCurrentOrg(ctx)
-	require.True(t, ok, "Should have org in context")
+	user, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err, "Should have user in context")
+	app, err := mock.GetAppFromContext(ctx)
+	require.NoError(t, err, "Should have app in context")
 
 	// Initialize consent plugin
 	repo := consent.NewMockRepository()
@@ -37,13 +37,13 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 			Version:     "1.0",
 		}
 
-		consentRecord, err := service.CreateConsent(ctx, org.ID.String(), user.ID.String(), req)
+		consentRecord, err := service.CreateConsent(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 		assert.NotNil(t, consentRecord)
 		assert.Equal(t, "marketing", consentRecord.ConsentType)
 		assert.True(t, consentRecord.Granted)
 		assert.Equal(t, user.ID.String(), consentRecord.UserID)
-		assert.Equal(t, org.ID.String(), consentRecord.OrganizationID)
+		assert.Equal(t, app.ID.String(), consentRecord.OrganizationID)
 	})
 
 	// Test: Revoke consent
@@ -55,7 +55,7 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 			Granted:     true,
 			Version:     "1.0",
 		}
-		created, err := service.CreateConsent(ctx, org.ID.String(), user.ID.String(), createReq)
+		created, err := service.CreateConsent(ctx, app.ID.String(), user.ID.String(), createReq)
 		require.NoError(t, err)
 
 		// Revoke it
@@ -63,7 +63,7 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 			Granted: boolPtr(false),
 			Reason:  "User opted out",
 		}
-		revoked, err := service.UpdateConsent(ctx, created.ID.String(), org.ID.String(), user.ID.String(), revokeReq)
+		revoked, err := service.UpdateConsent(ctx, created.ID.String(), app.ID.String(), user.ID.String(), revokeReq)
 		require.NoError(t, err)
 		assert.False(t, revoked.Granted)
 		assert.NotNil(t, revoked.RevokedAt)
@@ -79,12 +79,12 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 				Granted:     true,
 				Version:     "1.0",
 			}
-			_, err := service.CreateConsent(ctx, org.ID.String(), user.ID.String(), req)
+			_, err := service.CreateConsent(ctx, app.ID.String(), user.ID.String(), req)
 			require.NoError(t, err)
 		}
 
 		// List them
-		consents, err := service.ListConsentsByUser(ctx, user.ID.String(), org.ID.String())
+		consents, err := service.ListConsentsByUser(ctx, user.ID.String(), app.ID.String())
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(consents), 3, "Should have at least 3 consents")
 	})
@@ -96,8 +96,10 @@ func TestIntegration_CookieConsent(t *testing.T) {
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
-	user, _ := authsometesting.GetLoggedInUser(ctx)
-	org, _ := authsometesting.GetCurrentOrg(ctx)
+	user, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err)
+	app, err := mock.GetAppFromContext(ctx)
+	require.NoError(t, err)
 
 	repo := consent.NewMockRepository()
 	service := consent.NewService(repo, consent.DefaultConfig(), nil)
@@ -110,7 +112,7 @@ func TestIntegration_CookieConsent(t *testing.T) {
 			Marketing:  false,
 		}
 
-		cookieConsent, err := service.RecordCookieConsent(ctx, org.ID.String(), user.ID.String(), req)
+		cookieConsent, err := service.RecordCookieConsent(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 		assert.NotNil(t, cookieConsent)
 		assert.True(t, cookieConsent.Essential)
@@ -127,11 +129,11 @@ func TestIntegration_CookieConsent(t *testing.T) {
 			Analytics:  true,
 			Marketing:  true,
 		}
-		_, err := service.RecordCookieConsent(ctx, org.ID.String(), user.ID.String(), req)
+		_, err := service.RecordCookieConsent(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 
 		// Get preferences
-		retrieved, err := service.GetCookieConsent(ctx, user.ID.String(), org.ID.String())
+		retrieved, err := service.GetCookieConsent(ctx, user.ID.String(), app.ID.String())
 		require.NoError(t, err)
 		assert.True(t, retrieved.Essential)
 		assert.False(t, retrieved.Functional)
@@ -146,8 +148,10 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
-	user, _ := authsometesting.GetLoggedInUser(ctx)
-	org, _ := authsometesting.GetCurrentOrg(ctx)
+	user, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err)
+	app, err := mock.GetAppFromContext(ctx)
+	require.NoError(t, err)
 
 	repo := consent.NewMockRepository()
 	config := consent.DefaultConfig()
@@ -161,7 +165,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 			IncludeSections: []string{"profile", "consents", "privacy_settings"},
 		}
 
-		exportRequest, err := service.RequestDataExport(ctx, user.ID.String(), org.ID.String(), req)
+		exportRequest, err := service.RequestDataExport(ctx, user.ID.String(), app.ID.String(), req)
 		require.NoError(t, err)
 		assert.NotNil(t, exportRequest)
 		assert.Equal(t, "json", exportRequest.Format)
@@ -177,7 +181,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 			Format:          "csv",
 			IncludeSections: []string{"consents"},
 		}
-		created, err := service.RequestDataExport(ctx, user.ID.String(), org.ID.String(), req)
+		created, err := service.RequestDataExport(ctx, user.ID.String(), app.ID.String(), req)
 		require.NoError(t, err)
 
 		// Verify it was created
@@ -194,7 +198,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 				Format:          format,
 				IncludeSections: []string{"consents"},
 			}
-			exportRequest, err := service.RequestDataExport(ctx, user.ID.String(), org.ID.String(), req)
+			exportRequest, err := service.RequestDataExport(ctx, user.ID.String(), app.ID.String(), req)
 			require.NoError(t, err, "Should support %s format", format)
 			assert.Equal(t, format, exportRequest.Format)
 		}
@@ -207,8 +211,10 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
-	user, _ := authsometesting.GetLoggedInUser(ctx)
-	org, _ := authsometesting.GetCurrentOrg(ctx)
+	user, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err)
+	app, err := mock.GetAppFromContext(ctx)
+	require.NoError(t, err)
 
 	repo := consent.NewMockRepository()
 	config := consent.DefaultConfig()
@@ -223,7 +229,7 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 			DeleteSections: []string{"profile", "consents", "preferences"},
 		}
 
-		deletionRequest, err := service.RequestDataDeletion(ctx, user.ID.String(), org.ID.String(), req)
+		deletionRequest, err := service.RequestDataDeletion(ctx, user.ID.String(), app.ID.String(), req)
 		require.NoError(t, err)
 		assert.NotNil(t, deletionRequest)
 		assert.Equal(t, user.ID.String(), deletionRequest.UserID)
@@ -237,12 +243,12 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 			Reason:         "GDPR request",
 			DeleteSections: []string{"all"},
 		}
-		created, err := service.RequestDataDeletion(ctx, user.ID.String(), org.ID.String(), req)
+		created, err := service.RequestDataDeletion(ctx, user.ID.String(), app.ID.String(), req)
 		require.NoError(t, err)
 
 		// Approve it (as admin)
 		adminUser := mock.CreateUserWithRole("admin@example.com", "Admin", "admin")
-		err = service.ApproveDeletionRequest(ctx, created.ID.String(), org.ID.String(), adminUser.ID.String())
+		err = service.ApproveDeletionRequest(ctx, created.ID.String(), app.ID.String(), adminUser.ID.String())
 		require.NoError(t, err)
 
 		// Verify approval succeeded (no error means it worked)
@@ -254,12 +260,12 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 			Reason:         "User request",
 			DeleteSections: []string{"consents"},
 		}
-		created, err := service.RequestDataDeletion(ctx, user.ID.String(), org.ID.String(), req)
+		created, err := service.RequestDataDeletion(ctx, user.ID.String(), app.ID.String(), req)
 		require.NoError(t, err)
 
 		// Approve
 		adminUser := mock.CreateUserWithRole("admin@example.com", "Admin", "admin")
-		err = service.ApproveDeletionRequest(ctx, created.ID.String(), org.ID.String(), adminUser.ID.String())
+		err = service.ApproveDeletionRequest(ctx, created.ID.String(), app.ID.String(), adminUser.ID.String())
 		require.NoError(t, err)
 
 		// Verify grace period is configured
@@ -277,7 +283,7 @@ func TestIntegration_MultiTenancy(t *testing.T) {
 	user := mock.CreateUser("user@example.com", "Test User")
 	org1 := mock.GetDefaultOrg()
 	org2 := mock.CreateOrganization("Second Org", "second-org")
-	mock.AddUserToOrg(user.ID.String(), org2.ID.String(), "member")
+	mock.AddUserToOrg(user.ID, org2.ID, "member")
 
 	repo := consent.NewMockRepository()
 	service := consent.NewService(repo, consent.DefaultConfig(), nil)
@@ -354,8 +360,10 @@ func TestIntegration_ConsentExpiry(t *testing.T) {
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
-	user, _ := authsometesting.GetLoggedInUser(ctx)
-	org, _ := authsometesting.GetCurrentOrg(ctx)
+	user, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err)
+	app, err := mock.GetAppFromContext(ctx)
+	require.NoError(t, err)
 
 	repo := consent.NewMockRepository()
 	config := consent.DefaultConfig()
@@ -373,7 +381,7 @@ func TestIntegration_ConsentExpiry(t *testing.T) {
 			ExpiresIn:   &expiresIn,
 		}
 
-		consentRecord, err := service.CreateConsent(ctx, org.ID.String(), user.ID.String(), req)
+		consentRecord, err := service.CreateConsent(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 		assert.NotNil(t, consentRecord.ExpiresAt, "Consent should have expiry date")
 	})
@@ -387,7 +395,7 @@ func TestIntegration_ConsentExpiry(t *testing.T) {
 			Version:     "1.0",
 		}
 
-		consentRecord, err := service.CreateConsent(ctx, org.ID.String(), user.ID.String(), req)
+		consentRecord, err := service.CreateConsent(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 
 		// Verify the consent was created
@@ -402,8 +410,10 @@ func TestIntegration_ConsentPolicies(t *testing.T) {
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
-	user, _ := authsometesting.GetLoggedInUser(ctx)
-	org, _ := authsometesting.GetCurrentOrg(ctx)
+	user, err := mock.GetUserFromContext(ctx)
+	require.NoError(t, err)
+	app, err := mock.GetAppFromContext(ctx)
+	require.NoError(t, err)
 
 	repo := consent.NewMockRepository()
 	service := consent.NewService(repo, consent.DefaultConfig(), nil)
@@ -418,7 +428,7 @@ func TestIntegration_ConsentPolicies(t *testing.T) {
 			Required:    true,
 		}
 
-		policy, err := service.CreatePolicy(ctx, org.ID.String(), user.ID.String(), req)
+		policy, err := service.CreatePolicy(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 		assert.NotNil(t, policy)
 		assert.Equal(t, "terms_of_service", policy.ConsentType)
@@ -434,7 +444,7 @@ func TestIntegration_ConsentPolicies(t *testing.T) {
 			Description: "Data privacy information",
 			Content:     "Privacy details...",
 		}
-		created, err := service.CreatePolicy(ctx, org.ID.String(), user.ID.String(), req)
+		created, err := service.CreatePolicy(ctx, app.ID.String(), user.ID.String(), req)
 		require.NoError(t, err)
 
 		// Retrieve policy

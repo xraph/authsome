@@ -5,6 +5,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 )
@@ -62,9 +63,9 @@ type AfterSessionRevokeHook func(ctx context.Context, sessionID xid.ID) error
 
 // Auth hooks
 type BeforeSignUpHook func(ctx context.Context, req *auth.SignUpRequest) error
-type AfterSignUpHook func(ctx context.Context, response *auth.AuthResponse) error
+type AfterSignUpHook func(ctx context.Context, response *responses.AuthResponse) error
 type BeforeSignInHook func(ctx context.Context, req *auth.SignInRequest) error
-type AfterSignInHook func(ctx context.Context, response *auth.AuthResponse) error
+type AfterSignInHook func(ctx context.Context, response *responses.AuthResponse) error
 type BeforeSignOutHook func(ctx context.Context, token string) error
 type AfterSignOutHook func(ctx context.Context, token string) error
 
@@ -289,7 +290,7 @@ func (h *HookRegistry) ExecuteBeforeSignUp(ctx context.Context, req *auth.SignUp
 }
 
 // ExecuteAfterSignUp executes all after sign up hooks
-func (h *HookRegistry) ExecuteAfterSignUp(ctx context.Context, response *auth.AuthResponse) error {
+func (h *HookRegistry) ExecuteAfterSignUp(ctx context.Context, response *responses.AuthResponse) error {
 	for _, hook := range h.afterSignUp {
 		if err := hook(ctx, response); err != nil {
 			return err
@@ -309,7 +310,7 @@ func (h *HookRegistry) ExecuteBeforeSignIn(ctx context.Context, req *auth.SignIn
 }
 
 // ExecuteAfterSignIn executes all after sign in hooks
-func (h *HookRegistry) ExecuteAfterSignIn(ctx context.Context, response *auth.AuthResponse) error {
+func (h *HookRegistry) ExecuteAfterSignIn(ctx context.Context, response *responses.AuthResponse) error {
 	for _, hook := range h.afterSignIn {
 		if err := hook(ctx, response); err != nil {
 			return err

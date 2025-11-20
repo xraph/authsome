@@ -2,18 +2,18 @@ package emailotp
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
-	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/hooks"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
@@ -122,22 +122,22 @@ func (p *Plugin) ID() string { return "emailotp" }
 
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("emailotp plugin requires auth instance")
+		return errs.New("EMAILOTP_PLUGIN_REQUIRES_AUTH_INSTANCE", "Email OTP plugin requires auth instance", http.StatusInternalServerError)
 	}
 
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for emailotp plugin")
+		return errs.New("DATABASE_NOT_AVAILABLE", "Database not available for email OTP plugin", http.StatusInternalServerError)
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for emailotp plugin")
+		return errs.New("FORGE_APP_NOT_AVAILABLE", "Forge app not available for email OTP plugin", http.StatusInternalServerError)
 	}
 
 	// Initialize logger
-	p.logger = forgeApp.Logger().With(forge.F("plugin", "emailotp"))
+	p.logger = authInst.Logger().With(forge.F("plugin", "emailotp"))
 
 	// Get config manager and bind configuration
 	configManager := forgeApp.Config()
@@ -159,9 +159,8 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	eotpr := repo.NewEmailOTPRepository(p.db)
 	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
 	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
-	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
 	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
-	p.service = NewService(eotpr, userSvc, authSvc, auditSvc, p.notifAdapter, p.config)
+	p.service = NewService(eotpr, userSvc, sessionSvc, auditSvc, p.notifAdapter, p.config, p.logger)
 
 	p.logger.Info("email OTP plugin initialized",
 		forge.F("otp_length", p.config.OTPLength),
@@ -175,47 +174,38 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
+
 	// Router is already scoped to the correct basePath
 	// Set up a simple in-memory rate limit: 5 sends per minute per email
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/email-otp/send": {Window: time.Minute, Max: 5}}})
 	h := NewHandler(p.service, rls)
+
 	router.POST("/email-otp/send", h.Send,
 		forge.WithName("emailotp.send"),
 		forge.WithSummary("Send email OTP"),
 		forge.WithDescription("Sends a one-time password (OTP) to the specified email address. Rate limited to 5 requests per minute per email"),
-		forge.WithResponseSchema(200, "OTP sent", EmailOTPSendResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", EmailOTPErrorResponse{}),
-		forge.WithResponseSchema(429, "Too many requests", EmailOTPErrorResponse{}),
+		forge.WithRequestSchema(SendRequest{}),
+		forge.WithResponseSchema(200, "OTP sent", SendResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Too many requests", ErrorResponse{}),
+		forge.WithResponseSchema(500, "Server error", ErrorResponse{}),
 		forge.WithTags("EmailOTP", "Authentication"),
 		forge.WithValidation(true),
 	)
+
 	router.POST("/email-otp/verify", h.Verify,
 		forge.WithName("emailotp.verify"),
 		forge.WithSummary("Verify email OTP"),
 		forge.WithDescription("Verifies the OTP code and creates a user session on success. Supports implicit signup if enabled"),
-		forge.WithResponseSchema(200, "OTP verified", EmailOTPVerifyResponse{}),
-		forge.WithResponseSchema(400, "Invalid request", EmailOTPErrorResponse{}),
-		forge.WithResponseSchema(401, "Invalid OTP", EmailOTPErrorResponse{}),
+		forge.WithRequestSchema(VerifyRequest{}),
+		forge.WithResponseSchema(200, "OTP verified", VerifyResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid OTP", ErrorResponse{}),
 		forge.WithTags("EmailOTP", "Authentication"),
 		forge.WithValidation(true),
 	)
+
 	return nil
-}
-
-// Response types for email OTP routes
-type EmailOTPErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
-}
-
-type EmailOTPSendResponse struct {
-	Status string `json:"status" example:"sent"`
-	DevOTP string `json:"dev_otp,omitempty" example:"123456"`
-}
-
-type EmailOTPVerifyResponse struct {
-	User    interface{} `json:"user"`
-	Session interface{} `json:"session"`
-	Token   string      `json:"token" example:"session_token_abc123"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
