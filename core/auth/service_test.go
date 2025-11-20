@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
@@ -292,7 +293,11 @@ func TestService_SignUp(t *testing.T) {
 			tt.setup(mockUserSvc, mockSessionSvc)
 			svc := newTestService(mockUserSvc, mockSessionSvc, tt.config)
 
-			resp, err := svc.SignUp(context.Background(), tt.req)
+			// Create context with AppID
+			ctx := context.Background()
+			ctx = contexts.SetAppID(ctx, xid.New())
+
+			resp, err := svc.SignUp(ctx, tt.req)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -452,7 +457,11 @@ func TestService_SignIn(t *testing.T) {
 			tt.setup(mockUserSvc, mockSessionSvc)
 			svc := newTestService(mockUserSvc, mockSessionSvc)
 
-			resp, err := svc.SignIn(context.Background(), tt.req)
+			// Create context with AppID
+			ctx := context.Background()
+			ctx = contexts.SetAppID(ctx, xid.New())
+
+			resp, err := svc.SignIn(ctx, tt.req)
 
 			if tt.wantErr {
 				assert.Error(t, err)

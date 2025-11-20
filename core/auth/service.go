@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -26,12 +27,19 @@ func NewService(users user.ServiceInterface, session session.ServiceInterface, c
 
 // SignUp registers a new user and returns a session
 func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.AuthResponse, error) {
+	// Extract AppID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return nil, contexts.ErrAppContextRequired
+	}
+
 	// ensure user does not exist
 	existing, err := s.users.FindByEmail(ctx, req.Email)
 	if err == nil && existing != nil {
 		return nil, types.ErrEmailAlreadyExists
 	}
 	userReq := &user.CreateUserRequest{
+		AppID:    appID,
 		Email:    req.Email,
 		Password: req.Password,
 		Name:     req.Name,
@@ -47,6 +55,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	}
 
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
+		AppID:     appID,
 		UserID:    u.ID,
 		Remember:  req.Remember,
 		IPAddress: req.IPAddress,
@@ -60,6 +69,12 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 
 // SignIn authenticates a user and returns a session
 func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.AuthResponse, error) {
+	// Extract AppID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return nil, contexts.ErrAppContextRequired
+	}
+
 	u, err := s.users.FindByEmail(ctx, req.Email)
 	if err != nil || u == nil {
 		return nil, types.ErrInvalidCredentials
@@ -68,6 +83,7 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 		return nil, types.ErrInvalidCredentials
 	}
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
+		AppID:     appID,
 		UserID:    u.ID,
 		Remember:  req.Remember || req.RememberMe,
 		IPAddress: req.IPAddress,
@@ -93,7 +109,14 @@ func (s *Service) CheckCredentials(ctx context.Context, email, password string) 
 
 // CreateSessionForUser creates a session for a given user and returns auth response
 func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ip, ua string) (*responses.AuthResponse, error) {
+	// Extract AppID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return nil, contexts.ErrAppContextRequired
+	}
+
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
+		AppID:     appID,
 		UserID:    u.ID,
 		Remember:  remember,
 		IPAddress: ip,

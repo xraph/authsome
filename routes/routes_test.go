@@ -13,7 +13,9 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	dev "github.com/xraph/authsome/core/device"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -28,60 +30,100 @@ import (
 // Mock audit repository for testing
 type mockAuditRepo struct{}
 
-func (m *mockAuditRepo) Create(ctx context.Context, event *audit.Event) error { return nil }
-func (m *mockAuditRepo) List(ctx context.Context, limit, offset int) ([]*audit.Event, error) {
-	return []*audit.Event{}, nil
+func (m *mockAuditRepo) Create(ctx context.Context, event *schema.AuditEvent) error { return nil }
+func (m *mockAuditRepo) Get(ctx context.Context, id xid.ID) (*schema.AuditEvent, error) {
+	return nil, nil
 }
-func (m *mockAuditRepo) Search(ctx context.Context, params audit.ListParams) ([]*audit.Event, error) {
-	return []*audit.Event{}, nil
-}
-func (m *mockAuditRepo) Count(ctx context.Context) (int, error) { return 0, nil }
-func (m *mockAuditRepo) SearchCount(ctx context.Context, params audit.ListParams) (int, error) {
-	return 0, nil
+func (m *mockAuditRepo) List(ctx context.Context, filter *audit.ListEventsFilter) (*pagination.PageResponse[*schema.AuditEvent], error) {
+	return &pagination.PageResponse[*schema.AuditEvent]{
+		Data: []*schema.AuditEvent{},
+		Pagination: &pagination.PageMeta{
+			Total:       0,
+			Limit:       50,
+			Offset:      0,
+			CurrentPage: 1,
+			TotalPages:  1,
+			HasNext:     false,
+			HasPrev:     false,
+		},
+	}, nil
 }
 
 // Mock webhook repository for testing
 type mockWebhookRepo struct{}
 
-func (m *mockWebhookRepo) Create(ctx context.Context, webhook *webhook.Webhook) error { return nil }
-func (m *mockWebhookRepo) FindByID(ctx context.Context, id xid.ID) (*webhook.Webhook, error) {
+func (m *mockWebhookRepo) CreateWebhook(ctx context.Context, wh *schema.Webhook) error { return nil }
+func (m *mockWebhookRepo) FindWebhookByID(ctx context.Context, id xid.ID) (*schema.Webhook, error) {
 	return nil, nil
 }
-func (m *mockWebhookRepo) FindByOrgID(ctx context.Context, orgID string, enabled *bool, offset, limit int) ([]*webhook.Webhook, int64, error) {
-	return []*webhook.Webhook{}, 0, nil
+func (m *mockWebhookRepo) ListWebhooks(ctx context.Context, filter *webhook.ListWebhooksFilter) (*pagination.PageResponse[*schema.Webhook], error) {
+	return &pagination.PageResponse[*schema.Webhook]{
+		Data: []*schema.Webhook{},
+		Pagination: &pagination.PageMeta{
+			Total:       0,
+			Limit:       50,
+			Offset:      0,
+			CurrentPage: 1,
+			TotalPages:  1,
+			HasNext:     false,
+			HasPrev:     false,
+		},
+	}, nil
 }
-func (m *mockWebhookRepo) FindByOrgAndEvent(ctx context.Context, orgID, eventType string) ([]*webhook.Webhook, error) {
-	return []*webhook.Webhook{}, nil
+func (m *mockWebhookRepo) FindWebhooksByAppAndEvent(ctx context.Context, appID xid.ID, envID xid.ID, eventType string) ([]*schema.Webhook, error) {
+	return []*schema.Webhook{}, nil
 }
-func (m *mockWebhookRepo) Update(ctx context.Context, webhook *webhook.Webhook) error { return nil }
-func (m *mockWebhookRepo) Delete(ctx context.Context, id xid.ID) error                { return nil }
+func (m *mockWebhookRepo) UpdateWebhook(ctx context.Context, wh *schema.Webhook) error { return nil }
+func (m *mockWebhookRepo) DeleteWebhook(ctx context.Context, id xid.ID) error          { return nil }
 func (m *mockWebhookRepo) UpdateFailureCount(ctx context.Context, id xid.ID, count int) error {
 	return nil
 }
 func (m *mockWebhookRepo) UpdateLastDelivery(ctx context.Context, id xid.ID, timestamp time.Time) error {
 	return nil
 }
-func (m *mockWebhookRepo) CreateEvent(ctx context.Context, event *webhook.Event) error { return nil }
-func (m *mockWebhookRepo) FindEventByID(ctx context.Context, id xid.ID) (*webhook.Event, error) {
+func (m *mockWebhookRepo) CreateEvent(ctx context.Context, event *schema.Event) error { return nil }
+func (m *mockWebhookRepo) FindEventByID(ctx context.Context, id xid.ID) (*schema.Event, error) {
 	return nil, nil
 }
-func (m *mockWebhookRepo) ListEvents(ctx context.Context, orgID string, offset, limit int) ([]*webhook.Event, int64, error) {
-	return []*webhook.Event{}, 0, nil
+func (m *mockWebhookRepo) ListEvents(ctx context.Context, filter *webhook.ListEventsFilter) (*pagination.PageResponse[*schema.Event], error) {
+	return &pagination.PageResponse[*schema.Event]{
+		Data: []*schema.Event{},
+		Pagination: &pagination.PageMeta{
+			Total:       0,
+			Limit:       50,
+			Offset:      0,
+			CurrentPage: 1,
+			TotalPages:  1,
+			HasNext:     false,
+			HasPrev:     false,
+		},
+	}, nil
 }
-func (m *mockWebhookRepo) CreateDelivery(ctx context.Context, delivery *webhook.Delivery) error {
+func (m *mockWebhookRepo) CreateDelivery(ctx context.Context, delivery *schema.Delivery) error {
 	return nil
 }
-func (m *mockWebhookRepo) FindDeliveryByID(ctx context.Context, id xid.ID) (*webhook.Delivery, error) {
+func (m *mockWebhookRepo) FindDeliveryByID(ctx context.Context, id xid.ID) (*schema.Delivery, error) {
 	return nil, nil
 }
-func (m *mockWebhookRepo) FindDeliveriesByWebhook(ctx context.Context, webhookID xid.ID, status string, offset, limit int) ([]*webhook.Delivery, int64, error) {
-	return []*webhook.Delivery{}, 0, nil
+func (m *mockWebhookRepo) ListDeliveries(ctx context.Context, filter *webhook.ListDeliveriesFilter) (*pagination.PageResponse[*schema.Delivery], error) {
+	return &pagination.PageResponse[*schema.Delivery]{
+		Data: []*schema.Delivery{},
+		Pagination: &pagination.PageMeta{
+			Total:       0,
+			Limit:       50,
+			Offset:      0,
+			CurrentPage: 1,
+			TotalPages:  1,
+			HasNext:     false,
+			HasPrev:     false,
+		},
+	}, nil
 }
-func (m *mockWebhookRepo) UpdateDelivery(ctx context.Context, delivery *webhook.Delivery) error {
+func (m *mockWebhookRepo) UpdateDelivery(ctx context.Context, delivery *schema.Delivery) error {
 	return nil
 }
-func (m *mockWebhookRepo) FindPendingDeliveries(ctx context.Context, limit int) ([]*webhook.Delivery, error) {
-	return []*webhook.Delivery{}, nil
+func (m *mockWebhookRepo) FindPendingDeliveries(ctx context.Context, limit int) ([]*schema.Delivery, error) {
+	return []*schema.Delivery{}, nil
 }
 
 // Envelope type for paginated policies list responses
@@ -95,31 +137,46 @@ type PaginatedPolicies struct {
 
 // In-memory user repo
 type memUserRepo struct {
-	byID    map[xid.ID]*user.User
-	byEmail map[string]*user.User
+	byID    map[xid.ID]*schema.User
+	byEmail map[string]*schema.User
 }
 
 func newMemUserRepo() *memUserRepo {
-	return &memUserRepo{byID: map[xid.ID]*user.User{}, byEmail: map[string]*user.User{}}
+	return &memUserRepo{byID: map[xid.ID]*schema.User{}, byEmail: map[string]*schema.User{}}
 }
-func (m *memUserRepo) Create(_ context.Context, u *user.User) error {
+func (m *memUserRepo) Create(_ context.Context, u *schema.User) error {
 	m.byID[u.ID] = u
 	m.byEmail[u.Email] = u
 	return nil
 }
-func (m *memUserRepo) FindByID(_ context.Context, id xid.ID) (*user.User, error) {
+func (m *memUserRepo) FindByID(_ context.Context, id xid.ID) (*schema.User, error) {
 	if u, ok := m.byID[id]; ok {
 		return u, nil
 	}
 	return nil, nil
 }
-func (m *memUserRepo) FindByEmail(_ context.Context, email string) (*user.User, error) {
+func (m *memUserRepo) FindByEmail(_ context.Context, email string) (*schema.User, error) {
 	if u, ok := m.byEmail[email]; ok {
 		return u, nil
 	}
 	return nil, nil
 }
-func (m *memUserRepo) Update(_ context.Context, u *user.User) error {
+func (m *memUserRepo) FindByAppAndEmail(_ context.Context, appID xid.ID, email string) (*schema.User, error) {
+	// For testing, ignore appID filtering
+	if u, ok := m.byEmail[email]; ok {
+		return u, nil
+	}
+	return nil, nil
+}
+func (m *memUserRepo) FindByUsername(_ context.Context, username string) (*schema.User, error) {
+	for _, u := range m.byID {
+		if u.Username == username || u.DisplayUsername == username {
+			return u, nil
+		}
+	}
+	return nil, nil
+}
+func (m *memUserRepo) Update(_ context.Context, u *schema.User) error {
 	m.byID[u.ID] = u
 	m.byEmail[u.Email] = u
 	return nil
@@ -131,86 +188,127 @@ func (m *memUserRepo) Delete(_ context.Context, id xid.ID) error {
 	}
 	return nil
 }
-func (m *memUserRepo) List(_ context.Context, limit, offset int) ([]*user.User, error) {
-	out := []*user.User{}
+func (m *memUserRepo) ListUsers(_ context.Context, filter *user.ListUsersFilter) (*pagination.PageResponse[*schema.User], error) {
+	out := []*schema.User{}
 	i := 0
+	offset := filter.Offset
+	limit := filter.Limit
+	if limit == 0 {
+		limit = 50
+	}
 	for _, u := range m.byID {
 		if i >= offset && len(out) < limit {
 			out = append(out, u)
 		}
 		i++
 	}
-	return out, nil
+	return &pagination.PageResponse[*schema.User]{
+		Data: out,
+		Pagination: &pagination.PageMeta{
+			Total:       int64(len(m.byID)),
+			Limit:       limit,
+			Offset:      offset,
+			CurrentPage: (offset / limit) + 1,
+			TotalPages:  (len(m.byID) + limit - 1) / limit,
+			HasNext:     offset+limit < len(m.byID),
+			HasPrev:     offset > 0,
+		},
+	}, nil
 }
-func (m *memUserRepo) Count(_ context.Context) (int, error) { return len(m.byID), nil }
-
-// FindByUsername implements the interface; simple scan over users
-func (m *memUserRepo) FindByUsername(_ context.Context, username string) (*user.User, error) {
-	for _, u := range m.byID {
-		if u.Username == username || u.DisplayUsername == username {
-			return u, nil
-		}
-	}
-	return nil, nil
+func (m *memUserRepo) CountUsers(_ context.Context, filter *user.CountUsersFilter) (int, error) {
+	return len(m.byID), nil
 }
 
 // In-memory session repo
 type memSessionRepo struct {
-	byToken map[string]*session.Session
-	byID    map[xid.ID]*session.Session
+	byToken map[string]*schema.Session
+	byID    map[xid.ID]*schema.Session
 }
 
 func newMemSessionRepo() *memSessionRepo {
 	return &memSessionRepo{
-		byToken: make(map[string]*session.Session),
-		byID:    make(map[xid.ID]*session.Session),
+		byToken: make(map[string]*schema.Session),
+		byID:    make(map[xid.ID]*schema.Session),
 	}
 }
-func (m *memSessionRepo) Create(_ context.Context, s *session.Session) error {
+func (m *memSessionRepo) CreateSession(_ context.Context, s *schema.Session) error {
 	m.byToken[s.Token] = s
 	m.byID[s.ID] = s
 	return nil
 }
-func (m *memSessionRepo) FindByToken(_ context.Context, token string) (*session.Session, error) {
-	s, ok := m.byToken[token]
-	if !ok {
-		return nil, nil
-	}
-	return s, nil
-}
-func (m *memSessionRepo) Revoke(_ context.Context, token string) error {
-	if s, ok := m.byToken[token]; ok {
-		delete(m.byID, s.ID)
-	}
-	delete(m.byToken, token)
-	return nil
-}
-func (m *memSessionRepo) FindByID(_ context.Context, id xid.ID) (*session.Session, error) {
+func (m *memSessionRepo) FindSessionByID(_ context.Context, id xid.ID) (*schema.Session, error) {
 	s, ok := m.byID[id]
 	if !ok {
 		return nil, nil
 	}
 	return s, nil
 }
-func (m *memSessionRepo) ListByUser(_ context.Context, userID xid.ID, limit, offset int) ([]*session.Session, error) {
-	var sessions []*session.Session
-	count := 0
-	for _, s := range m.byID {
-		if s.UserID == userID {
-			if count >= offset && len(sessions) < limit {
-				sessions = append(sessions, s)
-			}
-			count++
-		}
+func (m *memSessionRepo) FindSessionByToken(_ context.Context, token string) (*schema.Session, error) {
+	s, ok := m.byToken[token]
+	if !ok {
+		return nil, nil
 	}
-	return sessions, nil
+	return s, nil
 }
-func (m *memSessionRepo) RevokeByID(_ context.Context, id xid.ID) error {
+func (m *memSessionRepo) ListSessions(_ context.Context, filter *session.ListSessionsFilter) (*pagination.PageResponse[*schema.Session], error) {
+	var sessions []*schema.Session
+	count := 0
+	offset := filter.Offset
+	limit := filter.Limit
+	if limit == 0 {
+		limit = 50
+	}
+	for _, s := range m.byID {
+		// Apply userID filter if present
+		if filter.UserID != nil && !filter.UserID.IsNil() && s.UserID != *filter.UserID {
+			continue
+		}
+		if count >= offset && len(sessions) < limit {
+			sessions = append(sessions, s)
+		}
+		count++
+	}
+	total := count
+	return &pagination.PageResponse[*schema.Session]{
+		Data: sessions,
+		Pagination: &pagination.PageMeta{
+			Total:       int64(total),
+			Limit:       limit,
+			Offset:      offset,
+			CurrentPage: (offset / limit) + 1,
+			TotalPages:  (total + limit - 1) / limit,
+			HasNext:     offset+limit < total,
+			HasPrev:     offset > 0,
+		},
+	}, nil
+}
+func (m *memSessionRepo) RevokeSession(_ context.Context, token string) error {
+	if s, ok := m.byToken[token]; ok {
+		delete(m.byID, s.ID)
+	}
+	delete(m.byToken, token)
+	return nil
+}
+func (m *memSessionRepo) RevokeSessionByID(_ context.Context, id xid.ID) error {
 	if s, ok := m.byID[id]; ok {
 		delete(m.byToken, s.Token)
 		delete(m.byID, id)
 	}
 	return nil
+}
+func (m *memSessionRepo) CountSessions(_ context.Context, appID xid.ID, userID *xid.ID) (int, error) {
+	count := 0
+	for _, s := range m.byID {
+		if userID != nil && !userID.IsNil() && s.UserID != *userID {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+func (m *memSessionRepo) CleanupExpiredSessions(_ context.Context) (int, error) {
+	// For testing purposes, return 0 as we don't clean up expired sessions
+	return 0, nil
 }
 
 func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
@@ -230,12 +328,27 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// security and audit services optional for tests; pass nil
 	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, nil, nil)
 
-	mux := http.NewServeMux()
-	app := forge.NewApp(mux)
-	Register(app, "/api/auth", h)
+	// Create a test AppID
+	testAppID := xid.New()
 
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	// Create Forge app with middleware that injects AppID into context
+	app := forge.NewApp(forge.AppConfig{
+		Name:        "routes-test",
+		Version:     "1.0.0",
+		Environment: "test",
+	})
+
+	// Wrap the router with middleware that sets AppID in context
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		ctx = contexts.SetAppID(ctx, testAppID)
+		r = r.WithContext(ctx)
+		app.Router().ServeHTTP(w, r)
+	})
+
+	Register(app.Router(), "/api/auth", h)
+
+	srv := httptest.NewServer(wrappedHandler)
 
 	// SignUp
 	signupBody := map[string]any{"email": "alice@example.com", "password": "password123", "name": "Alice"}
@@ -245,7 +358,9 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 		t.Fatalf("signup request error: %v", err)
 	}
 	if resp.StatusCode != 200 {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
+		var errResp map[string]any
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		t.Fatalf("expected 200, got %d, error: %v", resp.StatusCode, errResp)
 	}
 	var signupRes auth.AuthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&signupRes); err != nil {
