@@ -7,7 +7,7 @@ routes:
       path: /phone/send-code
       request:
         phone: string!
-      request_type: SendCode_body
+      request_type: SendCodeRequest
     - name: Verify
       description: Verify checks the code and creates a session on success
       method: POST
@@ -18,11 +18,11 @@ routes:
         phone: string!
         remember: bool!
       response:
-        session: '!'
+        session: '*session.Session!'
         token: string!
-        user: '!'
-      request_type: Verify_body
-      response_type: VerifyResponse
+        user: '*user.User!'
+      request_type: VerifyRequest
+      response_type: PhoneVerifyResponse
     - name: SignIn
       description: SignIn aliases to Verify for convenience
       method: POST
@@ -33,47 +33,22 @@ routes:
         phone: string!
         remember: bool!
       response:
-        session: '!'
+        session: '*session.Session!'
         token: string!
-        user: '!'
-      request_type: SignIn_body
-      response_type: VerifyResponse
+        user: '*user.User!'
+      request_type: VerifyRequest
+      response_type: PhoneVerifyResponse
 types:
-    - name: VerifyResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: SendCode_body
-      fields:
-        phone: string!
-    - name: Verify_body
-      fields:
-        code: string!
-        email: string!
-        phone: string!
-        remember: bool!
-    - name: SignIn_body
-      fields:
-        code: string!
-        email: string!
-        phone: string!
-        remember: bool!
     - name: Plugin
       fields:
         "": Config
-    - name: PhoneSendCodeResponse
-      fields:
-        dev_code: string!
-        status: string!
-    - name: PhoneVerifyResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
     - name: Handler
       fields:
         "": '*rl.Service'
+    - name: SendCodeResponse
+      fields:
+        dev_code: string!
+        status: string!
     - name: Config
       fields:
         allowImplicitSignup: bool!
@@ -81,11 +56,37 @@ types:
         devExposeCode: bool!
         expiryMinutes: int!
         maxAttempts: int!
-        rateLimitPerHour: int!
+        rateLimit: RateLimitConfig!
         smsProvider: string!
-    - name: PhoneErrorResponse
+    - name: RateLimitConfig
       fields:
-        error: string!
+        enabled: bool!
+        redisAddr: string!
+        redisDb: int!
+        redisPassword: string!
+        sendCodePerIp: RateLimitRule!
+        sendCodePerPhone: RateLimitRule!
+        useRedis: bool!
+        verifyPerIp: RateLimitRule!
+        verifyPerPhone: RateLimitRule!
+    - name: RateLimitRule
+      fields:
+        max: int!
+        window: time.Duration!
     - name: Service
       fields:
-        "": '*auth.Service'
+        "": Config
+    - name: SendCodeRequest
+      fields:
+        phone: string!
+    - name: VerifyRequest
+      fields:
+        code: string!
+        email: string!
+        phone: string!
+        remember: bool!
+    - name: PhoneVerifyResponse
+      fields:
+        session: '*session.Session!'
+        token: string!
+        user: '*user.User!'

@@ -2,109 +2,143 @@ plugin_id: passkey
 version: 1.0.0
 routes:
     - name: BeginRegister
+      description: BeginRegister initiates passkey registration with WebAuthn challenge
       method: POST
       path: /register/begin
-      request:
-        user_id: string!
-      request_type: BeginRegister_body
     - name: FinishRegister
+      description: FinishRegister completes passkey registration with attestation verification
       method: POST
       path: /register/finish
-      request:
-        credential_id: string!
-        user_id: string!
-      response:
-        status: string!
-      request_type: FinishRegister_body
-      response_type: StatusResponse
     - name: BeginLogin
+      description: BeginLogin initiates passkey authentication with WebAuthn challenge
       method: POST
       path: /login/begin
-      request:
-        user_id: string!
-      request_type: BeginLogin_body
     - name: FinishLogin
+      description: FinishLogin completes passkey authentication with signature verification
       method: POST
       path: /login/finish
-      request:
-        remember: bool!
-        user_id: string!
-      response:
-        session: '!'
-        token: string!
-        user: '!'
-      request_type: FinishLogin_body
-      response_type: AuthResponse
     - name: List
+      description: List retrieves all passkeys for a user
       method: GET
       path: /list
+    - name: Update
+      description: Update updates a passkey's metadata (name)
+      method: PUT
+      path: /:id
     - name: Delete
+      description: Delete removes a passkey
       method: DELETE
       path: /:id
-      response:
-        status: string!
       response_type: StatusResponse
 types:
-    - name: PasskeyListResponse
+    - name: UserAdapter
       fields:
-        passkeys: '[]!'
-    - name: BeginRegister_body
+        "": '[]webauthn.Credential'
+    - name: WebAuthnWrapper
       fields:
-        user_id: string!
-    - name: FinishRegister_body
+        "": Config
+    - name: RedisChallengeStore
+      fields: {}
+    - name: FinishRegisterRequest
       fields:
-        credential_id: string!
-        user_id: string!
-    - name: Config
+        name: string!
+        response: '!'
+        userId: string!
+    - name: UpdatePasskeyRequest
       fields:
         "": string
-    - name: Service
+        name: string!
+    - name: LoginResponse
       fields:
-        "": '*user.Service'
-    - name: FinishLogin_body
-      fields:
-        remember: bool!
-        user_id: string!
-    - name: PasskeyStatusResponse
-      fields:
-        status: string!
-    - name: PasskeyRegistrationOptionsResponse
-      fields:
-        options: '!'
-    - name: ErrorResponse
-      fields:
-        error: string!
-    - name: MessageResponse
-      fields:
-        message: string!
-    - name: StatusResponse
-      fields:
-        status: string!
-    - name: SuccessResponse
-      fields:
-        success: bool!
-    - name: AuthResponse
-      fields:
+        passkeyUsed: string!
         session: '!'
         token: string!
         user: '!'
-    - name: BeginLogin_body
+    - name: Service
       fields:
-        user_id: string!
-    - name: PasskeyErrorResponse
+        "": ChallengeStore
+    - name: ChallengeSession
       fields:
-        error: string!
-    - name: PasskeyLoginOptionsResponse
+        "": xid.ID
+    - name: Config
       fields:
-        options: '!'
+        attestationtype: string!
+        authenticatorattachment: string!
+        challengestorage: string!
+        requireresidentkey: bool!
+        rpid: string!
+        rpname: string!
+        rporigins: '[]string!'
+        timeout: time.Duration!
+        userverification: string!
     - name: Handler
       fields:
         "": '*Service'
+    - name: GetPasskeyRequest
+      fields:
+        "": string
+    - name: BeginLoginResponse
+      fields:
+        challenge: string!
+        options: '!'
+        timeout: time.Duration!
+    - name: ListPasskeysResponse
+      fields:
+        count: int!
+        passkeys: '[]PasskeyInfo!'
     - name: Plugin
       fields:
-        "": Config
-    - name: PasskeyLoginResponse
+        "": forge.Logger
+    - name: BeginLoginRequest
       fields:
-        session: '!'
-        token: string!
-        user: '!'
+        userId: string!
+        userVerification: string!
+    - name: FinishLoginRequest
+      fields:
+        remember: bool!
+        response: '!'
+    - name: ListPasskeysRequest
+      fields:
+        "": string
+    - name: DeletePasskeyRequest
+      fields:
+        "": string
+    - name: UpdatePasskeyResponse
+      fields:
+        name: string!
+        passkeyId: string!
+        updatedAt: time.Time!
+    - name: MemoryChallengeStore
+      fields:
+        "": time.Duration
+    - name: BeginRegisterRequest
+      fields:
+        authenticatorType: string!
+        name: string!
+        requireResidentKey: bool!
+        userId: string!
+        userVerification: string!
+    - name: BeginRegisterResponse
+      fields:
+        challenge: string!
+        options: '!'
+        timeout: time.Duration!
+        userId: string!
+    - name: FinishRegisterResponse
+      fields:
+        createdAt: time.Time!
+        credentialId: string!
+        name: string!
+        passkeyId: string!
+        status: string!
+    - name: PasskeyInfo
+      fields:
+        aaguid: string!
+        authenticatorType: string!
+        createdAt: time.Time!
+        credentialId: string!
+        id: string!
+        isResidentKey: bool!
+        lastUsedAt: '*time.Time!'
+        name: string!
+        signCount: uint32!

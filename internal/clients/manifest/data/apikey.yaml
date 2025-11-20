@@ -35,8 +35,6 @@ routes:
       description: DeleteAPIKey handles DELETE /api-keys/:id
       method: DELETE
       path: /:id
-      response:
-        message: string!
       response_type: MessageResponse
     - name: RotateAPIKey
       description: RotateAPIKey handles POST /api-keys/:id/rotate
@@ -52,9 +50,12 @@ routes:
       path: /verify
       request_type: apikey.VerifyAPIKeyRequest
 types:
+    - name: Middleware
+      fields:
+        "": Config
     - name: Plugin
       fields:
-        "": '*Handler'
+        "": ""
     - name: Config
       fields:
         allow_query_param: bool!
@@ -68,50 +69,24 @@ types:
         max_rate_limit: int!
         rate_limiting: RateLimitConfig!
         webhooks: WebhookConfig!
-    - name: IPWhitelistConfig
-      fields:
-        enabled: bool!
-        strict_mode: bool!
-    - name: WebhookConfig
-      fields:
-        enabled: bool!
-        expiry_warning_days: int!
-        notify_on_created: bool!
-        notify_on_deleted: bool!
-        notify_on_expiring: bool!
-        notify_on_rate_limit: bool!
-        notify_on_rotated: bool!
-        webhook_urls: '[]string!'
-    - name: Handler
-      fields:
-        "": Config
-    - name: RotateAPIKeyResponse
-      fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
-    - name: RolesResponse
-      fields:
-        roles: '[]*apikey.Role!'
-    - name: AssignRole_reqBody
-      fields:
-        roleID: string!
-    - name: Middleware
-      fields:
-        "": Config
     - name: RateLimitConfig
       fields:
         enabled: bool!
         window: time.Duration!
+    - name: IPWhitelistConfig
+      fields:
+        enabled: bool!
+        strict_mode: bool!
     - name: AutoCleanupConfig
       fields:
         enabled: bool!
         interval: time.Duration!
+    - name: Handler
+      fields:
+        "": Config
     - name: CreateAPIKeyResponse
       fields:
         api_key: '*apikey.APIKey!'
-        message: string!
-    - name: MessageResponse
-      fields:
         message: string!
     - name: CreateAPIKey_reqBody
       fields:
@@ -122,3 +97,23 @@ types:
         permissions: ""
         rate_limit: int
         scopes: '[]string!'
+    - name: AssignRole_reqBody
+      fields:
+        roleID: string!
+    - name: WebhookConfig
+      fields:
+        enabled: bool!
+        expiry_warning_days: int!
+        notify_on_created: bool!
+        notify_on_deleted: bool!
+        notify_on_expiring: bool!
+        notify_on_rate_limit: bool!
+        notify_on_rotated: bool!
+        webhook_urls: '[]string!'
+    - name: RotateAPIKeyResponse
+      fields:
+        api_key: '*apikey.APIKey!'
+        message: string!
+    - name: RolesResponse
+      fields:
+        roles: '[]*apikey.Role!'

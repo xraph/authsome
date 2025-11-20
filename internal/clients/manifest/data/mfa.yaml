@@ -10,12 +10,7 @@ routes:
         name: string!
         priority: FactorPriority!
         type: FactorType!
-      response:
-        code: string!
-        details: '!'
-        error: string!
       request_type: FactorEnrollmentRequest
-      response_type: ErrorResponse
     - name: ListFactors
       description: ListFactors handles GET /mfa/factors
       method: GET
@@ -28,24 +23,15 @@ routes:
       description: GetFactor handles GET /mfa/factors/:id
       method: GET
       path: /mfa/factors/:id
-      response:
-        code: string!
-        details: '!'
-        error: string!
-      response_type: ErrorResponse
     - name: UpdateFactor
       description: UpdateFactor handles PUT /mfa/factors/:id
       method: PUT
       path: /mfa/factors/:id
-      response:
-        message: string!
       response_type: MessageResponse
     - name: DeleteFactor
       description: DeleteFactor handles DELETE /mfa/factors/:id
       method: DELETE
       path: /mfa/factors/:id
-      response:
-        message: string!
       response_type: MessageResponse
     - name: VerifyFactor
       description: VerifyFactor handles POST /mfa/factors/:id/verify
@@ -53,8 +39,6 @@ routes:
       path: /mfa/factors/:id/verify
       request:
         code: string!
-      response:
-        message: string!
       request_type: VerifyFactor_req
       response_type: MessageResponse
     - name: InitiateChallenge
@@ -66,12 +50,7 @@ routes:
         factorTypes: '[]FactorType!'
         metadata: '!'
         userId: xid.ID!
-      response:
-        code: string!
-        details: '!'
-        error: string!
       request_type: ChallengeRequest
-      response_type: ErrorResponse
     - name: VerifyChallenge
       description: VerifyChallenge handles POST /mfa/verify
       method: POST
@@ -83,21 +62,11 @@ routes:
         deviceInfo: '*DeviceInfo!'
         factorId: xid.ID!
         rememberDevice: bool!
-      response:
-        code: string!
-        details: '!'
-        error: string!
       request_type: VerificationRequest
-      response_type: ErrorResponse
     - name: GetChallengeStatus
       description: GetChallengeStatus handles GET /mfa/challenge/:id
       method: GET
       path: /mfa/challenge/:id
-      response:
-        code: string!
-        details: '!'
-        error: string!
-      response_type: ErrorResponse
     - name: TrustDevice
       description: TrustDevice handles POST /mfa/devices/trust
       method: POST
@@ -106,8 +75,6 @@ routes:
         deviceId: string!
         metadata: '!'
         name: string!
-      response:
-        message: string!
       request_type: DeviceInfo
       response_type: MessageResponse
     - name: ListTrustedDevices
@@ -122,18 +89,11 @@ routes:
       description: RevokeTrustedDevice handles DELETE /mfa/devices/:id
       method: DELETE
       path: /mfa/devices/:id
-      response:
-        message: string!
       response_type: MessageResponse
     - name: GetStatus
       description: GetStatus handles GET /mfa/status
       method: GET
       path: /mfa/status
-      response:
-        code: string!
-        details: '!'
-        error: string!
-      response_type: ErrorResponse
     - name: GetPolicy
       description: GetPolicy handles GET /mfa/policy
       method: GET
@@ -143,50 +103,84 @@ routes:
         enabled: bool!
         required_factor_count: int!
       response_type: MFAConfigResponse
+    - name: AdminUpdatePolicy
+      description: |-
+        AdminUpdatePolicy handles PUT /mfa/admin/policy
+        Updates the MFA policy for an app (admin only)
+      method: PUT
+      path: /mfa/policy
+      request:
+        allowedTypes: '[]string!'
+        enabled: bool!
+        gracePeriod: int!
+        requiredFactors: int!
+      request_type: AdminPolicyRequest
+    - name: AdminResetUserMFA
+      description: |-
+        AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
+        Resets all MFA factors for a user (admin only)
+      method: POST
+      path: /mfa/users/:id/reset
 types:
-    - name: VerifyEnrolledFactorRequest
+    - name: ErrorResponse
       fields:
-        "": string
         code: string!
-        data: '!'
-    - name: ListTrustedDevicesResponse
+        details: '!'
+        error: string!
+    - name: VerificationResponse
       fields:
-        count: int!
-        devices: '[]TrustedDevice!'
-    - name: ResetUserMFARequest
+        expiresAt: '*time.Time!'
+        factorsRemaining: int!
+        sessionComplete: bool!
+        success: bool!
+        token: string!
+    - name: MFAPolicyResponse
       fields:
-        "": string
-        reason: string!
-    - name: SMSFactorAdapter
+        allowedFactorTypes: '[]string!'
+        appId: xid.ID!
+        enabled: bool!
+        gracePeriodDays: int!
+        id: xid.ID!
+        organizationId: '*xid.ID!'
+        requiredFactorCount: int!
+    - name: RiskAssessment
       fields:
-        "": '*phone.Service'
-    - name: RateLimiter
+        factors: '[]string!'
+        level: RiskLevel!
+        metadata: '!'
+        recommended: '[]FactorType!'
+        score: float64!
+    - name: MFAConfigResponse
       fields:
-        "": '*repository.MFARepository'
-    - name: RevokeTrustedDeviceRequest
+        allowed_factor_types: '[]string!'
+        enabled: bool!
+        required_factor_count: int!
+    - name: Plugin
       fields:
-        "": string
+        "": '*Config'
+    - name: TrustDeviceRequest
+      fields:
+        deviceId: string!
+        metadata: '!'
+        name: string!
     - name: GetStatusRequest
       fields:
         "": string
-    - name: ResetUserMFAResponse
-      fields:
-        devicesRevoked: int!
-        factorsReset: int!
-        message: string!
-        success: bool!
     - name: RiskFactor
       fields:
-        "": float64
-    - name: EnrollFactorRequest
+        "": string
+    - name: Service
       fields:
-        metadata: '!'
-        name: string!
-        priority: FactorPriority!
+        "": '*Config'
+    - name: FactorEnrollmentResponse
+      fields:
+        factorId: xid.ID!
+        provisioningData: '!'
+        status: FactorStatus!
         type: FactorType!
-    - name: RiskEngine
+    - name: RevokeTrustedDeviceRequest
       fields:
-        "": '*repository.MFARepository'
+        "": string
     - name: MFASession
       fields:
         completedAt: '*time.Time!'
@@ -202,21 +196,177 @@ types:
         userAgent: string!
         userId: xid.ID!
         verifiedFactors: '[]xid.ID!'
-    - name: BackupCodeFactorAdapter
+    - name: TrustedDevicesConfig
       fields:
-        "": '*twofa.Service'
-    - name: AdaptiveMFAConfig
+        default_expiry_days: int!
+        enabled: bool!
+        max_devices_per_user: int!
+        max_expiry_days: int!
+    - name: DeleteFactorRequest
+      fields:
+        "": string
+    - name: VerifyEnrolledFactorRequest
+      fields:
+        "": string
+        code: string!
+        data: '!'
+    - name: GetChallengeStatusResponse
+      fields:
+        attempts: int!
+        availableFactors: '[]FactorInfo!'
+        challengeId: xid.ID!
+        factorsRequired: int!
+        factorsVerified: int!
+        maxAttempts: int!
+        status: ChallengeStatus!
+    - name: FactorAdapterRegistry
+      fields:
+        "": ""
+    - name: SMSConfig
+      fields:
+        code_expiry_minutes: int!
+        code_length: int!
+        enabled: bool!
+        provider: string!
+        rate_limit: '*RateLimitConfig!'
+        template_id: string!
+    - name: EmailConfig
+      fields:
+        code_expiry_minutes: int!
+        code_length: int!
+        enabled: bool!
+        provider: string!
+        rate_limit: '*RateLimitConfig!'
+        template_id: string!
+    - name: RateLimitConfig
       fields:
         enabled: bool!
-        factor_ip_reputation: bool!
-        factor_location_change: bool!
-        factor_new_device: bool!
-        factor_velocity: bool!
-        location_change_risk: float64!
-        new_device_risk: float64!
-        require_step_up_threshold: float64!
-        risk_threshold: float64!
-        velocity_risk: float64!
+        lockout_minutes: int!
+        max_attempts: int!
+        window_minutes: int!
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: ListFactorsRequest
+      fields:
+        "": bool
+    - name: ResetUserMFARequest
+      fields:
+        "": string
+        reason: string!
+    - name: RateLimiter
+      fields:
+        "": '*repository.MFARepository'
+    - name: ListTrustedDevicesResponse
+      fields:
+        count: int!
+        devices: '[]TrustedDevice!'
+    - name: ListFactorsResponse
+      fields:
+        count: int!
+        factors: '[]Factor!'
+    - name: RiskEngine
+      fields:
+        "": '*repository.MFARepository'
+    - name: MFAPolicy
+      fields:
+        adaptiveMfaEnabled: bool!
+        allowedFactorTypes: '[]FactorType!'
+        createdAt: time.Time!
+        gracePeriodDays: int!
+        id: xid.ID!
+        lockoutDurationMinutes: int!
+        maxFailedAttempts: int!
+        organizationId: xid.ID!
+        requiredFactorCount: int!
+        requiredFactorTypes: '[]FactorType!'
+        stepUpRequired: bool!
+        trustedDeviceDays: int!
+        updatedAt: time.Time!
+    - name: FactorVerificationRequest
+      fields:
+        code: string!
+        data: '!'
+        factorId: xid.ID!
+    - name: EnrollFactorRequest
+      fields:
+        metadata: '!'
+        name: string!
+        priority: FactorPriority!
+        type: FactorType!
+    - name: EmailFactorAdapter
+      fields:
+        "": '*notificationPlugin.Adapter'
+    - name: BackupCodesConfig
+      fields:
+        allow_reuse: bool!
+        count: int!
+        enabled: bool!
+        format: string!
+        length: int!
+    - name: UpdatePolicyRequest
+      fields:
+        adaptiveMfaEnabled: '*bool!'
+        allowedFactorTypes: '[]FactorType!'
+        gracePeriodDays: '*int!'
+        lockoutDurationMinutes: '*int!'
+        maxFailedAttempts: '*int!'
+        requiredFactorCount: '*int!'
+        requiredFactorTypes: '[]FactorType!'
+        stepUpRequired: '*bool!'
+        trustedDeviceDays: '*int!'
+    - name: ResetUserMFAResponse
+      fields:
+        devicesRevoked: int!
+        factorsReset: int!
+        message: string!
+        success: bool!
+    - name: TOTPConfig
+      fields:
+        algorithm: string!
+        digits: int!
+        enabled: bool!
+        issuer: string!
+        period: int!
+        window_size: int!
+    - name: VerifyChallengeRequest
+      fields:
+        challengeId: xid.ID!
+        code: string!
+        data: '!'
+        deviceInfo: '*DeviceInfo!'
+        factorId: xid.ID!
+        rememberDevice: bool!
+    - name: GetChallengeStatusRequest
+      fields:
+        "": string
+    - name: TrustedDevice
+      fields:
+        createdAt: time.Time!
+        deviceId: string!
+        expiresAt: time.Time!
+        id: xid.ID!
+        ipAddress: string!
+        lastUsedAt: '*time.Time!'
+        metadata: '!'
+        name: string!
+        userAgent: string!
+        userId: xid.ID!
+    - name: FactorInfo
+      fields:
+        factorId: xid.ID!
+        metadata: '!'
+        name: string!
+        type: FactorType!
+    - name: WebAuthnFactorAdapter
+      fields:
+        "": '*passkey.Service'
+    - name: FactorEnrollmentRequest
+      fields:
+        metadata: '!'
+        name: string!
+        priority: FactorPriority!
+        type: FactorType!
     - name: ChallengeResponse
       fields:
         availableFactors: '[]FactorInfo!'
@@ -224,6 +374,42 @@ types:
         expiresAt: time.Time!
         factorsRequired: int!
         sessionId: xid.ID!
+    - name: VerificationRequest
+      fields:
+        challengeId: xid.ID!
+        code: string!
+        data: '!'
+        deviceInfo: '*DeviceInfo!'
+        factorId: xid.ID!
+        rememberDevice: bool!
+    - name: ChallengeStatusResponse
+      fields:
+        completedAt: '*time.Time!'
+        expiresAt: time.Time!
+        factorsRemaining: int!
+        factorsRequired: int!
+        factorsVerified: int!
+        sessionId: xid.ID!
+        status: string!
+    - name: MFAStatus
+      fields:
+        enabled: bool!
+        enrolledFactors: '[]FactorInfo!'
+        gracePeriod: '*time.Time!'
+        policyActive: bool!
+        requiredCount: int!
+        trustedDevice: bool!
+    - name: BaseFactorAdapter
+      fields:
+        "": bool
+    - name: FactorsResponse
+      fields:
+        count: int!
+        factors: '!'
+    - name: SuccessResponse
+      fields:
+        data: '!'
+        message: string!
     - name: Config
       fields:
         adaptive_mfa: AdaptiveMFAConfig!
@@ -242,13 +428,90 @@ types:
         totp: TOTPConfig!
         trusted_devices: TrustedDevicesConfig!
         webauthn: WebAuthnConfig!
-    - name: ListFactorsResponse
-      fields:
-        count: int!
-        factors: '[]Factor!'
     - name: GetFactorRequest
       fields:
         "": string
+    - name: InitiateChallengeRequest
+      fields:
+        context: string!
+        factorTypes: '[]FactorType!'
+        metadata: '!'
+    - name: UpdateFactorRequest
+      fields:
+        "": string
+        metadata: '!'
+        name: '*string!'
+        priority: '*FactorPriority!'
+        status: '*FactorStatus!'
+    - name: MFABypassResponse
+      fields:
+        expiresAt: time.Time!
+        id: xid.ID!
+        reason: string!
+        userId: xid.ID!
+    - name: BackupCodeFactorAdapter
+      fields:
+        "": '*twofa.Service'
+    - name: VerifyFactor_req
+      fields:
+        code: string!
+    - name: AdminBypassRequest
+      fields:
+        duration: int!
+        reason: string!
+        userId: xid.ID!
+    - name: LimitResult
+      fields:
+        "": '*time.Time'
+    - name: Factor
+      fields:
+        '-': string!
+        createdAt: time.Time!
+        expiresAt: '*time.Time!'
+        id: xid.ID!
+        lastUsedAt: '*time.Time!'
+        metadata: '!'
+        name: string!
+        priority: FactorPriority!
+        status: FactorStatus!
+        type: FactorType!
+        updatedAt: time.Time!
+        userId: xid.ID!
+        verifiedAt: '*time.Time!'
+    - name: DevicesResponse
+      fields:
+        count: int!
+        devices: '!'
+    - name: SMSFactorAdapter
+      fields:
+        "": '*notificationPlugin.Adapter'
+    - name: TOTPFactorAdapter
+      fields:
+        "": '*twofa.Service'
+    - name: WebAuthnConfig
+      fields:
+        attestation_preference: string!
+        authenticator_selection: '!'
+        enabled: bool!
+        rp_display_name: string!
+        rp_id: string!
+        rp_origins: '[]string!'
+        timeout: int!
+    - name: AdaptiveMFAConfig
+      fields:
+        enabled: bool!
+        factor_ip_reputation: bool!
+        factor_location_change: bool!
+        factor_new_device: bool!
+        factor_velocity: bool!
+        location_change_risk: float64!
+        new_device_risk: float64!
+        require_step_up_threshold: float64!
+        risk_threshold: float64!
+        velocity_risk: float64!
+    - name: RiskContext
+      fields:
+        "": time.Time
     - name: Challenge
       fields:
         '-': string!
@@ -265,287 +528,20 @@ types:
         userAgent: string!
         userId: xid.ID!
         verifiedAt: '*time.Time!'
-    - name: FactorInfo
-      fields:
-        factorId: xid.ID!
-        metadata: '!'
-        name: string!
-        type: FactorType!
-    - name: VerificationRequest
-      fields:
-        challengeId: xid.ID!
-        code: string!
-        data: '!'
-        deviceInfo: '*DeviceInfo!'
-        factorId: xid.ID!
-        rememberDevice: bool!
-    - name: ListFactorsRequest
-      fields:
-        "": bool
-    - name: GetChallengeStatusResponse
-      fields:
-        attempts: int!
-        availableFactors: '[]FactorInfo!'
-        challengeId: xid.ID!
-        factorsRequired: int!
-        factorsVerified: int!
-        maxAttempts: int!
-        status: ChallengeStatus!
-    - name: RiskContext
-      fields:
-        "": string
-    - name: Service
-      fields:
-        "": '*Config'
-    - name: FactorVerificationRequest
-      fields:
-        code: string!
-        data: '!'
-        factorId: xid.ID!
-    - name: EmailConfig
-      fields:
-        code_expiry_minutes: int!
-        code_length: int!
-        enabled: bool!
-        provider: string!
-        rate_limit: '*RateLimitConfig!'
-        template_id: string!
-    - name: WebAuthnConfig
-      fields:
-        attestation_preference: string!
-        authenticator_selection: '!'
-        enabled: bool!
-        rp_display_name: string!
-        rp_id: string!
-        rp_origins: '[]string!'
-        timeout: int!
-    - name: GetChallengeStatusRequest
-      fields:
-        "": string
-    - name: Factor
-      fields:
-        '-': string!
-        createdAt: time.Time!
-        expiresAt: '*time.Time!'
-        id: xid.ID!
-        lastUsedAt: '*time.Time!'
-        metadata: '!'
-        name: string!
-        priority: FactorPriority!
-        status: FactorStatus!
-        type: FactorType!
-        updatedAt: time.Time!
-        userId: xid.ID!
-        verifiedAt: '*time.Time!'
-    - name: MFAPolicy
-      fields:
-        adaptiveMfaEnabled: bool!
-        allowedFactorTypes: '[]FactorType!'
-        createdAt: time.Time!
-        gracePeriodDays: int!
-        id: xid.ID!
-        lockoutDurationMinutes: int!
-        maxFailedAttempts: int!
-        organizationId: xid.ID!
-        requiredFactorCount: int!
-        requiredFactorTypes: '[]FactorType!'
-        stepUpRequired: bool!
-        trustedDeviceDays: int!
-        updatedAt: time.Time!
-    - name: FactorEnrollmentResponse
-      fields:
-        factorId: xid.ID!
-        provisioningData: '!'
-        status: FactorStatus!
-        type: FactorType!
-    - name: BaseFactorAdapter
-      fields:
-        "": bool
-    - name: SuccessResponse
-      fields:
-        data: '!'
-        message: string!
-    - name: MFAConfigResponse
-      fields:
-        allowed_factor_types: '[]string!'
-        enabled: bool!
-        required_factor_count: int!
-    - name: VerifyFactor_req
-      fields:
-        code: string!
-    - name: InitiateChallengeRequest
-      fields:
-        context: string!
-        factorTypes: '[]FactorType!'
-        metadata: '!'
-    - name: RateLimitConfig
-      fields:
-        enabled: bool!
-        lockout_minutes: int!
-        max_attempts: int!
-        window_minutes: int!
-    - name: LimitResult
-      fields:
-        "": bool
-    - name: DeleteFactorRequest
-      fields:
-        "": string
-    - name: TrustDeviceRequest
-      fields:
-        deviceId: string!
-        metadata: '!'
-        name: string!
-    - name: WebAuthnFactorAdapter
-      fields:
-        "": '*passkey.Service'
-    - name: ErrorResponse
-      fields:
-        code: string!
-        details: '!'
-        error: string!
-    - name: MessageResponse
-      fields:
-        message: string!
-    - name: UpdateFactorRequest
-      fields:
-        "": string
-        metadata: '!'
-        name: '*string!'
-        priority: '*FactorPriority!'
-        status: '*FactorStatus!'
-    - name: TrustedDevice
-      fields:
-        createdAt: time.Time!
-        deviceId: string!
-        expiresAt: time.Time!
-        id: xid.ID!
-        ipAddress: string!
-        lastUsedAt: '*time.Time!'
-        metadata: '!'
-        name: string!
-        userAgent: string!
-        userId: xid.ID!
-    - name: FactorEnrollmentRequest
-      fields:
-        metadata: '!'
-        name: string!
-        priority: FactorPriority!
-        type: FactorType!
-    - name: VerificationResponse
-      fields:
-        expiresAt: '*time.Time!'
-        factorsRemaining: int!
-        sessionComplete: bool!
-        success: bool!
-        token: string!
-    - name: MFAStatus
-      fields:
-        enabled: bool!
-        enrolledFactors: '[]FactorInfo!'
-        gracePeriod: '*time.Time!'
-        policyActive: bool!
-        requiredCount: int!
-        trustedDevice: bool!
-    - name: BackupCodesConfig
-      fields:
-        allow_reuse: bool!
-        count: int!
-        enabled: bool!
-        format: string!
-        length: int!
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: AdminBypassRequest
-      fields:
-        duration: int!
-        reason: string!
-        userId: xid.ID!
-    - name: VerifyChallengeRequest
-      fields:
-        challengeId: xid.ID!
-        code: string!
-        data: '!'
-        deviceInfo: '*DeviceInfo!'
-        factorId: xid.ID!
-        rememberDevice: bool!
-    - name: SMSConfig
-      fields:
-        code_expiry_minutes: int!
-        code_length: int!
-        enabled: bool!
-        provider: string!
-        rate_limit: '*RateLimitConfig!'
-        template_id: string!
-    - name: StatusResponse
-      fields:
-        status: string!
-    - name: Plugin
-      fields:
-        "": '*Config'
-    - name: DeviceInfo
-      fields:
-        deviceId: string!
-        metadata: '!'
-        name: string!
-    - name: EmailFactorAdapter
-      fields:
-        "": '*emailotp.Service'
-    - name: TOTPConfig
-      fields:
-        algorithm: string!
-        digits: int!
-        enabled: bool!
-        issuer: string!
-        period: int!
-        window_size: int!
-    - name: TrustedDevicesConfig
-      fields:
-        default_expiry_days: int!
-        enabled: bool!
-        max_devices_per_user: int!
-        max_expiry_days: int!
-    - name: AdminPolicyRequest
-      fields:
-        allowedTypes: '[]string!'
-        enabled: bool!
-        gracePeriod: int!
-        requiredFactors: int!
-    - name: UpdatePolicyRequest
-      fields:
-        adaptiveMfaEnabled: '*bool!'
-        allowedFactorTypes: '[]FactorType!'
-        gracePeriodDays: '*int!'
-        lockoutDurationMinutes: '*int!'
-        maxFailedAttempts: '*int!'
-        requiredFactorCount: '*int!'
-        requiredFactorTypes: '[]FactorType!'
-        stepUpRequired: '*bool!'
-        trustedDeviceDays: '*int!'
     - name: ChallengeRequest
       fields:
         context: string!
         factorTypes: '[]FactorType!'
         metadata: '!'
         userId: xid.ID!
-    - name: TOTPFactorAdapter
+    - name: DeviceInfo
       fields:
-        "": '*twofa.Service'
-    - name: FactorAdapterRegistry
-      fields:
-        "": ""
-    - name: DevicesResponse
-      fields:
-        count: int!
-        devices: '!'
-    - name: RiskAssessment
-      fields:
-        factors: '[]string!'
-        level: RiskLevel!
+        deviceId: string!
         metadata: '!'
-        recommended: '[]FactorType!'
-        score: float64!
-    - name: FactorsResponse
+        name: string!
+    - name: AdminPolicyRequest
       fields:
-        count: int!
-        factors: '!'
+        allowedTypes: '[]string!'
+        enabled: bool!
+        gracePeriod: int!
+        requiredFactors: int!

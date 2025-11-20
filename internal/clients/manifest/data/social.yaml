@@ -24,7 +24,7 @@ routes:
       response:
         action: string!
         isNewUser: bool!
-        user: '!'
+        user: '*schema.User!'
       response_type: CallbackDataResponse
     - name: LinkAccount
       description: |-
@@ -45,8 +45,6 @@ routes:
         DELETE /api/auth/account/unlink/:provider
       method: DELETE
       path: /account/unlink/:provider
-      response:
-        message: string!
       response_type: MessageResponse
     - name: ListProviders
       description: |-
@@ -55,7 +53,7 @@ routes:
       method: GET
       path: /providers
       response:
-        providers: '!'
+        providers: '[]string!'
       response_type: ProvidersResponse
 types:
     - name: ProvidersConfig
@@ -77,64 +75,27 @@ types:
         spotify: '*providers.ProviderConfig!'
         twitch: '*providers.ProviderConfig!'
         twitter: '*providers.ProviderConfig!'
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: MessageResponse
-      fields:
-        message: string!
-    - name: CallbackDataResponse
-      fields:
-        action: string!
-        isNewUser: bool!
-        user: '!'
-    - name: ProviderConfigResponse
-      fields:
-        appId: string!
-        message: string!
-        provider: string!
-    - name: AdminUpdateProviderRequest
-      fields:
-        clientId: '*string!'
-        clientSecret: '*string!'
-        enabled: '*bool!'
-        scopes: '[]string!'
-    - name: SocialErrorResponse
-      fields:
-        error: string!
-    - name: OAuthState
-      fields:
-        "": time.Time
-    - name: AuthURLResponse
-      fields:
-        url: string!
-    - name: CallbackResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: ConnectionResponse
-      fields:
-        connection: '!'
-    - name: SignInRequest
-      fields:
-        provider: string!
-        redirectUrl: string!
-        scopes: '[]string!'
     - name: LinkAccountRequest
       fields:
         provider: string!
         scopes: '[]string!'
-    - name: AdminListProvidersRequest
+    - name: CallbackResponse
       fields:
-        appId: xid.ID!
-    - name: SocialSignInResponse
-      fields:
-        redirect_url: string!
-    - name: SocialCallbackResponse
-      fields:
+        session: '*session.Session!'
         token: string!
-        user: '!'
+        user: '*user.User!'
+    - name: stateEntry
+      fields:
+        "": time.Time
+    - name: RedisStateStore
+      fields:
+        "": '*redis.Client'
+    - name: Plugin
+      fields:
+        "": Config
+    - name: Service
+      fields:
+        "": '*audit.Service'
     - name: Config
       fields:
         allowAccountLinking: bool!
@@ -142,11 +103,8 @@ types:
         baseUrl: string!
         providers: ProvidersConfig!
         requireEmailVerified: bool!
+        stateStorage: StateStorageConfig!
         trustEmailVerified: bool!
-    - name: ProvidersAppResponse
-      fields:
-        appId: string!
-        providers: '!'
     - name: AdminAddProviderRequest
       fields:
         appId: xid.ID!
@@ -155,27 +113,78 @@ types:
         enabled: bool!
         provider: string!
         scopes: '[]string!'
-    - name: Plugin
+    - name: AuthURLResponse
       fields:
-        "": core.Authsome
-    - name: SocialProvidersResponse
+        url: string!
+    - name: ProvidersAppResponse
       fields:
+        appId: string!
         providers: '[]string!'
-    - name: Service
+    - name: ProviderConfigResponse
       fields:
-        "": ""
-    - name: ConnectionsResponse
+        appId: string!
+        message: string!
+        provider: string!
+    - name: RateLimit
       fields:
-        connections: '!'
-    - name: ProvidersResponse
-      fields:
-        providers: '!'
-    - name: SocialStatusResponse
-      fields:
-        status: string!
-    - name: SocialLinkResponse
-      fields:
-        linked: bool!
+        "": int
     - name: CallbackResult
       fields:
         "": string
+    - name: MockSocialAccountRepository
+      fields: {}
+    - name: SignInRequest
+      fields:
+        provider: string!
+        redirectUrl: string!
+        scopes: '[]string!'
+    - name: CallbackDataResponse
+      fields:
+        action: string!
+        isNewUser: bool!
+        user: '*schema.User!'
+    - name: ConnectionResponse
+      fields:
+        connection: '*schema.SocialAccount!'
+    - name: ProvidersResponse
+      fields:
+        providers: '[]string!'
+    - name: MemoryStateStore
+      fields:
+        "": ""
+    - name: MockUserRepository
+      fields: {}
+    - name: Handler
+      fields:
+        "": '*RateLimiter'
+    - name: AdminUpdateProviderRequest
+      fields:
+        clientId: '*string!'
+        clientSecret: '*string!'
+        enabled: '*bool!'
+        scopes: '[]string!'
+    - name: ConnectionsResponse
+      fields:
+        connections: '[]*schema.SocialAccount!'
+    - name: OAuthState
+      fields:
+        app_id: xid.ID!
+        created_at: time.Time!
+        extra_scopes: '[]string!'
+        link_user_id: '*xid.ID!'
+        provider: string!
+        redirect_url: string!
+        user_organization_id: '*xid.ID!'
+    - name: RateLimiter
+      fields:
+        "": '*redis.Client'
+    - name: MockStateStore
+      fields:
+        "": ""
+    - name: StateStorageConfig
+      fields:
+        redisAddr: string!
+        redisDb: int!
+        redisPassword: string!
+        stateTtl: time.Duration!
+        useRedis: bool!

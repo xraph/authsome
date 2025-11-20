@@ -6,45 +6,32 @@ routes:
       path: /magic-link/send
       request:
         email: string!
-      request_type: Send_body
+      request_type: SendRequest
     - name: Verify
       method: GET
       path: /magic-link/verify
-      response:
-        session: '!'
-        token: string!
-        user: '!'
       response_type: VerifyResponse
 types:
-    - name: MagicLinkErrorResponse
+    - name: SendRequest
       fields:
-        error: string!
-    - name: MagicLinkSendResponse
+        email: string!
+    - name: SendResponse
       fields:
         dev_url: string!
         status: string!
-    - name: MagicLinkVerifyResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Service
-      fields:
-        "": '*audit.Service'
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: VerifyResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Config
-      fields:
-        "": bool
-    - name: Send_body
-      fields:
-        email: string!
     - name: Plugin
       fields:
-        "": Config
+        "": forge.Logger
+    - name: Config
+      fields:
+        allowImplicitSignup: bool!
+        baseURL: string!
+        devExposeURL: bool!
+        expiryMinutes: int!
+        rateLimitPerHour: int!
+    - name: Service
+      fields:
+        "": '*session.Service'
+    - name: Handler
+      fields:
+        "": '*rl.Service'

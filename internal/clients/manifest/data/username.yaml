@@ -2,82 +2,94 @@ plugin_id: username
 version: 1.0.0
 routes:
     - name: SignUp
+      description: SignUp handles user registration with username and password
       method: POST
       path: /username/signup
-      request:
-        password: string!
-        username: string!
       response:
+        message: string!
         status: string!
-      request_type: SignUp_body
-      response_type: StatusResponse
+      response_type: SignUpResponse
     - name: SignIn
+      description: SignIn handles user authentication with username and password
       method: POST
       path: /username/signin
-      request:
+      response:
+        session: '*session.Session!'
+        token: string!
+        user: '*user.User!'
+      response_type: SignInResponse
+types:
+    - name: Handler
+      fields:
+        "": '*repo.TwoFARepository'
+    - name: SignUpRequest
+      fields:
+        password: string!
+        username: string!
+    - name: SignInRequest
+      fields:
         password: string!
         remember: bool!
         username: string!
-      response:
-        session: '!'
+    - name: SignInResponse
+      fields:
+        session: '*session.Session!'
         token: string!
-        user: '!'
-      request_type: SignIn_body
-      response_type: SignInResponse
-types:
+        user: '*user.User!'
+    - name: AccountLockedResponse
+      fields:
+        code: string!
+        locked_minutes: int!
+        locked_until: time.Time!
+        message: string!
     - name: Config
       fields:
         allowUsernameLogin: bool!
+        failedAttemptWindow: time.Duration!
+        lockoutDuration: time.Duration!
+        lockoutEnabled: bool!
+        maxFailedAttempts: int!
         maxPasswordLength: int!
         minPasswordLength: int!
+        passwordExpiryDays: int!
+        passwordExpiryEnabled: bool!
+        passwordExpiryWarningDays: int!
+        passwordHistorySize: int!
+        preventPasswordReuse: bool!
+        rateLimit: RateLimitConfig!
         requireLowercase: bool!
         requireNumber: bool!
         requireSpecialChar: bool!
         requireUppercase: bool!
-    - name: UsernameErrorResponse
+    - name: RateLimitRule
       fields:
-        error: string!
-    - name: SignInResponse
+        max: int!
+        window: time.Duration!
+    - name: AccountLockoutError
       fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: UsernameStatusResponse
+        "": int
+    - name: SignUpResponse
       fields:
-        status: string!
-    - name: UsernameSignInResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Username2FARequiredResponse
-      fields:
-        device_id: string!
-        require_twofa: bool!
-        user: '!'
-    - name: Service
-      fields:
-        "": Config
-    - name: Handler
-      fields:
-        "": '*repo.TwoFARepository'
-    - name: StatusResponse
-      fields:
+        message: string!
         status: string!
     - name: TwoFARequiredResponse
       fields:
         device_id: string!
         require_twofa: bool!
-        user: '!'
-    - name: SignUp_body
-      fields:
-        password: string!
-        username: string!
-    - name: SignIn_body
-      fields:
-        password: string!
-        remember: bool!
-        username: string!
+        user: '*user.User!'
     - name: Plugin
       fields:
         "": core.Authsome
+    - name: RateLimitConfig
+      fields:
+        enabled: bool!
+        redisAddr: string!
+        redisDb: int!
+        redisPassword: string!
+        signinPerIp: RateLimitRule!
+        signinPerUser: RateLimitRule!
+        signupPerIp: RateLimitRule!
+        useRedis: bool!
+    - name: Service
+      fields:
+        "": '*user.Service'

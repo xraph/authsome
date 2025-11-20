@@ -95,15 +95,6 @@ types:
       fields:
         member_id: xid.ID!
         role: string!
-    - name: ErrorResponse
-      fields:
-        error: string!
-    - name: MessageResponse
-      fields:
-        message: string!
-    - name: StatusResponse
-      fields:
-        status: string!
     - name: AppHandler
       fields:
         "": '*coreapp.ServiceImpl'

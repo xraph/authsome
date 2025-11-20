@@ -30,7 +30,7 @@ types:
         "": '*jwt.Service'
     - name: Plugin
       fields:
-        "": '*Handler'
+        "": Config
     - name: Config
       fields:
         accessExpirySeconds: int!
@@ -38,6 +38,3 @@ types:
         issuer: string!
         refreshExpirySeconds: int!
         signingAlgorithm: string!
-    - name: ErrorResponse
-      fields:
-        error: string!

@@ -16,8 +16,6 @@ routes:
         device_id: string!
         remember_device: bool!
         user_id: string!
-      response:
-        status: string!
       request_type: Verify_body
       response_type: StatusResponse
     - name: Disable
@@ -25,8 +23,6 @@ routes:
       path: /2fa/disable
       request:
         user_id: string!
-      response:
-        status: string!
       request_type: Disable_body
       response_type: StatusResponse
     - name: GenerateBackupCodes
@@ -58,35 +54,23 @@ routes:
         device_id: string!
         user_id: string!
       response:
-        status: string!
+        enabled: bool!
+        method: string!
+        trusted: bool!
       request_type: Status_body
       response_type: TwoFAStatusResponse
 types:
-    - name: TwoFAEnableResponse
+    - name: TwoFAErrorResponse
       fields:
-        status: string!
-        totp_uri: string!
+        error: string!
     - name: TwoFASendOTPResponse
       fields:
         code: string!
         status: string!
-    - name: Service
+    - name: VerifyRequest
       fields:
-        "": Config
-    - name: SendOTP_body
-      fields:
-        user_id: string!
-    - name: Status_body
-      fields:
-        device_id: string!
-        user_id: string!
-    - name: Plugin
-      fields:
-        "": forge.Logger
-    - name: TwoFABackupCodesResponse
-      fields:
-        codes: '[]string!'
-    - name: EnableRequest
+        "": string
+    - name: TOTPSecret
       fields:
         "": string
     - name: Handler
@@ -95,47 +79,42 @@ types:
     - name: CodesResponse
       fields:
         codes: '[]string!'
-    - name: TwoFAStatusResponse
-      fields:
-        status: string!
-    - name: Enable_body
-      fields:
-        method: string!
-        user_id: string!
     - name: Verify_body
       fields:
         code: string!
         device_id: string!
         remember_device: bool!
         user_id: string!
-    - name: Disable_body
+    - name: SendOTP_body
       fields:
         user_id: string!
-    - name: VerifyRequest
+    - name: TwoFAEnableResponse
       fields:
-        "": string
-    - name: Status
-      fields:
-        "": bool
-    - name: GenerateBackupCodes_body
-      fields:
-        count: int!
-        user_id: string!
+        status: string!
+        totp_uri: string!
     - name: TwoFAStatusDetailResponse
       fields:
         enabled: bool!
         method: string!
         trusted: bool!
-    - name: TOTPSecret
+    - name: Status
       fields:
-        "": string
-    - name: StatusResponse
-      fields:
-        status: string!
+        "": bool
     - name: OTPSentResponse
       fields:
         code: string!
         status: string!
+    - name: Enable_body
+      fields:
+        method: string!
+        user_id: string!
+    - name: Disable_body
+      fields:
+        user_id: string!
+    - name: Status_body
+      fields:
+        device_id: string!
+        user_id: string!
     - name: Config
       fields:
         backupCodeCount: int!
@@ -147,6 +126,24 @@ types:
         totpIssuer: string!
         totpPeriod: int!
         trustedDeviceDays: int!
-    - name: TwoFAErrorResponse
+    - name: GenerateBackupCodes_body
       fields:
-        error: string!
+        count: int!
+        user_id: string!
+    - name: Plugin
+      fields:
+        "": '*Service'
+    - name: TwoFABackupCodesResponse
+      fields:
+        codes: '[]string!'
+    - name: Service
+      fields:
+        "": Config
+    - name: EnableRequest
+      fields:
+        "": string
+    - name: TwoFAStatusResponse
+      fields:
+        enabled: bool!
+        method: string!
+        trusted: bool!

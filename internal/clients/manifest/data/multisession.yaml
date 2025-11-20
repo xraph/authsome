@@ -23,47 +23,11 @@ routes:
       description: Delete revokes a session by id for the current user
       method: POST
       path: /delete/{id}
-      response:
-        status: string!
       response_type: StatusResponse
 types:
-    - name: StatusResponse
-      fields:
-        status: string!
-    - name: SessionsResponse
-      fields:
-        sessions: '!'
-    - name: SessionTokenResponse
-      fields:
-        session: '!'
-        token: string!
-    - name: DashboardExtension
-      fields:
-        "": '*dashboard.ExtensionRegistry'
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: ErrorResponse
-      fields:
-        error: string!
     - name: SetActive_body
       fields:
         id: string!
-    - name: Config
-      fields:
-        allowCrossPlatform: bool!
-        enableDeviceTracking: bool!
-        maxSessionsPerUser: int!
-        sessionExpiryHours: int!
-    - name: testRouter
-      fields:
-        "": string
-    - name: testContext
-      fields:
-        "": '*http.Request'
-    - name: MultiSessionListResponse
-      fields:
-        sessions: '[]!'
     - name: MultiSessionSetActiveResponse
       fields:
         session: '!'
@@ -71,15 +35,37 @@ types:
     - name: Service
       fields:
         "": '*auth.Service'
-    - name: MessageResponse
+    - name: DashboardExtension
       fields:
-        message: string!
+        "": '*dashboard.ExtensionRegistry'
+    - name: SessionTokenResponse
+      fields:
+        session: '!'
+        token: string!
+    - name: mockSessionService
+      fields:
+        "": '*bun.DB'
     - name: Plugin
       fields:
-        "": '*DashboardExtension'
+        "": Config
+    - name: Config
+      fields:
+        allowCrossPlatform: bool!
+        enableDeviceTracking: bool!
+        maxSessionsPerUser: int!
+        sessionExpiryHours: int!
     - name: MultiSessionErrorResponse
       fields:
         error: string!
+    - name: MultiSessionListResponse
+      fields:
+        sessions: '[]!'
     - name: MultiSessionDeleteResponse
       fields:
         status: string!
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: SessionsResponse
+      fields:
+        sessions: '!'

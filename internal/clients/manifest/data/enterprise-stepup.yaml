@@ -13,6 +13,7 @@ routes:
         method: string!
         resource_type: string!
         route: string!
+      request_type: EvaluateRequest
     - name: Verify
       description: Verify handles POST /stepup/verify
       method: POST
@@ -27,6 +28,7 @@ routes:
         remember_device: bool!
         requirement_id: string!
         user_agent: string!
+      request_type: VerifyRequest
     - name: GetRequirement
       description: GetRequirement handles GET /stepup/requirements/:id
       method: GET
@@ -35,6 +37,10 @@ routes:
       description: ListPendingRequirements handles GET /stepup/requirements/pending
       method: GET
       path: /requirements/pending
+      response:
+        count: int!
+        requirements: '!'
+      response_type: RequirementsResponse
     - name: ListVerifications
       description: ListVerifications handles GET /stepup/verifications
       method: GET
@@ -43,10 +49,18 @@ routes:
       description: ListRememberedDevices handles GET /stepup/devices
       method: GET
       path: /devices
+      response:
+        count: int!
+        devices: '!'
+      response_type: StepUpDevicesResponse
     - name: ForgetDevice
       description: ForgetDevice handles DELETE /stepup/devices/:id
       method: DELETE
       path: /devices/:id
+      response:
+        message: string!
+        success: bool!
+      response_type: ForgetDeviceResponse
     - name: CreatePolicy
       description: CreatePolicy handles POST /stepup/policies
       method: POST
@@ -75,6 +89,8 @@ routes:
         rules: '!'
         updated_at: time.Time!
         user_id: string!
+      request_type: StepUpPolicy
+      response_type: StepUpPolicy
     - name: ListPolicies
       description: ListPolicies handles GET /stepup/policies
       method: GET
@@ -111,6 +127,8 @@ routes:
         rules: '!'
         updated_at: time.Time!
         user_id: string!
+      request_type: StepUpPolicy
+      response_type: StepUpPolicy
     - name: DeletePolicy
       description: DeletePolicy handles DELETE /stepup/policies/:id
       method: DELETE
@@ -124,26 +142,55 @@ routes:
       method: GET
       path: /status
 types:
-    - name: ContextRule
+    - name: AmountRule
       fields:
-        condition: string!
+        currency: string!
         description: string!
-        name: string!
+        max_amount: float64!
+        min_amount: float64!
         org_id: string!
         security_level: SecurityLevel!
-    - name: StepUpStatusResponse
+    - name: EvaluateRequest
       fields:
-        status: string!
-    - name: StepUpPolicyResponse
+        action: string!
+        amount: float64!
+        currency: string!
+        metadata: '!'
+        method: string!
+        resource_type: string!
+        route: string!
+    - name: StepUpErrorResponse
       fields:
-        id: string!
-    - name: EvaluationContext
+        error: string!
+    - name: StepUpEvaluationResponse
       fields:
-        "": string
-    - name: StepUpVerificationResponse
+        reason: string!
+        required: bool!
+    - name: Service
       fields:
-        expires_at: string!
-        verified: bool!
+        "": AuditServiceInterface
+    - name: VerifyRequest
+      fields:
+        challenge_token: string!
+        credential: string!
+        device_id: string!
+        device_name: string!
+        ip: string!
+        method: VerificationMethod!
+        remember_device: bool!
+        requirement_id: string!
+        user_agent: string!
+    - name: ResourceRule
+      fields:
+        action: string!
+        description: string!
+        org_id: string!
+        resource_type: string!
+        security_level: SecurityLevel!
+        sensitivity: string!
+    - name: Middleware
+      fields:
+        "": '*Config'
     - name: StepUpVerification
       fields:
         created_at: time.Time!
@@ -161,45 +208,9 @@ types:
         user_agent: string!
         user_id: string!
         verified_at: time.Time!
-    - name: StepUpRequirement
+    - name: EvaluationContext
       fields:
-        amount: float64!
-        challenge_token: string!
-        created_at: time.Time!
-        currency: string!
-        current_level: SecurityLevel!
-        expires_at: time.Time!
-        fulfilled_at: '*time.Time!'
-        id: string!
-        ip: string!
-        metadata: '!'
-        method: string!
-        org_id: string!
-        reason: string!
-        required_level: SecurityLevel!
-        resource_action: string!
-        resource_type: string!
-        risk_score: float64!
-        route: string!
-        rule_name: string!
-        session_id: string!
-        status: string!
-        user_agent: string!
-        user_id: string!
-    - name: EvaluationResult
-      fields:
-        allowed_methods: '[]VerificationMethod!'
-        can_remember: bool!
-        challenge_token: string!
-        current_level: SecurityLevel!
-        expires_at: time.Time!
-        grace_period_ends_at: time.Time!
-        matched_rules: '[]string!'
-        metadata: '!'
-        reason: string!
-        required: bool!
-        requirement_id: string!
-        security_level: SecurityLevel!
+        "": string
     - name: VerifyResponse
       fields:
         device_remembered: bool!
@@ -209,20 +220,8 @@ types:
         security_level: SecurityLevel!
         success: bool!
         verification_id: string!
-    - name: StepUpRememberedDevice
-      fields:
-        created_at: time.Time!
-        device_id: string!
-        device_name: string!
-        expires_at: time.Time!
-        id: string!
-        ip: string!
-        last_used_at: time.Time!
-        org_id: string!
-        remembered_at: time.Time!
-        security_level: SecurityLevel!
-        user_agent: string!
-        user_id: string!
+    - name: mockRepository
+      fields: {}
     - name: Config
       fields:
         allow_degradation: bool!
@@ -253,26 +252,30 @@ types:
         time_based_rules: '[]TimeBasedRule!'
         webhook_enabled: bool!
         webhook_events: '[]string!'
-    - name: ResourceRule
+    - name: TimeBasedRule
       fields:
-        action: string!
         description: string!
+        max_age: time.Duration!
+        operation: string!
         org_id: string!
-        resource_type: string!
         security_level: SecurityLevel!
-        sensitivity: string!
-    - name: StepUpAttempt
+    - name: ContextRule
       fields:
-        created_at: time.Time!
-        failure_reason: string!
-        id: string!
-        ip: string!
-        method: VerificationMethod!
+        condition: string!
+        description: string!
+        name: string!
         org_id: string!
-        requirement_id: string!
-        success: bool!
-        user_agent: string!
-        user_id: string!
+        security_level: SecurityLevel!
+    - name: Handler
+      fields:
+        "": '*Config'
+    - name: StepUpDevicesResponse
+      fields:
+        count: int!
+        devices: '!'
+    - name: StepUpPolicyResponse
+      fields:
+        id: string!
     - name: StepUpPolicy
       fields:
         created_at: time.Time!
@@ -286,39 +289,31 @@ types:
         rules: '!'
         updated_at: time.Time!
         user_id: string!
-    - name: Service
+    - name: EvaluationResult
       fields:
-        "": AuditServiceInterface
-    - name: TimeBasedRule
-      fields:
-        description: string!
-        max_age: time.Duration!
-        operation: string!
-        org_id: string!
-        security_level: SecurityLevel!
-    - name: Plugin
-      fields:
-        "": '*Middleware'
-    - name: StepUpVerificationsResponse
-      fields:
-        verifications: '[]!'
-    - name: StepUpDevicesResponse
-      fields:
-        devices: '[]!'
-    - name: StepUpAuditLogsResponse
-      fields:
-        audit_logs: '[]!'
-    - name: VerifyRequest
-      fields:
+        allowed_methods: '[]VerificationMethod!'
+        can_remember: bool!
         challenge_token: string!
-        credential: string!
-        device_id: string!
-        device_name: string!
-        ip: string!
-        method: VerificationMethod!
-        remember_device: bool!
+        current_level: SecurityLevel!
+        expires_at: time.Time!
+        grace_period_ends_at: time.Time!
+        matched_rules: '[]string!'
+        metadata: '!'
+        reason: string!
+        required: bool!
         requirement_id: string!
-        user_agent: string!
+        security_level: SecurityLevel!
+    - name: RequirementsResponse
+      fields:
+        count: int!
+        requirements: '!'
+    - name: ForgetDeviceResponse
+      fields:
+        message: string!
+        success: bool!
+    - name: StepUpStatusResponse
+      fields:
+        status: string!
     - name: RouteRule
       fields:
         description: string!
@@ -326,20 +321,52 @@ types:
         org_id: string!
         pattern: string!
         security_level: SecurityLevel!
-    - name: AmountRule
+    - name: StepUpPoliciesResponse
       fields:
+        policies: '[]!'
+    - name: StepUpAuditLogsResponse
+      fields:
+        audit_logs: '[]!'
+    - name: BunRepository
+      fields:
+        "": '*bun.DB'
+    - name: StepUpRequirement
+      fields:
+        amount: float64!
+        challenge_token: string!
+        created_at: time.Time!
         currency: string!
-        description: string!
-        max_amount: float64!
-        min_amount: float64!
-        org_id: string!
-        security_level: SecurityLevel!
-    - name: Middleware
-      fields:
-        "": '*Config'
-    - name: StepUpRequirementResponse
-      fields:
+        current_level: SecurityLevel!
+        expires_at: time.Time!
+        fulfilled_at: '*time.Time!'
         id: string!
+        ip: string!
+        metadata: '!'
+        method: string!
+        org_id: string!
+        reason: string!
+        required_level: SecurityLevel!
+        resource_action: string!
+        resource_type: string!
+        risk_score: float64!
+        route: string!
+        rule_name: string!
+        session_id: string!
+        status: string!
+        user_agent: string!
+        user_id: string!
+    - name: StepUpAttempt
+      fields:
+        created_at: time.Time!
+        failure_reason: string!
+        id: string!
+        ip: string!
+        method: VerificationMethod!
+        org_id: string!
+        requirement_id: string!
+        success: bool!
+        user_agent: string!
+        user_id: string!
     - name: StepUpAuditLog
       fields:
         created_at: time.Time!
@@ -351,36 +378,40 @@ types:
         severity: string!
         user_agent: string!
         user_id: string!
-    - name: mockRepository
-      fields: {}
-    - name: EvaluateRequest
+    - name: VerificationsResponse
       fields:
-        action: string!
-        amount: float64!
-        currency: string!
-        metadata: '!'
-        method: string!
-        resource_type: string!
-        route: string!
-    - name: StepUpErrorResponse
+        count: int!
+        verifications: '!'
+    - name: StepUpVerificationResponse
       fields:
-        error: string!
-    - name: StepUpEvaluationResponse
+        expires_at: string!
+        verified: bool!
+    - name: StepUpVerificationsResponse
       fields:
-        reason: string!
-        required: bool!
+        verifications: '[]!'
+    - name: StepUpRememberedDevice
+      fields:
+        created_at: time.Time!
+        device_id: string!
+        device_name: string!
+        expires_at: time.Time!
+        id: string!
+        ip: string!
+        last_used_at: time.Time!
+        org_id: string!
+        remembered_at: time.Time!
+        security_level: SecurityLevel!
+        user_agent: string!
+        user_id: string!
     - name: StepUpRequirementsResponse
       fields:
         requirements: '[]!'
-    - name: Handler
+    - name: Plugin
       fields:
-        "": '*Service'
+        "": '*Config'
     - name: auditServiceAdapter
       fields:
         "": '*audit.Service'
-    - name: StepUpPoliciesResponse
+    - name: StepUpRequirementResponse
       fields:
-        policies: '[]!'
-    - name: BunRepository
-      fields:
-        "": '*bun.DB'
+        id: string!

@@ -1,92 +1,163 @@
 plugin_id: oidcprovider
 version: 1.0.0
 routes:
+    - name: RegisterClient
+      description: RegisterClient handles dynamic client registration (admin only)
+      method: POST
+      path: /register
+      request:
+        application_type: string!
+        client_name: string!
+        contacts: '[]string!'
+        grant_types: '[]string!'
+        logo_uri: string!
+        policy_uri: string!
+        post_logout_redirect_uris: '[]string!'
+        redirect_uris: '[]string!'
+        require_consent: bool!
+        require_pkce: bool!
+        response_types: '[]string!'
+        scope: string!
+        token_endpoint_auth_method: string!
+        tos_uri: string!
+        trusted_client: bool!
+      request_type: ClientRegistrationRequest
+    - name: ListClients
+      description: ListClients lists all OAuth clients for the current app/env/org
+      method: GET
+      path: /listclients
+    - name: GetClient
+      description: GetClient retrieves detailed information about an OAuth client
+      method: GET
+      path: /:clientId
+    - name: UpdateClient
+      description: UpdateClient updates an existing OAuth client
+      method: PUT
+      path: /:clientId
+      request:
+        allowed_scopes: '[]string!'
+        contacts: '[]string!'
+        grant_types: '[]string!'
+        logo_uri: string!
+        name: string!
+        policy_uri: string!
+        post_logout_redirect_uris: '[]string!'
+        redirect_uris: '[]string!'
+        require_consent: '*bool!'
+        require_pkce: '*bool!'
+        response_types: '[]string!'
+        token_endpoint_auth_method: string!
+        tos_uri: string!
+        trusted_client: '*bool!'
+      request_type: ClientUpdateRequest
+    - name: DeleteClient
+      description: DeleteClient deletes an OAuth client
+      method: DELETE
+      path: /:clientId
+    - name: Discovery
+      description: Discovery handles the OIDC discovery endpoint (.well-known/openid-configuration)
+      method: GET
+      path: /.well-known/openid-configuration
+    - name: JWKS
+      description: JWKS returns the JSON Web Key Set
+      method: GET
+      path: /jwks
     - name: Authorize
       description: Authorize handles OAuth2/OIDC authorization requests
       method: GET
       path: /authorize
+    - name: HandleConsent
+      description: HandleConsent processes the consent form submission
+      method: POST
+      path: /consent
     - name: Token
       description: Token handles the token endpoint
       method: POST
       path: /token
       request:
+        audience: string!
         client_id: string!
         client_secret: string!
         code: string!
         code_verifier: string!
         grant_type: string!
         redirect_uri: string!
+        refresh_token: string!
+        scope: string!
       request_type: TokenRequest
-      response_type: ErrorResponse
     - name: UserInfo
-      description: |-
-        UserInfo returns user info based on scopes (placeholder user)
-        UserInfo returns user information based on the access token
+      description: UserInfo returns user information based on the access token
       method: GET
       path: /userinfo
-      response_type: ErrorResponse
-    - name: JWKS
-      description: JWKS returns the JSON Web Key Set
-      method: GET
-      path: /jwks
-      response_type: ErrorResponse
-    - name: RegisterClient
-      description: RegisterClient registers a new OAuth client
+    - name: IntrospectToken
+      description: IntrospectToken handles token introspection requests
       method: POST
-      path: /register
-      request:
-        name: string!
-        redirect_uri: string!
-      request_type: RegisterClient_req
-      response_type: ErrorResponse
-    - name: HandleConsent
-      description: HandleConsent processes the consent form submission
+      path: /introspect
+    - name: RevokeToken
+      description: RevokeToken handles token revocation requests
       method: POST
-      path: /consent
-      response_type: ErrorResponse
+      path: /revoke
+      response_type: responses.StatusResponse
 types:
-    - name: ScopeInfo
-      fields:
-        "": string
-    - name: KeyPair
-      fields:
-        "": time.Time
-    - name: Plugin
-      fields:
-        "": forge.Logger
-    - name: OIDCJWKSResponse
-      fields:
-        keys: '[]!'
-    - name: Service
-      fields:
-        "": ""
-    - name: JWKS
-      fields:
-        keys: '[]JWK!'
-    - name: JWTService
-      fields:
-        "": string
-    - name: OIDCErrorResponse
+    - name: OAuthErrorResponse
       fields:
         error: string!
         error_description: string!
-    - name: OIDCUserInfoResponse
+        error_uri: string!
+        state: string!
+    - name: ScopeInfo
       fields:
-        email: string!
-        email_verified: bool!
-        family_name: string!
-        given_name: string!
-        name: string!
-        picture: string!
-        sub: string!
+        "": string
+    - name: DiscoveryService
+      fields:
+        "": Config
+    - name: JWK
+      fields:
+        alg: string!
+        e: string!
+        kid: string!
+        kty: string!
+        "n": string!
+        use: string!
+    - name: KeyPair
+      fields:
+        "": bool
+    - name: TokenRequest
+      fields:
+        audience: string!
+        client_id: string!
+        client_secret: string!
+        code: string!
+        code_verifier: string!
+        grant_type: string!
+        redirect_uri: string!
+        refresh_token: string!
+        scope: string!
+    - name: JWKSResponse
+      fields:
+        keys: '[]JWK!'
+    - name: AdminHandler
+      fields:
+        "": '*RegistrationService'
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: JWTService
+      fields:
+        "": '*JWKSService'
+    - name: AccessTokenClaims
+      fields:
+        client_id: string!
+        scope: string!
+        token_type: string!
     - name: Config
       fields:
         issuer: string!
         keys: '!'
         tokens: '!'
-    - name: AuthorizeRequest
+    - name: RegistrationService
       fields:
-        "": string
+        "": Config
     - name: TokenResponse
       fields:
         access_token: string!
@@ -95,13 +166,13 @@ types:
         refresh_token: string!
         scope: string!
         token_type: string!
-    - name: OIDCConfigResponse
+    - name: ClientsListResponse
       fields:
-        config: '!'
-        issuer: string!
-    - name: JWKSService
-      fields:
-        "": '*KeyStore'
+        clients: '[]ClientSummary!'
+        page: int!
+        pageSize: int!
+        total: int!
+        totalPages: int!
     - name: IDTokenClaims
       fields:
         auth_time: int64!
@@ -113,50 +184,220 @@ types:
         nonce: string!
         preferred_username: string!
         session_state: string!
-    - name: JWK
+    - name: Plugin
       fields:
-        alg: string!
-        e: string!
-        kid: string!
-        kty: string!
-        "n": string!
-        use: string!
+        "": forge.Logger
+    - name: ClientAuthResult
+      fields:
+        "": string
+    - name: ClientAuthenticator
+      fields:
+        "": '*repo.OAuthClientRepository'
     - name: KeyStore
       fields:
-        "": time.Duration
-    - name: AccessTokenClaims
+        "": sync.RWMutex
+    - name: Service
       fields:
+        "": '*session.Service'
+    - name: TokenIntrospectionResponse
+      fields:
+        active: bool!
+        aud: '[]string!'
         client_id: string!
+        exp: int64!
+        iat: int64!
+        iss: string!
+        jti: string!
+        nbf: int64!
         scope: string!
+        sub: string!
         token_type: string!
-    - name: OIDCTokenResponse
-      fields:
-        access_token: string!
-        expires_in: int!
-        id_token: string!
-        refresh_token: string!
-        scope: string!
-        token_type: string!
-    - name: OIDCClientResponse
+        username: string!
+    - name: TokenRevocationRequest
       fields:
         client_id: string!
         client_secret: string!
-        redirect_uris: '[]string!'
+        token: string!
+        token_type_hint: string!
+    - name: IntrospectionService
+      fields:
+        "": UserService
+    - name: AuthorizeRequest
+      fields:
+        acr_values: string!
+        client_id: string!
+        code_challenge: string!
+        code_challenge_method: string!
+        id_token_hint: string!
+        login_hint: string!
+        max_age: '*int!'
+        nonce: string!
+        prompt: string!
+        redirect_uri: string!
+        response_type: string!
+        scope: string!
+        state: string!
+        ui_locales: string!
+    - name: DiscoveryResponse
+      fields:
+        authorization_endpoint: string!
+        claims_parameter_supported: bool!
+        claims_supported: '[]string!'
+        code_challenge_methods_supported: '[]string!'
+        grant_types_supported: '[]string!'
+        id_token_signing_alg_values_supported: '[]string!'
+        introspection_endpoint: string!
+        introspection_endpoint_auth_methods_supported: '[]string!'
+        issuer: string!
+        jwks_uri: string!
+        registration_endpoint: string!
+        request_parameter_supported: bool!
+        request_uri_parameter_supported: bool!
+        require_request_uri_registration: bool!
+        response_modes_supported: '[]string!'
+        response_types_supported: '[]string!'
+        revocation_endpoint: string!
+        revocation_endpoint_auth_methods_supported: '[]string!'
+        scopes_supported: '[]string!'
+        subject_types_supported: '[]string!'
+        token_endpoint: string!
+        token_endpoint_auth_methods_supported: '[]string!'
+        userinfo_endpoint: string!
     - name: ConsentDecision
       fields:
         "": '[]string'
-    - name: Handler
+    - name: JWKSService
       fields:
-        "": '*Service'
-    - name: TokenRequest
+        "": '*KeyStore'
+    - name: ClientRegistrationResponse
+      fields:
+        application_type: string!
+        client_id: string!
+        client_id_issued_at: int64!
+        client_name: string!
+        client_secret: string!
+        client_secret_expires_at: int64!
+        contacts: '[]string!'
+        grant_types: '[]string!'
+        logo_uri: string!
+        policy_uri: string!
+        post_logout_redirect_uris: '[]string!'
+        redirect_uris: '[]string!'
+        response_types: '[]string!'
+        scope: string!
+        token_endpoint_auth_method: string!
+        tos_uri: string!
+    - name: ClientSummary
+      fields:
+        applicationType: string!
+        clientID: string!
+        createdAt: string!
+        isOrgLevel: bool!
+        name: string!
+    - name: ClientDetailsResponse
+      fields:
+        allowedScopes: '[]string!'
+        applicationType: string!
+        clientID: string!
+        contacts: '[]string!'
+        createdAt: string!
+        grantTypes: '[]string!'
+        isOrgLevel: bool!
+        logoURI: string!
+        name: string!
+        organizationID: string!
+        policyURI: string!
+        postLogoutRedirectURIs: '[]string!'
+        redirectURIs: '[]string!'
+        requireConsent: bool!
+        requirePKCE: bool!
+        responseTypes: '[]string!'
+        tokenEndpointAuthMethod: string!
+        tosURI: string!
+        trustedClient: bool!
+        updatedAt: string!
+    - name: ConsentManager
+      fields:
+        "": EnterpriseConsentService
+    - name: userServiceAdapter
+      fields:
+        "": '*user.Service'
+    - name: ConsentRequest
+      fields:
+        action: string!
+        client_id: string!
+        code_challenge: string!
+        code_challenge_method: string!
+        redirect_uri: string!
+        response_type: string!
+        scope: string!
+        state: string!
+    - name: UserInfoResponse
+      fields:
+        birthdate: string!
+        email: string!
+        email_verified: bool!
+        family_name: string!
+        gender: string!
+        given_name: string!
+        locale: string!
+        middle_name: string!
+        name: string!
+        nickname: string!
+        phone_number: string!
+        phone_number_verified: bool!
+        picture: string!
+        preferred_username: string!
+        profile: string!
+        sub: string!
+        updated_at: int64!
+        website: string!
+        zoneinfo: string!
+    - name: ClientRegistrationRequest
+      fields:
+        application_type: string!
+        client_name: string!
+        contacts: '[]string!'
+        grant_types: '[]string!'
+        logo_uri: string!
+        policy_uri: string!
+        post_logout_redirect_uris: '[]string!'
+        redirect_uris: '[]string!'
+        require_consent: bool!
+        require_pkce: bool!
+        response_types: '[]string!'
+        scope: string!
+        token_endpoint_auth_method: string!
+        tos_uri: string!
+        trusted_client: bool!
+    - name: ConsentService
+      fields:
+        "": '*repo.OAuthClientRepository'
+    - name: JWKS
+      fields:
+        keys: '[]JWK!'
+    - name: RevokeTokenService
+      fields:
+        "": '*repo.OAuthTokenRepository'
+    - name: TokenIntrospectionRequest
       fields:
         client_id: string!
         client_secret: string!
-        code: string!
-        code_verifier: string!
-        grant_type: string!
-        redirect_uri: string!
-    - name: RegisterClient_req
+        token: string!
+        token_type_hint: string!
+    - name: ClientUpdateRequest
       fields:
+        allowed_scopes: '[]string!'
+        contacts: '[]string!'
+        grant_types: '[]string!'
+        logo_uri: string!
         name: string!
-        redirect_uri: string!
+        policy_uri: string!
+        post_logout_redirect_uris: '[]string!'
+        redirect_uris: '[]string!'
+        require_consent: '*bool!'
+        require_pkce: '*bool!'
+        response_types: '[]string!'
+        token_endpoint_auth_method: string!
+        tos_uri: string!
+        trusted_client: '*bool!'

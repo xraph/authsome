@@ -7,7 +7,7 @@ routes:
       path: /email-otp/send
       request:
         email: string!
-      request_type: Send_body
+      request_type: SendRequest
     - name: Verify
       description: Verify checks the OTP and creates a session on success
       method: POST
@@ -16,43 +16,24 @@ routes:
         email: string!
         otp: string!
         remember: bool!
-      response:
-        session: '!'
-        token: string!
-        user: '!'
-      request_type: Verify_body
+      request_type: VerifyRequest
       response_type: VerifyResponse
 types:
-    - name: EmailOTPVerifyResponse
+    - name: SendRequest
       fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Service
-      fields:
-        "": Config
-    - name: VerifyResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Verify_body
+        email: string!
+    - name: VerifyRequest
       fields:
         email: string!
         otp: string!
         remember: bool!
+    - name: SendResponse
+      fields:
+        dev_otp: string!
+        status: string!
     - name: Plugin
       fields:
-        "": '*bun.DB'
-    - name: EmailOTPErrorResponse
-      fields:
-        error: string!
-    - name: Handler
-      fields:
-        "": '*rl.Service'
-    - name: Send_body
-      fields:
-        email: string!
+        "": Config
     - name: Config
       fields:
         allowImplicitSignup: bool!
@@ -61,7 +42,9 @@ types:
         maxAttempts: int!
         otpLength: int!
         rateLimitPerHour: int!
-    - name: EmailOTPSendResponse
+    - name: Service
       fields:
-        dev_otp: string!
-        status: string!
+        "": session.ServiceInterface
+    - name: Handler
+      fields:
+        "": '*rl.Service'

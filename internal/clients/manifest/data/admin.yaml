@@ -13,23 +13,15 @@ routes:
         password: string
         role: string
         username: string
-      response:
-        error: string!
       request_type: CreateUser_reqBody
-      response_type: ErrorResponse
     - name: ListUsers
       description: ListUsers handles GET /admin/users
       method: GET
       path: /users
-      response:
-        error: string!
-      response_type: ErrorResponse
     - name: DeleteUser
       description: DeleteUser handles DELETE /admin/users/:id
       method: DELETE
       path: /users/:id
-      response:
-        message: string!
       response_type: MessageResponse
     - name: BanUser
       description: BanUser handles POST /admin/users/:id/ban
@@ -38,8 +30,6 @@ routes:
       request:
         expires_at: '*time.Time'
         reason: string!
-      response:
-        message: string!
       request_type: BanUser_reqBody
       response_type: MessageResponse
     - name: UnbanUser
@@ -48,8 +38,6 @@ routes:
       path: /users/:id/unban
       request:
         reason: string
-      response:
-        message: string!
       request_type: UnbanUser_reqBody
       response_type: MessageResponse
     - name: ImpersonateUser
@@ -58,52 +46,41 @@ routes:
       path: /users/:id/impersonate
       request:
         duration: time.Duration
-      response:
-        error: string!
       request_type: ImpersonateUser_reqBody
-      response_type: ErrorResponse
     - name: SetUserRole
       description: SetUserRole handles POST /admin/users/:id/role
       method: POST
       path: /users/:id/role
       request:
         role: string!
-      response:
-        message: string!
       request_type: SetUserRole_reqBody
       response_type: MessageResponse
     - name: ListSessions
       description: ListSessions handles GET /admin/sessions
       method: GET
       path: /sessions
-      response:
-        error: string!
-      response_type: ErrorResponse
     - name: RevokeSession
       description: RevokeSession handles DELETE /admin/sessions/:id
       method: DELETE
       path: /sessions/:id
-      response:
-        message: string!
       response_type: MessageResponse
     - name: GetStats
       description: GetStats handles GET /admin/stats
       method: GET
       path: /stats
-      response:
-        error: string!
-      response_type: ErrorResponse
     - name: GetAuditLogs
       description: GetAuditLogs handles GET /admin/audit
       method: GET
       path: /audit-logs
-      response:
-        error: string!
-      response_type: ErrorResponse
 types:
-    - name: SetUserRole_reqBody
+    - name: ListSessionsRequest
       fields:
-        role: string!
+        '-': xid.ID!
+        app_id: xid.ID!
+        limit: int!
+        page: int!
+        user_id: '*xid.ID!'
+        user_organization_id: '*xid.ID!'
     - name: ListSessionsResponse
       fields:
         limit: int!
@@ -124,6 +101,12 @@ types:
       fields:
         expires_at: '*time.Time'
         reason: string!
+    - name: UnbanUser_reqBody
+      fields:
+        reason: string
+    - name: Plugin
+      fields:
+        "": '*Handler'
     - name: Config
       fields:
         allow_impersonation: bool!
@@ -131,16 +114,6 @@ types:
         allow_user_deletion: bool!
         max_impersonation_duration: time.Duration!
         required_role: string!
-    - name: ListUsersRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        limit: int!
-        page: int!
-        role: string!
-        search: string!
-        status: string!
-        user_organization_id: '*xid.ID!'
     - name: ListUsersResponse
       fields:
         limit: int!
@@ -148,10 +121,11 @@ types:
         total: int!
         total_pages: int!
         users: '[]*user.User!'
-    - name: UnbanUserRequest
+    - name: BanUserRequest
       fields:
         '-': xid.ID!
         app_id: xid.ID!
+        expires_at: '*time.Time!'
         reason: string!
         user_id: xid.ID!
         user_organization_id: '*xid.ID!'
@@ -165,9 +139,34 @@ types:
     - name: Handler
       fields:
         "": '*Service'
-    - name: MessageResponse
+    - name: StatsResponse
       fields:
-        message: string!
+        active_sessions: int!
+        active_users: int!
+        banned_users: int!
+        timestamp: string!
+        total_sessions: int!
+        total_users: int!
+    - name: Service
+      fields:
+        "": ""
+    - name: ListUsersRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        limit: int!
+        page: int!
+        role: string!
+        search: string!
+        status: string!
+        user_organization_id: '*xid.ID!'
+    - name: SetUserRoleRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        role: string!
+        user_id: xid.ID!
+        user_organization_id: '*xid.ID!'
     - name: CreateUserRequest
       fields:
         '-': xid.ID!
@@ -180,49 +179,16 @@ types:
         role: string!
         user_organization_id: '*xid.ID!'
         username: string!
-    - name: BanUserRequest
+    - name: UnbanUserRequest
       fields:
         '-': xid.ID!
         app_id: xid.ID!
-        expires_at: '*time.Time!'
         reason: string!
         user_id: xid.ID!
         user_organization_id: '*xid.ID!'
-    - name: ListSessionsRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        limit: int!
-        page: int!
-        user_id: '*xid.ID!'
-        user_organization_id: '*xid.ID!'
-    - name: ErrorResponse
-      fields:
-        error: string!
-    - name: UnbanUser_reqBody
-      fields:
-        reason: string
-    - name: Plugin
-      fields:
-        "": '*Handler'
-    - name: Service
-      fields:
-        "": ""
-    - name: SetUserRoleRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        role: string!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
-    - name: StatsResponse
-      fields:
-        active_sessions: int!
-        active_users: int!
-        banned_users: int!
-        timestamp: string!
-        total_sessions: int!
-        total_users: int!
     - name: ImpersonateUser_reqBody
       fields:
         duration: time.Duration
+    - name: SetUserRole_reqBody
+      fields:
+        role: string!
