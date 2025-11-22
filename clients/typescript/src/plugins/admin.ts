@@ -12,16 +12,16 @@ export class AdminPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createUser(request: types.CreateUser_reqBody): Promise<types.ErrorResponse> {
+  async createUser(request: types.CreateUser_reqBody): Promise<void> {
     const path = '/users';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async listUsers(): Promise<types.ErrorResponse> {
+  async listUsers(): Promise<void> {
     const path = '/users';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
   async deleteUser(): Promise<types.MessageResponse> {
@@ -43,9 +43,9 @@ export class AdminPlugin implements ClientPlugin {
     });
   }
 
-  async impersonateUser(request: types.ImpersonateUser_reqBody): Promise<types.ErrorResponse> {
+  async impersonateUser(request: types.ImpersonateUser_reqBody): Promise<void> {
     const path = '/users/:id/impersonate';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -57,9 +57,9 @@ export class AdminPlugin implements ClientPlugin {
     });
   }
 
-  async listSessions(): Promise<types.ErrorResponse> {
+  async listSessions(): Promise<void> {
     const path = '/sessions';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
   async revokeSession(): Promise<types.MessageResponse> {
@@ -67,14 +67,14 @@ export class AdminPlugin implements ClientPlugin {
     return this.client.request<types.MessageResponse>('DELETE', path);
   }
 
-  async getStats(): Promise<types.ErrorResponse> {
+  async getStats(): Promise<void> {
     const path = '/stats';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async getAuditLogs(): Promise<types.ErrorResponse> {
+  async getAuditLogs(): Promise<void> {
     const path = '/audit-logs';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
 }

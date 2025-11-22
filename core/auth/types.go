@@ -4,28 +4,27 @@ import "github.com/xraph/authsome/core/responses"
 
 // SignUpRequest represents a signup request
 type SignUpRequest struct {
-	Email     string
-	Password  string
-	Name      string
-	Remember  bool
-	IPAddress string
-	UserAgent string
+	Email      string `json:"email" validate:"required,email"`
+	Password   string `json:"password" validate:"required,min=8"`
+	Name       string `json:"name" validate:"required"`
+	RememberMe bool   `json:"rememberMe,omitempty"`
+	IPAddress  string `json:"ipAddress,omitempty"`
+	UserAgent  string `json:"userAgent,omitempty"`
 }
 
 // SignInRequest represents a signin request
 type SignInRequest struct {
-	Email    string
-	Password string
-	Remember bool
+	Email      string `json:"email" validate:"required,email"`
+	Password   string `json:"password" validate:"required,min=8"`
+	RememberMe bool   `json:"rememberMe,omitempty"`
 	// Optional alternative naming per docs
-	RememberMe bool
-	IPAddress  string
-	UserAgent  string
+	IPAddress string `json:"ipAddress,omitempty"`
+	UserAgent string `json:"userAgent,omitempty"`
 }
 
 // SignOutRequest represents a signout request
 type SignOutRequest struct {
-	Token string
+	Token string `json:"token" validate:"required"`
 }
 
 // AuthResponse represents an authentication response

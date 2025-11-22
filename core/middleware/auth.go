@@ -124,19 +124,30 @@ func (m *AuthMiddleware) Authenticate(next func(forge.Context) error) func(forge
 			}
 		}
 
-		// Set authenticated flag
-		authCtx.IsAuthenticated = authCtx.IsAPIKeyAuth || authCtx.IsUserAuth
+	// Set authenticated flag
+	authCtx.IsAuthenticated = authCtx.IsAPIKeyAuth || authCtx.IsUserAuth
 
-		// Compute effective permissions (union of all applicable permissions)
-		authCtx.EffectivePermissions = m.computeEffectivePermissions(authCtx)
+	// Compute effective permissions (union of all applicable permissions)
+	authCtx.EffectivePermissions = m.computeEffectivePermissions(authCtx)
 
-		// If not optional and not authenticated, reject
-		if !m.config.Optional && !authCtx.IsAuthenticated {
+	// If not optional and not authenticated, reject with specific error message
+	if !m.config.Optional && !authCtx.IsAuthenticated {
+		// Check if API key was attempted but failed validation
+		apiKeyAttempted := m.extractAPIKey(c)
+		if apiKeyAttempted != "" {
+			// API key was provided but invalid/expired
 			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-				"error": "authentication required",
-				"code":  "AUTHENTICATION_REQUIRED",
+				"error": "Invalid or expired API key",
+				"code":  "INVALID_API_KEY",
 			})
 		}
+		
+		// No authentication provided at all
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"error": "API key required for app identification",
+			"code":  "API_KEY_REQUIRED",
+		})
+	}
 
 		// Store auth context
 		ctx = contexts.SetAuthContext(ctx, authCtx)

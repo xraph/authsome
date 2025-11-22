@@ -47,11 +47,16 @@ func main() {
 		authext.WithBasePath("/api/auth"),
 		authext.WithSecret("demo-secret-key-change-in-production"),
 		authext.WithRBACEnforcement(false),
+		// Enable CORS for frontend access
+		authext.WithTrustedOrigins([]string{
+			"http://localhost:3000",
+			"http://localhost:8080",
+		}),
 		authext.WithPlugins(
 			dashboard.NewPlugin(),
 		),
 	))
-	log.Println("✅ AuthSome extension registered with dashboard plugin")
+	log.Println("✅ AuthSome extension registered with dashboard plugin and CORS")
 
 	// Add your app routes
 	app.Router().GET("/", func(c forge.Context) error {

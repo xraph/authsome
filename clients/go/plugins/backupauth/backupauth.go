@@ -31,18 +31,18 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // StartRecoveryRequest is the request for StartRecovery
 type StartRecoveryRequest struct {
-	DeviceId string `json:"deviceId"`
 	Email string `json:"email"`
 	PreferredMethod authsome.RecoveryMethod `json:"preferredMethod"`
 	UserId string `json:"userId"`
+	DeviceId string `json:"deviceId"`
 }
 
 // StartRecoveryResponse is the response for StartRecovery
 type StartRecoveryResponse struct {
+	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
-	Code string `json:"code"`
 }
 
 // StartRecovery StartRecovery handles POST /recovery/start
@@ -63,10 +63,10 @@ type ContinueRecoveryRequest struct {
 
 // ContinueRecoveryResponse is the response for ContinueRecovery
 type ContinueRecoveryResponse struct {
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
+	Code string `json:"code"`
+	Details authsome. `json:"details"`
 }
 
 // ContinueRecovery ContinueRecovery handles POST /recovery/continue
@@ -86,10 +86,10 @@ type CompleteRecoveryRequest struct {
 
 // CompleteRecoveryResponse is the response for CompleteRecovery
 type CompleteRecoveryResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
+	Error string `json:"error"`
+	Message string `json:"message"`
 }
 
 // CompleteRecovery CompleteRecovery handles POST /recovery/complete
@@ -126,8 +126,8 @@ func (p *Plugin) CancelRecovery(ctx context.Context, req *CancelRecoveryRequest)
 
 // GenerateRecoveryCodesRequest is the request for GenerateRecoveryCodes
 type GenerateRecoveryCodesRequest struct {
-	Format string `json:"format"`
 	Count int `json:"count"`
+	Format string `json:"format"`
 }
 
 // GenerateRecoveryCodesResponse is the response for GenerateRecoveryCodes
@@ -150,16 +150,16 @@ func (p *Plugin) GenerateRecoveryCodes(ctx context.Context, req *GenerateRecover
 
 // VerifyRecoveryCodeRequest is the request for VerifyRecoveryCode
 type VerifyRecoveryCodeRequest struct {
-	SessionId authsome.xid.ID `json:"sessionId"`
 	Code string `json:"code"`
+	SessionId authsome.xid.ID `json:"sessionId"`
 }
 
 // VerifyRecoveryCodeResponse is the response for VerifyRecoveryCode
 type VerifyRecoveryCodeResponse struct {
+	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
-	Message string `json:"message"`
 }
 
 // VerifyRecoveryCode VerifyRecoveryCode handles POST /recovery-codes/verify
@@ -179,10 +179,10 @@ type SetupSecurityQuestionsRequest struct {
 
 // SetupSecurityQuestionsResponse is the response for SetupSecurityQuestions
 type SetupSecurityQuestionsResponse struct {
-	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
+	Message string `json:"message"`
 }
 
 // SetupSecurityQuestions SetupSecurityQuestions handles POST /security-questions/setup
@@ -202,10 +202,10 @@ type GetSecurityQuestionsRequest struct {
 
 // GetSecurityQuestionsResponse is the response for GetSecurityQuestions
 type GetSecurityQuestionsResponse struct {
-	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
+	Message string `json:"message"`
 }
 
 // GetSecurityQuestions GetSecurityQuestions handles POST /security-questions/get
@@ -226,10 +226,10 @@ type VerifySecurityAnswersRequest struct {
 
 // VerifySecurityAnswersResponse is the response for VerifySecurityAnswers
 type VerifySecurityAnswersResponse struct {
+	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
-	Message string `json:"message"`
 }
 
 // VerifySecurityAnswers VerifySecurityAnswers handles POST /security-questions/verify
@@ -311,16 +311,16 @@ func (p *Plugin) VerifyTrustedContact(ctx context.Context, req *VerifyTrustedCon
 
 // RequestTrustedContactVerificationRequest is the request for RequestTrustedContactVerification
 type RequestTrustedContactVerificationRequest struct {
-	SessionId authsome.xid.ID `json:"sessionId"`
 	ContactId authsome.xid.ID `json:"contactId"`
+	SessionId authsome.xid.ID `json:"sessionId"`
 }
 
 // RequestTrustedContactVerificationResponse is the response for RequestTrustedContactVerification
 type RequestTrustedContactVerificationResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
+	Error string `json:"error"`
+	Message string `json:"message"`
 }
 
 // RequestTrustedContactVerification RequestTrustedContactVerification handles POST /trusted-contacts/request-verification
@@ -382,10 +382,10 @@ type VerifyCodeRequest struct {
 
 // VerifyCodeResponse is the response for VerifyCode
 type VerifyCodeResponse struct {
+	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
-	Code string `json:"code"`
 }
 
 // VerifyCode VerifyCode handles POST /verification/verify
@@ -407,10 +407,10 @@ type ScheduleVideoSessionRequest struct {
 
 // ScheduleVideoSessionResponse is the response for ScheduleVideoSession
 type ScheduleVideoSessionResponse struct {
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
+	Code string `json:"code"`
+	Details authsome. `json:"details"`
 }
 
 // ScheduleVideoSession ScheduleVideoSession handles POST /video/schedule
@@ -430,10 +430,10 @@ type StartVideoSessionRequest struct {
 
 // StartVideoSessionResponse is the response for StartVideoSession
 type StartVideoSessionResponse struct {
+	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
-	Code string `json:"code"`
 }
 
 // StartVideoSession StartVideoSession handles POST /video/start
@@ -457,10 +457,10 @@ type CompleteVideoSessionRequest struct {
 
 // CompleteVideoSessionResponse is the response for CompleteVideoSession
 type CompleteVideoSessionResponse struct {
-	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
+	Code string `json:"code"`
 }
 
 // CompleteVideoSession CompleteVideoSession handles POST /video/complete (admin)
@@ -502,10 +502,10 @@ func (p *Plugin) UploadDocument(ctx context.Context, req *UploadDocumentRequest)
 
 // GetDocumentVerificationResponse is the response for GetDocumentVerification
 type GetDocumentVerificationResponse struct {
-	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
 	Code string `json:"code"`
+	Details authsome. `json:"details"`
 }
 
 // GetDocumentVerification GetDocumentVerification handles GET /documents/:id
@@ -520,10 +520,10 @@ func (p *Plugin) GetDocumentVerification(ctx context.Context) (*GetDocumentVerif
 
 // ReviewDocumentRequest is the request for ReviewDocument
 type ReviewDocumentRequest struct {
+	RejectionReason string `json:"rejectionReason"`
 	Approved bool `json:"approved"`
 	DocumentId authsome.xid.ID `json:"documentId"`
 	Notes string `json:"notes"`
-	RejectionReason string `json:"rejectionReason"`
 }
 
 // ReviewDocumentResponse is the response for ReviewDocument
@@ -559,10 +559,10 @@ type ApproveRecoveryRequest struct {
 
 // ApproveRecoveryResponse is the response for ApproveRecovery
 type ApproveRecoveryResponse struct {
-	Message string `json:"message"`
 	Code string `json:"code"`
 	Details authsome. `json:"details"`
 	Error string `json:"error"`
+	Message string `json:"message"`
 }
 
 // ApproveRecovery ApproveRecovery handles POST /admin/sessions/:id/approve (admin)
@@ -584,10 +584,10 @@ type RejectRecoveryRequest struct {
 
 // RejectRecoveryResponse is the response for RejectRecovery
 type RejectRecoveryResponse struct {
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
 	Error string `json:"error"`
 	Message string `json:"message"`
+	Code string `json:"code"`
+	Details authsome. `json:"details"`
 }
 
 // RejectRecovery RejectRecovery handles POST /admin/sessions/:id/reject (admin)
@@ -620,11 +620,11 @@ func (p *Plugin) GetRecoveryConfig(ctx context.Context) error {
 
 // UpdateRecoveryConfigRequest is the request for UpdateRecoveryConfig
 type UpdateRecoveryConfigRequest struct {
+	RequireMultipleSteps bool `json:"requireMultipleSteps"`
+	RiskScoreThreshold float64 `json:"riskScoreThreshold"`
 	EnabledMethods authsome.[]RecoveryMethod `json:"enabledMethods"`
 	MinimumStepsRequired int `json:"minimumStepsRequired"`
 	RequireAdminReview bool `json:"requireAdminReview"`
-	RequireMultipleSteps bool `json:"requireMultipleSteps"`
-	RiskScoreThreshold float64 `json:"riskScoreThreshold"`
 }
 
 // UpdateRecoveryConfigResponse is the response for UpdateRecoveryConfig

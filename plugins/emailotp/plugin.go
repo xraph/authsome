@@ -29,6 +29,7 @@ type Plugin struct {
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // Config holds the email OTP plugin configuration
@@ -125,6 +126,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return errs.New("EMAILOTP_PLUGIN_REQUIRES_AUTH_INSTANCE", "Email OTP plugin requires auth instance", http.StatusInternalServerError)
 	}
 
+	// Store auth instance for middleware access
+	p.authInst = authInst
+
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
@@ -178,9 +182,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the correct basePath
 	// Set up a simple in-memory rate limit: 5 sends per minute per email
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/email-otp/send": {Window: time.Minute, Max: 5}}})
-	h := NewHandler(p.service, rls)
+	h := NewHandler(p.service, rls, p.authInst)
 
-	router.POST("/email-otp/send", h.Send,
+	// Get authentication middleware for API key validation
+	authMw := p.authInst.AuthMiddleware()
+
+	// Wrap handler with middleware if available
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMw != nil {
+			return authMw(handler)
+		}
+		return handler
+	}
+
+	router.POST("/email-otp/send", wrapHandler(h.Send),
 		forge.WithName("emailotp.send"),
 		forge.WithSummary("Send email OTP"),
 		forge.WithDescription("Sends a one-time password (OTP) to the specified email address. Rate limited to 5 requests per minute per email"),
@@ -193,7 +208,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithValidation(true),
 	)
 
-	router.POST("/email-otp/verify", h.Verify,
+	router.POST("/email-otp/verify", wrapHandler(h.Verify),
 		forge.WithName("emailotp.verify"),
 		forge.WithSummary("Verify email OTP"),
 		forge.WithDescription("Verifies the OTP code and creates a user session on success. Supports implicit signup if enabled"),

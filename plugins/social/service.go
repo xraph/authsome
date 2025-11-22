@@ -154,7 +154,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 	}
 
 	authURL := oauth2Config.AuthCodeURL(state)
-	
+
 	// Audit: OAuth flow initiated
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, "social_signin_initiated",
@@ -169,7 +169,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 					return "[]"
 				}()))
 	}
-	
+
 	return authURL, nil
 }
 
@@ -200,7 +200,7 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 	}
 
 	authURL := oauth2Config.AuthCodeURL(state)
-	
+
 	// Audit: link flow initiated
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, &userID, "social_link_initiated",
@@ -208,7 +208,7 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 			"", "",
 			fmt.Sprintf(`{"provider":"%s","user_id":"%s","app_id":"%s"}`, providerName, userID.String(), appID.String()))
 	}
-	
+
 	return authURL, nil
 }
 
@@ -326,7 +326,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		}
 
 		return &CallbackResult{
-			User:          &schema.User{ID: targetUser.ID, Email: targetUser.Email, Name: targetUser.Name, Image: targetUser.Image, EmailVerified: targetUser.EmailVerified},
+			User:          targetUser,
 			IsNewUser:     false,
 			SocialAccount: existingAccount,
 			Action:        "linked",
@@ -341,7 +341,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		}
 
 		return &CallbackResult{
-			User:          &schema.User{ID: targetUser.ID, Email: targetUser.Email, Name: targetUser.Name, Image: targetUser.Image, EmailVerified: targetUser.EmailVerified},
+			User:          targetUser,
 			IsNewUser:     false,
 			SocialAccount: existingAccount,
 			Action:        "signin",
@@ -361,7 +361,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 					}
 
 					return &CallbackResult{
-						User:      &schema.User{ID: existingUser.ID, Email: existingUser.Email, Name: existingUser.Name, Image: existingUser.Image, EmailVerified: existingUser.EmailVerified},
+						User:      existingUser,
 						IsNewUser: false,
 						Action:    "linked",
 					}, nil
@@ -400,7 +400,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		}
 
 		return &CallbackResult{
-			User:      &schema.User{ID: newUser.ID, Email: newUser.Email, Name: newUser.Name, Image: newUser.Image, EmailVerified: newUser.EmailVerified},
+			User:      newUser,
 			IsNewUser: true,
 			Action:    "signup",
 		}, nil
@@ -462,7 +462,7 @@ func (s *Service) generateState(ctx context.Context, provider string, appID xid.
 	if ttl == 0 {
 		ttl = 15 * time.Minute
 	}
-	
+
 	if err := s.stateStore.Set(ctx, stateToken, state, ttl); err != nil {
 		return "", fmt.Errorf("failed to store state: %w", err)
 	}
@@ -492,7 +492,7 @@ func (s *Service) verifyState(ctx context.Context, stateToken string) (*OAuthSta
 
 // CallbackResult holds the result of OAuth callback processing
 type CallbackResult struct {
-	User          *schema.User
+	User          *user.User
 	SocialAccount *schema.SocialAccount
 	IsNewUser     bool
 	Action        string // "signin", "signup", "linked"

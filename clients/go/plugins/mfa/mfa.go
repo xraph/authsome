@@ -37,21 +37,13 @@ type EnrollFactorRequest struct {
 	Type authsome.FactorType `json:"type"`
 }
 
-// EnrollFactorResponse is the response for EnrollFactor
-type EnrollFactorResponse struct {
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
-	Error string `json:"error"`
-}
-
 // EnrollFactor EnrollFactor handles POST /mfa/factors/enroll
-func (p *Plugin) EnrollFactor(ctx context.Context, req *EnrollFactorRequest) (*EnrollFactorResponse, error) {
+func (p *Plugin) EnrollFactor(ctx context.Context, req *EnrollFactorRequest) error {
 	path := "/mfa/factors/enroll"
-	var result EnrollFactorResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListFactorsResponse is the response for ListFactors
@@ -70,51 +62,31 @@ func (p *Plugin) ListFactors(ctx context.Context) (*ListFactorsResponse, error) 
 	return &result, nil
 }
 
-// GetFactorResponse is the response for GetFactor
-type GetFactorResponse struct {
-	Details authsome. `json:"details"`
-	Error string `json:"error"`
-	Code string `json:"code"`
-}
-
 // GetFactor GetFactor handles GET /mfa/factors/:id
-func (p *Plugin) GetFactor(ctx context.Context) (*GetFactorResponse, error) {
+func (p *Plugin) GetFactor(ctx context.Context) error {
 	path := "/mfa/factors/:id"
-	var result GetFactorResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// UpdateFactorResponse is the response for UpdateFactor
-type UpdateFactorResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // UpdateFactor UpdateFactor handles PUT /mfa/factors/:id
-func (p *Plugin) UpdateFactor(ctx context.Context) (*UpdateFactorResponse, error) {
+func (p *Plugin) UpdateFactor(ctx context.Context) error {
 	path := "/mfa/factors/:id"
-	var result UpdateFactorResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// DeleteFactorResponse is the response for DeleteFactor
-type DeleteFactorResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // DeleteFactor DeleteFactor handles DELETE /mfa/factors/:id
-func (p *Plugin) DeleteFactor(ctx context.Context) (*DeleteFactorResponse, error) {
+func (p *Plugin) DeleteFactor(ctx context.Context) error {
 	path := "/mfa/factors/:id"
-	var result DeleteFactorResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // VerifyFactorRequest is the request for VerifyFactor
@@ -122,19 +94,13 @@ type VerifyFactorRequest struct {
 	Code string `json:"code"`
 }
 
-// VerifyFactorResponse is the response for VerifyFactor
-type VerifyFactorResponse struct {
-	Message string `json:"message"`
-}
-
 // VerifyFactor VerifyFactor handles POST /mfa/factors/:id/verify
-func (p *Plugin) VerifyFactor(ctx context.Context, req *VerifyFactorRequest) (*VerifyFactorResponse, error) {
+func (p *Plugin) VerifyFactor(ctx context.Context, req *VerifyFactorRequest) error {
 	path := "/mfa/factors/:id/verify"
-	var result VerifyFactorResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // InitiateChallengeRequest is the request for InitiateChallenge
@@ -145,87 +111,57 @@ type InitiateChallengeRequest struct {
 	UserId authsome.xid.ID `json:"userId"`
 }
 
-// InitiateChallengeResponse is the response for InitiateChallenge
-type InitiateChallengeResponse struct {
-	Error string `json:"error"`
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
-}
-
 // InitiateChallenge InitiateChallenge handles POST /mfa/challenge
-func (p *Plugin) InitiateChallenge(ctx context.Context, req *InitiateChallengeRequest) (*InitiateChallengeResponse, error) {
+func (p *Plugin) InitiateChallenge(ctx context.Context, req *InitiateChallengeRequest) error {
 	path := "/mfa/challenge"
-	var result InitiateChallengeResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // VerifyChallengeRequest is the request for VerifyChallenge
 type VerifyChallengeRequest struct {
-	RememberDevice bool `json:"rememberDevice"`
-	ChallengeId authsome.xid.ID `json:"challengeId"`
-	Code string `json:"code"`
 	Data authsome. `json:"data"`
 	DeviceInfo authsome.*DeviceInfo `json:"deviceInfo"`
 	FactorId authsome.xid.ID `json:"factorId"`
-}
-
-// VerifyChallengeResponse is the response for VerifyChallenge
-type VerifyChallengeResponse struct {
+	RememberDevice bool `json:"rememberDevice"`
+	ChallengeId authsome.xid.ID `json:"challengeId"`
 	Code string `json:"code"`
-	Details authsome. `json:"details"`
-	Error string `json:"error"`
 }
 
 // VerifyChallenge VerifyChallenge handles POST /mfa/verify
-func (p *Plugin) VerifyChallenge(ctx context.Context, req *VerifyChallengeRequest) (*VerifyChallengeResponse, error) {
+func (p *Plugin) VerifyChallenge(ctx context.Context, req *VerifyChallengeRequest) error {
 	path := "/mfa/verify"
-	var result VerifyChallengeResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetChallengeStatusResponse is the response for GetChallengeStatus
-type GetChallengeStatusResponse struct {
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
-	Error string `json:"error"`
+	return nil
 }
 
 // GetChallengeStatus GetChallengeStatus handles GET /mfa/challenge/:id
-func (p *Plugin) GetChallengeStatus(ctx context.Context) (*GetChallengeStatusResponse, error) {
+func (p *Plugin) GetChallengeStatus(ctx context.Context) error {
 	path := "/mfa/challenge/:id"
-	var result GetChallengeStatusResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // TrustDeviceRequest is the request for TrustDevice
 type TrustDeviceRequest struct {
-	Name string `json:"name"`
 	DeviceId string `json:"deviceId"`
 	Metadata authsome. `json:"metadata"`
-}
-
-// TrustDeviceResponse is the response for TrustDevice
-type TrustDeviceResponse struct {
-	Message string `json:"message"`
+	Name string `json:"name"`
 }
 
 // TrustDevice TrustDevice handles POST /mfa/devices/trust
-func (p *Plugin) TrustDevice(ctx context.Context, req *TrustDeviceRequest) (*TrustDeviceResponse, error) {
+func (p *Plugin) TrustDevice(ctx context.Context, req *TrustDeviceRequest) error {
 	path := "/mfa/devices/trust"
-	var result TrustDeviceResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListTrustedDevicesResponse is the response for ListTrustedDevices
@@ -244,36 +180,22 @@ func (p *Plugin) ListTrustedDevices(ctx context.Context) (*ListTrustedDevicesRes
 	return &result, nil
 }
 
-// RevokeTrustedDeviceResponse is the response for RevokeTrustedDevice
-type RevokeTrustedDeviceResponse struct {
-	Message string `json:"message"`
-}
-
 // RevokeTrustedDevice RevokeTrustedDevice handles DELETE /mfa/devices/:id
-func (p *Plugin) RevokeTrustedDevice(ctx context.Context) (*RevokeTrustedDeviceResponse, error) {
+func (p *Plugin) RevokeTrustedDevice(ctx context.Context) error {
 	path := "/mfa/devices/:id"
-	var result RevokeTrustedDeviceResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetStatusResponse is the response for GetStatus
-type GetStatusResponse struct {
-	Code string `json:"code"`
-	Details authsome. `json:"details"`
-	Error string `json:"error"`
+	return nil
 }
 
 // GetStatus GetStatus handles GET /mfa/status
-func (p *Plugin) GetStatus(ctx context.Context) (*GetStatusResponse, error) {
+func (p *Plugin) GetStatus(ctx context.Context) error {
 	path := "/mfa/status"
-	var result GetStatusResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // GetPolicyResponse is the response for GetPolicy
@@ -291,5 +213,33 @@ func (p *Plugin) GetPolicy(ctx context.Context) (*GetPolicyResponse, error) {
 	// For now, this is a placeholder
 	_ = path
 	return &result, nil
+}
+
+// AdminUpdatePolicyRequest is the request for AdminUpdatePolicy
+type AdminUpdatePolicyRequest struct {
+	AllowedTypes authsome.[]string `json:"allowedTypes"`
+	Enabled bool `json:"enabled"`
+	GracePeriod int `json:"gracePeriod"`
+	RequiredFactors int `json:"requiredFactors"`
+}
+
+// AdminUpdatePolicy AdminUpdatePolicy handles PUT /mfa/admin/policy
+Updates the MFA policy for an app (admin only)
+func (p *Plugin) AdminUpdatePolicy(ctx context.Context, req *AdminUpdatePolicyRequest) error {
+	path := "/mfa/policy"
+	// Note: This requires exposing client.request or using a different approach
+	// For now, this is a placeholder
+	_ = path
+	return nil
+}
+
+// AdminResetUserMFA AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
+Resets all MFA factors for a user (admin only)
+func (p *Plugin) AdminResetUserMFA(ctx context.Context) error {
+	path := "/mfa/users/:id/reset"
+	// Note: This requires exposing client.request or using a different approach
+	// For now, this is a placeholder
+	_ = path
+	return nil
 }
 

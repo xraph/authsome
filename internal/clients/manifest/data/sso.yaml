@@ -77,6 +77,9 @@ routes:
         user: '*user.User!'
       response_type: SSOAuthResponse
 types:
+    - name: Plugin
+      fields:
+        "": forge.Logger
     - name: Config
       fields:
         allowOIDC: bool!
@@ -89,40 +92,44 @@ types:
         samlACS: string!
         samlMetadataURL: string!
         updateAttributes: bool!
-    - name: StateStore
-      fields:
-        "": ""
-    - name: SAMLLoginRequest
-      fields:
-        relayState: string!
-    - name: DiscoverProviderRequest
-      fields:
-        email: string!
-    - name: SAMLLoginResponse
-      fields:
-        providerId: string!
-        redirectUrl: string!
-        requestId: string!
-    - name: Handler
-      fields:
-        "": forge.Logger
-    - name: MockUserService
+    - name: MockSessionService
       fields: {}
     - name: OIDCState
       fields:
-        "": time.Time
-    - name: RedisStateStore
-      fields: {}
+        "": string
     - name: SSOAuthResponse
       fields:
         session: '*session.Session!'
         token: string!
         user: '*user.User!'
+    - name: ProviderRegisteredResponse
+      fields:
+        providerId: string!
+        status: string!
+        type: string!
+    - name: MetadataResponse
+      fields:
+        metadata: string!
+    - name: RedisStateStore
+      fields: {}
+    - name: OIDCLoginRequest
+      fields:
+        nonce: string!
+        redirectUri: string!
+        scope: string!
+        state: string!
+    - name: DiscoverProviderRequest
+      fields:
+        email: string!
     - name: ProviderDiscoveredResponse
       fields:
         found: bool!
         providerId: string!
         type: string!
+    - name: ProviderListResponse
+      fields:
+        providers: '[]ProviderInfo!'
+        total: int!
     - name: ProviderInfo
       fields:
         createdAt: string!
@@ -131,28 +138,15 @@ types:
         type: string!
     - name: Service
       fields:
-        "": Config
-    - name: MockSessionService
-      fields: {}
-    - name: RegisterProviderRequest
+        "": '*samsvc.Service'
+    - name: SAMLLoginRequest
       fields:
-        attributeMapping: '!'
-        domain: string!
-        oidcClientID: string!
-        oidcClientSecret: string!
-        oidcIssuer: string!
-        oidcRedirectURI: string!
+        relayState: string!
+    - name: SAMLLoginResponse
+      fields:
         providerId: string!
-        samlCert: string!
-        samlEntryPoint: string!
-        samlIssuer: string!
-        type: string!
-    - name: OIDCLoginRequest
-      fields:
-        nonce: string!
-        redirectUri: string!
-        scope: string!
-        state: string!
+        redirectUrl: string!
+        requestId: string!
     - name: ProviderDetailResponse
       fields:
         attributeMapping: '!'
@@ -167,13 +161,23 @@ types:
         samlIssuer: string!
         type: string!
         updatedAt: string!
-    - name: Plugin
+    - name: MockUserService
+      fields: {}
+    - name: StateStore
       fields:
-        "": Config
-    - name: ProviderRegisteredResponse
+        "": ""
+    - name: RegisterProviderRequest
       fields:
+        attributeMapping: '!'
+        domain: string!
+        oidcClientID: string!
+        oidcClientSecret: string!
+        oidcIssuer: string!
+        oidcRedirectURI: string!
         providerId: string!
-        status: string!
+        samlCert: string!
+        samlEntryPoint: string!
+        samlIssuer: string!
         type: string!
     - name: OIDCLoginResponse
       fields:
@@ -181,10 +185,6 @@ types:
         nonce: string!
         providerId: string!
         state: string!
-    - name: MetadataResponse
+    - name: Handler
       fields:
-        metadata: string!
-    - name: ProviderListResponse
-      fields:
-        providers: '[]ProviderInfo!'
-        total: int!
+        "": forge.Logger

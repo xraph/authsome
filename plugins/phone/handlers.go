@@ -5,16 +5,19 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/xraph/authsome/core"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/helpers"
 	"github.com/xraph/forge"
 )
 
 type Handler struct {
-	svc *Service
-	rl  *rl.Service
+	svc      *Service
+	rl       *rl.Service
+	authInst core.Authsome
 }
 
 // Request types
@@ -41,7 +44,9 @@ type PhoneVerifyResponse struct {
 	Token   string           `json:"token" example:"session_token_abc123"`
 }
 
-func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
+func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome) *Handler {
+	return &Handler{svc: s, rl: rls, authInst: authInst}
+}
 
 // handleError returns the error in a structured format
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
@@ -108,6 +113,11 @@ func (h *Handler) Verify(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired verification code", http.StatusUnauthorized))
 	}
 
+	// Set session cookie if enabled
+	if h.authInst != nil && authRes.Session != nil {
+		_ = helpers.SetSessionCookieFromAuth(c, h.authInst, authRes.Token, authRes.Session.ExpiresAt)
+	}
+
 	return c.JSON(http.StatusOK, &PhoneVerifyResponse{
 		User:    authRes.User,
 		Session: authRes.Session,
@@ -134,6 +144,11 @@ func (h *Handler) SignIn(c forge.Context) error {
 	}
 	if authRes == nil {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired verification code", http.StatusUnauthorized))
+	}
+
+	// Set session cookie if enabled
+	if h.authInst != nil && authRes.Session != nil {
+		_ = helpers.SetSessionCookieFromAuth(c, h.authInst, authRes.Token, authRes.Session.ExpiresAt)
 	}
 
 	return c.JSON(http.StatusOK, &PhoneVerifyResponse{

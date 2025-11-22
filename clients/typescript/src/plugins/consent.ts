@@ -12,21 +12,21 @@ export class ConsentPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createConsent(request: types.CreateConsentRequest): Promise<types.ErrorResponse> {
+  async createConsent(request: types.CreateConsentRequest): Promise<void> {
     const path = '/records';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getConsent(): Promise<types.ErrorResponse> {
+  async getConsent(): Promise<void> {
     const path = '/records/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async updateConsent(request: types.UpdateConsentRequest): Promise<types.ErrorResponse> {
+  async updateConsent(request: types.UpdateConsentRequest): Promise<void> {
     const path = '/records/:id';
-    return this.client.request<types.ErrorResponse>('PUT', path, {
+    return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
@@ -38,57 +38,57 @@ export class ConsentPlugin implements ClientPlugin {
     });
   }
 
-  async createConsentPolicy(request: types.CreatePolicyRequest): Promise<types.ErrorResponse> {
+  async createConsentPolicy(request: types.CreatePolicyRequest): Promise<void> {
     const path = '/policies';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getConsentPolicy(): Promise<types.ErrorResponse> {
+  async getConsentPolicy(): Promise<void> {
     const path = '/policies/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async recordCookieConsent(request: types.CookieConsentRequest): Promise<types.ErrorResponse> {
+  async recordCookieConsent(request: types.CookieConsentRequest): Promise<void> {
     const path = '/cookies';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getCookieConsent(): Promise<types.ErrorResponse> {
+  async getCookieConsent(): Promise<void> {
     const path = '/cookies';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async requestDataExport(request: types.DataExportRequestInput): Promise<types.ErrorResponse> {
+  async requestDataExport(request: types.DataExportRequestInput): Promise<void> {
     const path = '/export';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getDataExport(): Promise<types.ErrorResponse> {
+  async getDataExport(): Promise<void> {
     const path = '/export/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async downloadDataExport(): Promise<types.ErrorResponse> {
+  async downloadDataExport(): Promise<void> {
     const path = '/export/:id/download';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async requestDataDeletion(request: types.DataDeletionRequestInput): Promise<types.ErrorResponse> {
+  async requestDataDeletion(request: types.DataDeletionRequestInput): Promise<void> {
     const path = '/deletion';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getDataDeletion(): Promise<types.ErrorResponse> {
+  async getDataDeletion(): Promise<void> {
     const path = '/deletion/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
   async approveDeletionRequest(): Promise<types.MessageResponse> {
@@ -96,14 +96,14 @@ export class ConsentPlugin implements ClientPlugin {
     return this.client.request<types.MessageResponse>('POST', path);
   }
 
-  async getPrivacySettings(): Promise<types.ErrorResponse> {
+  async getPrivacySettings(): Promise<void> {
     const path = '/settings';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async updatePrivacySettings(request: types.PrivacySettingsRequest): Promise<types.ErrorResponse> {
+  async updatePrivacySettings(request: types.PrivacySettingsRequest): Promise<void> {
     const path = '/settings';
-    return this.client.request<types.ErrorResponse>('PUT', path, {
+    return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
@@ -113,9 +113,9 @@ export class ConsentPlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async generateConsentReport(): Promise<types.ErrorResponse> {
+  async generateConsentReport(): Promise<void> {
     const path = '/reports';
-    return this.client.request<types.ErrorResponse>('POST', path);
+    return this.client.request<void>('POST', path);
   }
 
 }

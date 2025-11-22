@@ -29,18 +29,14 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// SignUpRequest is the request for SignUp
-type SignUpRequest struct {
-	Password string `json:"password"`
-	Username string `json:"username"`
-}
-
 // SignUpResponse is the response for SignUp
 type SignUpResponse struct {
+	Message string `json:"message"`
 	Status string `json:"status"`
 }
 
-func (p *Plugin) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpResponse, error) {
+// SignUp SignUp handles user registration with username and password
+func (p *Plugin) SignUp(ctx context.Context) (*SignUpResponse, error) {
 	path := "/username/signup"
 	var result SignUpResponse
 	// Note: This requires exposing client.request or using a different approach
@@ -49,21 +45,15 @@ func (p *Plugin) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpRespons
 	return &result, nil
 }
 
-// SignInRequest is the request for SignIn
-type SignInRequest struct {
-	Password string `json:"password"`
-	Remember bool `json:"remember"`
-	Username string `json:"username"`
-}
-
 // SignInResponse is the response for SignIn
 type SignInResponse struct {
-	User authsome. `json:"user"`
-	Session authsome. `json:"session"`
+	Session authsome.*session.Session `json:"session"`
 	Token string `json:"token"`
+	User authsome.*user.User `json:"user"`
 }
 
-func (p *Plugin) SignIn(ctx context.Context, req *SignInRequest) (*SignInResponse, error) {
+// SignIn SignIn handles user authentication with username and password
+func (p *Plugin) SignIn(ctx context.Context) (*SignInResponse, error) {
 	path := "/username/signin"
 	var result SignInResponse
 	// Note: This requires exposing client.request or using a different approach

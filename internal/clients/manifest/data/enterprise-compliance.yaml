@@ -274,106 +274,34 @@ routes:
       method: GET
       path: /templates/:standard
 types:
-    - name: AppServiceAdapter
+    - name: UserServiceAdapter
       fields:
-        "": ""
-    - name: ListChecksFilter
+        "": user.ServiceInterface
+    - name: AuditConfig
       fields:
-        appId: '*string!'
-        checkType: '*string!'
-        profileId: '*string!'
-        sinceBefore: '*time.Time!'
-        status: '*string!'
-    - name: UpdatePolicy_req
+        detailedTrail: bool!
+        exportFormat: string!
+        immutable: bool!
+        maxRetentionDays: int!
+        minRetentionDays: int!
+        signLogs: bool!
+    - name: NotificationsConfig
       fields:
-        content: '*string!'
-        status: '*string!'
-        title: '*string!'
-        version: '*string!'
-    - name: BunRepository
-      fields:
-        "": '*bun.DB'
-    - name: CompleteTraining_req
-      fields:
-        score: int!
-    - name: MockUserService
-      fields: {}
-    - name: ComplianceCheck
-      fields:
-        appId: string!
-        checkType: string!
-        createdAt: time.Time!
-        evidence: '[]string!'
-        id: string!
-        lastCheckedAt: time.Time!
-        nextCheckAt: time.Time!
-        profileId: string!
-        result: '!'
-        status: string!
-    - name: CompliancePolicyResponse
-      fields:
-        id: string!
-    - name: CreateTrainingRequest
-      fields:
-        standard: ComplianceStandard!
-        trainingType: string!
-        userId: string!
-    - name: User
-      fields:
-        "": time.Time
-    - name: ComplianceUserTrainingResponse
-      fields:
-        user_id: string!
-    - name: ListViolationsFilter
+        auditReminders: bool!
+        channels: NotificationChannels!
+        enabled: bool!
+        failedChecks: bool!
+        notifyComplianceContact: bool!
+        notifyOwners: bool!
+        violations: bool!
+    - name: ListPoliciesFilter
       fields:
         appId: '*string!'
+        policyType: '*string!'
         profileId: '*string!'
-        severity: '*string!'
+        standard: '*ComplianceStandard!'
         status: '*string!'
-        userId: '*string!'
-        violationType: '*string!'
-    - name: Handler
-      fields:
-        "": '*PolicyEngine'
-    - name: CompliancePolicy
-      fields:
-        appId: string!
-        approvedAt: '*time.Time!'
-        approvedBy: string!
-        content: string!
-        createdAt: time.Time!
-        effectiveDate: time.Time!
-        id: string!
-        metadata: '!'
-        policyType: string!
-        profileId: string!
-        reviewDate: time.Time!
-        standard: ComplianceStandard!
-        status: string!
-        title: string!
-        updatedAt: time.Time!
-        version: string!
-    - name: ComplianceTraining
-      fields:
-        appId: string!
-        completedAt: '*time.Time!'
-        createdAt: time.Time!
-        expiresAt: '*time.Time!'
-        id: string!
-        metadata: '!'
-        profileId: string!
-        score: int!
-        standard: ComplianceStandard!
-        status: string!
-        trainingType: string!
-        userId: string!
-    - name: ComplianceViolationResponse
-      fields:
-        id: string!
-    - name: ComplianceTemplateResponse
-      fields:
-        standard: string!
-    - name: CreateEvidenceRequest
+    - name: CreateEvidence_req
       fields:
         controlId: string!
         description: string!
@@ -381,9 +309,63 @@ types:
         fileUrl: string!
         standard: ComplianceStandard!
         title: string!
-    - name: AuditLog
+    - name: CreatePolicy_req
       fields:
-        "": time.Time
+        content: string!
+        policyType: string!
+        standard: ComplianceStandard!
+        title: string!
+        version: string!
+    - name: ComplianceReportFileResponse
+      fields:
+        content_type: string!
+        data: '[]byte!'
+    - name: CompleteTraining_req
+      fields:
+        score: int!
+    - name: ReportsConfig
+      fields:
+        enabled: bool!
+        formats: '[]string!'
+        includeEvidence: bool!
+        retentionDays: int!
+        schedule: string!
+        storagePath: string!
+    - name: ComplianceReport
+      fields:
+        appId: string!
+        createdAt: time.Time!
+        expiresAt: time.Time!
+        fileSize: int64!
+        fileUrl: string!
+        format: string!
+        generatedBy: string!
+        id: string!
+        period: string!
+        profileId: string!
+        reportType: string!
+        standard: ComplianceStandard!
+        status: string!
+        summary: '!'
+    - name: ComplianceCheckResponse
+      fields:
+        id: string!
+    - name: ComplianceEvidenceResponse
+      fields:
+        id: string!
+    - name: ComplianceEvidencesResponse
+      fields:
+        evidence: '[]!'
+    - name: ResolveViolationRequest
+      fields:
+        notes: string!
+        resolution: string!
+    - name: GenerateReportRequest
+      fields:
+        format: string!
+        period: string!
+        reportType: string!
+        standard: ComplianceStandard!
     - name: ComplianceProfile
       fields:
         appId: string!
@@ -429,16 +411,54 @@ types:
         status: string!
         userId: string!
         violationType: string!
-    - name: CompliancePoliciesResponse
+    - name: ComplianceStatusDetailsResponse
       fields:
-        policies: '[]!'
-    - name: CreateProfileFromTemplateRequest
+        status: string!
+    - name: ComplianceUserTrainingResponse
       fields:
+        user_id: string!
+    - name: CreateEvidenceRequest
+      fields:
+        controlId: string!
+        description: string!
+        evidenceType: string!
+        fileUrl: string!
         standard: ComplianceStandard!
-    - name: ResolveViolationRequest
+        title: string!
+    - name: CreatePolicyRequest
       fields:
-        notes: string!
-        resolution: string!
+        content: string!
+        policyType: string!
+        standard: ComplianceStandard!
+        title: string!
+        version: string!
+    - name: User
+      fields:
+        "": time.Time
+    - name: AppServiceAdapter
+      fields:
+        "": ""
+    - name: Config
+      fields:
+        audit: AuditConfig!
+        automatedChecks: AutomatedChecksConfig!
+        dashboard: DashboardConfig!
+        defaultStandard: ComplianceStandard!
+        enabled: bool!
+        notifications: NotificationsConfig!
+        reports: ReportsConfig!
+        retention: RetentionConfig!
+    - name: MockUserService
+      fields: {}
+    - name: ComplianceProfileResponse
+      fields:
+        id: string!
+    - name: CompleteTrainingRequest
+      fields:
+        score: int!
+    - name: EmailServiceAdapter
+      fields:
+        "": '*notification.Service'
     - name: RetentionConfig
       fields:
         archiveBeforePurge: bool!
@@ -446,108 +466,18 @@ types:
         enabled: bool!
         gracePeriodDays: int!
         purgeSchedule: string!
-    - name: NotificationsConfig
+    - name: UpdatePolicy_req
       fields:
-        auditReminders: bool!
-        channels: NotificationChannels!
-        enabled: bool!
-        failedChecks: bool!
-        notifyComplianceContact: bool!
-        notifyOwners: bool!
-        violations: bool!
-    - name: DashboardConfig
+        content: '*string!'
+        status: '*string!'
+        title: '*string!'
+        version: '*string!'
+    - name: MockRepository
       fields:
-        enabled: bool!
-        path: string!
-        showRecentChecks: bool!
-        showReports: bool!
-        showScore: bool!
-        showViolations: bool!
-    - name: CreateTraining_req
+        "": ""
+    - name: BunRepository
       fields:
-        standard: ComplianceStandard!
-        trainingType: string!
-        userId: string!
-    - name: ComplianceViolationsResponse
-      fields:
-        violations: '[]!'
-    - name: ComplianceTrainingsResponse
-      fields:
-        training: '[]!'
-    - name: ListEvidenceFilter
-      fields:
-        appId: '*string!'
-        controlId: '*string!'
-        evidenceType: '*string!'
-        profileId: '*string!'
-        standard: '*ComplianceStandard!'
-    - name: ComplianceStatusDetailsResponse
-      fields:
-        status: string!
-    - name: EmailServiceAdapter
-      fields:
-        "": '*notification.Service'
-    - name: CreateProfileFromTemplate_req
-      fields:
-        standard: ComplianceStandard!
-    - name: CreatePolicy_req
-      fields:
-        content: string!
-        policyType: string!
-        standard: ComplianceStandard!
-        title: string!
-        version: string!
-    - name: ComplianceStatus
-      fields:
-        appId: string!
-        checksFailed: int!
-        checksPassed: int!
-        checksWarning: int!
-        lastChecked: time.Time!
-        nextAudit: time.Time!
-        overallStatus: string!
-        profileId: string!
-        score: int!
-        standard: ComplianceStandard!
-        violations: int!
-    - name: ComplianceDashboardResponse
-      fields:
-        metrics: '!'
-    - name: RunCheckRequest
-      fields:
-        checkType: string!
-    - name: CompleteTrainingRequest
-      fields:
-        score: int!
-    - name: ComplianceReport
-      fields:
-        appId: string!
-        createdAt: time.Time!
-        expiresAt: time.Time!
-        fileSize: int64!
-        fileUrl: string!
-        format: string!
-        generatedBy: string!
-        id: string!
-        period: string!
-        profileId: string!
-        reportType: string!
-        standard: ComplianceStandard!
-        status: string!
-        summary: '!'
-    - name: ComplianceTemplate
-      fields:
-        auditFrequencyDays: int!
-        dataResidency: string!
-        description: string!
-        mfaRequired: bool!
-        name: string!
-        passwordMinLength: int!
-        requiredPolicies: '[]string!'
-        requiredTraining: '[]string!'
-        retentionDays: int!
-        sessionMaxAge: int!
-        standard: ComplianceStandard!
+        "": '*bun.DB'
     - name: AutomatedChecksConfig
       fields:
         accessReview: bool!
@@ -559,61 +489,48 @@ types:
         passwordPolicy: bool!
         sessionPolicy: bool!
         suspiciousActivity: bool!
-    - name: ReportsConfig
-      fields:
-        enabled: bool!
-        formats: '[]string!'
-        includeEvidence: bool!
-        retentionDays: int!
-        schedule: string!
-        storagePath: string!
-    - name: NotificationChannels
-      fields:
-        email: bool!
-        slack: bool!
-        webhook: bool!
-    - name: MockRepository
-      fields:
-        "": sync.RWMutex
-    - name: MockAuditService
-      fields: {}
-    - name: UpdatePolicyRequest
-      fields:
-        content: '*string!'
-        status: '*string!'
-        title: '*string!'
-        version: '*string!'
-    - name: AuditServiceAdapter
-      fields:
-        "": '*audit.Service'
-    - name: ListReportsFilter
+    - name: ListChecksFilter
       fields:
         appId: '*string!'
-        format: '*string!'
+        checkType: '*string!'
         profileId: '*string!'
-        reportType: '*string!'
-        standard: '*ComplianceStandard!'
+        sinceBefore: '*time.Time!'
         status: '*string!'
-    - name: ListTrainingFilter
+    - name: GenerateReport_req
       fields:
-        appId: '*string!'
-        profileId: '*string!'
-        standard: '*ComplianceStandard!'
-        status: '*string!'
-        trainingType: '*string!'
-        userId: '*string!'
-    - name: MockAppService
-      fields: {}
-    - name: ComplianceReportResponse
+        format: string!
+        period: string!
+        reportType: string!
+        standard: ComplianceStandard!
+    - name: ComplianceEvidence
       fields:
+        appId: string!
+        collectedBy: string!
+        controlId: string!
+        createdAt: time.Time!
+        description: string!
+        evidenceType: string!
+        fileHash: string!
+        fileUrl: string!
         id: string!
-    - name: ComplianceReportsResponse
+        metadata: '!'
+        profileId: string!
+        standard: ComplianceStandard!
+        title: string!
+    - name: ComplianceTraining
       fields:
-        reports: '[]!'
-    - name: ComplianceReportFileResponse
-      fields:
-        content_type: string!
-        data: '[]byte!'
+        appId: string!
+        completedAt: '*time.Time!'
+        createdAt: time.Time!
+        expiresAt: '*time.Time!'
+        id: string!
+        metadata: '!'
+        profileId: string!
+        score: int!
+        standard: ComplianceStandard!
+        status: string!
+        trainingType: string!
+        userId: string!
     - name: CreateProfileRequest
       fields:
         appId: string!
@@ -641,134 +558,217 @@ types:
         sessionIpBinding: bool!
         sessionMaxAge: int!
         standards: '[]ComplianceStandard!'
-    - name: AuditConfig
-      fields:
-        detailedTrail: bool!
-        exportFormat: string!
-        immutable: bool!
-        maxRetentionDays: int!
-        minRetentionDays: int!
-        signLogs: bool!
-    - name: ListProfilesFilter
-      fields:
-        appId: '*string!'
-        standard: '*ComplianceStandard!'
-        status: '*string!'
-    - name: ComplianceChecksResponse
-      fields:
-        checks: '[]!'
-    - name: ComplianceEvidenceResponse
-      fields:
-        id: string!
-    - name: ComplianceEvidencesResponse
-      fields:
-        evidence: '[]!'
-    - name: ComplianceTrainingResponse
-      fields:
-        id: string!
     - name: UpdateProfileRequest
       fields:
         mfaRequired: '*bool!'
         name: '*string!'
         retentionDays: '*int!'
         status: '*string!'
-    - name: UserServiceAdapter
+    - name: RunCheckRequest
       fields:
-        "": user.ServiceInterface
-    - name: Config
+        checkType: string!
+    - name: RunCheck_req
       fields:
-        audit: AuditConfig!
-        automatedChecks: AutomatedChecksConfig!
-        dashboard: DashboardConfig!
-        defaultStandard: ComplianceStandard!
+        checkType: string!
+    - name: CreateTrainingRequest
+      fields:
+        standard: ComplianceStandard!
+        trainingType: string!
+        userId: string!
+    - name: ListReportsFilter
+      fields:
+        appId: '*string!'
+        format: '*string!'
+        profileId: '*string!'
+        reportType: '*string!'
+        standard: '*ComplianceStandard!'
+        status: '*string!'
+    - name: ListEvidenceFilter
+      fields:
+        appId: '*string!'
+        controlId: '*string!'
+        evidenceType: '*string!'
+        profileId: '*string!'
+        standard: '*ComplianceStandard!'
+    - name: Handler
+      fields:
+        "": '*PolicyEngine'
+    - name: CompliancePolicy
+      fields:
+        appId: string!
+        approvedAt: '*time.Time!'
+        approvedBy: string!
+        content: string!
+        createdAt: time.Time!
+        effectiveDate: time.Time!
+        id: string!
+        metadata: '!'
+        policyType: string!
+        profileId: string!
+        reviewDate: time.Time!
+        standard: ComplianceStandard!
+        status: string!
+        title: string!
+        updatedAt: time.Time!
+        version: string!
+    - name: ComplianceViolationsResponse
+      fields:
+        violations: '[]!'
+    - name: ComplianceViolationResponse
+      fields:
+        id: string!
+    - name: ComplianceTrainingResponse
+      fields:
+        id: string!
+    - name: ComplianceTrainingsResponse
+      fields:
+        training: '[]!'
+    - name: App
+      fields:
+        "": string
+    - name: DashboardConfig
+      fields:
         enabled: bool!
-        notifications: NotificationsConfig!
-        reports: ReportsConfig!
-        retention: RetentionConfig!
-    - name: MockEmailService
+        path: string!
+        showRecentChecks: bool!
+        showReports: bool!
+        showScore: bool!
+        showViolations: bool!
+    - name: ListViolationsFilter
+      fields:
+        appId: '*string!'
+        profileId: '*string!'
+        severity: '*string!'
+        status: '*string!'
+        userId: '*string!'
+        violationType: '*string!'
+    - name: ComplianceTemplatesResponse
+      fields:
+        templates: '[]!'
+    - name: PolicyEngine
+      fields:
+        "": '*Service'
+    - name: Email
+      fields:
+        "": string
+    - name: ListTrainingFilter
+      fields:
+        appId: '*string!'
+        profileId: '*string!'
+        standard: '*ComplianceStandard!'
+        status: '*string!'
+        trainingType: '*string!'
+        userId: '*string!'
+    - name: CreateTraining_req
+      fields:
+        standard: ComplianceStandard!
+        trainingType: string!
+        userId: string!
+    - name: ComplianceTemplate
+      fields:
+        auditFrequencyDays: int!
+        dataResidency: string!
+        description: string!
+        mfaRequired: bool!
+        name: string!
+        passwordMinLength: int!
+        requiredPolicies: '[]string!'
+        requiredTraining: '[]string!'
+        retentionDays: int!
+        sessionMaxAge: int!
+        standard: ComplianceStandard!
+    - name: ComplianceStatusResponse
+      fields:
+        status: string!
+    - name: CompliancePolicyResponse
+      fields:
+        id: string!
+    - name: Session
+      fields:
+        "": time.Time
+    - name: AuditLog
+      fields:
+        "": time.Time
+    - name: MockAuditService
       fields: {}
     - name: Plugin
       fields:
         "": '*Handler'
-    - name: ComplianceProfileResponse
+    - name: CompliancePoliciesResponse
       fields:
-        id: string!
-    - name: ComplianceCheckResponse
+        policies: '[]!'
+    - name: ComplianceTemplateResponse
       fields:
-        id: string!
-    - name: ComplianceTemplatesResponse
+        standard: string!
+    - name: AuditServiceAdapter
       fields:
-        templates: '[]!'
-    - name: AuditEvent
+        "": '*audit.Service'
+    - name: CreateProfileFromTemplate_req
       fields:
-        "": ""
-    - name: PolicyEngine
-      fields:
-        "": '*Service'
-    - name: App
-      fields:
-        "": string
-    - name: Email
-      fields:
-        "": string
-    - name: RunCheck_req
-      fields:
-        checkType: string!
-    - name: ComplianceEvidence
+        standard: ComplianceStandard!
+    - name: MockAppService
+      fields: {}
+    - name: ComplianceCheck
       fields:
         appId: string!
-        collectedBy: string!
-        controlId: string!
+        checkType: string!
         createdAt: time.Time!
-        description: string!
-        evidenceType: string!
-        fileHash: string!
-        fileUrl: string!
+        evidence: '[]string!'
         id: string!
-        metadata: '!'
+        lastCheckedAt: time.Time!
+        nextCheckAt: time.Time!
         profileId: string!
-        standard: ComplianceStandard!
-        title: string!
-    - name: ComplianceStatusResponse
-      fields:
+        result: '!'
         status: string!
-    - name: Session
+    - name: ComplianceReportResponse
       fields:
-        "": time.Time
-    - name: ListPoliciesFilter
-      fields:
-        appId: '*string!'
-        policyType: '*string!'
-        profileId: '*string!'
-        standard: '*ComplianceStandard!'
-        status: '*string!'
-    - name: GenerateReport_req
-      fields:
-        format: string!
-        period: string!
-        reportType: string!
-        standard: ComplianceStandard!
-    - name: CreateEvidence_req
-      fields:
-        controlId: string!
-        description: string!
-        evidenceType: string!
-        fileUrl: string!
-        standard: ComplianceStandard!
-        title: string!
+        id: string!
     - name: Service
       fields:
         "": EmailService
-    - name: GenerateReportRequest
+    - name: UpdatePolicyRequest
       fields:
-        format: string!
-        period: string!
-        reportType: string!
-        standard: ComplianceStandard!
-    - name: CreatePolicyRequest
+        content: '*string!'
+        status: '*string!'
+        title: '*string!'
+        version: '*string!'
+    - name: NotificationChannels
       fields:
-        content: string!
-        policyType: string!
+        email: bool!
+        slack: bool!
+        webhook: bool!
+    - name: ListProfilesFilter
+      fields:
+        appId: '*string!'
+        standard: '*ComplianceStandard!'
+        status: '*string!'
+    - name: ComplianceStatus
+      fields:
+        appId: string!
+        checksFailed: int!
+        checksPassed: int!
+        checksWarning: int!
+        lastChecked: time.Time!
+        nextAudit: time.Time!
+        overallStatus: string!
+        profileId: string!
+        score: int!
         standard: ComplianceStandard!
-        title: string!
-        version: string!
+        violations: int!
+    - name: ComplianceReportsResponse
+      fields:
+        reports: '[]!'
+    - name: AuditEvent
+      fields:
+        "": string
+    - name: MockEmailService
+      fields: {}
+    - name: ComplianceDashboardResponse
+      fields:
+        metrics: '!'
+    - name: ComplianceChecksResponse
+      fields:
+        checks: '[]!'
+    - name: CreateProfileFromTemplateRequest
+      fields:
+        standard: ComplianceStandard!

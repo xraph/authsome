@@ -25,29 +25,34 @@ routes:
       path: /delete/{id}
       response_type: StatusResponse
 types:
-    - name: SetActive_body
-      fields:
-        id: string!
-    - name: MultiSessionSetActiveResponse
-      fields:
-        session: '!'
-        token: string!
-    - name: Service
-      fields:
-        "": '*auth.Service'
     - name: DashboardExtension
       fields:
         "": '*dashboard.ExtensionRegistry'
-    - name: SessionTokenResponse
+    - name: SetActive_body
       fields:
-        session: '!'
-        token: string!
+        id: string!
     - name: mockSessionService
       fields:
         "": '*bun.DB'
     - name: Plugin
       fields:
-        "": Config
+        "": '*DashboardExtension'
+    - name: MultiSessionDeleteResponse
+      fields:
+        status: string!
+    - name: Service
+      fields:
+        "": dev.Repository
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: SessionsResponse
+      fields:
+        sessions: '!'
+    - name: SessionTokenResponse
+      fields:
+        session: '!'
+        token: string!
     - name: Config
       fields:
         allowCrossPlatform: bool!
@@ -60,12 +65,7 @@ types:
     - name: MultiSessionListResponse
       fields:
         sessions: '[]!'
-    - name: MultiSessionDeleteResponse
+    - name: MultiSessionSetActiveResponse
       fields:
-        status: string!
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: SessionsResponse
-      fields:
-        sessions: '!'
+        session: '!'
+        token: string!

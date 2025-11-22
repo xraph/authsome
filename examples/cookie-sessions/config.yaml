@@ -1,0 +1,29 @@
+app:
+  name: "Cookie Sessions Example"
+  port: 8080
+
+database:
+  driver: sqlite
+  source: ":memory:"
+
+auth:
+  basePath: "/auth"
+  secret: "your-super-secret-key-change-in-production"
+  
+  # Cookie-based session configuration
+  sessionCookie:
+    enabled: true                # Enable cookie-based sessions
+    name: "authsome_session"     # Cookie name
+    path: "/"                    # Cookie path
+    httpOnly: true               # HttpOnly flag for security
+    sameSite: "Lax"             # SameSite policy: "Strict", "Lax", or "None"
+    # secure: true              # Uncomment for HTTPS in production
+    # domain: ".example.com"    # Uncomment to set cookie domain
+    # maxAge: 86400             # Uncomment to override session duration (seconds)
+  
+  # CORS configuration (if needed)
+  corsEnabled: true
+  trustedOrigins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+

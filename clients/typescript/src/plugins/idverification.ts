@@ -12,16 +12,16 @@ export class IdverificationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createVerificationSession(request: types.CreateVerificationSession_req): Promise<types.ErrorResponse> {
+  async createVerificationSession(request: types.CreateVerificationSession_req): Promise<types.VerificationSessionResponse> {
     const path = '/sessions';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<types.VerificationSessionResponse>('POST', path, {
       body: request,
     });
   }
 
-  async getVerificationSession(): Promise<types.ErrorResponse> {
+  async getVerificationSession(): Promise<types.VerificationSessionResponse> {
     const path = '/sessions/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<types.VerificationSessionResponse>('GET', path);
   }
 
   async getVerification(): Promise<types.VerificationResponse> {
@@ -29,14 +29,14 @@ export class IdverificationPlugin implements ClientPlugin {
     return this.client.request<types.VerificationResponse>('GET', path);
   }
 
-  async getUserVerifications(): Promise<types.ErrorResponse> {
+  async getUserVerifications(): Promise<types.VerificationListResponse> {
     const path = '/me';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<types.VerificationListResponse>('GET', path);
   }
 
-  async getUserVerificationStatus(): Promise<types.StatusResponse> {
+  async getUserVerificationStatus(): Promise<types.UserVerificationStatusResponse> {
     const path = '/me/status';
-    return this.client.request<types.StatusResponse>('GET', path);
+    return this.client.request<types.UserVerificationStatusResponse>('GET', path);
   }
 
   async requestReverification(request: types.RequestReverification_req): Promise<types.MessageResponse> {
@@ -46,9 +46,9 @@ export class IdverificationPlugin implements ClientPlugin {
     });
   }
 
-  async handleWebhook(): Promise<types.ErrorResponse> {
+  async handleWebhook(): Promise<void> {
     const path = '/webhook/:provider';
-    return this.client.request<types.ErrorResponse>('POST', path);
+    return this.client.request<void>('POST', path);
   }
 
   async adminBlockUser(request: types.AdminBlockUser_req): Promise<types.MessageResponse> {
@@ -63,14 +63,14 @@ export class IdverificationPlugin implements ClientPlugin {
     return this.client.request<types.MessageResponse>('POST', path);
   }
 
-  async adminGetUserVerificationStatus(): Promise<types.StatusResponse> {
+  async adminGetUserVerificationStatus(): Promise<types.UserVerificationStatusResponse> {
     const path = '/users/:userId/status';
-    return this.client.request<types.StatusResponse>('GET', path);
+    return this.client.request<types.UserVerificationStatusResponse>('GET', path);
   }
 
-  async adminGetUserVerifications(): Promise<types.ErrorResponse> {
+  async adminGetUserVerifications(): Promise<types.VerificationListResponse> {
     const path = '/users/:userId/verifications';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<types.VerificationListResponse>('GET', path);
   }
 
 }

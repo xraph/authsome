@@ -31,24 +31,27 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // RegisterProviderRequest is the request for RegisterProvider
 type RegisterProviderRequest struct {
+	OidcClientID string `json:"oidcClientID"`
+	OidcIssuer string `json:"oidcIssuer"`
+	OidcRedirectURI string `json:"oidcRedirectURI"`
 	ProviderId string `json:"providerId"`
+	SamlEntryPoint string `json:"samlEntryPoint"`
 	Type string `json:"type"`
-	OIDCClientSecret string `json:"OIDCClientSecret"`
-	OIDCRedirectURI string `json:"OIDCRedirectURI"`
-	SAMLEntryPoint string `json:"SAMLEntryPoint"`
-	SAMLIssuer string `json:"SAMLIssuer"`
+	AttributeMapping authsome. `json:"attributeMapping"`
 	Domain string `json:"domain"`
-	OIDCClientID string `json:"OIDCClientID"`
-	OIDCIssuer string `json:"OIDCIssuer"`
-	SAMLCert string `json:"SAMLCert"`
+	OidcClientSecret string `json:"oidcClientSecret"`
+	SamlCert string `json:"samlCert"`
+	SamlIssuer string `json:"samlIssuer"`
 }
 
 // RegisterProviderResponse is the response for RegisterProvider
 type RegisterProviderResponse struct {
 	Status string `json:"status"`
+	Type string `json:"type"`
+	ProviderId string `json:"providerId"`
 }
 
-// RegisterProvider RegisterProvider registers an SSO provider (SAML or OIDC); org scoping TBD
+// RegisterProvider RegisterProvider registers a new SSO provider (SAML or OIDC)
 func (p *Plugin) RegisterProvider(ctx context.Context, req *RegisterProviderRequest) (*RegisterProviderResponse, error) {
 	path := "/provider/register"
 	var result RegisterProviderResponse
@@ -63,7 +66,7 @@ type SAMLSPMetadataResponse struct {
 	Metadata string `json:"metadata"`
 }
 
-// SAMLSPMetadata SAMLSPMetadata returns Service Provider metadata (placeholder)
+// SAMLSPMetadata SAMLSPMetadata returns Service Provider metadata
 func (p *Plugin) SAMLSPMetadata(ctx context.Context) (*SAMLSPMetadataResponse, error) {
 	path := "/saml2/sp/metadata"
 	var result SAMLSPMetadataResponse
@@ -73,14 +76,38 @@ func (p *Plugin) SAMLSPMetadata(ctx context.Context) (*SAMLSPMetadataResponse, e
 	return &result, nil
 }
 
-// SAMLCallbackResponse is the response for SAMLCallback
-type SAMLCallbackResponse struct {
-	Status string `json:"status"`
+// SAMLLoginRequest is the request for SAMLLogin
+type SAMLLoginRequest struct {
+	RelayState string `json:"relayState"`
 }
 
-// SAMLCallback SAMLCallback handles SAML response callback for given provider
+// SAMLLoginResponse is the response for SAMLLogin
+type SAMLLoginResponse struct {
+	RedirectUrl string `json:"redirectUrl"`
+	RequestId string `json:"requestId"`
+	ProviderId string `json:"providerId"`
+}
+
+// SAMLLogin SAMLLogin initiates SAML authentication by generating AuthnRequest
+func (p *Plugin) SAMLLogin(ctx context.Context, req *SAMLLoginRequest) (*SAMLLoginResponse, error) {
+	path := "/saml2/login/:providerId"
+	var result SAMLLoginResponse
+	// Note: This requires exposing client.request or using a different approach
+	// For now, this is a placeholder
+	_ = path
+	return &result, nil
+}
+
+// SAMLCallbackResponse is the response for SAMLCallback
+type SAMLCallbackResponse struct {
+	Token string `json:"token"`
+	User authsome.*user.User `json:"user"`
+	Session authsome.*session.Session `json:"session"`
+}
+
+// SAMLCallback SAMLCallback handles SAML response callback and provisions user
 func (p *Plugin) SAMLCallback(ctx context.Context) (*SAMLCallbackResponse, error) {
-	path := "/saml2/callback/{providerId}"
+	path := "/saml2/callback/:providerId"
 	var result SAMLCallbackResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
@@ -88,23 +115,42 @@ func (p *Plugin) SAMLCallback(ctx context.Context) (*SAMLCallbackResponse, error
 	return &result, nil
 }
 
-// SAMLLogin SAMLLogin initiates SAML authentication by redirecting to IdP
-func (p *Plugin) SAMLLogin(ctx context.Context) error {
-	path := "/saml2/login/{providerId}"
+// OIDCLoginRequest is the request for OIDCLogin
+type OIDCLoginRequest struct {
+	Nonce string `json:"nonce"`
+	RedirectUri string `json:"redirectUri"`
+	Scope string `json:"scope"`
+	State string `json:"state"`
+}
+
+// OIDCLoginResponse is the response for OIDCLogin
+type OIDCLoginResponse struct {
+	AuthUrl string `json:"authUrl"`
+	Nonce string `json:"nonce"`
+	ProviderId string `json:"providerId"`
+	State string `json:"state"`
+}
+
+// OIDCLogin OIDCLogin initiates OIDC authentication flow with PKCE
+func (p *Plugin) OIDCLogin(ctx context.Context, req *OIDCLoginRequest) (*OIDCLoginResponse, error) {
+	path := "/oidc/login/:providerId"
+	var result OIDCLoginResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return nil
+	return &result, nil
 }
 
 // OIDCCallbackResponse is the response for OIDCCallback
 type OIDCCallbackResponse struct {
-	Status string `json:"status"`
+	Session authsome.*session.Session `json:"session"`
+	Token string `json:"token"`
+	User authsome.*user.User `json:"user"`
 }
 
-// OIDCCallback OIDCCallback handles OIDC response callback for given provider
+// OIDCCallback OIDCCallback handles OIDC callback and provisions user
 func (p *Plugin) OIDCCallback(ctx context.Context) (*OIDCCallbackResponse, error) {
-	path := "/oidc/callback/{providerId}"
+	path := "/oidc/callback/:providerId"
 	var result OIDCCallbackResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder

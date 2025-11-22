@@ -37,6 +37,21 @@ types:
       ipAddress: string
       userAgent: string
 
+  - name: MessageResponse
+    description: Simple message response
+    fields:
+      message: string!
+
+  - name: StatusResponse
+    description: Status response
+    fields:
+      status: string!
+
+  - name: SuccessResponse
+    description: Success boolean response
+    fields:
+      success: boolean!
+
 routes:
   - name: SignUp
     description: Create a new user account

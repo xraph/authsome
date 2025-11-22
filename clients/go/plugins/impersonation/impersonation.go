@@ -37,19 +37,13 @@ type StartImpersonationRequest struct {
 	Ticket_number *string `json:"ticket_number,omitempty"`
 }
 
-// StartImpersonationResponse is the response for StartImpersonation
-type StartImpersonationResponse struct {
-	Error string `json:"error"`
-}
-
 // StartImpersonation StartImpersonation handles POST /impersonation/start
-func (p *Plugin) StartImpersonation(ctx context.Context, req *StartImpersonationRequest) (*StartImpersonationResponse, error) {
+func (p *Plugin) StartImpersonation(ctx context.Context, req *StartImpersonationRequest) error {
 	path := "/start"
-	var result StartImpersonationResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // EndImpersonationRequest is the request for EndImpersonation
@@ -58,78 +52,48 @@ type EndImpersonationRequest struct {
 	Reason *string `json:"reason,omitempty"`
 }
 
-// EndImpersonationResponse is the response for EndImpersonation
-type EndImpersonationResponse struct {
-	Error string `json:"error"`
-}
-
 // EndImpersonation EndImpersonation handles POST /impersonation/end
-func (p *Plugin) EndImpersonation(ctx context.Context, req *EndImpersonationRequest) (*EndImpersonationResponse, error) {
+func (p *Plugin) EndImpersonation(ctx context.Context, req *EndImpersonationRequest) error {
 	path := "/end"
-	var result EndImpersonationResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetImpersonationResponse is the response for GetImpersonation
-type GetImpersonationResponse struct {
-	Error string `json:"error"`
+	return nil
 }
 
 // GetImpersonation GetImpersonation handles GET /impersonation/:id
-func (p *Plugin) GetImpersonation(ctx context.Context) (*GetImpersonationResponse, error) {
+func (p *Plugin) GetImpersonation(ctx context.Context) error {
 	path := "/:id"
-	var result GetImpersonationResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// ListImpersonationsResponse is the response for ListImpersonations
-type ListImpersonationsResponse struct {
-	Error string `json:"error"`
+	return nil
 }
 
 // ListImpersonations ListImpersonations handles GET /impersonation
-func (p *Plugin) ListImpersonations(ctx context.Context) (*ListImpersonationsResponse, error) {
+func (p *Plugin) ListImpersonations(ctx context.Context) error {
 	path := "/"
-	var result ListImpersonationsResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// ListAuditEventsResponse is the response for ListAuditEvents
-type ListAuditEventsResponse struct {
-	Error string `json:"error"`
+	return nil
 }
 
 // ListAuditEvents ListAuditEvents handles GET /impersonation/audit
-func (p *Plugin) ListAuditEvents(ctx context.Context) (*ListAuditEventsResponse, error) {
+func (p *Plugin) ListAuditEvents(ctx context.Context) error {
 	path := "/audit"
-	var result ListAuditEventsResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// VerifyImpersonationResponse is the response for VerifyImpersonation
-type VerifyImpersonationResponse struct {
-	Error string `json:"error"`
+	return nil
 }
 
 // VerifyImpersonation VerifyImpersonation handles GET /impersonation/verify/:sessionId
-func (p *Plugin) VerifyImpersonation(ctx context.Context) (*VerifyImpersonationResponse, error) {
+func (p *Plugin) VerifyImpersonation(ctx context.Context) error {
 	path := "/verify"
-	var result VerifyImpersonationResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 

@@ -56,58 +56,34 @@ impl NotificationPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct UpdateTemplateResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// UpdateTemplate updates a template
     pub async fn update_template(
         &self,
-    ) -> Result<UpdateTemplateResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct DeleteTemplateResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// DeleteTemplate deletes a template
     pub async fn delete_template(
         &self,
-    ) -> Result<DeleteTemplateResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct ResetTemplateResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// ResetTemplate resets a template to default values
     pub async fn reset_template(
         &self,
-    ) -> Result<ResetTemplateResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct ResetAllTemplatesResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// ResetAllTemplates resets all templates for an app to defaults
     pub async fn reset_all_templates(
         &self,
-    ) -> Result<ResetAllTemplatesResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -184,16 +160,10 @@ impl NotificationPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct HandleWebhookResponse {
-        #[serde(rename = "status")]
-        pub status: String,
-    }
-
     /// HandleWebhook handles provider webhook callbacks
     pub async fn handle_webhook(
         &self,
-    ) -> Result<HandleWebhookResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

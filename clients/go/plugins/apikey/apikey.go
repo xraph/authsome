@@ -31,13 +31,13 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // CreateAPIKeyRequest is the request for CreateAPIKey
 type CreateAPIKeyRequest struct {
-	Scopes authsome.[]string `json:"scopes"`
 	Allowed_ips *authsome.[]string `json:"allowed_ips,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Metadata *authsome. `json:"metadata,omitempty"`
 	Name string `json:"name"`
 	Permissions *authsome. `json:"permissions,omitempty"`
 	Rate_limit *int `json:"rate_limit,omitempty"`
+	Scopes authsome.[]string `json:"scopes"`
 }
 
 // CreateAPIKeyResponse is the response for CreateAPIKey
@@ -83,19 +83,13 @@ func (p *Plugin) UpdateAPIKey(ctx context.Context) error {
 	return nil
 }
 
-// DeleteAPIKeyResponse is the response for DeleteAPIKey
-type DeleteAPIKeyResponse struct {
-	Message string `json:"message"`
-}
-
 // DeleteAPIKey DeleteAPIKey handles DELETE /api-keys/:id
-func (p *Plugin) DeleteAPIKey(ctx context.Context) (*DeleteAPIKeyResponse, error) {
+func (p *Plugin) DeleteAPIKey(ctx context.Context) error {
 	path := "/:id"
-	var result DeleteAPIKeyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // RotateAPIKeyResponse is the response for RotateAPIKey

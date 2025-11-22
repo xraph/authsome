@@ -25,9 +25,13 @@ routes:
       request_type: LinkRequest
       response_type: LinkResponse
 types:
+    - name: LinkResponse
+      fields:
+        message: string!
+        user: '!'
     - name: Plugin
       fields:
-        "": forge.Logger
+        "": Config
     - name: Config
       fields:
         autoConvert: bool!
@@ -51,8 +55,4 @@ types:
       fields:
         session: '!'
         token: string!
-        user: '!'
-    - name: LinkResponse
-      fields:
-        message: string!
         user: '!'

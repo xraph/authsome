@@ -29,6 +29,7 @@ type Plugin struct {
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // Config holds the phone plugin configuration
@@ -196,6 +197,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return fmt.Errorf("phone plugin requires auth instance")
 	}
 
+	// Store auth instance for middleware access
+	p.authInst = authInst
+
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
@@ -308,8 +312,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		Enabled: p.config.RateLimit.Enabled,
 		Rules:   rules,
 	})
-	h := NewHandler(p.service, rls)
-	router.POST("/phone/send-code", h.SendCode,
+	h := NewHandler(p.service, rls, p.authInst)
+	
+	// Get authentication middleware for API key validation
+	authMw := p.authInst.AuthMiddleware()
+	
+	// Wrap handler with middleware if available
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMw != nil {
+			return authMw(handler)
+		}
+		return handler
+	}
+	
+	router.POST("/phone/send-code", wrapHandler(h.SendCode),
 		forge.WithName("phone.sendcode"),
 		forge.WithSummary("Send phone verification code"),
 		forge.WithDescription("Sends a verification code via SMS to the specified phone number. Rate limited to 5 requests per minute per phone"),
@@ -320,7 +336,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
 	)
-	router.POST("/phone/verify", h.Verify,
+	router.POST("/phone/verify", wrapHandler(h.Verify),
 		forge.WithName("phone.verify"),
 		forge.WithSummary("Verify phone code"),
 		forge.WithDescription("Verifies the phone verification code and creates a user session on success. Supports implicit signup if enabled"),
@@ -331,7 +347,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
 	)
-	router.POST("/phone/signin", h.SignIn,
+	router.POST("/phone/signin", wrapHandler(h.SignIn),
 		forge.WithName("phone.signin"),
 		forge.WithSummary("Sign in with phone"),
 		forge.WithDescription("Alias for phone verification. Verifies the phone code and creates a user session"),

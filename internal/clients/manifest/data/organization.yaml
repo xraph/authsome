@@ -105,16 +105,12 @@ routes:
       method: DELETE
       path: /:teamId
 types:
-    - name: TeamsResponse
-      fields:
-        teams: '[]*organization.Team!'
-        total: int!
     - name: MockService
       fields:
-        "": error
+        "": ""
     - name: Plugin
       fields:
-        "": '*bun.DB'
+        "": forge.Logger
     - name: DashboardExtension
       fields:
         "": string
@@ -134,3 +130,7 @@ types:
       fields:
         invitation: '*organization.Invitation!'
         message: string!
+    - name: TeamsResponse
+      fields:
+        teams: '[]*organization.Team!'
+        total: int!

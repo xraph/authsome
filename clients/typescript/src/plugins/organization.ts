@@ -52,34 +52,34 @@ export class OrganizationPlugin implements ClientPlugin {
     return this.client.request<void>('DELETE', path);
   }
 
-  async getOrganization(): Promise<types.ErrorResponse> {
+  async getOrganization(): Promise<void> {
     const path = '/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async listOrganizations(): Promise<types.ErrorResponse> {
+  async listOrganizations(): Promise<void> {
     const path = '/listorganizations';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async getOrganizationBySlug(): Promise<types.ErrorResponse> {
+  async getOrganizationBySlug(): Promise<void> {
     const path = '/slug/:slug';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async listMembers(): Promise<types.ErrorResponse> {
+  async listMembers(): Promise<void> {
     const path = '/listmembers';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async updateMember(): Promise<types.ErrorResponse> {
+  async updateMember(): Promise<void> {
     const path = '/:memberId';
-    return this.client.request<types.ErrorResponse>('PATCH', path);
+    return this.client.request<void>('PATCH', path);
   }
 
-  async acceptInvitation(): Promise<types.ErrorResponse> {
+  async acceptInvitation(): Promise<void> {
     const path = '/:token/accept';
-    return this.client.request<types.ErrorResponse>('POST', path);
+    return this.client.request<void>('POST', path);
   }
 
   async declineInvitation(): Promise<types.StatusResponse> {
@@ -87,9 +87,9 @@ export class OrganizationPlugin implements ClientPlugin {
     return this.client.request<types.StatusResponse>('POST', path);
   }
 
-  async listTeams(): Promise<types.ErrorResponse> {
+  async listTeams(): Promise<void> {
     const path = '/listteams';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
 }

@@ -12,38 +12,38 @@ export class ImpersonationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async startImpersonation(request: types.StartImpersonation_reqBody): Promise<types.ErrorResponse> {
+  async startImpersonation(request: types.StartImpersonation_reqBody): Promise<void> {
     const path = '/start';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async endImpersonation(request: types.EndImpersonation_reqBody): Promise<types.ErrorResponse> {
+  async endImpersonation(request: types.EndImpersonation_reqBody): Promise<void> {
     const path = '/end';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getImpersonation(): Promise<types.ErrorResponse> {
+  async getImpersonation(): Promise<void> {
     const path = '/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async listImpersonations(): Promise<types.ErrorResponse> {
+  async listImpersonations(): Promise<void> {
     const path = '/';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async listAuditEvents(): Promise<types.ErrorResponse> {
+  async listAuditEvents(): Promise<void> {
     const path = '/audit';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async verifyImpersonation(): Promise<types.ErrorResponse> {
+  async verifyImpersonation(): Promise<void> {
     const path = '/verify';
-    return this.client.request<types.ErrorResponse>('POST', path);
+    return this.client.request<void>('POST', path);
   }
 
 }

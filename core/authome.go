@@ -51,4 +51,8 @@ type Authsome interface {
 
 	// Repository returns the repository instance
 	Repository() repository.Repository
+
+	// AuthMiddleware returns the optional authentication middleware
+	// This middleware populates the auth context with API key and/or session data
+	AuthMiddleware() func(func(forge.Context) error) func(forge.Context) error
 }

@@ -28,6 +28,7 @@ type Plugin struct {
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // Config holds the magic link plugin configuration
@@ -114,6 +115,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return fmt.Errorf("magiclink plugin requires auth instance")
 	}
 
+	// Store auth instance for middleware access
+	p.authInst = authInst
+
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
@@ -167,8 +171,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 	// Router is already scoped to the correct basePath
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/magic-link/send": {Window: time.Minute, Max: 5}}})
-	h := NewHandler(p.service, rls)
-	router.POST("/magic-link/send", h.Send,
+	h := NewHandler(p.service, rls, p.authInst)
+
+	// Get authentication middleware for API key validation
+	authMw := p.authInst.AuthMiddleware()
+
+	// Wrap handler with middleware if available
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMw != nil {
+			return authMw(handler)
+		}
+		return handler
+	}
+
+	router.POST("/magic-link/send", wrapHandler(h.Send),
 		forge.WithName("magiclink.send"),
 		forge.WithSummary("Send magic link"),
 		forge.WithDescription("Sends a passwordless authentication link to the specified email address. Rate limited to 5 requests per minute per email"),
@@ -179,7 +195,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("MagicLink", "Authentication"),
 		forge.WithValidation(true),
 	)
-	router.GET("/magic-link/verify", h.Verify,
+	router.GET("/magic-link/verify", wrapHandler(h.Verify),
 		forge.WithName("magiclink.verify"),
 		forge.WithSummary("Verify magic link"),
 		forge.WithDescription("Verifies the magic link token from email and creates a user session on success. Supports implicit signup if enabled. Query params: token (required), remember (optional)"),

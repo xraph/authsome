@@ -38,6 +38,7 @@ type Plugin struct {
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // PluginOption is a functional option for configuring the passkey plugin
@@ -145,6 +146,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return fmt.Errorf("passkey plugin requires auth instance")
 	}
 
+	// Store auth instance for middleware access
+	p.authInst = authInst
+
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
@@ -201,8 +205,19 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	grp := router.Group("/passkey")
 	h := NewHandler(p.service)
 
+	// Get authentication middleware for API key validation
+	authMw := p.authInst.AuthMiddleware()
+	
+	// Wrap handler with middleware if available
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMw != nil {
+			return authMw(handler)
+		}
+		return handler
+	}
+
 	// Registration endpoints
-	grp.POST("/register/begin", h.BeginRegister,
+	grp.POST("/register/begin", wrapHandler(h.BeginRegister),
 		forge.WithName("passkey.register.begin"),
 		forge.WithSummary("Begin passkey registration"),
 		forge.WithDescription("Initiates WebAuthn/FIDO2 passkey registration with cryptographic challenge. Supports platform authenticators (Touch ID, Windows Hello) and cross-platform authenticators (YubiKey, etc.)"),
@@ -212,7 +227,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Passkey", "WebAuthn", "Registration"),
 		forge.WithValidation(true),
 	)
-	grp.POST("/register/finish", h.FinishRegister,
+	grp.POST("/register/finish", wrapHandler(h.FinishRegister),
 		forge.WithName("passkey.register.finish"),
 		forge.WithSummary("Finish passkey registration"),
 		forge.WithDescription("Completes WebAuthn/FIDO2 passkey registration with attestation verification. Stores credential with cryptographic public key"),
@@ -224,7 +239,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	// Authentication endpoints
-	grp.POST("/login/begin", h.BeginLogin,
+	grp.POST("/login/begin", wrapHandler(h.BeginLogin),
 		forge.WithName("passkey.login.begin"),
 		forge.WithSummary("Begin passkey login"),
 		forge.WithDescription("Initiates WebAuthn/FIDO2 passkey authentication. Supports both user-specific and discoverable (usernameless) credentials"),
@@ -234,7 +249,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
 		forge.WithValidation(true),
 	)
-	grp.POST("/login/finish", h.FinishLogin,
+	grp.POST("/login/finish", wrapHandler(h.FinishLogin),
 		forge.WithName("passkey.login.finish"),
 		forge.WithSummary("Finish passkey login"),
 		forge.WithDescription("Completes WebAuthn/FIDO2 passkey authentication with signature verification and creates user session. Validates sign count for replay attack detection"),
@@ -247,7 +262,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	// Management endpoints
-	grp.GET("/list", h.List,
+	grp.GET("/list", wrapHandler(h.List),
 		forge.WithName("passkey.list"),
 		forge.WithSummary("List passkeys"),
 		forge.WithDescription("Lists all registered passkeys for a user with metadata including name, type, last used, and sign count"),
@@ -257,7 +272,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
 	)
-	grp.PUT("/:id", h.Update,
+	grp.PUT("/:id", wrapHandler(h.Update),
 		forge.WithName("passkey.update"),
 		forge.WithSummary("Update passkey"),
 		forge.WithDescription("Updates a passkey's metadata (currently only name)"),
@@ -268,7 +283,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
 	)
-	grp.DELETE("/:id", h.Delete,
+	grp.DELETE("/:id", wrapHandler(h.Delete),
 		forge.WithName("passkey.delete"),
 		forge.WithSummary("Delete passkey"),
 		forge.WithDescription("Deletes a registered passkey by ID. Scoped to app and organization context"),

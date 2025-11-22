@@ -50,44 +50,21 @@ routes:
       path: /verify
       request_type: apikey.VerifyAPIKeyRequest
 types:
-    - name: Middleware
-      fields:
-        "": Config
-    - name: Plugin
-      fields:
-        "": ""
-    - name: Config
-      fields:
-        allow_query_param: bool!
-        auto_cleanup: AutoCleanupConfig!
-        default_expiry: time.Duration!
-        default_rate_limit: int!
-        ip_whitelisting: IPWhitelistConfig!
-        key_length: int!
-        max_keys_per_org: int!
-        max_keys_per_user: int!
-        max_rate_limit: int!
-        rate_limiting: RateLimitConfig!
-        webhooks: WebhookConfig!
-    - name: RateLimitConfig
-      fields:
-        enabled: bool!
-        window: time.Duration!
     - name: IPWhitelistConfig
       fields:
         enabled: bool!
         strict_mode: bool!
-    - name: AutoCleanupConfig
-      fields:
-        enabled: bool!
-        interval: time.Duration!
-    - name: Handler
-      fields:
-        "": Config
     - name: CreateAPIKeyResponse
       fields:
         api_key: '*apikey.APIKey!'
         message: string!
+    - name: RotateAPIKeyResponse
+      fields:
+        api_key: '*apikey.APIKey!'
+        message: string!
+    - name: RolesResponse
+      fields:
+        roles: '[]*apikey.Role!'
     - name: CreateAPIKey_reqBody
       fields:
         allowed_ips: '[]string'
@@ -110,10 +87,33 @@ types:
         notify_on_rate_limit: bool!
         notify_on_rotated: bool!
         webhook_urls: '[]string!'
-    - name: RotateAPIKeyResponse
+    - name: AutoCleanupConfig
       fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
-    - name: RolesResponse
+        enabled: bool!
+        interval: time.Duration!
+    - name: Handler
       fields:
-        roles: '[]*apikey.Role!'
+        "": Config
+    - name: Middleware
+      fields:
+        "": '*ratelimit.Service'
+    - name: Plugin
+      fields:
+        "": '*Handler'
+    - name: Config
+      fields:
+        allow_query_param: bool!
+        auto_cleanup: AutoCleanupConfig!
+        default_expiry: time.Duration!
+        default_rate_limit: int!
+        ip_whitelisting: IPWhitelistConfig!
+        key_length: int!
+        max_keys_per_org: int!
+        max_keys_per_user: int!
+        max_rate_limit: int!
+        rate_limiting: RateLimitConfig!
+        webhooks: WebhookConfig!
+    - name: RateLimitConfig
+      fields:
+        enabled: bool!
+        window: time.Duration!

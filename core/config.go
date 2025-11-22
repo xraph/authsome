@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/xraph/authsome/core/session"
 	forgedb "github.com/xraph/forge/extensions/database"
 )
 
@@ -9,14 +10,24 @@ type Config struct {
 	// BasePath is the base path for auth routes
 	BasePath string
 
-	// TrustedOrigins for CORS
-	TrustedOrigins []string
+	// CORS configuration
+	CORSEnabled    bool     // Enable/disable CORS middleware (default: false)
+	TrustedOrigins []string // Allowed origins for CORS
 
 	// Secret for signing tokens
 	Secret string
 
 	// RBACEnforce toggles handler-level RBAC enforcement (off by default)
 	RBACEnforce bool
+
+	// SessionCookieName is the name of the session cookie (default: "authsome_session")
+	// DEPRECATED: Use SessionCookie.Name instead. Kept for backward compatibility.
+	SessionCookieName string
+
+	// SessionCookie configures cookie-based session management
+	// When enabled, authentication responses will automatically set session cookies
+	// Apps can override this configuration via their metadata
+	SessionCookie session.CookieConfig
 
 	// Database configuration - support for Forge database extension
 	// DatabaseManager is the Forge database extension manager

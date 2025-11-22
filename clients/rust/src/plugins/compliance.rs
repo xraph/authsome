@@ -19,14 +19,56 @@ impl CompliancePlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateProfileRequest {
-        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
-        pub : Option<>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct CreateProfileResponse {
-        #[serde(rename = "error")]
-        pub error: String,
+        #[serde(rename = "complianceContact")]
+        pub compliance_contact: String,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "passwordMinLength")]
+        pub password_min_length: i32,
+        #[serde(rename = "passwordRequireNumber")]
+        pub password_require_number: bool,
+        #[serde(rename = "passwordRequireUpper")]
+        pub password_require_upper: bool,
+        #[serde(rename = "retentionDays")]
+        pub retention_days: i32,
+        #[serde(rename = "sessionIdleTimeout")]
+        pub session_idle_timeout: i32,
+        #[serde(rename = "sessionIpBinding")]
+        pub session_ip_binding: bool,
+        #[serde(rename = "auditLogExport")]
+        pub audit_log_export: bool,
+        #[serde(rename = "regularAccessReview")]
+        pub regular_access_review: bool,
+        #[serde(rename = "standards")]
+        pub standards: []ComplianceStandard,
+        #[serde(rename = "dpoContact")]
+        pub dpo_contact: String,
+        #[serde(rename = "encryptionAtRest")]
+        pub encryption_at_rest: bool,
+        #[serde(rename = "mfaRequired")]
+        pub mfa_required: bool,
+        #[serde(rename = "passwordExpiryDays")]
+        pub password_expiry_days: i32,
+        #[serde(rename = "rbacRequired")]
+        pub rbac_required: bool,
+        #[serde(rename = "sessionMaxAge")]
+        pub session_max_age: i32,
+        #[serde(rename = "appId")]
+        pub app_id: String,
+        #[serde(rename = "dataResidency")]
+        pub data_residency: String,
+        #[serde(rename = "detailedAuditTrail")]
+        pub detailed_audit_trail: bool,
+        #[serde(rename = "encryptionInTransit")]
+        pub encryption_in_transit: bool,
+        #[serde(rename = "leastPrivilege")]
+        pub least_privilege: bool,
+        #[serde(rename = "name")]
+        pub name: String,
+        #[serde(rename = "passwordRequireLower")]
+        pub password_require_lower: bool,
+        #[serde(rename = "passwordRequireSymbol")]
+        pub password_require_symbol: bool,
     }
 
     /// CreateProfile creates a new compliance profile
@@ -34,23 +76,15 @@ POST /auth/compliance/profiles
     pub async fn create_profile(
         &self,
         _request: CreateProfileRequest,
-    ) -> Result<CreateProfileResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
     #[derive(Debug, Serialize)]
     pub struct CreateProfileFromTemplateRequest {
-        #[serde(rename = "appId")]
-        pub app_id: String,
         #[serde(rename = "standard")]
         pub standard: ComplianceStandard,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct CreateProfileFromTemplateResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// CreateProfileFromTemplate creates a profile from a template
@@ -58,7 +92,7 @@ POST /auth/compliance/profiles/from-template
     pub async fn create_profile_from_template(
         &self,
         _request: CreateProfileFromTemplateRequest,
-    ) -> Result<CreateProfileFromTemplateResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -83,14 +117,14 @@ GET /auth/compliance/apps/:appId/profile
 
     #[derive(Debug, Serialize)]
     pub struct UpdateProfileRequest {
-        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
-        pub : Option<*int>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct UpdateProfileResponse {
-        #[serde(rename = "error")]
-        pub error: String,
+        #[serde(rename = "status")]
+        pub status: *string,
+        #[serde(rename = "mfaRequired")]
+        pub mfa_required: *bool,
+        #[serde(rename = "name")]
+        pub name: *string,
+        #[serde(rename = "retentionDays")]
+        pub retention_days: *int,
     }
 
     /// UpdateProfile updates a compliance profile
@@ -98,7 +132,7 @@ PUT /auth/compliance/profiles/:id
     pub async fn update_profile(
         &self,
         _request: UpdateProfileRequest,
-    ) -> Result<UpdateProfileResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -136,18 +170,12 @@ GET /auth/compliance/apps/:appId/dashboard
         pub check_type: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct RunCheckResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// RunCheck executes a compliance check
 POST /auth/compliance/profiles/:profileId/checks
     pub async fn run_check(
         &self,
         _request: RunCheckRequest,
-    ) -> Result<RunCheckResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -209,18 +237,12 @@ PUT /auth/compliance/violations/:id/resolve
         pub standard: ComplianceStandard,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct GenerateReportResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// GenerateReport generates a compliance report
 POST /auth/compliance/apps/:appId/reports
     pub async fn generate_report(
         &self,
         _request: GenerateReportRequest,
-    ) -> Result<GenerateReportResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -243,23 +265,21 @@ GET /auth/compliance/reports/:id
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct DownloadReportResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// DownloadReport downloads a compliance report file
 GET /auth/compliance/reports/:id/download
     pub async fn download_report(
         &self,
-    ) -> Result<DownloadReportResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
     #[derive(Debug, Serialize)]
     pub struct CreateEvidenceRequest {
+        #[serde(rename = "standard")]
+        pub standard: ComplianceStandard,
+        #[serde(rename = "title")]
+        pub title: String,
         #[serde(rename = "controlId")]
         pub control_id: String,
         #[serde(rename = "description")]
@@ -268,16 +288,6 @@ GET /auth/compliance/reports/:id/download
         pub evidence_type: String,
         #[serde(rename = "fileUrl")]
         pub file_url: String,
-        #[serde(rename = "standard")]
-        pub standard: ComplianceStandard,
-        #[serde(rename = "title")]
-        pub title: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct CreateEvidenceResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// CreateEvidence creates compliance evidence
@@ -285,7 +295,7 @@ POST /auth/compliance/apps/:appId/evidence
     pub async fn create_evidence(
         &self,
         _request: CreateEvidenceRequest,
-    ) -> Result<CreateEvidenceResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -331,18 +341,12 @@ DELETE /auth/compliance/evidence/:id
         pub version: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct CreatePolicyResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// CreatePolicy creates a compliance policy
 POST /auth/compliance/apps/:appId/policies
     pub async fn create_policy(
         &self,
         _request: CreatePolicyRequest,
-    ) -> Result<CreatePolicyResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -367,20 +371,14 @@ GET /auth/compliance/policies/:id
 
     #[derive(Debug, Serialize)]
     pub struct UpdatePolicyRequest {
-        #[serde(rename = "content")]
-        pub content: *string,
-        #[serde(rename = "status")]
-        pub status: *string,
         #[serde(rename = "title")]
         pub title: *string,
         #[serde(rename = "version")]
         pub version: *string,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct UpdatePolicyResponse {
-        #[serde(rename = "error")]
-        pub error: String,
+        #[serde(rename = "content")]
+        pub content: *string,
+        #[serde(rename = "status")]
+        pub status: *string,
     }
 
     /// UpdatePolicy updates a compliance policy
@@ -388,7 +386,7 @@ PUT /auth/compliance/policies/:id
     pub async fn update_policy(
         &self,
         _request: UpdatePolicyRequest,
-    ) -> Result<UpdatePolicyResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -404,18 +402,12 @@ DELETE /auth/compliance/policies/:id
 
     #[derive(Debug, Serialize)]
     pub struct CreateTrainingRequest {
+        #[serde(rename = "standard")]
+        pub standard: ComplianceStandard,
         #[serde(rename = "trainingType")]
         pub training_type: String,
         #[serde(rename = "userId")]
         pub user_id: String,
-        #[serde(rename = "standard")]
-        pub standard: ComplianceStandard,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct CreateTrainingResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// CreateTraining creates a training record
@@ -423,7 +415,7 @@ POST /auth/compliance/apps/:appId/training
     pub async fn create_training(
         &self,
         _request: CreateTrainingRequest,
-    ) -> Result<CreateTrainingResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -452,18 +444,12 @@ GET /auth/compliance/users/:userId/training
         pub score: i32,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct CompleteTrainingResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// CompleteTraining marks training as completed
 PUT /auth/compliance/training/:id/complete
     pub async fn complete_training(
         &self,
         _request: CompleteTrainingRequest,
-    ) -> Result<CompleteTrainingResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -477,17 +463,11 @@ GET /auth/compliance/templates
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct GetTemplateResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// GetTemplate retrieves a compliance template
 GET /auth/compliance/templates/:standard
     pub async fn get_template(
         &self,
-    ) -> Result<GetTemplateResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

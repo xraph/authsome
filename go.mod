@@ -2,6 +2,8 @@ module github.com/xraph/authsome
 
 go 1.25.3
 
+replace github.com/xraph/forge => ../forge
+
 require (
 	github.com/beevik/etree v1.5.0
 	github.com/coreos/go-oidc/v3 v3.16.0

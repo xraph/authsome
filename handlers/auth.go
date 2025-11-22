@@ -8,14 +8,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/core/app"
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/device"
 	dev "github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/pagination"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/responses"
 	sec "github.com/xraph/authsome/core/security"
+	"github.com/xraph/authsome/core/session"
 	coreuser "github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
@@ -23,23 +26,47 @@ import (
 )
 
 type AuthHandler struct {
-	auth      auth.ServiceInterface
-	rl        *rl.Service
-	dev       *dev.Service
-	sec       *sec.Service
-	aud       *aud.Service
-	twofaRepo *repo.TwoFARepository
+	auth              auth.ServiceInterface
+	rl                *rl.Service
+	dev               *dev.Service
+	sec               *sec.Service
+	aud               *aud.Service
+	twofaRepo         *repo.TwoFARepository
+	sessionCookieName string
+	appService        *app.ServiceImpl
+	cookieConfig      *session.CookieConfig
 }
 
 // Use shared response types
 type TwoFARequiredResponse = responses.TwoFARequiredResponse
 type SessionResponse = responses.SessionResponse
 
-func NewAuthHandler(a auth.ServiceInterface, rlsvc *rl.Service, dsvc *dev.Service, ssvc *sec.Service, asvc *aud.Service, tfrepo *repo.TwoFARepository) *AuthHandler {
-	return &AuthHandler{auth: a, rl: rlsvc, dev: dsvc, sec: ssvc, aud: asvc, twofaRepo: tfrepo}
+func NewAuthHandler(a auth.ServiceInterface, rlsvc *rl.Service, dsvc *dev.Service, ssvc *sec.Service, asvc *aud.Service, tfrepo *repo.TwoFARepository, appSvc *app.ServiceImpl, cookieCfg *session.CookieConfig) *AuthHandler {
+	// Set default cookie name if not provided (for backward compatibility)
+	sessionCookieName := "authsome_session"
+	if cookieCfg != nil && cookieCfg.Name != "" {
+		sessionCookieName = cookieCfg.Name
+	}
+	
+	return &AuthHandler{
+		auth:              a,
+		rl:                rlsvc,
+		dev:               dsvc,
+		sec:               ssvc,
+		aud:               asvc,
+		twofaRepo:         tfrepo,
+		sessionCookieName: sessionCookieName,
+		appService:        appSvc,
+		cookieConfig:      cookieCfg,
+	}
 }
 
 func (h *AuthHandler) SignUp(c forge.Context) error {
+	// Verify AppID is in context (populated by middleware from API key)
+	if _, ok := contexts.GetAppID(c.Request().Context()); !ok {
+		return c.JSON(http.StatusUnauthorized, errs.New("API_KEY_REQUIRED", "Valid API key required for app identification", http.StatusUnauthorized))
+	}
+
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -61,8 +88,8 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 		}
 	}
 	var req auth.SignUpRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 	req.IPAddress = ip
 	req.UserAgent = c.Request().UserAgent()
@@ -80,10 +107,27 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 			log.Printf("audit log signup error: %v", err)
 		}
 	}
+	
+	// Set session cookie if enabled
+	if h.cookieConfig != nil && h.cookieConfig.Enabled && res.Session != nil && res.Token != "" {
+		appID, _ := contexts.GetAppID(c.Request().Context())
+		if h.appService != nil {
+			appCookieCfg, err := h.appService.App.GetCookieConfig(c.Request().Context(), appID)
+			if err == nil && appCookieCfg != nil && appCookieCfg.Enabled {
+				_ = session.SetCookie(c, res.Token, res.Session.ExpiresAt, appCookieCfg)
+			}
+		}
+	}
+	
 	return c.JSON(http.StatusOK, res)
 }
 
 func (h *AuthHandler) SignIn(c forge.Context) error {
+	// Verify AppID is in context (populated by middleware from API key)
+	if _, ok := contexts.GetAppID(c.Request().Context()); !ok {
+		return c.JSON(http.StatusUnauthorized, errs.New("API_KEY_REQUIRED", "Valid API key required for app identification", http.StatusUnauthorized))
+	}
+
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -103,8 +147,8 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		}
 	}
 	var req auth.SignInRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 	// Lockout check now that we have email
 	if h.sec != nil {
@@ -168,7 +212,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		return c.JSON(http.StatusOK, &TwoFARequiredResponse{User: u, RequireTwoFA: true, DeviceID: fp})
 	}
 	// Otherwise, create session and return normal auth response
-	res, err := h.auth.CreateSessionForUser(c.Request().Context(), u, req.Remember || req.RememberMe, req.IPAddress, req.UserAgent)
+	res, err := h.auth.CreateSessionForUser(c.Request().Context(), u, req.RememberMe, req.IPAddress, req.UserAgent)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
@@ -192,6 +236,18 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			log.Printf("audit log signin error: %v", err)
 		}
 	}
+	
+	// Set session cookie if enabled
+	if h.cookieConfig != nil && h.cookieConfig.Enabled && res.Session != nil && res.Token != "" {
+		appID, _ := contexts.GetAppID(c.Request().Context())
+		if h.appService != nil {
+			appCookieCfg, err := h.appService.App.GetCookieConfig(c.Request().Context(), appID)
+			if err == nil && appCookieCfg != nil && appCookieCfg.Enabled {
+				_ = session.SetCookie(c, res.Token, res.Session.ExpiresAt, appCookieCfg)
+			}
+		}
+	}
+	
 	return c.JSON(http.StatusOK, res)
 }
 
@@ -330,7 +386,7 @@ func (h *AuthHandler) GetSession(c forge.Context) error {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
-	cookie, err := c.Request().Cookie("session_token")
+	cookie, err := c.Request().Cookie(h.sessionCookieName)
 	if err != nil || cookie == nil {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}

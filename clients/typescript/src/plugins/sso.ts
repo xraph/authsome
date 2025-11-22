@@ -12,9 +12,9 @@ export class SsoPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async registerProvider(request: types.RegisterProvider_req): Promise<types.StatusResponse> {
+  async registerProvider(request: types.RegisterProviderRequest): Promise<types.ProviderRegisteredResponse> {
     const path = '/provider/register';
-    return this.client.request<types.StatusResponse>('POST', path, {
+    return this.client.request<types.ProviderRegisteredResponse>('POST', path, {
       body: request,
     });
   }
@@ -24,19 +24,28 @@ export class SsoPlugin implements ClientPlugin {
     return this.client.request<types.MetadataResponse>('GET', path);
   }
 
-  async sAMLCallback(): Promise<types.StatusResponse> {
-    const path = '/saml2/callback/{providerId}';
-    return this.client.request<types.StatusResponse>('POST', path);
+  async sAMLLogin(request: types.SAMLLoginRequest): Promise<types.SAMLLoginResponse> {
+    const path = '/saml2/login/:providerId';
+    return this.client.request<types.SAMLLoginResponse>('POST', path, {
+      body: request,
+    });
   }
 
-  async sAMLLogin(): Promise<void> {
-    const path = '/saml2/login/{providerId}';
-    return this.client.request<void>('GET', path);
+  async sAMLCallback(): Promise<types.SSOAuthResponse> {
+    const path = '/saml2/callback/:providerId';
+    return this.client.request<types.SSOAuthResponse>('POST', path);
   }
 
-  async oIDCCallback(): Promise<types.StatusResponse> {
-    const path = '/oidc/callback/{providerId}';
-    return this.client.request<types.StatusResponse>('GET', path);
+  async oIDCLogin(request: types.OIDCLoginRequest): Promise<types.OIDCLoginResponse> {
+    const path = '/oidc/login/:providerId';
+    return this.client.request<types.OIDCLoginResponse>('POST', path, {
+      body: request,
+    });
+  }
+
+  async oIDCCallback(): Promise<types.SSOAuthResponse> {
+    const path = '/oidc/callback/:providerId';
+    return this.client.request<types.SSOAuthResponse>('GET', path);
   }
 
 }

@@ -13,7 +13,7 @@ export class WebhookPlugin implements ClientPlugin {
   }
 
   async create(request: { url: string; events: string[]; secret?: string }): Promise<{ webhook: types.Webhook }> {
-    const path = '/api/auth/webhooks';
+    const path = '/webhooks';
     return this.client.request<{ webhook: types.Webhook }>('POST', path, {
       body: request,
       auth: true,
@@ -21,14 +21,14 @@ export class WebhookPlugin implements ClientPlugin {
   }
 
   async list(): Promise<{ webhooks: types.Webhook[] }> {
-    const path = '/api/auth/webhooks';
+    const path = '/webhooks';
     return this.client.request<{ webhooks: types.Webhook[] }>('GET', path, {
       auth: true,
     });
   }
 
   async update(request: { id: string; url?: string; events?: string[]; enabled?: boolean }): Promise<{ webhook: types.Webhook }> {
-    const path = '/api/auth/webhooks/update';
+    const path = '/webhooks/update';
     return this.client.request<{ webhook: types.Webhook }>('POST', path, {
       body: request,
       auth: true,
@@ -36,7 +36,7 @@ export class WebhookPlugin implements ClientPlugin {
   }
 
   async delete(request: { id: string }): Promise<{ success: boolean }> {
-    const path = '/api/auth/webhooks/delete';
+    const path = '/webhooks/delete';
     return this.client.request<{ success: boolean }>('POST', path, {
       body: request,
       auth: true,

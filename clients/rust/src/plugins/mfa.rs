@@ -19,31 +19,21 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct EnrollFactorRequest {
+        #[serde(rename = "name")]
+        pub name: String,
         #[serde(rename = "priority")]
         pub priority: FactorPriority,
         #[serde(rename = "type")]
         pub type: FactorType,
         #[serde(rename = "metadata")]
         pub metadata: ,
-        #[serde(rename = "name")]
-        pub name: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct EnrollFactorResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
     }
 
     /// EnrollFactor handles POST /mfa/factors/enroll
     pub async fn enroll_factor(
         &self,
         _request: EnrollFactorRequest,
-    ) -> Result<EnrollFactorResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -64,48 +54,26 @@ impl MfaPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct GetFactorResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
-    }
-
     /// GetFactor handles GET /mfa/factors/:id
     pub async fn get_factor(
         &self,
-    ) -> Result<GetFactorResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct UpdateFactorResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// UpdateFactor handles PUT /mfa/factors/:id
     pub async fn update_factor(
         &self,
-    ) -> Result<UpdateFactorResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct DeleteFactorResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// DeleteFactor handles DELETE /mfa/factors/:id
     pub async fn delete_factor(
         &self,
-    ) -> Result<DeleteFactorResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -116,17 +84,11 @@ impl MfaPlugin {{
         pub code: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct VerifyFactorResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// VerifyFactor handles POST /mfa/factors/:id/verify
     pub async fn verify_factor(
         &self,
         _request: VerifyFactorRequest,
-    ) -> Result<VerifyFactorResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -143,31 +105,17 @@ impl MfaPlugin {{
         pub user_id: xid.ID,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct InitiateChallengeResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// InitiateChallenge handles POST /mfa/challenge
     pub async fn initiate_challenge(
         &self,
         _request: InitiateChallengeRequest,
-    ) -> Result<InitiateChallengeResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
     #[derive(Debug, Serialize)]
     pub struct VerifyChallengeRequest {
-        #[serde(rename = "rememberDevice")]
-        pub remember_device: bool,
-        #[serde(rename = "challengeId")]
-        pub challenge_id: xid.ID,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "data")]
@@ -176,66 +124,44 @@ impl MfaPlugin {{
         pub device_info: *DeviceInfo,
         #[serde(rename = "factorId")]
         pub factor_id: xid.ID,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct VerifyChallengeResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
-        #[serde(rename = "error")]
-        pub error: String,
+        #[serde(rename = "rememberDevice")]
+        pub remember_device: bool,
+        #[serde(rename = "challengeId")]
+        pub challenge_id: xid.ID,
     }
 
     /// VerifyChallenge handles POST /mfa/verify
     pub async fn verify_challenge(
         &self,
         _request: VerifyChallengeRequest,
-    ) -> Result<VerifyChallengeResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct GetChallengeStatusResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// GetChallengeStatus handles GET /mfa/challenge/:id
     pub async fn get_challenge_status(
         &self,
-    ) -> Result<GetChallengeStatusResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
     #[derive(Debug, Serialize)]
     pub struct TrustDeviceRequest {
-        #[serde(rename = "name")]
-        pub name: String,
         #[serde(rename = "deviceId")]
         pub device_id: String,
         #[serde(rename = "metadata")]
         pub metadata: ,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct TrustDeviceResponse {
-        #[serde(rename = "message")]
-        pub message: String,
+        #[serde(rename = "name")]
+        pub name: String,
     }
 
     /// TrustDevice handles POST /mfa/devices/trust
     pub async fn trust_device(
         &self,
         _request: TrustDeviceRequest,
-    ) -> Result<TrustDeviceResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -256,34 +182,18 @@ impl MfaPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct RevokeTrustedDeviceResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// RevokeTrustedDevice handles DELETE /mfa/devices/:id
     pub async fn revoke_trusted_device(
         &self,
-    ) -> Result<RevokeTrustedDeviceResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct GetStatusResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// GetStatus handles GET /mfa/status
     pub async fn get_status(
         &self,
-    ) -> Result<GetStatusResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -302,6 +212,37 @@ impl MfaPlugin {{
     pub async fn get_policy(
         &self,
     ) -> Result<GetPolicyResponse> {{
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct AdminUpdatePolicyRequest {
+        #[serde(rename = "allowedTypes")]
+        pub allowed_types: []string,
+        #[serde(rename = "enabled")]
+        pub enabled: bool,
+        #[serde(rename = "gracePeriod")]
+        pub grace_period: i32,
+        #[serde(rename = "requiredFactors")]
+        pub required_factors: i32,
+    }
+
+    /// AdminUpdatePolicy handles PUT /mfa/admin/policy
+Updates the MFA policy for an app (admin only)
+    pub async fn admin_update_policy(
+        &self,
+        _request: AdminUpdatePolicyRequest,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
+    /// AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
+Resets all MFA factors for a user (admin only)
+    pub async fn admin_reset_user_m_f_a(
+        &self,
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

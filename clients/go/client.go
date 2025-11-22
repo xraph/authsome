@@ -138,9 +138,9 @@ func (c *Client) request(ctx context.Context, method, path string, body interfac
 
 // SignUpRequest is the request for SignUp
 type SignUpRequest struct {
+	Email string `json:"email"`
 	Password string `json:"password"`
 	Name *string `json:"name,omitempty"`
-	Email string `json:"email"`
 }
 
 // SignUpResponse is the response for SignUp
@@ -162,8 +162,8 @@ func (c *Client) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpRespons
 
 // SignInRequest is the request for SignIn
 type SignInRequest struct {
-	Email string `json:"email"`
 	Password string `json:"password"`
+	Email string `json:"email"`
 }
 
 // SignInResponse is the response for SignIn
@@ -219,8 +219,8 @@ func (c *Client) GetSession(ctx context.Context) (*GetSessionResponse, error) {
 
 // UpdateUserRequest is the request for UpdateUser
 type UpdateUserRequest struct {
-	Name *string `json:"name,omitempty"`
 	Email *string `json:"email,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 // UpdateUserResponse is the response for UpdateUser

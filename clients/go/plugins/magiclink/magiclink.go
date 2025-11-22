@@ -42,19 +42,11 @@ func (p *Plugin) Send(ctx context.Context, req *SendRequest) error {
 	return nil
 }
 
-// VerifyResponse is the response for Verify
-type VerifyResponse struct {
-	Session authsome. `json:"session"`
-	Token string `json:"token"`
-	User authsome. `json:"user"`
-}
-
-func (p *Plugin) Verify(ctx context.Context) (*VerifyResponse, error) {
+func (p *Plugin) Verify(ctx context.Context) error {
 	path := "/magic-link/verify"
-	var result VerifyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 

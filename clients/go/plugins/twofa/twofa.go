@@ -51,18 +51,12 @@ type VerifyRequest struct {
 	User_id string `json:"user_id"`
 }
 
-// VerifyResponse is the response for Verify
-type VerifyResponse struct {
-	Status string `json:"status"`
-}
-
-func (p *Plugin) Verify(ctx context.Context, req *VerifyRequest) (*VerifyResponse, error) {
+func (p *Plugin) Verify(ctx context.Context, req *VerifyRequest) error {
 	path := "/2fa/verify"
-	var result VerifyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // DisableRequest is the request for Disable
@@ -70,18 +64,12 @@ type DisableRequest struct {
 	User_id string `json:"user_id"`
 }
 
-// DisableResponse is the response for Disable
-type DisableResponse struct {
-	Status string `json:"status"`
-}
-
-func (p *Plugin) Disable(ctx context.Context, req *DisableRequest) (*DisableResponse, error) {
+func (p *Plugin) Disable(ctx context.Context, req *DisableRequest) error {
 	path := "/2fa/disable"
-	var result DisableResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // GenerateBackupCodesRequest is the request for GenerateBackupCodes
@@ -111,8 +99,8 @@ type SendOTPRequest struct {
 
 // SendOTPResponse is the response for SendOTP
 type SendOTPResponse struct {
-	Code string `json:"code"`
 	Status string `json:"status"`
+	Code string `json:"code"`
 }
 
 // SendOTP SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
@@ -133,7 +121,9 @@ type StatusRequest struct {
 
 // StatusResponse is the response for Status
 type StatusResponse struct {
-	Status string `json:"status"`
+	Enabled bool `json:"enabled"`
+	Method string `json:"method"`
+	Trusted bool `json:"trusted"`
 }
 
 // Status Status returns whether 2FA is enabled and whether the device is trusted

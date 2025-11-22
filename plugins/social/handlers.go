@@ -5,12 +5,12 @@ import (
 	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/base"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
-	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
@@ -60,17 +60,17 @@ type CallbackResponse struct {
 }
 
 type CallbackDataResponse struct {
-	User      *schema.User `json:"user"`
-	IsNewUser bool         `json:"isNewUser" example:"false"`
-	Action    string       `json:"action" example:"signin"` // "signin", "signup", "linked"
+	User      *user.User `json:"user"`
+	IsNewUser bool       `json:"isNewUser" example:"false"`
+	Action    string     `json:"action" example:"signin"` // "signin", "signup", "linked"
 }
 
 type ConnectionResponse struct {
-	Connection *schema.SocialAccount `json:"connection"`
+	Connection *base.SocialAccount `json:"connection"`
 }
 
 type ConnectionsResponse struct {
-	Connections []*schema.SocialAccount `json:"connections"`
+	Connections []*base.SocialAccount `json:"connections"`
 }
 
 type ProvidersResponse struct {

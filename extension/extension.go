@@ -83,6 +83,9 @@ func (e *Extension) Register(app forge.App) error {
 	}
 
 	// Add optional configuration
+	if e.config.CORSEnabled {
+		opts = append(opts, authsome.WithCORSEnabled(true))
+	}
 	if len(e.config.TrustedOrigins) > 0 {
 		opts = append(opts, authsome.WithTrustedOrigins(e.config.TrustedOrigins))
 	}
@@ -100,6 +103,9 @@ func (e *Extension) Register(app forge.App) error {
 	}
 	if e.config.GeoIPProvider != nil {
 		opts = append(opts, authsome.WithGeoIPProvider(e.config.GeoIPProvider))
+	}
+	if e.config.SessionCookie != nil {
+		opts = append(opts, authsome.WithGlobalCookieConfig(*e.config.SessionCookie))
 	}
 	opts = append(opts, authsome.WithRBACEnforcement(e.config.RBACEnforce))
 
@@ -224,4 +230,8 @@ func (e *Extension) GetDB() *bun.DB {
 		return nil
 	}
 	return e.auth.GetDB()
+}
+
+func (e *Extension) ExcludeFromSchemas() bool {
+	return !e.config.DisableOpenAPI
 }

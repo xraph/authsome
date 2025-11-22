@@ -31,68 +31,47 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // CreateConsentRequest is the request for CreateConsent
 type CreateConsentRequest struct {
-	Metadata authsome. `json:"metadata"`
-	Purpose string `json:"purpose"`
 	UserId string `json:"userId"`
 	Version string `json:"version"`
 	ConsentType string `json:"consentType"`
 	ExpiresIn authsome.*int `json:"expiresIn"`
 	Granted bool `json:"granted"`
-}
-
-// CreateConsentResponse is the response for CreateConsent
-type CreateConsentResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	Metadata authsome. `json:"metadata"`
+	Purpose string `json:"purpose"`
 }
 
 // CreateConsent CreateConsent handles POST /consent/records
-func (p *Plugin) CreateConsent(ctx context.Context, req *CreateConsentRequest) (*CreateConsentResponse, error) {
+func (p *Plugin) CreateConsent(ctx context.Context, req *CreateConsentRequest) error {
 	path := "/records"
-	var result CreateConsentResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetConsentResponse is the response for GetConsent
-type GetConsentResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // GetConsent GetConsent handles GET /consent/records/:id
-func (p *Plugin) GetConsent(ctx context.Context) (*GetConsentResponse, error) {
+func (p *Plugin) GetConsent(ctx context.Context) error {
 	path := "/records/:id"
-	var result GetConsentResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // UpdateConsentRequest is the request for UpdateConsent
 type UpdateConsentRequest struct {
-	Granted authsome.*bool `json:"granted"`
 	Metadata authsome. `json:"metadata"`
 	Reason string `json:"reason"`
-}
-
-// UpdateConsentResponse is the response for UpdateConsent
-type UpdateConsentResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	Granted authsome.*bool `json:"granted"`
 }
 
 // UpdateConsent UpdateConsent handles PATCH /consent/records/:id
-func (p *Plugin) UpdateConsent(ctx context.Context, req *UpdateConsentRequest) (*UpdateConsentResponse, error) {
+func (p *Plugin) UpdateConsent(ctx context.Context, req *UpdateConsentRequest) error {
 	path := "/records/:id"
-	var result UpdateConsentResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // RevokeConsentRequest is the request for RevokeConsent
@@ -102,64 +81,44 @@ type RevokeConsentRequest struct {
 	Reason string `json:"reason"`
 }
 
-// RevokeConsentResponse is the response for RevokeConsent
-type RevokeConsentResponse struct {
-	Message string `json:"message"`
-}
-
 // RevokeConsent RevokeConsent handles POST /consent/records/:id/revoke
-func (p *Plugin) RevokeConsent(ctx context.Context, req *RevokeConsentRequest) (*RevokeConsentResponse, error) {
+func (p *Plugin) RevokeConsent(ctx context.Context, req *RevokeConsentRequest) error {
 	path := "/revoke/:id"
-	var result RevokeConsentResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // CreateConsentPolicyRequest is the request for CreateConsentPolicy
 type CreateConsentPolicyRequest struct {
+	ConsentType string `json:"consentType"`
 	Description string `json:"description"`
 	Metadata authsome. `json:"metadata"`
 	Name string `json:"name"`
 	Renewable bool `json:"renewable"`
 	Required bool `json:"required"`
 	ValidityPeriod authsome.*int `json:"validityPeriod"`
-	Version string `json:"version"`
-	ConsentType string `json:"consentType"`
 	Content string `json:"content"`
-}
-
-// CreateConsentPolicyResponse is the response for CreateConsentPolicy
-type CreateConsentPolicyResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	Version string `json:"version"`
 }
 
 // CreateConsentPolicy CreateConsentPolicy handles POST /consent/policies
-func (p *Plugin) CreateConsentPolicy(ctx context.Context, req *CreateConsentPolicyRequest) (*CreateConsentPolicyResponse, error) {
+func (p *Plugin) CreateConsentPolicy(ctx context.Context, req *CreateConsentPolicyRequest) error {
 	path := "/policies"
-	var result CreateConsentPolicyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetConsentPolicyResponse is the response for GetConsentPolicy
-type GetConsentPolicyResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // GetConsentPolicy GetConsentPolicy handles GET /consent/policies/:id
-func (p *Plugin) GetConsentPolicy(ctx context.Context) (*GetConsentPolicyResponse, error) {
+func (p *Plugin) GetConsentPolicy(ctx context.Context) error {
 	path := "/policies/:id"
-	var result GetConsentPolicyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // RecordCookieConsentRequest is the request for RecordCookieConsent
@@ -174,36 +133,22 @@ type RecordCookieConsentRequest struct {
 	Personalization bool `json:"personalization"`
 }
 
-// RecordCookieConsentResponse is the response for RecordCookieConsent
-type RecordCookieConsentResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
-}
-
 // RecordCookieConsent RecordCookieConsent handles POST /consent/cookies
-func (p *Plugin) RecordCookieConsent(ctx context.Context, req *RecordCookieConsentRequest) (*RecordCookieConsentResponse, error) {
+func (p *Plugin) RecordCookieConsent(ctx context.Context, req *RecordCookieConsentRequest) error {
 	path := "/cookies"
-	var result RecordCookieConsentResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetCookieConsentResponse is the response for GetCookieConsent
-type GetCookieConsentResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // GetCookieConsent GetCookieConsent handles GET /consent/cookies
-func (p *Plugin) GetCookieConsent(ctx context.Context) (*GetCookieConsentResponse, error) {
+func (p *Plugin) GetCookieConsent(ctx context.Context) error {
 	path := "/cookies"
-	var result GetCookieConsentResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // RequestDataExportRequest is the request for RequestDataExport
@@ -212,52 +157,31 @@ type RequestDataExportRequest struct {
 	IncludeSections authsome.[]string `json:"includeSections"`
 }
 
-// RequestDataExportResponse is the response for RequestDataExport
-type RequestDataExportResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
-}
-
 // RequestDataExport RequestDataExport handles POST /consent/data-exports
-func (p *Plugin) RequestDataExport(ctx context.Context, req *RequestDataExportRequest) (*RequestDataExportResponse, error) {
+func (p *Plugin) RequestDataExport(ctx context.Context, req *RequestDataExportRequest) error {
 	path := "/export"
-	var result RequestDataExportResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetDataExportResponse is the response for GetDataExport
-type GetDataExportResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // GetDataExport GetDataExport handles GET /consent/data-exports/:id
-func (p *Plugin) GetDataExport(ctx context.Context) (*GetDataExportResponse, error) {
+func (p *Plugin) GetDataExport(ctx context.Context) error {
 	path := "/export/:id"
-	var result GetDataExportResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// DownloadDataExportResponse is the response for DownloadDataExport
-type DownloadDataExportResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // DownloadDataExport DownloadDataExport handles GET /consent/data-exports/:id/download
-func (p *Plugin) DownloadDataExport(ctx context.Context) (*DownloadDataExportResponse, error) {
+func (p *Plugin) DownloadDataExport(ctx context.Context) error {
 	path := "/export/:id/download"
-	var result DownloadDataExportResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // RequestDataDeletionRequest is the request for RequestDataDeletion
@@ -266,104 +190,70 @@ type RequestDataDeletionRequest struct {
 	Reason string `json:"reason"`
 }
 
-// RequestDataDeletionResponse is the response for RequestDataDeletion
-type RequestDataDeletionResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
-}
-
 // RequestDataDeletion RequestDataDeletion handles POST /consent/data-deletions
-func (p *Plugin) RequestDataDeletion(ctx context.Context, req *RequestDataDeletionRequest) (*RequestDataDeletionResponse, error) {
+func (p *Plugin) RequestDataDeletion(ctx context.Context, req *RequestDataDeletionRequest) error {
 	path := "/deletion"
-	var result RequestDataDeletionResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetDataDeletionResponse is the response for GetDataDeletion
-type GetDataDeletionResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // GetDataDeletion GetDataDeletion handles GET /consent/data-deletions/:id
-func (p *Plugin) GetDataDeletion(ctx context.Context) (*GetDataDeletionResponse, error) {
+func (p *Plugin) GetDataDeletion(ctx context.Context) error {
 	path := "/deletion/:id"
-	var result GetDataDeletionResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// ApproveDeletionRequestResponse is the response for ApproveDeletionRequest
-type ApproveDeletionRequestResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // ApproveDeletionRequest ApproveDeletionRequest handles POST /consent/data-deletions/:id/approve (Admin only)
-func (p *Plugin) ApproveDeletionRequest(ctx context.Context) (*ApproveDeletionRequestResponse, error) {
+func (p *Plugin) ApproveDeletionRequest(ctx context.Context) error {
 	path := "/deletion/:id/approve"
-	var result ApproveDeletionRequestResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// GetPrivacySettingsResponse is the response for GetPrivacySettings
-type GetPrivacySettingsResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	return nil
 }
 
 // GetPrivacySettings GetPrivacySettings handles GET /consent/privacy-settings
-func (p *Plugin) GetPrivacySettings(ctx context.Context) (*GetPrivacySettingsResponse, error) {
+func (p *Plugin) GetPrivacySettings(ctx context.Context) error {
 	path := "/settings"
-	var result GetPrivacySettingsResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // UpdatePrivacySettingsRequest is the request for UpdatePrivacySettings
 type UpdatePrivacySettingsRequest struct {
-	AutoDeleteAfterDays authsome.*int `json:"autoDeleteAfterDays"`
+	CcpaMode authsome.*bool `json:"ccpaMode"`
 	ContactEmail string `json:"contactEmail"`
-	DpoEmail string `json:"dpoEmail"`
-	ConsentRequired authsome.*bool `json:"consentRequired"`
-	AnonymousConsentEnabled authsome.*bool `json:"anonymousConsentEnabled"`
-	ContactPhone string `json:"contactPhone"`
+	DataRetentionDays authsome.*int `json:"dataRetentionDays"`
+	AllowDataPortability authsome.*bool `json:"allowDataPortability"`
+	AutoDeleteAfterDays authsome.*int `json:"autoDeleteAfterDays"`
 	CookieConsentEnabled authsome.*bool `json:"cookieConsentEnabled"`
-	DeletionGracePeriodDays authsome.*int `json:"deletionGracePeriodDays"`
+	ExportFormat authsome.[]string `json:"exportFormat"`
 	GdprMode authsome.*bool `json:"gdprMode"`
 	RequireExplicitConsent authsome.*bool `json:"requireExplicitConsent"`
-	CcpaMode authsome.*bool `json:"ccpaMode"`
-	CookieConsentStyle string `json:"cookieConsentStyle"`
 	DataExportExpiryHours authsome.*int `json:"dataExportExpiryHours"`
-	DataRetentionDays authsome.*int `json:"dataRetentionDays"`
-	ExportFormat authsome.[]string `json:"exportFormat"`
+	DpoEmail string `json:"dpoEmail"`
 	RequireAdminApprovalForDeletion authsome.*bool `json:"requireAdminApprovalForDeletion"`
-	AllowDataPortability authsome.*bool `json:"allowDataPortability"`
-}
-
-// UpdatePrivacySettingsResponse is the response for UpdatePrivacySettings
-type UpdatePrivacySettingsResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
+	AnonymousConsentEnabled authsome.*bool `json:"anonymousConsentEnabled"`
+	ConsentRequired authsome.*bool `json:"consentRequired"`
+	ContactPhone string `json:"contactPhone"`
+	CookieConsentStyle string `json:"cookieConsentStyle"`
+	DeletionGracePeriodDays authsome.*int `json:"deletionGracePeriodDays"`
 }
 
 // UpdatePrivacySettings UpdatePrivacySettings handles PATCH /consent/privacy-settings (Admin only)
-func (p *Plugin) UpdatePrivacySettings(ctx context.Context, req *UpdatePrivacySettingsRequest) (*UpdatePrivacySettingsResponse, error) {
+func (p *Plugin) UpdatePrivacySettings(ctx context.Context, req *UpdatePrivacySettingsRequest) error {
 	path := "/settings"
-	var result UpdatePrivacySettingsResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // GetConsentAuditLogs GetConsentAuditLogs handles GET /consent/audit-logs
@@ -375,19 +265,12 @@ func (p *Plugin) GetConsentAuditLogs(ctx context.Context) error {
 	return nil
 }
 
-// GenerateConsentReportResponse is the response for GenerateConsentReport
-type GenerateConsentReportResponse struct {
-	Error string `json:"error"`
-	Message string `json:"message"`
-}
-
 // GenerateConsentReport GenerateConsentReport handles GET /consent/reports
-func (p *Plugin) GenerateConsentReport(ctx context.Context) (*GenerateConsentReportResponse, error) {
+func (p *Plugin) GenerateConsentReport(ctx context.Context) error {
 	path := "/reports"
-	var result GenerateConsentReportResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 

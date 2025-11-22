@@ -31,19 +31,9 @@ impl MagiclinkPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct VerifyResponse {
-        #[serde(rename = "session")]
-        pub session: ,
-        #[serde(rename = "token")]
-        pub token: String,
-        #[serde(rename = "user")]
-        pub user: ,
-    }
-
     pub async fn verify(
         &self,
-    ) -> Result<VerifyResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

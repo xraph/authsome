@@ -19,26 +19,26 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct StartRecoveryRequest {
-        #[serde(rename = "userId")]
-        pub user_id: String,
-        #[serde(rename = "deviceId")]
-        pub device_id: String,
         #[serde(rename = "email")]
         pub email: String,
         #[serde(rename = "preferredMethod")]
         pub preferred_method: RecoveryMethod,
+        #[serde(rename = "userId")]
+        pub user_id: String,
+        #[serde(rename = "deviceId")]
+        pub device_id: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct StartRecoveryResponse {
+        #[serde(rename = "code")]
+        pub code: String,
         #[serde(rename = "details")]
         pub details: ,
         #[serde(rename = "error")]
         pub error: String,
         #[serde(rename = "message")]
         pub message: String,
-        #[serde(rename = "code")]
-        pub code: String,
     }
 
     /// StartRecovery handles POST /recovery/start
@@ -116,10 +116,10 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct CancelRecoveryResponse {
-        #[serde(rename = "message")]
-        pub message: String,
         #[serde(rename = "success")]
         pub success: bool,
+        #[serde(rename = "message")]
+        pub message: String,
     }
 
     /// CancelRecovery handles POST /recovery/cancel
@@ -141,14 +141,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GenerateRecoveryCodesResponse {
-        #[serde(rename = "message")]
-        pub message: String,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "details")]
         pub details: ,
         #[serde(rename = "error")]
         pub error: String,
+        #[serde(rename = "message")]
+        pub message: String,
     }
 
     /// GenerateRecoveryCodes handles POST /recovery-codes/generate
@@ -162,10 +162,10 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyRecoveryCodeRequest {
-        #[serde(rename = "code")]
-        pub code: String,
         #[serde(rename = "sessionId")]
         pub session_id: xid.ID,
+        #[serde(rename = "code")]
+        pub code: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -197,14 +197,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct SetupSecurityQuestionsResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
         #[serde(rename = "error")]
         pub error: String,
         #[serde(rename = "message")]
         pub message: String,
+        #[serde(rename = "code")]
+        pub code: String,
+        #[serde(rename = "details")]
+        pub details: ,
     }
 
     /// SetupSecurityQuestions handles POST /security-questions/setup
@@ -253,14 +253,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct VerifySecurityAnswersResponse {
-        #[serde(rename = "code")]
-        pub code: String,
         #[serde(rename = "details")]
         pub details: ,
         #[serde(rename = "error")]
         pub error: String,
         #[serde(rename = "message")]
         pub message: String,
+        #[serde(rename = "code")]
+        pub code: String,
     }
 
     /// VerifySecurityAnswers handles POST /security-questions/verify
@@ -286,14 +286,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct AddTrustedContactResponse {
-        #[serde(rename = "message")]
-        pub message: String,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "details")]
         pub details: ,
         #[serde(rename = "error")]
         pub error: String,
+        #[serde(rename = "message")]
+        pub message: String,
     }
 
     /// AddTrustedContact handles POST /trusted-contacts/add
@@ -354,10 +354,10 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RequestTrustedContactVerificationRequest {
-        #[serde(rename = "contactId")]
-        pub contact_id: xid.ID,
         #[serde(rename = "sessionId")]
         pub session_id: xid.ID,
+        #[serde(rename = "contactId")]
+        pub contact_id: xid.ID,
     }
 
     #[derive(Debug, Deserialize)]
@@ -399,12 +399,12 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct SendVerificationCodeRequest {
-        #[serde(rename = "target")]
-        pub target: String,
         #[serde(rename = "method")]
         pub method: RecoveryMethod,
         #[serde(rename = "sessionId")]
         pub session_id: xid.ID,
+        #[serde(rename = "target")]
+        pub target: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -438,14 +438,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct VerifyCodeResponse {
+        #[serde(rename = "message")]
+        pub message: String,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "details")]
         pub details: ,
         #[serde(rename = "error")]
         pub error: String,
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// VerifyCode handles POST /verification/verify
@@ -469,14 +469,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct ScheduleVideoSessionResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-        #[serde(rename = "message")]
-        pub message: String,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "details")]
         pub details: ,
+        #[serde(rename = "error")]
+        pub error: String,
+        #[serde(rename = "message")]
+        pub message: String,
     }
 
     /// ScheduleVideoSession handles POST /video/schedule
@@ -496,14 +496,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct StartVideoSessionResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "details")]
-        pub details: ,
         #[serde(rename = "error")]
         pub error: String,
         #[serde(rename = "message")]
         pub message: String,
+        #[serde(rename = "code")]
+        pub code: String,
+        #[serde(rename = "details")]
+        pub details: ,
     }
 
     /// StartVideoSession handles POST /video/start
@@ -531,14 +531,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct CompleteVideoSessionResponse {
+        #[serde(rename = "error")]
+        pub error: String,
         #[serde(rename = "message")]
         pub message: String,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "details")]
         pub details: ,
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// CompleteVideoSession handles POST /video/complete (admin)
@@ -552,6 +552,8 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UploadDocumentRequest {
+        #[serde(rename = "sessionId")]
+        pub session_id: xid.ID,
         #[serde(rename = "backImage")]
         pub back_image: String,
         #[serde(rename = "documentType")]
@@ -560,8 +562,6 @@ impl BackupauthPlugin {{
         pub front_image: String,
         #[serde(rename = "selfie")]
         pub selfie: String,
-        #[serde(rename = "sessionId")]
-        pub session_id: xid.ID,
     }
 
     #[derive(Debug, Deserialize)]
@@ -587,14 +587,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetDocumentVerificationResponse {
+        #[serde(rename = "message")]
+        pub message: String,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "details")]
         pub details: ,
         #[serde(rename = "error")]
         pub error: String,
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// GetDocumentVerification handles GET /documents/:id
@@ -607,14 +607,14 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct ReviewDocumentRequest {
+        #[serde(rename = "rejectionReason")]
+        pub rejection_reason: String,
         #[serde(rename = "approved")]
         pub approved: bool,
         #[serde(rename = "documentId")]
         pub document_id: xid.ID,
         #[serde(rename = "notes")]
         pub notes: String,
-        #[serde(rename = "rejectionReason")]
-        pub rejection_reason: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -673,12 +673,12 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RejectRecoveryRequest {
+        #[serde(rename = "notes")]
+        pub notes: String,
         #[serde(rename = "reason")]
         pub reason: String,
         #[serde(rename = "sessionId")]
         pub session_id: xid.ID,
-        #[serde(rename = "notes")]
-        pub notes: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -720,6 +720,8 @@ impl BackupauthPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdateRecoveryConfigRequest {
+        #[serde(rename = "requireAdminReview")]
+        pub require_admin_review: bool,
         #[serde(rename = "requireMultipleSteps")]
         pub require_multiple_steps: bool,
         #[serde(rename = "riskScoreThreshold")]
@@ -728,8 +730,6 @@ impl BackupauthPlugin {{
         pub enabled_methods: []RecoveryMethod,
         #[serde(rename = "minimumStepsRequired")]
         pub minimum_steps_required: i32,
-        #[serde(rename = "requireAdminReview")]
-        pub require_admin_review: bool,
     }
 
     #[derive(Debug, Deserialize)]

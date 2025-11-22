@@ -36,41 +36,25 @@ routes:
       method: POST
       path: /verify
 types:
-    - name: mockUserService
-      fields:
-        "": ""
-    - name: ImpersonationContext
-      fields:
-        impersonation_id: '*xid.ID!'
-        impersonator_id: '*xid.ID!'
-        indicator_message: string!
-        is_impersonating: bool!
-        target_user_id: '*xid.ID!'
-    - name: ImpersonationMiddleware
-      fields:
-        "": Config
-    - name: ImpersonationSession
-      fields: {}
-    - name: StartImpersonation_reqBody
-      fields:
-        duration_minutes: int
-        reason: string!
-        target_user_id: string!
-        ticket_number: string
     - name: ImpersonationStartResponse
       fields:
         impersonator_id: string!
         session_id: string!
         started_at: string!
         target_user_id: string!
-    - name: ImpersonationVerifyResponse
+    - name: ImpersonationEndResponse
       fields:
-        impersonator_id: string!
-        is_impersonating: bool!
-        target_user_id: string!
+        ended_at: string!
+        status: string!
     - name: mockImpersonationRepository
       fields:
         "": ""
+    - name: mockUserService
+      fields:
+        "": ""
+    - name: Plugin
+      fields:
+        "": '*ImpersonationMiddleware'
     - name: Config
       fields:
         audit_all_actions: bool!
@@ -89,23 +73,39 @@ types:
         webhook_on_end: bool!
         webhook_on_start: bool!
         webhook_urls: '[]string!'
+    - name: ImpersonationMiddleware
+      fields:
+        "": Config
     - name: ImpersonationErrorResponse
       fields:
         error: string!
-    - name: ImpersonationEndResponse
+    - name: ImpersonationSession
+      fields: {}
+    - name: ImpersonationVerifyResponse
       fields:
-        ended_at: string!
-        status: string!
-    - name: mockSessionService
-      fields:
-        "": ""
+        impersonator_id: string!
+        is_impersonating: bool!
+        target_user_id: string!
     - name: Handler
       fields:
-        "": '*impersonation.Service'
+        "": Config
+    - name: StartImpersonation_reqBody
+      fields:
+        duration_minutes: int
+        reason: string!
+        target_user_id: string!
+        ticket_number: string
     - name: EndImpersonation_reqBody
       fields:
         impersonation_id: string!
         reason: string
-    - name: Plugin
+    - name: ImpersonationContext
+      fields:
+        impersonation_id: '*xid.ID!'
+        impersonator_id: '*xid.ID!'
+        indicator_message: string!
+        is_impersonating: bool!
+        target_user_id: '*xid.ID!'
+    - name: mockSessionService
       fields:
         "": ""

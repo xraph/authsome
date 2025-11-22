@@ -17,10 +17,20 @@ impl AnonymousPlugin {{
         Self { client: None }
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct SignInResponse {
+        #[serde(rename = "session")]
+        pub session: ,
+        #[serde(rename = "token")]
+        pub token: String,
+        #[serde(rename = "user")]
+        pub user: ,
+    }
+
     /// SignIn creates a guest user and session
     pub async fn sign_in(
         &self,
-    ) -> Result<()> {
+    ) -> Result<SignInResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -35,11 +45,19 @@ impl AnonymousPlugin {{
         pub password: String,
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct LinkResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+        #[serde(rename = "user")]
+        pub user: ,
+    }
+
     /// Link upgrades an anonymous session to a real account
     pub async fn link(
         &self,
         _request: LinkRequest,
-    ) -> Result<()> {
+    ) -> Result<LinkResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

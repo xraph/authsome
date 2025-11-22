@@ -12,14 +12,14 @@ export class AnonymousPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async signIn(): Promise<types.ErrorResponse> {
+  async signIn(): Promise<types.SignInResponse> {
     const path = '/anonymous/signin';
-    return this.client.request<types.ErrorResponse>('POST', path);
+    return this.client.request<types.SignInResponse>('POST', path);
   }
 
-  async link(request: types.Link_body): Promise<types.ErrorResponse> {
+  async link(request: types.LinkRequest): Promise<types.LinkResponse> {
     const path = '/anonymous/link';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<types.LinkResponse>('POST', path, {
       body: request,
     });
   }

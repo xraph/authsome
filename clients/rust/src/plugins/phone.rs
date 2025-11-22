@@ -47,11 +47,11 @@ impl PhonePlugin {{
     #[derive(Debug, Deserialize)]
     pub struct VerifyResponse {
         #[serde(rename = "session")]
-        pub session: ,
+        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
         #[serde(rename = "user")]
-        pub user: ,
+        pub user: *user.User,
     }
 
     /// Verify checks the code and creates a session on success
@@ -77,12 +77,12 @@ impl PhonePlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct SignInResponse {
-        #[serde(rename = "user")]
-        pub user: ,
         #[serde(rename = "session")]
-        pub session: ,
+        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
+        #[serde(rename = "user")]
+        pub user: *user.User,
     }
 
     /// SignIn aliases to Verify for convenience

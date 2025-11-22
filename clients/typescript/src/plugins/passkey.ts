@@ -12,37 +12,34 @@ export class PasskeyPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async beginRegister(request: types.BeginRegister_body): Promise<void> {
+  async beginRegister(): Promise<void> {
     const path = '/register/begin';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+    return this.client.request<void>('POST', path);
   }
 
-  async finishRegister(request: types.FinishRegister_body): Promise<types.StatusResponse> {
+  async finishRegister(): Promise<void> {
     const path = '/register/finish';
-    return this.client.request<types.StatusResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<void>('POST', path);
   }
 
-  async beginLogin(request: types.BeginLogin_body): Promise<void> {
+  async beginLogin(): Promise<void> {
     const path = '/login/begin';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+    return this.client.request<void>('POST', path);
   }
 
-  async finishLogin(request: types.FinishLogin_body): Promise<types.AuthResponse> {
+  async finishLogin(): Promise<void> {
     const path = '/login/finish';
-    return this.client.request<types.AuthResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<void>('POST', path);
   }
 
   async list(): Promise<void> {
     const path = '/list';
     return this.client.request<void>('GET', path);
+  }
+
+  async update(): Promise<void> {
+    const path = '/:id';
+    return this.client.request<void>('PUT', path);
   }
 
   async delete(): Promise<types.StatusResponse> {

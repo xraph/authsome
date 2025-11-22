@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,14 +10,16 @@ import (
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/core/session"
 )
 
 // AppService handles app aggregate operations
 type AppService struct {
-	repo         AppRepository
-	config       Config
-	rbacSvc      *rbac.Service
-	hookRegistry *hooks.HookRegistry
+	repo               AppRepository
+	config             Config
+	rbacSvc            *rbac.Service
+	hookRegistry       *hooks.HookRegistry
+	globalCookieConfig *session.CookieConfig // Global cookie configuration
 }
 
 // NewAppService creates a new app service
@@ -26,6 +29,12 @@ func NewAppService(repo AppRepository, cfg Config, rbacSvc *rbac.Service) *AppSe
 		config:  cfg,
 		rbacSvc: rbacSvc,
 	}
+}
+
+// SetGlobalCookieConfig sets the global cookie configuration
+// This is called during Auth initialization to provide the global default
+func (s *AppService) SetGlobalCookieConfig(config *session.CookieConfig) {
+	s.globalCookieConfig = config
 }
 
 // SetHookRegistry sets the hook registry for executing hooks
@@ -208,6 +217,72 @@ func (s *AppService) ListApps(ctx context.Context, filter *ListAppsFilter) (*pag
 // CountApps returns total number of apps
 func (s *AppService) CountApps(ctx context.Context) (int, error) {
 	return s.repo.CountApps(ctx)
+}
+
+// GetCookieConfig retrieves the cookie configuration for a specific app
+// It merges app-specific overrides from metadata with the global configuration
+func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*session.CookieConfig, error) {
+	// Start with global config as base
+	var baseConfig session.CookieConfig
+	if s.globalCookieConfig != nil {
+		baseConfig = *s.globalCookieConfig
+	} else {
+		// Use defaults if no global config is set
+		baseConfig = session.DefaultCookieConfig()
+	}
+
+	// If no app ID provided, return global config
+	if appID.IsNil() {
+		return &baseConfig, nil
+	}
+
+	// Fetch app from database
+	app, err := s.repo.FindAppByID(ctx, appID)
+	if err != nil {
+		// If app not found, return global config
+		return &baseConfig, nil
+	}
+
+	// Check if app has cookie config override in metadata
+	if app.Metadata == nil {
+		return &baseConfig, nil
+	}
+
+	cookieConfigData, exists := app.Metadata["sessionCookie"]
+	if !exists {
+		return &baseConfig, nil
+	}
+
+	// Parse the cookie config from metadata
+	var appCookieConfig session.CookieConfig
+	
+	// Handle different possible types in metadata
+	switch v := cookieConfigData.(type) {
+	case map[string]interface{}:
+		// Convert to JSON and unmarshal
+		jsonData, err := json.Marshal(v)
+		if err != nil {
+			// Invalid format, return base config
+			return &baseConfig, nil
+		}
+		if err := json.Unmarshal(jsonData, &appCookieConfig); err != nil {
+			// Invalid format, return base config
+			return &baseConfig, nil
+		}
+	case string:
+		// Try to parse as JSON string
+		if err := json.Unmarshal([]byte(v), &appCookieConfig); err != nil {
+			// Invalid format, return base config
+			return &baseConfig, nil
+		}
+	default:
+		// Unknown type, return base config
+		return &baseConfig, nil
+	}
+
+	// Merge app config with base config
+	mergedConfig := baseConfig.Merge(&appCookieConfig)
+	return mergedConfig, nil
 }
 
 // Type assertion to ensure AppService implements AppOperations

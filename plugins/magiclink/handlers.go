@@ -6,19 +6,24 @@ import (
 	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/contexts"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/helpers"
 	"github.com/xraph/forge"
 )
 
 type Handler struct {
-	svc *Service
-	rl  *rl.Service
+	svc      *Service
+	rl       *rl.Service
+	authInst core.Authsome
 }
 
-func NewHandler(s *Service, rls *rl.Service) *Handler { return &Handler{svc: s, rl: rls} }
+func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome) *Handler {
+	return &Handler{svc: s, rl: rls, authInst: authInst}
+}
 
 // Request types
 type SendRequest struct {
@@ -124,6 +129,11 @@ func (h *Handler) Verify(c forge.Context) error {
 	res, err := h.svc.Verify(c.Request().Context(), appID, envID, orgIDPtr, token, remember, ip, ua)
 	if err != nil {
 		return handleError(c, err, "VERIFY_MAGIC_LINK_FAILED", "Failed to verify magic link", http.StatusBadRequest)
+	}
+
+	// Set session cookie if enabled
+	if h.authInst != nil && res.Session != nil {
+		_ = helpers.SetSessionCookieFromAuth(c, h.authInst, res.Token, res.Session.ExpiresAt)
 	}
 
 	return c.JSON(http.StatusOK, VerifyResponse{

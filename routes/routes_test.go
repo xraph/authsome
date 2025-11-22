@@ -326,7 +326,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// device service is optional for tests; pass nil to keep scope minimal
 	var dSvc *dev.Service
 	// security and audit services optional for tests; pass nil
-	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, nil, nil)
+	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, nil, nil, "authsome_session")
 
 	// Create a test AppID
 	testAppID := xid.New()
@@ -346,7 +346,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 		app.Router().ServeHTTP(w, r)
 	})
 
-	Register(app.Router(), "/api/auth", h)
+	Register(app.Router(), "/api/auth", h, nil)
 
 	srv := httptest.NewServer(wrappedHandler)
 

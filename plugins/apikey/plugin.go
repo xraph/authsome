@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
@@ -17,14 +18,15 @@ import (
 
 // Plugin implements API key authentication for external clients
 type Plugin struct {
-	service       *apikey.Service
-	userSvc       *user.Service
-	handler       *Handler
-	middleware    *Middleware
-	config        Config
-	defaultConfig Config
-	cleanupTicker *time.Ticker
-	cleanupDone   chan bool
+	service            *apikey.Service
+	userSvc            *user.Service
+	handler            *Handler
+	middleware         *Middleware
+	config             Config
+	defaultConfig      Config
+	cleanupTicker      *time.Ticker
+	cleanupDone        chan bool
+	dashboardExtension *DashboardExtension
 }
 
 // PluginOption is a functional option for configuring the API key plugin
@@ -169,6 +171,9 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.startCleanupScheduler()
 	}
 
+	// Initialize dashboard extension
+	p.dashboardExtension = NewDashboardExtension(p)
+
 	return nil
 }
 
@@ -303,4 +308,13 @@ func (p *Plugin) StopCleanupScheduler() {
 		close(p.cleanupDone)
 		log.Println("[APIKey Plugin] Cleanup scheduler stopped")
 	}
+}
+
+// DashboardExtension returns the dashboard extension for this plugin
+// This implements the PluginWithDashboardExtension interface
+func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	if p.dashboardExtension == nil {
+		p.dashboardExtension = NewDashboardExtension(p)
+	}
+	return p.dashboardExtension
 }

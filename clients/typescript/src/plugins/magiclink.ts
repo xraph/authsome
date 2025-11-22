@@ -12,7 +12,7 @@ export class MagiclinkPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async send(request: types.Send_body): Promise<void> {
+  async send(request: types.SendRequest): Promise<void> {
     const path = '/magic-link/send';
     return this.client.request<void>('POST', path, {
       body: request,

@@ -88,13 +88,6 @@ routes:
       method: DELETE
       path: /:teamId/members/:memberId
 types:
-    - name: TeamHandler
-      fields:
-        "": '*app.ServiceImpl'
-    - name: AddTeamMember_req
-      fields:
-        member_id: xid.ID!
-        role: string!
     - name: AppHandler
       fields:
         "": '*coreapp.ServiceImpl'
@@ -105,3 +98,10 @@ types:
       fields:
         role: string!
         user_id: string!
+    - name: TeamHandler
+      fields:
+        "": '*app.ServiceImpl'
+    - name: AddTeamMember_req
+      fields:
+        member_id: xid.ID!
+        role: string!

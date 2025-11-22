@@ -12,16 +12,16 @@ export class CompliancePlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createProfile(request: types.CreateProfileRequest): Promise<types.ErrorResponse> {
+  async createProfile(request: types.CreateProfileRequest): Promise<void> {
     const path = '/profiles';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async createProfileFromTemplate(request: types.CreateProfileFromTemplate_req): Promise<types.ErrorResponse> {
+  async createProfileFromTemplate(request: types.CreateProfileFromTemplate_req): Promise<void> {
     const path = '/profiles/from-template';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -36,9 +36,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async updateProfile(request: types.UpdateProfileRequest): Promise<types.ErrorResponse> {
+  async updateProfile(request: types.UpdateProfileRequest): Promise<void> {
     const path = '/profiles/:id';
-    return this.client.request<types.ErrorResponse>('PUT', path, {
+    return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
@@ -58,9 +58,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async runCheck(request: types.RunCheck_req): Promise<types.ErrorResponse> {
+  async runCheck(request: types.RunCheck_req): Promise<void> {
     const path = '/profiles/:profileId/checks';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -90,9 +90,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('PUT', path);
   }
 
-  async generateReport(request: types.GenerateReport_req): Promise<types.ErrorResponse> {
+  async generateReport(request: types.GenerateReport_req): Promise<void> {
     const path = '/apps/:appId/reports';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -107,14 +107,14 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async downloadReport(): Promise<types.ErrorResponse> {
+  async downloadReport(): Promise<void> {
     const path = '/reports/:id/download';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
-  async createEvidence(request: types.CreateEvidence_req): Promise<types.ErrorResponse> {
+  async createEvidence(request: types.CreateEvidence_req): Promise<void> {
     const path = '/apps/:appId/evidence';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -134,9 +134,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('DELETE', path);
   }
 
-  async createPolicy(request: types.CreatePolicy_req): Promise<types.ErrorResponse> {
+  async createPolicy(request: types.CreatePolicy_req): Promise<void> {
     const path = '/apps/:appId/policies';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -151,9 +151,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async updatePolicy(request: types.UpdatePolicy_req): Promise<types.ErrorResponse> {
+  async updatePolicy(request: types.UpdatePolicy_req): Promise<void> {
     const path = '/policies/:id';
-    return this.client.request<types.ErrorResponse>('PUT', path, {
+    return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
@@ -163,9 +163,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('DELETE', path);
   }
 
-  async createTraining(request: types.CreateTraining_req): Promise<types.ErrorResponse> {
+  async createTraining(request: types.CreateTraining_req): Promise<void> {
     const path = '/apps/:appId/training';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -180,9 +180,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async completeTraining(request: types.CompleteTraining_req): Promise<types.ErrorResponse> {
+  async completeTraining(request: types.CompleteTraining_req): Promise<void> {
     const path = '/training/:id/complete';
-    return this.client.request<types.ErrorResponse>('PUT', path, {
+    return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
@@ -192,9 +192,9 @@ export class CompliancePlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async getTemplate(): Promise<types.ErrorResponse> {
+  async getTemplate(): Promise<void> {
     const path = '/templates/:standard';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
 }

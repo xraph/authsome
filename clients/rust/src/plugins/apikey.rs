@@ -19,12 +19,6 @@ impl ApikeyPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateAPIKeyRequest {
-        #[serde(rename = "description", skip_serializing_if = "Option::is_none")]
-        pub description: Option<String>,
-        #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
-        pub metadata: Option<>,
-        #[serde(rename = "name")]
-        pub name: String,
         #[serde(rename = "permissions", skip_serializing_if = "Option::is_none")]
         pub permissions: Option<>,
         #[serde(rename = "rate_limit", skip_serializing_if = "Option::is_none")]
@@ -33,14 +27,20 @@ impl ApikeyPlugin {{
         pub scopes: []string,
         #[serde(rename = "allowed_ips", skip_serializing_if = "Option::is_none")]
         pub allowed_ips: Option<[]string>,
+        #[serde(rename = "description", skip_serializing_if = "Option::is_none")]
+        pub description: Option<String>,
+        #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
+        pub metadata: Option<>,
+        #[serde(rename = "name")]
+        pub name: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct CreateAPIKeyResponse {
-        #[serde(rename = "message")]
-        pub message: String,
         #[serde(rename = "api_key")]
         pub api_key: *apikey.APIKey,
+        #[serde(rename = "message")]
+        pub message: String,
     }
 
     /// CreateAPIKey handles POST /api-keys
@@ -76,16 +76,10 @@ impl ApikeyPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct DeleteAPIKeyResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// DeleteAPIKey handles DELETE /api-keys/:id
     pub async fn delete_a_p_i_key(
         &self,
-    ) -> Result<DeleteAPIKeyResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

@@ -3,6 +3,7 @@ package authsome
 import (
 	rl "github.com/xraph/authsome/core/ratelimit"
 	sec "github.com/xraph/authsome/core/security"
+	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/forge"
 	forgedb "github.com/xraph/forge/extensions/database"
 )
@@ -58,7 +59,17 @@ func WithBasePath(path string) Option {
 	}
 }
 
+// WithCORSEnabled enables or disables CORS middleware
+// When enabled, uses TrustedOrigins for allowed origins
+// Default: false (disabled - let Forge or your app handle CORS)
+func WithCORSEnabled(enabled bool) Option {
+	return func(a *Auth) {
+		a.config.CORSEnabled = enabled
+	}
+}
+
 // WithTrustedOrigins sets trusted origins for CORS
+// Setting origins does NOT automatically enable CORS - use WithCORSEnabled(true)
 func WithTrustedOrigins(origins []string) Option {
 	return func(a *Auth) {
 		a.config.TrustedOrigins = origins
@@ -116,5 +127,38 @@ func WithRBACEnforcement(enabled bool) Option {
 func WithDatabaseSchema(schema string) Option {
 	return func(a *Auth) {
 		a.config.DatabaseSchema = schema
+	}
+}
+
+// WithGlobalCookieConfig sets the global cookie configuration for session management
+// This configuration applies to all apps unless overridden at the app level
+// Example:
+//   WithGlobalCookieConfig(session.CookieConfig{
+//       Enabled:  true,
+//       Name:     "my_session",
+//       HttpOnly: true,
+//       SameSite: "Lax",
+//   })
+func WithGlobalCookieConfig(config session.CookieConfig) Option {
+	return func(a *Auth) {
+		a.config.SessionCookie = config
+	}
+}
+
+// WithSessionCookieEnabled enables or disables cookie-based session management globally
+// When enabled, authentication responses will automatically set secure HTTP cookies
+func WithSessionCookieEnabled(enabled bool) Option {
+	return func(a *Auth) {
+		a.config.SessionCookie.Enabled = enabled
+	}
+}
+
+// WithSessionCookieName sets the session cookie name
+// Default: "authsome_session"
+func WithSessionCookieName(name string) Option {
+	return func(a *Auth) {
+		a.config.SessionCookie.Name = name
+		// Also set the deprecated field for backward compatibility
+		a.config.SessionCookieName = name
 	}
 }

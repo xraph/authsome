@@ -31,13 +31,13 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // EvaluateRequest is the request for Evaluate
 type EvaluateRequest struct {
-	Metadata authsome. `json:"metadata"`
 	Method string `json:"method"`
 	Resource_type string `json:"resource_type"`
 	Route string `json:"route"`
 	Action string `json:"action"`
 	Amount float64 `json:"amount"`
 	Currency string `json:"currency"`
+	Metadata authsome. `json:"metadata"`
 }
 
 // Evaluate Evaluate handles POST /stepup/evaluate
@@ -51,15 +51,15 @@ func (p *Plugin) Evaluate(ctx context.Context, req *EvaluateRequest) error {
 
 // VerifyRequest is the request for Verify
 type VerifyRequest struct {
-	Device_name string `json:"device_name"`
-	Ip string `json:"ip"`
-	Requirement_id string `json:"requirement_id"`
-	User_agent string `json:"user_agent"`
+	Challenge_token string `json:"challenge_token"`
+	Remember_device bool `json:"remember_device"`
 	Credential string `json:"credential"`
 	Device_id string `json:"device_id"`
+	Device_name string `json:"device_name"`
+	Ip string `json:"ip"`
 	Method authsome.VerificationMethod `json:"method"`
-	Remember_device bool `json:"remember_device"`
-	Challenge_token string `json:"challenge_token"`
+	Requirement_id string `json:"requirement_id"`
+	User_agent string `json:"user_agent"`
 }
 
 // Verify Verify handles POST /stepup/verify
@@ -80,13 +80,20 @@ func (p *Plugin) GetRequirement(ctx context.Context) error {
 	return nil
 }
 
+// ListPendingRequirementsResponse is the response for ListPendingRequirements
+type ListPendingRequirementsResponse struct {
+	Requirements authsome. `json:"requirements"`
+	Count int `json:"count"`
+}
+
 // ListPendingRequirements ListPendingRequirements handles GET /stepup/requirements/pending
-func (p *Plugin) ListPendingRequirements(ctx context.Context) error {
+func (p *Plugin) ListPendingRequirements(ctx context.Context) (*ListPendingRequirementsResponse, error) {
 	path := "/requirements/pending"
+	var result ListPendingRequirementsResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return nil
+	return &result, nil
 }
 
 // ListVerifications ListVerifications handles GET /stepup/verifications
@@ -98,52 +105,66 @@ func (p *Plugin) ListVerifications(ctx context.Context) error {
 	return nil
 }
 
+// ListRememberedDevicesResponse is the response for ListRememberedDevices
+type ListRememberedDevicesResponse struct {
+	Count int `json:"count"`
+	Devices authsome. `json:"devices"`
+}
+
 // ListRememberedDevices ListRememberedDevices handles GET /stepup/devices
-func (p *Plugin) ListRememberedDevices(ctx context.Context) error {
+func (p *Plugin) ListRememberedDevices(ctx context.Context) (*ListRememberedDevicesResponse, error) {
 	path := "/devices"
+	var result ListRememberedDevicesResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return nil
+	return &result, nil
+}
+
+// ForgetDeviceResponse is the response for ForgetDevice
+type ForgetDeviceResponse struct {
+	Message string `json:"message"`
+	Success bool `json:"success"`
 }
 
 // ForgetDevice ForgetDevice handles DELETE /stepup/devices/:id
-func (p *Plugin) ForgetDevice(ctx context.Context) error {
+func (p *Plugin) ForgetDevice(ctx context.Context) (*ForgetDeviceResponse, error) {
 	path := "/devices/:id"
+	var result ForgetDeviceResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return nil
+	return &result, nil
 }
 
 // CreatePolicyRequest is the request for CreatePolicy
 type CreatePolicyRequest struct {
-	Priority int `json:"priority"`
-	Rules authsome. `json:"rules"`
 	Description string `json:"description"`
 	Metadata authsome. `json:"metadata"`
-	Updated_at authsome.time.Time `json:"updated_at"`
+	Priority int `json:"priority"`
 	User_id string `json:"user_id"`
-	Created_at authsome.time.Time `json:"created_at"`
 	Enabled bool `json:"enabled"`
 	Id string `json:"id"`
 	Name string `json:"name"`
 	Org_id string `json:"org_id"`
+	Rules authsome. `json:"rules"`
+	Updated_at authsome.time.Time `json:"updated_at"`
+	Created_at authsome.time.Time `json:"created_at"`
 }
 
 // CreatePolicyResponse is the response for CreatePolicy
 type CreatePolicyResponse struct {
+	Created_at authsome.time.Time `json:"created_at"`
 	Description string `json:"description"`
 	Id string `json:"id"`
 	Org_id string `json:"org_id"`
 	Rules authsome. `json:"rules"`
-	User_id string `json:"user_id"`
-	Created_at authsome.time.Time `json:"created_at"`
 	Enabled bool `json:"enabled"`
 	Metadata authsome. `json:"metadata"`
 	Name string `json:"name"`
 	Priority int `json:"priority"`
 	Updated_at authsome.time.Time `json:"updated_at"`
+	User_id string `json:"user_id"`
 }
 
 // CreatePolicy CreatePolicy handles POST /stepup/policies
@@ -176,32 +197,32 @@ func (p *Plugin) GetPolicy(ctx context.Context) error {
 
 // UpdatePolicyRequest is the request for UpdatePolicy
 type UpdatePolicyRequest struct {
-	Description string `json:"description"`
 	Enabled bool `json:"enabled"`
+	Id string `json:"id"`
 	Metadata authsome. `json:"metadata"`
 	Name string `json:"name"`
+	Org_id string `json:"org_id"`
 	Priority int `json:"priority"`
 	Rules authsome. `json:"rules"`
-	User_id string `json:"user_id"`
-	Id string `json:"id"`
-	Org_id string `json:"org_id"`
 	Updated_at authsome.time.Time `json:"updated_at"`
+	User_id string `json:"user_id"`
 	Created_at authsome.time.Time `json:"created_at"`
+	Description string `json:"description"`
 }
 
 // UpdatePolicyResponse is the response for UpdatePolicy
 type UpdatePolicyResponse struct {
-	Rules authsome. `json:"rules"`
-	Description string `json:"description"`
-	Id string `json:"id"`
-	Priority int `json:"priority"`
-	Updated_at authsome.time.Time `json:"updated_at"`
-	User_id string `json:"user_id"`
-	Created_at authsome.time.Time `json:"created_at"`
-	Enabled bool `json:"enabled"`
-	Metadata authsome. `json:"metadata"`
 	Name string `json:"name"`
 	Org_id string `json:"org_id"`
+	User_id string `json:"user_id"`
+	Created_at authsome.time.Time `json:"created_at"`
+	Priority int `json:"priority"`
+	Rules authsome. `json:"rules"`
+	Updated_at authsome.time.Time `json:"updated_at"`
+	Description string `json:"description"`
+	Enabled bool `json:"enabled"`
+	Id string `json:"id"`
+	Metadata authsome. `json:"metadata"`
 }
 
 // UpdatePolicy UpdatePolicy handles PUT /stepup/policies/:id

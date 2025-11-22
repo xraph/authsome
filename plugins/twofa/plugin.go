@@ -19,6 +19,7 @@ type Plugin struct {
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // Config holds the 2FA plugin configuration
@@ -146,6 +147,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return fmt.Errorf("twofa plugin requires auth instance")
 	}
 
+	// Store auth instance for middleware access
+	p.authInst = authInst
+
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
@@ -191,7 +195,19 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the correct basePath by the auth mount
 	h := NewHandler(p.service)
-	router.POST("/2fa/enable", h.Enable,
+
+	// Get authentication middleware for API key validation
+	authMw := p.authInst.AuthMiddleware()
+
+	// Wrap handler with middleware if available
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMw != nil {
+			return authMw(handler)
+		}
+		return handler
+	}
+
+	router.POST("/2fa/enable", wrapHandler(h.Enable),
 		forge.WithName("twofa.enable"),
 		forge.WithSummary("Enable 2FA"),
 		forge.WithDescription("Enables two-factor authentication for a user. Returns TOTP URI for QR code generation"),
@@ -200,7 +216,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("2FA", "TOTP"),
 		forge.WithValidation(true),
 	)
-	router.POST("/2fa/verify", h.Verify,
+	router.POST("/2fa/verify", wrapHandler(h.Verify),
 		forge.WithName("twofa.verify"),
 		forge.WithSummary("Verify 2FA code"),
 		forge.WithDescription("Verifies a 2FA code (TOTP or backup code) for authentication. Optionally marks device as trusted"),
@@ -210,7 +226,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("2FA", "Verification"),
 		forge.WithValidation(true),
 	)
-	router.POST("/2fa/disable", h.Disable,
+	router.POST("/2fa/disable", wrapHandler(h.Disable),
 		forge.WithName("twofa.disable"),
 		forge.WithSummary("Disable 2FA"),
 		forge.WithDescription("Disables two-factor authentication for a user"),
@@ -219,7 +235,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("2FA", "Management"),
 		forge.WithValidation(true),
 	)
-	router.POST("/2fa/generate-backup-codes", h.GenerateBackupCodes,
+	router.POST("/2fa/generate-backup-codes", wrapHandler(h.GenerateBackupCodes),
 		forge.WithName("twofa.backupcodes.generate"),
 		forge.WithSummary("Generate backup codes"),
 		forge.WithDescription("Generates new backup codes for 2FA recovery. Previous codes are invalidated"),
@@ -228,7 +244,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("2FA", "BackupCodes"),
 		forge.WithValidation(true),
 	)
-	router.POST("/2fa/send-otp", h.SendOTP,
+	router.POST("/2fa/send-otp", wrapHandler(h.SendOTP),
 		forge.WithName("twofa.sendotp"),
 		forge.WithSummary("Send OTP code"),
 		forge.WithDescription("Sends a one-time password via email or SMS for 2FA. Returns code in dev mode"),
@@ -237,7 +253,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("2FA", "OTP"),
 		forge.WithValidation(true),
 	)
-	router.POST("/2fa/status", h.Status,
+	router.POST("/2fa/status", wrapHandler(h.Status),
 		forge.WithName("twofa.status"),
 		forge.WithSummary("Get 2FA status"),
 		forge.WithDescription("Retrieves 2FA status for a user including enabled state, method, and trusted device status"),

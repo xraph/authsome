@@ -12,6 +12,9 @@ routes:
       path: /magic-link/verify
       response_type: VerifyResponse
 types:
+    - name: Handler
+      fields:
+        "": '*rl.Service'
     - name: SendRequest
       fields:
         email: string!
@@ -21,7 +24,7 @@ types:
         status: string!
     - name: Plugin
       fields:
-        "": forge.Logger
+        "": Config
     - name: Config
       fields:
         allowImplicitSignup: bool!
@@ -31,7 +34,4 @@ types:
         rateLimitPerHour: int!
     - name: Service
       fields:
-        "": '*session.Service'
-    - name: Handler
-      fields:
-        "": '*rl.Service'
+        "": '*notificationPlugin.Adapter'

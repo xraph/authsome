@@ -10,11 +10,20 @@ import (
 )
 
 // Register registers auth routes using forge.Router
-func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
+// authMiddleware is applied to all routes to extract and validate API keys for app identification
+func Register(router forge.Router, basePath string, h *handlers.AuthHandler, authMiddleware func(func(forge.Context) error) func(forge.Context) error) {
 	authGroup := router.Group(basePath)
 
+	// Wrap handler with middleware if provided
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMiddleware != nil {
+			return authMiddleware(handler)
+		}
+		return handler
+	}
+
 	// User registration
-	authGroup.POST("/signup", h.SignUp,
+	authGroup.POST("/signup", wrapHandler(h.SignUp),
 		forge.WithName("auth.signup"),
 		forge.WithSummary("User registration"),
 		forge.WithDescription("Register a new user account with email and password"),
@@ -28,7 +37,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 	)
 
 	// User authentication
-	authGroup.POST("/signin", h.SignIn,
+	authGroup.POST("/signin", wrapHandler(h.SignIn),
 		forge.WithName("auth.signin"),
 		forge.WithSummary("User sign in"),
 		forge.WithDescription("Authenticate a user with email and password. May require 2FA verification if enabled."),
@@ -43,7 +52,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 	)
 
 	// User sign out
-	authGroup.POST("/signout", h.SignOut,
+	authGroup.POST("/signout", wrapHandler(h.SignOut),
 		forge.WithName("auth.signout"),
 		forge.WithSummary("User sign out"),
 		forge.WithDescription("Sign out a user by invalidating their session token"),
@@ -56,7 +65,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 	)
 
 	// Get current session
-	authGroup.GET("/session", h.GetSession,
+	authGroup.GET("/session", wrapHandler(h.GetSession),
 		forge.WithName("auth.session"),
 		forge.WithSummary("Get current session"),
 		forge.WithDescription("Retrieve the current user session and profile information"),
@@ -67,7 +76,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 	)
 
 	// List user devices
-	authGroup.GET("/devices", h.ListDevices,
+	authGroup.GET("/devices", wrapHandler(h.ListDevices),
 		forge.WithName("auth.devices.list"),
 		forge.WithSummary("List user devices"),
 		forge.WithDescription("List all devices associated with the authenticated user"),
@@ -78,7 +87,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 	)
 
 	// Revoke device
-	authGroup.POST("/devices/revoke", h.RevokeDevice,
+	authGroup.POST("/devices/revoke", wrapHandler(h.RevokeDevice),
 		forge.WithName("auth.devices.revoke"),
 		forge.WithSummary("Revoke a device"),
 		forge.WithDescription("Remove a device from the authenticated user's trusted devices"),
@@ -92,7 +101,7 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler) {
 	)
 
 	// Update user profile
-	authGroup.POST("/user/update", h.UpdateUser,
+	authGroup.POST("/user/update", wrapHandler(h.UpdateUser),
 		forge.WithName("auth.user.update"),
 		forge.WithSummary("Update user profile"),
 		forge.WithDescription("Update the authenticated user's profile information (name, image, username)"),
@@ -146,10 +155,18 @@ type UpdateUserRequest struct {
 }
 
 // RegisterAudit registers audit routes under a base path
-func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandler) {
+func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandler, authMiddleware func(func(forge.Context) error) func(forge.Context) error) {
 	grp := router.Group(basePath)
 
-	grp.GET("/audit/events", h.ListEvents,
+	// Wrap handler with middleware if provided
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMiddleware != nil {
+			return authMiddleware(handler)
+		}
+		return handler
+	}
+
+	grp.GET("/audit/events", wrapHandler(h.ListEvents),
 		forge.WithName("audit.events.list"),
 		forge.WithSummary("List audit events"),
 		forge.WithDescription("Retrieve paginated audit events with optional filters (userId, action, since, until)"),
@@ -171,11 +188,19 @@ type AuditEventsResponse struct {
 
 // RegisterApp registers app (platform tenant) routes under a base path
 // This is used when multitenancy plugin is NOT enabled
-func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
+func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, authMiddleware func(func(forge.Context) error) func(forge.Context) error) {
 	org := router.Group(basePath)
 
+	// Wrap handler with middleware if provided
+	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
+		if authMiddleware != nil {
+			return authMiddleware(handler)
+		}
+		return handler
+	}
+
 	// Organizations
-	org.POST("/", h.CreateOrganization,
+	org.POST("/", wrapHandler(h.CreateOrganization),
 		forge.WithName("apps.create"),
 		forge.WithSummary("Create app"),
 		forge.WithDescription("Create a new organization"),
@@ -185,7 +210,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.GET("/", h.GetOrganizations,
+	org.GET("/", wrapHandler(h.GetOrganizations),
 		forge.WithName("apps.list"),
 		forge.WithSummary("List apps"),
 		forge.WithDescription("List all organizations accessible to the user"),
@@ -194,7 +219,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithTags("Apps"),
 	)
 
-	org.POST("/update", h.UpdateOrganization,
+	org.POST("/update", wrapHandler(h.UpdateOrganization),
 		forge.WithName("apps.update"),
 		forge.WithSummary("Update app"),
 		forge.WithDescription("Update app details"),
@@ -204,7 +229,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.POST("/delete", h.DeleteOrganization,
+	org.POST("/delete", wrapHandler(h.DeleteOrganization),
 		forge.WithName("apps.delete"),
 		forge.WithSummary("Delete app"),
 		forge.WithDescription("Delete an organization"),
@@ -214,7 +239,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 	)
 
 	// Members
-	org.POST("/members", h.CreateMember,
+	org.POST("/members", wrapHandler(h.CreateMember),
 		forge.WithName("apps.members.create"),
 		forge.WithSummary("Add app member"),
 		forge.WithDescription("Add a new member to the organization"),
@@ -224,7 +249,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.GET("/members", h.GetMembers,
+	org.GET("/members", wrapHandler(h.GetMembers),
 		forge.WithName("apps.members.list"),
 		forge.WithSummary("List app members"),
 		forge.WithDescription("List all members of the organization"),
@@ -233,7 +258,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithTags("Apps", "Members"),
 	)
 
-	org.POST("/members/update", h.UpdateMember,
+	org.POST("/members/update", wrapHandler(h.UpdateMember),
 		forge.WithName("apps.members.update"),
 		forge.WithSummary("Update member"),
 		forge.WithDescription("Update app member details"),
@@ -243,7 +268,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.POST("/members/delete", h.DeleteMember,
+	org.POST("/members/delete", wrapHandler(h.DeleteMember),
 		forge.WithName("apps.members.delete"),
 		forge.WithSummary("Remove member"),
 		forge.WithDescription("Remove a member from the organization"),
@@ -253,7 +278,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 	)
 
 	// Teams
-	org.POST("/teams", h.CreateTeam,
+	org.POST("/teams", wrapHandler(h.CreateTeam),
 		forge.WithName("apps.teams.create"),
 		forge.WithSummary("Create team"),
 		forge.WithDescription("Create a new team within the organization"),
@@ -263,7 +288,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.GET("/teams", h.GetTeams,
+	org.GET("/teams", wrapHandler(h.GetTeams),
 		forge.WithName("apps.teams.list"),
 		forge.WithSummary("List teams"),
 		forge.WithDescription("List all teams in the organization"),
@@ -272,7 +297,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithTags("Apps", "Teams"),
 	)
 
-	org.POST("/teams/update", h.UpdateTeam,
+	org.POST("/teams/update", wrapHandler(h.UpdateTeam),
 		forge.WithName("apps.teams.update"),
 		forge.WithSummary("Update team"),
 		forge.WithDescription("Update team details"),
@@ -282,7 +307,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.POST("/teams/delete", h.DeleteTeam,
+	org.POST("/teams/delete", wrapHandler(h.DeleteTeam),
 		forge.WithName("apps.teams.delete"),
 		forge.WithSummary("Delete team"),
 		forge.WithDescription("Delete a team from the organization"),
@@ -292,7 +317,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 	)
 
 	// Team members
-	org.POST("/team_members", h.AddTeamMember,
+	org.POST("/team_members", wrapHandler(h.AddTeamMember),
 		forge.WithName("apps.teams.members.add"),
 		forge.WithSummary("Add team member"),
 		forge.WithDescription("Add a member to a team"),
@@ -302,7 +327,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.GET("/team_members", h.GetTeamMembers,
+	org.GET("/team_members", wrapHandler(h.GetTeamMembers),
 		forge.WithName("apps.teams.members.list"),
 		forge.WithSummary("List team members"),
 		forge.WithDescription("List all members of a team"),
@@ -311,7 +336,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithTags("Apps", "Teams"),
 	)
 
-	org.POST("/team_members/remove", h.RemoveTeamMember,
+	org.POST("/team_members/remove", wrapHandler(h.RemoveTeamMember),
 		forge.WithName("apps.teams.members.remove"),
 		forge.WithSummary("Remove team member"),
 		forge.WithDescription("Remove a member from a team"),
@@ -321,7 +346,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 	)
 
 	// Invitations
-	org.POST("/invitations", h.CreateInvitation,
+	org.POST("/invitations", wrapHandler(h.CreateInvitation),
 		forge.WithName("apps.invitations.create"),
 		forge.WithSummary("Create invitation"),
 		forge.WithDescription("Invite a user to join the organization"),
@@ -332,7 +357,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 	)
 
 	// Organization by ID endpoints (registered after specific paths to avoid conflicts)
-	org.GET("/{id}", h.GetOrganizationByID,
+	org.GET("/{id}", wrapHandler(h.GetOrganizationByID),
 		forge.WithName("apps.get"),
 		forge.WithSummary("Get app by ID"),
 		forge.WithDescription("Retrieve a specific app by ID"),
@@ -341,7 +366,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithTags("Apps"),
 	)
 
-	org.POST("/{id}/update", h.UpdateOrganizationByID,
+	org.POST("/{id}/update", wrapHandler(h.UpdateOrganizationByID),
 		forge.WithName("apps.update.byid"),
 		forge.WithSummary("Update app by ID"),
 		forge.WithDescription("Update a specific app by ID"),
@@ -352,7 +377,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithValidation(true),
 	)
 
-	org.POST("/{id}/delete", h.DeleteOrganizationByID,
+	org.POST("/{id}/delete", wrapHandler(h.DeleteOrganizationByID),
 		forge.WithName("apps.delete.byid"),
 		forge.WithSummary("Delete app by ID"),
 		forge.WithDescription("Delete a specific app by ID"),
@@ -360,6 +385,39 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler) {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithResponseSchema(404, "App not found", ErrorResponse{}),
 		forge.WithTags("Apps"),
+	)
+
+	// Cookie configuration endpoints
+	org.GET("/{id}/cookie-config", wrapHandler(h.GetAppCookieConfig),
+		forge.WithName("apps.cookie_config.get"),
+		forge.WithSummary("Get app cookie configuration"),
+		forge.WithDescription("Retrieve the cookie configuration for a specific app (merged with global defaults)"),
+		forge.WithResponseSchema(200, "Cookie configuration retrieved", CookieConfigResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "App not found", ErrorResponse{}),
+		forge.WithTags("Apps", "Configuration"),
+	)
+
+	org.PUT("/{id}/cookie-config", wrapHandler(h.UpdateAppCookieConfig),
+		forge.WithName("apps.cookie_config.update"),
+		forge.WithSummary("Update app cookie configuration"),
+		forge.WithDescription("Set or update the cookie configuration for a specific app"),
+		forge.WithRequestSchema(CookieConfigRequest{}),
+		forge.WithResponseSchema(200, "Cookie configuration updated", CookieConfigUpdateResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "App not found", ErrorResponse{}),
+		forge.WithTags("Apps", "Configuration"),
+		forge.WithValidation(true),
+	)
+
+	org.DELETE("/{id}/cookie-config", wrapHandler(h.DeleteAppCookieConfig),
+		forge.WithName("apps.cookie_config.delete"),
+		forge.WithSummary("Delete app cookie configuration"),
+		forge.WithDescription("Remove app-specific cookie configuration, reverting to global defaults"),
+		forge.WithResponseSchema(200, "Cookie configuration deleted", StatusResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(404, "App not found", ErrorResponse{}),
+		forge.WithTags("Apps", "Configuration"),
 	)
 
 	// RBAC routes
@@ -375,9 +433,13 @@ type TeamResponse struct{}
 type TeamsResponse []interface{}
 type TeamMembersResponse []interface{}
 type InvitationResponse struct{}
+type CookieConfigResponse struct{}
+type CookieConfigRequest struct{}
+type CookieConfigUpdateResponse struct{}
 
 // RegisterAppRBAC registers RBAC-related routes (policies, roles, user roles)
 // This is used when multitenancy plugin IS enabled to supplement its routes
+// Note: These routes don't apply middleware as they're nested under RegisterApp which already applies it
 func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	// Policies
 	router.POST("/policies", h.CreatePolicy,

@@ -12,18 +12,14 @@ export class UsernamePlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async signUp(request: types.SignUp_body): Promise<types.StatusResponse> {
+  async signUp(): Promise<types.SignUpResponse> {
     const path = '/username/signup';
-    return this.client.request<types.StatusResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.SignUpResponse>('POST', path);
   }
 
-  async signIn(request: types.SignIn_body): Promise<types.SignInResponse> {
+  async signIn(): Promise<types.SignInResponse> {
     const path = '/username/signin';
-    return this.client.request<types.SignInResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.SignInResponse>('POST', path);
   }
 
 }

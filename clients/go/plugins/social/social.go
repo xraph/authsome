@@ -31,9 +31,9 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // SignInRequest is the request for SignIn
 type SignInRequest struct {
+	Scopes authsome.[]string `json:"scopes"`
 	Provider string `json:"provider"`
 	RedirectUrl string `json:"redirectUrl"`
-	Scopes authsome.[]string `json:"scopes"`
 }
 
 // SignInResponse is the response for SignIn
@@ -56,7 +56,7 @@ func (p *Plugin) SignIn(ctx context.Context, req *SignInRequest) (*SignInRespons
 type CallbackResponse struct {
 	Action string `json:"action"`
 	IsNewUser bool `json:"isNewUser"`
-	User authsome. `json:"user"`
+	User authsome.*schema.User `json:"user"`
 }
 
 // Callback Callback handles OAuth provider callback
@@ -92,25 +92,19 @@ func (p *Plugin) LinkAccount(ctx context.Context, req *LinkAccountRequest) (*Lin
 	return &result, nil
 }
 
-// UnlinkAccountResponse is the response for UnlinkAccount
-type UnlinkAccountResponse struct {
-	Message string `json:"message"`
-}
-
 // UnlinkAccount UnlinkAccount unlinks a social provider from the current user
 DELETE /api/auth/account/unlink/:provider
-func (p *Plugin) UnlinkAccount(ctx context.Context) (*UnlinkAccountResponse, error) {
+func (p *Plugin) UnlinkAccount(ctx context.Context) error {
 	path := "/account/unlink/:provider"
-	var result UnlinkAccountResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListProvidersResponse is the response for ListProviders
 type ListProvidersResponse struct {
-	Providers authsome. `json:"providers"`
+	Providers authsome.[]string `json:"providers"`
 }
 
 // ListProviders ListProviders returns available OAuth providers

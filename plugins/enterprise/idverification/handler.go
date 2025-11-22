@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/base"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
@@ -93,7 +94,7 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, &VerificationSessionResponse{
-		Session: session,
+		Session: base.FromSchemaIdentityVerificationSession(session),
 	})
 }
 
@@ -117,7 +118,7 @@ func (h *Handler) GetVerificationSession(c forge.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &VerificationSessionResponse{
-		Session: session,
+		Session: base.FromSchemaIdentityVerificationSession(session),
 	})
 }
 
@@ -140,7 +141,9 @@ func (h *Handler) GetVerification(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, &VerificationResponse{Verification: verification})
+	return c.JSON(http.StatusOK, &VerificationResponse{
+		Verification: base.FromSchemaIdentityVerification(verification),
+	})
 }
 
 // GetUserVerifications retrieves all verifications for the current user
@@ -179,7 +182,7 @@ func (h *Handler) GetUserVerifications(c forge.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &VerificationListResponse{
-		Verifications: verifications,
+		Verifications: base.FromSchemaIdentityVerifications(verifications),
 		Limit:         limit,
 		Offset:        offset,
 	})
@@ -211,7 +214,7 @@ func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &UserVerificationStatusResponse{
-		Status: status,
+		Status: base.FromSchemaUserVerificationStatus(status),
 	})
 }
 
@@ -401,7 +404,7 @@ func (h *Handler) AdminGetUserVerificationStatus(c forge.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &UserVerificationStatusResponse{
-		Status: status,
+		Status: base.FromSchemaUserVerificationStatus(status),
 	})
 }
 
@@ -450,7 +453,7 @@ func (h *Handler) AdminGetUserVerifications(c forge.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &VerificationListResponse{
-		Verifications: verifications,
+		Verifications: base.FromSchemaIdentityVerifications(verifications),
 		Limit:         limit,
 		Offset:        offset,
 	})

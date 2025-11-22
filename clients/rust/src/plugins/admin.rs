@@ -35,45 +35,27 @@ impl AdminPlugin {{
         pub name: Option<String>,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct CreateUserResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// CreateUser handles POST /admin/users
     pub async fn create_user(
         &self,
         _request: CreateUserRequest,
-    ) -> Result<CreateUserResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct ListUsersResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// ListUsers handles GET /admin/users
     pub async fn list_users(
         &self,
-    ) -> Result<ListUsersResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct DeleteUserResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// DeleteUser handles DELETE /admin/users/:id
     pub async fn delete_user(
         &self,
-    ) -> Result<DeleteUserResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -86,17 +68,11 @@ impl AdminPlugin {{
         pub reason: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct BanUserResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// BanUser handles POST /admin/users/:id/ban
     pub async fn ban_user(
         &self,
         _request: BanUserRequest,
-    ) -> Result<BanUserResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -107,17 +83,11 @@ impl AdminPlugin {{
         pub reason: Option<String>,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct UnbanUserResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// UnbanUser handles POST /admin/users/:id/unban
     pub async fn unban_user(
         &self,
         _request: UnbanUserRequest,
-    ) -> Result<UnbanUserResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -128,17 +98,11 @@ impl AdminPlugin {{
         pub duration: Option<time.Duration>,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct ImpersonateUserResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
     /// ImpersonateUser handles POST /admin/users/:id/impersonate
     pub async fn impersonate_user(
         &self,
         _request: ImpersonateUserRequest,
-    ) -> Result<ImpersonateUserResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -149,73 +113,43 @@ impl AdminPlugin {{
         pub role: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct SetUserRoleResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// SetUserRole handles POST /admin/users/:id/role
     pub async fn set_user_role(
         &self,
         _request: SetUserRoleRequest,
-    ) -> Result<SetUserRoleResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct ListSessionsResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// ListSessions handles GET /admin/sessions
     pub async fn list_sessions(
         &self,
-    ) -> Result<ListSessionsResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct RevokeSessionResponse {
-        #[serde(rename = "message")]
-        pub message: String,
     }
 
     /// RevokeSession handles DELETE /admin/sessions/:id
     pub async fn revoke_session(
         &self,
-    ) -> Result<RevokeSessionResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct GetStatsResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// GetStats handles GET /admin/stats
     pub async fn get_stats(
         &self,
-    ) -> Result<GetStatsResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct GetAuditLogsResponse {
-        #[serde(rename = "error")]
-        pub error: String,
     }
 
     /// GetAuditLogs handles GET /admin/audit
     pub async fn get_audit_logs(
         &self,
-    ) -> Result<GetAuditLogsResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

@@ -12,14 +12,14 @@ export class EmailotpPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async send(request: types.Send_body): Promise<void> {
+  async send(request: types.SendRequest): Promise<void> {
     const path = '/email-otp/send';
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async verify(request: types.Verify_body): Promise<types.VerifyResponse> {
+  async verify(request: types.VerifyRequest): Promise<types.VerifyResponse> {
     const path = '/email-otp/verify';
     return this.client.request<types.VerifyResponse>('POST', path, {
       body: request,

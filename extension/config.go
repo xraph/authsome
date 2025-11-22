@@ -4,11 +4,15 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/security"
+	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/plugins"
 )
 
 // Config holds the configuration for the AuthSome extension
 type Config struct {
+	// DisableOpenAPI disables the OpenAPI documentation
+	DisableOpenAPI bool `yaml:"disableOpenAPI" json:"disableOpenAPI"`
+
 	// BasePath is the base path where auth routes are mounted
 	BasePath string `yaml:"basePath" json:"basePath"`
 
@@ -18,7 +22,8 @@ type Config struct {
 	// DatabaseName is the name of the database to use from DatabaseManager
 	DatabaseName string `yaml:"databaseName" json:"databaseName"`
 
-	// TrustedOrigins for CORS
+	// CORS configuration
+	CORSEnabled    bool     `yaml:"corsEnabled" json:"corsEnabled"`
 	TrustedOrigins []string `yaml:"trustedOrigins" json:"trustedOrigins"`
 
 	// Secret for signing tokens
@@ -39,6 +44,9 @@ type Config struct {
 	// GeoIPProvider for country-based restrictions
 	GeoIPProvider security.GeoIPProvider `yaml:"-" json:"-"`
 
+	// SessionCookie configures cookie-based session management
+	SessionCookie *session.CookieConfig `yaml:"sessionCookie" json:"sessionCookie"`
+
 	// Plugins to register with AuthSome
 	Plugins []plugins.Plugin `yaml:"-" json:"-"`
 
@@ -49,9 +57,11 @@ type Config struct {
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	return Config{
-		BasePath:      "/api/auth",
-		RBACEnforce:   false,
-		RequireConfig: false,
+		BasePath:       "/api/auth",
+		CORSEnabled:    false, // Disabled by default - let Forge handle it
+		RBACEnforce:    false,
+		RequireConfig:  false,
+		DisableOpenAPI: false,
 	}
 }
 
@@ -79,10 +89,21 @@ func WithDatabaseName(name string) ConfigOption {
 	}
 }
 
-// WithTrustedOrigins sets trusted origins for CORS
+// WithCORSEnabled enables or disables CORS middleware
+func WithCORSEnabled(enabled bool) ConfigOption {
+	return func(c *Config) {
+		c.CORSEnabled = enabled
+	}
+}
+
+// WithTrustedOrigins sets trusted origins for CORS and auto-enables CORS if origins provided
 func WithTrustedOrigins(origins []string) ConfigOption {
 	return func(c *Config) {
 		c.TrustedOrigins = origins
+		// Auto-enable CORS if origins are provided
+		if len(origins) > 0 {
+			c.CORSEnabled = true
+		}
 	}
 }
 
@@ -146,5 +167,49 @@ func WithRequireConfig(require bool) ConfigOption {
 func WithConfig(config Config) ConfigOption {
 	return func(c *Config) {
 		*c = config
+	}
+}
+
+func WithDisableOpenAPI(disable bool) ConfigOption {
+	return func(c *Config) {
+		c.DisableOpenAPI = disable
+	}
+}
+
+// WithGlobalCookieConfig sets the global cookie configuration for session management
+// This configuration applies to all apps unless overridden at the app level
+// Example:
+//
+//	WithGlobalCookieConfig(session.CookieConfig{
+//	    Enabled:  true,
+//	    Name:     "my_session",
+//	    HttpOnly: true,
+//	    SameSite: "Lax",
+//	})
+func WithGlobalCookieConfig(config session.CookieConfig) ConfigOption {
+	return func(c *Config) {
+		c.SessionCookie = &config
+	}
+}
+
+// WithSessionCookieEnabled enables or disables cookie-based session management globally
+// When enabled, authentication responses will automatically set secure HTTP cookies
+func WithSessionCookieEnabled(enabled bool) ConfigOption {
+	return func(c *Config) {
+		if c.SessionCookie == nil {
+			c.SessionCookie = &session.CookieConfig{}
+		}
+		c.SessionCookie.Enabled = enabled
+	}
+}
+
+// WithSessionCookieName sets the session cookie name
+// Default: "authsome_session"
+func WithSessionCookieName(name string) ConfigOption {
+	return func(c *Config) {
+		if c.SessionCookie == nil {
+			c.SessionCookie = &session.CookieConfig{}
+		}
+		c.SessionCookie.Name = name
 	}
 }

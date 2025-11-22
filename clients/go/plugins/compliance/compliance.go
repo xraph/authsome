@@ -31,45 +31,56 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // CreateProfileRequest is the request for CreateProfile
 type CreateProfileRequest struct {
-	 *authsome. `json:",omitempty"`
-}
-
-// CreateProfileResponse is the response for CreateProfile
-type CreateProfileResponse struct {
-	Error string `json:"error"`
+	ComplianceContact string `json:"complianceContact"`
+	Metadata authsome. `json:"metadata"`
+	PasswordMinLength int `json:"passwordMinLength"`
+	PasswordRequireNumber bool `json:"passwordRequireNumber"`
+	PasswordRequireUpper bool `json:"passwordRequireUpper"`
+	RetentionDays int `json:"retentionDays"`
+	SessionIdleTimeout int `json:"sessionIdleTimeout"`
+	SessionIpBinding bool `json:"sessionIpBinding"`
+	AuditLogExport bool `json:"auditLogExport"`
+	RegularAccessReview bool `json:"regularAccessReview"`
+	Standards authsome.[]ComplianceStandard `json:"standards"`
+	DpoContact string `json:"dpoContact"`
+	EncryptionAtRest bool `json:"encryptionAtRest"`
+	MfaRequired bool `json:"mfaRequired"`
+	PasswordExpiryDays int `json:"passwordExpiryDays"`
+	RbacRequired bool `json:"rbacRequired"`
+	SessionMaxAge int `json:"sessionMaxAge"`
+	AppId string `json:"appId"`
+	DataResidency string `json:"dataResidency"`
+	DetailedAuditTrail bool `json:"detailedAuditTrail"`
+	EncryptionInTransit bool `json:"encryptionInTransit"`
+	LeastPrivilege bool `json:"leastPrivilege"`
+	Name string `json:"name"`
+	PasswordRequireLower bool `json:"passwordRequireLower"`
+	PasswordRequireSymbol bool `json:"passwordRequireSymbol"`
 }
 
 // CreateProfile CreateProfile creates a new compliance profile
 POST /auth/compliance/profiles
-func (p *Plugin) CreateProfile(ctx context.Context, req *CreateProfileRequest) (*CreateProfileResponse, error) {
+func (p *Plugin) CreateProfile(ctx context.Context, req *CreateProfileRequest) error {
 	path := "/profiles"
-	var result CreateProfileResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // CreateProfileFromTemplateRequest is the request for CreateProfileFromTemplate
 type CreateProfileFromTemplateRequest struct {
 	Standard authsome.ComplianceStandard `json:"standard"`
-	AppId string `json:"appId"`
-}
-
-// CreateProfileFromTemplateResponse is the response for CreateProfileFromTemplate
-type CreateProfileFromTemplateResponse struct {
-	Error string `json:"error"`
 }
 
 // CreateProfileFromTemplate CreateProfileFromTemplate creates a profile from a template
 POST /auth/compliance/profiles/from-template
-func (p *Plugin) CreateProfileFromTemplate(ctx context.Context, req *CreateProfileFromTemplateRequest) (*CreateProfileFromTemplateResponse, error) {
+func (p *Plugin) CreateProfileFromTemplate(ctx context.Context, req *CreateProfileFromTemplateRequest) error {
 	path := "/profiles/from-template"
-	var result CreateProfileFromTemplateResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // GetProfile GetProfile retrieves a compliance profile
@@ -94,23 +105,20 @@ func (p *Plugin) GetAppProfile(ctx context.Context) error {
 
 // UpdateProfileRequest is the request for UpdateProfile
 type UpdateProfileRequest struct {
-	 *authsome.*int `json:",omitempty"`
-}
-
-// UpdateProfileResponse is the response for UpdateProfile
-type UpdateProfileResponse struct {
-	Error string `json:"error"`
+	MfaRequired authsome.*bool `json:"mfaRequired"`
+	Name authsome.*string `json:"name"`
+	RetentionDays authsome.*int `json:"retentionDays"`
+	Status authsome.*string `json:"status"`
 }
 
 // UpdateProfile UpdateProfile updates a compliance profile
 PUT /auth/compliance/profiles/:id
-func (p *Plugin) UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*UpdateProfileResponse, error) {
+func (p *Plugin) UpdateProfile(ctx context.Context, req *UpdateProfileRequest) error {
 	path := "/profiles/:id"
-	var result UpdateProfileResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // DeleteProfile DeleteProfile deletes a compliance profile
@@ -148,20 +156,14 @@ type RunCheckRequest struct {
 	CheckType string `json:"checkType"`
 }
 
-// RunCheckResponse is the response for RunCheck
-type RunCheckResponse struct {
-	Error string `json:"error"`
-}
-
 // RunCheck RunCheck executes a compliance check
 POST /auth/compliance/profiles/:profileId/checks
-func (p *Plugin) RunCheck(ctx context.Context, req *RunCheckRequest) (*RunCheckResponse, error) {
+func (p *Plugin) RunCheck(ctx context.Context, req *RunCheckRequest) error {
 	path := "/profiles/:profileId/checks"
-	var result RunCheckResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListChecks ListChecks lists compliance checks
@@ -222,20 +224,14 @@ type GenerateReportRequest struct {
 	Standard authsome.ComplianceStandard `json:"standard"`
 }
 
-// GenerateReportResponse is the response for GenerateReport
-type GenerateReportResponse struct {
-	Error string `json:"error"`
-}
-
 // GenerateReport GenerateReport generates a compliance report
 POST /auth/compliance/apps/:appId/reports
-func (p *Plugin) GenerateReport(ctx context.Context, req *GenerateReportRequest) (*GenerateReportResponse, error) {
+func (p *Plugin) GenerateReport(ctx context.Context, req *GenerateReportRequest) error {
 	path := "/apps/:appId/reports"
-	var result GenerateReportResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListReports ListReports lists compliance reports
@@ -258,46 +254,34 @@ func (p *Plugin) GetReport(ctx context.Context) error {
 	return nil
 }
 
-// DownloadReportResponse is the response for DownloadReport
-type DownloadReportResponse struct {
-	Error string `json:"error"`
-}
-
 // DownloadReport DownloadReport downloads a compliance report file
 GET /auth/compliance/reports/:id/download
-func (p *Plugin) DownloadReport(ctx context.Context) (*DownloadReportResponse, error) {
+func (p *Plugin) DownloadReport(ctx context.Context) error {
 	path := "/reports/:id/download"
-	var result DownloadReportResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // CreateEvidenceRequest is the request for CreateEvidence
 type CreateEvidenceRequest struct {
+	Standard authsome.ComplianceStandard `json:"standard"`
+	Title string `json:"title"`
 	ControlId string `json:"controlId"`
 	Description string `json:"description"`
 	EvidenceType string `json:"evidenceType"`
 	FileUrl string `json:"fileUrl"`
-	Standard authsome.ComplianceStandard `json:"standard"`
-	Title string `json:"title"`
-}
-
-// CreateEvidenceResponse is the response for CreateEvidence
-type CreateEvidenceResponse struct {
-	Error string `json:"error"`
 }
 
 // CreateEvidence CreateEvidence creates compliance evidence
 POST /auth/compliance/apps/:appId/evidence
-func (p *Plugin) CreateEvidence(ctx context.Context, req *CreateEvidenceRequest) (*CreateEvidenceResponse, error) {
+func (p *Plugin) CreateEvidence(ctx context.Context, req *CreateEvidenceRequest) error {
 	path := "/apps/:appId/evidence"
-	var result CreateEvidenceResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListEvidence ListEvidence lists compliance evidence
@@ -332,27 +316,21 @@ func (p *Plugin) DeleteEvidence(ctx context.Context) error {
 
 // CreatePolicyRequest is the request for CreatePolicy
 type CreatePolicyRequest struct {
+	Content string `json:"content"`
+	PolicyType string `json:"policyType"`
 	Standard authsome.ComplianceStandard `json:"standard"`
 	Title string `json:"title"`
 	Version string `json:"version"`
-	Content string `json:"content"`
-	PolicyType string `json:"policyType"`
-}
-
-// CreatePolicyResponse is the response for CreatePolicy
-type CreatePolicyResponse struct {
-	Error string `json:"error"`
 }
 
 // CreatePolicy CreatePolicy creates a compliance policy
 POST /auth/compliance/apps/:appId/policies
-func (p *Plugin) CreatePolicy(ctx context.Context, req *CreatePolicyRequest) (*CreatePolicyResponse, error) {
+func (p *Plugin) CreatePolicy(ctx context.Context, req *CreatePolicyRequest) error {
 	path := "/apps/:appId/policies"
-	var result CreatePolicyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListPolicies ListPolicies lists compliance policies
@@ -377,26 +355,20 @@ func (p *Plugin) GetPolicy(ctx context.Context) error {
 
 // UpdatePolicyRequest is the request for UpdatePolicy
 type UpdatePolicyRequest struct {
+	Version authsome.*string `json:"version"`
 	Content authsome.*string `json:"content"`
 	Status authsome.*string `json:"status"`
 	Title authsome.*string `json:"title"`
-	Version authsome.*string `json:"version"`
-}
-
-// UpdatePolicyResponse is the response for UpdatePolicy
-type UpdatePolicyResponse struct {
-	Error string `json:"error"`
 }
 
 // UpdatePolicy UpdatePolicy updates a compliance policy
 PUT /auth/compliance/policies/:id
-func (p *Plugin) UpdatePolicy(ctx context.Context, req *UpdatePolicyRequest) (*UpdatePolicyResponse, error) {
+func (p *Plugin) UpdatePolicy(ctx context.Context, req *UpdatePolicyRequest) error {
 	path := "/policies/:id"
-	var result UpdatePolicyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // DeletePolicy DeletePolicy deletes a compliance policy
@@ -416,20 +388,14 @@ type CreateTrainingRequest struct {
 	UserId string `json:"userId"`
 }
 
-// CreateTrainingResponse is the response for CreateTraining
-type CreateTrainingResponse struct {
-	Error string `json:"error"`
-}
-
 // CreateTraining CreateTraining creates a training record
 POST /auth/compliance/apps/:appId/training
-func (p *Plugin) CreateTraining(ctx context.Context, req *CreateTrainingRequest) (*CreateTrainingResponse, error) {
+func (p *Plugin) CreateTraining(ctx context.Context, req *CreateTrainingRequest) error {
 	path := "/apps/:appId/training"
-	var result CreateTrainingResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListTraining ListTraining lists training records
@@ -457,20 +423,14 @@ type CompleteTrainingRequest struct {
 	Score int `json:"score"`
 }
 
-// CompleteTrainingResponse is the response for CompleteTraining
-type CompleteTrainingResponse struct {
-	Error string `json:"error"`
-}
-
 // CompleteTraining CompleteTraining marks training as completed
 PUT /auth/compliance/training/:id/complete
-func (p *Plugin) CompleteTraining(ctx context.Context, req *CompleteTrainingRequest) (*CompleteTrainingResponse, error) {
+func (p *Plugin) CompleteTraining(ctx context.Context, req *CompleteTrainingRequest) error {
 	path := "/training/:id/complete"
-	var result CompleteTrainingResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // ListTemplates ListTemplates lists available compliance templates
@@ -483,19 +443,13 @@ func (p *Plugin) ListTemplates(ctx context.Context) error {
 	return nil
 }
 
-// GetTemplateResponse is the response for GetTemplate
-type GetTemplateResponse struct {
-	Error string `json:"error"`
-}
-
 // GetTemplate GetTemplate retrieves a compliance template
 GET /auth/compliance/templates/:standard
-func (p *Plugin) GetTemplate(ctx context.Context) (*GetTemplateResponse, error) {
+func (p *Plugin) GetTemplate(ctx context.Context) error {
 	path := "/templates/:standard"
-	var result GetTemplateResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 

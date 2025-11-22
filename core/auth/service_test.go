@@ -160,12 +160,12 @@ func TestService_SignUp(t *testing.T) {
 		{
 			name: "successful signup without email verification",
 			req: &SignUpRequest{
-				Email:     "test@example.com",
-				Password:  password,
-				Name:      "Test User",
-				Remember:  false,
-				IPAddress: "192.168.1.1",
-				UserAgent: "Mozilla/5.0",
+				Email:      "test@example.com",
+				Password:   password,
+				Name:       "Test User",
+				RememberMe: false,
+				IPAddress:  "192.168.1.1",
+				UserAgent:  "Mozilla/5.0",
 			},
 			config: Config{RequireEmailVerification: false},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
@@ -335,11 +335,11 @@ func TestService_SignIn(t *testing.T) {
 		{
 			name: "successful signin",
 			req: &SignInRequest{
-				Email:     "test@example.com",
-				Password:  password,
-				Remember:  false,
-				IPAddress: "192.168.1.1",
-				UserAgent: "Mozilla/5.0",
+				Email:      "test@example.com",
+				Password:   password,
+				RememberMe: false,
+				IPAddress:  "192.168.1.1",
+				UserAgent:  "Mozilla/5.0",
 			},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
 				existingUser := &user.User{

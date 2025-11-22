@@ -31,93 +31,12 @@ routes:
       path: /:id
       response_type: StatusResponse
 types:
-    - name: UserAdapter
-      fields:
-        "": '[]webauthn.Credential'
-    - name: WebAuthnWrapper
-      fields:
-        "": Config
-    - name: RedisChallengeStore
-      fields: {}
-    - name: FinishRegisterRequest
-      fields:
-        name: string!
-        response: '!'
-        userId: string!
-    - name: UpdatePasskeyRequest
-      fields:
-        "": string
-        name: string!
-    - name: LoginResponse
-      fields:
-        passkeyUsed: string!
-        session: '!'
-        token: string!
-        user: '!'
-    - name: Service
-      fields:
-        "": ChallengeStore
-    - name: ChallengeSession
-      fields:
-        "": xid.ID
-    - name: Config
-      fields:
-        attestationtype: string!
-        authenticatorattachment: string!
-        challengestorage: string!
-        requireresidentkey: bool!
-        rpid: string!
-        rpname: string!
-        rporigins: '[]string!'
-        timeout: time.Duration!
-        userverification: string!
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: GetPasskeyRequest
-      fields:
-        "": string
-    - name: BeginLoginResponse
-      fields:
-        challenge: string!
-        options: '!'
-        timeout: time.Duration!
-    - name: ListPasskeysResponse
-      fields:
-        count: int!
-        passkeys: '[]PasskeyInfo!'
-    - name: Plugin
-      fields:
-        "": forge.Logger
-    - name: BeginLoginRequest
-      fields:
-        userId: string!
-        userVerification: string!
-    - name: FinishLoginRequest
-      fields:
-        remember: bool!
-        response: '!'
-    - name: ListPasskeysRequest
-      fields:
-        "": string
     - name: DeletePasskeyRequest
       fields:
         "": string
-    - name: UpdatePasskeyResponse
+    - name: GetPasskeyRequest
       fields:
-        name: string!
-        passkeyId: string!
-        updatedAt: time.Time!
-    - name: MemoryChallengeStore
-      fields:
-        "": time.Duration
-    - name: BeginRegisterRequest
-      fields:
-        authenticatorType: string!
-        name: string!
-        requireResidentKey: bool!
-        userId: string!
-        userVerification: string!
+        "": string
     - name: BeginRegisterResponse
       fields:
         challenge: string!
@@ -131,6 +50,72 @@ types:
         name: string!
         passkeyId: string!
         status: string!
+    - name: BeginLoginResponse
+      fields:
+        challenge: string!
+        options: '!'
+        timeout: time.Duration!
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: BeginRegisterRequest
+      fields:
+        authenticatorType: string!
+        name: string!
+        requireResidentKey: bool!
+        userId: string!
+        userVerification: string!
+    - name: FinishRegisterRequest
+      fields:
+        name: string!
+        response: '!'
+        userId: string!
+    - name: LoginResponse
+      fields:
+        passkeyUsed: string!
+        session: '!'
+        token: string!
+        user: '!'
+    - name: Service
+      fields:
+        "": '*bun.DB'
+    - name: UserAdapter
+      fields:
+        "": '[]webauthn.Credential'
+    - name: WebAuthnWrapper
+      fields:
+        "": Config
+    - name: BeginLoginRequest
+      fields:
+        userId: string!
+        userVerification: string!
+    - name: ListPasskeysRequest
+      fields:
+        "": string
+    - name: UpdatePasskeyRequest
+      fields:
+        "": string
+        name: string!
+    - name: ListPasskeysResponse
+      fields:
+        count: int!
+        passkeys: '[]PasskeyInfo!'
+    - name: ChallengeSession
+      fields:
+        "": time.Time
+    - name: RedisChallengeStore
+      fields: {}
+    - name: Config
+      fields:
+        attestationtype: string!
+        authenticatorattachment: string!
+        challengestorage: string!
+        requireresidentkey: bool!
+        rpid: string!
+        rpname: string!
+        rporigins: '[]string!'
+        timeout: time.Duration!
+        userverification: string!
     - name: PasskeyInfo
       fields:
         aaguid: string!
@@ -142,3 +127,18 @@ types:
         lastUsedAt: '*time.Time!'
         name: string!
         signCount: uint32!
+    - name: UpdatePasskeyResponse
+      fields:
+        name: string!
+        passkeyId: string!
+        updatedAt: time.Time!
+    - name: MemoryChallengeStore
+      fields:
+        "": ""
+    - name: Plugin
+      fields:
+        "": '*bun.DB'
+    - name: FinishLoginRequest
+      fields:
+        remember: bool!
+        response: '!'

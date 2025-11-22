@@ -29,12 +29,8 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// BeginRegisterRequest is the request for BeginRegister
-type BeginRegisterRequest struct {
-	User_id string `json:"user_id"`
-}
-
-func (p *Plugin) BeginRegister(ctx context.Context, req *BeginRegisterRequest) error {
+// BeginRegister BeginRegister initiates passkey registration with WebAuthn challenge
+func (p *Plugin) BeginRegister(ctx context.Context) error {
 	path := "/register/begin"
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
@@ -42,32 +38,17 @@ func (p *Plugin) BeginRegister(ctx context.Context, req *BeginRegisterRequest) e
 	return nil
 }
 
-// FinishRegisterRequest is the request for FinishRegister
-type FinishRegisterRequest struct {
-	Credential_id string `json:"credential_id"`
-	User_id string `json:"user_id"`
-}
-
-// FinishRegisterResponse is the response for FinishRegister
-type FinishRegisterResponse struct {
-	Status string `json:"status"`
-}
-
-func (p *Plugin) FinishRegister(ctx context.Context, req *FinishRegisterRequest) (*FinishRegisterResponse, error) {
+// FinishRegister FinishRegister completes passkey registration with attestation verification
+func (p *Plugin) FinishRegister(ctx context.Context) error {
 	path := "/register/finish"
-	var result FinishRegisterResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
-// BeginLoginRequest is the request for BeginLogin
-type BeginLoginRequest struct {
-	User_id string `json:"user_id"`
-}
-
-func (p *Plugin) BeginLogin(ctx context.Context, req *BeginLoginRequest) error {
+// BeginLogin BeginLogin initiates passkey authentication with WebAuthn challenge
+func (p *Plugin) BeginLogin(ctx context.Context) error {
 	path := "/login/begin"
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
@@ -75,28 +56,16 @@ func (p *Plugin) BeginLogin(ctx context.Context, req *BeginLoginRequest) error {
 	return nil
 }
 
-// FinishLoginRequest is the request for FinishLogin
-type FinishLoginRequest struct {
-	User_id string `json:"user_id"`
-	Remember bool `json:"remember"`
-}
-
-// FinishLoginResponse is the response for FinishLogin
-type FinishLoginResponse struct {
-	Session authsome. `json:"session"`
-	Token string `json:"token"`
-	User authsome. `json:"user"`
-}
-
-func (p *Plugin) FinishLogin(ctx context.Context, req *FinishLoginRequest) (*FinishLoginResponse, error) {
+// FinishLogin FinishLogin completes passkey authentication with signature verification
+func (p *Plugin) FinishLogin(ctx context.Context) error {
 	path := "/login/finish"
-	var result FinishLoginResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
+// List List retrieves all passkeys for a user
 func (p *Plugin) List(ctx context.Context) error {
 	path := "/list"
 	// Note: This requires exposing client.request or using a different approach
@@ -105,17 +74,21 @@ func (p *Plugin) List(ctx context.Context) error {
 	return nil
 }
 
-// DeleteResponse is the response for Delete
-type DeleteResponse struct {
-	Status string `json:"status"`
-}
-
-func (p *Plugin) Delete(ctx context.Context) (*DeleteResponse, error) {
+// Update Update updates a passkey's metadata (name)
+func (p *Plugin) Update(ctx context.Context) error {
 	path := "/:id"
-	var result DeleteResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
+}
+
+// Delete Delete removes a passkey
+func (p *Plugin) Delete(ctx context.Context) error {
+	path := "/:id"
+	// Note: This requires exposing client.request or using a different approach
+	// For now, this is a placeholder
+	_ = path
+	return nil
 }
 

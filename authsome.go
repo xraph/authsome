@@ -106,7 +106,8 @@ type Auth struct {
 func New(opts ...Option) *Auth {
 	a := &Auth{
 		config: Config{
-			BasePath: "/api/auth",
+			BasePath:          "/api/auth",
+			SessionCookieName: "authsome_session",
 		},
 		pluginRegistry:  plugins.NewRegistry(),
 		serviceRegistry: registry.NewServiceRegistry(),
@@ -244,7 +245,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.sessionService,
 		a.userService,
 		middleware.AuthMiddlewareConfig{
-			SessionCookieName:   "authsome_session",
+			SessionCookieName:   a.config.SessionCookieName,
 			Optional:            true,  // Don't block unauthenticated requests by default
 			AllowAPIKeyInQuery:  false, // Security best practice
 			AllowSessionInQuery: false, // Security best practice
@@ -262,6 +263,9 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		app.Config{},
 		a.rbacService,
 	)
+
+	// Set global cookie config on app service
+	a.appService.App.SetGlobalCookieConfig(&a.config.SessionCookie)
 
 	if err := app.RegisterAppPermissions(a.serviceRegistry.RoleRegistry()); err != nil {
 		return errs.InternalServerError("failed to register app permissions", err)
@@ -467,7 +471,39 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	if basePath == "" {
 		basePath = a.config.BasePath
 	}
-	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA())
+
+	// Apply CORS middleware if enabled
+	if a.config.CORSEnabled && len(a.config.TrustedOrigins) > 0 {
+		corsMiddleware := middleware.CORSMiddleware(middleware.CORSConfig{
+			AllowedOrigins:   a.config.TrustedOrigins,
+			AllowCredentials: true, // Required for cookies
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{
+				"Accept",
+				"Authorization",
+				"Content-Type",
+				"X-API-Key",
+				"X-App-ID",
+				"X-Environment",
+				"X-Organization-ID",
+			},
+		})
+
+		// Create a router group with CORS middleware
+		corsGroup := router.Group(basePath)
+		corsGroup.Use(corsMiddleware)
+		router = corsGroup
+		basePath = "" // Reset basePath since we're now in a group
+
+		a.logger.Info("CORS enabled", forge.F("origins", a.config.TrustedOrigins))
+	}
+
+	// Backward compatibility: If SessionCookie.Name is empty, use SessionCookieName
+	if a.config.SessionCookie.Name == "" && a.config.SessionCookieName != "" {
+		a.config.SessionCookie.Name = a.config.SessionCookieName
+	}
+
+	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA(), a.appService, &a.config.SessionCookie)
 	audH := handlers.NewAuditHandler(a.auditService)
 	appH := handlers.NewAppHandler(a.appService, a.rateLimitService, a.sessionService, a.rbacService, a.repo.UserRole(), a.repo.Role(), a.repo.Policy(), a.config.RBACEnforce)
 
@@ -480,9 +516,10 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	// - Notifications: Register plugins/notification.NewPlugin() for notification templates
 	// The core services remain available for internal use by other features
 
-	// Register core auth routes
-	routes.Register(router, basePath, h)
-	routes.RegisterAudit(router, basePath, audH)
+	// Register core auth routes with authentication middleware
+	// Middleware extracts and validates API keys for app identification
+	routes.Register(router, basePath, h, a.AuthMiddleware())
+	routes.RegisterAudit(router, basePath, audH, a.AuthMiddleware())
 
 	// Check if multitenancy plugin is enabled
 	hasMultitenancyPlugin := false
@@ -498,8 +535,8 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	// Only register built-in app routes if multitenancy plugin is NOT enabled
 	// This prevents route duplication and allows the plugin to fully control app routes
 	if !hasMultitenancyPlugin {
-		// Mount app routes under basePath (not hardcoded)
-		routes.RegisterApp(router, basePath+"/apps", appH)
+		// Mount app routes under basePath (not hardcoded) with authentication middleware
+		routes.RegisterApp(router, basePath+"/apps", appH, a.AuthMiddleware())
 		a.logger.Info("registered built-in app routes (multitenancy plugin not detected)")
 	} else {
 		a.logger.Info("skipping built-in app routes (multitenancy plugin detected)")

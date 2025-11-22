@@ -45,25 +45,17 @@ func (p *Plugin) Send(ctx context.Context, req *SendRequest) error {
 
 // VerifyRequest is the request for Verify
 type VerifyRequest struct {
-	Email string `json:"email"`
 	Otp string `json:"otp"`
 	Remember bool `json:"remember"`
-}
-
-// VerifyResponse is the response for Verify
-type VerifyResponse struct {
-	Session authsome. `json:"session"`
-	Token string `json:"token"`
-	User authsome. `json:"user"`
+	Email string `json:"email"`
 }
 
 // Verify Verify checks the OTP and creates a session on success
-func (p *Plugin) Verify(ctx context.Context, req *VerifyRequest) (*VerifyResponse, error) {
+func (p *Plugin) Verify(ctx context.Context, req *VerifyRequest) error {
 	path := "/email-otp/verify"
-	var result VerifyResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 

@@ -51,8 +51,8 @@ type SetActiveRequest struct {
 
 // SetActiveResponse is the response for SetActive
 type SetActiveResponse struct {
-	Session authsome. `json:"session"`
 	Token string `json:"token"`
+	Session authsome. `json:"session"`
 }
 
 // SetActive SetActive switches the current session cookie to the provided session id

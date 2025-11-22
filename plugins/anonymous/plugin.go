@@ -18,6 +18,7 @@ type Plugin struct {
 	logger        forge.Logger
 	config        Config
 	defaultConfig Config
+	authInst      core.Authsome
 }
 
 // Config holds the anonymous plugin configuration
@@ -103,6 +104,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return fmt.Errorf("anonymous plugin requires auth instance")
 	}
 
+	// Store auth instance for cookie support
+	p.authInst = authInst
+
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
@@ -146,7 +150,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return nil
 	}
 
-	h := NewHandler(p.service)
+	h := NewHandler(p.service, p.authInst)
 
 	// Sign in as anonymous
 	router.POST("/anonymous/signin", h.SignIn,

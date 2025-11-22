@@ -19,6 +19,10 @@ impl StepupPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct EvaluateRequest {
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "method")]
+        pub method: String,
         #[serde(rename = "resource_type")]
         pub resource_type: String,
         #[serde(rename = "route")]
@@ -29,10 +33,6 @@ impl StepupPlugin {{
         pub amount: f64,
         #[serde(rename = "currency")]
         pub currency: String,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "method")]
-        pub method: String,
     }
 
     /// Evaluate handles POST /stepup/evaluate
@@ -46,24 +46,24 @@ impl StepupPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyRequest {
-        #[serde(rename = "challenge_token")]
-        pub challenge_token: String,
         #[serde(rename = "device_name")]
         pub device_name: String,
         #[serde(rename = "ip")]
         pub ip: String,
+        #[serde(rename = "method")]
+        pub method: VerificationMethod,
         #[serde(rename = "requirement_id")]
         pub requirement_id: String,
         #[serde(rename = "user_agent")]
         pub user_agent: String,
+        #[serde(rename = "challenge_token")]
+        pub challenge_token: String,
+        #[serde(rename = "remember_device")]
+        pub remember_device: bool,
         #[serde(rename = "credential")]
         pub credential: String,
         #[serde(rename = "device_id")]
         pub device_id: String,
-        #[serde(rename = "method")]
-        pub method: VerificationMethod,
-        #[serde(rename = "remember_device")]
-        pub remember_device: bool,
     }
 
     /// Verify handles POST /stepup/verify
@@ -83,10 +83,18 @@ impl StepupPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct ListPendingRequirementsResponse {
+        #[serde(rename = "requirements")]
+        pub requirements: ,
+        #[serde(rename = "count")]
+        pub count: i32,
+    }
+
     /// ListPendingRequirements handles GET /stepup/requirements/pending
     pub async fn list_pending_requirements(
         &self,
-    ) -> Result<()> {
+    ) -> Result<ListPendingRequirementsResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -99,26 +107,40 @@ impl StepupPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct ListRememberedDevicesResponse {
+        #[serde(rename = "count")]
+        pub count: i32,
+        #[serde(rename = "devices")]
+        pub devices: ,
+    }
+
     /// ListRememberedDevices handles GET /stepup/devices
     pub async fn list_remembered_devices(
         &self,
-    ) -> Result<()> {
+    ) -> Result<ListRememberedDevicesResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct ForgetDeviceResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+        #[serde(rename = "success")]
+        pub success: bool,
     }
 
     /// ForgetDevice handles DELETE /stepup/devices/:id
     pub async fn forget_device(
         &self,
-    ) -> Result<()> {
+    ) -> Result<ForgetDeviceResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
     #[derive(Debug, Serialize)]
     pub struct CreatePolicyRequest {
-        #[serde(rename = "created_at")]
-        pub created_at: time.Time,
         #[serde(rename = "enabled")]
         pub enabled: bool,
         #[serde(rename = "id")]
@@ -127,44 +149,46 @@ impl StepupPlugin {{
         pub name: String,
         #[serde(rename = "org_id")]
         pub org_id: String,
-        #[serde(rename = "priority")]
-        pub priority: i32,
         #[serde(rename = "rules")]
         pub rules: ,
+        #[serde(rename = "updated_at")]
+        pub updated_at: time.Time,
+        #[serde(rename = "created_at")]
+        pub created_at: time.Time,
         #[serde(rename = "description")]
         pub description: String,
         #[serde(rename = "metadata")]
         pub metadata: ,
-        #[serde(rename = "updated_at")]
-        pub updated_at: time.Time,
+        #[serde(rename = "priority")]
+        pub priority: i32,
         #[serde(rename = "user_id")]
         pub user_id: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct CreatePolicyResponse {
-        #[serde(rename = "rules")]
-        pub rules: ,
-        #[serde(rename = "user_id")]
-        pub user_id: String,
-        #[serde(rename = "created_at")]
-        pub created_at: time.Time,
-        #[serde(rename = "enabled")]
-        pub enabled: bool,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "name")]
-        pub name: String,
         #[serde(rename = "priority")]
         pub priority: i32,
         #[serde(rename = "updated_at")]
         pub updated_at: time.Time,
+        #[serde(rename = "user_id")]
+        pub user_id: String,
+        #[serde(rename = "created_at")]
+        pub created_at: time.Time,
         #[serde(rename = "description")]
         pub description: String,
         #[serde(rename = "id")]
         pub id: String,
         #[serde(rename = "org_id")]
         pub org_id: String,
+        #[serde(rename = "rules")]
+        pub rules: ,
+        #[serde(rename = "enabled")]
+        pub enabled: bool,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "name")]
+        pub name: String,
     }
 
     /// CreatePolicy handles POST /stepup/policies
@@ -194,54 +218,54 @@ impl StepupPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdatePolicyRequest {
+        #[serde(rename = "id")]
+        pub id: String,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "name")]
+        pub name: String,
+        #[serde(rename = "org_id")]
+        pub org_id: String,
+        #[serde(rename = "priority")]
+        pub priority: i32,
+        #[serde(rename = "rules")]
+        pub rules: ,
         #[serde(rename = "updated_at")]
         pub updated_at: time.Time,
+        #[serde(rename = "user_id")]
+        pub user_id: String,
         #[serde(rename = "created_at")]
         pub created_at: time.Time,
         #[serde(rename = "description")]
         pub description: String,
         #[serde(rename = "enabled")]
         pub enabled: bool,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "name")]
-        pub name: String,
-        #[serde(rename = "priority")]
-        pub priority: i32,
-        #[serde(rename = "rules")]
-        pub rules: ,
-        #[serde(rename = "user_id")]
-        pub user_id: String,
-        #[serde(rename = "id")]
-        pub id: String,
-        #[serde(rename = "org_id")]
-        pub org_id: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct UpdatePolicyResponse {
+        #[serde(rename = "user_id")]
+        pub user_id: String,
         #[serde(rename = "created_at")]
         pub created_at: time.Time,
+        #[serde(rename = "priority")]
+        pub priority: i32,
+        #[serde(rename = "rules")]
+        pub rules: ,
+        #[serde(rename = "updated_at")]
+        pub updated_at: time.Time,
+        #[serde(rename = "description")]
+        pub description: String,
         #[serde(rename = "enabled")]
         pub enabled: bool,
+        #[serde(rename = "id")]
+        pub id: String,
         #[serde(rename = "metadata")]
         pub metadata: ,
         #[serde(rename = "name")]
         pub name: String,
         #[serde(rename = "org_id")]
         pub org_id: String,
-        #[serde(rename = "rules")]
-        pub rules: ,
-        #[serde(rename = "description")]
-        pub description: String,
-        #[serde(rename = "id")]
-        pub id: String,
-        #[serde(rename = "priority")]
-        pub priority: i32,
-        #[serde(rename = "updated_at")]
-        pub updated_at: time.Time,
-        #[serde(rename = "user_id")]
-        pub user_id: String,
     }
 
     /// UpdatePolicy handles PUT /stepup/policies/:id

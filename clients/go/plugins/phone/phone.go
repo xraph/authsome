@@ -45,17 +45,17 @@ func (p *Plugin) SendCode(ctx context.Context, req *SendCodeRequest) error {
 
 // VerifyRequest is the request for Verify
 type VerifyRequest struct {
-	Remember bool `json:"remember"`
 	Code string `json:"code"`
 	Email string `json:"email"`
 	Phone string `json:"phone"`
+	Remember bool `json:"remember"`
 }
 
 // VerifyResponse is the response for Verify
 type VerifyResponse struct {
-	Session authsome. `json:"session"`
 	Token string `json:"token"`
-	User authsome. `json:"user"`
+	User authsome.*user.User `json:"user"`
+	Session authsome.*session.Session `json:"session"`
 }
 
 // Verify Verify checks the code and creates a session on success
@@ -78,9 +78,9 @@ type SignInRequest struct {
 
 // SignInResponse is the response for SignIn
 type SignInResponse struct {
+	Session authsome.*session.Session `json:"session"`
 	Token string `json:"token"`
-	User authsome. `json:"user"`
-	Session authsome. `json:"session"`
+	User authsome.*user.User `json:"user"`
 }
 
 // SignIn SignIn aliases to Verify for convenience

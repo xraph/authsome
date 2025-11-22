@@ -288,7 +288,16 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("// Auto-generated AuthSome client\n\n")
 	sb.WriteString("import { ClientPlugin } from './plugin';\n")
 	sb.WriteString("import { createErrorFromResponse } from './errors';\n")
-	sb.WriteString("import * as types from './types';\n\n")
+	sb.WriteString("import * as types from './types';\n")
+
+	// Import plugin classes for type-safe access
+	for _, m := range g.manifests {
+		if m.PluginID != "core" {
+			pluginClassName := g.pascalCase(m.PluginID) + "Plugin"
+			sb.WriteString(fmt.Sprintf("import { %s } from './plugins/%s';\n", pluginClassName, m.PluginID))
+		}
+	}
+	sb.WriteString("\n")
 
 	// Find core manifest
 	var coreManifest *manifest.Manifest
@@ -326,10 +335,14 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("  \n")
 	sb.WriteString("  /** Custom headers to include with all requests */\n")
 	sb.WriteString("  headers?: Record<string, string>;\n")
+	sb.WriteString("  \n")
+	sb.WriteString("  /** Base path prefix for all API routes (default: '') */\n")
+	sb.WriteString("  basePath?: string;\n")
 	sb.WriteString("}\n\n")
 
 	sb.WriteString("export class AuthsomeClient {\n")
 	sb.WriteString("  private baseURL: string;\n")
+	sb.WriteString("  private basePath: string;\n")
 	sb.WriteString("  private token?: string;\n")
 	sb.WriteString("  private apiKey?: string;\n")
 	sb.WriteString("  private apiKeyHeader: string;\n")
@@ -338,6 +351,7 @@ func (g *TypeScriptGenerator) generateClient() error {
 
 	sb.WriteString("  constructor(config: AuthsomeClientConfig) {\n")
 	sb.WriteString("    this.baseURL = config.baseURL;\n")
+	sb.WriteString("    this.basePath = config.basePath || '';\n")
 	sb.WriteString("    this.token = config.token;\n")
 	sb.WriteString("    this.apiKey = config.apiKey;\n")
 	sb.WriteString("    this.apiKeyHeader = config.apiKeyHeader || 'X-API-Key';\n")
@@ -388,9 +402,38 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("    this.setApiKey(secretKey);\n")
 	sb.WriteString("  }\n\n")
 
+	sb.WriteString("  setBasePath(basePath: string): void {\n")
+	sb.WriteString("    this.basePath = basePath;\n")
+	sb.WriteString("  }\n\n")
+
+	// Add setGlobalHeaders method
+	sb.WriteString("  /**\n")
+	sb.WriteString("   * Set global headers for all requests\n")
+	sb.WriteString("   * @param headers - Headers to set\n")
+	sb.WriteString("   * @param replace - If true, replaces all existing headers. If false (default), merges with existing headers\n")
+	sb.WriteString("   */\n")
+	sb.WriteString("  setGlobalHeaders(headers: Record<string, string>, replace: boolean = false): void {\n")
+	sb.WriteString("    if (replace) {\n")
+	sb.WriteString("      this.headers = { ...headers };\n")
+	sb.WriteString("    } else {\n")
+	sb.WriteString("      this.headers = { ...this.headers, ...headers };\n")
+	sb.WriteString("    }\n")
+	sb.WriteString("  }\n\n")
+
 	sb.WriteString("  getPlugin<T extends ClientPlugin>(id: string): T | undefined {\n")
 	sb.WriteString("    return this.plugins.get(id) as T | undefined;\n")
 	sb.WriteString("  }\n\n")
+
+	// Generate type-safe plugin accessors
+	sb.WriteString("  public readonly $plugins = {\n")
+	for _, m := range g.manifests {
+		if m.PluginID != "core" {
+			pluginClassName := g.pascalCase(m.PluginID) + "Plugin"
+			sb.WriteString(fmt.Sprintf("    %s: (): %s | undefined => this.getPlugin<%s>('%s'),\n",
+				g.camelCase(m.PluginID), pluginClassName, pluginClassName, m.PluginID))
+		}
+	}
+	sb.WriteString("  };\n\n")
 
 	// Generate request helper
 	sb.WriteString("  public async request<T>(\n")
@@ -402,7 +445,7 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("      auth?: boolean;\n")
 	sb.WriteString("    }\n")
 	sb.WriteString("  ): Promise<T> {\n")
-	sb.WriteString("    const url = new URL(path, this.baseURL);\n\n")
+	sb.WriteString("    const url = new URL(this.basePath + path, this.baseURL);\n\n")
 	sb.WriteString("    if (options?.query) {\n")
 	sb.WriteString("      for (const [key, value] of Object.entries(options.query)) {\n")
 	sb.WriteString("        url.searchParams.append(key, value);\n")
@@ -470,9 +513,9 @@ func (g *TypeScriptGenerator) generateTSMethod(sb *strings.Builder, m *manifest.
 		for paramName := range route.Params {
 			path = strings.ReplaceAll(path, "{"+paramName+"}", "${params."+paramName+"}")
 		}
-		sb.WriteString(fmt.Sprintf("    const path = `%s%s`;\n", m.BasePath, path))
+		sb.WriteString(fmt.Sprintf("    const path = `%s`;\n", path))
 	} else {
-		sb.WriteString(fmt.Sprintf("    const path = '%s%s';\n", m.BasePath, path))
+		sb.WriteString(fmt.Sprintf("    const path = '%s';\n", path))
 	}
 
 	// Make request
@@ -629,7 +672,12 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 	if len(route.Request) > 0 {
 		// Use named type if available, otherwise inline type
 		if route.RequestType != "" {
-			params = append(params, fmt.Sprintf("request: types.%s", route.RequestType))
+			// Strip package qualifier if present (e.g., "responses.CreateRequest" -> "CreateRequest")
+			typeName := route.RequestType
+			if idx := strings.LastIndex(typeName, "."); idx != -1 {
+				typeName = typeName[idx+1:]
+			}
+			params = append(params, fmt.Sprintf("request: types.%s", typeName))
 		} else {
 			params = append(params, fmt.Sprintf("request: { %s }", g.generateTSRequestType(route)))
 		}
@@ -646,7 +694,12 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 	// Use named response type if available, otherwise inline type
 	var responseType string
 	if route.ResponseType != "" {
-		responseType = "types." + route.ResponseType
+		// Strip package qualifier if present (e.g., "responses.StatusResponse" -> "StatusResponse")
+		typeName := route.ResponseType
+		if idx := strings.LastIndex(typeName, "."); idx != -1 {
+			typeName = typeName[idx+1:]
+		}
+		responseType = "types." + typeName
 	} else if len(route.Response) > 0 {
 		responseType = fmt.Sprintf("{ %s }", g.generateTSResponseType(route))
 	} else {
@@ -660,9 +713,9 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 		for paramName := range route.Params {
 			path = strings.ReplaceAll(path, "{"+paramName+"}", "${params."+paramName+"}")
 		}
-		sb.WriteString(fmt.Sprintf("    const path = `%s%s`;\n", m.BasePath, path))
+		sb.WriteString(fmt.Sprintf("    const path = `%s`;\n", path))
 	} else {
-		sb.WriteString(fmt.Sprintf("    const path = '%s%s';\n", m.BasePath, path))
+		sb.WriteString(fmt.Sprintf("    const path = '%s';\n", path))
 	}
 
 	sb.WriteString(fmt.Sprintf("    return this.client.request<%s>('%s', path", responseType, strings.ToUpper(route.Method)))
@@ -694,12 +747,15 @@ func (g *TypeScriptGenerator) generateIndex() error {
 	sb.WriteString("export * from './types';\n")
 	sb.WriteString("export * from './errors';\n\n")
 
-	// Export plugins
+	// Export plugins with explicit class names for type safety
+	sb.WriteString("// Plugin exports\n")
 	for _, m := range g.manifests {
 		if m.PluginID == "core" {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("export * from './plugins/%s';\n", m.PluginID))
+		pluginClassName := g.pascalCase(m.PluginID) + "Plugin"
+		factoryName := g.camelCase(m.PluginID) + "Client"
+		sb.WriteString(fmt.Sprintf("export { %s, %s } from './plugins/%s';\n", pluginClassName, factoryName, m.PluginID))
 	}
 
 	return g.writeFile("src/index.ts", sb.String())

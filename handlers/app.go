@@ -947,3 +947,146 @@ func (h *AppHandler) GetUserRoles(c forge.Context) error {
 	total := len(roles)
 	return c.JSON(200, types.PaginatedResult{Data: roles, Total: total, Page: 1, PageSize: total, TotalPages: 1})
 }
+
+// GetAppCookieConfig retrieves the cookie configuration for a specific app
+// GET /apps/:appId/cookie-config
+func (h *AppHandler) GetAppCookieConfig(c forge.Context) error {
+	if h.rl != nil {
+		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
+		if err != nil || !ok {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
+		}
+	}
+
+	appIDStr := c.Param("appId")
+	if appIDStr == "" {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	}
+
+	appID, err := xid.FromString(appIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
+	}
+
+	if !h.checkRBAC(c, "read", "organization:"+appID.String(), &appID) {
+		return c.JSON(http.StatusForbidden, errs.New("FORBIDDEN", "Access forbidden", http.StatusForbidden))
+	}
+
+	cookieConfig, err := h.app.App.GetCookieConfig(c.Request().Context(), appID)
+	if err != nil {
+		return handleError(c, err, "GET_COOKIE_CONFIG_FAILED", "Failed to get cookie configuration", http.StatusInternalServerError)
+	}
+
+	return c.JSON(http.StatusOK, cookieConfig)
+}
+
+// UpdateAppCookieConfig updates the cookie configuration for a specific app
+// PUT /apps/:appId/cookie-config
+func (h *AppHandler) UpdateAppCookieConfig(c forge.Context) error {
+	if h.rl != nil {
+		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
+		if err != nil || !ok {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
+		}
+	}
+
+	appIDStr := c.Param("appId")
+	if appIDStr == "" {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	}
+
+	appID, err := xid.FromString(appIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
+	}
+
+	if !h.checkRBAC(c, "update", "organization:"+appID.String(), &appID) {
+		return c.JSON(http.StatusForbidden, errs.New("FORBIDDEN", "Access forbidden", http.StatusForbidden))
+	}
+
+	var cookieConfig session.CookieConfig
+	if err := json.NewDecoder(c.Request().Body).Decode(&cookieConfig); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	// Get the app to update its metadata
+	existingApp, err := h.app.FindAppByID(c.Request().Context(), appID)
+	if err != nil {
+		return handleError(c, err, "APP_NOT_FOUND", "App not found", http.StatusNotFound)
+	}
+
+	// Update metadata with cookie config
+	if existingApp.Metadata == nil {
+		existingApp.Metadata = make(map[string]interface{})
+	}
+	existingApp.Metadata["sessionCookie"] = cookieConfig
+
+	// Update the app
+	updateReq := &app.UpdateAppRequest{
+		Metadata: existingApp.Metadata,
+	}
+	updatedApp, err := h.app.UpdateApp(c.Request().Context(), appID, updateReq)
+	if err != nil {
+		return handleError(c, err, "UPDATE_COOKIE_CONFIG_FAILED", "Failed to update cookie configuration", http.StatusInternalServerError)
+	}
+
+	// Return the updated cookie config
+	updatedConfig, _ := h.app.App.GetCookieConfig(c.Request().Context(), appID)
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"app":          updatedApp,
+		"cookieConfig": updatedConfig,
+	})
+}
+
+// DeleteAppCookieConfig removes the cookie configuration override for a specific app
+// DELETE /apps/:appId/cookie-config
+func (h *AppHandler) DeleteAppCookieConfig(c forge.Context) error {
+	if h.rl != nil {
+		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
+		if err != nil || !ok {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
+		}
+	}
+
+	appIDStr := c.Param("appId")
+	if appIDStr == "" {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	}
+
+	appID, err := xid.FromString(appIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
+	}
+
+	if !h.checkRBAC(c, "update", "organization:"+appID.String(), &appID) {
+		return c.JSON(http.StatusForbidden, errs.New("FORBIDDEN", "Access forbidden", http.StatusForbidden))
+	}
+
+	// Get the app to update its metadata
+	existingApp, err := h.app.FindAppByID(c.Request().Context(), appID)
+	if err != nil {
+		return handleError(c, err, "APP_NOT_FOUND", "App not found", http.StatusNotFound)
+	}
+
+	// Remove cookie config from metadata
+	if existingApp.Metadata != nil {
+		delete(existingApp.Metadata, "sessionCookie")
+	}
+
+	// Update the app
+	updateReq := &app.UpdateAppRequest{
+		Metadata: existingApp.Metadata,
+	}
+	_, err = h.app.UpdateApp(c.Request().Context(), appID, updateReq)
+	if err != nil {
+		return handleError(c, err, "DELETE_COOKIE_CONFIG_FAILED", "Failed to delete cookie configuration", http.StatusInternalServerError)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":  "deleted",
+		"message": "Cookie configuration removed, using global defaults",
+	})
+}

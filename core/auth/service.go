@@ -57,7 +57,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
 		AppID:     appID,
 		UserID:    u.ID,
-		Remember:  req.Remember,
+		Remember:  req.RememberMe,
 		IPAddress: req.IPAddress,
 		UserAgent: req.UserAgent,
 	})
@@ -85,7 +85,7 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
 		AppID:     appID,
 		UserID:    u.ID,
-		Remember:  req.Remember || req.RememberMe,
+		Remember:  req.RememberMe,
 		IPAddress: req.IPAddress,
 		UserAgent: req.UserAgent,
 	})

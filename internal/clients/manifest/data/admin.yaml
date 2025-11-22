@@ -73,13 +73,34 @@ routes:
       method: GET
       path: /audit-logs
 types:
-    - name: ListSessionsRequest
+    - name: UnbanUser_reqBody
+      fields:
+        reason: string
+    - name: SetUserRole_reqBody
+      fields:
+        role: string!
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: Plugin
+      fields:
+        "": '*Handler'
+    - name: ListUsersRequest
       fields:
         '-': xid.ID!
         app_id: xid.ID!
         limit: int!
         page: int!
-        user_id: '*xid.ID!'
+        role: string!
+        search: string!
+        status: string!
+        user_organization_id: '*xid.ID!'
+    - name: UnbanUserRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        reason: string!
+        user_id: xid.ID!
         user_organization_id: '*xid.ID!'
     - name: ListSessionsResponse
       fields:
@@ -101,19 +122,9 @@ types:
       fields:
         expires_at: '*time.Time'
         reason: string!
-    - name: UnbanUser_reqBody
+    - name: Service
       fields:
-        reason: string
-    - name: Plugin
-      fields:
-        "": '*Handler'
-    - name: Config
-      fields:
-        allow_impersonation: bool!
-        allow_user_creation: bool!
-        allow_user_deletion: bool!
-        max_impersonation_duration: time.Duration!
-        required_role: string!
+        "": ""
     - name: ListUsersResponse
       fields:
         limit: int!
@@ -136,9 +147,14 @@ types:
         duration: time.Duration!
         user_id: xid.ID!
         user_organization_id: '*xid.ID!'
-    - name: Handler
+    - name: ListSessionsRequest
       fields:
-        "": '*Service'
+        '-': xid.ID!
+        app_id: xid.ID!
+        limit: int!
+        page: int!
+        user_id: '*xid.ID!'
+        user_organization_id: '*xid.ID!'
     - name: StatsResponse
       fields:
         active_sessions: int!
@@ -147,26 +163,16 @@ types:
         timestamp: string!
         total_sessions: int!
         total_users: int!
-    - name: Service
+    - name: ImpersonateUser_reqBody
       fields:
-        "": ""
-    - name: ListUsersRequest
+        duration: time.Duration
+    - name: Config
       fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        limit: int!
-        page: int!
-        role: string!
-        search: string!
-        status: string!
-        user_organization_id: '*xid.ID!'
-    - name: SetUserRoleRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        role: string!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
+        allow_impersonation: bool!
+        allow_user_creation: bool!
+        allow_user_deletion: bool!
+        max_impersonation_duration: time.Duration!
+        required_role: string!
     - name: CreateUserRequest
       fields:
         '-': xid.ID!
@@ -179,16 +185,10 @@ types:
         role: string!
         user_organization_id: '*xid.ID!'
         username: string!
-    - name: UnbanUserRequest
+    - name: SetUserRoleRequest
       fields:
         '-': xid.ID!
         app_id: xid.ID!
-        reason: string!
+        role: string!
         user_id: xid.ID!
         user_organization_id: '*xid.ID!'
-    - name: ImpersonateUser_reqBody
-      fields:
-        duration: time.Duration
-    - name: SetUserRole_reqBody
-      fields:
-        role: string!

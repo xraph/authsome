@@ -39,15 +39,15 @@ type SuccessResponse struct {
 // AuthResponse represents a successful authentication response with user, session, and token
 type AuthResponse struct {
 	User         *user.User       `json:"user"`
-	Session      *session.Session `json:"session"`
-	Token        string           `json:"token"`
+	Session      *session.Session `json:"session,omitempty"`
+	Token        string           `json:"token,omitempty"`
 	RequireTwoFA bool             `json:"requireTwofa,omitempty"`
 }
 
 // TwoFARequiredResponse indicates that two-factor authentication is required
 type TwoFARequiredResponse struct {
 	User         *user.User `json:"user"`
-	RequireTwoFA bool       `json:"requireTwofa"`
+	RequireTwoFA bool       `json:"requireTwofa,omitempty"`
 	DeviceID     string     `json:"deviceId,omitempty"`
 }
 
@@ -56,11 +56,11 @@ type TwoFARequiredResponse struct {
 type VerifyResponse struct {
 	User    interface{} `json:"user"`
 	Session interface{} `json:"session"`
-	Token   string      `json:"token"`
+	Token   string      `json:"token,omitempty"`
 }
 
 // SessionResponse represents a session query response
 type SessionResponse struct {
 	User    *user.User       `json:"user"`
-	Session *session.Session `json:"session"`
+	Session *session.Session `json:"session,omitempty"`
 }

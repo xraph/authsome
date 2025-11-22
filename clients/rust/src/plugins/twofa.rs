@@ -19,10 +19,10 @@ impl TwofaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct EnableRequest {
-        #[serde(rename = "user_id")]
-        pub user_id: String,
         #[serde(rename = "method")]
         pub method: String,
+        #[serde(rename = "user_id")]
+        pub user_id: String,
     }
 
     pub async fn enable(
@@ -45,16 +45,10 @@ impl TwofaPlugin {{
         pub user_id: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct VerifyResponse {
-        #[serde(rename = "status")]
-        pub status: String,
-    }
-
     pub async fn verify(
         &self,
         _request: VerifyRequest,
-    ) -> Result<VerifyResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -65,16 +59,10 @@ impl TwofaPlugin {{
         pub user_id: String,
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct DisableResponse {
-        #[serde(rename = "status")]
-        pub status: String,
-    }
-
     pub async fn disable(
         &self,
         _request: DisableRequest,
-    ) -> Result<DisableResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -134,8 +122,12 @@ impl TwofaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct StatusResponse {
-        #[serde(rename = "status")]
-        pub status: String,
+        #[serde(rename = "enabled")]
+        pub enabled: bool,
+        #[serde(rename = "method")]
+        pub method: String,
+        #[serde(rename = "trusted")]
+        pub trusted: bool,
     }
 
     /// Status returns whether 2FA is enabled and whether the device is trusted

@@ -50,7 +50,7 @@ POST /api/auth/signin/social
         #[serde(rename = "isNewUser")]
         pub is_new_user: bool,
         #[serde(rename = "user")]
-        pub user: ,
+        pub user: *schema.User,
     }
 
     /// Callback handles OAuth provider callback
@@ -86,17 +86,11 @@ POST /api/auth/account/link
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct UnlinkAccountResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
     /// UnlinkAccount unlinks a social provider from the current user
 DELETE /api/auth/account/unlink/:provider
     pub async fn unlink_account(
         &self,
-    ) -> Result<UnlinkAccountResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -104,7 +98,7 @@ DELETE /api/auth/account/unlink/:provider
     #[derive(Debug, Deserialize)]
     pub struct ListProvidersResponse {
         #[serde(rename = "providers")]
-        pub providers: ,
+        pub providers: []string,
     }
 
     /// ListProviders returns available OAuth providers

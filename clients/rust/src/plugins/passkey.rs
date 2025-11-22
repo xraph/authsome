@@ -17,82 +17,39 @@ impl PasskeyPlugin {{
         Self { client: None }
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct BeginRegisterRequest {
-        #[serde(rename = "user_id")]
-        pub user_id: String,
-    }
-
+    /// BeginRegister initiates passkey registration with WebAuthn challenge
     pub async fn begin_register(
         &self,
-        _request: BeginRegisterRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct FinishRegisterRequest {
-        #[serde(rename = "credential_id")]
-        pub credential_id: String,
-        #[serde(rename = "user_id")]
-        pub user_id: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct FinishRegisterResponse {
-        #[serde(rename = "status")]
-        pub status: String,
-    }
-
+    /// FinishRegister completes passkey registration with attestation verification
     pub async fn finish_register(
         &self,
-        _request: FinishRegisterRequest,
-    ) -> Result<FinishRegisterResponse> {{
-        // TODO: Implement plugin method
-        unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Serialize)]
-    pub struct BeginLoginRequest {
-        #[serde(rename = "user_id")]
-        pub user_id: String,
-    }
-
-    pub async fn begin_login(
-        &self,
-        _request: BeginLoginRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct FinishLoginRequest {
-        #[serde(rename = "remember")]
-        pub remember: bool,
-        #[serde(rename = "user_id")]
-        pub user_id: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct FinishLoginResponse {
-        #[serde(rename = "session")]
-        pub session: ,
-        #[serde(rename = "token")]
-        pub token: String,
-        #[serde(rename = "user")]
-        pub user: ,
-    }
-
-    pub async fn finish_login(
+    /// BeginLogin initiates passkey authentication with WebAuthn challenge
+    pub async fn begin_login(
         &self,
-        _request: FinishLoginRequest,
-    ) -> Result<FinishLoginResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
+    /// FinishLogin completes passkey authentication with signature verification
+    pub async fn finish_login(
+        &self,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
+    /// List retrieves all passkeys for a user
     pub async fn list(
         &self,
     ) -> Result<()> {
@@ -100,15 +57,18 @@ impl PasskeyPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct DeleteResponse {
-        #[serde(rename = "status")]
-        pub status: String,
+    /// Update updates a passkey's metadata (name)
+    pub async fn update(
+        &self,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
     }
 
+    /// Delete removes a passkey
     pub async fn delete(
         &self,
-    ) -> Result<DeleteResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

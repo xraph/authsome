@@ -39,16 +39,12 @@ routes:
       request_type: VerifyRequest
       response_type: PhoneVerifyResponse
 types:
-    - name: Plugin
+    - name: VerifyRequest
       fields:
-        "": Config
-    - name: Handler
-      fields:
-        "": '*rl.Service'
-    - name: SendCodeResponse
-      fields:
-        dev_code: string!
-        status: string!
+        code: string!
+        email: string!
+        phone: string!
+        remember: bool!
     - name: Config
       fields:
         allowImplicitSignup: bool!
@@ -73,20 +69,24 @@ types:
       fields:
         max: int!
         window: time.Duration!
-    - name: Service
+    - name: Handler
       fields:
-        "": Config
+        "": '*rl.Service'
     - name: SendCodeRequest
       fields:
         phone: string!
-    - name: VerifyRequest
+    - name: SendCodeResponse
       fields:
-        code: string!
-        email: string!
-        phone: string!
-        remember: bool!
+        dev_code: string!
+        status: string!
     - name: PhoneVerifyResponse
       fields:
         session: '*session.Session!'
         token: string!
         user: '*user.User!'
+    - name: Plugin
+      fields:
+        "": Config
+    - name: Service
+      fields:
+        "": '*user.Service'

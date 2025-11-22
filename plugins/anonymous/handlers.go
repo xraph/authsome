@@ -7,15 +7,22 @@ import (
 	"strings"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/helpers"
 	"github.com/xraph/forge"
 )
 
-type Handler struct{ svc *Service }
+type Handler struct {
+	svc      *Service
+	authInst core.Authsome
+}
 
-func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
+func NewHandler(s *Service, authInst core.Authsome) *Handler {
+	return &Handler{svc: s, authInst: authInst}
+}
 
 // Response types - use shared responses from core
 type ErrorResponse = responses.ErrorResponse
@@ -83,6 +90,11 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	// Get user for response
 	user, _ := h.svc.GetUserByID(c.Request().Context(), sess.UserID)
+
+	// Set session cookie if enabled
+	if h.authInst != nil {
+		_ = helpers.SetSessionCookieFromAuth(c, h.authInst, sess.Token, sess.ExpiresAt)
+	}
 
 	return c.JSON(http.StatusOK, SignInResponse{
 		Token:   sess.Token,

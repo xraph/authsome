@@ -12,9 +12,9 @@ export class MfaPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async enrollFactor(request: types.FactorEnrollmentRequest): Promise<types.ErrorResponse> {
+  async enrollFactor(request: types.FactorEnrollmentRequest): Promise<void> {
     const path = '/mfa/factors/enroll';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
@@ -24,9 +24,9 @@ export class MfaPlugin implements ClientPlugin {
     return this.client.request<types.FactorsResponse>('GET', path);
   }
 
-  async getFactor(): Promise<types.ErrorResponse> {
+  async getFactor(): Promise<void> {
     const path = '/mfa/factors/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
   async updateFactor(): Promise<types.MessageResponse> {
@@ -46,23 +46,23 @@ export class MfaPlugin implements ClientPlugin {
     });
   }
 
-  async initiateChallenge(request: types.ChallengeRequest): Promise<types.ErrorResponse> {
+  async initiateChallenge(request: types.ChallengeRequest): Promise<void> {
     const path = '/mfa/challenge';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async verifyChallenge(request: types.VerificationRequest): Promise<types.ErrorResponse> {
+  async verifyChallenge(request: types.VerificationRequest): Promise<void> {
     const path = '/mfa/verify';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+    return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getChallengeStatus(): Promise<types.ErrorResponse> {
+  async getChallengeStatus(): Promise<void> {
     const path = '/mfa/challenge/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
   async trustDevice(request: types.DeviceInfo): Promise<types.MessageResponse> {
@@ -82,14 +82,26 @@ export class MfaPlugin implements ClientPlugin {
     return this.client.request<types.MessageResponse>('DELETE', path);
   }
 
-  async getStatus(): Promise<types.ErrorResponse> {
+  async getStatus(): Promise<void> {
     const path = '/mfa/status';
-    return this.client.request<types.ErrorResponse>('GET', path);
+    return this.client.request<void>('GET', path);
   }
 
   async getPolicy(): Promise<types.MFAConfigResponse> {
     const path = '/mfa/policy';
     return this.client.request<types.MFAConfigResponse>('GET', path);
+  }
+
+  async adminUpdatePolicy(request: types.AdminPolicyRequest): Promise<void> {
+    const path = '/mfa/policy';
+    return this.client.request<void>('PUT', path, {
+      body: request,
+    });
+  }
+
+  async adminResetUserMFA(): Promise<void> {
+    const path = '/mfa/users/:id/reset';
+    return this.client.request<void>('POST', path);
   }
 
 }

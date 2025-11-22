@@ -12,23 +12,23 @@ export class PhonePlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async sendCode(request: types.SendCode_body): Promise<void> {
+  async sendCode(request: types.SendCodeRequest): Promise<void> {
     const path = '/phone/send-code';
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async verify(request: types.Verify_body): Promise<types.VerifyResponse> {
+  async verify(request: types.VerifyRequest): Promise<types.PhoneVerifyResponse> {
     const path = '/phone/verify';
-    return this.client.request<types.VerifyResponse>('POST', path, {
+    return this.client.request<types.PhoneVerifyResponse>('POST', path, {
       body: request,
     });
   }
 
-  async signIn(request: types.SignIn_body): Promise<types.VerifyResponse> {
+  async signIn(request: types.VerifyRequest): Promise<types.PhoneVerifyResponse> {
     const path = '/phone/signin';
-    return this.client.request<types.VerifyResponse>('POST', path, {
+    return this.client.request<types.PhoneVerifyResponse>('POST', path, {
       body: request,
     });
   }

@@ -34,29 +34,19 @@ impl EmailotpPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyRequest {
+        #[serde(rename = "otp")]
+        pub otp: String,
         #[serde(rename = "remember")]
         pub remember: bool,
         #[serde(rename = "email")]
         pub email: String,
-        #[serde(rename = "otp")]
-        pub otp: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct VerifyResponse {
-        #[serde(rename = "session")]
-        pub session: ,
-        #[serde(rename = "token")]
-        pub token: String,
-        #[serde(rename = "user")]
-        pub user: ,
     }
 
     /// Verify checks the OTP and creates a session on success
     pub async fn verify(
         &self,
         _request: VerifyRequest,
-    ) -> Result<VerifyResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

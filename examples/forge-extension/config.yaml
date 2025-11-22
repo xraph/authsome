@@ -23,7 +23,9 @@ authsome:
   # Optional: Use specific database from DatabaseManager
   # databaseName: main
   
-  # Optional: CORS configuration
+  # Optional: CORS configuration (disabled by default)
+  # Enable CORS if your frontend is on a different origin
+  corsEnabled: true  # Set to false to let Forge handle CORS
   trustedOrigins:
     - http://localhost:3000
     - http://localhost:8080

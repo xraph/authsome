@@ -70,64 +70,40 @@ func (p *Plugin) ListTemplates(ctx context.Context) error {
 	return nil
 }
 
-// UpdateTemplateResponse is the response for UpdateTemplate
-type UpdateTemplateResponse struct {
-	Message string `json:"message"`
-}
-
 // UpdateTemplate UpdateTemplate updates a template
-func (p *Plugin) UpdateTemplate(ctx context.Context) (*UpdateTemplateResponse, error) {
+func (p *Plugin) UpdateTemplate(ctx context.Context) error {
 	path := "/:id"
-	var result UpdateTemplateResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// DeleteTemplateResponse is the response for DeleteTemplate
-type DeleteTemplateResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // DeleteTemplate DeleteTemplate deletes a template
-func (p *Plugin) DeleteTemplate(ctx context.Context) (*DeleteTemplateResponse, error) {
+func (p *Plugin) DeleteTemplate(ctx context.Context) error {
 	path := "/:id"
-	var result DeleteTemplateResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// ResetTemplateResponse is the response for ResetTemplate
-type ResetTemplateResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // ResetTemplate ResetTemplate resets a template to default values
-func (p *Plugin) ResetTemplate(ctx context.Context) (*ResetTemplateResponse, error) {
+func (p *Plugin) ResetTemplate(ctx context.Context) error {
 	path := "/:id/reset"
-	var result ResetTemplateResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// ResetAllTemplatesResponse is the response for ResetAllTemplates
-type ResetAllTemplatesResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // ResetAllTemplates ResetAllTemplates resets all templates for an app to defaults
-func (p *Plugin) ResetAllTemplates(ctx context.Context) (*ResetAllTemplatesResponse, error) {
+func (p *Plugin) ResetAllTemplates(ctx context.Context) error {
 	path := "/reset-all"
-	var result ResetAllTemplatesResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // GetTemplateDefaults GetTemplateDefaults returns default template metadata
@@ -204,18 +180,12 @@ func (p *Plugin) ResendNotification(ctx context.Context) error {
 	return nil
 }
 
-// HandleWebhookResponse is the response for HandleWebhook
-type HandleWebhookResponse struct {
-	Status string `json:"status"`
-}
-
 // HandleWebhook HandleWebhook handles provider webhook callbacks
-func (p *Plugin) HandleWebhook(ctx context.Context) (*HandleWebhookResponse, error) {
+func (p *Plugin) HandleWebhook(ctx context.Context) error {
 	path := "/notifications/webhook/:provider"
-	var result HandleWebhookResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 

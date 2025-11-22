@@ -31,17 +31,17 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // CreateVerificationSessionRequest is the request for CreateVerificationSession
 type CreateVerificationSessionRequest struct {
-	SuccessUrl string `json:"successUrl"`
 	CancelUrl string `json:"cancelUrl"`
 	Config authsome. `json:"config"`
 	Metadata authsome. `json:"metadata"`
 	Provider string `json:"provider"`
 	RequiredChecks authsome.[]string `json:"requiredChecks"`
+	SuccessUrl string `json:"successUrl"`
 }
 
 // CreateVerificationSessionResponse is the response for CreateVerificationSession
 type CreateVerificationSessionResponse struct {
-	Error string `json:"error"`
+	Session authsome.*schema.IdentityVerificationSession `json:"session"`
 }
 
 // CreateVerificationSession CreateVerificationSession creates a new verification session
@@ -57,7 +57,7 @@ func (p *Plugin) CreateVerificationSession(ctx context.Context, req *CreateVerif
 
 // GetVerificationSessionResponse is the response for GetVerificationSession
 type GetVerificationSessionResponse struct {
-	Error string `json:"error"`
+	Session authsome.*schema.IdentityVerificationSession `json:"session"`
 }
 
 // GetVerificationSession GetVerificationSession retrieves a verification session
@@ -73,7 +73,7 @@ func (p *Plugin) GetVerificationSession(ctx context.Context) (*GetVerificationSe
 
 // GetVerificationResponse is the response for GetVerification
 type GetVerificationResponse struct {
-	Verification authsome. `json:"verification"`
+	Verification authsome.*schema.IdentityVerification `json:"verification"`
 }
 
 // GetVerification GetVerification retrieves a verification by ID
@@ -89,7 +89,10 @@ func (p *Plugin) GetVerification(ctx context.Context) (*GetVerificationResponse,
 
 // GetUserVerificationsResponse is the response for GetUserVerifications
 type GetUserVerificationsResponse struct {
-	Error string `json:"error"`
+	Offset int `json:"offset"`
+	Total int `json:"total"`
+	Verifications authsome.[]*schema.IdentityVerification `json:"verifications"`
+	Limit int `json:"limit"`
 }
 
 // GetUserVerifications GetUserVerifications retrieves all verifications for the current user
@@ -105,7 +108,7 @@ func (p *Plugin) GetUserVerifications(ctx context.Context) (*GetUserVerification
 
 // GetUserVerificationStatusResponse is the response for GetUserVerificationStatus
 type GetUserVerificationStatusResponse struct {
-	Status string `json:"status"`
+	Status authsome.*schema.UserVerificationStatus `json:"status"`
 }
 
 // GetUserVerificationStatus GetUserVerificationStatus retrieves the verification status for the current user
@@ -124,36 +127,24 @@ type RequestReverificationRequest struct {
 	Reason string `json:"reason"`
 }
 
-// RequestReverificationResponse is the response for RequestReverification
-type RequestReverificationResponse struct {
-	Message string `json:"message"`
-}
-
 // RequestReverification RequestReverification requests re-verification for the current user
 POST /verification/me/reverify
-func (p *Plugin) RequestReverification(ctx context.Context, req *RequestReverificationRequest) (*RequestReverificationResponse, error) {
+func (p *Plugin) RequestReverification(ctx context.Context, req *RequestReverificationRequest) error {
 	path := "/me/reverify"
-	var result RequestReverificationResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// HandleWebhookResponse is the response for HandleWebhook
-type HandleWebhookResponse struct {
-	Error string `json:"error"`
+	return nil
 }
 
 // HandleWebhook HandleWebhook handles provider webhook callbacks
 POST /verification/webhook/:provider
-func (p *Plugin) HandleWebhook(ctx context.Context) (*HandleWebhookResponse, error) {
+func (p *Plugin) HandleWebhook(ctx context.Context) error {
 	path := "/webhook/:provider"
-	var result HandleWebhookResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // AdminBlockUserRequest is the request for AdminBlockUser
@@ -161,41 +152,29 @@ type AdminBlockUserRequest struct {
 	Reason string `json:"reason"`
 }
 
-// AdminBlockUserResponse is the response for AdminBlockUser
-type AdminBlockUserResponse struct {
-	Message string `json:"message"`
-}
-
 // AdminBlockUser AdminBlockUser blocks a user from verification (admin only)
 POST /verification/admin/users/:userId/block
-func (p *Plugin) AdminBlockUser(ctx context.Context, req *AdminBlockUserRequest) (*AdminBlockUserResponse, error) {
+func (p *Plugin) AdminBlockUser(ctx context.Context, req *AdminBlockUserRequest) error {
 	path := "/users/:userId/block"
-	var result AdminBlockUserResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
-}
-
-// AdminUnblockUserResponse is the response for AdminUnblockUser
-type AdminUnblockUserResponse struct {
-	Message string `json:"message"`
+	return nil
 }
 
 // AdminUnblockUser AdminUnblockUser unblocks a user (admin only)
 POST /verification/admin/users/:userId/unblock
-func (p *Plugin) AdminUnblockUser(ctx context.Context) (*AdminUnblockUserResponse, error) {
+func (p *Plugin) AdminUnblockUser(ctx context.Context) error {
 	path := "/users/:userId/unblock"
-	var result AdminUnblockUserResponse
 	// Note: This requires exposing client.request or using a different approach
 	// For now, this is a placeholder
 	_ = path
-	return &result, nil
+	return nil
 }
 
 // AdminGetUserVerificationStatusResponse is the response for AdminGetUserVerificationStatus
 type AdminGetUserVerificationStatusResponse struct {
-	Status string `json:"status"`
+	Status authsome.*schema.UserVerificationStatus `json:"status"`
 }
 
 // AdminGetUserVerificationStatus AdminGetUserVerificationStatus retrieves verification status for any user (admin only)
@@ -211,7 +190,10 @@ func (p *Plugin) AdminGetUserVerificationStatus(ctx context.Context) (*AdminGetU
 
 // AdminGetUserVerificationsResponse is the response for AdminGetUserVerifications
 type AdminGetUserVerificationsResponse struct {
-	Error string `json:"error"`
+	Verifications authsome.[]*schema.IdentityVerification `json:"verifications"`
+	Limit int `json:"limit"`
+	Offset int `json:"offset"`
+	Total int `json:"total"`
 }
 
 // AdminGetUserVerifications AdminGetUserVerifications retrieves all verifications for any user (admin only)

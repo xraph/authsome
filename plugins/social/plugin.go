@@ -232,8 +232,19 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Use the handler created during Init()
 	handler := p.handler
 
+	// Get authentication middleware for API key validation
+	authMw := p.authInst.AuthMiddleware()
+	
+	// Wrap handler with middleware if available
+	wrapHandler := func(h func(forge.Context) error) func(forge.Context) error {
+		if authMw != nil {
+			return authMw(h)
+		}
+		return h
+	}
+
 	// Router is already scoped to the correct basePath
-	router.POST("/signin/social", handler.SignIn,
+	router.POST("/signin/social", wrapHandler(handler.SignIn),
 		forge.WithName("social.signin"),
 		forge.WithSummary("Sign in with social provider"),
 		forge.WithDescription("Initiate OAuth sign-in flow with a social provider (Google, GitHub, Facebook, etc.)"),
@@ -243,7 +254,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Social", "Authentication"),
 		forge.WithValidation(true),
 	)
-	router.GET("/callback/:provider", handler.Callback,
+	router.GET("/callback/:provider", wrapHandler(handler.Callback),
 		forge.WithName("social.callback"),
 		forge.WithSummary("OAuth callback"),
 		forge.WithDescription("Handle OAuth provider callback and complete authentication"),
@@ -251,7 +262,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "OAuth error", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 	)
-	router.POST("/account/link", handler.LinkAccount,
+	router.POST("/account/link", wrapHandler(handler.LinkAccount),
 		forge.WithName("social.link"),
 		forge.WithSummary("Link social account"),
 		forge.WithDescription("Link a social provider account to existing user account"),
@@ -262,7 +273,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Social", "Account Management"),
 		forge.WithValidation(true),
 	)
-	router.DELETE("/account/unlink/:provider", handler.UnlinkAccount,
+	router.DELETE("/account/unlink/:provider", wrapHandler(handler.UnlinkAccount),
 		forge.WithName("social.unlink"),
 		forge.WithSummary("Unlink social account"),
 		forge.WithDescription("Unlink a social provider account from user account"),
@@ -271,7 +282,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not linked", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
 	)
-	router.GET("/providers", handler.ListProviders,
+	router.GET("/providers", wrapHandler(handler.ListProviders),
 		forge.WithName("social.providers.list"),
 		forge.WithSummary("List available providers"),
 		forge.WithDescription("List all configured social authentication providers"),

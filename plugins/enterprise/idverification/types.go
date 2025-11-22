@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/schema"
+	"github.com/xraph/authsome/core/base"
 )
 
 // =============================================================================
@@ -114,25 +114,25 @@ type VerificationResult struct {
 
 // VerificationSessionResponse represents a single verification session response
 type VerificationSessionResponse struct {
-	Session *schema.IdentityVerificationSession `json:"session"`
+	Session *base.IdentityVerificationSession `json:"session"`
 }
 
 // VerificationResponse represents a single verification response
 type VerificationResponse struct {
-	Verification *schema.IdentityVerification `json:"verification"`
+	Verification *base.IdentityVerification `json:"verification"`
 }
 
 // VerificationListResponse represents a list of verifications with pagination
 type VerificationListResponse struct {
-	Verifications []*schema.IdentityVerification `json:"verifications"`
-	Limit         int                            `json:"limit"`
-	Offset        int                            `json:"offset"`
-	Total         int                            `json:"total,omitempty"`
+	Verifications []*base.IdentityVerification `json:"verifications"`
+	Limit         int                          `json:"limit"`
+	Offset        int                          `json:"offset"`
+	Total         int                          `json:"total,omitempty"`
 }
 
 // UserVerificationStatusResponse represents a user's verification status
 type UserVerificationStatusResponse struct {
-	Status *schema.UserVerificationStatus `json:"status"`
+	Status *base.UserVerificationStatus `json:"status"`
 }
 
 // WebhookResponse represents a webhook processing response
