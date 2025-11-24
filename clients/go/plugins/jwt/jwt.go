@@ -32,45 +32,35 @@ func (p *Plugin) Init(client *authsome.Client) error {
 // CreateJWTKey CreateJWTKey creates a new JWT signing key
 func (p *Plugin) CreateJWTKey(ctx context.Context) error {
 	path := "/createjwtkey"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+	return err
 }
 
 // ListJWTKeys ListJWTKeys lists JWT signing keys
 func (p *Plugin) ListJWTKeys(ctx context.Context) error {
 	path := "/listjwtkeys"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // GetJWKS GetJWKS returns the JSON Web Key Set
 func (p *Plugin) GetJWKS(ctx context.Context) error {
 	path := "/jwks"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // GenerateToken GenerateToken generates a new JWT token
 func (p *Plugin) GenerateToken(ctx context.Context) error {
 	path := "/generate"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+	return err
 }
 
 // VerifyToken VerifyToken verifies a JWT token
 func (p *Plugin) VerifyToken(ctx context.Context) error {
 	path := "/verify"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+	return err
 }
 

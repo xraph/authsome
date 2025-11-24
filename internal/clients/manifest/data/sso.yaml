@@ -111,7 +111,8 @@ types:
       fields:
         metadata: string!
     - name: RedisStateStore
-      fields: {}
+      fields:
+        client: '*redis.Client'
     - name: OIDCLoginRequest
       fields:
         nonce: string!

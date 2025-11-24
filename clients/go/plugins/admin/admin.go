@@ -29,134 +29,80 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// CreateUserRequest is the request for CreateUser
-type CreateUserRequest struct {
-	Name *string `json:"name,omitempty"`
-	Password *string `json:"password,omitempty"`
-	Role *string `json:"role,omitempty"`
-	Username *string `json:"username,omitempty"`
-	Email string `json:"email"`
-	Email_verified bool `json:"email_verified"`
-	Metadata *authsome. `json:"metadata,omitempty"`
-}
-
 // CreateUser CreateUser handles POST /admin/users
-func (p *Plugin) CreateUser(ctx context.Context, req *CreateUserRequest) error {
+func (p *Plugin) CreateUser(ctx context.Context, req *authsome.CreateUserRequest) error {
 	path := "/users"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // ListUsers ListUsers handles GET /admin/users
 func (p *Plugin) ListUsers(ctx context.Context) error {
 	path := "/users"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // DeleteUser DeleteUser handles DELETE /admin/users/:id
 func (p *Plugin) DeleteUser(ctx context.Context) error {
 	path := "/users/:id"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// BanUserRequest is the request for BanUser
-type BanUserRequest struct {
-	Expires_at *authsome.*time.Time `json:"expires_at,omitempty"`
-	Reason string `json:"reason"`
+	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
+	return err
 }
 
 // BanUser BanUser handles POST /admin/users/:id/ban
-func (p *Plugin) BanUser(ctx context.Context, req *BanUserRequest) error {
+func (p *Plugin) BanUser(ctx context.Context, req *authsome.BanUserRequest) error {
 	path := "/users/:id/ban"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// UnbanUserRequest is the request for UnbanUser
-type UnbanUserRequest struct {
-	Reason *string `json:"reason,omitempty"`
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // UnbanUser UnbanUser handles POST /admin/users/:id/unban
-func (p *Plugin) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
+func (p *Plugin) UnbanUser(ctx context.Context, req *authsome.UnbanUserRequest) error {
 	path := "/users/:id/unban"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// ImpersonateUserRequest is the request for ImpersonateUser
-type ImpersonateUserRequest struct {
-	Duration *authsome.time.Duration `json:"duration,omitempty"`
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // ImpersonateUser ImpersonateUser handles POST /admin/users/:id/impersonate
-func (p *Plugin) ImpersonateUser(ctx context.Context, req *ImpersonateUserRequest) error {
+func (p *Plugin) ImpersonateUser(ctx context.Context, req *authsome.ImpersonateUserRequest) error {
 	path := "/users/:id/impersonate"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// SetUserRoleRequest is the request for SetUserRole
-type SetUserRoleRequest struct {
-	Role string `json:"role"`
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // SetUserRole SetUserRole handles POST /admin/users/:id/role
-func (p *Plugin) SetUserRole(ctx context.Context, req *SetUserRoleRequest) error {
+func (p *Plugin) SetUserRole(ctx context.Context, req *authsome.SetUserRoleRequest) error {
 	path := "/users/:id/role"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // ListSessions ListSessions handles GET /admin/sessions
 func (p *Plugin) ListSessions(ctx context.Context) error {
 	path := "/sessions"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // RevokeSession RevokeSession handles DELETE /admin/sessions/:id
 func (p *Plugin) RevokeSession(ctx context.Context) error {
 	path := "/sessions/:id"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
+	return err
 }
 
 // GetStats GetStats handles GET /admin/stats
 func (p *Plugin) GetStats(ctx context.Context) error {
 	path := "/stats"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // GetAuditLogs GetAuditLogs handles GET /admin/audit
 func (p *Plugin) GetAuditLogs(ctx context.Context) error {
 	path := "/audit-logs"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 

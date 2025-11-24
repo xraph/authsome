@@ -53,6 +53,6 @@ types:
         password: string!
     - name: SignInResponse
       fields:
-        session: '!'
+        session: Session!
         token: string!
-        user: '!'
+        user: User!

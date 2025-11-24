@@ -29,43 +29,25 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// SignInResponse is the response for SignIn
-type SignInResponse struct {
-	Token string `json:"token"`
-	User authsome. `json:"user"`
-	Session authsome. `json:"session"`
-}
-
 // SignIn SignIn creates a guest user and session
-func (p *Plugin) SignIn(ctx context.Context) (*SignInResponse, error) {
+func (p *Plugin) SignIn(ctx context.Context) (*authsome.SignInResponse, error) {
 	path := "/anonymous/signin"
-	var result SignInResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.SignInResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
-// LinkRequest is the request for Link
-type LinkRequest struct {
-	Password string `json:"password"`
-	Email string `json:"email"`
-	Name string `json:"name"`
-}
-
-// LinkResponse is the response for Link
-type LinkResponse struct {
-	Message string `json:"message"`
-	User authsome. `json:"user"`
-}
-
 // Link Link upgrades an anonymous session to a real account
-func (p *Plugin) Link(ctx context.Context, req *LinkRequest) (*LinkResponse, error) {
+func (p *Plugin) Link(ctx context.Context, req *authsome.LinkRequest) (*authsome.LinkResponse, error) {
 	path := "/anonymous/link"
-	var result LinkResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.LinkResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 

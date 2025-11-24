@@ -112,6 +112,9 @@ func (e *Extension) Register(app forge.App) error {
 	if e.config.SessionCookie != nil {
 		opts = append(opts, authsome.WithGlobalCookieConfig(*e.config.SessionCookie))
 	}
+	if e.config.AuthMiddlewareConfig != nil {
+		opts = append(opts, authsome.WithAuthMiddlewareConfig(*e.config.AuthMiddlewareConfig))
+	}
 	opts = append(opts, authsome.WithRBACEnforcement(e.config.RBACEnforce))
 
 	// Create AuthSome instance

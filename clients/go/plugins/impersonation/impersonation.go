@@ -29,71 +29,45 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// StartImpersonationRequest is the request for StartImpersonation
-type StartImpersonationRequest struct {
-	Duration_minutes *int `json:"duration_minutes,omitempty"`
-	Reason string `json:"reason"`
-	Target_user_id string `json:"target_user_id"`
-	Ticket_number *string `json:"ticket_number,omitempty"`
-}
-
 // StartImpersonation StartImpersonation handles POST /impersonation/start
-func (p *Plugin) StartImpersonation(ctx context.Context, req *StartImpersonationRequest) error {
+func (p *Plugin) StartImpersonation(ctx context.Context, req *authsome.StartImpersonationRequest) error {
 	path := "/start"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// EndImpersonationRequest is the request for EndImpersonation
-type EndImpersonationRequest struct {
-	Impersonation_id string `json:"impersonation_id"`
-	Reason *string `json:"reason,omitempty"`
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // EndImpersonation EndImpersonation handles POST /impersonation/end
-func (p *Plugin) EndImpersonation(ctx context.Context, req *EndImpersonationRequest) error {
+func (p *Plugin) EndImpersonation(ctx context.Context, req *authsome.EndImpersonationRequest) error {
 	path := "/end"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // GetImpersonation GetImpersonation handles GET /impersonation/:id
 func (p *Plugin) GetImpersonation(ctx context.Context) error {
 	path := "/:id"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // ListImpersonations ListImpersonations handles GET /impersonation
 func (p *Plugin) ListImpersonations(ctx context.Context) error {
 	path := "/"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // ListAuditEvents ListAuditEvents handles GET /impersonation/audit
 func (p *Plugin) ListAuditEvents(ctx context.Context) error {
 	path := "/audit"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 
 // VerifyImpersonation VerifyImpersonation handles GET /impersonation/verify/:sessionId
 func (p *Plugin) VerifyImpersonation(ctx context.Context) error {
 	path := "/verify"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+	return err
 }
 

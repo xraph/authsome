@@ -183,8 +183,7 @@ types:
       fields:
         providers: '[]string!'
     - name: MemoryStateStore
-      fields:
-        "": ""
+      fields: {}
     - name: RedisStateStore
       fields:
-        "": '*redis.Client'
+        client: '*redis.Client'

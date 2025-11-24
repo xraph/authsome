@@ -29,36 +29,25 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// SignUpResponse is the response for SignUp
-type SignUpResponse struct {
-	Message string `json:"message"`
-	Status string `json:"status"`
-}
-
 // SignUp SignUp handles user registration with username and password
-func (p *Plugin) SignUp(ctx context.Context) (*SignUpResponse, error) {
+func (p *Plugin) SignUp(ctx context.Context) (*authsome.SignUpResponse, error) {
 	path := "/username/signup"
-	var result SignUpResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.SignUpResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
-// SignInResponse is the response for SignIn
-type SignInResponse struct {
-	Session authsome.*session.Session `json:"session"`
-	Token string `json:"token"`
-	User authsome.*user.User `json:"user"`
-}
-
 // SignIn SignIn handles user authentication with username and password
-func (p *Plugin) SignIn(ctx context.Context) (*SignInResponse, error) {
+func (p *Plugin) SignIn(ctx context.Context) (*authsome.SignInResponse, error) {
 	path := "/username/signin"
-	var result SignInResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.SignInResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 

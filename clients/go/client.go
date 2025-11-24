@@ -13,11 +13,15 @@ import (
 
 // Client is the main AuthSome client
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	token      string
-	headers    map[string]string
-	plugins    map[string]Plugin
+	baseURL       string
+	httpClient    *http.Client
+	token         string              // Session token (Bearer)
+	apiKey        string              // API key (pk_/sk_/rk_)
+	cookieJar     http.CookieJar      // For session cookies
+	headers       map[string]string
+	plugins       map[string]Plugin
+	appID         string              // Current app context
+	environmentID string              // Current environment context
 }
 
 // Option is a functional option for configuring the client
@@ -30,10 +34,27 @@ func WithHTTPClient(client *http.Client) Option {
 	}
 }
 
-// WithToken sets the authentication token
+// WithToken sets the authentication token (session token)
 func WithToken(token string) Option {
 	return func(c *Client) {
 		c.token = token
+	}
+}
+
+// WithAPIKey sets the API key for authentication
+func WithAPIKey(apiKey string) Option {
+	return func(c *Client) {
+		c.apiKey = apiKey
+	}
+}
+
+// WithCookieJar sets a cookie jar for session management
+func WithCookieJar(jar http.CookieJar) Option {
+	return func(c *Client) {
+		c.cookieJar = jar
+		if c.httpClient != nil {
+			c.httpClient.Jar = jar
+		}
 	}
 }
 
@@ -41,6 +62,14 @@ func WithToken(token string) Option {
 func WithHeaders(headers map[string]string) Option {
 	return func(c *Client) {
 		c.headers = headers
+	}
+}
+
+// WithAppContext sets the app and environment context for requests
+func WithAppContext(appID, envID string) Option {
+	return func(c *Client) {
+		c.appID = appID
+		c.environmentID = envID
 	}
 }
 
@@ -75,10 +104,31 @@ func (c *Client) SetToken(token string) {
 	c.token = token
 }
 
+// SetAPIKey sets the API key
+func (c *Client) SetAPIKey(apiKey string) {
+	c.apiKey = apiKey
+}
+
+// SetAppContext sets the app and environment context
+func (c *Client) SetAppContext(appID, envID string) {
+	c.appID = appID
+	c.environmentID = envID
+}
+
+// GetAppContext returns the current app and environment IDs
+func (c *Client) GetAppContext() (appID, envID string) {
+	return c.appID, c.environmentID
+}
+
 // GetPlugin returns a plugin by ID
 func (c *Client) GetPlugin(id string) (Plugin, bool) {
 	p, ok := c.plugins[id]
 	return p, ok
+}
+
+// Request makes an HTTP request - exposed for plugin use
+func (c *Client) Request(ctx context.Context, method, path string, body interface{}, result interface{}, auth bool) error {
+	return c.request(ctx, method, path, body, result, auth)
 }
 
 func (c *Client) request(ctx context.Context, method, path string, body interface{}, result interface{}, auth bool) error {
@@ -97,12 +147,29 @@ func (c *Client) request(ctx context.Context, method, path string, body interfac
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	// Set custom headers
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
 
-	if auth && c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+	// Auto-detect and set authentication
+	if auth {
+		// Priority 1: API key (if set)
+		if c.apiKey != "" {
+			req.Header.Set("Authorization", "ApiKey "+c.apiKey)
+		// Priority 2: Session token
+		} else if c.token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.token)
+		}
+		// Note: Cookies are automatically attached by httpClient if cookieJar is set
+	}
+
+	// Set app and environment context headers if available
+	if c.appID != "" {
+		req.Header.Set("X-App-ID", c.appID)
+	}
+	if c.environmentID != "" {
+		req.Header.Set("X-Environment-ID", c.environmentID)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -136,19 +203,6 @@ func (c *Client) request(ctx context.Context, method, path string, body interfac
 	return nil
 }
 
-// SignUpRequest is the request for SignUp
-type SignUpRequest struct {
-	Email string `json:"email"`
-	Password string `json:"password"`
-	Name *string `json:"name,omitempty"`
-}
-
-// SignUpResponse is the response for SignUp
-type SignUpResponse struct {
-	User User `json:"user"`
-	Session Session `json:"session"`
-}
-
 // SignUp Create a new user account
 func (c *Client) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpResponse, error) {
 	path := "/api/auth/signup"
@@ -158,19 +212,6 @@ func (c *Client) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpRespons
 		return nil, err
 	}
 	return &result, nil
-}
-
-// SignInRequest is the request for SignIn
-type SignInRequest struct {
-	Password string `json:"password"`
-	Email string `json:"email"`
-}
-
-// SignInResponse is the response for SignIn
-type SignInResponse struct {
-	User User `json:"user"`
-	Session Session `json:"session"`
-	RequiresTwoFactor bool `json:"requiresTwoFactor"`
 }
 
 // SignIn Sign in with email and password
@@ -184,11 +225,6 @@ func (c *Client) SignIn(ctx context.Context, req *SignInRequest) (*SignInRespons
 	return &result, nil
 }
 
-// SignOutResponse is the response for SignOut
-type SignOutResponse struct {
-	Success bool `json:"success"`
-}
-
 // SignOut Sign out and invalidate session
 func (c *Client) SignOut(ctx context.Context) (*SignOutResponse, error) {
 	path := "/api/auth/signout"
@@ -198,12 +234,6 @@ func (c *Client) SignOut(ctx context.Context) (*SignOutResponse, error) {
 		return nil, err
 	}
 	return &result, nil
-}
-
-// GetSessionResponse is the response for GetSession
-type GetSessionResponse struct {
-	User User `json:"user"`
-	Session Session `json:"session"`
 }
 
 // GetSession Get current session information
@@ -217,17 +247,6 @@ func (c *Client) GetSession(ctx context.Context) (*GetSessionResponse, error) {
 	return &result, nil
 }
 
-// UpdateUserRequest is the request for UpdateUser
-type UpdateUserRequest struct {
-	Email *string `json:"email,omitempty"`
-	Name *string `json:"name,omitempty"`
-}
-
-// UpdateUserResponse is the response for UpdateUser
-type UpdateUserResponse struct {
-	User User `json:"user"`
-}
-
 // UpdateUser Update current user profile
 func (c *Client) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*UpdateUserResponse, error) {
 	path := "/api/auth/user/update"
@@ -239,11 +258,6 @@ func (c *Client) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Updat
 	return &result, nil
 }
 
-// ListDevicesResponse is the response for ListDevices
-type ListDevicesResponse struct {
-	Devices []*Device `json:"devices"`
-}
-
 // ListDevices List user devices
 func (c *Client) ListDevices(ctx context.Context) (*ListDevicesResponse, error) {
 	path := "/api/auth/devices"
@@ -253,16 +267,6 @@ func (c *Client) ListDevices(ctx context.Context) (*ListDevicesResponse, error) 
 		return nil, err
 	}
 	return &result, nil
-}
-
-// RevokeDeviceRequest is the request for RevokeDevice
-type RevokeDeviceRequest struct {
-	DeviceId string `json:"deviceId"`
-}
-
-// RevokeDeviceResponse is the response for RevokeDevice
-type RevokeDeviceResponse struct {
-	Success bool `json:"success"`
 }
 
 // RevokeDevice Revoke a device

@@ -60,6 +60,22 @@ func (g *GoGenerator) Generate() error {
 		return err
 	}
 
+	if err := g.generateContextHelpers(); err != nil {
+		return err
+	}
+
+	if err := g.generateForgeMiddleware(); err != nil {
+		return err
+	}
+
+	if err := g.generateHTTPMiddleware(); err != nil {
+		return err
+	}
+
+	if err := g.generateContextFile(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -92,27 +108,179 @@ func (g *GoGenerator) generateTypes() error {
 	var sb strings.Builder
 
 	sb.WriteString("package authsome\n\n")
+	sb.WriteString("import (\n")
+	sb.WriteString("\t\"time\"\n")
+	sb.WriteString("\n")
+	sb.WriteString("\t\"github.com/rs/xid\"\n")
+	sb.WriteString(")\n\n")
 	sb.WriteString("// Auto-generated types\n\n")
+	
+	// Placeholder type aliases for undefined types referenced in manifests
+	sb.WriteString("// Placeholder type aliases for undefined enum/custom types\n")
+	sb.WriteString("type (\n")
+	sb.WriteString("\tRecoveryMethod       = string\n")
+	sb.WriteString("\tRecoveryStatus       = string\n")
+	sb.WriteString("\tComplianceStandard   = string\n")
+	sb.WriteString("\tVerificationMethod   = string\n")
+	sb.WriteString("\tFactorPriority       = string\n")
+	sb.WriteString("\tFactorType           = string\n")
+	sb.WriteString("\tFactorStatus         = string\n")
+	sb.WriteString("\tRiskLevel            = string\n")
+	sb.WriteString("\tSecurityLevel        = string\n")
+	sb.WriteString("\tChallengeStatus      = string\n")
+	sb.WriteString("\tJSONBMap             = map[string]interface{}\n")
+	sb.WriteString(")\n\n")
+	
+	// Placeholder types as empty interfaces (to be used directly, not as package qualifiers)
+	sb.WriteString("type (\n")
+	sb.WriteString("\tschema               schemaPlaceholder\n")
+	sb.WriteString("\tsession              sessionPlaceholder\n")
+	sb.WriteString("\tuser                 userPlaceholder\n")
+	sb.WriteString("\tproviders            providersPlaceholder\n")
+	sb.WriteString("\tapikey               apikeyPlaceholder\n")
+	sb.WriteString("\torganization         organizationPlaceholder\n")
+	sb.WriteString(")\n\n")
+	
+	// Placeholder structs for package-qualified types
+	sb.WriteString("// Placeholder structs for package-qualified types\n")
+	sb.WriteString("type schemaPlaceholder struct {\n")
+	sb.WriteString("\tIdentityVerificationSession interface{}\n")
+	sb.WriteString("\tSocialAccount               interface{}\n")
+	sb.WriteString("\tIdentityVerification        interface{}\n")
+	sb.WriteString("\tUserVerificationStatus      interface{}\n")
+	sb.WriteString("\tUser                        interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	sb.WriteString("type providersPlaceholder struct {\n")
+	sb.WriteString("\tEmailProvider interface{}\n")
+	sb.WriteString("\tOAuthProvider interface{}\n")
+	sb.WriteString("\tSAMLProvider  interface{}\n")
+	sb.WriteString("\tSMSProvider   interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	sb.WriteString("type sessionPlaceholder struct {\n")
+	sb.WriteString("\tSession interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	sb.WriteString("type userPlaceholder struct {\n")
+	sb.WriteString("\tUser interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	sb.WriteString("type apikeyPlaceholder struct {\n")
+	sb.WriteString("\tAPIKey interface{}\n")
+	sb.WriteString("\tRole   interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	sb.WriteString("type organizationPlaceholder struct {\n")
+	sb.WriteString("\tTeam       interface{}\n")
+	sb.WriteString("\tInvitation interface{}\n")
+	sb.WriteString("\tMember     interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	sb.WriteString("type redisPlaceholder struct {\n")
+	sb.WriteString("\tClient interface{}\n")
+	sb.WriteString("}\n\n")
+	
+	// Make redis an alias to redisPlaceholder for backward compat
+	sb.WriteString("var redis = redisPlaceholder{}\n\n")
+
+	// Add placeholder empty structs for commonly missing types
+	sb.WriteString("// Placeholder types for undefined/missing types\n")
+	sb.WriteString("type (\n")
+	sb.WriteString("\tTime                        = time.Time\n")
+	sb.WriteString("\tID                          = xid.ID\n")
+	sb.WriteString("\tIdentityVerification        struct {}\n")
+	sb.WriteString("\tSocialAccount               struct {}\n")
+	sb.WriteString("\tIdentityVerificationSession struct {}\n")
+	sb.WriteString("\tNotificationType            = string\n")
+	sb.WriteString("\tTeam                        struct {}\n")
+	sb.WriteString("\tAPIKey                      struct {}\n")
+	sb.WriteString("\tInvitation                  struct {}\n")
+	sb.WriteString("\tUserVerificationStatus      = string\n")
+	sb.WriteString("\tRole                        struct {}\n")
+	sb.WriteString("\tProviderConfig              struct {}\n")
+	sb.WriteString("\tMember                      struct {}\n")
+	sb.WriteString(")\n\n")
 
 	// Collect all types from all manifests
+	// Deduplicate by type name, preferring core definitions
 	typeMap := make(map[string]*manifest.TypeDef)
+	
+	// First pass: collect core types
 	for _, m := range g.manifests {
-		for _, t := range m.Types {
-			if _, exists := typeMap[t.Name]; !exists {
-				typeMap[t.Name] = &t
+		if m.PluginID == "core" {
+			for _, t := range m.Types {
+				td := t // Create a copy
+				typeMap[t.Name] = &td
+			}
+			break
+		}
+	}
+	
+	// Second pass: collect plugin types (only if not already defined)
+	for _, m := range g.manifests {
+		if m.PluginID != "core" {
+			for _, t := range m.Types {
+				if _, exists := typeMap[t.Name]; !exists {
+					td := t // Create a copy
+					typeMap[t.Name] = &td
+				}
+			}
+		}
+	}
+	
+	// Third pass: collect request/response types from routes (to avoid inline redeclaration)
+	for _, m := range g.manifests {
+		for _, route := range m.Routes {
+			// Collect request types
+			if len(route.Request) > 0 {
+				typeName := route.Name + "Request"
+				if _, exists := typeMap[typeName]; !exists {
+					typeMap[typeName] = &manifest.TypeDef{
+						Name:   typeName,
+						Fields: route.Request,
+					}
+				}
+			}
+			// Collect response types
+			if len(route.Response) > 0 {
+				typeName := route.Name + "Response"
+				if _, exists := typeMap[typeName]; !exists {
+					typeMap[typeName] = &manifest.TypeDef{
+						Name:   typeName,
+						Fields: route.Response,
+					}
+				}
 			}
 		}
 	}
 
 	// Generate type definitions
 	for _, t := range typeMap {
+		// Skip types that conflict with handwritten code
+		if t.Name == "Plugin" {
+			continue // Plugin is defined as an interface in plugin.go
+		}
+		
 		if t.Description != "" {
 			sb.WriteString(fmt.Sprintf("// %s represents %s\n", t.Name, t.Description))
 		}
 		sb.WriteString(fmt.Sprintf("type %s struct {\n", t.Name))
 
 		for name, typeStr := range t.Fields {
+			// Skip fields with empty names or "-" (JSON omit marker)
+			if name == "" || name == "-" {
+				continue
+			}
+			
 			field := manifest.ParseField(name, typeStr)
+			
+			// If type is empty, use interface{} instead of trying to infer
+			// (inference often leads to undefined type references)
+			if field.Type == "" {
+				field.Type = "interface{}"
+			}
+			
 			goType := g.mapTypeToGo(field.Type)
 
 			if field.Array {
@@ -125,7 +293,10 @@ func (g *GoGenerator) generateTypes() error {
 			}
 
 			if !field.Required && !field.Array {
-				goType = "*" + goType
+				// Don't add pointer if type already is a pointer (e.g., *redis.Client)
+				if !g.isPointerType(field.Type) {
+					goType = "*" + goType
+				}
 			}
 
 			jsonTag := field.Name
@@ -246,11 +417,15 @@ func (g *GoGenerator) generateClient() error {
 
 	sb.WriteString("// Client is the main AuthSome client\n")
 	sb.WriteString("type Client struct {\n")
-	sb.WriteString("\tbaseURL    string\n")
-	sb.WriteString("\thttpClient *http.Client\n")
-	sb.WriteString("\ttoken      string\n")
-	sb.WriteString("\theaders    map[string]string\n")
-	sb.WriteString("\tplugins    map[string]Plugin\n")
+	sb.WriteString("\tbaseURL       string\n")
+	sb.WriteString("\thttpClient    *http.Client\n")
+	sb.WriteString("\ttoken         string              // Session token (Bearer)\n")
+	sb.WriteString("\tapiKey        string              // API key (pk_/sk_/rk_)\n")
+	sb.WriteString("\tcookieJar     http.CookieJar      // For session cookies\n")
+	sb.WriteString("\theaders       map[string]string\n")
+	sb.WriteString("\tplugins       map[string]Plugin\n")
+	sb.WriteString("\tappID         string              // Current app context\n")
+	sb.WriteString("\tenvironmentID string              // Current environment context\n")
 	sb.WriteString("}\n\n")
 
 	sb.WriteString("// Option is a functional option for configuring the client\n")
@@ -263,10 +438,27 @@ func (g *GoGenerator) generateClient() error {
 	sb.WriteString("\t}\n")
 	sb.WriteString("}\n\n")
 
-	sb.WriteString("// WithToken sets the authentication token\n")
+	sb.WriteString("// WithToken sets the authentication token (session token)\n")
 	sb.WriteString("func WithToken(token string) Option {\n")
 	sb.WriteString("\treturn func(c *Client) {\n")
 	sb.WriteString("\t\tc.token = token\n")
+	sb.WriteString("\t}\n")
+	sb.WriteString("}\n\n")
+
+	sb.WriteString("// WithAPIKey sets the API key for authentication\n")
+	sb.WriteString("func WithAPIKey(apiKey string) Option {\n")
+	sb.WriteString("\treturn func(c *Client) {\n")
+	sb.WriteString("\t\tc.apiKey = apiKey\n")
+	sb.WriteString("\t}\n")
+	sb.WriteString("}\n\n")
+
+	sb.WriteString("// WithCookieJar sets a cookie jar for session management\n")
+	sb.WriteString("func WithCookieJar(jar http.CookieJar) Option {\n")
+	sb.WriteString("\treturn func(c *Client) {\n")
+	sb.WriteString("\t\tc.cookieJar = jar\n")
+	sb.WriteString("\t\tif c.httpClient != nil {\n")
+	sb.WriteString("\t\t\tc.httpClient.Jar = jar\n")
+	sb.WriteString("\t\t}\n")
 	sb.WriteString("\t}\n")
 	sb.WriteString("}\n\n")
 
@@ -274,6 +466,14 @@ func (g *GoGenerator) generateClient() error {
 	sb.WriteString("func WithHeaders(headers map[string]string) Option {\n")
 	sb.WriteString("\treturn func(c *Client) {\n")
 	sb.WriteString("\t\tc.headers = headers\n")
+	sb.WriteString("\t}\n")
+	sb.WriteString("}\n\n")
+
+	sb.WriteString("// WithAppContext sets the app and environment context for requests\n")
+	sb.WriteString("func WithAppContext(appID, envID string) Option {\n")
+	sb.WriteString("\treturn func(c *Client) {\n")
+	sb.WriteString("\t\tc.appID = appID\n")
+	sb.WriteString("\t\tc.environmentID = envID\n")
 	sb.WriteString("\t}\n")
 	sb.WriteString("}\n\n")
 
@@ -306,13 +506,35 @@ func (g *GoGenerator) generateClient() error {
 	sb.WriteString("\tc.token = token\n")
 	sb.WriteString("}\n\n")
 
+	sb.WriteString("// SetAPIKey sets the API key\n")
+	sb.WriteString("func (c *Client) SetAPIKey(apiKey string) {\n")
+	sb.WriteString("\tc.apiKey = apiKey\n")
+	sb.WriteString("}\n\n")
+
+	sb.WriteString("// SetAppContext sets the app and environment context\n")
+	sb.WriteString("func (c *Client) SetAppContext(appID, envID string) {\n")
+	sb.WriteString("\tc.appID = appID\n")
+	sb.WriteString("\tc.environmentID = envID\n")
+	sb.WriteString("}\n\n")
+
+	sb.WriteString("// GetAppContext returns the current app and environment IDs\n")
+	sb.WriteString("func (c *Client) GetAppContext() (appID, envID string) {\n")
+	sb.WriteString("\treturn c.appID, c.environmentID\n")
+	sb.WriteString("}\n\n")
+
 	sb.WriteString("// GetPlugin returns a plugin by ID\n")
 	sb.WriteString("func (c *Client) GetPlugin(id string) (Plugin, bool) {\n")
 	sb.WriteString("\tp, ok := c.plugins[id]\n")
 	sb.WriteString("\treturn p, ok\n")
 	sb.WriteString("}\n\n")
 
-	// Generate request helper
+	// Generate public Request method for plugins
+	sb.WriteString("// Request makes an HTTP request - exposed for plugin use\n")
+	sb.WriteString("func (c *Client) Request(ctx context.Context, method, path string, body interface{}, result interface{}, auth bool) error {\n")
+	sb.WriteString("\treturn c.request(ctx, method, path, body, result, auth)\n")
+	sb.WriteString("}\n\n")
+
+	// Generate request helper with auto-detection
 	sb.WriteString("func (c *Client) request(ctx context.Context, method, path string, body interface{}, result interface{}, auth bool) error {\n")
 	sb.WriteString("\tvar bodyReader io.Reader\n")
 	sb.WriteString("\tif body != nil {\n")
@@ -327,11 +549,27 @@ func (g *GoGenerator) generateClient() error {
 	sb.WriteString("\t\treturn fmt.Errorf(\"failed to create request: %w\", err)\n")
 	sb.WriteString("\t}\n\n")
 	sb.WriteString("\treq.Header.Set(\"Content-Type\", \"application/json\")\n")
+	sb.WriteString("\t// Set custom headers\n")
 	sb.WriteString("\tfor k, v := range c.headers {\n")
 	sb.WriteString("\t\treq.Header.Set(k, v)\n")
 	sb.WriteString("\t}\n\n")
-	sb.WriteString("\tif auth && c.token != \"\" {\n")
-	sb.WriteString("\t\treq.Header.Set(\"Authorization\", \"Bearer \"+c.token)\n")
+	sb.WriteString("\t// Auto-detect and set authentication\n")
+	sb.WriteString("\tif auth {\n")
+	sb.WriteString("\t\t// Priority 1: API key (if set)\n")
+	sb.WriteString("\t\tif c.apiKey != \"\" {\n")
+	sb.WriteString("\t\t\treq.Header.Set(\"Authorization\", \"ApiKey \"+c.apiKey)\n")
+	sb.WriteString("\t\t// Priority 2: Session token\n")
+	sb.WriteString("\t\t} else if c.token != \"\" {\n")
+	sb.WriteString("\t\t\treq.Header.Set(\"Authorization\", \"Bearer \"+c.token)\n")
+	sb.WriteString("\t\t}\n")
+	sb.WriteString("\t\t// Note: Cookies are automatically attached by httpClient if cookieJar is set\n")
+	sb.WriteString("\t}\n\n")
+	sb.WriteString("\t// Set app and environment context headers if available\n")
+	sb.WriteString("\tif c.appID != \"\" {\n")
+	sb.WriteString("\t\treq.Header.Set(\"X-App-ID\", c.appID)\n")
+	sb.WriteString("\t}\n")
+	sb.WriteString("\tif c.environmentID != \"\" {\n")
+	sb.WriteString("\t\treq.Header.Set(\"X-Environment-ID\", c.environmentID)\n")
 	sb.WriteString("\t}\n\n")
 	sb.WriteString("\tresp, err := c.httpClient.Do(req)\n")
 	sb.WriteString("\tif err != nil {\n")
@@ -374,56 +612,8 @@ func (g *GoGenerator) generateClient() error {
 func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest, route *manifest.Route) {
 	methodName := route.Name
 
-	// Generate request struct if needed
-	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf("// %sRequest is the request for %s\n", methodName, methodName))
-		sb.WriteString(fmt.Sprintf("type %sRequest struct {\n", methodName))
-		for name, typeStr := range route.Request {
-			field := manifest.ParseField(name, typeStr)
-			goType := g.mapTypeToGo(field.Type)
-			if field.Array {
-				// Use pointer to element type for custom types
-				if g.isCustomType(field.Type) {
-					goType = "[]*" + goType
-				} else {
-					goType = "[]" + goType
-				}
-			}
-			if !field.Required && !field.Array {
-				goType = "*" + goType
-			}
-			jsonTag := field.Name
-			if !field.Required {
-				jsonTag += ",omitempty"
-			}
-			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", g.exportedName(field.Name), goType, jsonTag))
-		}
-		sb.WriteString("}\n\n")
-	}
-
-	// Generate response struct if needed
-	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("// %sResponse is the response for %s\n", methodName, methodName))
-		sb.WriteString(fmt.Sprintf("type %sResponse struct {\n", methodName))
-		for name, typeStr := range route.Response {
-			field := manifest.ParseField(name, typeStr)
-			goType := g.mapTypeToGo(field.Type)
-
-			// For arrays, use pointer to element type for custom types
-			if field.Array {
-				// Check if it's a custom type (not a primitive)
-				if g.isCustomType(field.Type) {
-					goType = "[]*" + goType
-				} else {
-					goType = "[]" + goType
-				}
-			}
-
-			jsonTag := field.Name
-			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", g.exportedName(field.Name), goType, jsonTag))
-		}
-		sb.WriteString("}\n\n")
-	}
+	// Request/Response types are now generated in types.go via deduplication
+	// No need to generate inline types here
 
 	// Generate method
 	if route.Description != "" {
@@ -572,56 +762,8 @@ func (g *GoGenerator) generatePluginFile(m *manifest.Manifest) error {
 func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Manifest, route *manifest.Route) {
 	methodName := route.Name
 
-	// Generate request struct if needed
-	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf("// %sRequest is the request for %s\n", methodName, methodName))
-		sb.WriteString(fmt.Sprintf("type %sRequest struct {\n", methodName))
-		for name, typeStr := range route.Request {
-			field := manifest.ParseField(name, typeStr)
-			goType := g.mapTypeToGoWithPackage(field.Type)
-			if field.Array {
-				// Use pointer to element type for custom types
-				if g.isCustomType(field.Type) {
-					goType = "[]*" + goType
-				} else {
-					goType = "[]" + goType
-				}
-			}
-			if !field.Required && !field.Array {
-				goType = "*" + goType
-			}
-			jsonTag := field.Name
-			if !field.Required {
-				jsonTag += ",omitempty"
-			}
-			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", g.exportedName(field.Name), goType, jsonTag))
-		}
-		sb.WriteString("}\n\n")
-	}
-
-	// Generate response struct if needed
-	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("// %sResponse is the response for %s\n", methodName, methodName))
-		sb.WriteString(fmt.Sprintf("type %sResponse struct {\n", methodName))
-		for name, typeStr := range route.Response {
-			field := manifest.ParseField(name, typeStr)
-			goType := g.mapTypeToGoWithPackage(field.Type)
-
-			// For arrays, use pointer to element type for custom types
-			if field.Array {
-				// Check if it's a custom type (not a primitive)
-				if g.isCustomType(field.Type) {
-					goType = "[]*" + goType
-				} else {
-					goType = "[]" + goType
-				}
-			}
-
-			jsonTag := field.Name
-			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", g.exportedName(field.Name), goType, jsonTag))
-		}
-		sb.WriteString("}\n\n")
-	}
+	// Request/Response types are now generated in types.go via deduplication
+	// No need to generate inline types here
 
 	// Generate method
 	if route.Description != "" {
@@ -630,7 +772,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 	sb.WriteString(fmt.Sprintf("func (p *Plugin) %s(ctx context.Context", methodName))
 
 	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf(", req *%sRequest", methodName))
+		sb.WriteString(fmt.Sprintf(", req *authsome.%sRequest", methodName))
 	}
 	if len(route.Params) > 0 {
 		for paramName, typeStr := range route.Params {
@@ -640,7 +782,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 	}
 
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf(") (*%sResponse, error) {\n", methodName))
+		sb.WriteString(fmt.Sprintf(") (*authsome.%sResponse, error) {\n", methodName))
 	} else {
 		sb.WriteString(") error {\n")
 	}
@@ -656,22 +798,82 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 		sb.WriteString(fmt.Sprintf("\tpath := \"%s\"\n", path))
 	}
 
-	// Use reflection to call client.request (private method)
+	// Make request through client
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("\tvar result %sResponse\n", methodName))
+		sb.WriteString(fmt.Sprintf("\tvar result authsome.%sResponse\n", methodName))
 	}
 
-	sb.WriteString("\t// Note: This requires exposing client.request or using a different approach\n")
-	sb.WriteString("\t// For now, this is a placeholder\n")
-	sb.WriteString("\t_ = path\n")
+	sb.WriteString("\terr := p.client.Request(ctx, \"")
+	sb.WriteString(strings.ToUpper(route.Method))
+	sb.WriteString("\", path, ")
+
+	if len(route.Request) > 0 {
+		sb.WriteString("req")
+	} else {
+		sb.WriteString("nil")
+	}
+	sb.WriteString(", ")
 
 	if len(route.Response) > 0 {
+		sb.WriteString("&result")
+	} else {
+		sb.WriteString("nil")
+	}
+	sb.WriteString(", ")
+
+	if route.Auth {
+		sb.WriteString("true")
+	} else {
+		sb.WriteString("false")
+	}
+	sb.WriteString(")\n")
+
+	if len(route.Response) > 0 {
+		sb.WriteString("\tif err != nil {\n")
+		sb.WriteString("\t\treturn nil, err\n")
+		sb.WriteString("\t}\n")
 		sb.WriteString("\treturn &result, nil\n")
 	} else {
-		sb.WriteString("\treturn nil\n")
+		sb.WriteString("\treturn err\n")
 	}
 
 	sb.WriteString("}\n\n")
+}
+
+func (g *GoGenerator) generateContextHelpers() error {
+	var sb strings.Builder
+
+	sb.WriteString("package authsome\n\n")
+	sb.WriteString("import (\n")
+	sb.WriteString("\t\"context\"\n")
+	sb.WriteString(")\n\n")
+	sb.WriteString("// Auto-generated context helper methods\n\n")
+
+	// GetCurrentUser method
+	sb.WriteString("// GetCurrentUser retrieves the current user from the session\n")
+	sb.WriteString("func (c *Client) GetCurrentUser(ctx context.Context) (*User, error) {\n")
+	sb.WriteString("\tsession, err := c.GetSession(ctx)\n")
+	sb.WriteString("\tif err != nil {\n")
+	sb.WriteString("\t\treturn nil, err\n")
+	sb.WriteString("\t}\n")
+	sb.WriteString("\treturn &session.User, nil\n")
+	sb.WriteString("}\n\n")
+
+	// GetCurrentSession method
+	sb.WriteString("// GetCurrentSession retrieves the current session\n")
+	sb.WriteString("func (c *Client) GetCurrentSession(ctx context.Context) (*Session, error) {\n")
+	sb.WriteString("\tsession, err := c.GetSession(ctx)\n")
+	sb.WriteString("\tif err != nil {\n")
+	sb.WriteString("\t\treturn nil, err\n")
+	sb.WriteString("\t}\n")
+	sb.WriteString("\treturn &session.Session, nil\n")
+	sb.WriteString("}\n\n")
+
+	return g.writeFile("context_helpers.go", sb.String())
+}
+
+func (g *GoGenerator) isPointerType(t string) bool {
+	return strings.HasPrefix(t, "*")
 }
 
 func (g *GoGenerator) mapTypeToGo(t string) string {
@@ -694,7 +896,27 @@ func (g *GoGenerator) mapTypeToGo(t string) string {
 		return "bool"
 	case "object", "map":
 		return "map[string]interface{}"
+	case "Time":
+		return "time.Time"
+	case "ID":
+		return "xid.ID"
+	case "Duration":
+		return "time.Duration"
+	case "NotificationType":
+		return "string"
 	default:
+		// Strip package qualifiers for authsome internal types (e.g., "user.User" -> "User")
+		// But preserve standard library and external package qualifiers (e.g., "xid.ID", "time.Time")
+		if strings.Contains(t, ".") {
+			parts := strings.Split(t, ".")
+			pkg := parts[0]
+			// Preserve qualifiers for standard library and known external packages
+			if pkg == "time" || pkg == "xid" || pkg == "redis" || pkg == "context" {
+				return t
+			}
+			// Strip qualifiers for authsome internal types
+			return parts[len(parts)-1]
+		}
 		// Assume it's a custom type
 		return t
 	}

@@ -1,6 +1,7 @@
 package authsome
 
 import (
+	"github.com/xraph/authsome/core/middleware"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	sec "github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/core/session"
@@ -175,5 +176,30 @@ func WithSessionCookieName(name string) Option {
 		a.config.SessionCookie.Name = name
 		// Also set the deprecated field for backward compatibility
 		a.config.SessionCookieName = name
+	}
+}
+
+// WithAuthMiddlewareConfig sets the authentication middleware configuration
+// This controls how the global authentication middleware behaves, including:
+// - Session cookie name
+// - Optional authentication (allow unauthenticated requests)
+// - API key authentication settings
+// - Context resolution (app/environment from headers or API key)
+//
+// Example:
+//
+//	WithAuthMiddlewareConfig(middleware.AuthMiddlewareConfig{
+//	    SessionCookieName:   "my_session",
+//	    Optional:            true,
+//	    AllowAPIKeyInQuery:  false, // Security best practice
+//	    AllowSessionInQuery: false, // Security best practice
+//	    Context: middleware.ContextConfig{
+//	        AutoDetectFromAPIKey: true,
+//	        AutoDetectFromConfig: true,
+//	    },
+//	})
+func WithAuthMiddlewareConfig(config middleware.AuthMiddlewareConfig) Option {
+	return func(a *Auth) {
+		a.authMiddlewareConfig = config
 	}
 }

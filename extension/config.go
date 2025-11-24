@@ -2,6 +2,7 @@ package extension
 
 import (
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/middleware"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/core/session"
@@ -46,6 +47,9 @@ type Config struct {
 
 	// SessionCookie configures cookie-based session management
 	SessionCookie *session.CookieConfig `yaml:"sessionCookie" json:"sessionCookie"`
+
+	// AuthMiddlewareConfig configures the authentication middleware behavior
+	AuthMiddlewareConfig *middleware.AuthMiddlewareConfig `yaml:"authMiddleware" json:"authMiddleware"`
 
 	// Plugins to register with AuthSome
 	Plugins []plugins.Plugin `yaml:"-" json:"-"`
@@ -211,5 +215,30 @@ func WithSessionCookieName(name string) ConfigOption {
 			c.SessionCookie = &session.CookieConfig{}
 		}
 		c.SessionCookie.Name = name
+	}
+}
+
+// WithAuthMiddlewareConfig sets the authentication middleware configuration
+// This controls how the global authentication middleware behaves, including:
+// - Session cookie name
+// - Optional authentication (allow unauthenticated requests)
+// - API key authentication settings
+// - Context resolution (app/environment from headers or API key)
+//
+// Example:
+//
+//	WithAuthMiddlewareConfig(middleware.AuthMiddlewareConfig{
+//	    SessionCookieName:   "my_session",
+//	    Optional:            true,
+//	    AllowAPIKeyInQuery:  false, // Security best practice
+//	    AllowSessionInQuery: false, // Security best practice
+//	    Context: middleware.ContextConfig{
+//	        AutoDetectFromAPIKey: true,
+//	        AutoDetectFromConfig: true,
+//	    },
+//	})
+func WithAuthMiddlewareConfig(config middleware.AuthMiddlewareConfig) ConfigOption {
+	return func(c *Config) {
+		c.AuthMiddlewareConfig = &config
 	}
 }

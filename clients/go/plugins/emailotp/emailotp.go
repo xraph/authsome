@@ -29,33 +29,17 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// SendRequest is the request for Send
-type SendRequest struct {
-	Email string `json:"email"`
-}
-
 // Send Send handles sending of OTP to email
-func (p *Plugin) Send(ctx context.Context, req *SendRequest) error {
+func (p *Plugin) Send(ctx context.Context, req *authsome.SendRequest) error {
 	path := "/email-otp/send"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// VerifyRequest is the request for Verify
-type VerifyRequest struct {
-	Otp string `json:"otp"`
-	Remember bool `json:"remember"`
-	Email string `json:"email"`
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 // Verify Verify checks the OTP and creates a session on success
-func (p *Plugin) Verify(ctx context.Context, req *VerifyRequest) error {
+func (p *Plugin) Verify(ctx context.Context, req *authsome.VerifyRequest) error {
 	path := "/email-otp/verify"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 

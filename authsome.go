@@ -92,7 +92,8 @@ type Auth struct {
 	apikeyService       *apikey.Service
 
 	// Global authentication middleware
-	authMiddleware *middleware.AuthMiddleware
+	authMiddleware       *middleware.AuthMiddleware
+	authMiddlewareConfig middleware.AuthMiddlewareConfig
 
 	// Plugin registry
 	pluginRegistry plugins.PluginRegistry
@@ -246,16 +247,36 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{})
 
 	// Initialize global authentication middleware now that all required services are ready
-	a.authMiddleware = middleware.NewAuthMiddleware(
-		a.apikeyService,
-		a.sessionService,
-		a.userService,
-		middleware.AuthMiddlewareConfig{
+	// Use provided config or sensible defaults
+	middlewareConfig := a.authMiddlewareConfig
+
+	// If no config was provided via options, set secure defaults
+	if middlewareConfig.SessionCookieName == "" && len(middlewareConfig.APIKeyHeaders) == 0 {
+		// No explicit config provided, use sensible defaults
+		middlewareConfig = middleware.AuthMiddlewareConfig{
 			SessionCookieName:   a.config.SessionCookieName,
 			Optional:            true,  // Don't block unauthenticated requests by default
 			AllowAPIKeyInQuery:  false, // Security best practice
 			AllowSessionInQuery: false, // Security best practice
-		},
+		}
+		if middlewareConfig.SessionCookieName == "" {
+			middlewareConfig.SessionCookieName = "authsome_session"
+		}
+	} else {
+		// Config was partially or fully provided, only fill in missing session cookie name
+		if middlewareConfig.SessionCookieName == "" {
+			middlewareConfig.SessionCookieName = a.config.SessionCookieName
+			if middlewareConfig.SessionCookieName == "" {
+				middlewareConfig.SessionCookieName = "authsome_session"
+			}
+		}
+	}
+
+	a.authMiddleware = middleware.NewAuthMiddleware(
+		a.apikeyService,
+		a.sessionService,
+		a.userService,
+		middlewareConfig,
 	)
 
 	// App service (platform tenant management)
@@ -630,6 +651,61 @@ func (a *Auth) GetGlobalGroupRoutesOptions() []forge.GroupOption {
 	return a.globalGroupRoutesOptions
 }
 
+// GetDefaultApp returns the default app when in standalone mode
+// This is useful for middleware context auto-detection
+// Returns nil if not in standalone mode or app not found
+func (a *Auth) GetDefaultApp(ctx context.Context) (*app.App, error) {
+	if a.appService == nil {
+		return nil, fmt.Errorf("app service not initialized")
+	}
+
+	// Query for apps - in standalone mode there should be one default app
+	filter := &app.ListAppsFilter{}
+	result, err := a.appService.ListApps(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list apps: %w", err)
+	}
+
+	if result == nil || len(result.Data) == 0 {
+		return nil, fmt.Errorf("no default app found")
+	}
+
+	// Return the first app (in standalone mode there's typically only one)
+	return result.Data[0], nil
+}
+
+// GetDefaultEnvironment returns the default environment for an app
+// This is useful for middleware context auto-detection
+// Returns nil if environment not found
+func (a *Auth) GetDefaultEnvironment(ctx context.Context, appID xid.ID) (*env.Environment, error) {
+	if a.environmentService == nil {
+		return nil, fmt.Errorf("environment service not initialized")
+	}
+
+	// Query for environments for the given app
+	filter := &env.ListEnvironmentsFilter{
+		AppID: appID,
+	}
+	result, err := a.environmentService.ListEnvironments(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list environments: %w", err)
+	}
+
+	if result == nil || len(result.Data) == 0 {
+		return nil, fmt.Errorf("no default environment found for app %s", appID.String())
+	}
+
+	// Look for an environment named "production" or "default" first
+	for _, e := range result.Data {
+		if e.Name == "production" || e.Name == "default" {
+			return e, nil
+		}
+	}
+
+	// Otherwise return the first environment
+	return result.Data[0], nil
+}
+
 // IsPluginEnabled checks if a plugin is registered and enabled
 func (a *Auth) IsPluginEnabled(pluginID string) bool {
 	if a.pluginRegistry == nil {
@@ -654,6 +730,11 @@ func (a *Auth) AuthMiddleware() forge.Middleware {
 // Blocks requests that are not authenticated via API key or session
 func (a *Auth) RequireAuth() forge.Middleware {
 	return a.authMiddleware.RequireAuth
+}
+
+// Authenticate returns the authentication middleware
+func (a *Auth) Authenticate() forge.Middleware {
+	return a.authMiddleware.Authenticate
 }
 
 // RequireUser returns middleware that requires user authentication (session)

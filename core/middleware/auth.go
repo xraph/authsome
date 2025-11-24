@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
@@ -40,6 +41,9 @@ type AuthMiddlewareConfig struct {
 
 	// Allow query param session tokens (NOT recommended for production)
 	AllowSessionInQuery bool
+
+	// Context configuration for app/environment population
+	Context ContextConfig
 }
 
 // NewAuthMiddleware creates a new authentication middleware
@@ -58,6 +62,14 @@ func NewAuthMiddleware(
 			"Authorization", // Bearer/ApiKey scheme
 			"X-API-Key",     // Dedicated header
 		}
+	}
+
+	// Set context config defaults
+	if config.Context.AppIDHeader == "" {
+		config.Context.AppIDHeader = "X-App-ID"
+	}
+	if config.Context.EnvironmentIDHeader == "" {
+		config.Context.EnvironmentIDHeader = "X-Environment-ID"
 	}
 
 	return &AuthMiddleware{
@@ -129,6 +141,15 @@ func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 
 		// Compute effective permissions (union of all applicable permissions)
 		authCtx.EffectivePermissions = m.computeEffectivePermissions(authCtx)
+
+		// Resolve app and environment context using priority chain
+		resolution := m.resolveContext(c, authCtx)
+		if !resolution.AppID.IsNil() {
+			authCtx.AppID = resolution.AppID
+		}
+		if !resolution.EnvironmentID.IsNil() {
+			authCtx.EnvironmentID = resolution.EnvironmentID
+		}
 
 		// If not optional and not authenticated, reject with specific error message
 		if !m.config.Optional && !authCtx.IsAuthenticated {
@@ -617,6 +638,77 @@ func (m *AuthMiddleware) computeEffectivePermissions(authCtx *contexts.AuthConte
 	}
 
 	return result
+}
+
+// resolveContext resolves app and environment context using priority chain:
+// 1. Check if already in context (from prior middleware)
+// 2. Extract from headers (X-App-ID, X-Environment-ID)
+// 3. If API key verified, use API key's app and environment
+// 4. Fallback to default values from config
+// 5. If AutoDetectFromConfig enabled, query AuthSome (future enhancement)
+func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthContext) ContextResolution {
+	ctx := c.Request().Context()
+	resolution := ContextResolution{}
+
+	// Priority 1: Check if already in context (from prior middleware)
+	if existingAppID, ok := contexts.GetAppID(ctx); ok && !existingAppID.IsNil() {
+		resolution.AppID = existingAppID
+		resolution.AppIDSource = ContextSourceExisting
+	}
+	if existingEnvID, ok := contexts.GetEnvironmentID(ctx); ok && !existingEnvID.IsNil() {
+		resolution.EnvironmentID = existingEnvID
+		resolution.EnvironmentIDSource = ContextSourceExisting
+	}
+
+	// Priority 2: Extract from headers
+	if resolution.AppID.IsNil() && m.config.Context.AppIDHeader != "" {
+		if appIDStr := c.Request().Header.Get(m.config.Context.AppIDHeader); appIDStr != "" {
+			if appID, err := xid.FromString(appIDStr); err == nil {
+				resolution.AppID = appID
+				resolution.AppIDSource = ContextSourceHeader
+			}
+		}
+	}
+	if resolution.EnvironmentID.IsNil() && m.config.Context.EnvironmentIDHeader != "" {
+		if envIDStr := c.Request().Header.Get(m.config.Context.EnvironmentIDHeader); envIDStr != "" {
+			if envID, err := xid.FromString(envIDStr); err == nil {
+				resolution.EnvironmentID = envID
+				resolution.EnvironmentIDSource = ContextSourceHeader
+			}
+		}
+	}
+
+	// Priority 3: If API key verified and AutoDetectFromAPIKey enabled, use API key's context
+	if m.config.Context.AutoDetectFromAPIKey && authCtx.IsAPIKeyAuth {
+		if resolution.AppID.IsNil() && !authCtx.AppID.IsNil() {
+			resolution.AppID = authCtx.AppID
+			resolution.AppIDSource = ContextSourceAPIKey
+		}
+		if resolution.EnvironmentID.IsNil() && !authCtx.EnvironmentID.IsNil() {
+			resolution.EnvironmentID = authCtx.EnvironmentID
+			resolution.EnvironmentIDSource = ContextSourceAPIKey
+		}
+	}
+
+	// Priority 4: Fallback to default values (parse from string)
+	if resolution.AppID.IsNil() && m.config.Context.DefaultAppID != "" {
+		if defaultAppID, err := xid.FromString(m.config.Context.DefaultAppID); err == nil {
+			resolution.AppID = defaultAppID
+			resolution.AppIDSource = ContextSourceDefault
+		}
+	}
+	if resolution.EnvironmentID.IsNil() && m.config.Context.DefaultEnvironmentID != "" {
+		if defaultEnvID, err := xid.FromString(m.config.Context.DefaultEnvironmentID); err == nil {
+			resolution.EnvironmentID = defaultEnvID
+			resolution.EnvironmentIDSource = ContextSourceDefault
+		}
+	}
+
+	// Priority 5: Auto-detect from config (future enhancement)
+	// This would query AuthSome for the standalone app if configured
+	// Not implemented yet - requires reference to Auth instance
+
+	return resolution
 }
 
 // extractClientIP extracts the real client IP from the request

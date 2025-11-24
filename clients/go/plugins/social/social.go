@@ -29,66 +29,39 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// SignInRequest is the request for SignIn
-type SignInRequest struct {
-	Scopes authsome.[]string `json:"scopes"`
-	Provider string `json:"provider"`
-	RedirectUrl string `json:"redirectUrl"`
-}
-
-// SignInResponse is the response for SignIn
-type SignInResponse struct {
-	Url string `json:"url"`
-}
-
 // SignIn SignIn initiates OAuth flow for sign-in
 POST /api/auth/signin/social
-func (p *Plugin) SignIn(ctx context.Context, req *SignInRequest) (*SignInResponse, error) {
+func (p *Plugin) SignIn(ctx context.Context, req *authsome.SignInRequest) (*authsome.SignInResponse, error) {
 	path := "/signin/social"
-	var result SignInResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.SignInResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
-}
-
-// CallbackResponse is the response for Callback
-type CallbackResponse struct {
-	Action string `json:"action"`
-	IsNewUser bool `json:"isNewUser"`
-	User authsome.*schema.User `json:"user"`
 }
 
 // Callback Callback handles OAuth provider callback
 GET /api/auth/callback/:provider
-func (p *Plugin) Callback(ctx context.Context) (*CallbackResponse, error) {
+func (p *Plugin) Callback(ctx context.Context) (*authsome.CallbackResponse, error) {
 	path := "/callback/:provider"
-	var result CallbackResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.CallbackResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
-}
-
-// LinkAccountRequest is the request for LinkAccount
-type LinkAccountRequest struct {
-	Scopes authsome.[]string `json:"scopes"`
-	Provider string `json:"provider"`
-}
-
-// LinkAccountResponse is the response for LinkAccount
-type LinkAccountResponse struct {
-	Url string `json:"url"`
 }
 
 // LinkAccount LinkAccount links a social provider to the current user
 POST /api/auth/account/link
-func (p *Plugin) LinkAccount(ctx context.Context, req *LinkAccountRequest) (*LinkAccountResponse, error) {
+func (p *Plugin) LinkAccount(ctx context.Context, req *authsome.LinkAccountRequest) (*authsome.LinkAccountResponse, error) {
 	path := "/account/link"
-	var result LinkAccountResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.LinkAccountResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
@@ -96,25 +69,19 @@ func (p *Plugin) LinkAccount(ctx context.Context, req *LinkAccountRequest) (*Lin
 DELETE /api/auth/account/unlink/:provider
 func (p *Plugin) UnlinkAccount(ctx context.Context) error {
 	path := "/account/unlink/:provider"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
-}
-
-// ListProvidersResponse is the response for ListProviders
-type ListProvidersResponse struct {
-	Providers authsome.[]string `json:"providers"`
+	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
+	return err
 }
 
 // ListProviders ListProviders returns available OAuth providers
 GET /api/auth/providers
-func (p *Plugin) ListProviders(ctx context.Context) (*ListProvidersResponse, error) {
+func (p *Plugin) ListProviders(ctx context.Context) (*authsome.ListProvidersResponse, error) {
 	path := "/providers"
-	var result ListProvidersResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.ListProvidersResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	dev "github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
+	"github.com/xraph/authsome/core/middleware"
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/organization"
 	rl "github.com/xraph/authsome/core/ratelimit"
@@ -499,4 +500,56 @@ var (
 
 	// ErrInsufficientPermission is returned when lacking required RBAC permission
 	ErrInsufficientPermission = contexts.ErrInsufficientPermission
+)
+
+// ============================================================================
+// Middleware Package Exports
+// ============================================================================
+
+// Middleware Configuration
+type (
+	// AuthMiddleware is the authentication middleware
+	AuthMiddleware = middleware.AuthMiddleware
+
+	// AuthMiddlewareConfig configures the authentication middleware behavior
+	AuthMiddlewareConfig = middleware.AuthMiddlewareConfig
+
+	// ContextConfig configures how app and environment context is populated
+	ContextConfig = middleware.ContextConfig
+
+	// ContextResolution tracks how context values were resolved
+	ContextResolution = middleware.ContextResolution
+
+	// ContextSource indicates where the context value came from
+	ContextSource = middleware.ContextSource
+)
+
+// Context Source Constants
+const (
+	// ContextSourceNone indicates no context source
+	ContextSourceNone = middleware.ContextSourceNone
+
+	// ContextSourceExisting indicates context already exists in request
+	ContextSourceExisting = middleware.ContextSourceExisting
+
+	// ContextSourceHeader indicates context from HTTP header
+	ContextSourceHeader = middleware.ContextSourceHeader
+
+	// ContextSourceAPIKey indicates context from verified API key
+	ContextSourceAPIKey = middleware.ContextSourceAPIKey
+
+	// ContextSourceDefault indicates context from default config
+	ContextSourceDefault = middleware.ContextSourceDefault
+
+	// ContextSourceAutoDetect indicates context from AuthSome config
+	ContextSourceAutoDetect = middleware.ContextSourceAutoDetect
+)
+
+// Middleware Config Functions
+var (
+	// NewAuthMiddleware creates a new authentication middleware
+	NewAuthMiddleware = middleware.NewAuthMiddleware
+
+	// DefaultContextConfig returns a ContextConfig with sensible defaults
+	DefaultContextConfig = middleware.DefaultContextConfig
 )

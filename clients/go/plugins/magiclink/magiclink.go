@@ -29,24 +29,15 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// SendRequest is the request for Send
-type SendRequest struct {
-	Email string `json:"email"`
-}
-
-func (p *Plugin) Send(ctx context.Context, req *SendRequest) error {
+func (p *Plugin) Send(ctx context.Context, req *authsome.SendRequest) error {
 	path := "/magic-link/send"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
 }
 
 func (p *Plugin) Verify(ctx context.Context) error {
 	path := "/magic-link/verify"
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
-	return nil
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
 }
 

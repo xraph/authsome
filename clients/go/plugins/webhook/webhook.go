@@ -29,83 +29,47 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// CreateRequest is the request for Create
-type CreateRequest struct {
-	Url string `json:"url"`
-	Events []string `json:"events"`
-	Secret *string `json:"secret,omitempty"`
-}
-
-// CreateResponse is the response for Create
-type CreateResponse struct {
-	Webhook authsome.Webhook `json:"webhook"`
-}
-
 // Create Create a webhook
-func (p *Plugin) Create(ctx context.Context, req *CreateRequest) (*CreateResponse, error) {
+func (p *Plugin) Create(ctx context.Context, req *authsome.CreateRequest) (*authsome.CreateResponse, error) {
 	path := "/api/auth/webhooks"
-	var result CreateResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.CreateResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, true)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
-}
-
-// ListResponse is the response for List
-type ListResponse struct {
-	Webhooks []*authsome.Webhook `json:"webhooks"`
 }
 
 // List List webhooks
-func (p *Plugin) List(ctx context.Context) (*ListResponse, error) {
+func (p *Plugin) List(ctx context.Context) (*authsome.ListResponse, error) {
 	path := "/api/auth/webhooks"
-	var result ListResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.ListResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, true)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
-}
-
-// UpdateRequest is the request for Update
-type UpdateRequest struct {
-	Id string `json:"id"`
-	Url *string `json:"url,omitempty"`
-	Events []string `json:"events,omitempty"`
-	Enabled *bool `json:"enabled,omitempty"`
-}
-
-// UpdateResponse is the response for Update
-type UpdateResponse struct {
-	Webhook authsome.Webhook `json:"webhook"`
 }
 
 // Update Update a webhook
-func (p *Plugin) Update(ctx context.Context, req *UpdateRequest) (*UpdateResponse, error) {
+func (p *Plugin) Update(ctx context.Context, req *authsome.UpdateRequest) (*authsome.UpdateResponse, error) {
 	path := "/api/auth/webhooks/update"
-	var result UpdateResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.UpdateResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, true)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
-// DeleteRequest is the request for Delete
-type DeleteRequest struct {
-	Id string `json:"id"`
-}
-
-// DeleteResponse is the response for Delete
-type DeleteResponse struct {
-	Success bool `json:"success"`
-}
-
 // Delete Delete a webhook
-func (p *Plugin) Delete(ctx context.Context, req *DeleteRequest) (*DeleteResponse, error) {
+func (p *Plugin) Delete(ctx context.Context, req *authsome.DeleteRequest) (*authsome.DeleteResponse, error) {
 	path := "/api/auth/webhooks/delete"
-	var result DeleteResponse
-	// Note: This requires exposing client.request or using a different approach
-	// For now, this is a placeholder
-	_ = path
+	var result authsome.DeleteResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, true)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
