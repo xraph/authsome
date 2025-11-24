@@ -12,7 +12,7 @@ func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Create identity verification tables if they don't exist
 		// These tables might not exist if upgrading from a version without ID verification plugin
-		
+
 		// Create identity_verifications table
 		if _, err := db.NewCreateTable().
 			Model((*schema.IdentityVerification)(nil)).
@@ -47,7 +47,7 @@ func init() {
 
 		// If tables already existed (old version), add V2 fields
 		// Otherwise, they were created with V2 fields already
-		
+
 		// Add V2 context fields to identity_verifications table (for existing tables)
 		if _, err := db.ExecContext(ctx, `
 			ALTER TABLE identity_verifications
@@ -315,7 +315,7 @@ func init() {
 		`); err != nil {
 			fmt.Printf("Warning: could not set app_id NOT NULL on documents: %v\n", err)
 		}
-		
+
 		if _, err := db.ExecContext(ctx, `
 			ALTER TABLE identity_verification_documents
 			ALTER COLUMN organization_id SET NOT NULL
