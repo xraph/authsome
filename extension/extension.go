@@ -20,7 +20,7 @@ type Extension struct {
 }
 
 // NewExtension creates a new AuthSome extension with optional configuration
-func NewExtension(opts ...ConfigOption) forge.Extension {
+func NewExtension(opts ...ConfigOption) *Extension {
 	config := DefaultConfig()
 	for _, opt := range opts {
 		opt(&config)
@@ -61,6 +61,11 @@ func (e *Extension) Register(app forge.App) error {
 	opts := []authsome.Option{
 		authsome.WithForgeApp(app),
 		authsome.WithBasePath(e.config.BasePath),
+		authsome.WithGlobalRoutesOptions(forge.ExtensionRoutes(e)...),
+	}
+
+	if e.config.DisableOpenAPI {
+		opts = append(opts, authsome.WithGlobalGroupRoutesOptions(forge.WithGroupSchemaExclude()))
 	}
 
 	// Database configuration - try multiple sources

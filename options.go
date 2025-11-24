@@ -59,6 +59,20 @@ func WithBasePath(path string) Option {
 	}
 }
 
+// WithExcludeFromSchemas sets whether to exclude the extension from schemas
+func WithGlobalRoutesOptions(opts ...forge.RouteOption) Option {
+	return func(a *Auth) {
+		a.globalRoutesOptions = append(a.globalRoutesOptions, opts...)
+	}
+}
+
+// WithGlobalGroupRoutesOptions sets the global group routes options
+func WithGlobalGroupRoutesOptions(opts ...forge.GroupOption) Option {
+	return func(a *Auth) {
+		a.globalGroupRoutesOptions = append(a.globalGroupRoutesOptions, opts...)
+	}
+}
+
 // WithCORSEnabled enables or disables CORS middleware
 // When enabled, uses TrustedOrigins for allowed origins
 // Default: false (disabled - let Forge or your app handle CORS)
@@ -133,12 +147,13 @@ func WithDatabaseSchema(schema string) Option {
 // WithGlobalCookieConfig sets the global cookie configuration for session management
 // This configuration applies to all apps unless overridden at the app level
 // Example:
-//   WithGlobalCookieConfig(session.CookieConfig{
-//       Enabled:  true,
-//       Name:     "my_session",
-//       HttpOnly: true,
-//       SameSite: "Lax",
-//   })
+//
+//	WithGlobalCookieConfig(session.CookieConfig{
+//	    Enabled:  true,
+//	    Name:     "my_session",
+//	    HttpOnly: true,
+//	    SameSite: "Lax",
+//	})
 func WithGlobalCookieConfig(config session.CookieConfig) Option {
 	return func(a *Auth) {
 		a.config.SessionCookie = config

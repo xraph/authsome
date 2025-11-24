@@ -207,7 +207,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Get authentication middleware for API key validation
 	authMw := p.authInst.AuthMiddleware()
-	
+
 	// Wrap handler with middleware if available
 	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
 		if authMw != nil {

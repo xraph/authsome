@@ -559,3 +559,99 @@ func (r *Repository) FindAttributeMappingByOrganization(ctx context.Context, app
 
 	return &mapping, nil
 }
+
+// UpdateTeamProvisioningInfo updates team provisioning tracking fields
+// This method updates both app teams and organization teams
+func (r *Repository) UpdateTeamProvisioningInfo(ctx context.Context, teamID xid.ID, provisionedBy, externalID *string) error {
+	// Try updating app teams first
+	result, err := r.db.NewUpdate().
+		Table("teams").
+		Set("provisioned_by = ?", provisionedBy).
+		Set("external_id = ?", externalID).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", teamID).
+		Exec(ctx)
+	
+	if err != nil {
+		return fmt.Errorf("failed to update app team: %w", err)
+	}
+	
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	
+	// If no app team found, try organization teams
+	if rowsAffected == 0 {
+		result, err = r.db.NewUpdate().
+			Table("organization_teams").
+			Set("provisioned_by = ?", provisionedBy).
+			Set("external_id = ?", externalID).
+			Set("updated_at = ?", time.Now()).
+			Where("id = ?", teamID).
+			Exec(ctx)
+		
+		if err != nil {
+			return fmt.Errorf("failed to update organization team: %w", err)
+		}
+		
+		rowsAffected, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		
+		if rowsAffected == 0 {
+			return fmt.Errorf("team not found: %s", teamID)
+		}
+	}
+	
+	return nil
+}
+
+// UpdateTeamMemberProvisioningInfo updates team member provisioning tracking field
+// This method updates both app team members and organization team members
+func (r *Repository) UpdateTeamMemberProvisioningInfo(ctx context.Context, teamID, memberID xid.ID, provisionedBy *string) error {
+	// Try updating app team members first
+	result, err := r.db.NewUpdate().
+		Table("team_members").
+		Set("provisioned_by = ?", provisionedBy).
+		Set("updated_at = ?", time.Now()).
+		Where("team_id = ? AND member_id = ?", teamID, memberID).
+		Exec(ctx)
+	
+	if err != nil {
+		return fmt.Errorf("failed to update app team member: %w", err)
+	}
+	
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	
+	// If no app team member found, try organization team members
+	if rowsAffected == 0 {
+		result, err = r.db.NewUpdate().
+			Table("organization_team_members").
+			Set("provisioned_by = ?", provisionedBy).
+			Set("updated_at = ?", time.Now()).
+			Where("team_id = ? AND member_id = ?", teamID, memberID).
+			Exec(ctx)
+		
+		if err != nil {
+			return fmt.Errorf("failed to update organization team member: %w", err)
+		}
+		
+		rowsAffected, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		
+		if rowsAffected == 0 {
+			return fmt.Errorf("team member not found: team=%s, member=%s", teamID, memberID)
+		}
+	}
+	
+	return nil
+}

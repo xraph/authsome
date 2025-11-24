@@ -15,6 +15,9 @@ type Team struct {
 	Name           string                 `json:"name"`
 	Description    string                 `json:"description,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    *string `json:"externalID,omitempty"`    // External system ID
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -29,6 +32,8 @@ func (t *Team) ToSchema() *schema.OrganizationTeam {
 		Name:           t.Name,
 		Description:    t.Description,
 		Metadata:       t.Metadata,
+		ProvisionedBy:  t.ProvisionedBy,
+		ExternalID:     t.ExternalID,
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: t.CreatedAt,
 			UpdatedAt: t.UpdatedAt,
@@ -48,6 +53,8 @@ func FromSchemaTeam(st *schema.OrganizationTeam) *Team {
 		Name:           st.Name,
 		Description:    st.Description,
 		Metadata:       st.Metadata,
+		ProvisionedBy:  st.ProvisionedBy,
+		ExternalID:     st.ExternalID,
 		CreatedAt:      st.CreatedAt,
 		UpdatedAt:      st.UpdatedAt,
 		DeletedAt:      st.DeletedAt,
@@ -69,6 +76,8 @@ type TeamMember struct {
 	TeamID   xid.ID    `json:"teamID"`
 	MemberID xid.ID    `json:"memberID"` // References OrganizationMember
 	JoinedAt time.Time `json:"joinedAt"`
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty"` // e.g., "scim"
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -78,10 +87,11 @@ type TeamMember struct {
 // ToSchema converts the TeamMember DTO to a schema.OrganizationTeamMember model
 func (tm *TeamMember) ToSchema() *schema.OrganizationTeamMember {
 	return &schema.OrganizationTeamMember{
-		ID:       tm.ID,
-		TeamID:   tm.TeamID,
-		MemberID: tm.MemberID,
-		JoinedAt: tm.JoinedAt,
+		ID:            tm.ID,
+		TeamID:        tm.TeamID,
+		MemberID:      tm.MemberID,
+		JoinedAt:      tm.JoinedAt,
+		ProvisionedBy: tm.ProvisionedBy,
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: tm.CreatedAt,
 			UpdatedAt: tm.UpdatedAt,
@@ -96,13 +106,14 @@ func FromSchemaTeamMember(stm *schema.OrganizationTeamMember) *TeamMember {
 		return nil
 	}
 	return &TeamMember{
-		ID:        stm.ID,
-		TeamID:    stm.TeamID,
-		MemberID:  stm.MemberID,
-		JoinedAt:  stm.JoinedAt,
-		CreatedAt: stm.CreatedAt,
-		UpdatedAt: stm.UpdatedAt,
-		DeletedAt: stm.DeletedAt,
+		ID:            stm.ID,
+		TeamID:        stm.TeamID,
+		MemberID:      stm.MemberID,
+		JoinedAt:      stm.JoinedAt,
+		ProvisionedBy: stm.ProvisionedBy,
+		CreatedAt:     stm.CreatedAt,
+		UpdatedAt:     stm.UpdatedAt,
+		DeletedAt:     stm.DeletedAt,
 	}
 }
 

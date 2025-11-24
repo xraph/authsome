@@ -100,6 +100,10 @@ type Auth struct {
 	// ServiceImpl registry for plugin decorator pattern
 	serviceRegistry *registry.ServiceRegistry
 	hookRegistry    *hooks.HookRegistry
+
+	// Global routes options
+	globalRoutesOptions      []forge.RouteOption
+	globalGroupRoutesOptions []forge.GroupOption
 }
 
 // New creates a new Auth instance with the given options
@@ -109,9 +113,11 @@ func New(opts ...Option) *Auth {
 			BasePath:          "/api/auth",
 			SessionCookieName: "authsome_session",
 		},
-		pluginRegistry:  plugins.NewRegistry(),
-		serviceRegistry: registry.NewServiceRegistry(),
-		hookRegistry:    hooks.NewHookRegistry(),
+		pluginRegistry:           plugins.NewRegistry(),
+		serviceRegistry:          registry.NewServiceRegistry(),
+		hookRegistry:             hooks.NewHookRegistry(),
+		globalRoutesOptions:      []forge.RouteOption{},
+		globalGroupRoutesOptions: []forge.GroupOption{},
 	}
 
 	// Apply options
@@ -507,19 +513,14 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	audH := handlers.NewAuditHandler(a.auditService)
 	appH := handlers.NewAppHandler(a.appService, a.rateLimitService, a.sessionService, a.rbacService, a.repo.UserRole(), a.repo.Role(), a.repo.Policy(), a.config.RBACEnforce)
 
-	// Phase 10 handlers (infrastructure only)
 	webhookH := handlers.NewWebhookHandler(a.webhookService)
 
-	// NOTE: These features are now plugin-based (use RegisterPlugin):
-	// - JWT: Register plugins/jwt.NewPlugin() for JWT token management
-	// - API Keys: Register plugins/apikey.NewPlugin() for API key authentication
-	// - Notifications: Register plugins/notification.NewPlugin() for notification templates
-	// The core services remain available for internal use by other features
+	excludeableGroupp := router.Group("", a.GetGlobalGroupRoutesOptions()...)
 
 	// Register core auth routes with authentication middleware
 	// Middleware extracts and validates API keys for app identification
-	routes.Register(router, basePath, h, a.AuthMiddleware())
-	routes.RegisterAudit(router, basePath, audH, a.AuthMiddleware())
+	routes.Register(excludeableGroupp, basePath, h, a.AuthMiddleware())
+	routes.RegisterAudit(excludeableGroupp, basePath, audH, a.AuthMiddleware())
 
 	// Check if multitenancy plugin is enabled
 	hasMultitenancyPlugin := false
@@ -536,27 +537,25 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	// This prevents route duplication and allows the plugin to fully control app routes
 	if !hasMultitenancyPlugin {
 		// Mount app routes under basePath (not hardcoded) with authentication middleware
-		routes.RegisterApp(router, basePath+"/apps", appH, a.AuthMiddleware())
+		routes.RegisterApp(excludeableGroupp, basePath+"/apps", appH, a.AuthMiddleware())
 		a.logger.Info("registered built-in app routes (multitenancy plugin not detected)")
 	} else {
 		a.logger.Info("skipping built-in app routes (multitenancy plugin detected)")
 
 		// Register RBAC-related routes that the multitenancy plugin doesn't handle
 		// These are still needed even with the multitenancy plugin
-		rbacGroup := router.Group(basePath + "/apps")
+		rbacGroup := excludeableGroupp.Group(basePath + "/apps")
 		routes.RegisterAppRBAC(rbacGroup, appH)
 		a.logger.Info("registered app RBAC routes")
 	}
 
-	// Phase 10 routes - webhook management (infrastructure)
-	authGroup := router.Group(basePath)
+	authGroup := excludeableGroupp.Group(basePath)
 	routes.RegisterWebhookRoutes(authGroup, webhookH)
-	// NOTE: JWT, API Keys, and Notifications are now plugin-based - handled by plugins via RegisterRoutes()
 
 	// Register plugin routes (scoped to basePath)
 	if a.pluginRegistry != nil {
 		// Pass a group with the basePath so plugins are scoped under the auth mount point
-		pluginGroup := router.Group(basePath)
+		pluginGroup := excludeableGroupp.Group(basePath)
 		for _, p := range a.pluginRegistry.List() {
 			a.logger.Info("registering routes for plugin", forge.F("plugin", p.ID()))
 			if err := p.RegisterRoutes(pluginGroup); err != nil {
@@ -621,6 +620,16 @@ func (a *Auth) GetPluginRegistry() plugins.PluginRegistry {
 	return a.pluginRegistry
 }
 
+// GetGlobalRoutesOptions returns the global routes options
+func (a *Auth) GetGlobalRoutesOptions() []forge.RouteOption {
+	return a.globalRoutesOptions
+}
+
+// GetGlobalGroupRoutesOptions returns the global group routes options
+func (a *Auth) GetGlobalGroupRoutesOptions() []forge.GroupOption {
+	return a.globalGroupRoutesOptions
+}
+
 // IsPluginEnabled checks if a plugin is registered and enabled
 func (a *Auth) IsPluginEnabled(pluginID string) bool {
 	if a.pluginRegistry == nil {
@@ -637,58 +646,85 @@ func (a *Auth) IsPluginEnabled(pluginID string) bool {
 // AuthMiddleware returns the optional authentication middleware
 // This middleware populates the auth context with API key and/or session data
 // but does not block unauthenticated requests
-func (a *Auth) AuthMiddleware() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) AuthMiddleware() forge.Middleware {
 	return a.authMiddleware.Authenticate
 }
 
 // RequireAuth returns middleware that requires authentication
 // Blocks requests that are not authenticated via API key or session
-func (a *Auth) RequireAuth() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireAuth() forge.Middleware {
 	return a.authMiddleware.RequireAuth
 }
 
 // RequireUser returns middleware that requires user authentication (session)
 // Blocks requests that don't have a valid user session
-func (a *Auth) RequireUser() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireUser() forge.Middleware {
 	return a.authMiddleware.RequireUser
 }
 
 // RequireAPIKey returns middleware that requires API key authentication
 // Blocks requests that don't have a valid API key
-func (a *Auth) RequireAPIKey() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireAPIKey() forge.Middleware {
 	return a.authMiddleware.RequireAPIKey
 }
 
 // RequireScope returns middleware that requires a specific API key scope
 // Blocks requests where the API key lacks the specified scope
-func (a *Auth) RequireScope(scope string) func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireScope(scope string) forge.Middleware {
 	return a.authMiddleware.RequireScope(scope)
 }
 
 // RequireAnyScope returns middleware that requires any of the specified scopes
-func (a *Auth) RequireAnyScope(scopes ...string) func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireAnyScope(scopes ...string) forge.Middleware {
 	return a.authMiddleware.RequireAnyScope(scopes...)
 }
 
 // RequireAllScopes returns middleware that requires all of the specified scopes
-func (a *Auth) RequireAllScopes(scopes ...string) func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireAllScopes(scopes ...string) forge.Middleware {
 	return a.authMiddleware.RequireAllScopes(scopes...)
 }
 
 // RequireSecretKey returns middleware that requires a secret (sk_) API key
-func (a *Auth) RequireSecretKey() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireSecretKey() forge.Middleware {
 	return a.authMiddleware.RequireSecretKey
 }
 
 // RequirePublishableKey returns middleware that requires a publishable (pk_) API key
-func (a *Auth) RequirePublishableKey() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequirePublishableKey() forge.Middleware {
 	return a.authMiddleware.RequirePublishableKey
 }
 
 // RequireAdmin returns middleware that requires admin privileges
 // Blocks requests that don't have admin:full scope via secret API key
-func (a *Auth) RequireAdmin() func(func(forge.Context) error) func(forge.Context) error {
+func (a *Auth) RequireAdmin() forge.Middleware {
 	return a.authMiddleware.RequireAdmin
+}
+
+// =============================================================================
+// RBAC-AWARE MIDDLEWARE (Hybrid Approach)
+// =============================================================================
+
+// RequireRBACPermission returns middleware that requires a specific RBAC permission
+// Checks only RBAC permissions (not legacy scopes)
+func (a *Auth) RequireRBACPermission(action, resource string) forge.Middleware {
+	return a.authMiddleware.RequireRBACPermission(action, resource)
+}
+
+// RequireCanAccess returns middleware that checks if auth context can access a resource
+// This is flexible - accepts EITHER legacy scopes OR RBAC permissions
+// Recommended for backward compatibility
+func (a *Auth) RequireCanAccess(action, resource string) forge.Middleware {
+	return a.authMiddleware.RequireCanAccess(action, resource)
+}
+
+// RequireAnyPermission returns middleware that requires any of the specified permissions
+func (a *Auth) RequireAnyPermission(permissions ...string) forge.Middleware {
+	return a.authMiddleware.RequireAnyPermission(permissions...)
+}
+
+// RequireAllPermissions returns middleware that requires all of the specified permissions
+func (a *Auth) RequireAllPermissions(permissions ...string) forge.Middleware {
+	return a.authMiddleware.RequireAllPermissions(permissions...)
 }
 
 // =============================================================================

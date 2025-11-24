@@ -24,6 +24,7 @@ import (
 
 // Plugin implements the multi-tenancy plugin
 type Plugin struct {
+	authInstance core.Authsome
 	// Core services
 	appService         *app.ServiceImpl
 	configService      *config.Service
@@ -166,6 +167,8 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
 		return errs.InternalServerError("invalid auth instance", nil)
 	}
+
+	p.authInstance = authInstance
 
 	p.db = authInstance.GetDB()
 	forgeApp := authInstance.GetForgeApp()
@@ -313,8 +316,10 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 
 // RegisterRoutes registers the plugin's HTTP routes
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	gopts := p.authInstance.GetGlobalGroupRoutesOptions()
+
 	// App management routes
-	appGroup := router.Group("/apps")
+	appGroup := router.Group("/apps", gopts...)
 	{
 		appGroup.POST("", p.appHandler.CreateApp,
 			forge.WithName("multitenancy.apps.create"),

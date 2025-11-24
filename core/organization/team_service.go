@@ -213,5 +213,15 @@ func (s *TeamService) IsTeamMember(ctx context.Context, teamID, memberID xid.ID)
 	return s.repo.IsTeamMember(ctx, teamID, memberID)
 }
 
+// IsSCIMManaged checks if a team is managed via SCIM provisioning
+func (s *TeamService) IsSCIMManaged(team *Team) bool {
+	return team.ProvisionedBy != nil && *team.ProvisionedBy == "scim"
+}
+
+// IsTeamMemberSCIMManaged checks if a team membership is managed via SCIM provisioning
+func (s *TeamService) IsTeamMemberSCIMManaged(teamMember *TeamMember) bool {
+	return teamMember.ProvisionedBy != nil && *teamMember.ProvisionedBy == "scim"
+}
+
 // Type assertion to ensure TeamService implements TeamOperations
 var _ TeamOperations = (*TeamService)(nil)

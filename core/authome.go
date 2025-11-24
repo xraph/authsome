@@ -54,5 +54,11 @@ type Authsome interface {
 
 	// AuthMiddleware returns the optional authentication middleware
 	// This middleware populates the auth context with API key and/or session data
-	AuthMiddleware() func(func(forge.Context) error) func(forge.Context) error
+	AuthMiddleware() forge.Middleware
+
+	// GetGlobalRoutesOptions returns the global routes options
+	GetGlobalRoutesOptions() []forge.RouteOption
+
+	// GetGlobalGroupRoutesOptions returns the global group routes options
+	GetGlobalGroupRoutesOptions() []forge.GroupOption
 }

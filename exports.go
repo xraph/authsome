@@ -5,6 +5,7 @@ import (
 	"github.com/xraph/authsome/core/app"
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	dev "github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
@@ -269,6 +270,30 @@ type (
 	Organization = organization.Organization
 )
 
+// Contexts Package Exports
+type (
+	// AuthContext holds complete authentication state for a request
+	AuthContext = contexts.AuthContext
+
+	// AuthMethod indicates how the request was authenticated
+	AuthMethod = contexts.AuthMethod
+)
+
+// AuthMethod constants
+const (
+	// AuthMethodNone indicates no authentication
+	AuthMethodNone = contexts.AuthMethodNone
+
+	// AuthMethodSession indicates session-based authentication
+	AuthMethodSession = contexts.AuthMethodSession
+
+	// AuthMethodAPIKey indicates API key authentication
+	AuthMethodAPIKey = contexts.AuthMethodAPIKey
+
+	// AuthMethodBoth indicates both session and API key authentication
+	AuthMethodBoth = contexts.AuthMethodBoth
+)
+
 // Hook Package Exports
 type (
 	// HookRegistry is the registry for registering hooks
@@ -345,6 +370,45 @@ var (
 	RegisterDefaultPlatformRoles = rbac.RegisterDefaultPlatformRoles
 )
 
+// Contexts Functions
+var (
+	// App Context Functions
+	GetAppID     = contexts.GetAppID
+	SetAppID     = contexts.SetAppID
+	RequireAppID = contexts.RequireAppID
+
+	// Environment Context Functions
+	GetEnvironmentID     = contexts.GetEnvironmentID
+	SetEnvironmentID     = contexts.SetEnvironmentID
+	RequireEnvironmentID = contexts.RequireEnvironmentID
+
+	// Organization Context Functions
+	GetOrganizationID     = contexts.GetOrganizationID
+	SetOrganizationID     = contexts.SetOrganizationID
+	RequireOrganizationID = contexts.RequireOrganizationID
+
+	// User Context Functions
+	GetUserID     = contexts.GetUserID
+	SetUserID     = contexts.SetUserID
+	RequireUserID = contexts.RequireUserID
+
+	// Composite Context Helpers
+	WithAppAndOrganization            = contexts.WithAppAndOrganization
+	WithAppAndUser                    = contexts.WithAppAndUser
+	WithAppEnvironmentAndOrganization = contexts.WithAppEnvironmentAndOrganization
+	WithAll                           = contexts.WithAll
+
+	// Auth Context Functions
+	SetAuthContext     = contexts.SetAuthContext
+	GetAuthContext     = contexts.GetAuthContext
+	RequireAuthContext = contexts.RequireAuthContext
+	RequireUser        = contexts.RequireUser
+	RequireAPIKey      = contexts.RequireAPIKey
+	GetUser            = contexts.GetUser
+	GetAPIKey          = contexts.GetAPIKey
+	GetSession         = contexts.GetSession
+)
+
 type (
 	// AfterOrganizationCreateHook registers a user lifecycle hook
 	AfterOrganizationCreateHook = hooks.AfterOrganizationCreateHook
@@ -401,4 +465,38 @@ const (
 	StatusActive    = app.MemberStatusActive
 	StatusSuspended = app.MemberStatusSuspended
 	StatusPending   = app.MemberStatusPending
+)
+
+// ============================================================================
+// Error Exports from Core Packages
+// ============================================================================
+
+// Context Errors
+var (
+	// ErrAppContextRequired is returned when app context is required but not found
+	ErrAppContextRequired = contexts.ErrAppContextRequired
+
+	// ErrEnvironmentContextRequired is returned when environment context is required but not found
+	ErrEnvironmentContextRequired = contexts.ErrEnvironmentContextRequired
+
+	// ErrOrganizationContextRequired is returned when organization context is required but not found
+	ErrOrganizationContextRequired = contexts.ErrOrganizationContextRequired
+
+	// ErrUserContextRequired is returned when user context is required but not found
+	ErrUserContextRequired = contexts.ErrUserContextRequired
+
+	// ErrAuthContextRequired is returned when auth context is required but not found
+	ErrAuthContextRequired = contexts.ErrAuthContextRequired
+
+	// ErrUserAuthRequired is returned when user authentication is required
+	ErrUserAuthRequired = contexts.ErrUserAuthRequired
+
+	// ErrAPIKeyRequired is returned when API key authentication is required
+	ErrAPIKeyRequired = contexts.ErrAPIKeyRequired
+
+	// ErrInsufficientScope is returned when API key lacks required scope
+	ErrInsufficientScope = contexts.ErrInsufficientScope
+
+	// ErrInsufficientPermission is returned when lacking required RBAC permission
+	ErrInsufficientPermission = contexts.ErrInsufficientPermission
 )

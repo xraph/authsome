@@ -436,6 +436,13 @@ func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 		return c.JSON(500, errs.InternalError(err))
 	}
 
+	// Check if team is SCIM-managed and return with warning if so
+	if team.ProvisionedBy != nil && *team.ProvisionedBy == "scim" {
+		response := responses.NewResponseWithWarnings(team)
+		response.AddWarning("scim_managed_team", "This team is managed via SCIM provisioning. Manual changes may be overwritten by the identity provider.")
+		return c.JSON(200, response)
+	}
+
 	return c.JSON(200, team)
 }
 
@@ -450,12 +457,25 @@ func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 		return c.JSON(400, errs.BadRequest("invalid team ID"))
 	}
 
+	// Check if team is SCIM-managed before deletion
+	team, err := h.orgService.FindTeamByID(c.Request().Context(), teamID)
+	if err != nil {
+		return c.JSON(404, errs.NotFound("team not found"))
+	}
+
 	// TODO: Get user ID from session/context
 	userID := xid.New() // Placeholder
 
 	err = h.orgService.DeleteTeam(c.Request().Context(), teamID, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
+	}
+
+	// If team was SCIM-managed, return warning in response
+	if team.ProvisionedBy != nil && *team.ProvisionedBy == "scim" {
+		response := responses.NewResponseWithWarnings(map[string]string{"message": "Team deleted"})
+		response.AddWarning("scim_managed_team", "This team was managed via SCIM provisioning. The deletion may be reversed by the identity provider.")
+		return c.JSON(200, response)
 	}
 
 	return c.JSON(204, nil)

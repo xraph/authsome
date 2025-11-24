@@ -54,6 +54,10 @@ type OrganizationTeam struct {
 	Description    string                 `json:"description" bun:"description"`
 	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
 
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty" bun:"provisioned_by,type:varchar(50)"` // e.g., "scim"
+	ExternalID    *string `json:"externalID,omitempty" bun:"external_id,type:varchar(255)"`      // External system ID
+
 	// Relations
 	Organization *Organization `json:"organization" bun:"rel:belongs-to,join:organization_id=id"`
 }
@@ -67,6 +71,9 @@ type OrganizationTeamMember struct {
 	TeamID   xid.ID    `json:"teamID" bun:"team_id,notnull,type:varchar(20)"`
 	MemberID xid.ID    `json:"memberID" bun:"member_id,notnull,type:varchar(20)"` // References OrganizationMember
 	JoinedAt time.Time `json:"joinedAt" bun:"joined_at,nullzero,notnull,default:current_timestamp"`
+
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty" bun:"provisioned_by,type:varchar(50)"` // e.g., "scim"
 
 	// Relations
 	Team   *OrganizationTeam   `json:"team" bun:"rel:belongs-to,join:team_id=id"`

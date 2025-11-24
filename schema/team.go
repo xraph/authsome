@@ -16,6 +16,10 @@ type Team struct {
 	Description string                 `json:"description" bun:"description"`
 	Metadata    map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
 
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty" bun:"provisioned_by,type:varchar(50)"` // e.g., "scim"
+	ExternalID    *string `json:"externalID,omitempty" bun:"external_id,type:varchar(255)"`      // External system ID
+
 	// Relations
 	App     *App     `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
 	Members []Member `json:"members,omitempty" bun:"m2m:team_members,join:Team=Member"`

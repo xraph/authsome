@@ -67,6 +67,24 @@ func (r *organizationTeamRepository) FindByName(ctx context.Context, orgID xid.I
 	return organization.FromSchemaTeam(schemaTeam), nil
 }
 
+// FindByExternalID retrieves a team by external ID (for SCIM lookups)
+func (r *organizationTeamRepository) FindByExternalID(ctx context.Context, orgID xid.ID, externalID string) (*organization.Team, error) {
+	schemaTeam := new(schema.OrganizationTeam)
+	err := r.db.NewSelect().
+		Model(schemaTeam).
+		Where("organization_id = ? AND external_id = ?", orgID, externalID).
+		Scan(ctx)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("team not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaTeam(schemaTeam), nil
+}
+
 // ListByOrganization lists all teams in an organization with pagination
 func (r *organizationTeamRepository) ListByOrganization(ctx context.Context, filter *organization.ListTeamsFilter) (*pagination.PageResponse[*organization.Team], error) {
 	var schemaTeams []*schema.OrganizationTeam

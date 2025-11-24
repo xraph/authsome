@@ -74,12 +74,20 @@ func (s *TeamService) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*
 }
 
 // UpdateTeam updates a team
+// Returns an error if the update fails
+// Note: Updating SCIM-managed teams should emit a warning at the handler level
 func (s *TeamService) UpdateTeam(ctx context.Context, team *Team) error {
 	team.UpdatedAt = time.Now()
 	return s.repo.UpdateTeam(ctx, team.ToSchema())
 }
 
+// IsSCIMManaged checks if a team is managed via SCIM provisioning
+func (s *TeamService) IsSCIMManaged(team *Team) bool {
+	return team.ProvisionedBy != nil && *team.ProvisionedBy == "scim"
+}
+
 // DeleteTeam deletes a team by ID
+// Note: Deleting SCIM-managed teams should emit a warning at the handler level
 func (s *TeamService) DeleteTeam(ctx context.Context, id xid.ID) error {
 	return s.repo.DeleteTeam(ctx, id)
 }
@@ -150,6 +158,11 @@ func (s *TeamService) ListMemberTeams(ctx context.Context, filter *ListMemberTea
 		Data:       teams,
 		Pagination: response.Pagination,
 	}, nil
+}
+
+// IsTeamMemberSCIMManaged checks if a team membership is managed via SCIM provisioning
+func (s *TeamService) IsTeamMemberSCIMManaged(teamMember *TeamMember) bool {
+	return teamMember.ProvisionedBy != nil && *teamMember.ProvisionedBy == "scim"
 }
 
 // Type assertion to ensure TeamService implements TeamOperations

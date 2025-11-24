@@ -23,26 +23,26 @@ const (
 // BaseRequestParams contains common request parameters for sorting, searching, and filtering
 // Can be used in both paginated and non-paginated requests
 type BaseRequestParams struct {
-	SortBy string    `json:"sortBy" query:"sort_by" default:"created_at" example:"created_at"`
-	Order  SortOrder `json:"order" query:"order" default:"desc" validate:"oneof=asc desc" example:"desc"`
-	Search string    `json:"search" query:"search" default:"" example:"john"`
-	Filter string    `json:"filter" query:"filter" default:"" example:"status:active"`
-	Fields string    `json:"fields" query:"fields" default:"" example:"id,name,email"`
+	SortBy string    `json:"sortBy" query:"sortBy" default:"created_at" example:"created_at" optional:"true"`
+	Order  SortOrder `json:"order" query:"order" default:"desc" validate:"oneof=asc desc" example:"desc" optional:"true"`
+	Search string    `json:"search" query:"search" default:"" example:"john" optional:"true"`
+	Filter string    `json:"filter" query:"filter" default:"" example:"status:active" optional:"true"`
+	Fields string    `json:"fields" query:"fields" default:"" example:"id,name,email" optional:"true"`
 }
 
 // PaginationParams represents offset-based pagination request parameters
 type PaginationParams struct {
 	BaseRequestParams
-	Limit  int `json:"limit" query:"limit" default:"10" validate:"min=1,max=100" example:"10"`
-	Offset int `json:"offset" query:"offset" default:"0" validate:"min=0" example:"0"`
-	Page   int `json:"page" query:"page" default:"1" validate:"min=1" example:"1"`
+	Limit  int `json:"limit" query:"limit" default:"10" validate:"min=1,max=100" example:"10" optional:"true"`
+	Offset int `json:"offset" query:"offset" default:"0" validate:"min=0" example:"0" optional:"true"`
+	Page   int `json:"page" query:"page" default:"1" validate:"min=1" example:"1" optional:"true"`
 }
 
 // CursorParams represents cursor-based pagination parameters
 type CursorParams struct {
 	BaseRequestParams
-	Limit  int    `json:"limit" query:"limit" default:"10" validate:"min=1,max=100" example:"10"`
-	Cursor string `json:"cursor" query:"cursor" default:"" example:"eyJpZCI6IjEyMyIsInRzIjoxNjQwMDAwMDAwfQ=="`
+	Limit  int    `json:"limit" query:"limit" default:"10" validate:"min=1,max=100" example:"10" optional:"true"`
+	Cursor string `json:"cursor" query:"cursor" default:"" example:"eyJpZCI6IjEyMyIsInRzIjoxNjQwMDAwMDAwfQ==" optional:"true"`
 }
 
 // PageResponse represents a paginated response with metadata

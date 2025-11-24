@@ -14,6 +14,9 @@ type Team struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    *string `json:"externalID,omitempty"`    // External system ID
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -23,11 +26,13 @@ type Team struct {
 // ToSchema converts the Team DTO to a schema.Team model
 func (t *Team) ToSchema() *schema.Team {
 	return &schema.Team{
-		ID:          t.ID,
-		AppID:       t.AppID,
-		Name:        t.Name,
-		Description: t.Description,
-		Metadata:    t.Metadata,
+		ID:            t.ID,
+		AppID:         t.AppID,
+		Name:          t.Name,
+		Description:   t.Description,
+		Metadata:      t.Metadata,
+		ProvisionedBy: t.ProvisionedBy,
+		ExternalID:    t.ExternalID,
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: t.CreatedAt,
 			UpdatedAt: t.UpdatedAt,
@@ -42,14 +47,16 @@ func FromSchemaTeam(st *schema.Team) *Team {
 		return nil
 	}
 	return &Team{
-		ID:          st.ID,
-		AppID:       st.AppID,
-		Name:        st.Name,
-		Description: st.Description,
-		Metadata:    st.Metadata,
-		CreatedAt:   st.CreatedAt,
-		UpdatedAt:   st.UpdatedAt,
-		DeletedAt:   st.DeletedAt,
+		ID:            st.ID,
+		AppID:         st.AppID,
+		Name:          st.Name,
+		Description:   st.Description,
+		Metadata:      st.Metadata,
+		ProvisionedBy: st.ProvisionedBy,
+		ExternalID:    st.ExternalID,
+		CreatedAt:     st.CreatedAt,
+		UpdatedAt:     st.UpdatedAt,
+		DeletedAt:     st.DeletedAt,
 	}
 }
 
@@ -68,6 +75,8 @@ type TeamMember struct {
 	ID       xid.ID `json:"id"`
 	TeamID   xid.ID `json:"teamId"`
 	MemberID xid.ID `json:"memberId"`
+	// Provisioning tracking
+	ProvisionedBy *string `json:"provisionedBy,omitempty"` // e.g., "scim"
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -77,9 +86,10 @@ type TeamMember struct {
 // ToSchema converts the TeamMember DTO to a schema.TeamMember model
 func (tm *TeamMember) ToSchema() *schema.TeamMember {
 	return &schema.TeamMember{
-		ID:       tm.ID,
-		TeamID:   tm.TeamID,
-		MemberID: tm.MemberID,
+		ID:            tm.ID,
+		TeamID:        tm.TeamID,
+		MemberID:      tm.MemberID,
+		ProvisionedBy: tm.ProvisionedBy,
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: tm.CreatedAt,
 			UpdatedAt: tm.UpdatedAt,
@@ -94,12 +104,13 @@ func FromSchemaTeamMember(stm *schema.TeamMember) *TeamMember {
 		return nil
 	}
 	return &TeamMember{
-		ID:        stm.ID,
-		TeamID:    stm.TeamID,
-		MemberID:  stm.MemberID,
-		CreatedAt: stm.CreatedAt,
-		UpdatedAt: stm.UpdatedAt,
-		DeletedAt: stm.DeletedAt,
+		ID:            stm.ID,
+		TeamID:        stm.TeamID,
+		MemberID:      stm.MemberID,
+		ProvisionedBy: stm.ProvisionedBy,
+		CreatedAt:     stm.CreatedAt,
+		UpdatedAt:     stm.UpdatedAt,
+		DeletedAt:     stm.DeletedAt,
 	}
 }
 

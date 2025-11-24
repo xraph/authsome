@@ -64,3 +64,36 @@ type SessionResponse struct {
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session,omitempty"`
 }
+
+// Warning represents a single warning message
+type Warning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// ResponseWithWarnings wraps any response data with optional warnings
+type ResponseWithWarnings struct {
+	Data     interface{} `json:"data"`
+	Warnings []Warning   `json:"warnings,omitempty"`
+}
+
+// NewResponseWithWarnings creates a new response with warnings
+func NewResponseWithWarnings(data interface{}, warnings ...Warning) *ResponseWithWarnings {
+	return &ResponseWithWarnings{
+		Data:     data,
+		Warnings: warnings,
+	}
+}
+
+// AddWarning adds a warning to the response
+func (r *ResponseWithWarnings) AddWarning(code, message string) {
+	r.Warnings = append(r.Warnings, Warning{
+		Code:    code,
+		Message: message,
+	})
+}
+
+// HasWarnings returns true if the response has any warnings
+func (r *ResponseWithWarnings) HasWarnings() bool {
+	return len(r.Warnings) > 0
+}

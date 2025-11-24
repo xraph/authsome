@@ -522,6 +522,116 @@ Content-Type: application/scim+json
 }
 ```
 
+### SCIM-Managed Team Tracking
+
+Teams created via SCIM provisioning are automatically marked with special tracking fields to distinguish them from manually-created teams:
+
+- **`provisionedBy`**: Set to `"scim"` for SCIM-created teams
+- **`externalID`**: Stores the external system's identifier (e.g., Okta group ID)
+
+#### Behavior
+
+**Manual Modifications:**
+- SCIM-managed teams can still be updated or deleted via regular team APIs
+- Operations on SCIM-managed teams return warnings in the response
+- Changes made manually may be overwritten by the identity provider
+
+**Warning Response Example:**
+
+When updating a SCIM-managed team via the regular team API:
+
+```json
+{
+  "data": {
+    "id": "cm3xyz789abc123def456",
+    "name": "Engineering",
+    "description": "Engineering team",
+    "provisionedBy": "scim",
+    "externalID": "okta_group_engineering"
+  },
+  "warnings": [
+    {
+      "code": "scim_managed_team",
+      "message": "This team is managed via SCIM provisioning. Manual changes may be overwritten by the identity provider."
+    }
+  ]
+}
+```
+
+**Team Response Fields:**
+
+All teams now include provisioning information in their responses:
+
+```json
+{
+  "id": "cm3xyz789abc123def456",
+  "name": "Engineering",
+  "description": "Team description",
+  "provisionedBy": "scim",          // Only present for SCIM-managed teams
+  "externalID": "okta_group_123",   // Only present for SCIM-managed teams
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Best Practices:**
+
+1. **Identity Provider as Source of Truth**: When using SCIM, treat the identity provider as the authoritative source for team management
+2. **Manual Changes**: Use manual updates only for emergency situations or temporary fixes
+3. **Monitoring**: Watch for warning responses when modifying teams to identify potential conflicts
+4. **Audit Trail**: Review SCIM provisioning logs to track all changes made via identity provider
+
+### SCIM-Managed Team Memberships
+
+Similar to teams, team memberships created via SCIM are tracked with a provisioning field:
+
+- **`provisionedBy`**: Set to `"scim"` for SCIM-added members
+
+#### Team Member Tracking
+
+When SCIM adds a user to a group (team), the membership relationship is marked as SCIM-managed:
+
+```json
+{
+  "id": "cm3xyz789abc123def456",
+  "teamID": "cm3team123",
+  "memberID": "cm3member456",
+  "provisionedBy": "scim",        // Indicates SCIM-managed membership
+  "joinedAt": "2024-01-15T10:30:00Z",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Use Cases:**
+
+1. **Membership Audit**: Identify which team memberships are controlled by identity provider
+2. **Access Reviews**: Distinguish between manually-granted and SCIM-provisioned access
+3. **Compliance**: Track provisioned access for regulatory requirements
+4. **Conflict Detection**: Services can check `provisionedBy` before manual member removal
+
+**Example Service Check:**
+
+```go
+// Check if team membership is SCIM-managed before removal
+teamMember, err := teamService.GetTeamMember(ctx, teamID, memberID)
+if err != nil {
+    return err
+}
+
+if teamMember.ProvisionedBy != nil && *teamMember.ProvisionedBy == "scim" {
+    log.Warn("Attempting to remove SCIM-managed team member",
+        "team", teamID,
+        "member", memberID)
+    // Optionally return warning to user
+}
+```
+
+**Important Notes:**
+
+- Team membership removal via regular APIs is allowed even for SCIM-managed members
+- Identity provider will re-provision the member on next sync if they're still in the group
+- For complete removal, remove the user from the group in the identity provider
+
 ## Monitoring & Audit
 
 ### Viewing Provisioning Logs

@@ -42,6 +42,22 @@ func (r *TeamRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Team,
 	return team, nil
 }
 
+// FindByExternalID finds a team by external ID (for SCIM lookups)
+func (r *TeamRepository) FindByExternalID(ctx context.Context, appID xid.ID, externalID string) (*schema.Team, error) {
+	team := &schema.Team{}
+	err := r.db.NewSelect().
+		Model(team).
+		Where("app_id = ? AND external_id = ?", appID, externalID).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("team not found")
+		}
+		return nil, fmt.Errorf("failed to find team by external_id: %w", err)
+	}
+	return team, nil
+}
+
 // ListByApp lists teams by app with pagination
 func (r *TeamRepository) ListByApp(ctx context.Context, appID xid.ID, limit, offset int) ([]*schema.Team, int64, error) {
 	var teams []*schema.Team

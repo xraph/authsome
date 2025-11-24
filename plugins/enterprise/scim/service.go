@@ -511,6 +511,12 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 			}
 		}
 
+		// Update team with SCIM provisioning information
+		if err := s.updateTeamProvisioningInfo(ctx, teamID, scimGroup.ExternalID); err != nil {
+			// Log warning but don't fail the operation
+			fmt.Printf("[SCIM] Warning: Failed to update team provisioning info: %v\n", err)
+		}
+
 		// Store mapping
 		orgXID := orgID
 		mapping := &GroupMapping{
@@ -1286,10 +1292,33 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID xid.ID, members 
 		// Add to team
 		if err := s.getOrgService().AddTeamMember(ctx, groupID, memberID, "member"); err != nil {
 			fmt.Printf("[SCIM] Failed to add member to team: %v\n", err)
+			continue
+		}
+
+		// Mark this team membership as SCIM-provisioned
+		if err := s.repo.UpdateTeamMemberProvisioningInfo(ctx, groupID, memberID, strPtr("scim")); err != nil {
+			// Log warning but don't fail the operation
+			fmt.Printf("[SCIM] Warning: Failed to update team member provisioning info: %v\n", err)
 		}
 	}
 
 	return nil
+}
+
+// updateTeamProvisioningInfo updates a team with SCIM provisioning information
+// This uses direct database access to update provisioning fields since the service layer
+// doesn't expose these fields in update requests
+func (s *Service) updateTeamProvisioningInfo(ctx context.Context, teamID xid.ID, externalID string) error {
+	provisionedBy := "scim"
+	
+	// Use direct repository access to update provisioning fields
+	// We can't use the service layer since CreateTeamRequest doesn't include these fields
+	return s.repo.UpdateTeamProvisioningInfo(ctx, teamID, &provisionedBy, &externalID)
+}
+
+// strPtr is a helper function to create a string pointer
+func strPtr(s string) *string {
+	return &s
 }
 
 func (s *Service) sendProvisioningWebhook(ctx context.Context, event string, data map[string]interface{}) error {
