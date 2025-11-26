@@ -239,12 +239,16 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// Note: This will be initialized fully after session and user services are created
 	// For now, we'll create a placeholder that will be updated later
 
-	// Initialize services (now with webhook service dependency)
-	a.userService = user.NewService(a.repo.User(), user.Config{
-		PasswordRequirements: validator.DefaultPasswordRequirements(),
-	}, a.webhookService)
-	a.sessionService = session.NewService(a.repo.Session(), session.Config{}, a.webhookService)
-	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{})
+	// Initialize services (now with webhook service dependency and hook registry)
+	// Initialize user config with defaults if not set
+	userConfig := a.config.UserConfig
+	if userConfig.PasswordRequirements.MinLength == 0 {
+		userConfig.PasswordRequirements = validator.DefaultPasswordRequirements()
+	}
+
+	a.userService = user.NewService(a.repo.User(), userConfig, a.webhookService, a.hookRegistry)
+	a.sessionService = session.NewService(a.repo.Session(), a.config.SessionConfig, a.webhookService, a.hookRegistry)
+	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{}, a.hookRegistry)
 
 	// Initialize global authentication middleware now that all required services are ready
 	// Use provided config or sensible defaults
@@ -277,6 +281,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.sessionService,
 		a.userService,
 		middlewareConfig,
+		&a.config.SessionCookie, // Pass cookie config for session renewal
 	)
 
 	// App service (platform tenant management)
@@ -619,6 +624,16 @@ func (a *Auth) GetServiceRegistry() *registry.ServiceRegistry {
 // Repository implements core.Authsome.
 func (a *Auth) Repository() repo.Repository {
 	return a.repo
+}
+
+// ServiceRegistry returns the service registry for plugins
+func (a *Auth) ServiceRegistry() *registry.ServiceRegistry {
+	return a.serviceRegistry
+}
+
+// Hooks returns the hook registry for plugins
+func (a *Auth) Hooks() *hooks.HookRegistry {
+	return a.hookRegistry
 }
 
 // GetHookRegistry returns the hook registry for plugins

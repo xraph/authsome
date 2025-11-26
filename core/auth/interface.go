@@ -18,6 +18,7 @@ type ServiceInterface interface {
 	CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*responses.AuthResponse, error)
 	GetSession(ctx context.Context, token string) (*responses.AuthResponse, error)
 	UpdateUser(ctx context.Context, id xid.ID, req *user.UpdateUserRequest) (*user.User, error)
+	RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error)
 }
 
 // Ensure Service implements ServiceInterface

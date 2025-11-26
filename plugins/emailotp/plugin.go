@@ -161,8 +161,8 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// wire repo and services
 	eotpr := repo.NewEmailOTPRepository(p.db)
-	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
-	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil, nil)
 	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
 	p.service = NewService(eotpr, userSvc, sessionSvc, auditSvc, p.notifAdapter, p.config, p.logger)
 

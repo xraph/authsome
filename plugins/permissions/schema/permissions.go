@@ -12,7 +12,7 @@ import (
 // =============================================================================
 
 // PermissionPolicy represents a permission policy in the database
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type PermissionPolicy struct {
 	bun.BaseModel `bun:"table:permission_policies,alias:pp"`
 
@@ -21,6 +21,7 @@ type PermissionPolicy struct {
 
 	// V2 Multi-tenant context
 	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
 	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
 
 	// Policy details
@@ -50,7 +51,7 @@ func (PermissionPolicy) TableName() string {
 // =============================================================================
 
 // PermissionNamespace represents a permission namespace in the database
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type PermissionNamespace struct {
 	bun.BaseModel `bun:"table:permission_namespaces,alias:pn"`
 
@@ -59,6 +60,7 @@ type PermissionNamespace struct {
 
 	// V2 Multi-tenant context
 	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
 	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
 
 	// Namespace details
@@ -146,7 +148,7 @@ func (PermissionAction) TableName() string {
 // =============================================================================
 
 // PermissionAuditLog represents an audit log entry in the database
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type PermissionAuditLog struct {
 	bun.BaseModel `bun:"table:permission_audit_logs,alias:pal"`
 
@@ -155,6 +157,7 @@ type PermissionAuditLog struct {
 
 	// V2 Multi-tenant context
 	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
 	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
 
 	// Audit details
@@ -183,7 +186,7 @@ func (PermissionAuditLog) TableName() string {
 // =============================================================================
 
 // PermissionEvaluationStats tracks policy evaluation statistics
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type PermissionEvaluationStats struct {
 	bun.BaseModel `bun:"table:permission_evaluation_stats,alias:pes"`
 
@@ -192,6 +195,7 @@ type PermissionEvaluationStats struct {
 
 	// V2 Multi-tenant context
 	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
 	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
 
 	// Policy reference
@@ -226,16 +230,18 @@ func (PermissionEvaluationStats) TableName() string {
 //
 // PermissionPolicy indexes:
 // - idx_permission_policies_app_id ON permission_policies(app_id)
+// - idx_permission_policies_env_id ON permission_policies(environment_id)
 // - idx_permission_policies_user_org_id ON permission_policies(user_organization_id) WHERE user_organization_id IS NOT NULL
 // - idx_permission_policies_namespace_id ON permission_policies(namespace_id)
 // - idx_permission_policies_resource_type ON permission_policies(resource_type)
 // - idx_permission_policies_enabled ON permission_policies(enabled) WHERE enabled = true
-// - idx_permission_policies_lookup ON permission_policies(app_id, user_organization_id, resource_type, enabled)
+// - idx_permission_policies_lookup ON permission_policies(app_id, environment_id, user_organization_id, resource_type, enabled)
 //
 // PermissionNamespace indexes:
 // - idx_permission_namespaces_app_id ON permission_namespaces(app_id)
+// - idx_permission_namespaces_env_id ON permission_namespaces(environment_id)
 // - idx_permission_namespaces_user_org_id ON permission_namespaces(user_organization_id) WHERE user_organization_id IS NOT NULL
-// - idx_permission_namespaces_name ON permission_namespaces(app_id, user_organization_id, name) UNIQUE
+// - idx_permission_namespaces_name ON permission_namespaces(app_id, environment_id, user_organization_id, name) UNIQUE
 //
 // PermissionResource indexes:
 // - idx_permission_resources_namespace_id ON permission_resources(namespace_id)
@@ -247,6 +253,7 @@ func (PermissionEvaluationStats) TableName() string {
 //
 // PermissionAuditLog indexes:
 // - idx_permission_audit_logs_app_id ON permission_audit_logs(app_id)
+// - idx_permission_audit_logs_env_id ON permission_audit_logs(environment_id)
 // - idx_permission_audit_logs_user_org_id ON permission_audit_logs(user_organization_id) WHERE user_organization_id IS NOT NULL
 // - idx_permission_audit_logs_actor_id ON permission_audit_logs(actor_id)
 // - idx_permission_audit_logs_timestamp ON permission_audit_logs(timestamp DESC)
@@ -254,7 +261,8 @@ func (PermissionEvaluationStats) TableName() string {
 //
 // PermissionEvaluationStats indexes:
 // - idx_permission_eval_stats_app_id ON permission_evaluation_stats(app_id)
+// - idx_permission_eval_stats_env_id ON permission_evaluation_stats(environment_id)
 // - idx_permission_eval_stats_user_org_id ON permission_evaluation_stats(user_organization_id) WHERE user_organization_id IS NOT NULL
 // - idx_permission_eval_stats_policy_id ON permission_evaluation_stats(policy_id)
-// - idx_permission_eval_stats_lookup ON permission_evaluation_stats(app_id, user_organization_id, policy_id) UNIQUE
+// - idx_permission_eval_stats_lookup ON permission_evaluation_stats(app_id, environment_id, user_organization_id, policy_id) UNIQUE
 

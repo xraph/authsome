@@ -353,3 +353,8 @@ func (r *ServiceRegistry) ListKeys() []string {
 
 	return keys
 }
+
+// RBAC registry getter
+func (r *ServiceRegistry) RBACRegistry() *rbac.RoleRegistry {
+	return r.roleRegistry
+}

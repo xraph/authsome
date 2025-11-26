@@ -7,10 +7,11 @@ import (
 )
 
 // Policy represents a permission policy
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type Policy struct {
 	ID                 xid.ID    `json:"id" bun:"id,pk"`
 	AppID              xid.ID    `json:"appId" bun:"app_id,notnull"`                              // Platform app (required)
+	EnvironmentID      xid.ID    `json:"environmentId" bun:"environment_id,notnull"`             // Environment (required)
 	UserOrganizationID *xid.ID   `json:"userOrganizationId,omitempty" bun:"user_organization_id"` // User-created org (optional)
 	NamespaceID        xid.ID    `json:"namespaceId" bun:"namespace_id,notnull"`
 	Name               string    `json:"name" bun:"name,notnull"`
@@ -27,10 +28,11 @@ type Policy struct {
 }
 
 // Namespace represents an organization-scoped policy namespace
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type Namespace struct {
 	ID                 xid.ID                `json:"id" bun:"id,pk"`
 	AppID              xid.ID                `json:"appId" bun:"app_id,notnull"`                              // Platform app (required)
+	EnvironmentID      xid.ID                `json:"environmentId" bun:"environment_id,notnull"`             // Environment (required)
 	UserOrganizationID *xid.ID               `json:"userOrganizationId,omitempty" bun:"user_organization_id"` // User-created org (optional)
 	Name               string                `json:"name" bun:"name"`
 	Description        string                `json:"description" bun:"description"`
@@ -91,9 +93,10 @@ type TemplateParameter struct {
 }
 
 // MigrationStatus tracks RBAC to Permissions migration progress
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type MigrationStatus struct {
 	AppID              xid.ID     `json:"appId"`                        // Platform app
+	EnvironmentID      xid.ID     `json:"environmentId"`                // Environment
 	UserOrganizationID *xid.ID    `json:"userOrganizationId,omitempty"` // User-created org (optional)
 	StartedAt          time.Time  `json:"startedAt"`
 	CompletedAt        *time.Time `json:"completedAt,omitempty"`
@@ -106,10 +109,11 @@ type MigrationStatus struct {
 }
 
 // AuditEvent records a permission-related event
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type AuditEvent struct {
 	ID                 xid.ID                 `json:"id" bun:"id,pk"`
 	AppID              xid.ID                 `json:"appId" bun:"app_id,notnull"`                              // Platform app (required)
+	EnvironmentID      xid.ID                 `json:"environmentId" bun:"environment_id,notnull"`             // Environment (required)
 	UserOrganizationID *xid.ID                `json:"userOrganizationId,omitempty" bun:"user_organization_id"` // User-created org (optional)
 	ActorID            xid.ID                 `json:"actorId" bun:"actor_id,notnull"`
 	Action             string                 `json:"action" bun:"action,notnull"`

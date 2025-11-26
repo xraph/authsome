@@ -123,8 +123,8 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	userRepo := repo.NewUserRepository(p.db)
 
 	// Create core services
-	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
-	userSvc := user.NewService(userRepo, user.Config{}, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil, nil)
+	userSvc := user.NewService(userRepo, user.Config{}, nil, nil)
 
 	// Create OIDC Provider service with config
 	p.service = NewServiceWithRepos(clientRepo, p.config)

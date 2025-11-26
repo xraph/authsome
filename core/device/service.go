@@ -19,7 +19,7 @@ func NewService(repo Repository) *Service {
 }
 
 // TrackDevice creates or updates a device record
-func (s *Service) TrackDevice(ctx context.Context, userID xid.ID, fingerprint, userAgent, ip string) (*Device, error) {
+func (s *Service) TrackDevice(ctx context.Context, appID, userID xid.ID, fingerprint, userAgent, ip string) (*Device, error) {
 	// Validate fingerprint
 	if fingerprint == "" {
 		return nil, InvalidFingerprint()
@@ -46,6 +46,7 @@ func (s *Service) TrackDevice(ctx context.Context, userID xid.ID, fingerprint, u
 	// Create new device
 	deviceSchema := &schema.Device{
 		ID:          xid.New(),
+		AppID:       appID,
 		UserID:      userID,
 		Fingerprint: fingerprint,
 		UserAgent:   userAgent,

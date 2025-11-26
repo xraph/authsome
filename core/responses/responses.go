@@ -65,6 +65,16 @@ type SessionResponse struct {
 	Session *session.Session `json:"session,omitempty"`
 }
 
+// RefreshSessionResponse represents a refresh token response
+type RefreshSessionResponse struct {
+	User             *user.User       `json:"user"`
+	Session          *session.Session `json:"session"`
+	AccessToken      string           `json:"accessToken"`
+	RefreshToken     string           `json:"refreshToken"`
+	ExpiresAt        string           `json:"expiresAt"`
+	RefreshExpiresAt string           `json:"refreshExpiresAt"`
+}
+
 // Warning represents a single warning message
 type Warning struct {
 	Code    string `json:"code"`

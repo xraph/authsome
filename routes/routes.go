@@ -61,6 +61,20 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler, aut
 		forge.WithValidation(true),
 	)
 
+	// Refresh session
+	authGroup.POST("/refresh", h.RefreshSession,
+		forge.WithName("auth.refresh"),
+		forge.WithSummary("Refresh session"),
+		forge.WithDescription("Refresh an access token using a refresh token (long-lived session pattern)"),
+		forge.WithRequestSchema(RefreshSessionRequest{}),
+		forge.WithResponseSchema(200, "Session refreshed", RefreshSessionResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid or expired refresh token", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication"),
+		forge.WithValidation(true),
+	)
+
 	// Get current session
 	authGroup.GET("/session", h.GetSession,
 		forge.WithName("auth.session"),
@@ -127,6 +141,18 @@ type StatusResponse struct {
 // SignOutRequest represents a sign out request
 type SignOutRequest struct {
 	Token string `json:"token" validate:"required" example:"session_token_here"`
+}
+
+type RefreshSessionRequest struct {
+	RefreshToken string `json:"refreshToken" validate:"required" example:"refresh_token_here"`
+}
+
+type RefreshSessionResponse struct {
+	Session          interface{} `json:"session"`
+	AccessToken      string      `json:"accessToken"`
+	RefreshToken     string      `json:"refreshToken"`
+	ExpiresAt        string      `json:"expiresAt"`
+	RefreshExpiresAt string      `json:"refreshExpiresAt"`
 }
 
 // SessionResponse represents session information

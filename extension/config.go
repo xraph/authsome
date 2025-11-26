@@ -1,11 +1,15 @@
 package extension
 
 import (
+	"time"
+
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/middleware"
 	"github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/security"
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/validator"
 	"github.com/xraph/authsome/plugins"
 )
 
@@ -47,6 +51,12 @@ type Config struct {
 
 	// SessionCookie configures cookie-based session management
 	SessionCookie *session.CookieConfig `yaml:"sessionCookie" json:"sessionCookie"`
+
+	// SessionConfig configures session behavior (TTL, sliding window, refresh tokens)
+	SessionConfig *session.Config `yaml:"sessionConfig" json:"sessionConfig"`
+
+	// UserConfig configures user service behavior (password requirements, etc.)
+	UserConfig *user.Config `yaml:"userConfig" json:"userConfig"`
 
 	// AuthMiddlewareConfig configures the authentication middleware behavior
 	AuthMiddlewareConfig *middleware.AuthMiddlewareConfig `yaml:"authMiddleware" json:"authMiddleware"`
@@ -218,6 +228,23 @@ func WithSessionCookieName(name string) ConfigOption {
 	}
 }
 
+// WithSessionCookieMaxAge sets the cookie MaxAge in seconds
+// This controls how long the browser keeps the cookie
+// If not set, defaults to session TTL (24 hours)
+//
+// Example:
+//
+//	extension.WithSessionCookieMaxAge(3600)  // 1 hour
+//	extension.WithSessionCookieMaxAge(86400) // 24 hours
+func WithSessionCookieMaxAge(seconds int) ConfigOption {
+	return func(c *Config) {
+		if c.SessionCookie == nil {
+			c.SessionCookie = &session.CookieConfig{}
+		}
+		c.SessionCookie.MaxAge = &seconds
+	}
+}
+
 // WithAuthMiddlewareConfig sets the authentication middleware configuration
 // This controls how the global authentication middleware behaves, including:
 // - Session cookie name
@@ -240,5 +267,200 @@ func WithSessionCookieName(name string) ConfigOption {
 func WithAuthMiddlewareConfig(config middleware.AuthMiddlewareConfig) ConfigOption {
 	return func(c *Config) {
 		c.AuthMiddlewareConfig = &config
+	}
+}
+
+// WithSessionConfig sets the full session configuration
+// This controls session behavior including TTL, sliding window, and refresh tokens
+//
+// Example:
+//
+//	extension.WithSessionConfig(session.Config{
+//	    DefaultTTL:           24 * time.Hour,
+//	    RememberTTL:          7 * 24 * time.Hour,
+//	    EnableSlidingWindow:  true,
+//	    SlidingRenewalAfter:  5 * time.Minute,
+//	    EnableRefreshTokens:  true,
+//	    RefreshTokenTTL:      30 * 24 * time.Hour,
+//	    AccessTokenTTL:       15 * time.Minute,
+//	})
+func WithSessionConfig(config session.Config) ConfigOption {
+	return func(c *Config) {
+		c.SessionConfig = &config
+	}
+}
+
+// WithSlidingWindowSessions enables automatic session renewal on each request
+// When enabled, sessions are extended whenever the user makes a request
+// The renewalThreshold determines how often to actually update the database (default: 5 minutes)
+// This prevents logging out active users while minimizing database writes
+//
+// Example:
+//
+//	extension.WithSlidingWindowSessions(true, 5*time.Minute)
+func WithSlidingWindowSessions(enabled bool, renewalThreshold ...time.Duration) ConfigOption {
+	return func(c *Config) {
+		if c.SessionConfig == nil {
+			c.SessionConfig = &session.Config{}
+		}
+		c.SessionConfig.EnableSlidingWindow = enabled
+		if len(renewalThreshold) > 0 {
+			c.SessionConfig.SlidingRenewalAfter = renewalThreshold[0]
+		}
+	}
+}
+
+// WithRefreshTokens enables the refresh token pattern
+// Short-lived access tokens are issued with long-lived refresh tokens
+// Clients must explicitly refresh when access token expires
+//
+// Example:
+//
+//	extension.WithRefreshTokens(true, 15*time.Minute, 30*24*time.Hour)
+//	// 15 min access tokens, 30 day refresh tokens
+func WithRefreshTokens(enabled bool, accessTTL, refreshTTL time.Duration) ConfigOption {
+	return func(c *Config) {
+		if c.SessionConfig == nil {
+			c.SessionConfig = &session.Config{}
+		}
+		c.SessionConfig.EnableRefreshTokens = enabled
+		if accessTTL > 0 {
+			c.SessionConfig.AccessTokenTTL = accessTTL
+		}
+		if refreshTTL > 0 {
+			c.SessionConfig.RefreshTokenTTL = refreshTTL
+		}
+	}
+}
+
+// WithSessionTTL sets the default and "remember me" session TTL
+//
+// Example:
+//
+//	extension.WithSessionTTL(24*time.Hour, 7*24*time.Hour)
+func WithSessionTTL(defaultTTL, rememberTTL time.Duration) ConfigOption {
+	return func(c *Config) {
+		if c.SessionConfig == nil {
+			c.SessionConfig = &session.Config{}
+		}
+		if defaultTTL > 0 {
+			c.SessionConfig.DefaultTTL = defaultTTL
+		}
+		if rememberTTL > 0 {
+			c.SessionConfig.RememberTTL = rememberTTL
+		}
+	}
+}
+
+// WithUserConfig sets the full user configuration
+// This controls user service behavior including password requirements
+//
+// Example:
+//
+//	extension.WithUserConfig(user.Config{
+//	    PasswordRequirements: validator.PasswordRequirements{
+//	        MinLength:      12,
+//	        RequireUpper:   true,
+//	        RequireLower:   true,
+//	        RequireNumber:  true,
+//	        RequireSpecial: true,
+//	    },
+//	})
+func WithUserConfig(config user.Config) ConfigOption {
+	return func(c *Config) {
+		c.UserConfig = &config
+	}
+}
+
+// WithPasswordRequirements sets the password requirements
+// This controls password validation for user registration and password changes
+//
+// Example:
+//
+//	extension.WithPasswordRequirements(validator.PasswordRequirements{
+//	    MinLength:      12,
+//	    RequireUpper:   true,
+//	    RequireLower:   true,
+//	    RequireNumber:  true,
+//	    RequireSpecial: true,
+//	})
+func WithPasswordRequirements(reqs validator.PasswordRequirements) ConfigOption {
+	return func(c *Config) {
+		if c.UserConfig == nil {
+			c.UserConfig = &user.Config{}
+		}
+		c.UserConfig.PasswordRequirements = reqs
+	}
+}
+
+// WithPasswordPolicy is a convenience function to set common password policies
+// Predefined policies: "weak", "medium", "strong", "enterprise"
+//
+// Example:
+//
+//	extension.WithPasswordPolicy("strong")
+func WithPasswordPolicy(policy string) ConfigOption {
+	return func(c *Config) {
+		if c.UserConfig == nil {
+			c.UserConfig = &user.Config{}
+		}
+
+		switch policy {
+		case "weak":
+			c.UserConfig.PasswordRequirements = validator.PasswordRequirements{
+				MinLength:      6,
+				RequireUpper:   false,
+				RequireLower:   false,
+				RequireNumber:  false,
+				RequireSpecial: false,
+			}
+		case "medium":
+			c.UserConfig.PasswordRequirements = validator.PasswordRequirements{
+				MinLength:      8,
+				RequireUpper:   true,
+				RequireLower:   true,
+				RequireNumber:  false,
+				RequireSpecial: false,
+			}
+		case "strong":
+			c.UserConfig.PasswordRequirements = validator.PasswordRequirements{
+				MinLength:      10,
+				RequireUpper:   true,
+				RequireLower:   true,
+				RequireNumber:  true,
+				RequireSpecial: true,
+			}
+		case "enterprise":
+			c.UserConfig.PasswordRequirements = validator.PasswordRequirements{
+				MinLength:      14,
+				RequireUpper:   true,
+				RequireLower:   true,
+				RequireNumber:  true,
+				RequireSpecial: true,
+			}
+		default:
+			// Default to medium
+			c.UserConfig.PasswordRequirements = validator.PasswordRequirements{
+				MinLength:      8,
+				RequireUpper:   true,
+				RequireLower:   true,
+				RequireNumber:  false,
+				RequireSpecial: false,
+			}
+		}
+	}
+}
+
+// WithMinPasswordLength sets the minimum password length
+//
+// Example:
+//
+//	extension.WithMinPasswordLength(12)
+func WithMinPasswordLength(length int) ConfigOption {
+	return func(c *Config) {
+		if c.UserConfig == nil {
+			c.UserConfig = &user.Config{}
+		}
+		c.UserConfig.PasswordRequirements.MinLength = length
 	}
 }

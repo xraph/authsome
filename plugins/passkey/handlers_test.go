@@ -372,8 +372,8 @@ func setupTestService(t *testing.T) (*bun.DB, *Service) {
 	// Create services
 	userRepo := repo.NewUserRepository(db)
 	sessionRepo := repo.NewSessionRepository(db)
-	sessionSvc := session.NewService(sessionRepo, session.Config{}, nil)
-	userSvc := user.NewService(userRepo, user.Config{}, nil)
+	sessionSvc := session.NewService(sessionRepo, session.Config{}, nil, nil)
+	userSvc := user.NewService(userRepo, user.Config{}, nil, nil)
 	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
 	auditSvc := audit.NewService(repo.NewAuditRepository(db))
 

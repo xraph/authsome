@@ -15,14 +15,15 @@ import (
 
 // Service provides authentication operations
 type Service struct {
-	users   user.ServiceInterface
-	session session.ServiceInterface
-	config  Config
+	users        user.ServiceInterface
+	session      session.ServiceInterface
+	config       Config
+	hookExecutor HookExecutor
 }
 
 // NewService creates a new auth service
-func NewService(users user.ServiceInterface, session session.ServiceInterface, cfg Config) *Service {
-	return &Service{users: users, session: session, config: cfg}
+func NewService(users user.ServiceInterface, session session.ServiceInterface, cfg Config, hookExecutor HookExecutor) *Service {
+	return &Service{users: users, session: session, config: cfg, hookExecutor: hookExecutor}
 }
 
 // SignUp registers a new user and returns a session
@@ -31,6 +32,13 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
 		return nil, contexts.ErrAppContextRequired
+	}
+
+	// Execute before sign up hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteBeforeSignUp(ctx, req); err != nil {
+			return nil, err
+		}
 	}
 
 	// ensure user does not exist
@@ -51,7 +59,15 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 
 	// if verification is required, do not create session
 	if s.config.RequireEmailVerification {
-		return &responses.AuthResponse{User: u}, nil
+		response := &responses.AuthResponse{User: u}
+		// Execute after sign up hooks
+		if s.hookExecutor != nil {
+			if err := s.hookExecutor.ExecuteAfterSignUp(ctx, response); err != nil {
+				// Log error but don't fail the operation - user is already created
+				// TODO: Add proper logging
+			}
+		}
+		return response, nil
 	}
 
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
@@ -64,7 +80,18 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	if err != nil {
 		return nil, err
 	}
-	return &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}, nil
+	
+	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
+	
+	// Execute after sign up hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterSignUp(ctx, response); err != nil {
+			// Log error but don't fail the operation - user is already signed up
+			// TODO: Add proper logging
+		}
+	}
+	
+	return response, nil
 }
 
 // SignIn authenticates a user and returns a session
@@ -73,6 +100,13 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
 		return nil, contexts.ErrAppContextRequired
+	}
+
+	// Execute before sign in hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteBeforeSignIn(ctx, req); err != nil {
+			return nil, err
+		}
 	}
 
 	u, err := s.users.FindByEmail(ctx, req.Email)
@@ -92,7 +126,18 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	if err != nil {
 		return nil, err
 	}
-	return &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}, nil
+	
+	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
+	
+	// Execute after sign in hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterSignIn(ctx, response); err != nil {
+			// Log error but don't fail the operation - user is already signed in
+			// TODO: Add proper logging
+		}
+	}
+	
+	return response, nil
 }
 
 // CheckCredentials validates a user's credentials and returns the user without creating a session
@@ -108,6 +153,7 @@ func (s *Service) CheckCredentials(ctx context.Context, email, password string) 
 }
 
 // CreateSessionForUser creates a session for a given user and returns auth response
+// This is typically used after credentials are already validated (e.g., after 2FA verification)
 func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ip, ua string) (*responses.AuthResponse, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -125,12 +171,45 @@ func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, rememb
 	if err != nil {
 		return nil, err
 	}
-	return &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}, nil
+	
+	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
+	
+	// Execute after sign in hooks
+	// Note: BeforeSignIn hooks are not executed here because credentials were already validated
+	// This method is used in flows where validation happens separately (e.g., 2FA, magic link)
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterSignIn(ctx, response); err != nil {
+			// Log error but don't fail the operation - user is already signed in
+			// TODO: Add proper logging
+		}
+	}
+	
+	return response, nil
 }
 
 // SignOut revokes a session
 func (s *Service) SignOut(ctx context.Context, req *SignOutRequest) error {
-	return s.session.Revoke(ctx, req.Token)
+	// Execute before sign out hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteBeforeSignOut(ctx, req.Token); err != nil {
+			return err
+		}
+	}
+
+	err := s.session.Revoke(ctx, req.Token)
+	if err != nil {
+		return err
+	}
+	
+	// Execute after sign out hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterSignOut(ctx, req.Token); err != nil {
+			// Log error but don't fail the operation - session is already revoked
+			// TODO: Add proper logging
+		}
+	}
+	
+	return nil
 }
 
 // GetSession validates and returns session details
@@ -156,4 +235,38 @@ func (s *Service) UpdateUser(ctx context.Context, userID xid.ID, req *user.Updat
 		return nil, types.ErrUserNotFound
 	}
 	return s.users.Update(ctx, u, req)
+}
+
+// RefreshSession refreshes an access token using a refresh token
+func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error) {
+	// Delegate to session service
+	refreshResp, err := s.session.RefreshSession(ctx, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load user
+	u, err := s.users.FindByID(ctx, refreshResp.Session.UserID)
+	if err != nil || u == nil {
+		return nil, types.ErrUserNotFound
+	}
+
+	// Execute after sign in hooks (session was refreshed, similar to signing in)
+	if s.hookExecutor != nil {
+		authResp := &responses.AuthResponse{
+			User:    u,
+			Session: refreshResp.Session,
+			Token:   refreshResp.AccessToken,
+		}
+		_ = s.hookExecutor.ExecuteAfterSignIn(ctx, authResp)
+	}
+
+	return &responses.RefreshSessionResponse{
+		User:             u,
+		Session:          refreshResp.Session,
+		AccessToken:      refreshResp.AccessToken,
+		RefreshToken:     refreshResp.RefreshToken,
+		ExpiresAt:        refreshResp.ExpiresAt.Format(time.RFC3339),
+		RefreshExpiresAt: refreshResp.RefreshExpiresAt.Format(time.RFC3339),
+	}, nil
 }

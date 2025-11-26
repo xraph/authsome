@@ -332,6 +332,18 @@ func (s *Service) GetOrgPermissions(ctx context.Context, orgID xid.ID) ([]*schem
 	return s.permissionRepo.ListByOrg(ctx, orgID)
 }
 
+// GetUserPermissions gets all permissions for a user
+func (s *Service) GetPermission(ctx context.Context, permissionID xid.ID) (*schema.Permission, error) {
+	if s.permissionRepo == nil {
+		return nil, fmt.Errorf("permission repository not initialized")
+	}
+	permission, err := s.permissionRepo.FindByID(ctx, permissionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get permissions: %w", err)
+	}
+	return permission, nil
+}
+
 // GetPermissionsByCategory gets permissions by category
 func (s *Service) GetPermissionsByCategory(ctx context.Context, category string, appID xid.ID) ([]*schema.Permission, error) {
 	if s.permissionRepo == nil {

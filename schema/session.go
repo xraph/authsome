@@ -25,6 +25,11 @@ type Session struct {
 	IPAddress string    `bun:"ip_address"`
 	UserAgent string    `bun:"user_agent"`
 
+	// Refresh token support (Option 3)
+	RefreshToken         *string    `bun:"refresh_token,unique"`              // Long-lived refresh token
+	RefreshTokenExpiresAt *time.Time `bun:"refresh_token_expires_at"`          // Refresh token expiry
+	LastRefreshedAt      *time.Time `bun:"last_refreshed_at"`                 // When was access token last refreshed
+
 	// Relations
 	User *User `bun:"rel:belongs-to,join:user_id=id"`
 }

@@ -2,385 +2,595 @@
 
 ## Package Purpose
 
-The `rbac` package provides Role-Based Access Control with a powerful CEL (Common Expression Language) policy engine. It manages roles, permissions, policies, and permission checking with caching for performance.
+The `rbac` package provides Role-Based Access Control with a policy-based authorization engine. It features a **Role Template System** for dynamic role registration, inheritance-based role hierarchies, and a lightweight policy evaluation engine. The system supports multi-tenant organizations with app-scoped and organization-scoped roles.
 
 ## Key Files
 
-- **service.go**: Main RBAC service with policy management (392 lines)
-- **evaluator.go**: CEL-based policy evaluation engine
-- **parser.go**: Policy DSL parser
-- **repository.go**: Repository interfaces for roles and permissions
-- **role.go**: Role entity and operations
-- **permission.go**: Permission entity and operations
-- **policy.go**: Policy entity and CEL expressions
-- **types.go**: Common types and constants
-- **constants.go**: Built-in roles and permissions
-- **bootstrap.go**: Default role/permission initialization
+- **service.go**: Main RBAC service with policy management and role operations (392 lines)
+- **bootstrap.go**: Role Registry and template system for dynamic role registration (494 lines)
+- **evaluator.go**: Policy evaluation engine
+- **parser.go**: Policy expression parser
+- **repository.go**: Repository interfaces for roles, permissions, and policies
+- **types.go**: Helper types including RoleWithPermissions, PermissionCategory, PermissionAction
+- **constants.go**: Built-in role names, priorities, and descriptions
+- **policy.go**: Policy and Context struct definitions
+- **role.go**: Role entity definition
+- **permission.go**: Permission entity definition
+- **bootstrap_test.go**: Role registry and bootstrap tests
 - **evaluator_test.go**: Policy evaluation tests
 - **parser_test.go**: Policy parser tests
-- **bootstrap_test.go**: Bootstrap tests
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Role Template System                      │
+│  ┌─────────────┐    ┌──────────────┐    ┌───────────────────┐  │
+│  │ RoleRegistry │───▶│ RoleDefinition│───▶│ RegisterRole()    │  │
+│  └─────────────┘    └──────────────┘    └───────────────────┘  │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌─────────────────┐                                            │
+│  │   Bootstrap()   │──▶ Creates roles, permissions, policies    │
+│  └─────────────────┘                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     Policy Evaluation Engine                     │
+│  ┌────────┐    ┌────────────┐    ┌───────────┐                 │
+│  │ Parser │───▶│  Policies  │───▶│ Evaluator │                 │
+│  └────────┘    └────────────┘    └───────────┘                 │
+│       │                                │                        │
+│       ▼                                ▼                        │
+│  Expression DSL            Subject/Action/Resource Match        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Main Types/Interfaces
 
-### Role
+### RoleDefinition (Template System)
 ```go
-type Role struct {
-    ID           xid.ID
-    Name         string        // e.g., "admin", "editor", "viewer"
-    Description  string
-    Scope        RoleScope     // system, organization, app
-    ScopeID      *xid.ID       // org ID or app ID
-    Permissions  []string      // Permission names
-    CreatedAt    time.Time
+type RoleDefinition struct {
+    Name         string   // Role name (e.g., "superadmin", "owner", "admin", "member")
+    Description  string   // Human-readable description
+    Permissions  []string // Permission expressions: "action on resource" or "* on *"
+    IsPlatform   bool     // Platform-level role (superadmin) vs org-level (owner, admin, member)
+    InheritsFrom string   // Parent role to inherit permissions from (for role hierarchy)
+    Priority     int      // Higher priority roles override lower priority (superadmin=100, owner=80, admin=60, member=40)
 }
-
-type RoleScope string
-const (
-    RoleScopeSystem       RoleScope = "system"
-    RoleScopeOrganization RoleScope = "organization"
-    RoleScopeApp          RoleScope = "app"
-)
 ```
 
-### Permission
+### RoleRegistry
 ```go
-type Permission struct {
-    ID          xid.ID
-    Name        string        // e.g., "users:read", "org:manage"
-    Description string
-    Resource    string        // e.g., "users", "organizations"
-    Action      string        // e.g., "read", "write", "delete"
-    CreatedAt   time.Time
+type RoleRegistry struct {
+    roles map[string]*RoleDefinition
+}
+
+type RoleRegistryInterface interface {
+    // RegisterRole registers or updates a role definition with merge semantics
+    RegisterRole(role *RoleDefinition) error
+    
+    // GetRole retrieves a role definition by name
+    GetRole(name string) (*RoleDefinition, bool)
+    
+    // ListRoles returns all registered role definitions
+    ListRoles() []*RoleDefinition
+    
+    // Bootstrap applies all registered roles to the database and policy engine
+    Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformOrgID xid.ID) error
+    
+    // ValidateRoleAssignment checks if a role can be assigned
+    ValidateRoleAssignment(roleName string, isPlatformOrg bool) error
+    
+    // GetRoleHierarchy returns roles in descending priority order
+    GetRoleHierarchy() []*RoleDefinition
 }
 ```
 
 ### Policy
 ```go
 type Policy struct {
-    Name        string
-    Description string
-    Effect      Effect        // allow or deny
-    Actions     []string      // e.g., ["users:read", "users:write"]
-    Resources   []string      // e.g., ["users/*", "users/{userID}"]
-    Condition   string        // CEL expression
+    Subject   string   // e.g., "user", "role:admin"
+    Actions   []string // e.g., ["read", "write"]
+    Resource  string   // e.g., "project:*"
+    Condition string   // optional condition, e.g., "owner = true"
 }
 
-type Effect string
-const (
-    EffectAllow Effect = "allow"
-    EffectDeny  Effect = "deny"
-)
+type Context struct {
+    Subject  string            // e.g., "user", "role:admin"
+    Action   string            // e.g., "read"
+    Resource string            // e.g., "project:123"
+    Vars     map[string]string // context variables used by conditions
+}
 ```
 
 ### Service
 ```go
 type Service struct {
-    policies            []*Policy
-    eval                *Evaluator
-    roleRepo            RoleRepository
-    permissionRepo      PermissionRepository
-    rolePermissionRepo  RolePermissionRepository
-    userRoleRepo        UserRoleRepository
+    mu       sync.RWMutex
+    policies []*Policy
+    eval     *Evaluator
+
+    // Repositories for role and permission management
+    roleRepo           RoleRepository
+    permissionRepo     PermissionRepository
+    rolePermissionRepo RolePermissionRepository
+    userRoleRepo       UserRoleRepository
 }
+```
+
+### Built-in Role Constants
+```go
+const (
+    RoleSuperAdmin = "superadmin"  // Priority: 100, Platform-only
+    RoleOwner      = "owner"       // Priority: 80
+    RoleAdmin      = "admin"       // Priority: 60, Inherits from member
+    RoleMember     = "member"      // Priority: 40
+)
+```
+
+### Helper Types
+```go
+type RoleWithPermissions struct {
+    *schema.Role
+    Permissions []*schema.Permission
+}
+
+type RoleCustomization struct {
+    Name               *string   // Override template name
+    Description        *string   // Override template description
+    PermissionIDs      []xid.ID  // Specific permissions to clone
+    ExcludePermissions []xid.ID  // Permissions to exclude
+}
+
+type PermissionCategory string
+const (
+    CategoryUsers         PermissionCategory = "users"
+    CategorySettings      PermissionCategory = "settings"
+    CategoryOrganizations PermissionCategory = "organizations"
+    CategorySessions      PermissionCategory = "sessions"
+    CategoryAPIKeys       PermissionCategory = "apikeys"
+    CategoryAuditLogs     PermissionCategory = "audit_logs"
+    CategoryRoles         PermissionCategory = "roles"
+    CategoryDashboard     PermissionCategory = "dashboard"
+    CategoryCustom        PermissionCategory = "custom"
+)
+
+type PermissionAction string
+const (
+    ActionView    PermissionAction = "view"
+    ActionCreate  PermissionAction = "create"
+    ActionEdit    PermissionAction = "edit"
+    ActionDelete  PermissionAction = "delete"
+    ActionManage  PermissionAction = "manage"
+    ActionAll     PermissionAction = "*"
+)
 ```
 
 ## Public API
 
-### Role Management
+### Role Template System
 
-#### Create Role
+#### Register Role Definition
 ```go
-role := &Role{
-    Name:        "editor",
-    Description: "Can edit content",
-    Scope:       RoleScopeOrganization,
-    ScopeID:     &orgID,
-    Permissions: []string{"content:read", "content:write"},
+registry := NewRoleRegistry()
+
+// Register a custom role with inheritance
+err := registry.RegisterRole(&RoleDefinition{
+    Name:         "moderator",
+    Description:  "Content moderator",
+    IsPlatform:   false,
+    InheritsFrom: "member",  // Inherits member permissions
+    Priority:     50,
+    Permissions: []string{
+        "view,edit,delete on content",
+        "view on audit_logs",
+    },
+})
+```
+
+#### Override Existing Role (Merge Semantics)
+```go
+// Plugins can extend existing roles
+err := registry.RegisterRole(&RoleDefinition{
+    Name:        "admin",
+    Permissions: []string{
+        "manage on webhooks",  // Added to existing admin permissions
+    },
+})
+// Permissions are merged, not replaced
+```
+
+#### Register Default Platform Roles
+```go
+// Called during AuthSome initialization
+err := RegisterDefaultPlatformRoles(registry)
+// Creates: superadmin, owner, admin, member with default permissions
+```
+
+#### Bootstrap Roles to Database
+```go
+// Called after DB migrations and plugin init
+err := registry.Bootstrap(ctx, db, rbacService, platformOrgID)
+// Creates:
+// 1. Permission records in database
+// 2. Role records in database
+// 3. Policy expressions in policy engine
+```
+
+#### Validate Role Assignment
+```go
+// Platform roles can only be assigned in platform org
+err := registry.ValidateRoleAssignment("superadmin", isPlatformOrg)
+if err != nil {
+    // "superadmin is a platform role and can only be assigned in the platform organization"
 }
-created, err := rbacSvc.CreateRole(ctx, role)
 ```
 
-#### Assign Role to User
+### Policy Management
+
+#### Add Policy Directly
 ```go
-err := rbacSvc.AssignRole(ctx, userID, roleID, orgID)
-// User now has role's permissions within org scope
+rbacSvc.AddPolicy(&Policy{
+    Subject:   "role:admin",
+    Actions:   []string{"read", "write"},
+    Resource:  "users",
+    Condition: "",
+})
 ```
 
-#### Get User Roles
+#### Add Policy via Expression
 ```go
-roles, err := rbacSvc.GetUserRoles(ctx, userID, orgID)
-// Returns all roles assigned to user in org
+// Parse and add policy expression
+err := rbacSvc.AddExpression("role:admin:read,write on users")
+// Alternative with condition:
+err := rbacSvc.AddExpression("role:editor:edit on content:* where owner = true")
 ```
 
-#### Revoke Role from User
+#### Load Policies from Repository
 ```go
-err := rbacSvc.RevokeRole(ctx, userID, roleID, orgID)
+err := rbacSvc.LoadPolicies(ctx, policyRepo)
+// Loads all stored policy expressions
+```
+
+### Policy Evaluation
+
+#### Simple Authorization Check
+```go
+allowed := rbacSvc.Allowed(&Context{
+    Subject:  "role:admin",
+    Action:   "read",
+    Resource: "users",
+})
+```
+
+#### Authorization with User Roles
+```go
+// Check policies against user's assigned roles
+userRoles := []string{"admin", "editor"}
+allowed := rbacSvc.AllowedWithRoles(&Context{
+    Subject:  "user:123",
+    Action:   "edit",
+    Resource: "content:456",
+}, userRoles)
+// Evaluates policies for "role:admin" and "role:editor"
+```
+
+#### With Condition Variables
+```go
+allowed := rbacSvc.Allowed(&Context{
+    Subject:  "role:editor",
+    Action:   "delete",
+    Resource: "content:123",
+    Vars: map[string]string{
+        "owner": "true",
+    },
+})
+```
+
+### Organization Role Management
+
+#### Bootstrap Organization Roles from Templates
+```go
+// Clone role templates for a new organization
+templateIDs := []xid.ID{templateID1, templateID2}
+customizations := map[xid.ID]*RoleCustomization{
+    templateID1: {
+        Name: stringPtr("Custom Admin"),
+    },
+}
+err := rbacSvc.BootstrapOrgRoles(ctx, orgID, templateIDs, customizations)
+```
+
+#### Get Organization Roles
+```go
+roles, err := rbacSvc.GetOrgRoles(ctx, orgID)
+// Returns all org-specific roles (cloned from templates)
+```
+
+#### Update Organization Role
+```go
+err := rbacSvc.UpdateOrgRole(ctx, roleID, "New Name", "New Description", permissionIDs)
+// Only works for org-scoped roles, not templates
+```
+
+#### Delete Organization Role
+```go
+err := rbacSvc.DeleteOrgRole(ctx, roleID)
+// Only works for org-scoped roles, not templates
+```
+
+#### Assign Owner Role
+```go
+err := rbacSvc.AssignOwnerRole(ctx, userID, orgID)
+// Finds and assigns the owner role (cloned from template with is_owner_role = true)
 ```
 
 ### Permission Management
 
-#### Create Permission
+#### Get App Permissions
 ```go
-perm := &Permission{
-    Name:        "content:publish",
-    Description: "Publish content",
-    Resource:    "content",
-    Action:      "publish",
-}
-created, err := rbacSvc.CreatePermission(ctx, perm)
+perms, err := rbacSvc.GetAppPermissions(ctx, appID)
 ```
 
-#### Add Permission to Role
+#### Get Org-Specific Permissions
 ```go
-err := rbacSvc.AddPermissionToRole(ctx, roleID, permissionID)
+perms, err := rbacSvc.GetOrgPermissions(ctx, orgID)
+```
+
+#### Get Permissions by Category
+```go
+perms, err := rbacSvc.GetPermissionsByCategory(ctx, "users", appID)
+```
+
+#### Create Custom Permission
+```go
+perm, err := rbacSvc.CreateCustomPermission(ctx, "export_reports", "Export data reports", "custom", orgID)
+```
+
+### Role-Permission Management
+
+#### Assign Permissions to Role
+```go
+err := rbacSvc.AssignPermissionsToRole(ctx, roleID, []xid.ID{permID1, permID2})
+```
+
+#### Remove Permissions from Role
+```go
+err := rbacSvc.RemovePermissionsFromRole(ctx, roleID, []xid.ID{permID1})
 ```
 
 #### Get Role Permissions
 ```go
 perms, err := rbacSvc.GetRolePermissions(ctx, roleID)
-// Returns all permissions attached to role
 ```
 
-### Permission Checking
+## Policy Expression Syntax
 
-#### Check Permission
+### Format
+```
+subject:action1,action2 on resource[:*] [where key = value]
+```
+
+### Examples
+```
+# Basic policy
+user:read on projects
+
+# Multiple actions
+role:admin:read,write,delete on users
+
+# Wildcard resource
+role:owner:* on organization:*
+
+# Conditional policy
+role:editor:edit on content:* where owner = true
+
+# Role subject (used with AllowedWithRoles)
+role:superadmin:* on *
+```
+
+### Resource Matching
+- Exact match: `users` matches `users`
+- Wildcard all: `*` matches any resource
+- Prefix wildcard: `content:*` matches `content:123`, `content:abc`
+
+## Default Platform Roles
+
+The system registers four default roles with inheritance:
+
+### superadmin (Priority: 100)
 ```go
-// Simple check
-hasPermission := rbacSvc.CheckPermission(ctx, userID, "users:read", orgID)
+Permissions: ["* on *"]  // Unrestricted access
+IsPlatform: true          // Platform org only
+```
 
-// With resource context
-allowed := rbacSvc.CheckPermissionWithContext(ctx, userID, "users:delete", map[string]any{
-    "userID":  targetUserID,
-    "orgID":   orgID,
-    "actorID": userID,
+### owner (Priority: 80)
+```go
+Permissions: [
+    "* on organization.*",
+    "dashboard.view on dashboard",
+    "view,edit,delete,create on users",
+    "view,delete on sessions",
+    "view on audit_logs",
+    "manage on apikeys",
+    "manage on settings",
+]
+```
+
+### admin (Priority: 60, Inherits: member)
+```go
+Permissions: [
+    "dashboard.view on dashboard",
+    "view,edit,delete,create on users",
+    "view,delete on sessions",
+    "view on audit_logs",
+    "view,create on apikeys",
+    "view on settings",
+]
+// + all member permissions via inheritance
+```
+
+### member (Priority: 40)
+```go
+Permissions: [
+    "dashboard.view on dashboard",
+    "view on profile",
+    "edit on profile",
+]
+```
+
+## Role Inheritance
+
+The system supports single inheritance with automatic permission merging:
+
+```go
+// Admin inherits from member
+registry.RegisterRole(&RoleDefinition{
+    Name:         "admin",
+    InheritsFrom: "member",  // Inherits all member permissions
+    Permissions:  []string{"manage on users"},
 })
+
+// Final admin permissions = member permissions + "manage on users"
 ```
 
-#### Get User Permissions
-```go
-permissions, err := rbacSvc.GetUserPermissions(ctx, userID, orgID)
-// Returns all permissions from all user's roles
-```
+### Inheritance Resolution
+1. Resolves parent chain recursively
+2. Detects circular dependencies (returns error)
+3. Merges permissions (child + parent)
+4. Child permissions override parent on conflict
 
-### Policy Management
+## Repository Interfaces
 
-#### Add Policy
+### PolicyRepository
 ```go
-policy := &Policy{
-    Name:        "CanManageOwnContent",
-    Description: "Users can manage their own content",
-    Effect:      EffectAllow,
-    Actions:     []string{"content:update", "content:delete"},
-    Resources:   []string{"content/*"},
-    Condition:   "resource.createdBy == actor.id",
+type PolicyRepository interface {
+    ListAll(ctx context.Context) ([]string, error)
+    Create(ctx context.Context, expression string) error
 }
-rbacSvc.AddPolicy(policy)
 ```
 
-#### Evaluate Policy
+### RoleRepository
 ```go
-context := map[string]any{
-    "actor": map[string]any{
-        "id":   userID.String(),
-        "role": "editor",
-    },
-    "resource": map[string]any{
-        "id":        contentID.String(),
-        "createdBy": contentOwnerID.String(),
-    },
-    "environment": map[string]any{
-        "time": time.Now().Unix(),
-    },
+type RoleRepository interface {
+    Create(ctx context.Context, role *schema.Role) error
+    Update(ctx context.Context, role *schema.Role) error
+    Delete(ctx context.Context, roleID xid.ID) error
+    FindByID(ctx context.Context, roleID xid.ID) (*schema.Role, error)
+    FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*schema.Role, error)
+    ListByOrg(ctx context.Context, orgID *string) ([]schema.Role, error)
+    
+    // Template operations
+    GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error)
+    GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error)
+    
+    // Organization-scoped roles
+    GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error)
+    GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*schema.Role, error)
+    
+    // Role cloning
+    CloneRole(ctx context.Context, templateID xid.ID, orgID xid.ID, customName *string) (*schema.Role, error)
 }
-
-result := rbacSvc.EvaluatePolicy(policy, context)
-// Returns: allow, deny, or abstain
 ```
 
-### Bootstrap Default Roles
-
-#### Bootstrap System Roles
+### PermissionRepository
 ```go
-err := rbacSvc.BootstrapSystemRoles(ctx)
-// Creates: super_admin, system_admin, system_viewer
+type PermissionRepository interface {
+    Create(ctx context.Context, permission *schema.Permission) error
+    Update(ctx context.Context, permission *schema.Permission) error
+    Delete(ctx context.Context, permissionID xid.ID) error
+    FindByID(ctx context.Context, permissionID xid.ID) (*schema.Permission, error)
+    FindByName(ctx context.Context, name string, appID xid.ID, orgID *xid.ID) (*schema.Permission, error)
+    ListByApp(ctx context.Context, appID xid.ID) ([]*schema.Permission, error)
+    ListByOrg(ctx context.Context, orgID xid.ID) ([]*schema.Permission, error)
+    ListByCategory(ctx context.Context, category string, appID xid.ID) ([]*schema.Permission, error)
+    CreateCustomPermission(ctx context.Context, name, description, category string, orgID xid.ID) (*schema.Permission, error)
+}
 ```
 
-#### Bootstrap Organization Roles
+### RolePermissionRepository
 ```go
-err := rbacSvc.BootstrapOrganizationRoles(ctx, orgID)
-// Creates: owner, admin, member
+type RolePermissionRepository interface {
+    AssignPermission(ctx context.Context, roleID, permissionID xid.ID) error
+    UnassignPermission(ctx context.Context, roleID, permissionID xid.ID) error
+    GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*schema.Permission, error)
+    GetPermissionRoles(ctx context.Context, permissionID xid.ID) ([]*schema.Role, error)
+    ReplaceRolePermissions(ctx context.Context, roleID xid.ID, permissionIDs []xid.ID) error
+}
 ```
 
-#### Bootstrap App Roles
+### UserRoleRepository
 ```go
-err := rbacSvc.BootstrapAppRoles(ctx, appID)
-// Creates: app_admin, app_editor, app_viewer
-```
-
-## Permission Naming Convention
-
-Format: `resource:action[:subresource]`
-
-Examples:
-- `users:read` - Read users
-- `users:write` - Create/update users
-- `users:delete` - Delete users
-- `organizations:manage` - Full org management
-- `content:publish` - Publish content
-- `api_keys:create` - Create API keys
-
-## Policy CEL Expressions
-
-CEL expressions provide powerful conditional logic:
-
-### Basic Conditions
-```javascript
-// User is admin
-actor.role == "admin"
-
-// User owns resource
-resource.createdBy == actor.id
-
-// Time-based access
-environment.time < 1704067200  // Before 2024-01-01
-
-// IP-based access
-actor.ip.startsWith("192.168.")
-```
-
-### Complex Conditions
-```javascript
-// Admin or owner of resource
-actor.role == "admin" || resource.createdBy == actor.id
-
-// Business hours access
-environment.time >= 32400 && environment.time <= 64800
-
-// Team member check
-actor.id in resource.teamMembers
-
-// Multi-condition
-actor.role == "editor" && 
-resource.status == "draft" && 
-resource.createdBy == actor.id
+type UserRoleRepository interface {
+    Assign(ctx context.Context, userID, roleID, orgID xid.ID) error
+    Unassign(ctx context.Context, userID, roleID, orgID xid.ID) error
+    ListRolesForUser(ctx context.Context, userID xid.ID, orgID *xid.ID) ([]schema.Role, error)
+}
 ```
 
 ## Dependencies
 
-- **Google CEL-Go**: Policy evaluation engine
-- **repository**: Role and permission persistence
+- **github.com/rs/xid**: Unique ID generation
+- **github.com/uptrace/bun**: Database ORM for bootstrap
+- **schema**: Database models (Role, Permission)
 - **internal/errs**: Error handling
-- **schema**: Database models
 
 ## Used By
 
+- **authsome (root)**: Initializes RoleRegistry and calls Bootstrap
+- **plugins/**: Register custom roles via RoleRegistry
 - **core/organization**: Member permission checking
 - **core/app**: App-level authorization
 - **core/apikey**: API key scope validation
 - **handlers/**: Authorization middleware
 - **plugins/admin**: Admin permission checks
 - **plugins/dashboard**: UI permission enforcement
+- **plugins/permissions**: Advanced permission plugin
 
-## Common Patterns
+## Integration Patterns
 
-### Permission Check with Caching
+### Plugin Role Registration
 ```go
-func (s *Service) CheckPermission(ctx context.Context, userID xid.ID, permission string, scopeID xid.ID) bool {
-    // Cache key: user:permission:scope
-    cacheKey := fmt.Sprintf("perm:%s:%s:%s", userID, permission, scopeID)
+// In plugin Init()
+func (p *MyPlugin) Init(auth *authsome.Auth) error {
+    // Register plugin-specific roles
+    auth.RoleRegistry().RegisterRole(&rbac.RoleDefinition{
+        Name:        "content_manager",
+        Description: "Manages content",
+        Permissions: []string{
+            "* on content",
+            "view on analytics",
+        },
+        Priority: 55,
+    })
     
-    // Check cache (5-minute TTL)
-    if cached, found := s.cache.Get(cacheKey); found {
-        return cached.(bool)
-    }
+    // Extend existing roles
+    auth.RoleRegistry().RegisterRole(&rbac.RoleDefinition{
+        Name: "admin",
+        Permissions: []string{
+            "manage on content",  // Added to admin
+        },
+    })
     
-    // Get user roles
-    roles, err := s.GetUserRoles(ctx, userID, scopeID)
-    if err != nil {
-        return false
-    }
-    
-    // Check if any role has permission
-    for _, role := range roles {
-        for _, perm := range role.Permissions {
-            if perm == permission || perm == "*" {
-                s.cache.Set(cacheKey, true, 5*time.Minute)
-                return true
-            }
-        }
-    }
-    
-    s.cache.Set(cacheKey, false, 5*time.Minute)
-    return false
+    return nil
 }
 ```
 
-### Policy-Based Authorization
+### Authorization Middleware
 ```go
-func (s *Service) CanDeleteUser(ctx context.Context, actorID, targetUserID, orgID xid.ID) bool {
-    // Get actor's roles
-    roles, _ := s.GetUserRoles(ctx, actorID, orgID)
-    
-    // Build context for policy evaluation
-    policyCtx := map[string]any{
-        "actor": map[string]any{
-            "id":    actorID.String(),
-            "roles": roleNames(roles),
-        },
-        "resource": map[string]any{
-            "id":   targetUserID.String(),
-            "type": "user",
-        },
-        "org": map[string]any{
-            "id": orgID.String(),
-        },
-    }
-    
-    // Evaluate all applicable policies
-    for _, policy := range s.policies {
-        if contains(policy.Actions, "users:delete") {
-            result := s.eval.Evaluate(policy, policyCtx)
-            if result == EffectAllow {
-                return true
-            } else if result == EffectDeny {
-                return false
-            }
-        }
-    }
-    
-    // Default deny
-    return false
-}
-```
-
-## Integration Points
-
-### With Organization Service
-RBAC checks member permissions:
-```go
-// Check if user can invite members
-if !rbacSvc.CheckPermission(ctx, userID, "org:invite", orgID) {
-    return errs.PermissionDenied("invite", "organization")
-}
-```
-
-### With API Key Service
-RBAC validates API key scopes:
-```go
-// Check if API key has required scope
-allowed := rbacSvc.CheckAPIKeyScope(ctx, apiKeyID, "users:write")
-```
-
-### With Middleware
-RBAC enforces route-level authorization:
-```go
-func RequirePermission(rbacSvc *rbac.Service, permission string) forge.Middleware {
+func RequirePermission(rbacSvc *rbac.Service, action, resource string) forge.Middleware {
     return func(c *forge.Context) error {
-        userID := contexts.GetUserID(c.Context())
-        orgID := contexts.GetOrganizationID(c.Context())
+        userRoles := contexts.GetUserRoles(c.Context())
         
-        if !rbacSvc.CheckPermission(c.Context(), userID, permission, orgID) {
-            return errs.PermissionDenied(permission, "resource")
+        allowed := rbacSvc.AllowedWithRoles(&rbac.Context{
+            Subject:  "user",
+            Action:   action,
+            Resource: resource,
+        }, userRoles)
+        
+        if !allowed {
+            return errs.PermissionDenied(action, resource)
         }
         
         return c.Next()
@@ -388,84 +598,132 @@ func RequirePermission(rbacSvc *rbac.Service, permission string) forge.Middlewar
 }
 ```
 
+### Conditional Authorization
+```go
+func CanEditContent(rbacSvc *rbac.Service, userID, contentOwnerID xid.ID, roles []string) bool {
+    return rbacSvc.AllowedWithRoles(&rbac.Context{
+        Subject:  "user",
+        Action:   "edit",
+        Resource: "content",
+        Vars: map[string]string{
+            "owner": fmt.Sprintf("%v", userID == contentOwnerID),
+        },
+    }, roles)
+}
+```
+
 ## Error Handling
 
 Common errors:
-- `RoleNotFound(roleID)` - Role doesn't exist
-- `PermissionNotFound(permissionID)` - Permission doesn't exist
-- `PermissionDenied(action, resource)` - User lacks permission
-- `PolicyViolation(policy, reason)` - Policy condition failed
-- `InvalidPolicy(reason)` - Policy syntax error
+- `role name cannot be empty` - Empty role name in registration
+- `role %s not found` - Referenced role doesn't exist
+- `circular role inheritance detected: %s` - Inheritance cycle
+- `role %s not registered` - Attempting to assign unknown role
+- `role %s is a platform role and can only be assigned in the platform organization`
+- `role repository not initialized` - Service created without repositories
+- `cannot update template roles through this method` - Attempting to modify template
+- `cannot delete template roles through this method` - Attempting to delete template
 
 ## Testing
 
 ```go
-func TestService_CheckPermission(t *testing.T) {
-    rbacSvc := rbac.NewService()
+func TestRoleRegistry_RegisterRole(t *testing.T) {
+    registry := rbac.NewRoleRegistry()
     
-    // Create role with permission
-    role := &rbac.Role{
-        Name:        "admin",
-        Permissions: []string{"users:read", "users:write"},
-    }
-    rbacSvc.CreateRole(ctx, role)
+    // Register initial role
+    err := registry.RegisterRole(&rbac.RoleDefinition{
+        Name:        "editor",
+        Description: "Content editor",
+        Permissions: []string{"edit on content"},
+        Priority:    50,
+    })
+    require.NoError(t, err)
     
-    // Assign to user
-    rbacSvc.AssignRole(ctx, userID, role.ID, orgID)
+    // Override with additional permissions
+    err = registry.RegisterRole(&rbac.RoleDefinition{
+        Name:        "editor",
+        Permissions: []string{"delete on content"},
+    })
+    require.NoError(t, err)
     
-    // Check permission
-    hasRead := rbacSvc.CheckPermission(ctx, userID, "users:read", orgID)
-    assert.True(t, hasRead)
+    // Verify merged permissions
+    role, exists := registry.GetRole("editor")
+    require.True(t, exists)
+    assert.Contains(t, role.Permissions, "edit on content")
+    assert.Contains(t, role.Permissions, "delete on content")
+}
+
+func TestRoleInheritance(t *testing.T) {
+    registry := rbac.NewRoleRegistry()
     
-    hasDelete := rbacSvc.CheckPermission(ctx, userID, "users:delete", orgID)
-    assert.False(t, hasDelete)
+    // Register parent
+    registry.RegisterRole(&rbac.RoleDefinition{
+        Name:        "member",
+        Permissions: []string{"view on dashboard"},
+        Priority:    40,
+    })
+    
+    // Register child with inheritance
+    registry.RegisterRole(&rbac.RoleDefinition{
+        Name:         "admin",
+        InheritsFrom: "member",
+        Permissions:  []string{"manage on users"},
+        Priority:     60,
+    })
+    
+    // Bootstrap resolves inheritance
+    err := registry.Bootstrap(ctx, db, nil, platformOrgID)
+    require.NoError(t, err)
+    
+    // Admin should have both permissions
+    // (verified via database or policy engine)
+}
+
+func TestPolicyEvaluation(t *testing.T) {
+    svc := rbac.NewService()
+    
+    // Add policy
+    svc.AddPolicy(&rbac.Policy{
+        Subject:  "role:admin",
+        Actions:  []string{"read", "write"},
+        Resource: "users",
+    })
+    
+    // Test allowed
+    allowed := svc.AllowedWithRoles(&rbac.Context{
+        Subject:  "user:123",
+        Action:   "read",
+        Resource: "users",
+    }, []string{"admin"})
+    assert.True(t, allowed)
+    
+    // Test denied
+    allowed = svc.AllowedWithRoles(&rbac.Context{
+        Subject:  "user:123",
+        Action:   "delete",
+        Resource: "users",
+    }, []string{"admin"})
+    assert.False(t, allowed)
 }
 ```
 
 ## Performance Considerations
 
-- Permission checks cached for 5 minutes
-- Role lookups use user_id + scope_id index
-- Policy evaluation is fast (<1ms per policy)
-- Permission strings compared with simple equality
-- Wildcard permissions (`*`) checked first
-- Cache invalidation on role/permission changes
+- Policy evaluation is O(n) where n = number of policies
+- Role inheritance resolved once during Bootstrap
+- Permission strings compared with simple case-insensitive equality
+- Wildcard resources (`*`, `resource:*`) checked efficiently
+- RoleRegistry uses map for O(1) role lookup
+- Bootstrap runs once at startup, not per-request
 
 ## Security Considerations
 
-- Default deny (fail closed)
-- Explicit permission grants required
-- Policy conditions prevent privilege escalation
-- Audit logging for permission changes
-- Role hierarchy prevents circular assignments
-- Scope isolation (system vs org vs app)
-
-## CEL Policy Examples
-
-### Time-Based Access
-```javascript
-// Business hours (9 AM - 5 PM)
-environment.hour >= 9 && environment.hour < 17
-
-// Weekdays only
-environment.dayOfWeek >= 1 && environment.dayOfWeek <= 5
-```
-
-### Resource Ownership
-```javascript
-// Owner or admin
-resource.ownerId == actor.id || actor.role == "admin"
-
-// Team member
-actor.id in resource.team
-```
-
-### Complex Business Logic
-```javascript
-// Can approve if: admin OR (approver AND not own request)
-actor.role == "admin" || 
-(actor.hasPermission("requests:approve") && resource.requesterId != actor.id)
-```
+- Default deny: `Allowed()` returns false if no policy matches
+- Platform roles restricted to platform organization
+- Template roles cannot be modified/deleted via org methods
+- Inheritance cycles detected and rejected
+- Condition variables must be explicitly provided
+- Policy expressions validated during parse, not evaluation
 
 ## Configuration Example
 
@@ -476,5 +734,48 @@ auth:
     cacheTTL: "5m"
     defaultDeny: true
     auditChanges: true
+    
+    # Custom roles can be defined in config
+    customRoles:
+      - name: "content_moderator"
+        description: "Moderates user content"
+        inheritsFrom: "member"
+        priority: 45
+        permissions:
+          - "view,edit,delete on content"
+          - "view on reports"
 ```
 
+## Bootstrap Flow
+
+```
+Server Startup
+     │
+     ▼
+AuthSome.Init()
+     │
+     ├── Create RoleRegistry
+     │
+     ├── RegisterDefaultPlatformRoles()
+     │   └── Creates: superadmin, owner, admin, member
+     │
+     ├── Plugin.Init() (for each plugin)
+     │   └── Plugin calls registry.RegisterRole()
+     │       (extends/overrides default roles)
+     │
+     ├── Database Migrations
+     │
+     └── RoleRegistry.Bootstrap()
+         │
+         ├── resolveInheritance()
+         │   └── Flattens inheritance chains
+         │
+         ├── upsertPermission() (for each unique permission)
+         │   └── Creates permission records in DB
+         │
+         ├── upsertRole() (for each role)
+         │   └── Creates/updates role records in DB
+         │
+         └── rbacService.AddExpression() (for each role/permission combo)
+             └── Adds policies to policy engine
+```

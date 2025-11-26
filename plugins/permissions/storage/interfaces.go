@@ -10,37 +10,40 @@ import (
 )
 
 // Repository defines the data access interface for permissions
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type Repository interface {
 	// Policy operations
 	CreatePolicy(ctx context.Context, policy *core.Policy) error
 	GetPolicy(ctx context.Context, id xid.ID) (*core.Policy, error)
-	ListPolicies(ctx context.Context, appID xid.ID, userOrgID *xid.ID, filters PolicyFilters) ([]*core.Policy, error)
+	ListPolicies(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, filters PolicyFilters) ([]*core.Policy, error)
 	UpdatePolicy(ctx context.Context, policy *core.Policy) error
 	DeletePolicy(ctx context.Context, id xid.ID) error
-	GetPoliciesByResourceType(ctx context.Context, appID xid.ID, userOrgID *xid.ID, resourceType string) ([]*core.Policy, error)
-	GetActivePolicies(ctx context.Context, appID xid.ID, userOrgID *xid.ID) ([]*core.Policy, error)
+	GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) ([]*core.Policy, error)
+	GetActivePolicies(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID) ([]*core.Policy, error)
 
 	// Namespace operations
 	CreateNamespace(ctx context.Context, ns *core.Namespace) error
 	GetNamespace(ctx context.Context, id xid.ID) (*core.Namespace, error)
-	GetNamespaceByScope(ctx context.Context, appID xid.ID, userOrgID *xid.ID) (*core.Namespace, error)
+	GetNamespaceByScope(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID) (*core.Namespace, error)
+	ListNamespaces(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID) ([]*core.Namespace, error)
 	UpdateNamespace(ctx context.Context, ns *core.Namespace) error
 	DeleteNamespace(ctx context.Context, id xid.ID) error
 
 	// Resource definition operations
 	CreateResourceDefinition(ctx context.Context, res *core.ResourceDefinition) error
+	GetResourceDefinition(ctx context.Context, id xid.ID) (*core.ResourceDefinition, error)
 	ListResourceDefinitions(ctx context.Context, namespaceID xid.ID) ([]*core.ResourceDefinition, error)
 	DeleteResourceDefinition(ctx context.Context, id xid.ID) error
 
 	// Action definition operations
 	CreateActionDefinition(ctx context.Context, action *core.ActionDefinition) error
+	GetActionDefinition(ctx context.Context, id xid.ID) (*core.ActionDefinition, error)
 	ListActionDefinitions(ctx context.Context, namespaceID xid.ID) ([]*core.ActionDefinition, error)
 	DeleteActionDefinition(ctx context.Context, id xid.ID) error
 
 	// Audit operations
 	CreateAuditEvent(ctx context.Context, event *core.AuditEvent) error
-	ListAuditEvents(ctx context.Context, appID xid.ID, userOrgID *xid.ID, filters AuditFilters) ([]*core.AuditEvent, error)
+	ListAuditEvents(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, filters AuditFilters) ([]*core.AuditEvent, error)
 }
 
 // PolicyFilters defines filtering options for policy queries
@@ -65,7 +68,7 @@ type AuditFilters struct {
 }
 
 // Cache defines the caching interface for compiled policies
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type Cache interface {
 	// Get retrieves a compiled policy from cache
 	Get(ctx context.Context, key string) (*engine.CompiledPolicy, error)
@@ -79,8 +82,11 @@ type Cache interface {
 	// DeleteByApp removes all policies for an app
 	DeleteByApp(ctx context.Context, appID xid.ID) error
 
+	// DeleteByEnvironment removes all policies for an environment
+	DeleteByEnvironment(ctx context.Context, appID, envID xid.ID) error
+
 	// DeleteByOrganization removes all policies for a user-created organization
-	DeleteByOrganization(ctx context.Context, appID xid.ID, userOrgID xid.ID) error
+	DeleteByOrganization(ctx context.Context, appID, envID, userOrgID xid.ID) error
 
 	// GetMulti retrieves multiple policies
 	GetMulti(ctx context.Context, keys []string) (map[string]*engine.CompiledPolicy, error)

@@ -8,11 +8,12 @@ import (
 )
 
 // CompiledPolicy represents a policy compiled to executable CEL bytecode
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type CompiledPolicy struct {
 	// Policy metadata
 	PolicyID           xid.ID
 	AppID              xid.ID  // Platform app (required)
+	EnvironmentID      xid.ID  // Environment (required)
 	UserOrganizationID *xid.ID // User-created org (optional)
 	NamespaceID        xid.ID
 	Name               string
@@ -73,10 +74,11 @@ type Decision struct {
 }
 
 // IndexKey represents a multi-dimensional index key for fast policy lookup
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type IndexKey struct {
 	AppID              string
-	UserOrganizationID string // Empty string if platform-level
+	EnvironmentID      string
+	UserOrganizationID string // Empty string if environment-level
 	ResourceType       string
 	Action             string
 }
@@ -84,9 +86,9 @@ type IndexKey struct {
 // String returns the string representation of the index key
 func (k IndexKey) String() string {
 	if k.UserOrganizationID != "" {
-		return k.AppID + ":" + k.UserOrganizationID + ":" + k.ResourceType + ":" + k.Action
+		return k.AppID + ":" + k.EnvironmentID + ":" + k.UserOrganizationID + ":" + k.ResourceType + ":" + k.Action
 	}
-	return k.AppID + "::" + k.ResourceType + ":" + k.Action
+	return k.AppID + ":" + k.EnvironmentID + "::" + k.ResourceType + ":" + k.Action
 }
 
 // EvaluationStats tracks performance metrics for policies

@@ -20,20 +20,28 @@ type Session struct {
 	UserAgent      string    `json:"userAgent"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
+	
+	// Refresh token support (Option 3)
+	RefreshToken         *string    `json:"refreshToken,omitempty"`
+	RefreshTokenExpiresAt *time.Time `json:"refreshTokenExpiresAt,omitempty"`
+	LastRefreshedAt      *time.Time `json:"lastRefreshedAt,omitempty"`
 }
 
 // ToSchema converts Session DTO to schema.Session
 func (s *Session) ToSchema() *schema.Session {
 	return &schema.Session{
-		ID:             s.ID,
-		Token:          s.Token,
-		AppID:          s.AppID,
-		EnvironmentID:  s.EnvironmentID,
-		OrganizationID: s.OrganizationID,
-		UserID:         s.UserID,
-		ExpiresAt:      s.ExpiresAt,
-		IPAddress:      s.IPAddress,
-		UserAgent:      s.UserAgent,
+		ID:                    s.ID,
+		Token:                 s.Token,
+		AppID:                 s.AppID,
+		EnvironmentID:         s.EnvironmentID,
+		OrganizationID:        s.OrganizationID,
+		UserID:                s.UserID,
+		ExpiresAt:             s.ExpiresAt,
+		IPAddress:             s.IPAddress,
+		UserAgent:             s.UserAgent,
+		RefreshToken:          s.RefreshToken,
+		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
+		LastRefreshedAt:       s.LastRefreshedAt,
 		AuditableModel: schema.AuditableModel{
 			CreatedAt: s.CreatedAt,
 			UpdatedAt: s.UpdatedAt,

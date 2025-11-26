@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
 )
@@ -31,7 +32,7 @@ func NewMultiTenantAuthService(authService authsome.AuthService, appService *app
 }
 
 // SignIn authenticates a user within an app context
-func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInRequest) (*auth.AuthResponse, error) {
+func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInRequest) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
@@ -63,7 +64,7 @@ func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInReq
 }
 
 // SignUp registers a new user and adds them to the organization
-func (s *MultiTenantAuthService) SignUp(ctx context.Context, req *auth.SignUpRequest) (*auth.AuthResponse, error) {
+func (s *MultiTenantAuthService) SignUp(ctx context.Context, req *auth.SignUpRequest) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
@@ -130,7 +131,7 @@ func (s *MultiTenantAuthService) CheckCredentials(ctx context.Context, email, pa
 }
 
 // CreateSessionForUser creates a session for a user within app context
-func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*auth.AuthResponse, error) {
+func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
@@ -151,7 +152,7 @@ func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *us
 }
 
 // GetSession retrieves a session within app context
-func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (*auth.AuthResponse, error) {
+func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
@@ -195,4 +196,30 @@ func (s *MultiTenantAuthService) UpdateUser(ctx context.Context, id xid.ID, req 
 
 	// Update user using core service
 	return s.authService.UpdateUser(ctx, id, req)
+}
+
+// RefreshSession refreshes an access token using a refresh token within app context
+func (s *MultiTenantAuthService) RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error) {
+	// Get organization from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return nil, errs.NotFound("app ID not found in context")
+	}
+
+	// Refresh session using core service
+	response, err := s.authService.RefreshSession(ctx, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify user is a member of the organization
+	member, err := s.appService.Member.FindMember(ctx, appID, response.User.ID)
+	if err != nil {
+		return nil, errs.InternalServerError("failed to check organization membership", err)
+	}
+	if member.Status != app.MemberStatusActive {
+		return nil, fmt.Errorf("user membership is not active")
+	}
+
+	return response, nil
 }

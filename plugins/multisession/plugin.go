@@ -139,9 +139,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Core services used for auth context
 	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
 	webhookSvc := webhook.NewService(webhook.Config{}, repo.NewWebhookRepository(p.db), auditSvc)
-	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, webhookSvc)
-	sessSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{AllowMultiple: true}, webhookSvc)
-	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, webhookSvc, authInst.GetHookRegistry())
+	sessSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{AllowMultiple: true}, webhookSvc, authInst.GetHookRegistry())
+	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{}, authInst.GetHookRegistry())
 	devSvc := dev.NewService(repo.NewDeviceRepository(p.db))
 	p.service = NewService(
 		authInst.Repository().Session(),

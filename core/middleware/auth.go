@@ -18,10 +18,11 @@ import (
 // - Session-based authentication (cookies + bearer tokens)
 // - Dual authentication (both API key and user session)
 type AuthMiddleware struct {
-	apiKeySvc  *apikey.Service
-	sessionSvc session.ServiceInterface
-	userSvc    user.ServiceInterface
-	config     AuthMiddlewareConfig
+	apiKeySvc    *apikey.Service
+	sessionSvc   session.ServiceInterface
+	userSvc      user.ServiceInterface
+	config       AuthMiddlewareConfig
+	cookieConfig *session.CookieConfig // For updating session cookies on renewal
 }
 
 // AuthMiddlewareConfig configures the authentication middleware behavior
@@ -52,6 +53,7 @@ func NewAuthMiddleware(
 	sessionSvc session.ServiceInterface,
 	userSvc user.ServiceInterface,
 	config AuthMiddlewareConfig,
+	cookieConfig *session.CookieConfig,
 ) *AuthMiddleware {
 	// Set defaults
 	if config.SessionCookieName == "" {
@@ -72,11 +74,18 @@ func NewAuthMiddleware(
 		config.Context.EnvironmentIDHeader = "X-Environment-ID"
 	}
 
+	// Use default cookie config if not provided
+	if cookieConfig == nil {
+		defaultConfig := session.DefaultCookieConfig()
+		cookieConfig = &defaultConfig
+	}
+
 	return &AuthMiddleware{
-		apiKeySvc:  apiKeySvc,
-		sessionSvc: sessionSvc,
-		userSvc:    userSvc,
-		config:     config,
+		apiKeySvc:    apiKeySvc,
+		sessionSvc:   sessionSvc,
+		userSvc:      userSvc,
+		config:       config,
+		cookieConfig: cookieConfig,
 	}
 }
 
@@ -121,6 +130,12 @@ func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 			// Load user RBAC roles and permissions
 			authCtx.UserRoles = sessionResult.Roles
 			authCtx.UserPermissions = sessionResult.Permissions
+
+			// Update cookie if session was renewed (sliding window)
+			if sessionResult.SessionRenewed && m.cookieConfig != nil && m.cookieConfig.Enabled {
+				// Update cookie with new expiry time
+				_ = session.SetCookie(c, sessionResult.Session.Token, sessionResult.Session.ExpiresAt, m.cookieConfig)
+			}
 
 			// Update method
 			if authCtx.IsAPIKeyAuth {
@@ -196,11 +211,12 @@ func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 
 // authResult holds the result of an authentication attempt
 type authResult struct {
-	Authenticated bool
-	APIKey        *apikey.APIKey
-	Session       *session.Session
-	User          *user.User
-	Error         error
+	Authenticated  bool
+	APIKey         *apikey.APIKey
+	Session        *session.Session
+	User           *user.User
+	Error          error
+	SessionRenewed bool // Indicates if session expiry was extended
 	// RBAC data
 	Roles              []string
 	Permissions        []string
@@ -301,6 +317,15 @@ func (m *AuthMiddleware) trySessionAuth(c forge.Context) authResult {
 		return authResult{Authenticated: false, Error: err}
 	}
 
+	// Attempt to renew session if sliding window is enabled
+	// This extends the session lifetime for active users
+	renewedSess, wasRenewed, err := m.sessionSvc.TouchSession(ctx, sess)
+	if err == nil && wasRenewed {
+		sess = renewedSess
+		// Update cookie with new expiry if session was renewed
+		// Note: We'll need to store this in result so it can be set later
+	}
+
 	// Load user
 	usr, err := m.userSvc.FindByID(ctx, sess.UserID)
 	if err != nil || usr == nil {
@@ -308,9 +333,10 @@ func (m *AuthMiddleware) trySessionAuth(c forge.Context) authResult {
 	}
 
 	result := authResult{
-		Authenticated: true,
-		Session:       sess,
-		User:          usr,
+		Authenticated:  true,
+		Session:        sess,
+		User:           usr,
+		SessionRenewed: wasRenewed, // Track if we need to update cookie
 	}
 
 	// TODO: Load user RBAC roles and permissions

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
@@ -47,7 +48,7 @@ func NewAuthHandler(a auth.ServiceInterface, rlsvc *rl.Service, dsvc *dev.Servic
 	if cookieCfg != nil && cookieCfg.Name != "" {
 		sessionCookieName = cookieCfg.Name
 	}
-	
+
 	return &AuthHandler{
 		auth:              a,
 		rl:                rlsvc,
@@ -107,7 +108,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 			log.Printf("audit log signup error: %v", err)
 		}
 	}
-	
+
 	// Set session cookie if enabled
 	if h.cookieConfig != nil && h.cookieConfig.Enabled && res.Session != nil && res.Token != "" {
 		appID, _ := contexts.GetAppID(c.Request().Context())
@@ -118,7 +119,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 			}
 		}
 	}
-	
+
 	return c.JSON(http.StatusOK, res)
 }
 
@@ -194,7 +195,8 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 	if require2FA {
 		// Track device even when requiring 2FA
 		if h.dev != nil {
-			_, _ = h.dev.TrackDevice(c.Request().Context(), u.ID, fp, req.UserAgent, req.IPAddress)
+			appID, _ := contexts.GetAppID(c.Request().Context())
+			_, _ = h.dev.TrackDevice(c.Request().Context(), appID, u.ID, fp, req.UserAgent, req.IPAddress)
 		}
 		if h.sec != nil {
 			lockKey := req.Email
@@ -218,7 +220,8 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 	}
 	// Track device on successful login
 	if h.dev != nil && res.User != nil {
-		_, _ = h.dev.TrackDevice(c.Request().Context(), res.User.ID, fp, req.UserAgent, req.IPAddress)
+		appID, _ := contexts.GetAppID(c.Request().Context())
+		_, _ = h.dev.TrackDevice(c.Request().Context(), appID, res.User.ID, fp, req.UserAgent, req.IPAddress)
 	}
 	if h.sec != nil && res.User != nil {
 		// Reset failed attempts on success
@@ -236,7 +239,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			log.Printf("audit log signin error: %v", err)
 		}
 	}
-	
+
 	// Set session cookie if enabled
 	if h.cookieConfig != nil && h.cookieConfig.Enabled && res.Session != nil && res.Token != "" {
 		appID, _ := contexts.GetAppID(c.Request().Context())
@@ -247,7 +250,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			}
 		}
 	}
-	
+
 	return c.JSON(http.StatusOK, res)
 }
 
@@ -362,20 +365,120 @@ func (h *AuthHandler) SignOut(c forge.Context) error {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
-	var body struct {
-		Token string `json:"token"`
+
+	// Try to get token from multiple sources:
+	// 1. Session from context (set by auth middleware)
+	// 2. Token from request body
+	// 3. Token from cookie
+	var token string
+	var userID *xid.ID
+
+	// Try to get session from auth context (middleware-based auth)
+	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
+	if ok && authCtx.Session != nil {
+		token = authCtx.Session.Token
+		if authCtx.User != nil {
+			userID = &authCtx.User.ID
+		}
 	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil || body.Token == "" {
-		return c.JSON(http.StatusBadRequest, errs.RequiredField("token"))
+
+	// If no session in context, try request body
+	if token == "" {
+		var body struct {
+			Token string `json:"token,omitempty"`
+		}
+		// Ignore decode errors since token is optional when using cookies
+		_ = json.NewDecoder(c.Request().Body).Decode(&body)
+		if body.Token != "" {
+			token = body.Token
+		}
 	}
-	if err := h.auth.SignOut(c.Request().Context(), &auth.SignOutRequest{Token: body.Token}); err != nil {
+
+	// If still no token, try cookie
+	if token == "" {
+		cookie, err := c.Request().Cookie(h.sessionCookieName)
+		if err == nil && cookie != nil && cookie.Value != "" {
+			token = cookie.Value
+		}
+	}
+
+	// If we still don't have a token, return error
+	if token == "" {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_TOKEN", "Token required: provide via cookie, request body, or authentication middleware", http.StatusBadRequest))
+	}
+
+	// Sign out the session
+	if err := h.auth.SignOut(c.Request().Context(), &auth.SignOutRequest{Token: token}); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
+
+	// Clear the session cookie if cookie config is available
+	if h.cookieConfig != nil && h.cookieConfig.Enabled {
+		appID, _ := contexts.GetAppID(c.Request().Context())
+		if h.appService != nil {
+			appCookieCfg, err := h.appService.App.GetCookieConfig(c.Request().Context(), appID)
+			if err == nil && appCookieCfg != nil && appCookieCfg.Enabled {
+				_ = session.ClearCookie(c, appCookieCfg)
+			}
+		} else {
+			// Fall back to global cookie config
+			_ = session.ClearCookie(c, h.cookieConfig)
+		}
+	}
+
+	// Audit log
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
-		_ = h.aud.Log(c.Request().Context(), nil, "signout", "auth:session", ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), userID, "signout", "auth:session", ip, c.Request().UserAgent(), "")
 	}
+
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "signed_out"})
+}
+
+// RefreshSession refreshes an access token using a refresh token
+func (h *AuthHandler) RefreshSession(c forge.Context) error {
+	if h.rl != nil {
+		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
+		if err != nil || !ok {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
+		}
+	}
+
+	// Get refresh token from request body
+	var req struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	if req.RefreshToken == "" {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_REFRESH_TOKEN", "Refresh token is required", http.StatusBadRequest))
+	}
+
+	// Refresh the session via auth service
+	refreshResp, err := h.auth.RefreshSession(c.Request().Context(), req.RefreshToken)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, errs.Wrap(err, "REFRESH_FAILED", "Failed to refresh session", http.StatusUnauthorized))
+	}
+
+	// Log audit event
+	if h.aud != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		userID := refreshResp.Session.UserID
+		_ = h.aud.Log(c.Request().Context(), &userID, "session_refreshed", "auth:session", ip, c.Request().UserAgent(), "")
+	}
+
+	// Return response with new tokens
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"session":          refreshResp.Session,
+		"accessToken":      refreshResp.AccessToken,
+		"refreshToken":     refreshResp.RefreshToken,
+		"expiresAt":        refreshResp.ExpiresAt,
+		"refreshExpiresAt": refreshResp.RefreshExpiresAt,
+	})
 }
 
 func (h *AuthHandler) GetSession(c forge.Context) error {

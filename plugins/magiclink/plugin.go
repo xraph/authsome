@@ -149,11 +149,11 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// The notification plugin should be registered first and will set up its services
 
 	mr := repo.NewMagicLinkRepository(p.db)
-	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil, authInst.GetHookRegistry())
 	// Build full auth service with session
 	sessRepo := repo.NewSessionRepository(p.db)
-	sessionSvc := session.NewService(sessRepo, session.Config{}, nil)
-	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
+	sessionSvc := session.NewService(sessRepo, session.Config{}, nil, authInst.GetHookRegistry())
+	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{}, authInst.GetHookRegistry())
 	auditSvc := audit.NewService(repo.NewAuditRepository(p.db))
 	p.service = NewService(mr, userSvc, sessionSvc, authSvc, auditSvc, p.notifAdapter, p.config)
 

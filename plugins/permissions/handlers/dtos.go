@@ -36,12 +36,12 @@ type CreatePolicyRequest struct {
 
 // UpdatePolicyRequest represents a request to update an existing policy
 type UpdatePolicyRequest struct {
-	Name         *string  `json:"name,omitempty" validate:"omitempty,min=3,max=100"`
-	Description  *string  `json:"description,omitempty" validate:"omitempty,max=500"`
-	Expression   *string  `json:"expression,omitempty"`
-	ResourceType *string  `json:"resourceType,omitempty"`
+	Name         string   `json:"name,omitempty" validate:"omitempty,min=3,max=100"`
+	Description  string   `json:"description,omitempty" validate:"omitempty,max=500"`
+	Expression   string   `json:"expression,omitempty"`
+	ResourceType string   `json:"resourceType,omitempty"`
 	Actions      []string `json:"actions,omitempty"`
-	Priority     *int     `json:"priority,omitempty" validate:"omitempty,min=0,max=1000"`
+	Priority     int      `json:"priority,omitempty" validate:"omitempty,min=0,max=1000"`
 	Enabled      *bool    `json:"enabled,omitempty"`
 }
 
@@ -49,6 +49,7 @@ type UpdatePolicyRequest struct {
 type PolicyResponse struct {
 	ID                 string    `json:"id"`
 	AppID              string    `json:"appId"`
+	EnvironmentID      string    `json:"environmentId"`
 	UserOrganizationID *string   `json:"userOrganizationId,omitempty"`
 	NamespaceID        string    `json:"namespaceId"`
 	Name               string    `json:"name"`
@@ -78,20 +79,23 @@ type PoliciesListResponse struct {
 
 // CreateResourceRequest represents a request to create a resource definition
 type CreateResourceRequest struct {
-	NamespaceID string                    `json:"namespaceId" validate:"required"`
-	Type        string                    `json:"type" validate:"required,min=3,max=50"`
-	Description string                    `json:"description" validate:"max=500"`
-	Attributes  []ResourceAttributeInput  `json:"attributes" validate:"required,min=1"`
+	NamespaceID string                     `json:"namespaceId" validate:"required"`
+	Type        string                     `json:"type" validate:"required,min=3,max=50"`
+	Description string                     `json:"description" validate:"max=500"`
+	Attributes  []ResourceAttributeRequest `json:"attributes" validate:"required,min=1"`
 }
 
-// ResourceAttributeInput represents an attribute in a create/update request
-type ResourceAttributeInput struct {
+// ResourceAttributeRequest represents an attribute in a create/update request
+type ResourceAttributeRequest struct {
 	Name        string      `json:"name" validate:"required,min=1,max=50"`
 	Type        string      `json:"type" validate:"required,oneof=string int bool array object"`
 	Required    bool        `json:"required"`
 	Default     interface{} `json:"default,omitempty"`
 	Description string      `json:"description,omitempty" validate:"max=200"`
 }
+
+// ResourceAttributeInput is an alias for ResourceAttributeRequest for backwards compatibility
+type ResourceAttributeInput = ResourceAttributeRequest
 
 // ResourceResponse represents a single resource definition response
 type ResourceResponse struct {
@@ -141,23 +145,24 @@ type ActionsListResponse struct {
 
 // CreateNamespaceRequest represents a request to create a namespace
 type CreateNamespaceRequest struct {
-	Name            string  `json:"name" validate:"required,min=3,max=100"`
-	Description     string  `json:"description" validate:"max=500"`
-	TemplateID      *string `json:"templateId,omitempty"`
-	InheritPlatform bool    `json:"inheritPlatform"`
+	Name            string `json:"name" validate:"required,min=3,max=100"`
+	Description     string `json:"description" validate:"max=500"`
+	TemplateID      string `json:"templateId,omitempty"`
+	InheritPlatform bool   `json:"inheritPlatform"`
 }
 
 // UpdateNamespaceRequest represents a request to update a namespace
 type UpdateNamespaceRequest struct {
-	Name            *string `json:"name,omitempty" validate:"omitempty,min=3,max=100"`
-	Description     *string `json:"description,omitempty" validate:"omitempty,max=500"`
-	InheritPlatform *bool   `json:"inheritPlatform,omitempty"`
+	Name            string `json:"name,omitempty" validate:"omitempty,min=3,max=100"`
+	Description     string `json:"description,omitempty" validate:"omitempty,max=500"`
+	InheritPlatform *bool  `json:"inheritPlatform,omitempty"`
 }
 
 // NamespaceResponse represents a single namespace response
 type NamespaceResponse struct {
 	ID                 string    `json:"id"`
 	AppID              string    `json:"appId"`
+	EnvironmentID      string    `json:"environmentId"`
 	UserOrganizationID *string   `json:"userOrganizationId,omitempty"`
 	Name               string    `json:"name"`
 	Description        string    `json:"description"`
@@ -184,8 +189,10 @@ type NamespacesListResponse struct {
 type EvaluateRequest struct {
 	Principal    map[string]interface{} `json:"principal" validate:"required"`
 	Resource     map[string]interface{} `json:"resource" validate:"required"`
+	Request      map[string]interface{} `json:"request,omitempty"`
 	Action       string                 `json:"action" validate:"required"`
 	ResourceType string                 `json:"resourceType" validate:"required"`
+	ResourceID   string                 `json:"resourceId,omitempty"`
 	Context      map[string]interface{} `json:"context,omitempty"`
 }
 
@@ -202,15 +209,19 @@ type EvaluateResponse struct {
 
 // BatchEvaluateRequest represents a batch evaluation request
 type BatchEvaluateRequest struct {
-	Evaluations []EvaluateRequest `json:"evaluations" validate:"required,min=1,max=100"`
+	Requests []EvaluateRequest `json:"requests" validate:"required,min=1,max=100"`
 }
 
 // BatchEvaluationResult represents a single evaluation in a batch
 type BatchEvaluationResult struct {
-	Index    int               `json:"index"`
-	Allowed  bool              `json:"allowed"`
-	Policies []string          `json:"policies,omitempty"`
-	Error    string            `json:"error,omitempty"`
+	Index            int      `json:"index"`
+	ResourceType     string   `json:"resourceType"`
+	ResourceID       string   `json:"resourceId,omitempty"`
+	Action           string   `json:"action"`
+	Allowed          bool     `json:"allowed"`
+	Policies         []string `json:"policies,omitempty"`
+	Error            string   `json:"error,omitempty"`
+	EvaluationTimeMs float64  `json:"evaluationTimeMs"`
 }
 
 // BatchEvaluateResponse represents the result of a batch evaluation
@@ -234,46 +245,56 @@ type ValidatePolicyRequest struct {
 
 // ValidatePolicyResponse represents the result of policy validation
 type ValidatePolicyResponse struct {
-	Valid       bool     `json:"valid"`
-	Errors      []string `json:"errors,omitempty"`
-	Warnings    []string `json:"warnings,omitempty"`
-	Complexity  int      `json:"complexity,omitempty"`
-	Message     string   `json:"message,omitempty"`
+	Valid      bool     `json:"valid"`
+	Error      string   `json:"error,omitempty"`
+	Errors     []string `json:"errors,omitempty"`
+	Warnings   []string `json:"warnings,omitempty"`
+	Complexity int      `json:"complexity,omitempty"`
+	Message    string   `json:"message,omitempty"`
 }
 
 // TestPolicyRequest represents a request to test a policy with sample data
 type TestPolicyRequest struct {
-	Expression   string                 `json:"expression" validate:"required"`
-	ResourceType string                 `json:"resourceType" validate:"required"`
-	TestCases    []PolicyTestCase       `json:"testCases" validate:"required,min=1"`
+	Expression   string         `json:"expression" validate:"required"`
+	ResourceType string         `json:"resourceType" validate:"required"`
+	Actions      []string       `json:"actions" validate:"required,min=1"`
+	TestCases    []TestCase     `json:"testCases" validate:"required,min=1"`
 }
 
-// PolicyTestCase represents a single test case for policy testing
-type PolicyTestCase struct {
-	Name         string                 `json:"name" validate:"required"`
-	Principal    map[string]interface{} `json:"principal" validate:"required"`
-	Resource     map[string]interface{} `json:"resource" validate:"required"`
-	Action       string                 `json:"action" validate:"required"`
-	ExpectedResult bool                 `json:"expectedResult"`
+// TestCase represents a single test case for policy testing
+type TestCase struct {
+	Name      string                 `json:"name" validate:"required"`
+	Principal map[string]interface{} `json:"principal" validate:"required"`
+	Resource  map[string]interface{} `json:"resource" validate:"required"`
+	Request   map[string]interface{} `json:"request,omitempty"`
+	Action    string                 `json:"action" validate:"required"`
+	Expected  bool                   `json:"expected"`
 }
 
-// PolicyTestResult represents the result of a single test case
-type PolicyTestResult struct {
-	Name           string `json:"name"`
-	Passed         bool   `json:"passed"`
-	ActualResult   bool   `json:"actualResult"`
-	ExpectedResult bool   `json:"expectedResult"`
-	Error          string `json:"error,omitempty"`
+// PolicyTestCase is an alias for TestCase for backwards compatibility
+type PolicyTestCase = TestCase
+
+// TestCaseResult represents the result of a single test case
+type TestCaseResult struct {
+	Name             string  `json:"name"`
+	Passed           bool    `json:"passed"`
+	Actual           bool    `json:"actual"`
+	Expected         bool    `json:"expected"`
+	Error            string  `json:"error,omitempty"`
 	EvaluationTimeMs float64 `json:"evaluationTimeMs"`
 }
 
+// PolicyTestResult is an alias for TestCaseResult for backwards compatibility
+type PolicyTestResult = TestCaseResult
+
 // TestPolicyResponse represents the result of policy testing
 type TestPolicyResponse struct {
-	Results     []*PolicyTestResult `json:"results"`
-	TotalTests  int                 `json:"totalTests"`
-	PassedTests int                 `json:"passedTests"`
-	FailedTests int                 `json:"failedTests"`
-	Message     string              `json:"message,omitempty"`
+	Passed   bool             `json:"passed"`
+	Results  []TestCaseResult `json:"results"`
+	Total    int              `json:"total"`
+	PassCnt  int              `json:"passedCount"`
+	FailCnt  int              `json:"failedCount"`
+	Error    string           `json:"error,omitempty"`
 }
 
 // =============================================================================
@@ -333,6 +354,7 @@ type MigrationResponse struct {
 // MigrationStatusResponse represents the status of a migration
 type MigrationStatusResponse struct {
 	AppID              string     `json:"appId"`
+	EnvironmentID      string     `json:"environmentId"`
 	UserOrganizationID *string    `json:"userOrganizationId,omitempty"`
 	Status             string     `json:"status"`
 	StartedAt          time.Time  `json:"startedAt"`
@@ -353,6 +375,7 @@ type MigrationStatusResponse struct {
 type AuditLogEntry struct {
 	ID                 string                 `json:"id"`
 	AppID              string                 `json:"appId"`
+	EnvironmentID      string                 `json:"environmentId"`
 	UserOrganizationID *string                `json:"userOrganizationId,omitempty"`
 	ActorID            string                 `json:"actorId"`
 	Action             string                 `json:"action"`
@@ -375,15 +398,15 @@ type AuditLogResponse struct {
 
 // AnalyticsSummary represents summary analytics data
 type AnalyticsSummary struct {
-	TotalPolicies        int     `json:"totalPolicies"`
-	ActivePolicies       int     `json:"activePolicies"`
-	TotalEvaluations     int64   `json:"totalEvaluations"`
-	AllowedCount         int64   `json:"allowedCount"`
-	DeniedCount          int64   `json:"deniedCount"`
-	AvgEvaluationTimeMs  float64 `json:"avgEvaluationTimeMs"`
-	CacheHitRate         float64 `json:"cacheHitRate"`
-	TopPolicies          []PolicyStats `json:"topPolicies"`
-	TopResourceTypes     []ResourceTypeStats `json:"topResourceTypes"`
+	TotalPolicies       int               `json:"totalPolicies"`
+	ActivePolicies      int               `json:"activePolicies"`
+	TotalEvaluations    int64             `json:"totalEvaluations"`
+	AllowedCount        int64             `json:"allowedCount"`
+	DeniedCount         int64             `json:"deniedCount"`
+	AvgLatencyMs        float64           `json:"avgLatencyMs"`
+	CacheHitRate        float64           `json:"cacheHitRate"`
+	TopPolicies         []PolicyStats     `json:"topPolicies,omitempty"`
+	TopResourceTypes    []ResourceTypeStats `json:"topResourceTypes,omitempty"`
 }
 
 // PolicyStats represents statistics for a single policy
@@ -421,20 +444,21 @@ type AnalyticsResponse struct {
 // ToPolicyResponse converts a core.Policy to a PolicyResponse
 func ToPolicyResponse(p *core.Policy) *PolicyResponse {
 	resp := &PolicyResponse{
-		ID:           p.ID.String(),
-		AppID:        p.AppID.String(),
-		NamespaceID:  p.NamespaceID.String(),
-		Name:         p.Name,
-		Description:  p.Description,
-		Expression:   p.Expression,
-		ResourceType: p.ResourceType,
-		Actions:      p.Actions,
-		Priority:     p.Priority,
-		Enabled:      p.Enabled,
-		Version:      p.Version,
-		CreatedBy:    p.CreatedBy.String(),
-		CreatedAt:    p.CreatedAt,
-		UpdatedAt:    p.UpdatedAt,
+		ID:            p.ID.String(),
+		AppID:         p.AppID.String(),
+		EnvironmentID: p.EnvironmentID.String(),
+		NamespaceID:   p.NamespaceID.String(),
+		Name:          p.Name,
+		Description:   p.Description,
+		Expression:    p.Expression,
+		ResourceType:  p.ResourceType,
+		Actions:       p.Actions,
+		Priority:      p.Priority,
+		Enabled:       p.Enabled,
+		Version:       p.Version,
+		CreatedBy:     p.CreatedBy.String(),
+		CreatedAt:     p.CreatedAt,
+		UpdatedAt:     p.UpdatedAt,
 	}
 	if p.UserOrganizationID != nil {
 		orgID := p.UserOrganizationID.String()
@@ -448,6 +472,7 @@ func ToNamespaceResponse(n *core.Namespace) *NamespaceResponse {
 	resp := &NamespaceResponse{
 		ID:              n.ID.String(),
 		AppID:           n.AppID.String(),
+		EnvironmentID:   n.EnvironmentID.String(),
 		Name:            n.Name,
 		Description:     n.Description,
 		InheritPlatform: n.InheritPlatform,
@@ -493,17 +518,18 @@ func ToActionResponse(a *core.ActionDefinition) *ActionResponse {
 // ToAuditLogEntry converts a core.AuditEvent to an AuditLogEntry
 func ToAuditLogEntry(e *core.AuditEvent) *AuditLogEntry {
 	entry := &AuditLogEntry{
-		ID:           e.ID.String(),
-		AppID:        e.AppID.String(),
-		ActorID:      e.ActorID.String(),
-		Action:       e.Action,
-		ResourceType: e.ResourceType,
-		ResourceID:   e.ResourceID.String(),
-		OldValue:     e.OldValue,
-		NewValue:     e.NewValue,
-		IPAddress:    e.IPAddress,
-		UserAgent:    e.UserAgent,
-		Timestamp:    e.Timestamp,
+		ID:            e.ID.String(),
+		AppID:         e.AppID.String(),
+		EnvironmentID: e.EnvironmentID.String(),
+		ActorID:       e.ActorID.String(),
+		Action:        e.Action,
+		ResourceType:  e.ResourceType,
+		ResourceID:    e.ResourceID.String(),
+		OldValue:      e.OldValue,
+		NewValue:      e.NewValue,
+		IPAddress:     e.IPAddress,
+		UserAgent:     e.UserAgent,
+		Timestamp:     e.Timestamp,
 	}
 	if e.UserOrganizationID != nil {
 		orgID := e.UserOrganizationID.String()

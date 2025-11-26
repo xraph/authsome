@@ -1,6 +1,8 @@
 package session
 
 import (
+	"time"
+
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/base"
 	"github.com/xraph/authsome/core/pagination"
@@ -16,17 +18,20 @@ func FromSchemaSession(s *schema.Session) *Session {
 		return nil
 	}
 	return &Session{
-		ID:             s.ID,
-		Token:          s.Token,
-		AppID:          s.AppID,
-		EnvironmentID:  s.EnvironmentID,
-		OrganizationID: s.OrganizationID,
-		UserID:         s.UserID,
-		ExpiresAt:      s.ExpiresAt,
-		IPAddress:      s.IPAddress,
-		UserAgent:      s.UserAgent,
-		CreatedAt:      s.CreatedAt,
-		UpdatedAt:      s.UpdatedAt,
+		ID:                    s.ID,
+		Token:                 s.Token,
+		AppID:                 s.AppID,
+		EnvironmentID:         s.EnvironmentID,
+		OrganizationID:        s.OrganizationID,
+		UserID:                s.UserID,
+		ExpiresAt:             s.ExpiresAt,
+		IPAddress:             s.IPAddress,
+		UserAgent:             s.UserAgent,
+		CreatedAt:             s.CreatedAt,
+		UpdatedAt:             s.UpdatedAt,
+		RefreshToken:          s.RefreshToken,
+		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
+		LastRefreshedAt:       s.LastRefreshedAt,
 	}
 }
 
@@ -51,4 +56,13 @@ type CreateSessionRequest struct {
 	IPAddress      string  `json:"ipAddress"`
 	UserAgent      string  `json:"userAgent"`
 	Remember       bool    `json:"remember"`
+}
+
+// RefreshResponse represents the response from refreshing a session
+type RefreshResponse struct {
+	Session      *Session  `json:"session"`       // Updated session with new access token
+	AccessToken  string    `json:"accessToken"`   // New short-lived access token
+	RefreshToken string    `json:"refreshToken"`  // Refresh token (may be rotated)
+	ExpiresAt    time.Time `json:"expiresAt"`     // Access token expiry
+	RefreshExpiresAt time.Time `json:"refreshExpiresAt"` // Refresh token expiry
 }

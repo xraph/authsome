@@ -243,9 +243,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	}
 
 	pr := authInst.Repository().Phone()
-	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil)
-	sessSvc := session.NewService(authInst.Repository().Session(), session.Config{}, nil)
-	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{})
+	userSvc := user.NewService(authInst.Repository().User(), user.Config{}, nil, authInst.GetHookRegistry())
+	sessSvc := session.NewService(authInst.Repository().Session(), session.Config{}, nil, authInst.GetHookRegistry())
+	authSvc := auth.NewService(userSvc, sessSvc, auth.Config{}, authInst.GetHookRegistry())
 	auditSvc := audit.NewService(authInst.Repository().Audit())
 	p.service = NewService(pr, userSvc, authSvc, auditSvc, p.notifAdapter, p.config)
 

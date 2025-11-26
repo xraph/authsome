@@ -142,7 +142,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	userRepo := authInst.Repository().User()
 
 	// Create user service (simplified - in production, get from registry)
-	userSvc := user.NewService(userRepo, user.Config{}, nil)
+	userSvc := user.NewService(userRepo, user.Config{}, nil, nil)
 
 	// Create audit service
 	auditSvc := authInst.GetServiceRegistry().AuditService()
@@ -198,7 +198,7 @@ func (p *Plugin) SetConfig(config Config) {
 	p.config = config
 	if p.service != nil && p.authInst != nil {
 		// Reinitialize service with new config
-		userSvc := user.NewService(p.authInst.Repository().User(), user.Config{}, nil)
+		userSvc := user.NewService(p.authInst.Repository().User(), user.Config{}, nil, p.authInst.GetHookRegistry())
 		auditSvc := p.authInst.GetServiceRegistry().AuditService()
 
 		// Recreate state store

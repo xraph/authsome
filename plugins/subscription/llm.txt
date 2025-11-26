@@ -1,0 +1,69 @@
+# Subscription Plugin Context
+
+## Overview
+The subscription plugin provides SaaS subscription and billing for AuthSome organizations.
+
+## Key Files
+- plugin.go - Main plugin entry, initialization, route registration
+- config.go - Plugin configuration
+- errors.go - Domain-specific errors
+- hooks.go - Subscription event hooks
+- handlers.go - HTTP request handlers
+- dashboard.go - Dashboard UI extension
+- helpers.go - DI container helpers
+
+## Core Domain (core/)
+- types.go - Enums: BillingPattern, BillingInterval, SubscriptionStatus, FeatureType
+- plan.go - Plan entity and requests
+- subscription.go - Subscription entity and lifecycle
+- addon.go - Add-on entity
+- invoice.go - Invoice and line items
+- usage.go - Usage metering records
+- payment.go - Payment methods and customers
+
+## Services (service/)
+- plan_service.go - Plan CRUD, provider sync
+- subscription_service.go - Subscription lifecycle management
+- addon_service.go - Add-on management
+- invoice_service.go - Invoice operations
+- usage_service.go - Usage tracking and metering
+- payment_service.go - Payment method management
+- customer_service.go - Billing customer management
+- enforcement_service.go - Limit enforcement via hooks
+
+## Repositories (repository/)
+Bun implementations for all entities with filtering and pagination.
+
+## Providers (providers/)
+- interface.go - PaymentProvider interface
+- stripe/provider.go - Stripe implementation
+- mock/provider.go - Mock for testing
+
+## Schema (schema/)
+Bun database models for all subscription tables.
+
+## Key Patterns
+1. Services use repository pattern
+2. Provider abstraction for payment providers
+3. Hook registry for extensibility
+4. DI container registration for embedding
+
+## Configuration Keys
+- auth.subscription.enabled
+- auth.subscription.requireSubscription
+- auth.subscription.defaultTrialDays
+- auth.subscription.gracePeriodDays
+- auth.subscription.stripe.secretKey
+- auth.subscription.stripe.webhookSecret
+
+## API Endpoints
+- /subscription/plans - Plan management
+- /subscription/subscriptions - Subscription management
+- /subscription/addons - Add-on management
+- /subscription/invoices - Invoice viewing
+- /subscription/usage - Usage recording
+- /subscription/checkout - Checkout sessions
+- /subscription/webhooks/stripe - Stripe webhooks
+- /subscription/features/:orgId/:feature - Feature checks
+- /subscription/limits/:orgId - Limit information
+

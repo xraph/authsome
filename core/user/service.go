@@ -41,17 +41,19 @@ type Config struct {
 
 // Service provides user-related operations
 type Service struct {
-	repo       Repository
-	config     Config
-	webhookSvc *webhook.Service
+	repo         Repository
+	config       Config
+	webhookSvc   *webhook.Service
+	hookExecutor HookExecutor
 }
 
 // NewService creates a new user service
-func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service) *Service {
+func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookExecutor HookExecutor) *Service {
 	return &Service{
-		repo:       repo,
-		config:     cfg,
-		webhookSvc: webhookSvc,
+		repo:         repo,
+		config:       cfg,
+		webhookSvc:   webhookSvc,
+		hookExecutor: hookExecutor,
 	}
 }
 
@@ -61,6 +63,13 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service) *Servi
 
 // Create creates a new user in the specified app
 func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, error) {
+	// Execute before user create hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteBeforeUserCreate(ctx, req); err != nil {
+			return nil, err
+		}
+	}
+
 	// Validate email
 	if !validator.ValidateEmail(req.Email) {
 		return nil, InvalidEmail(req.Email)
@@ -107,6 +116,13 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, er
 	// Convert to schema and save
 	if err := s.repo.Create(ctx, user.ToSchema()); err != nil {
 		return nil, UserCreationFailed(err)
+	}
+
+	// Execute after user create hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterUserCreate(ctx, user); err != nil {
+			// Log error but don't fail - user is already created
+		}
 	}
 
 	// Emit webhook event
@@ -173,6 +189,13 @@ func (s *Service) FindByUsername(ctx context.Context, username string) (*User, e
 
 // Update updates a user
 func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (*User, error) {
+	// Execute before user update hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteBeforeUserUpdate(ctx, u.ID, req); err != nil {
+			return nil, err
+		}
+	}
+
 	if req.Name != nil {
 		u.Name = *req.Name
 	}
@@ -246,6 +269,13 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 		return nil, UserUpdateFailed(err)
 	}
 
+	// Execute after user update hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterUserUpdate(ctx, u); err != nil {
+			// Log error but don't fail - user is already updated
+		}
+	}
+
 	// Emit webhook event
 	if s.webhookSvc != nil {
 		data := map[string]interface{}{
@@ -262,6 +292,13 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 
 // Delete deletes a user by ID
 func (s *Service) Delete(ctx context.Context, id xid.ID) error {
+	// Execute before user delete hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteBeforeUserDelete(ctx, id); err != nil {
+			return err
+		}
+	}
+
 	// Get user before deletion for webhook event
 	schemaUser, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -273,6 +310,13 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return UserDeletionFailed(err)
+	}
+
+	// Execute after user delete hooks
+	if s.hookExecutor != nil {
+		if err := s.hookExecutor.ExecuteAfterUserDelete(ctx, id); err != nil {
+			// Log error but don't fail - user is already deleted
+		}
 	}
 
 	// Emit webhook event

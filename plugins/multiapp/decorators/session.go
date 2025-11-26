@@ -241,3 +241,48 @@ func (s *MultiTenantSessionService) RevokeByID(ctx context.Context, id xid.ID) e
 	// Revoke session using core service
 	return s.sessionService.RevokeByID(ctx, id)
 }
+
+// TouchSession extends the session expiry time if sliding window is enabled
+func (s *MultiTenantSessionService) TouchSession(ctx context.Context, sess *session.Session) (*session.Session, bool, error) {
+	// Get organization from context if present
+	appID, ok := contexts.GetAppID(ctx)
+	if ok && !appID.IsNil() {
+		// Verify user is a member of the organization
+		member, err := s.appService.Member.FindMember(ctx, appID, sess.UserID)
+		if err != nil {
+			return nil, false, fmt.Errorf("user is not a member of this app: %w", err)
+		}
+		if member.Status != coreapp.MemberStatusActive {
+			return nil, false, fmt.Errorf("user membership is not active")
+		}
+	}
+
+	// Touch session using core service
+	return s.sessionService.TouchSession(ctx, sess)
+}
+
+// RefreshSession refreshes an access token using a refresh token within app context
+func (s *MultiTenantSessionService) RefreshSession(ctx context.Context, refreshToken string) (*session.RefreshResponse, error) {
+	// Get organization from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return nil, fmt.Errorf("app context not found")
+	}
+
+	// Refresh session using core service
+	response, err := s.sessionService.RefreshSession(ctx, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify user is a member of the organization
+	member, err := s.appService.Member.FindMember(ctx, appID, response.Session.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("user is not a member of this app: %w", err)
+	}
+	if member.Status != coreapp.MemberStatusActive {
+		return nil, fmt.Errorf("user membership is not active")
+	}
+
+	return response, nil
+}

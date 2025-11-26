@@ -136,6 +136,49 @@ func (r *SessionRepository) RevokeSessionByID(ctx context.Context, id xid.ID) er
 	return err
 }
 
+// UpdateSessionExpiry updates the expiry time of a session (for sliding window renewal)
+func (r *SessionRepository) UpdateSessionExpiry(ctx context.Context, id xid.ID, expiresAt time.Time) error {
+	_, err := r.db.NewUpdate().
+		Model((*schema.Session)(nil)).
+		Set("expires_at = ?", expiresAt).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("id = ?", id).
+		Where("deleted_at IS NULL").
+		Exec(ctx)
+	return err
+}
+
+// FindSessionByRefreshToken retrieves a session by refresh token
+func (r *SessionRepository) FindSessionByRefreshToken(ctx context.Context, refreshToken string) (*schema.Session, error) {
+	ss := new(schema.Session)
+	err := r.db.NewSelect().
+		Model(ss).
+		Where("refresh_token = ?", refreshToken).
+		Where("deleted_at IS NULL").
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ss, nil
+}
+
+// RefreshSessionTokens updates both access and refresh tokens for a session
+func (r *SessionRepository) RefreshSessionTokens(ctx context.Context, id xid.ID, newAccessToken string, accessTokenExpiresAt time.Time, newRefreshToken string, refreshTokenExpiresAt time.Time) error {
+	now := time.Now().UTC()
+	_, err := r.db.NewUpdate().
+		Model((*schema.Session)(nil)).
+		Set("token = ?", newAccessToken).
+		Set("expires_at = ?", accessTokenExpiresAt).
+		Set("refresh_token = ?", newRefreshToken).
+		Set("refresh_token_expires_at = ?", refreshTokenExpiresAt).
+		Set("last_refreshed_at = ?", now).
+		Set("updated_at = ?", now).
+		Where("id = ?", id).
+		Where("deleted_at IS NULL").
+		Exec(ctx)
+	return err
+}
+
 // CountSessions counts sessions for an app and optionally a user
 func (r *SessionRepository) CountSessions(ctx context.Context, appID xid.ID, userID *xid.ID) (int, error) {
 	query := r.db.NewSelect().

@@ -176,9 +176,9 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	p.db.RegisterModel((*schema.Passkey)(nil))
 
 	// Wire services
-	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil)
-	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
-	authSvc := auth2.NewService(userSvc, sessionSvc, auth2.Config{})
+	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil, authInst.GetHookRegistry())
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil, authInst.GetHookRegistry())
+	authSvc := auth2.NewService(userSvc, sessionSvc, auth2.Config{}, authInst.GetHookRegistry())
 	auditSvc := audit2.NewService(repo.NewAuditRepository(p.db))
 
 	// Create passkey service with WebAuthn support

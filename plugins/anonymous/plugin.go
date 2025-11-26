@@ -133,7 +133,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// No specific Bun models for anonymous (uses core User and Session models)
 
 	users := repo.NewUserRepository(p.db)
-	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil)
+	sessionSvc := session.NewService(repo.NewSessionRepository(p.db), session.Config{}, nil, nil)
 	p.service = NewService(users, sessionSvc, p.config)
 
 	p.logger.Info("anonymous plugin initialized",

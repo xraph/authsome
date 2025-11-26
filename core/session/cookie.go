@@ -88,3 +88,39 @@ func SetCookie(
 	return nil
 }
 
+// ClearCookie clears a session cookie by setting it to expire immediately
+func ClearCookie(c forge.Context, config *CookieConfig) error {
+	if config == nil {
+		return fmt.Errorf("cookie config is nil")
+	}
+
+	// Determine cookie name (use default if not specified)
+	cookieName := config.Name
+	if cookieName == "" {
+		cookieName = "authsome_session"
+	}
+
+	// Determine path (use default if not specified)
+	path := config.Path
+	if path == "" {
+		path = "/"
+	}
+
+	// Create an expired cookie to clear it
+	cookie := &http.Cookie{
+		Name:     cookieName,
+		Value:    "",
+		Path:     path,
+		Domain:   config.Domain,
+		Expires:  time.Unix(0, 0), // Set to epoch to expire immediately
+		MaxAge:   -1,              // MaxAge < 0 means delete cookie now
+		Secure:   config.Secure != nil && *config.Secure,
+		HttpOnly: config.HttpOnly,
+		SameSite: ParseSameSite(config.SameSite),
+	}
+
+	// Set the expired cookie to clear it
+	http.SetCookie(c.Response(), cookie)
+
+	return nil
+}

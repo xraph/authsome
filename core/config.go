@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/core/user"
 	forgedb "github.com/xraph/forge/extensions/database"
 )
 
@@ -28,6 +29,12 @@ type Config struct {
 	// When enabled, authentication responses will automatically set session cookies
 	// Apps can override this configuration via their metadata
 	SessionCookie session.CookieConfig
+
+	// SessionConfig configures session behavior (TTL, sliding window, refresh tokens)
+	SessionConfig session.Config
+
+	// UserConfig configures user service behavior (password requirements, etc.)
+	UserConfig user.Config
 
 	// Database configuration - support for Forge database extension
 	// DatabaseManager is the Forge database extension manager

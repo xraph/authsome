@@ -11,7 +11,7 @@ import (
 )
 
 // Handler handles HTTP requests for the permissions plugin
-// Updated for V2 architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization
 type Handler struct {
 	service *Service
 }
@@ -27,20 +27,44 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// extractContext extracts V2 context values (app, env, org, user)
+func extractContext(c forge.Context) (appID, envID xid.ID, orgID *xid.ID, userID xid.ID, err error) {
+	ctx := c.Request().Context()
+
+	// App is required
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return xid.NilID(), xid.NilID(), nil, xid.NilID(), errs.New("APP_CONTEXT_REQUIRED", "App context required", 400)
+	}
+
+	// Environment is required
+	envID, ok = contexts.GetEnvironmentID(ctx)
+	if !ok || envID.IsNil() {
+		return xid.NilID(), xid.NilID(), nil, xid.NilID(), errs.New("ENV_CONTEXT_REQUIRED", "Environment context required", 400)
+	}
+
+	// Organization is optional
+	orgIDVal, _ := contexts.GetOrganizationID(ctx)
+	if !orgIDVal.IsNil() {
+		orgID = &orgIDVal
+	}
+
+	// User is optional for some operations
+	userID, _ = contexts.GetUserID(ctx)
+
+	return appID, envID, orgID, userID, nil
+}
+
 // =============================================================================
 // POLICY MANAGEMENT
 // =============================================================================
 
 // CreatePolicy handles POST /api/permissions/policies
 func (h *Handler) CreatePolicy(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, userID, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	// Parse request
 	var req handlers.CreatePolicyRequest
@@ -48,56 +72,42 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// policy, err := h.service.CreatePolicy(c.Request().Context(), appID, orgIDPtr, userID, &req)
-	_ = orgIDPtr
+	// policy, err := h.service.CreatePolicy(c.Request().Context(), appID, envID, orgID, userID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = userID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy creation will be implemented in Week 4 - full service integration",
+		Message: "Policy creation will be implemented in future phase",
 	})
 }
 
 // ListPolicies handles GET /api/permissions/policies
 func (h *Handler) ListPolicies(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// policies, err := h.service.ListPolicies(c.Request().Context(), appID, orgIDPtr, filters)
-	_ = orgIDPtr
+	// policies, err := h.service.ListPolicies(c.Request().Context(), appID, envID, orgID, filters)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy listing will be implemented in Week 4",
+		Message: "Policy listing will be implemented in future phase",
 	})
 }
 
 // GetPolicy handles GET /api/permissions/policies/:id
 func (h *Handler) GetPolicy(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse policy ID from URL param
 	policyIDStr := c.Param("id")
@@ -106,32 +116,24 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// policy, err := h.service.GetPolicy(c.Request().Context(), appID, orgIDPtr, policyID)
-	_ = orgIDPtr
+	// policy, err := h.service.GetPolicy(c.Request().Context(), appID, envID, orgID, policyID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = policyID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy retrieval will be implemented in Week 4",
+		Message: "Policy retrieval will be implemented in future phase",
 	})
 }
 
 // UpdatePolicy handles PUT /api/permissions/policies/:id
 func (h *Handler) UpdatePolicy(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, userID, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	// Parse policy ID from URL param
 	policyIDStr := c.Param("id")
@@ -146,32 +148,25 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// policy, err := h.service.UpdatePolicy(c.Request().Context(), appID, orgIDPtr, userID, policyID, &req)
-	_ = orgIDPtr
+	// policy, err := h.service.UpdatePolicy(c.Request().Context(), appID, envID, orgID, userID, policyID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = userID
 	_ = policyID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy update will be implemented in Week 4",
+		Message: "Policy update will be implemented in future phase",
 	})
 }
 
 // DeletePolicy handles DELETE /api/permissions/policies/:id
 func (h *Handler) DeletePolicy(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse policy ID from URL param
 	policyIDStr := c.Param("id")
@@ -180,19 +175,15 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// err := h.service.DeletePolicy(c.Request().Context(), appID, orgIDPtr, policyID)
-	_ = orgIDPtr
+	// err := h.service.DeletePolicy(c.Request().Context(), appID, envID, orgID, policyID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = policyID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy deletion will be implemented in Week 4",
+		Message: "Policy deletion will be implemented in future phase",
 	})
 }
 
@@ -208,7 +199,7 @@ func (h *Handler) ValidatePolicy(c forge.Context) error {
 	// validation, err := h.service.ValidatePolicy(c.Request().Context(), &req)
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy validation will be implemented in Week 4",
+		Message: "Policy validation will be implemented in future phase",
 	})
 }
 
@@ -224,7 +215,7 @@ func (h *Handler) TestPolicy(c forge.Context) error {
 	// testResults, err := h.service.TestPolicy(c.Request().Context(), &req)
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy testing will be implemented in Week 4",
+		Message: "Policy testing will be implemented in future phase",
 	})
 }
 
@@ -234,13 +225,10 @@ func (h *Handler) TestPolicy(c forge.Context) error {
 
 // CreateResource handles POST /api/permissions/resources
 func (h *Handler) CreateResource(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse request
 	var req handlers.CreateResourceRequest
@@ -248,55 +236,41 @@ func (h *Handler) CreateResource(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// resource, err := h.service.CreateResource(c.Request().Context(), appID, orgIDPtr, &req)
-	_ = orgIDPtr
+	// resource, err := h.service.CreateResource(c.Request().Context(), appID, envID, orgID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Resource creation will be implemented in Week 3",
+		Message: "Resource creation will be implemented in future phase",
 	})
 }
 
 // ListResources handles GET /api/permissions/resources
 func (h *Handler) ListResources(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// resources, err := h.service.ListResources(c.Request().Context(), appID, orgIDPtr, namespaceID)
-	_ = orgIDPtr
+	// resources, err := h.service.ListResources(c.Request().Context(), appID, envID, orgID, namespaceID)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Resource listing will be implemented in Week 3",
+		Message: "Resource listing will be implemented in future phase",
 	})
 }
 
 // GetResource handles GET /api/permissions/resources/:id
 func (h *Handler) GetResource(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse resource ID from URL param
 	resourceIDStr := c.Param("id")
@@ -305,31 +279,24 @@ func (h *Handler) GetResource(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_RESOURCE_ID", "Invalid resource ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// resource, err := h.service.GetResource(c.Request().Context(), appID, orgIDPtr, resourceID)
-	_ = orgIDPtr
+	// resource, err := h.service.GetResource(c.Request().Context(), appID, envID, orgID, resourceID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = resourceID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Resource retrieval will be implemented in Week 3",
+		Message: "Resource retrieval will be implemented in future phase",
 	})
 }
 
 // DeleteResource handles DELETE /api/permissions/resources/:id
 func (h *Handler) DeleteResource(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse resource ID from URL param
 	resourceIDStr := c.Param("id")
@@ -338,19 +305,15 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_RESOURCE_ID", "Invalid resource ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// err := h.service.DeleteResource(c.Request().Context(), appID, orgIDPtr, resourceID)
-	_ = orgIDPtr
+	// err := h.service.DeleteResource(c.Request().Context(), appID, envID, orgID, resourceID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = resourceID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Resource deletion will be implemented in Week 3",
+		Message: "Resource deletion will be implemented in future phase",
 	})
 }
 
@@ -360,13 +323,10 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 
 // CreateAction handles POST /api/permissions/actions
 func (h *Handler) CreateAction(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse request
 	var req handlers.CreateActionRequest
@@ -374,55 +334,41 @@ func (h *Handler) CreateAction(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// action, err := h.service.CreateAction(c.Request().Context(), appID, orgIDPtr, &req)
-	_ = orgIDPtr
+	// action, err := h.service.CreateAction(c.Request().Context(), appID, envID, orgID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Action creation will be implemented in Week 3",
+		Message: "Action creation will be implemented in future phase",
 	})
 }
 
 // ListActions handles GET /api/permissions/actions
 func (h *Handler) ListActions(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// actions, err := h.service.ListActions(c.Request().Context(), appID, orgIDPtr, namespaceID)
-	_ = orgIDPtr
+	// actions, err := h.service.ListActions(c.Request().Context(), appID, envID, orgID, namespaceID)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Action listing will be implemented in Week 3",
+		Message: "Action listing will be implemented in future phase",
 	})
 }
 
 // DeleteAction handles DELETE /api/permissions/actions/:id
 func (h *Handler) DeleteAction(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse action ID from URL param
 	actionIDStr := c.Param("id")
@@ -431,19 +377,15 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_ACTION_ID", "Invalid action ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// err := h.service.DeleteAction(c.Request().Context(), appID, orgIDPtr, actionID)
-	_ = orgIDPtr
+	// err := h.service.DeleteAction(c.Request().Context(), appID, envID, orgID, actionID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = actionID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Action deletion will be implemented in Week 3",
+		Message: "Action deletion will be implemented in future phase",
 	})
 }
 
@@ -453,14 +395,10 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 
 // CreateNamespace handles POST /api/permissions/namespaces
 func (h *Handler) CreateNamespace(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, userID, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	// Parse request
 	var req handlers.CreateNamespaceRequest
@@ -468,56 +406,42 @@ func (h *Handler) CreateNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// namespace, err := h.service.CreateNamespace(c.Request().Context(), appID, orgIDPtr, userID, &req)
-	_ = orgIDPtr
+	// namespace, err := h.service.CreateNamespace(c.Request().Context(), appID, envID, orgID, userID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = userID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Namespace creation will be implemented in Week 3",
+		Message: "Namespace creation will be implemented in future phase",
 	})
 }
 
 // ListNamespaces handles GET /api/permissions/namespaces
 func (h *Handler) ListNamespaces(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// namespaces, err := h.service.ListNamespaces(c.Request().Context(), appID, orgIDPtr)
-	_ = orgIDPtr
+	// namespaces, err := h.service.ListNamespaces(c.Request().Context(), appID, envID, orgID)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Namespace listing will be implemented in Week 3",
+		Message: "Namespace listing will be implemented in future phase",
 	})
 }
 
 // GetNamespace handles GET /api/permissions/namespaces/:id
 func (h *Handler) GetNamespace(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse namespace ID from URL param
 	namespaceIDStr := c.Param("id")
@@ -526,31 +450,24 @@ func (h *Handler) GetNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// namespace, err := h.service.GetNamespace(c.Request().Context(), appID, orgIDPtr, namespaceID)
-	_ = orgIDPtr
+	// namespace, err := h.service.GetNamespace(c.Request().Context(), appID, envID, orgID, namespaceID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = namespaceID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Namespace retrieval will be implemented in Week 3",
+		Message: "Namespace retrieval will be implemented in future phase",
 	})
 }
 
 // UpdateNamespace handles PUT /api/permissions/namespaces/:id
 func (h *Handler) UpdateNamespace(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse namespace ID from URL param
 	namespaceIDStr := c.Param("id")
@@ -565,31 +482,24 @@ func (h *Handler) UpdateNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// namespace, err := h.service.UpdateNamespace(c.Request().Context(), appID, orgIDPtr, namespaceID, &req)
-	_ = orgIDPtr
+	// namespace, err := h.service.UpdateNamespace(c.Request().Context(), appID, envID, orgID, namespaceID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = namespaceID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Namespace update will be implemented in Week 3",
+		Message: "Namespace update will be implemented in future phase",
 	})
 }
 
 // DeleteNamespace handles DELETE /api/permissions/namespaces/:id
 func (h *Handler) DeleteNamespace(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse namespace ID from URL param
 	namespaceIDStr := c.Param("id")
@@ -598,19 +508,15 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// err := h.service.DeleteNamespace(c.Request().Context(), appID, orgIDPtr, namespaceID)
-	_ = orgIDPtr
+	// err := h.service.DeleteNamespace(c.Request().Context(), appID, envID, orgID, namespaceID)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = namespaceID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Namespace deletion will be implemented in Week 3",
+		Message: "Namespace deletion will be implemented in future phase",
 	})
 }
 
@@ -620,14 +526,10 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 
 // Evaluate handles POST /api/permissions/evaluate
 func (h *Handler) Evaluate(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, userID, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	// Parse request
 	var req handlers.EvaluateRequest
@@ -635,32 +537,24 @@ func (h *Handler) Evaluate(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// decision, err := h.service.Evaluate(c.Request().Context(), appID, orgIDPtr, userID, &req)
-	_ = orgIDPtr
+	// decision, err := h.service.Evaluate(c.Request().Context(), appID, envID, orgID, userID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = userID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Policy evaluation will be implemented in Week 5 - core feature",
+		Message: "Policy evaluation will be implemented in future phase - core feature",
 	})
 }
 
 // EvaluateBatch handles POST /api/permissions/evaluate/batch
 func (h *Handler) EvaluateBatch(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, userID, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	// Parse request
 	var req handlers.BatchEvaluateRequest
@@ -668,19 +562,15 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// results, err := h.service.EvaluateBatch(c.Request().Context(), appID, orgIDPtr, userID, &req)
-	_ = orgIDPtr
+	// results, err := h.service.EvaluateBatch(c.Request().Context(), appID, envID, orgID, userID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = userID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Batch policy evaluation will be implemented in Week 5",
+		Message: "Batch policy evaluation will be implemented in future phase",
 	})
 }
 
@@ -690,18 +580,18 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 
 // ListTemplates handles GET /api/permissions/templates
 func (h *Handler) ListTemplates(c forge.Context) error {
-	// Templates are global, no app/org scope needed
+	// Templates are global, no app/env/org scope needed
 	// Stub: Service call would go here
 	// templates, err := h.service.ListTemplates(c.Request().Context())
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Template listing will be implemented in Week 6",
+		Message: "Template listing will be implemented in future phase",
 	})
 }
 
 // GetTemplate handles GET /api/permissions/templates/:id
 func (h *Handler) GetTemplate(c forge.Context) error {
-	// Templates are global, no app/org scope needed
+	// Templates are global, no app/env/org scope needed
 	templateID := c.Param("id")
 
 	// Stub: Service call would go here
@@ -709,20 +599,16 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 	_ = templateID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Template retrieval will be implemented in Week 6",
+		Message: "Template retrieval will be implemented in future phase",
 	})
 }
 
 // InstantiateTemplate handles POST /api/permissions/templates/:id/instantiate
 func (h *Handler) InstantiateTemplate(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, userID, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-	userID, _ := contexts.GetUserID(c.Request().Context())
 
 	// Get template ID from URL
 	templateID := c.Param("id")
@@ -733,20 +619,16 @@ func (h *Handler) InstantiateTemplate(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// policy, err := h.service.InstantiateTemplate(c.Request().Context(), appID, orgIDPtr, userID, templateID, &req)
-	_ = orgIDPtr
+	// policy, err := h.service.InstantiateTemplate(c.Request().Context(), appID, envID, orgID, userID, templateID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 	_ = userID
 	_ = templateID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Template instantiation will be implemented in Week 6",
+		Message: "Template instantiation will be implemented in future phase",
 	})
 }
 
@@ -756,13 +638,10 @@ func (h *Handler) InstantiateTemplate(c forge.Context) error {
 
 // MigrateFromRBAC handles POST /api/permissions/migrate/rbac
 func (h *Handler) MigrateFromRBAC(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
 	// Parse request
 	var req handlers.MigrateRBACRequest
@@ -770,43 +649,32 @@ func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
-	}
-
 	// Stub: Service call would go here
-	// migration, err := h.service.MigrateFromRBAC(c.Request().Context(), appID, orgIDPtr, &req)
-	_ = orgIDPtr
+	// migration, err := h.service.MigrateFromRBAC(c.Request().Context(), appID, envID, orgID, &req)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "RBAC migration will be implemented in Week 7 - integration feature",
+		Message: "RBAC migration will be implemented in future phase",
 	})
 }
 
 // GetMigrationStatus handles GET /api/permissions/migrate/rbac/status
 func (h *Handler) GetMigrationStatus(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// status, err := h.service.GetMigrationStatus(c.Request().Context(), appID, orgIDPtr)
-	_ = orgIDPtr
+	// status, err := h.service.GetMigrationStatus(c.Request().Context(), appID, envID, orgID)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Migration status will be implemented in Week 7",
+		Message: "Migration status will be implemented in future phase",
 	})
 }
 
@@ -816,50 +684,36 @@ func (h *Handler) GetMigrationStatus(c forge.Context) error {
 
 // GetAuditLog handles GET /api/permissions/audit
 func (h *Handler) GetAuditLog(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// auditLog, err := h.service.ListAuditEvents(c.Request().Context(), appID, orgIDPtr, filters)
-	_ = orgIDPtr
+	// auditLog, err := h.service.ListAuditEvents(c.Request().Context(), appID, envID, orgID, filters)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Audit log retrieval will be implemented in Week 8",
+		Message: "Audit log retrieval will be implemented in future phase",
 	})
 }
 
 // GetAnalytics handles GET /api/permissions/analytics
 func (h *Handler) GetAnalytics(c forge.Context) error {
-	// Extract V2 context
-	appID, _ := contexts.GetAppID(c.Request().Context())
-	if appID.IsNil() {
-		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
-	}
-
-	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
-
-	// Build optional org pointer
-	var orgIDPtr *xid.ID
-	if !orgID.IsNil() {
-		orgIDPtr = &orgID
+	appID, envID, orgID, _, err := extractContext(c)
+	if err != nil {
+		return c.JSON(400, err)
 	}
 
 	// Stub: Service call would go here
-	// analytics, err := h.service.GetAnalytics(c.Request().Context(), appID, orgIDPtr, timeRange)
-	_ = orgIDPtr
+	// analytics, err := h.service.GetAnalytics(c.Request().Context(), appID, envID, orgID, timeRange)
+	_ = appID
+	_ = envID
+	_ = orgID
 
 	return c.JSON(501, &MessageResponse{
-		Message: "Analytics retrieval will be implemented in Week 8",
+		Message: "Analytics retrieval will be implemented in future phase",
 	})
 }
