@@ -44,6 +44,19 @@ type Repository interface {
 	// Audit operations
 	CreateAuditEvent(ctx context.Context, event *core.AuditEvent) error
 	ListAuditEvents(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, filters AuditFilters) ([]*core.AuditEvent, error)
+
+	// Analytics operations
+	GetEvaluationStats(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, timeRange map[string]interface{}) (*EvaluationStats, error)
+}
+
+// EvaluationStats represents aggregated evaluation statistics
+type EvaluationStats struct {
+	TotalEvaluations int64
+	AllowedCount     int64
+	DeniedCount      int64
+	AvgLatencyMs     float64
+	CacheHits        int64
+	CacheMisses      int64
 }
 
 // PolicyFilters defines filtering options for policy queries

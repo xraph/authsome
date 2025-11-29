@@ -16,9 +16,10 @@ import (
 
 // PlanService handles plan business logic
 type PlanService struct {
-	repo      repository.PlanRepository
-	provider  providers.PaymentProvider
-	eventRepo repository.EventRepository
+	repo          repository.PlanRepository
+	provider      providers.PaymentProvider
+	eventRepo     repository.EventRepository
+	autoSyncPlans bool
 }
 
 // NewPlanService creates a new plan service
@@ -28,10 +29,16 @@ func NewPlanService(
 	eventRepo repository.EventRepository,
 ) *PlanService {
 	return &PlanService{
-		repo:      repo,
-		provider:  provider,
-		eventRepo: eventRepo,
+		repo:          repo,
+		provider:      provider,
+		eventRepo:     eventRepo,
+		autoSyncPlans: false,
 	}
+}
+
+// SetAutoSyncPlans enables or disables automatic plan sync to provider
+func (s *PlanService) SetAutoSyncPlans(enabled bool) {
+	s.autoSyncPlans = enabled
 }
 
 // Create creates a new plan
@@ -126,7 +133,24 @@ func (s *PlanService) Create(ctx context.Context, appID xid.ID, req *core.Create
 		}
 	}
 
-	return s.schemaToDomain(plan, req.Features, req.PriceTiers), nil
+	result := s.schemaToDomain(plan, req.Features, req.PriceTiers)
+
+	// Auto-sync to provider if enabled
+	if s.autoSyncPlans {
+		if err := s.provider.SyncPlan(ctx, result); err != nil {
+			// Log the error but don't fail the creation
+			// The plan can be synced manually later
+			fmt.Printf("warning: failed to auto-sync plan to provider: %v\n", err)
+		} else {
+			// Update provider IDs in database
+			plan.ProviderPlanID = result.ProviderPlanID
+			plan.ProviderPriceID = result.ProviderPriceID
+			plan.UpdatedAt = time.Now()
+			_ = s.repo.Update(ctx, plan)
+		}
+	}
+
+	return result, nil
 }
 
 // Update updates an existing plan

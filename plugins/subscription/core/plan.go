@@ -8,27 +8,28 @@ import (
 
 // Plan represents a subscription plan that organizations can subscribe to
 type Plan struct {
-	ID              xid.ID            `json:"id"`
-	AppID           xid.ID            `json:"appId"`           // Scoped to app
-	Name            string            `json:"name"`            // Display name
-	Slug            string            `json:"slug"`            // URL-safe identifier
-	Description     string            `json:"description"`     // Marketing description
-	BillingPattern  BillingPattern    `json:"billingPattern"`  // How the plan is billed
-	BillingInterval BillingInterval   `json:"billingInterval"` // Billing frequency
-	BasePrice       int64             `json:"basePrice"`       // Price in cents
-	Currency        string            `json:"currency"`        // ISO 4217 currency code
-	TrialDays       int               `json:"trialDays"`       // Number of trial days (0 for no trial)
-	Features        []PlanFeature     `json:"features"`        // Feature flags and limits
-	PriceTiers      []PriceTier       `json:"priceTiers"`      // For tiered/usage pricing
-	TierMode        TierMode          `json:"tierMode"`        // How tiers are applied
-	Metadata        map[string]any    `json:"metadata"`        // Custom metadata
-	IsActive        bool              `json:"isActive"`        // Can be subscribed to
-	IsPublic        bool              `json:"isPublic"`        // Visible in public pricing
-	DisplayOrder    int               `json:"displayOrder"`    // Order in pricing pages
-	ProviderPlanID  string            `json:"providerPlanId"`  // Stripe Product ID
-	ProviderPriceID string            `json:"providerPriceId"` // Stripe Price ID
-	CreatedAt       time.Time         `json:"createdAt"`
-	UpdatedAt       time.Time         `json:"updatedAt"`
+	ID              xid.ID          `json:"id"`
+	AppID           xid.ID          `json:"appId"`           // Scoped to app
+	Name            string          `json:"name"`            // Display name
+	Slug            string          `json:"slug"`            // URL-safe identifier
+	Description     string          `json:"description"`     // Marketing description
+	Archived        bool            `json:"archived"`        // Whether the plan is archived
+	BillingPattern  BillingPattern  `json:"billingPattern"`  // How the plan is billed
+	BillingInterval BillingInterval `json:"billingInterval"` // Billing frequency
+	BasePrice       int64           `json:"basePrice"`       // Price in cents
+	Currency        string          `json:"currency"`        // ISO 4217 currency code
+	TrialDays       int             `json:"trialDays"`       // Number of trial days (0 for no trial)
+	Features        []PlanFeature   `json:"features"`        // Feature flags and limits
+	PriceTiers      []PriceTier     `json:"priceTiers"`      // For tiered/usage pricing
+	TierMode        TierMode        `json:"tierMode"`        // How tiers are applied
+	Metadata        map[string]any  `json:"metadata"`        // Custom metadata
+	IsActive        bool            `json:"isActive"`        // Can be subscribed to
+	IsPublic        bool            `json:"isPublic"`        // Visible in public pricing
+	DisplayOrder    int             `json:"displayOrder"`    // Order in pricing pages
+	ProviderPlanID  string          `json:"providerPlanId"`  // Stripe Product ID
+	ProviderPriceID string          `json:"providerPriceId"` // Stripe Price ID
+	CreatedAt       time.Time       `json:"createdAt"`
+	UpdatedAt       time.Time       `json:"updatedAt"`
 }
 
 // PlanFeature represents a feature or limit included in a plan
@@ -196,36 +197,36 @@ func (p *Plan) CalculateTieredPrice(quantity int64) int64 {
 
 // CreatePlanRequest represents a request to create a new plan
 type CreatePlanRequest struct {
-	Name            string            `json:"name" validate:"required,min=1,max=100"`
-	Slug            string            `json:"slug" validate:"required,min=1,max=50,alphanum"`
-	Description     string            `json:"description" validate:"max=1000"`
-	BillingPattern  BillingPattern    `json:"billingPattern" validate:"required"`
-	BillingInterval BillingInterval   `json:"billingInterval" validate:"required"`
-	BasePrice       int64             `json:"basePrice" validate:"min=0"`
-	Currency        string            `json:"currency" validate:"len=3"`
-	TrialDays       int               `json:"trialDays" validate:"min=0,max=365"`
-	Features        []PlanFeature     `json:"features"`
-	PriceTiers      []PriceTier       `json:"priceTiers"`
-	TierMode        TierMode          `json:"tierMode"`
-	Metadata        map[string]any    `json:"metadata"`
-	IsActive        bool              `json:"isActive"`
-	IsPublic        bool              `json:"isPublic"`
-	DisplayOrder    int               `json:"displayOrder"`
+	Name            string          `json:"name" validate:"required,min=1,max=100"`
+	Slug            string          `json:"slug" validate:"required,min=1,max=50,alphanum"`
+	Description     string          `json:"description" validate:"max=1000"`
+	BillingPattern  BillingPattern  `json:"billingPattern" validate:"required"`
+	BillingInterval BillingInterval `json:"billingInterval" validate:"required"`
+	BasePrice       int64           `json:"basePrice" validate:"min=0"`
+	Currency        string          `json:"currency" validate:"len=3"`
+	TrialDays       int             `json:"trialDays" validate:"min=0,max=365"`
+	Features        []PlanFeature   `json:"features"`
+	PriceTiers      []PriceTier     `json:"priceTiers"`
+	TierMode        TierMode        `json:"tierMode"`
+	Metadata        map[string]any  `json:"metadata"`
+	IsActive        bool            `json:"isActive"`
+	IsPublic        bool            `json:"isPublic"`
+	DisplayOrder    int             `json:"displayOrder"`
 }
 
 // UpdatePlanRequest represents a request to update an existing plan
 type UpdatePlanRequest struct {
-	Name            *string           `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Description     *string           `json:"description,omitempty" validate:"omitempty,max=1000"`
-	BasePrice       *int64            `json:"basePrice,omitempty" validate:"omitempty,min=0"`
-	TrialDays       *int              `json:"trialDays,omitempty" validate:"omitempty,min=0,max=365"`
-	Features        []PlanFeature     `json:"features,omitempty"`
-	PriceTiers      []PriceTier       `json:"priceTiers,omitempty"`
-	TierMode        *TierMode         `json:"tierMode,omitempty"`
-	Metadata        map[string]any    `json:"metadata,omitempty"`
-	IsActive        *bool             `json:"isActive,omitempty"`
-	IsPublic        *bool             `json:"isPublic,omitempty"`
-	DisplayOrder    *int              `json:"displayOrder,omitempty"`
+	Name         *string        `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Description  *string        `json:"description,omitempty" validate:"omitempty,max=1000"`
+	BasePrice    *int64         `json:"basePrice,omitempty" validate:"omitempty,min=0"`
+	TrialDays    *int           `json:"trialDays,omitempty" validate:"omitempty,min=0,max=365"`
+	Features     []PlanFeature  `json:"features,omitempty"`
+	PriceTiers   []PriceTier    `json:"priceTiers,omitempty"`
+	TierMode     *TierMode      `json:"tierMode,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+	IsActive     *bool          `json:"isActive,omitempty"`
+	IsPublic     *bool          `json:"isPublic,omitempty"`
+	DisplayOrder *int           `json:"displayOrder,omitempty"`
 }
 
 func min(a, b int64) int64 {
@@ -234,4 +235,3 @@ func min(a, b int64) int64 {
 	}
 	return b
 }
-

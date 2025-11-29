@@ -100,9 +100,12 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 	if plan.ProviderPlanID != "" {
 		// Update existing product
 		params := &stripe.ProductParams{
-			Name:        stripe.String(plan.Name),
-			Description: stripe.String(plan.Description),
-			Active:      stripe.Bool(plan.IsActive),
+			Name:   stripe.String(plan.Name),
+			Active: stripe.Bool(plan.IsActive),
+		}
+		// Only set description if not empty (Stripe rejects empty strings)
+		if plan.Description != "" {
+			params.Description = stripe.String(plan.Description)
 		}
 		_, err := product.Update(plan.ProviderPlanID, params)
 		if err != nil {
@@ -112,13 +115,16 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 	} else {
 		// Create new product
 		params := &stripe.ProductParams{
-			Name:        stripe.String(plan.Name),
-			Description: stripe.String(plan.Description),
-			Active:      stripe.Bool(plan.IsActive),
+			Name:   stripe.String(plan.Name),
+			Active: stripe.Bool(plan.IsActive),
 			Metadata: map[string]string{
 				"plan_id": plan.ID.String(),
 				"slug":    plan.Slug,
 			},
+		}
+		// Only set description if not empty (Stripe rejects empty strings)
+		if plan.Description != "" {
+			params.Description = stripe.String(plan.Description)
 		}
 		prod, err := product.New(params)
 		if err != nil {

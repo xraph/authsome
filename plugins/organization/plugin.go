@@ -94,6 +94,13 @@ func WithInvitationExpiryHours(hours int) PluginOption {
 	}
 }
 
+// WithEnforceUniqueSlug sets whether to enforce unique slugs within app+environment scope
+func WithEnforceUniqueSlug(enforce bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.EnforceUniqueSlug = enforce
+	}
+}
+
 // NewPlugin creates a new organization plugin instance with optional configuration
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
@@ -104,6 +111,7 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 			MaxTeamsPerOrganization:   20,
 			EnableUserCreation:        true,
 			InvitationExpiryHours:     72,
+			EnforceUniqueSlug:         true,
 		},
 	}
 
@@ -179,6 +187,9 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	teamRepo := orgrepo.NewOrganizationTeamRepository(p.db)
 	invitationRepo := orgrepo.NewOrganizationInvitationRepository(p.db)
 
+	// Get role repository for RBAC role validation
+	roleRepo := authInstance.Repository().Role()
+
 	// Create organization service config
 	orgConfig := Config{
 		MaxOrganizationsPerUser:   p.config.MaxOrganizationsPerUser,
@@ -187,6 +198,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		EnableUserCreation:        p.config.EnableUserCreation,
 		RequireInvitation:         p.config.RequireInvitation,
 		InvitationExpiryHours:     p.config.InvitationExpiryHours,
+		EnforceUniqueSlug:         p.config.EnforceUniqueSlug,
 	}
 
 	// Create services with actual repositories and RBAC service
@@ -197,6 +209,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		invitationRepo,
 		orgConfig,
 		rbacSvc,
+		roleRepo,
 	)
 
 	// Create handlers
@@ -207,9 +220,17 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Initialize dashboard extension
 	p.dashboardExtension = NewDashboardExtension(p)
 
+	// Register services in DI container if available
+	if container := forgeApp.Container(); container != nil {
+		if err := p.RegisterServices(container); err != nil {
+			p.logger.Warn("failed to register organization services in DI container", forge.F("error", err.Error()))
+		}
+	}
+
 	p.logger.Info("organization plugin initialized",
 		forge.F("max_orgs_per_user", p.config.MaxOrganizationsPerUser),
-		forge.F("max_members_per_org", p.config.MaxMembersPerOrganization))
+		forge.F("max_members_per_org", p.config.MaxMembersPerOrganization),
+		forge.F("enforce_unique_slug", p.config.EnforceUniqueSlug))
 
 	return nil
 }
@@ -457,6 +478,105 @@ func (p *Plugin) Migrate() error {
 // DashboardExtension returns the dashboard extension interface implementation
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	return p.dashboardExtension
+}
+
+// RegisterRoles implements the PluginWithRoles interface
+// This registers organization-related permissions for platform roles
+func (p *Plugin) RegisterRoles(reg interface{}) error {
+	roleRegistry, ok := reg.(*rbac.RoleRegistry)
+	if !ok {
+		return fmt.Errorf("invalid role registry type")
+	}
+
+	fmt.Printf("[Organization] Registering organization role definitions and permissions...\n")
+
+	// Extend Owner role with full organization management permissions
+	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
+		Name:        rbac.RoleOwner,
+		Description: rbac.RoleDescOwner,
+		IsPlatform:  rbac.RoleIsPlatformOwner,
+		Priority:    rbac.RolePriorityOwner,
+		Permissions: []string{
+			// Full organization management
+			"* on organizations",
+			"* on organization.*",
+			// Members management
+			"create on members",
+			"view on members",
+			"update on members",
+			"delete on members",
+			"invite on members",
+			// Teams management
+			"create on teams",
+			"view on teams",
+			"update on teams",
+			"delete on teams",
+			// Invitations management
+			"create on invitations",
+			"view on invitations",
+			"cancel on invitations",
+			// Roles management
+			"view on roles",
+			"manage on roles",
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register owner organization permissions: %w", err)
+	}
+
+	// Extend Admin role with organization management permissions (except delete org)
+	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
+		Name:         rbac.RoleAdmin,
+		Description:  rbac.RoleDescAdmin,
+		IsPlatform:   rbac.RoleIsPlatformAdmin,
+		InheritsFrom: rbac.RoleMember,
+		Priority:     rbac.RolePriorityAdmin,
+		Permissions: []string{
+			// Organization view/update (not delete)
+			"view on organizations",
+			"update on organizations",
+			// Members management
+			"create on members",
+			"view on members",
+			"update on members",
+			"delete on members",
+			"invite on members",
+			// Teams management
+			"create on teams",
+			"view on teams",
+			"update on teams",
+			"delete on teams",
+			// Invitations management
+			"create on invitations",
+			"view on invitations",
+			"cancel on invitations",
+			// Roles view
+			"view on roles",
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register admin organization permissions: %w", err)
+	}
+
+	// Extend Member role with basic organization access
+	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
+		Name:        rbac.RoleMember,
+		Description: rbac.RoleDescMember,
+		IsPlatform:  rbac.RoleIsPlatformMember,
+		Priority:    rbac.RolePriorityMember,
+		Permissions: []string{
+			// Basic organization access
+			"view on organizations",
+			// View members and teams
+			"view on members",
+			"view on teams",
+			// View roles
+			"view on roles",
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register member organization permissions: %w", err)
+	}
+
+	fmt.Printf("[Organization] ✅ Organization roles registered\n")
+	return nil
 }
 
 // DTOs for organization routes - use shared responses from core

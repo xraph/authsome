@@ -237,6 +237,25 @@ func (m *MockService) UpdateMember(ctx context.Context, id xid.ID, req *organiza
 	return member, nil
 }
 
+// UpdateMemberRole mocks updating only the role of a member
+func (m *MockService) UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, newRole string, updaterUserID xid.ID) (*organization.Member, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	member, exists := m.members[memberID]
+	if !exists {
+		return nil, organization.MemberNotFound()
+	}
+
+	// Verify member belongs to organization
+	if member.OrganizationID != orgID {
+		return nil, organization.MemberNotFound()
+	}
+
+	member.Role = newRole
+	return member, nil
+}
+
 // RemoveMember mocks removing a member
 func (m *MockService) RemoveMember(ctx context.Context, id, removerUserID xid.ID) error {
 	m.mu.Lock()
@@ -374,6 +393,18 @@ func (m *MockService) IsTeamMember(ctx context.Context, teamID, memberID xid.ID)
 	return false, nil
 }
 
+func (m *MockService) FindTeamMemberByID(ctx context.Context, id xid.ID) (*organization.TeamMember, error) {
+	return nil, organization.TeamMemberNotFound()
+}
+
+func (m *MockService) FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*organization.TeamMember, error) {
+	return nil, organization.TeamMemberNotFound()
+}
+
+func (m *MockService) ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Team], error) {
+	return pagination.NewPageResponse([]*organization.Team{}, 0, filter), nil
+}
+
 func (m *MockService) InviteMember(ctx context.Context, orgID xid.ID, req *organization.InviteMemberRequest, inviterUserID xid.ID) (*organization.Invitation, error) {
 	if m.InviteMemberError != nil {
 		return nil, m.InviteMemberError
@@ -414,6 +445,19 @@ func (m *MockService) ResendInvitation(ctx context.Context, id, resenderUserID x
 
 func (m *MockService) CleanupExpiredInvitations(ctx context.Context) (int, error) {
 	return 0, nil
+}
+
+// RBAC Permission methods
+func (m *MockService) CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error) {
+	return true, nil // Mock always allows
+}
+
+func (m *MockService) CheckPermissionWithContext(ctx context.Context, orgID, userID xid.ID, action, resource string, contextVars map[string]string) (bool, error) {
+	return true, nil // Mock always allows
+}
+
+func (m *MockService) RequirePermission(ctx context.Context, orgID, userID xid.ID, action, resource string) error {
+	return nil // Mock never denies
 }
 
 // Type assertion to ensure MockService implements CompositeOrganizationService

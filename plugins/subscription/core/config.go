@@ -20,6 +20,9 @@ type Config struct {
 	// Seat management
 	AutoSyncSeats bool `json:"autoSyncSeats"` // Auto-update quantity based on org members
 
+	// Plan sync settings
+	AutoSyncPlans bool `json:"autoSyncPlans"` // Auto-sync plans to payment provider on create/update
+
 	// Provider configuration
 	Provider     string       `json:"provider"` // stripe, paddle, etc.
 	StripeConfig StripeConfig `json:"stripe"`
@@ -52,6 +55,7 @@ func DefaultConfig() Config {
 		TrialAllowedPlans:    []string{},
 		GracePeriodDays:      7,
 		AutoSyncSeats:        false,
+		AutoSyncPlans:        false, // Default to false for backward compatibility
 		Provider:             "stripe",
 		WebhookTolerance:     300, // 5 minutes
 		UsageReportBatchSize: 100,

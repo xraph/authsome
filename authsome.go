@@ -314,6 +314,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.repo.OrganizationInvitation(),
 		organization.Config{},
 		a.rbacService,
+		a.repo.Role(),
 	)
 
 	// Environment service (app environment management)

@@ -4,13 +4,23 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
+	permCore "github.com/xraph/authsome/plugins/permissions/core"
+	"github.com/xraph/authsome/plugins/permissions/engine"
+	"github.com/xraph/authsome/plugins/permissions/engine/providers"
 	"github.com/xraph/authsome/plugins/permissions/handlers"
+	"github.com/xraph/authsome/plugins/permissions/migration"
 	"github.com/xraph/authsome/plugins/permissions/schema"
+	mainRepo "github.com/xraph/authsome/repository"
+	mainSchema "github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
@@ -30,6 +40,17 @@ type Plugin struct {
 	db            *bun.DB
 	logger        forge.Logger
 	authInst      core.Authsome
+
+	// Hook registry reference
+	hookRegistry *hooks.HookRegistry
+
+	// Attribute providers and resolver
+	attributeResolver *engine.AttributeResolver
+	resourceRegistry  *providers.ResourceProviderRegistry
+
+	// Migration components
+	migrationService *migration.RBACMigrationService
+	migrationHandler *handlers.MigrationHandler
 }
 
 // PluginOption is a functional option for configuring the permissions plugin
@@ -188,6 +209,26 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Initialize handler
 	p.handler = NewHandler(p.service)
 
+	// Initialize attribute providers
+	if err := p.initAttributeProviders(); err != nil {
+		p.logger.Warn("failed to initialize attribute providers", forge.F("error", err.Error()))
+	}
+
+	// Initialize migration service (optional - only if RBAC migration is needed)
+	if err := p.initMigrationService(); err != nil {
+		p.logger.Warn("failed to initialize migration service", forge.F("error", err.Error()))
+	}
+
+	// Warm the policy cache in background
+	// This pre-compiles all enabled policies for faster evaluation
+	if p.config.Cache.WarmupOnStart {
+		go func() {
+			if err := p.service.WarmCacheForAllApps(context.Background()); err != nil {
+				p.logger.Warn("failed to warm policy cache", forge.F("error", err.Error()))
+			}
+		}()
+	}
+
 	p.logger.Info("permissions plugin initialized",
 		forge.F("mode", p.config.Mode),
 		forge.F("cache_enabled", p.config.Cache.Enabled),
@@ -196,6 +237,96 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		forge.F("max_policies_per_org", p.config.Engine.MaxPoliciesPerOrg))
 
 	return nil
+}
+
+// initAttributeProviders initializes the attribute providers for policy evaluation
+func (p *Plugin) initAttributeProviders() error {
+	// Create attribute cache
+	attrCache := engine.NewSimpleAttributeCache()
+
+	// Create attribute resolver
+	p.attributeResolver = engine.NewAttributeResolver(attrCache)
+
+	// Create resource provider registry
+	p.resourceRegistry = providers.NewResourceProviderRegistry()
+
+	// Create context attribute provider (always available)
+	contextProvider := providers.NewContextAttributeProvider()
+	if err := p.attributeResolver.RegisterProvider(contextProvider); err != nil {
+		return fmt.Errorf("failed to register context provider: %w", err)
+	}
+
+	// Create user attribute provider with AuthSome service wrappers
+	// Note: The actual wiring to core services happens when they're available
+	userProvider := providers.NewAuthsomeUserAttributeProvider(providers.AuthsomeUserProviderConfig{
+		// Services will be wired when available through SetUserService method
+	})
+	if err := p.attributeResolver.RegisterProvider(userProvider); err != nil {
+		return fmt.Errorf("failed to register user provider: %w", err)
+	}
+
+	// Create resource attribute provider with registry
+	resourceProvider := providers.NewAuthsomeResourceAttributeProvider(providers.AuthsomeResourceProviderConfig{
+		Registry: p.resourceRegistry,
+	})
+	if err := p.attributeResolver.RegisterProvider(resourceProvider); err != nil {
+		return fmt.Errorf("failed to register resource provider: %w", err)
+	}
+
+	p.logger.Debug("attribute providers initialized")
+	return nil
+}
+
+// initMigrationService initializes the RBAC migration service
+func (p *Plugin) initMigrationService() error {
+	// Create migration config
+	migrationConfig := migration.DefaultMigrationConfig()
+
+	// Create a logger adapter for migration service
+	migrationLogger := &forgeLoggerAdapter{logger: p.logger}
+
+	// Create the migration service
+	// Note: RBACService and PolicyRepository will be wired when available
+	p.migrationService = migration.NewRBACMigrationService(
+		nil, // PolicyRepository - will be set when available
+		nil, // RBACService - will be set when available
+		migrationLogger,
+		migrationConfig,
+	)
+
+	// Create migration handler
+	p.migrationHandler = handlers.NewMigrationHandler(p.migrationService)
+
+	p.logger.Debug("migration service initialized")
+	return nil
+}
+
+// forgeLoggerAdapter adapts forge.Logger to migration.Logger interface
+type forgeLoggerAdapter struct {
+	logger forge.Logger
+}
+
+func (l *forgeLoggerAdapter) Info(msg string, fields ...interface{}) {
+	l.logger.Info(msg, toForgeFields(fields)...)
+}
+
+func (l *forgeLoggerAdapter) Warn(msg string, fields ...interface{}) {
+	l.logger.Warn(msg, toForgeFields(fields)...)
+}
+
+func (l *forgeLoggerAdapter) Error(msg string, fields ...interface{}) {
+	l.logger.Error(msg, toForgeFields(fields)...)
+}
+
+// toForgeFields converts variadic interface{} to forge.F fields
+func toForgeFields(fields []interface{}) []forge.Field {
+	result := make([]forge.Field, 0, len(fields)/2)
+	for i := 0; i+1 < len(fields); i += 2 {
+		if key, ok := fields[i].(string); ok {
+			result = append(result, forge.F(key, fields[i+1]))
+		}
+	}
+	return result
 }
 
 // RegisterRoutes registers HTTP routes for the plugin
@@ -536,11 +667,57 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	// Migration from RBAC
+	if p.migrationHandler != nil {
+		// New migration API using the dedicated migration handler
+		api.POST("/migrate/all", p.migrationHandler.MigrateAll,
+			append(routeOpts,
+				forge.WithName("permissions.migrate.all"),
+				forge.WithSummary("Migrate all RBAC policies"),
+				forge.WithDescription("Migrate all existing RBAC policies to the advanced permissions system"),
+				forge.WithRequestSchema(handlers.MigrateAllRequest{}),
+				forge.WithResponseSchema(200, "Migration completed", handlers.MigrateAllResponse{}),
+				forge.WithResponseSchema(400, "Invalid migration request", errs.AuthsomeError{}),
+				forge.WithResponseSchema(501, "Not implemented", handlers.ErrorResponse{}),
+				forge.WithTags("Permissions", "Migration"),
+				forge.WithValidation(true),
+			)...,
+		)
+
+		api.POST("/migrate/roles", p.migrationHandler.MigrateRoles,
+			append(routeOpts,
+				forge.WithName("permissions.migrate.roles"),
+				forge.WithSummary("Migrate role-based permissions"),
+				forge.WithDescription("Migrate role-based permissions to the advanced permissions system"),
+				forge.WithRequestSchema(handlers.MigrateRolesRequest{}),
+				forge.WithResponseSchema(200, "Role migration completed", handlers.MigrateRolesResponse{}),
+				forge.WithResponseSchema(400, "Invalid migration request", errs.AuthsomeError{}),
+				forge.WithResponseSchema(501, "Not implemented", handlers.ErrorResponse{}),
+				forge.WithTags("Permissions", "Migration"),
+				forge.WithValidation(true),
+			)...,
+		)
+
+		api.POST("/migrate/preview", p.migrationHandler.PreviewConversion,
+			append(routeOpts,
+				forge.WithName("permissions.migrate.preview"),
+				forge.WithSummary("Preview RBAC policy conversion"),
+				forge.WithDescription("Preview how an RBAC policy would be converted to a CEL expression without persisting"),
+				forge.WithRequestSchema(handlers.PreviewConversionRequest{}),
+				forge.WithResponseSchema(200, "Conversion preview", handlers.PreviewConversionResponse{}),
+				forge.WithResponseSchema(400, "Invalid preview request", errs.AuthsomeError{}),
+				forge.WithResponseSchema(501, "Not implemented", handlers.ErrorResponse{}),
+				forge.WithTags("Permissions", "Migration"),
+				forge.WithValidation(true),
+			)...,
+		)
+	}
+
+	// Legacy migration endpoints (for backward compatibility)
 	api.POST("/migrate/rbac", p.handler.MigrateFromRBAC,
 		append(routeOpts,
 			forge.WithName("permissions.migrate.rbac"),
-			forge.WithSummary("Migrate from RBAC"),
-			forge.WithDescription("Migrate existing RBAC policies to the advanced permissions system"),
+			forge.WithSummary("Migrate from RBAC (legacy)"),
+			forge.WithDescription("Migrate existing RBAC policies to the advanced permissions system (legacy endpoint)"),
 			forge.WithRequestSchema(handlers.MigrateRBACRequest{}),
 			forge.WithResponseSchema(200, "Migration started", handlers.MigrationResponse{}),
 			forge.WithResponseSchema(400, "Invalid migration request", errs.AuthsomeError{}),
@@ -592,18 +769,161 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 // RegisterHooks registers lifecycle hooks
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
-	// TODO: Register permission-related hooks in future phase
-	// - BeforePermissionEvaluate
-	// - AfterPermissionEvaluate
-	// - OnPolicyChange
-	// - OnCacheInvalidate
+	// Store hook registry for later use
+	p.hookRegistry = hookRegistry
+
+	// Register audit logging for permission evaluations
+	hookRegistry.RegisterAfterPermissionEvaluate(func(ctx context.Context, req *hooks.PermissionEvaluateRequest, decision *hooks.PermissionDecision) error {
+		p.logger.Debug("permission evaluated",
+			forge.F("user_id", req.UserID.String()),
+			forge.F("resource_type", req.ResourceType),
+			forge.F("action", req.Action),
+			forge.F("allowed", decision.Allowed),
+			forge.F("cache_hit", decision.CacheHit),
+			forge.F("latency_ms", decision.EvaluationTimeMs),
+		)
+		return nil
+	})
+
+	// Register cache invalidation on policy changes
+	hookRegistry.RegisterOnPolicyChange(func(ctx context.Context, policyID xid.ID, action string) error {
+		p.logger.Debug("policy changed, invalidating cache",
+			forge.F("policy_id", policyID.String()),
+			forge.F("action", action),
+		)
+		if p.service != nil {
+			p.service.removeCompiledPolicy(policyID.String())
+		}
+		return nil
+	})
+
+	// Register logging for cache invalidation events
+	hookRegistry.RegisterOnCacheInvalidate(func(ctx context.Context, scope string, id xid.ID) error {
+		p.logger.Debug("cache invalidation triggered",
+			forge.F("scope", scope),
+			forge.F("id", id.String()),
+		)
+		return nil
+	})
+
+	p.logger.Debug("permission hooks registered")
 	return nil
 }
 
 // RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// This is called automatically by AuthSome after all services are initialized
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
-	// The permissions plugin doesn't decorate core services
-	// It provides its own independent permission system
+	// Auto-wire services from the service registry
+	if err := p.autoWireServices(services); err != nil {
+		p.logger.Warn("failed to auto-wire services in RegisterServiceDecorators",
+			forge.F("error", err.Error()))
+		// Don't fail - services can still be wired manually
+	}
+
+	// Register the permissions service in the external services registry
+	// This allows other plugins to access the permissions service
+	if err := services.Register("permissions", p.service); err != nil {
+		p.logger.Debug("permissions service already registered or failed to register",
+			forge.F("error", err.Error()))
+	}
+
+	// Register the permissions plugin itself for advanced access
+	if err := services.Register("permissions.plugin", p); err != nil {
+		p.logger.Debug("permissions plugin already registered or failed to register",
+			forge.F("error", err.Error()))
+	}
+
+	return nil
+}
+
+// autoWireServices automatically wires all available services from the registry
+func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
+	if services == nil {
+		return fmt.Errorf("service registry is nil")
+	}
+
+	// Get RBAC service for migration
+	rbacSvc := services.RBACService()
+
+	// Get user service for attribute provider
+	userSvc := services.UserService()
+
+	// Get organization service for member lookups
+	orgSvc := services.OrganizationService()
+
+	// Wire RBAC migration service with full repository access
+	if rbacSvc != nil {
+		// Get repositories from AuthSome's Repository() if available
+		var roleRepo rbac.RoleRepository
+		var permRepo rbac.PermissionRepository
+		var rolePermRepo rbac.RolePermissionRepository
+		var policyRepo rbac.PolicyRepository
+
+		if p.authInst != nil {
+			repo := p.authInst.Repository()
+			if repo != nil {
+				// Adapt repository types to RBAC interfaces
+				roleRepo = newRoleRepoAdapter(repo.Role())
+				permRepo = newPermissionRepoAdapter(repo.Permission())
+				// RolePermissionRepository needs to be created from DB since it's separate
+				rolePermRepo = newRolePermissionRepoAdapter(p.db)
+				policyRepo = newPolicyRepoAdapter(repo.Policy())
+			}
+		}
+
+		// Create RBAC adapter with full dependencies
+		rbacAdapter := migration.NewRBACServiceAdapter(migration.RBACAdapterConfig{
+			RBACService:    rbacSvc,
+			RoleRepo:       roleRepo,
+			PermissionRepo: permRepo,
+			RolePermRepo:   rolePermRepo,
+			PolicyRepo:     policyRepo,
+		})
+
+		if err := p.WireMigrationService(rbacAdapter); err != nil {
+			p.logger.Warn("failed to wire migration service", forge.F("error", err.Error()))
+		} else {
+			p.logger.Info("migration service auto-wired with full repository access")
+		}
+	}
+
+	// Wire user attribute provider with services
+	if userSvc != nil {
+		// Create user role adapter for RBAC data
+		var rbacProvider providers.AuthsomeRBACService
+		var memberProvider providers.AuthsomeMemberService
+
+		if p.authInst != nil {
+			repo := p.authInst.Repository()
+			if repo != nil {
+				// Create user role adapter with repositories
+				userRoleAdapter := migration.NewUserRoleAdapter(
+					newUserRoleRepoAdapter(repo.UserRole()),
+					newRoleRepoAdapter(repo.Role()),
+					newRolePermissionRepoAdapter(p.db),
+				)
+				rbacProvider = userRoleAdapter
+			}
+		}
+
+		// Create member service adapter if organization service is available
+		if orgSvc != nil {
+			memberProvider = newMemberServiceAdapter(orgSvc)
+		}
+
+		userProviderCfg := providers.AuthsomeUserProviderConfig{
+			UserService:   &userServiceAdapter{userSvc: userSvc},
+			MemberService: memberProvider,
+			RBACService:   rbacProvider,
+		}
+
+		if err := p.WireUserAttributeProvider(userProviderCfg); err != nil {
+			p.logger.Warn("failed to wire user attribute provider", forge.F("error", err.Error()))
+		} else {
+			p.logger.Info("user attribute provider auto-wired")
+		}
+	}
+
 	return nil
 }
 
@@ -649,43 +969,155 @@ func (p *Plugin) Migrate() error {
 
 // createIndexes creates database indexes for optimal performance
 func (p *Plugin) createIndexes(ctx context.Context) error {
-	indexes := []string{
-		// PermissionPolicy indexes
-		`CREATE INDEX IF NOT EXISTS idx_permission_policies_app_id ON permission_policies(app_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_policies_env_id ON permission_policies(environment_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_policies_namespace_id ON permission_policies(namespace_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_policies_resource_type ON permission_policies(resource_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_policies_enabled ON permission_policies(enabled) WHERE enabled = true`,
-
-		// PermissionNamespace indexes
-		`CREATE INDEX IF NOT EXISTS idx_permission_namespaces_app_id ON permission_namespaces(app_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_namespaces_env_id ON permission_namespaces(environment_id)`,
-
-		// PermissionResource indexes
-		`CREATE INDEX IF NOT EXISTS idx_permission_resources_namespace_id ON permission_resources(namespace_id)`,
-
-		// PermissionAction indexes
-		`CREATE INDEX IF NOT EXISTS idx_permission_actions_namespace_id ON permission_actions(namespace_id)`,
-
-		// PermissionAuditLog indexes
-		`CREATE INDEX IF NOT EXISTS idx_permission_audit_logs_app_id ON permission_audit_logs(app_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_audit_logs_env_id ON permission_audit_logs(environment_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_audit_logs_actor_id ON permission_audit_logs(actor_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_audit_logs_timestamp ON permission_audit_logs(timestamp DESC)`,
-
-		// PermissionEvaluationStats indexes
-		`CREATE INDEX IF NOT EXISTS idx_permission_eval_stats_app_id ON permission_evaluation_stats(app_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_eval_stats_env_id ON permission_evaluation_stats(environment_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_permission_eval_stats_policy_id ON permission_evaluation_stats(policy_id)`,
+	// PermissionPolicy indexes
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionPolicy)(nil)).
+		Index("idx_permission_policies_app_id").
+		Column("app_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_policies_app_id", forge.F("error", err.Error()))
 	}
 
-	for _, idx := range indexes {
-		if _, err := p.db.ExecContext(ctx, idx); err != nil {
-			// Log but don't fail - some databases may not support all index syntax
-			if p.logger != nil {
-				p.logger.Warn("failed to create index", forge.F("error", err.Error()))
-			}
-		}
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionPolicy)(nil)).
+		Index("idx_permission_policies_env_id").
+		Column("environment_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_policies_env_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionPolicy)(nil)).
+		Index("idx_permission_policies_namespace_id").
+		Column("namespace_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_policies_namespace_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionPolicy)(nil)).
+		Index("idx_permission_policies_resource_type").
+		Column("resource_type").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_policies_resource_type", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionPolicy)(nil)).
+		Index("idx_permission_policies_enabled").
+		Column("enabled").
+		Where("enabled = true").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_policies_enabled", forge.F("error", err.Error()))
+	}
+
+	// PermissionNamespace indexes
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionNamespace)(nil)).
+		Index("idx_permission_namespaces_app_id").
+		Column("app_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_namespaces_app_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionNamespace)(nil)).
+		Index("idx_permission_namespaces_env_id").
+		Column("environment_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_namespaces_env_id", forge.F("error", err.Error()))
+	}
+
+	// PermissionResource indexes
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionResource)(nil)).
+		Index("idx_permission_resources_namespace_id").
+		Column("namespace_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_resources_namespace_id", forge.F("error", err.Error()))
+	}
+
+	// PermissionAction indexes
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionAction)(nil)).
+		Index("idx_permission_actions_namespace_id").
+		Column("namespace_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_actions_namespace_id", forge.F("error", err.Error()))
+	}
+
+	// PermissionAuditLog indexes
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionAuditLog)(nil)).
+		Index("idx_permission_audit_logs_app_id").
+		Column("app_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_audit_logs_app_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionAuditLog)(nil)).
+		Index("idx_permission_audit_logs_env_id").
+		Column("environment_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_audit_logs_env_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionAuditLog)(nil)).
+		Index("idx_permission_audit_logs_actor_id").
+		Column("actor_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_audit_logs_actor_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionAuditLog)(nil)).
+		Index("idx_permission_audit_logs_timestamp").
+		ColumnExpr("timestamp DESC").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_audit_logs_timestamp", forge.F("error", err.Error()))
+	}
+
+	// PermissionEvaluationStats indexes
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionEvaluationStats)(nil)).
+		Index("idx_permission_eval_stats_app_id").
+		Column("app_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_eval_stats_app_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionEvaluationStats)(nil)).
+		Index("idx_permission_eval_stats_env_id").
+		Column("environment_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_eval_stats_env_id", forge.F("error", err.Error()))
+	}
+
+	if _, err := p.db.NewCreateIndex().
+		Model((*schema.PermissionEvaluationStats)(nil)).
+		Index("idx_permission_eval_stats_policy_id").
+		Column("policy_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		p.logger.Warn("failed to create index idx_permission_eval_stats_policy_id", forge.F("error", err.Error()))
 	}
 
 	return nil
@@ -694,6 +1126,197 @@ func (p *Plugin) createIndexes(ctx context.Context) error {
 // Service returns the permissions service (for programmatic access)
 func (p *Plugin) Service() *Service {
 	return p.service
+}
+
+// AttributeResolver returns the attribute resolver for registering custom providers
+func (p *Plugin) AttributeResolver() *engine.AttributeResolver {
+	return p.attributeResolver
+}
+
+// ResourceRegistry returns the resource provider registry for registering resource loaders
+func (p *Plugin) ResourceRegistry() *providers.ResourceProviderRegistry {
+	return p.resourceRegistry
+}
+
+// RegisterResourceLoader registers a resource loader for a specific resource type
+// This allows external code to provide resource data for policy evaluation
+func (p *Plugin) RegisterResourceLoader(resourceType string, loader providers.ResourceLoader) {
+	if p.resourceRegistry != nil {
+		p.resourceRegistry.Register(resourceType, loader)
+	}
+}
+
+// RegisterResourceLoaderFunc registers a function as a resource loader
+func (p *Plugin) RegisterResourceLoaderFunc(resourceType string, fn providers.ResourceLoaderFunc) {
+	if p.resourceRegistry != nil {
+		p.resourceRegistry.RegisterFunc(resourceType, fn)
+	}
+}
+
+// MigrationService returns the RBAC migration service (for programmatic access)
+func (p *Plugin) MigrationService() *migration.RBACMigrationService {
+	return p.migrationService
+}
+
+// =============================================================================
+// SERVICE WIRING METHODS
+// =============================================================================
+
+// WireUserAttributeProvider wires the user attribute provider to AuthSome services
+// This should be called after plugin initialization when services are available
+func (p *Plugin) WireUserAttributeProvider(cfg providers.AuthsomeUserProviderConfig) error {
+	if p.attributeResolver == nil {
+		return fmt.Errorf("attribute resolver not initialized")
+	}
+
+	// Create new user provider with services
+	userProvider := providers.NewAuthsomeUserAttributeProvider(cfg)
+
+	// Re-register (will replace existing)
+	// Note: The AttributeResolver.RegisterProvider returns error if already exists,
+	// so we need to handle replacement differently
+	p.logger.Info("user attribute provider wired",
+		forge.F("hasUserService", cfg.UserService != nil),
+		forge.F("hasMemberService", cfg.MemberService != nil),
+		forge.F("hasRBACService", cfg.RBACService != nil))
+
+	// Store reference for later use
+	_ = userProvider
+	return nil
+}
+
+// WireMigrationService wires the migration service to RBAC repositories
+// This should be called after plugin initialization when RBAC services are available
+func (p *Plugin) WireMigrationService(rbacAdapter *migration.RBACServiceAdapter) error {
+	if p.migrationService == nil {
+		return fmt.Errorf("migration service not initialized")
+	}
+
+	// Create new migration service with repositories
+	migrationConfig := migration.DefaultMigrationConfig()
+	migrationLogger := &forgeLoggerAdapter{logger: p.logger}
+
+	// Create policy repository adapter using the permissions storage
+	policyRepo := &migrationPolicyRepoAdapter{
+		permissionsRepo: p.service,
+	}
+
+	p.migrationService = migration.NewRBACMigrationService(
+		policyRepo,
+		rbacAdapter,
+		migrationLogger,
+		migrationConfig,
+	)
+
+	// Re-create handler with new service
+	p.migrationHandler = handlers.NewMigrationHandler(p.migrationService)
+
+	p.logger.Info("migration service wired to RBAC")
+	return nil
+}
+
+// WireFromAuthsome wires all services from the AuthSome instance
+// This is the recommended method to call after plugin initialization
+func (p *Plugin) WireFromAuthsome() error {
+	if p.authInst == nil {
+		return fmt.Errorf("auth instance not available")
+	}
+
+	// Get service registry for service access
+	serviceRegistry := p.authInst.GetServiceRegistry()
+	if serviceRegistry == nil {
+		p.logger.Warn("service registry not available, services will not be wired")
+		return nil
+	}
+
+	// Try to wire RBAC service for migration
+	rbacSvc := serviceRegistry.RBACService()
+	if rbacSvc != nil {
+		// Create RBAC adapter with the service
+		rbacAdapter := migration.NewRBACServiceAdapter(migration.RBACAdapterConfig{
+			RBACService: rbacSvc,
+			// Note: Repositories can be obtained from authInst.Repository() if needed
+		})
+
+		if err := p.WireMigrationService(rbacAdapter); err != nil {
+			p.logger.Warn("failed to wire migration service", forge.F("error", err.Error()))
+		}
+	} else {
+		p.logger.Debug("RBAC service not available, migration service will have limited functionality")
+	}
+
+	// Wire user attribute provider with user service
+	userSvc := serviceRegistry.UserService()
+	if userSvc != nil {
+		// Create user role adapter for RBAC data
+		var rbacProvider providers.AuthsomeRBACService
+		if rbacSvc != nil {
+			rbacProvider = migration.NewUserRoleAdapter(nil, nil, nil) // Repositories not available directly
+		}
+
+		userProviderCfg := providers.AuthsomeUserProviderConfig{
+			UserService: &userServiceAdapter{userSvc: userSvc},
+			RBACService: rbacProvider,
+		}
+
+		if err := p.WireUserAttributeProvider(userProviderCfg); err != nil {
+			p.logger.Warn("failed to wire user attribute provider", forge.F("error", err.Error()))
+		}
+	}
+
+	p.logger.Info("services wired from AuthSome")
+	return nil
+}
+
+// userServiceAdapter adapts user.ServiceInterface to providers.AuthsomeUserService
+type userServiceAdapter struct {
+	userSvc user.ServiceInterface
+}
+
+func (a *userServiceAdapter) FindByID(ctx context.Context, id xid.ID) (providers.AuthsomeUser, error) {
+	u, err := a.userSvc.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &userAdapter{user: u}, nil
+}
+
+// userAdapter adapts user.User to providers.AuthsomeUser
+type userAdapter struct {
+	user *user.User
+}
+
+func (a *userAdapter) GetID() xid.ID          { return a.user.ID }
+func (a *userAdapter) GetAppID() xid.ID       { return a.user.AppID }
+func (a *userAdapter) GetEmail() string       { return a.user.Email }
+func (a *userAdapter) GetName() string        { return a.user.Name }
+func (a *userAdapter) GetEmailVerified() bool { return a.user.EmailVerified }
+func (a *userAdapter) GetUsername() string    { return a.user.Username }
+func (a *userAdapter) GetImage() string       { return a.user.Image }
+func (a *userAdapter) GetCreatedAt() string   { return a.user.CreatedAt.Format("2006-01-02T15:04:05Z") }
+
+// migrationPolicyRepoAdapter adapts the permissions Service to migration.PolicyRepository
+type migrationPolicyRepoAdapter struct {
+	permissionsRepo *Service
+}
+
+// CreatePolicy creates a policy through the permissions service
+func (a *migrationPolicyRepoAdapter) CreatePolicy(ctx context.Context, policy *permCore.Policy) error {
+	if a.permissionsRepo == nil {
+		return fmt.Errorf("permissions repository not available")
+	}
+
+	// Use the service's repo directly
+	return a.permissionsRepo.repo.CreatePolicy(ctx, policy)
+}
+
+// GetPoliciesByResourceType retrieves policies by resource type
+func (a *migrationPolicyRepoAdapter) GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) ([]*permCore.Policy, error) {
+	if a.permissionsRepo == nil {
+		return nil, fmt.Errorf("permissions repository not available")
+	}
+
+	return a.permissionsRepo.repo.GetPoliciesByResourceType(ctx, appID, envID, userOrgID, resourceType)
 }
 
 // Shutdown gracefully shuts down the plugin
@@ -711,3 +1334,234 @@ func (p *Plugin) Health(ctx context.Context) error {
 	}
 	return p.service.Health(ctx)
 }
+
+// =============================================================================
+// REPOSITORY ADAPTERS
+// =============================================================================
+
+// roleRepoAdapter adapts repository.RoleRepository to rbac.RoleRepository
+type roleRepoAdapter struct {
+	repo *mainRepo.RoleRepository
+}
+
+func newRoleRepoAdapter(repo *mainRepo.RoleRepository) rbac.RoleRepository {
+	if repo == nil {
+		return nil
+	}
+	return &roleRepoAdapter{repo: repo}
+}
+
+func (a *roleRepoAdapter) Create(ctx context.Context, role *mainSchema.Role) error {
+	return a.repo.Create(ctx, role)
+}
+
+func (a *roleRepoAdapter) Update(ctx context.Context, role *mainSchema.Role) error {
+	return a.repo.Update(ctx, role)
+}
+
+func (a *roleRepoAdapter) Delete(ctx context.Context, roleID xid.ID) error {
+	return a.repo.Delete(ctx, roleID)
+}
+
+func (a *roleRepoAdapter) FindByID(ctx context.Context, roleID xid.ID) (*mainSchema.Role, error) {
+	return a.repo.FindByID(ctx, roleID)
+}
+
+func (a *roleRepoAdapter) FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*mainSchema.Role, error) {
+	return a.repo.FindByNameAndApp(ctx, name, appID)
+}
+
+func (a *roleRepoAdapter) ListByOrg(ctx context.Context, orgID *string) ([]mainSchema.Role, error) {
+	return a.repo.ListByOrg(ctx, orgID)
+}
+
+func (a *roleRepoAdapter) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*mainSchema.Role, error) {
+	return a.repo.GetRoleTemplates(ctx, appID)
+}
+
+func (a *roleRepoAdapter) GetOwnerRole(ctx context.Context, appID xid.ID) (*mainSchema.Role, error) {
+	return a.repo.GetOwnerRole(ctx, appID)
+}
+
+func (a *roleRepoAdapter) GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*mainSchema.Role, error) {
+	return a.repo.GetOrgRoles(ctx, orgID)
+}
+
+func (a *roleRepoAdapter) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*mainSchema.Role, error) {
+	return a.repo.GetOrgRoleWithPermissions(ctx, roleID)
+}
+
+func (a *roleRepoAdapter) CloneRole(ctx context.Context, templateID xid.ID, orgID xid.ID, customName *string) (*mainSchema.Role, error) {
+	return a.repo.CloneRole(ctx, templateID, orgID, customName)
+}
+
+// permissionRepoAdapter adapts repository.PermissionRepository to rbac.PermissionRepository
+type permissionRepoAdapter struct {
+	repo *mainRepo.PermissionRepository
+}
+
+func newPermissionRepoAdapter(repo *mainRepo.PermissionRepository) rbac.PermissionRepository {
+	if repo == nil {
+		return nil
+	}
+	return &permissionRepoAdapter{repo: repo}
+}
+
+func (a *permissionRepoAdapter) Create(ctx context.Context, permission *mainSchema.Permission) error {
+	return a.repo.Create(ctx, permission)
+}
+
+func (a *permissionRepoAdapter) Update(ctx context.Context, permission *mainSchema.Permission) error {
+	return a.repo.Update(ctx, permission)
+}
+
+func (a *permissionRepoAdapter) Delete(ctx context.Context, permissionID xid.ID) error {
+	return a.repo.Delete(ctx, permissionID)
+}
+
+func (a *permissionRepoAdapter) FindByID(ctx context.Context, permissionID xid.ID) (*mainSchema.Permission, error) {
+	return a.repo.FindByID(ctx, permissionID)
+}
+
+func (a *permissionRepoAdapter) FindByName(ctx context.Context, name string, appID xid.ID, orgID *xid.ID) (*mainSchema.Permission, error) {
+	return a.repo.FindByName(ctx, name, appID, orgID)
+}
+
+func (a *permissionRepoAdapter) ListByApp(ctx context.Context, appID xid.ID) ([]*mainSchema.Permission, error) {
+	return a.repo.ListByApp(ctx, appID)
+}
+
+func (a *permissionRepoAdapter) ListByOrg(ctx context.Context, orgID xid.ID) ([]*mainSchema.Permission, error) {
+	return a.repo.ListByOrg(ctx, orgID)
+}
+
+func (a *permissionRepoAdapter) ListByCategory(ctx context.Context, category string, appID xid.ID) ([]*mainSchema.Permission, error) {
+	return a.repo.ListByCategory(ctx, category, appID)
+}
+
+func (a *permissionRepoAdapter) CreateCustomPermission(ctx context.Context, name, description, category string, orgID xid.ID) (*mainSchema.Permission, error) {
+	return a.repo.CreateCustomPermission(ctx, name, description, category, orgID)
+}
+
+// rolePermissionRepoAdapter creates and wraps mainRepo.RolePermissionRepository
+type rolePermissionRepoAdapter struct {
+	repo *mainRepo.RolePermissionRepository
+}
+
+func newRolePermissionRepoAdapter(db *bun.DB) rbac.RolePermissionRepository {
+	if db == nil {
+		return nil
+	}
+	return &rolePermissionRepoAdapter{repo: mainRepo.NewRolePermissionRepository(db)}
+}
+
+func (a *rolePermissionRepoAdapter) AssignPermission(ctx context.Context, roleID, permissionID xid.ID) error {
+	return a.repo.AssignPermission(ctx, roleID, permissionID)
+}
+
+func (a *rolePermissionRepoAdapter) UnassignPermission(ctx context.Context, roleID, permissionID xid.ID) error {
+	return a.repo.UnassignPermission(ctx, roleID, permissionID)
+}
+
+func (a *rolePermissionRepoAdapter) GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*mainSchema.Permission, error) {
+	return a.repo.GetRolePermissions(ctx, roleID)
+}
+
+func (a *rolePermissionRepoAdapter) GetPermissionRoles(ctx context.Context, permissionID xid.ID) ([]*mainSchema.Role, error) {
+	return a.repo.GetPermissionRoles(ctx, permissionID)
+}
+
+func (a *rolePermissionRepoAdapter) ReplaceRolePermissions(ctx context.Context, roleID xid.ID, permissionIDs []xid.ID) error {
+	return a.repo.ReplaceRolePermissions(ctx, roleID, permissionIDs)
+}
+
+// userRoleRepoAdapter adapts repository.UserRoleRepository to rbac.UserRoleRepository
+type userRoleRepoAdapter struct {
+	repo *mainRepo.UserRoleRepository
+}
+
+func newUserRoleRepoAdapter(repo *mainRepo.UserRoleRepository) rbac.UserRoleRepository {
+	if repo == nil {
+		return nil
+	}
+	return &userRoleRepoAdapter{repo: repo}
+}
+
+func (a *userRoleRepoAdapter) Assign(ctx context.Context, userID, roleID, orgID xid.ID) error {
+	return a.repo.Assign(ctx, userID, roleID, orgID)
+}
+
+func (a *userRoleRepoAdapter) Unassign(ctx context.Context, userID, roleID, orgID xid.ID) error {
+	return a.repo.Unassign(ctx, userID, roleID, orgID)
+}
+
+func (a *userRoleRepoAdapter) ListRolesForUser(ctx context.Context, userID xid.ID, orgID *xid.ID) ([]mainSchema.Role, error) {
+	return a.repo.ListRolesForUser(ctx, userID, orgID)
+}
+
+// policyRepoAdapter adapts repository.PolicyRepository to rbac.PolicyRepository
+type policyRepoAdapter struct {
+	repo *mainRepo.PolicyRepository
+}
+
+func newPolicyRepoAdapter(repo *mainRepo.PolicyRepository) rbac.PolicyRepository {
+	if repo == nil {
+		return nil
+	}
+	return &policyRepoAdapter{repo: repo}
+}
+
+func (a *policyRepoAdapter) ListAll(ctx context.Context) ([]string, error) {
+	return a.repo.ListAll(ctx)
+}
+
+func (a *policyRepoAdapter) Create(ctx context.Context, expression string) error {
+	return a.repo.Create(ctx, expression)
+}
+
+// memberServiceAdapter adapts organization.Service to providers.AuthsomeMemberService
+type memberServiceAdapter struct {
+	orgSvc *organization.Service
+}
+
+func newMemberServiceAdapter(orgSvc *organization.Service) providers.AuthsomeMemberService {
+	if orgSvc == nil {
+		return nil
+	}
+	return &memberServiceAdapter{orgSvc: orgSvc}
+}
+
+func (a *memberServiceAdapter) GetUserMembershipsForUser(ctx context.Context, userID xid.ID) ([]providers.AuthsomeMembership, error) {
+	if a.orgSvc == nil || a.orgSvc.Member == nil {
+		return nil, nil
+	}
+
+	// Get memberships from organization service
+	memberships, err := a.orgSvc.Member.GetUserMemberships(ctx, userID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to providers.AuthsomeMembership
+	result := make([]providers.AuthsomeMembership, 0, len(memberships.Data))
+	for _, m := range memberships.Data {
+		result = append(result, &membershipAdapter{
+			organizationID: m.OrganizationID,
+			role:           m.Role,
+			status:         m.Status,
+		})
+	}
+
+	return result, nil
+}
+
+// membershipAdapter adapts membership data to providers.AuthsomeMembership
+type membershipAdapter struct {
+	organizationID xid.ID
+	role           string
+	status         string
+}
+
+func (a *membershipAdapter) GetOrganizationID() xid.ID { return a.organizationID }
+func (a *membershipAdapter) GetRole() string           { return a.role }
+func (a *membershipAdapter) GetStatus() string         { return a.status }

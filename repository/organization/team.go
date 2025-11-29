@@ -12,6 +12,33 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
+// teamMemberWithUser holds a team member joined with user data (via organization_members)
+type teamMemberWithUser struct {
+	schema.OrganizationTeamMember
+	UserID          xid.ID `bun:"user_id"`
+	UserName        string `bun:"user_name"`
+	UserEmail       string `bun:"user_email"`
+	UserImage       string `bun:"user_image"`
+	UserUsername    string `bun:"user_username"`
+	UserDisplayName string `bun:"user_display_username"`
+}
+
+// toTeamMemberWithUserInfo converts teamMemberWithUser to organization.TeamMember with UserInfo populated
+func (tm *teamMemberWithUser) toTeamMemberWithUserInfo() *organization.TeamMember {
+	teamMember := organization.FromSchemaTeamMember(&tm.OrganizationTeamMember)
+	if teamMember != nil {
+		teamMember.User = &organization.UserInfo{
+			ID:              tm.UserID,
+			Name:            tm.UserName,
+			Email:           tm.UserEmail,
+			Image:           tm.UserImage,
+			Username:        tm.UserUsername,
+			DisplayUsername: tm.UserDisplayName,
+		}
+	}
+	return teamMember
+}
+
 // organizationTeamRepository implements organization.TeamRepository using Bun
 type organizationTeamRepository struct {
 	db *bun.DB
@@ -161,15 +188,28 @@ func (r *organizationTeamRepository) RemoveMember(ctx context.Context, teamID, m
 
 // ListMembers lists all members of a team with pagination
 func (r *organizationTeamRepository) ListMembers(ctx context.Context, filter *organization.ListTeamMembersFilter) (*pagination.PageResponse[*organization.TeamMember], error) {
-	var schemaTeamMembers []*schema.OrganizationTeamMember
+	var teamMembersWithUsers []*teamMemberWithUser
 
+	// Join team_members -> organization_members -> users to get user info
 	query := r.db.NewSelect().
-		Model(&schemaTeamMembers).
-		Where("team_id = ?", filter.TeamID).
-		Order("joined_at ASC")
+		Model((*schema.OrganizationTeamMember)(nil)).
+		ColumnExpr("uotm.*").
+		ColumnExpr("u.id AS user_id").
+		ColumnExpr("u.name AS user_name").
+		ColumnExpr("u.email AS user_email").
+		ColumnExpr("u.image AS user_image").
+		ColumnExpr("u.username AS user_username").
+		ColumnExpr("u.display_username AS user_display_username").
+		Join("LEFT JOIN organization_members AS om ON om.id = uotm.member_id").
+		Join("LEFT JOIN users AS u ON u.id = om.user_id").
+		Where("uotm.team_id = ?", filter.TeamID).
+		Order("uotm.joined_at ASC")
 
-	// Get total count
-	total, err := query.Count(ctx)
+	// Get total count (separate query for accuracy)
+	countQuery := r.db.NewSelect().
+		Model((*schema.OrganizationTeamMember)(nil)).
+		Where("team_id = ?", filter.TeamID)
+	total, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -177,12 +217,15 @@ func (r *organizationTeamRepository) ListMembers(ctx context.Context, filter *or
 	// Apply pagination
 	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
 
-	if err := query.Scan(ctx); err != nil {
+	if err := query.Scan(ctx, &teamMembersWithUsers); err != nil {
 		return nil, err
 	}
 
-	// Convert to DTOs
-	teamMembers := organization.FromSchemaTeamMembers(schemaTeamMembers)
+	// Convert to DTOs with user info
+	teamMembers := make([]*organization.TeamMember, len(teamMembersWithUsers))
+	for i, tm := range teamMembersWithUsers {
+		teamMembers[i] = tm.toTeamMemberWithUserInfo()
+	}
 
 	return pagination.NewPageResponse(teamMembers, int64(total), &filter.PaginationParams), nil
 }
@@ -206,6 +249,72 @@ func (r *organizationTeamRepository) IsTeamMember(ctx context.Context, teamID, m
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// FindTeamMemberByID retrieves a team member by its ID
+func (r *organizationTeamRepository) FindTeamMemberByID(ctx context.Context, id xid.ID) (*organization.TeamMember, error) {
+	schemaTeamMember := new(schema.OrganizationTeamMember)
+	err := r.db.NewSelect().
+		Model(schemaTeamMember).
+		Where("id = ?", id).
+		Scan(ctx)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("team member not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaTeamMember(schemaTeamMember), nil
+}
+
+// FindTeamMember retrieves a team member by team ID and member ID
+func (r *organizationTeamRepository) FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*organization.TeamMember, error) {
+	schemaTeamMember := new(schema.OrganizationTeamMember)
+	err := r.db.NewSelect().
+		Model(schemaTeamMember).
+		Where("team_id = ? AND member_id = ?", teamID, memberID).
+		Scan(ctx)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("team member not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return organization.FromSchemaTeamMember(schemaTeamMember), nil
+}
+
+// ListMemberTeams retrieves all teams that a member belongs to
+func (r *organizationTeamRepository) ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Team], error) {
+	var schemaTeams []*schema.OrganizationTeam
+
+	// Query teams through the team_members join table
+	query := r.db.NewSelect().
+		Model(&schemaTeams).
+		Join("INNER JOIN organization_team_members AS otm ON otm.team_id = uot.id").
+		Where("otm.member_id = ?", memberID).
+		Order("uot.created_at ASC")
+
+	// Get total count
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+
+	if err := query.Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	teams := organization.FromSchemaTeams(schemaTeams)
+
+	return pagination.NewPageResponse(teams, int64(total), filter), nil
 }
 
 // Type assertion to ensure organizationTeamRepository implements organization.TeamRepository

@@ -12,6 +12,33 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
+// memberWithUser holds a member joined with user data
+type memberWithUser struct {
+	schema.OrganizationMember
+	UserID          xid.ID `bun:"user_id"`
+	UserName        string `bun:"user_name"`
+	UserEmail       string `bun:"user_email"`
+	UserImage       string `bun:"user_image"`
+	UserUsername    string `bun:"user_username"`
+	UserDisplayName string `bun:"user_display_username"`
+}
+
+// toMemberWithUserInfo converts memberWithUser to organization.Member with UserInfo populated
+func (m *memberWithUser) toMemberWithUserInfo() *organization.Member {
+	member := organization.FromSchemaMember(&m.OrganizationMember)
+	if member != nil {
+		member.User = &organization.UserInfo{
+			ID:              m.UserID,
+			Name:            m.UserName,
+			Email:           m.UserEmail,
+			Image:           m.UserImage,
+			Username:        m.UserUsername,
+			DisplayUsername: m.UserDisplayName,
+		}
+	}
+	return member
+}
+
 // organizationMemberRepository implements organization.MemberRepository using Bun
 type organizationMemberRepository struct {
 	db *bun.DB
@@ -69,24 +96,41 @@ func (r *organizationMemberRepository) FindByUserAndOrg(ctx context.Context, use
 
 // ListByOrganization lists members of an organization with pagination and filtering
 func (r *organizationMemberRepository) ListByOrganization(ctx context.Context, filter *organization.ListMembersFilter) (*pagination.PageResponse[*organization.Member], error) {
-	var schemaMembers []*schema.OrganizationMember
+	var membersWithUsers []*memberWithUser
 
 	query := r.db.NewSelect().
-		Model(&schemaMembers).
-		Where("organization_id = ?", filter.OrganizationID)
+		Model((*schema.OrganizationMember)(nil)).
+		ColumnExpr("uom.*").
+		ColumnExpr("u.id AS user_id").
+		ColumnExpr("u.name AS user_name").
+		ColumnExpr("u.email AS user_email").
+		ColumnExpr("u.image AS user_image").
+		ColumnExpr("u.username AS user_username").
+		ColumnExpr("u.display_username AS user_display_username").
+		Join("LEFT JOIN users AS u ON u.id = uom.user_id").
+		Where("uom.organization_id = ?", filter.OrganizationID)
 
 	// Apply filters
 	if filter.Role != nil {
-		query = query.Where("role = ?", *filter.Role)
+		query = query.Where("uom.role = ?", *filter.Role)
 	}
 	if filter.Status != nil {
-		query = query.Where("status = ?", *filter.Status)
+		query = query.Where("uom.status = ?", *filter.Status)
 	}
 
-	query = query.Order("joined_at ASC")
+	query = query.Order("uom.joined_at ASC")
 
-	// Get total count
-	total, err := query.Count(ctx)
+	// Get total count (need a separate query without joins for accurate count)
+	countQuery := r.db.NewSelect().
+		Model((*schema.OrganizationMember)(nil)).
+		Where("organization_id = ?", filter.OrganizationID)
+	if filter.Role != nil {
+		countQuery = countQuery.Where("role = ?", *filter.Role)
+	}
+	if filter.Status != nil {
+		countQuery = countQuery.Where("status = ?", *filter.Status)
+	}
+	total, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +138,15 @@ func (r *organizationMemberRepository) ListByOrganization(ctx context.Context, f
 	// Apply pagination
 	query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())
 
-	if err := query.Scan(ctx); err != nil {
+	if err := query.Scan(ctx, &membersWithUsers); err != nil {
 		return nil, err
 	}
 
-	// Convert to DTOs
-	members := organization.FromSchemaMembers(schemaMembers)
+	// Convert to DTOs with user info
+	members := make([]*organization.Member, len(membersWithUsers))
+	for i, m := range membersWithUsers {
+		members[i] = m.toMemberWithUserInfo()
+	}
 
 	return pagination.NewPageResponse(members, int64(total), &filter.PaginationParams), nil
 }

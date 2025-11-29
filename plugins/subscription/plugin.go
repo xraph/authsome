@@ -115,6 +115,13 @@ func WithAutoSyncSeats(enabled bool) PluginOption {
 	}
 }
 
+// WithAutoSyncPlans enables automatic plan synchronization to payment provider on create/update
+func WithAutoSyncPlans(enabled bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AutoSyncPlans = enabled
+	}
+}
+
 // NewPlugin creates a new subscription plugin instance
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
@@ -237,6 +244,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 
 	// Initialize services
 	p.planSvc = service.NewPlanService(p.planRepo, p.provider, p.eventRepo)
+	p.planSvc.SetAutoSyncPlans(p.config.AutoSyncPlans)
 	p.customerSvc = service.NewCustomerService(p.customerRepo, p.provider, p.eventRepo)
 	p.paymentSvc = service.NewPaymentService(p.paymentRepo, p.customerRepo, p.provider, p.eventRepo)
 	p.subscriptionSvc = service.NewSubscriptionService(

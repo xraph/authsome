@@ -142,7 +142,7 @@ func DesktopNavigation(data PageData) g.Node {
 		navLink("Users", usersURL, data.ActivePage == "users"),
 		// g.If(data.EnabledPlugins["organization"], navLink("Organizations", organizationsURL, data.ActivePage == "organizations")),
 		navLink("Environments", environmentsURL, data.ActivePage == "environments"),
-		navLink("Sessions", sessionsURL, data.ActivePage == "sessions"),
+		g.If(!data.EnabledPlugins["multisession"], navLink("Sessions", sessionsURL, data.ActivePage == "sessions")),
 	}
 
 	// Add extension navigation items for main position

@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins/dashboard"
 	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/plugins/notification/builder"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
@@ -141,6 +142,62 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			Summary:      "Test send",
 			Description:  "Send a test notification",
 			Tags:         []string{"Dashboard", "Notifications", "Templates"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Email Builder Routes
+		{
+			Method:       "GET",
+			Path:         "/notifications/templates/builder",
+			Handler:      e.ServeEmailBuilder,
+			Name:         "dashboard.notifications.builder",
+			Summary:      "Email template builder",
+			Description:  "Visual drag-and-drop email template builder",
+			Tags:         []string{"Dashboard", "Notifications", "Builder"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "GET",
+			Path:         "/notifications/templates/builder/:templateId",
+			Handler:      e.ServeEmailBuilderWithTemplate,
+			Name:         "dashboard.notifications.builder.edit",
+			Summary:      "Edit template in builder",
+			Description:  "Edit an existing template in the visual builder",
+			Tags:         []string{"Dashboard", "Notifications", "Builder"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/notifications/templates/builder/preview",
+			Handler:      e.PreviewBuilderTemplate,
+			Name:         "dashboard.notifications.builder.preview",
+			Summary:      "Preview builder template",
+			Description:  "Generate HTML preview from builder JSON",
+			Tags:         []string{"Dashboard", "Notifications", "Builder"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/notifications/templates/builder/save",
+			Handler:      e.SaveBuilderTemplate,
+			Name:         "dashboard.notifications.builder.save",
+			Summary:      "Save builder template",
+			Description:  "Save a template created with the visual builder",
+			Tags:         []string{"Dashboard", "Notifications", "Builder"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "GET",
+			Path:         "/notifications/templates/samples/:name",
+			Handler:      e.GetSampleTemplate,
+			Name:         "dashboard.notifications.samples",
+			Summary:      "Get sample template",
+			Description:  "Load a sample email template",
+			Tags:         []string{"Dashboard", "Notifications", "Builder"},
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
@@ -906,7 +963,7 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 	return Div(
 		Class("space-y-6"),
 
-		// Header with create button
+		// Header with create buttons
 		Div(
 			Class("flex items-center justify-between"),
 			Div(
@@ -915,13 +972,27 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
 					g.Textf("Manage %d notification templates", len(response.Data))),
 			),
-			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
-				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
-				lucide.Plus(Class("h-4 w-4")),
-				g.Text("New Template"),
+			Div(
+				Class("flex items-center gap-3"),
+				// Visual Builder button (primary)
+				A(
+					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, currentApp.ID)),
+					Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm"),
+					lucide.Sparkles(Class("h-4 w-4")),
+					g.Text("Visual Builder"),
+				),
+				// New Template button (secondary)
+				A(
+					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
+					Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
+					lucide.Plus(Class("h-4 w-4")),
+					g.Text("New Template"),
+				),
 			),
 		),
+
+		// Visual Builder promo card
+		renderBuilderPromoCard(basePath, currentApp),
 
 		// Templates table
 		g.If(len(response.Data) == 0,
@@ -930,6 +1001,59 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		g.If(len(response.Data) > 0,
 			renderTemplatesTable(response.Data, basePath, currentApp),
 		),
+	)
+}
+
+// renderBuilderPromoCard renders a promotional card for the visual builder
+func renderBuilderPromoCard(basePath string, currentApp *app.App) g.Node {
+	return Div(
+		Class("rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-violet-50 to-purple-50 p-6 dark:border-indigo-800 dark:from-indigo-900/20 dark:via-violet-900/20 dark:to-purple-900/20"),
+		Div(
+			Class("flex items-start gap-5"),
+			// Icon
+			Div(
+				Class("flex-shrink-0"),
+				Div(
+					Class("flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg"),
+					lucide.Sparkles(Class("h-7 w-7 text-white")),
+				),
+			),
+			// Content
+			Div(
+				Class("flex-1"),
+				H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+					g.Text("Visual Email Template Builder")),
+				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Design beautiful, responsive email templates visually with our drag-and-drop builder. No HTML knowledge required.")),
+				// Features
+				Div(
+					Class("mt-4 flex flex-wrap gap-3"),
+					featureBadge("Drag & Drop"),
+					featureBadge("Live Preview"),
+					featureBadge("Mobile Responsive"),
+					featureBadge("Sample Templates"),
+				),
+				// CTA
+				Div(
+					Class("mt-5"),
+					A(
+						Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, currentApp.ID)),
+						Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm transition-all"),
+						lucide.Sparkles(Class("h-4 w-4")),
+						g.Text("Open Visual Builder"),
+					),
+				),
+			),
+		),
+	)
+}
+
+// featureBadge renders a small feature badge
+func featureBadge(text string) g.Node {
+	return Span(
+		Class("inline-flex items-center gap-1 rounded-full bg-white/60 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-gray-800/60 dark:text-indigo-300"),
+		lucide.Check(Class("h-3 w-3")),
+		g.Text(text),
 	)
 }
 
@@ -946,12 +1070,22 @@ func renderEmptyTemplatesState(basePath string, currentApp *app.App) g.Node {
 		P(Class("mt-2 text-sm text-slate-600 dark:text-gray-400"),
 			g.Text("Get started by creating your first notification template")),
 		Div(
-			Class("mt-6"),
+			Class("mt-6 flex items-center justify-center gap-3"),
+			// Visual Builder button (primary)
+			A(
+				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, currentApp.ID)),
+				Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700"),
+				lucide.Sparkles(Class("h-4 w-4")),
+				g.Text("Use Visual Builder"),
+			),
+			// Or
+			Span(Class("text-sm text-slate-400 dark:text-gray-500"), g.Text("or")),
+			// Manual create
 			A(
 				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
-				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"),
 				lucide.Plus(Class("h-4 w-4")),
-				g.Text("Create Template"),
+				g.Text("Create Manually"),
 			),
 		),
 	)
@@ -2375,4 +2509,347 @@ func renderTopTemplates(templates []struct {
 		)
 	}
 	return nodes
+}
+
+// =============================================================================
+// EMAIL BUILDER HANDLERS
+// =============================================================================
+
+// ServeEmailBuilder serves the visual email template builder page
+func (e *DashboardExtension) ServeEmailBuilder(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	// Check if loading a sample template
+	sampleName := c.Query("sample")
+	var doc *builder.Document
+	if sampleName != "" {
+		doc, err = builder.GetSampleTemplate(sampleName)
+		if err != nil {
+			doc = builder.NewDocument()
+		}
+	} else {
+		doc = builder.NewDocument()
+	}
+
+	pageData := components.PageData{
+		Title:      "Email Template Builder",
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	content := e.renderEmailBuilder(doc, currentApp, basePath, "")
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// ServeEmailBuilderWithTemplate serves the builder with an existing template
+func (e *DashboardExtension) ServeEmailBuilderWithTemplate(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	templateID, err := xid.FromString(c.Param("templateId"))
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid template ID")
+	}
+
+	basePath := handler.GetBasePath()
+
+	// Load template from database
+	template, err := e.plugin.service.GetTemplate(c.Context(), templateID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Template not found")
+	}
+
+	var doc *builder.Document
+	// Check if template has builder JSON content (stored in metadata)
+	isVisualBuilder := false
+	if template.Metadata != nil {
+		if builderType, ok := template.Metadata["builderType"].(string); ok && builderType == "visual" {
+			isVisualBuilder = true
+		}
+	}
+
+	if isVisualBuilder && template.Body != "" {
+		doc, err = builder.FromJSON(template.Body)
+		if err != nil {
+			doc = builder.NewDocument()
+		}
+	} else {
+		// Legacy template - create a document with HTML block
+		doc = builder.NewDocument()
+		doc.AddBlock(builder.BlockTypeHTML, map[string]interface{}{
+			"style": map[string]interface{}{},
+			"props": map[string]interface{}{
+				"html": template.Body,
+			},
+		}, doc.Root)
+	}
+
+	pageData := components.PageData{
+		Title:      "Edit Template: " + template.Name,
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	content := e.renderEmailBuilder(doc, currentApp, basePath, templateID.String())
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// PreviewBuilderTemplate generates HTML preview from builder JSON
+func (e *DashboardExtension) PreviewBuilderTemplate(c forge.Context) error {
+	var doc builder.Document
+	if err := c.BindJSON(&doc); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid document structure",
+		})
+	}
+
+	// Validate document
+	if err := doc.Validate(); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": fmt.Sprintf("Invalid document: %v", err),
+		})
+	}
+
+	// Render to HTML
+	renderer := builder.NewRenderer(&doc)
+	html, err := renderer.RenderToHTML()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("Failed to render: %v", err),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"html": html,
+	})
+}
+
+// SaveBuilderTemplate saves a template created with the visual builder
+func (e *DashboardExtension) SaveBuilderTemplate(c forge.Context) error {
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
+	}
+
+	var req struct {
+		TemplateID  string           `json:"templateId,omitempty"`
+		TemplateKey string           `json:"templateKey"`
+		Name        string           `json:"name"`
+		Subject     string           `json:"subject"`
+		Document    builder.Document `json:"document"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
+		})
+	}
+
+	// Validate the document
+	if err := req.Document.Validate(); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": fmt.Sprintf("Invalid document: %v", err),
+		})
+	}
+
+	// Convert document to JSON string
+	jsonStr, err := req.Document.ToJSON()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to serialize document",
+		})
+	}
+
+	// Store both JSON and rendered HTML in the body with a marker
+	// The notification service will handle this appropriately
+	bodyContent := jsonStr
+
+	ctx := c.Context()
+
+	if req.TemplateID != "" {
+		// Update existing template
+		templateID, err := xid.FromString(req.TemplateID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid template ID"})
+		}
+
+		// Check template exists
+		_, err = e.plugin.service.GetTemplate(ctx, templateID)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
+		}
+
+		updateReq := &notification.UpdateTemplateRequest{
+			Name:    &req.Name,
+			Subject: &req.Subject,
+			Body:    &bodyContent,
+			Metadata: map[string]interface{}{
+				"builderType":    "visual",
+				"builderVersion": "1.0",
+			},
+		}
+
+		if err := e.plugin.service.UpdateTemplate(ctx, templateID, updateReq); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": fmt.Sprintf("Failed to update template: %v", err),
+			})
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":    true,
+			"templateId": templateID.String(),
+			"message":    "Template updated successfully",
+		})
+	}
+
+	// Create new template
+	templateKey := req.TemplateKey
+	if templateKey == "" {
+		templateKey = "custom." + slugify(req.Name)
+	}
+
+	createReq := &notification.CreateTemplateRequest{
+		AppID:       currentApp.ID,
+		TemplateKey: templateKey,
+		Name:        req.Name,
+		Type:        notification.NotificationTypeEmail,
+		Language:    "en",
+		Subject:     req.Subject,
+		Body:        bodyContent,
+		Metadata: map[string]interface{}{
+			"builderType":    "visual",
+			"builderVersion": "1.0",
+		},
+	}
+
+	template, err := e.plugin.service.CreateTemplate(ctx, createReq)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("Failed to create template: %v", err),
+		})
+	}
+
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"success":    true,
+		"templateId": template.ID.String(),
+		"message":    "Template created successfully",
+	})
+}
+
+// GetSampleTemplate returns a sample template by name
+func (e *DashboardExtension) GetSampleTemplate(c forge.Context) error {
+	name := c.Param("name")
+
+	template, err := builder.GetSampleTemplate(name)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{
+			"error": fmt.Sprintf("Sample template '%s' not found", name),
+		})
+	}
+
+	return c.JSON(http.StatusOK, template)
+}
+
+// renderEmailBuilder renders the visual email builder interface
+func (e *DashboardExtension) renderEmailBuilder(doc *builder.Document, currentApp *app.App, basePath, templateID string) g.Node {
+	builderUI := builder.NewBuilderUI(
+		doc,
+		fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder/preview", basePath, currentApp.ID),
+		fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder/save", basePath, currentApp.ID),
+	)
+
+	return Div(
+		Class("space-y-6"),
+
+		// Header
+		Div(
+			Class("flex items-center justify-between"),
+			Div(
+				Div(
+					Class("flex items-center gap-3"),
+					A(
+						Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
+						Class("inline-flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"),
+						lucide.ArrowLeft(Class("h-5 w-5")),
+					),
+					H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+						g.If(templateID != "", g.Text("Edit Template")),
+						g.If(templateID == "", g.Text("Create Email Template")),
+					),
+				),
+				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400 ml-11"),
+					g.Text("Design beautiful email templates with our visual drag-and-drop builder")),
+			),
+		),
+
+		// Hidden template ID for save
+		g.If(templateID != "",
+			Input(
+				Type("hidden"),
+				ID("template-id"),
+				Value(templateID),
+			),
+		),
+
+		// Builder UI
+		builderUI.Render(),
+	)
+}
+
+// slugify creates a URL-friendly slug from a string
+func slugify(s string) string {
+	// Simple slugify - replace spaces with hyphens, lowercase
+	result := ""
+	for _, c := range s {
+		if c >= 'a' && c <= 'z' {
+			result += string(c)
+		} else if c >= 'A' && c <= 'Z' {
+			result += string(c + 32) // lowercase
+		} else if c >= '0' && c <= '9' {
+			result += string(c)
+		} else if c == ' ' || c == '-' || c == '_' {
+			if len(result) > 0 && result[len(result)-1] != '-' {
+				result += "-"
+			}
+		}
+	}
+	return result
 }

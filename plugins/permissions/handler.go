@@ -2,10 +2,12 @@ package permissions
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/plugins/permissions/core"
 	"github.com/xraph/authsome/plugins/permissions/handlers"
 	"github.com/xraph/forge"
 )
@@ -55,6 +57,20 @@ func extractContext(c forge.Context) (appID, envID xid.ID, orgID *xid.ID, userID
 	return appID, envID, orgID, userID, nil
 }
 
+// getStatusCode extracts HTTP status code from error
+func getStatusCode(err error) int {
+	return errs.GetHTTPStatus(err)
+}
+
+// toErrorResponse converts an error to a JSON-serializable response
+func toErrorResponse(err error) interface{} {
+	if authErr, ok := err.(*errs.AuthsomeError); ok {
+		return authErr
+	}
+	// Wrap generic errors
+	return errs.InternalError(err)
+}
+
 // =============================================================================
 // POLICY MANAGEMENT
 // =============================================================================
@@ -63,7 +79,7 @@ func extractContext(c forge.Context) (appID, envID xid.ID, orgID *xid.ID, userID
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -72,33 +88,65 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// policy, err := h.service.CreatePolicy(c.Request().Context(), appID, envID, orgID, userID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = userID
+	// Call service
+	policy, err := h.service.CreatePolicy(c.Request().Context(), appID, envID, orgID, userID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy creation will be implemented in future phase",
-	})
+	return c.JSON(201, handlers.ToPolicyResponse(policy))
 }
 
 // ListPolicies handles GET /api/permissions/policies
 func (h *Handler) ListPolicies(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// policies, err := h.service.ListPolicies(c.Request().Context(), appID, envID, orgID, filters)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Build filters from query params
+	filters := make(map[string]interface{})
+	if resourceType := c.Query("resourceType"); resourceType != "" {
+		filters["resourceType"] = resourceType
+	}
+	if namespaceID := c.Query("namespaceId"); namespaceID != "" {
+		filters["namespaceId"] = namespaceID
+	}
+	if enabledStr := c.Query("enabled"); enabledStr != "" {
+		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
+			filters["enabled"] = enabled
+		}
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy listing will be implemented in future phase",
+	// Pagination
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	filters["page"] = page
+	filters["pageSize"] = pageSize
+
+	// Call service
+	policies, total, err := h.service.ListPolicies(c.Request().Context(), appID, envID, orgID, filters)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
+
+	// Convert to response
+	policyResponses := make([]*handlers.PolicyResponse, 0, len(policies))
+	for _, p := range policies {
+		policyResponses = append(policyResponses, handlers.ToPolicyResponse(p))
+	}
+
+	return c.JSON(200, &handlers.PoliciesListResponse{
+		Policies:   policyResponses,
+		TotalCount: total,
+		Page:       page,
+		PageSize:   pageSize,
 	})
 }
 
@@ -106,7 +154,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 func (h *Handler) GetPolicy(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse policy ID from URL param
@@ -116,23 +164,20 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// policy, err := h.service.GetPolicy(c.Request().Context(), appID, envID, orgID, policyID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = policyID
+	// Call service
+	policy, err := h.service.GetPolicy(c.Request().Context(), appID, envID, orgID, policyID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy retrieval will be implemented in future phase",
-	})
+	return c.JSON(200, handlers.ToPolicyResponse(policy))
 }
 
 // UpdatePolicy handles PUT /api/permissions/policies/:id
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse policy ID from URL param
@@ -148,24 +193,20 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// policy, err := h.service.UpdatePolicy(c.Request().Context(), appID, envID, orgID, userID, policyID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = userID
-	_ = policyID
+	// Call service
+	policy, err := h.service.UpdatePolicy(c.Request().Context(), appID, envID, orgID, userID, policyID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy update will be implemented in future phase",
-	})
+	return c.JSON(200, handlers.ToPolicyResponse(policy))
 }
 
 // DeletePolicy handles DELETE /api/permissions/policies/:id
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse policy ID from URL param
@@ -175,16 +216,12 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// err := h.service.DeletePolicy(c.Request().Context(), appID, envID, orgID, policyID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = policyID
+	// Call service
+	if err := h.service.DeletePolicy(c.Request().Context(), appID, envID, orgID, policyID); err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy deletion will be implemented in future phase",
-	})
+	return c.JSON(204, nil)
 }
 
 // ValidatePolicy handles POST /api/permissions/policies/validate
@@ -195,12 +232,13 @@ func (h *Handler) ValidatePolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// validation, err := h.service.ValidatePolicy(c.Request().Context(), &req)
+	// Call service
+	validation, err := h.service.ValidatePolicy(c.Request().Context(), &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy validation will be implemented in future phase",
-	})
+	return c.JSON(200, validation)
 }
 
 // TestPolicy handles POST /api/permissions/policies/test
@@ -211,12 +249,13 @@ func (h *Handler) TestPolicy(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// testResults, err := h.service.TestPolicy(c.Request().Context(), &req)
+	// Call service
+	testResult, err := h.service.TestPolicy(c.Request().Context(), &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy testing will be implemented in future phase",
-	})
+	return c.JSON(200, testResult)
 }
 
 // =============================================================================
@@ -227,7 +266,7 @@ func (h *Handler) TestPolicy(c forge.Context) error {
 func (h *Handler) CreateResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -236,32 +275,46 @@ func (h *Handler) CreateResource(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// resource, err := h.service.CreateResource(c.Request().Context(), appID, envID, orgID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Call service
+	resource, err := h.service.CreateResource(c.Request().Context(), appID, envID, orgID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Resource creation will be implemented in future phase",
-	})
+	return c.JSON(201, handlers.ToResourceResponse(resource))
 }
 
 // ListResources handles GET /api/permissions/resources
 func (h *Handler) ListResources(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// resources, err := h.service.ListResources(c.Request().Context(), appID, envID, orgID, namespaceID)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Get optional namespace filter
+	var namespaceID xid.ID
+	if nsID := c.Query("namespaceId"); nsID != "" {
+		namespaceID, err = xid.FromString(nsID)
+		if err != nil {
+			return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
+		}
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Resource listing will be implemented in future phase",
+	// Call service
+	resources, err := h.service.ListResources(c.Request().Context(), appID, envID, orgID, namespaceID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
+
+	// Convert to response
+	resourceResponses := make([]*handlers.ResourceResponse, 0, len(resources))
+	for _, r := range resources {
+		resourceResponses = append(resourceResponses, handlers.ToResourceResponse(r))
+	}
+
+	return c.JSON(200, &handlers.ResourcesListResponse{
+		Resources:  resourceResponses,
+		TotalCount: len(resourceResponses),
 	})
 }
 
@@ -269,7 +322,7 @@ func (h *Handler) ListResources(c forge.Context) error {
 func (h *Handler) GetResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse resource ID from URL param
@@ -279,23 +332,20 @@ func (h *Handler) GetResource(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_RESOURCE_ID", "Invalid resource ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// resource, err := h.service.GetResource(c.Request().Context(), appID, envID, orgID, resourceID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = resourceID
+	// Call service
+	resource, err := h.service.GetResource(c.Request().Context(), appID, envID, orgID, resourceID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Resource retrieval will be implemented in future phase",
-	})
+	return c.JSON(200, handlers.ToResourceResponse(resource))
 }
 
 // DeleteResource handles DELETE /api/permissions/resources/:id
 func (h *Handler) DeleteResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse resource ID from URL param
@@ -305,16 +355,12 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_RESOURCE_ID", "Invalid resource ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// err := h.service.DeleteResource(c.Request().Context(), appID, envID, orgID, resourceID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = resourceID
+	// Call service
+	if err := h.service.DeleteResource(c.Request().Context(), appID, envID, orgID, resourceID); err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Resource deletion will be implemented in future phase",
-	})
+	return c.JSON(204, nil)
 }
 
 // =============================================================================
@@ -325,7 +371,7 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 func (h *Handler) CreateAction(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -334,32 +380,46 @@ func (h *Handler) CreateAction(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// action, err := h.service.CreateAction(c.Request().Context(), appID, envID, orgID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Call service
+	action, err := h.service.CreateAction(c.Request().Context(), appID, envID, orgID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Action creation will be implemented in future phase",
-	})
+	return c.JSON(201, handlers.ToActionResponse(action))
 }
 
 // ListActions handles GET /api/permissions/actions
 func (h *Handler) ListActions(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// actions, err := h.service.ListActions(c.Request().Context(), appID, envID, orgID, namespaceID)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Get optional namespace filter
+	var namespaceID xid.ID
+	if nsID := c.Query("namespaceId"); nsID != "" {
+		namespaceID, err = xid.FromString(nsID)
+		if err != nil {
+			return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
+		}
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Action listing will be implemented in future phase",
+	// Call service
+	actions, err := h.service.ListActions(c.Request().Context(), appID, envID, orgID, namespaceID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
+
+	// Convert to response
+	actionResponses := make([]*handlers.ActionResponse, 0, len(actions))
+	for _, a := range actions {
+		actionResponses = append(actionResponses, handlers.ToActionResponse(a))
+	}
+
+	return c.JSON(200, &handlers.ActionsListResponse{
+		Actions:    actionResponses,
+		TotalCount: len(actionResponses),
 	})
 }
 
@@ -367,7 +427,7 @@ func (h *Handler) ListActions(c forge.Context) error {
 func (h *Handler) DeleteAction(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse action ID from URL param
@@ -377,16 +437,12 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_ACTION_ID", "Invalid action ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// err := h.service.DeleteAction(c.Request().Context(), appID, envID, orgID, actionID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = actionID
+	// Call service
+	if err := h.service.DeleteAction(c.Request().Context(), appID, envID, orgID, actionID); err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Action deletion will be implemented in future phase",
-	})
+	return c.JSON(204, nil)
 }
 
 // =============================================================================
@@ -397,7 +453,7 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 func (h *Handler) CreateNamespace(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -406,33 +462,37 @@ func (h *Handler) CreateNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// namespace, err := h.service.CreateNamespace(c.Request().Context(), appID, envID, orgID, userID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = userID
+	// Call service
+	namespace, err := h.service.CreateNamespace(c.Request().Context(), appID, envID, orgID, userID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Namespace creation will be implemented in future phase",
-	})
+	return c.JSON(201, handlers.ToNamespaceResponse(namespace))
 }
 
 // ListNamespaces handles GET /api/permissions/namespaces
 func (h *Handler) ListNamespaces(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// namespaces, err := h.service.ListNamespaces(c.Request().Context(), appID, envID, orgID)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Call service
+	namespaces, err := h.service.ListNamespaces(c.Request().Context(), appID, envID, orgID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Namespace listing will be implemented in future phase",
+	// Convert to response
+	namespaceResponses := make([]*handlers.NamespaceResponse, 0, len(namespaces))
+	for _, n := range namespaces {
+		namespaceResponses = append(namespaceResponses, handlers.ToNamespaceResponse(n))
+	}
+
+	return c.JSON(200, &handlers.NamespacesListResponse{
+		Namespaces: namespaceResponses,
+		TotalCount: len(namespaceResponses),
 	})
 }
 
@@ -440,7 +500,7 @@ func (h *Handler) ListNamespaces(c forge.Context) error {
 func (h *Handler) GetNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse namespace ID from URL param
@@ -450,23 +510,20 @@ func (h *Handler) GetNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// namespace, err := h.service.GetNamespace(c.Request().Context(), appID, envID, orgID, namespaceID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = namespaceID
+	// Call service
+	namespace, err := h.service.GetNamespace(c.Request().Context(), appID, envID, orgID, namespaceID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Namespace retrieval will be implemented in future phase",
-	})
+	return c.JSON(200, handlers.ToNamespaceResponse(namespace))
 }
 
 // UpdateNamespace handles PUT /api/permissions/namespaces/:id
 func (h *Handler) UpdateNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse namespace ID from URL param
@@ -482,23 +539,20 @@ func (h *Handler) UpdateNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// namespace, err := h.service.UpdateNamespace(c.Request().Context(), appID, envID, orgID, namespaceID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = namespaceID
+	// Call service
+	namespace, err := h.service.UpdateNamespace(c.Request().Context(), appID, envID, orgID, namespaceID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Namespace update will be implemented in future phase",
-	})
+	return c.JSON(200, handlers.ToNamespaceResponse(namespace))
 }
 
 // DeleteNamespace handles DELETE /api/permissions/namespaces/:id
 func (h *Handler) DeleteNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse namespace ID from URL param
@@ -508,16 +562,12 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
 	}
 
-	// Stub: Service call would go here
-	// err := h.service.DeleteNamespace(c.Request().Context(), appID, envID, orgID, namespaceID)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = namespaceID
+	// Call service
+	if err := h.service.DeleteNamespace(c.Request().Context(), appID, envID, orgID, namespaceID); err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Namespace deletion will be implemented in future phase",
-	})
+	return c.JSON(204, nil)
 }
 
 // =============================================================================
@@ -528,7 +578,7 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 func (h *Handler) Evaluate(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -537,23 +587,30 @@ func (h *Handler) Evaluate(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// decision, err := h.service.Evaluate(c.Request().Context(), appID, envID, orgID, userID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = userID
+	// Call service
+	decision, err := h.service.Evaluate(c.Request().Context(), appID, envID, orgID, userID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Policy evaluation will be implemented in future phase - core feature",
-	})
+	// Convert to response
+	response := &handlers.EvaluateResponse{
+		Allowed:           decision.Allowed,
+		EvaluatedPolicies: decision.EvaluatedPolicies,
+		EvaluationTimeMs:  float64(decision.EvaluationTime.Milliseconds()),
+		CacheHit:          decision.CacheHit,
+		MatchedPolicies:   decision.MatchedPolicies,
+		Error:             decision.Error,
+	}
+
+	return c.JSON(200, response)
 }
 
 // EvaluateBatch handles POST /api/permissions/evaluate/batch
 func (h *Handler) EvaluateBatch(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -562,15 +619,31 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// results, err := h.service.EvaluateBatch(c.Request().Context(), appID, envID, orgID, userID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = userID
+	// Call service
+	results, err := h.service.EvaluateBatch(c.Request().Context(), appID, envID, orgID, userID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Batch policy evaluation will be implemented in future phase",
+	// Calculate totals
+	var totalTime float64
+	successCount := 0
+	failureCount := 0
+	for _, r := range results {
+		totalTime += r.EvaluationTimeMs
+		if r.Allowed {
+			successCount++
+		} else {
+			failureCount++
+		}
+	}
+
+	return c.JSON(200, &handlers.BatchEvaluateResponse{
+		Results:          results,
+		TotalEvaluations: len(results),
+		TotalTimeMs:      totalTime,
+		SuccessCount:     successCount,
+		FailureCount:     failureCount,
 	})
 }
 
@@ -580,34 +653,51 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 
 // ListTemplates handles GET /api/permissions/templates
 func (h *Handler) ListTemplates(c forge.Context) error {
-	// Templates are global, no app/env/org scope needed
-	// Stub: Service call would go here
-	// templates, err := h.service.ListTemplates(c.Request().Context())
+	// Call service
+	templates, err := h.service.ListTemplates(c.Request().Context())
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Template listing will be implemented in future phase",
+	// Convert to response
+	templateResponses := make([]*handlers.TemplateResponse, 0, len(templates))
+	categories := make(map[string]bool)
+	for _, t := range templates {
+		templateResponses = append(templateResponses, toTemplateResponse(t))
+		categories[t.Category] = true
+	}
+
+	// Extract unique categories
+	categoryList := make([]string, 0, len(categories))
+	for cat := range categories {
+		categoryList = append(categoryList, cat)
+	}
+
+	return c.JSON(200, &handlers.TemplatesListResponse{
+		Templates:  templateResponses,
+		TotalCount: len(templateResponses),
+		Categories: categoryList,
 	})
 }
 
 // GetTemplate handles GET /api/permissions/templates/:id
 func (h *Handler) GetTemplate(c forge.Context) error {
-	// Templates are global, no app/env/org scope needed
 	templateID := c.Param("id")
 
-	// Stub: Service call would go here
-	// template, err := h.service.GetTemplate(c.Request().Context(), templateID)
-	_ = templateID
+	// Call service
+	template, err := h.service.GetTemplate(c.Request().Context(), templateID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Template retrieval will be implemented in future phase",
-	})
+	return c.JSON(200, toTemplateResponse(template))
 }
 
 // InstantiateTemplate handles POST /api/permissions/templates/:id/instantiate
 func (h *Handler) InstantiateTemplate(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Get template ID from URL
@@ -619,17 +709,26 @@ func (h *Handler) InstantiateTemplate(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// policy, err := h.service.InstantiateTemplate(c.Request().Context(), appID, envID, orgID, userID, templateID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
-	_ = userID
-	_ = templateID
+	// Call service
+	policy, err := h.service.InstantiateTemplate(c.Request().Context(), appID, envID, orgID, userID, templateID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Template instantiation will be implemented in future phase",
-	})
+	return c.JSON(201, handlers.ToPolicyResponse(policy))
+}
+
+// toTemplateResponse converts a core.PolicyTemplate to a handlers.TemplateResponse
+func toTemplateResponse(t *core.PolicyTemplate) *handlers.TemplateResponse {
+	return &handlers.TemplateResponse{
+		ID:          t.ID,
+		Name:        t.Name,
+		Description: t.Description,
+		Category:    t.Category,
+		Expression:  t.Expression,
+		Parameters:  t.Parameters,
+		Examples:    t.Examples,
+	}
 }
 
 // =============================================================================
@@ -640,7 +739,7 @@ func (h *Handler) InstantiateTemplate(c forge.Context) error {
 func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
 	// Parse request
@@ -649,33 +748,53 @@ func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
 	}
 
-	// Stub: Service call would go here
-	// migration, err := h.service.MigrateFromRBAC(c.Request().Context(), appID, envID, orgID, &req)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Call service
+	status, err := h.service.MigrateFromRBAC(c.Request().Context(), appID, envID, orgID, &req)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "RBAC migration will be implemented in future phase",
-	})
+	return c.JSON(200, toMigrationStatusResponse(status))
 }
 
 // GetMigrationStatus handles GET /api/permissions/migrate/rbac/status
 func (h *Handler) GetMigrationStatus(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// status, err := h.service.GetMigrationStatus(c.Request().Context(), appID, envID, orgID)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Call service
+	status, err := h.service.GetMigrationStatus(c.Request().Context(), appID, envID, orgID)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Migration status will be implemented in future phase",
-	})
+	return c.JSON(200, toMigrationStatusResponse(status))
+}
+
+// toMigrationStatusResponse converts a core.MigrationStatus to a handlers.MigrationStatusResponse
+func toMigrationStatusResponse(s *core.MigrationStatus) *handlers.MigrationStatusResponse {
+	resp := &handlers.MigrationStatusResponse{
+		AppID:            s.AppID.String(),
+		EnvironmentID:    s.EnvironmentID.String(),
+		Status:           s.Status,
+		StartedAt:        s.StartedAt,
+		CompletedAt:      s.CompletedAt,
+		TotalPolicies:    s.TotalPolicies,
+		MigratedCount:    s.MigratedCount,
+		FailedCount:      s.FailedCount,
+		ValidationPassed: s.ValidationPassed,
+		Errors:           s.Errors,
+	}
+	if s.TotalPolicies > 0 {
+		resp.Progress = float64(s.MigratedCount) / float64(s.TotalPolicies) * 100
+	}
+	if s.UserOrganizationID != nil {
+		orgID := s.UserOrganizationID.String()
+		resp.UserOrganizationID = &orgID
+	}
+	return resp
 }
 
 // =============================================================================
@@ -686,17 +805,50 @@ func (h *Handler) GetMigrationStatus(c forge.Context) error {
 func (h *Handler) GetAuditLog(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// auditLog, err := h.service.ListAuditEvents(c.Request().Context(), appID, envID, orgID, filters)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Build filters from query params
+	filters := make(map[string]interface{})
+	if resourceType := c.Query("resourceType"); resourceType != "" {
+		filters["resourceType"] = resourceType
+	}
+	if action := c.Query("action"); action != "" {
+		filters["action"] = action
+	}
+	if actorID := c.Query("actorId"); actorID != "" {
+		filters["actorId"] = actorID
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Audit log retrieval will be implemented in future phase",
+	// Pagination
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	filters["page"] = page
+	filters["pageSize"] = pageSize
+
+	// Call service
+	events, total, err := h.service.ListAuditEvents(c.Request().Context(), appID, envID, orgID, filters)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
+
+	// Convert to response
+	entries := make([]*handlers.AuditLogEntry, 0, len(events))
+	for _, e := range events {
+		entries = append(entries, handlers.ToAuditLogEntry(e))
+	}
+
+	return c.JSON(200, &handlers.AuditLogResponse{
+		Entries:    entries,
+		TotalCount: total,
+		Page:       page,
+		PageSize:   pageSize,
 	})
 }
 
@@ -704,16 +856,23 @@ func (h *Handler) GetAuditLog(c forge.Context) error {
 func (h *Handler) GetAnalytics(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
-		return c.JSON(400, err)
+		return c.JSON(400, toErrorResponse(err))
 	}
 
-	// Stub: Service call would go here
-	// analytics, err := h.service.GetAnalytics(c.Request().Context(), appID, envID, orgID, timeRange)
-	_ = appID
-	_ = envID
-	_ = orgID
+	// Build time range from query params
+	timeRange := make(map[string]interface{})
+	if startTime := c.Query("startTime"); startTime != "" {
+		timeRange["startTime"] = startTime
+	}
+	if endTime := c.Query("endTime"); endTime != "" {
+		timeRange["endTime"] = endTime
+	}
 
-	return c.JSON(501, &MessageResponse{
-		Message: "Analytics retrieval will be implemented in future phase",
-	})
+	// Call service
+	analytics, err := h.service.GetAnalytics(c.Request().Context(), appID, envID, orgID, timeRange)
+	if err != nil {
+		return c.JSON(getStatusCode(err), toErrorResponse(err))
+	}
+
+	return c.JSON(200, analytics)
 }

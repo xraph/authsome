@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/plugins/permissions/core"
 	"github.com/xraph/authsome/plugins/permissions/engine"
 	"github.com/xraph/authsome/plugins/permissions/handlers"
+	"github.com/xraph/authsome/plugins/permissions/migration"
 	"github.com/xraph/authsome/plugins/permissions/storage"
 	"github.com/xraph/forge"
 )
@@ -26,11 +27,19 @@ type Service struct {
 	compiler  *engine.Compiler
 	evaluator *engine.Evaluator
 
+	// Migration service for RBAC to CEL migration
+	migrationService *migration.RBACMigrationService
+
 	// Compiled policies cache (in-memory for fast evaluation)
 	compiledPolicies     map[string]*engine.CompiledPolicy
 	compiledPoliciesMu   sync.RWMutex
 	policyIndex          map[string][]*engine.CompiledPolicy // Indexed by resource type
 	policyIndexMu        sync.RWMutex
+}
+
+// SetMigrationService sets the migration service
+func (s *Service) SetMigrationService(svc *migration.RBACMigrationService) {
+	s.migrationService = svc
 }
 
 // NewService creates a new permissions service with all dependencies
@@ -831,25 +840,84 @@ func (s *Service) InstantiateTemplate(ctx context.Context, appID, envID xid.ID, 
 
 // MigrateFromRBAC migrates RBAC policies to permissions
 func (s *Service) MigrateFromRBAC(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, req *handlers.MigrateRBACRequest) (*core.MigrationStatus, error) {
-	// TODO: Implement RBAC migration in future phase
-	// This would:
-	// 1. Fetch all RBAC policies for the scope
-	// 2. Convert each RBAC policy to a CEL expression
-	// 3. Create permissions policies
-	// 4. Return migration status
-	return &core.MigrationStatus{
-		AppID:         appID,
-		EnvironmentID: envID,
-		Status:        "not_implemented",
-	}, nil
+	if s.migrationService == nil {
+		return nil, fmt.Errorf("migration service not configured")
+	}
+
+	startTime := time.Now()
+
+	// Get the user ID from context for audit purposes
+	var userID xid.ID
+	// Note: userID should be passed from handler if needed
+
+	// Execute the migration
+	result, err := s.migrationService.MigrateAll(ctx, appID, envID, orgID, userID)
+	if err != nil {
+		return &core.MigrationStatus{
+			AppID:              appID,
+			EnvironmentID:      envID,
+			UserOrganizationID: orgID,
+			Status:             "failed",
+			StartedAt:          startTime,
+			Errors:             []string{err.Error()},
+		}, err
+	}
+
+	// Convert migration result to MigrationStatus
+	completedAt := time.Now()
+	
+	// Convert migration errors to string slice
+	var errorStrings []string
+	for _, e := range result.Errors {
+		errorStrings = append(errorStrings, e.Error)
+	}
+
+	status := &core.MigrationStatus{
+		AppID:              appID,
+		EnvironmentID:      envID,
+		UserOrganizationID: orgID,
+		Status:             "completed",
+		StartedAt:          startTime,
+		CompletedAt:        &completedAt,
+		TotalPolicies:      result.TotalPolicies,
+		MigratedCount:      result.MigratedPolicies,
+		FailedCount:        result.FailedPolicies,
+		ValidationPassed:   result.FailedPolicies == 0,
+		Errors:             errorStrings,
+	}
+
+	s.logger.Info("RBAC migration completed",
+		forge.F("app_id", appID.String()),
+		forge.F("env_id", envID.String()),
+		forge.F("total", result.TotalPolicies),
+		forge.F("migrated", result.MigratedPolicies),
+		forge.F("failed", result.FailedPolicies),
+	)
+
+	return status, nil
 }
 
 // GetMigrationStatus retrieves migration status
 func (s *Service) GetMigrationStatus(ctx context.Context, appID, envID xid.ID, orgID *xid.ID) (*core.MigrationStatus, error) {
+	// Check if there's an ongoing or completed migration
+	// For now, return a basic status based on existing policies
+	policies, total, err := s.ListPolicies(ctx, appID, envID, orgID, map[string]interface{}{"limit": 1})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check migration status: %w", err)
+	}
+
+	status := "not_started"
+	if total > 0 && len(policies) > 0 {
+		status = "completed"
+	}
+
 	return &core.MigrationStatus{
-		AppID:         appID,
-		EnvironmentID: envID,
-		Status:        "not_started",
+		AppID:              appID,
+		EnvironmentID:      envID,
+		UserOrganizationID: orgID,
+		Status:             status,
+		TotalPolicies:      total,
+		MigratedCount:      total,
 	}, nil
 }
 
@@ -881,19 +949,151 @@ func (s *Service) ListAuditEvents(ctx context.Context, appID, envID xid.ID, orgI
 
 // GetAnalytics retrieves analytics data
 func (s *Service) GetAnalytics(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, timeRange map[string]interface{}) (*handlers.AnalyticsSummary, error) {
-	// TODO: Implement analytics aggregation
+	// Get policy counts
+	policies, totalPolicies, err := s.ListPolicies(ctx, appID, envID, orgID, map[string]interface{}{})
+	if err != nil {
+		s.logger.Warn("failed to get policies for analytics", forge.F("error", err.Error()))
+	}
+
+	// Count active policies
+	activePolicies := 0
+	for _, p := range policies {
+		if p.Enabled {
+			activePolicies++
+		}
+	}
+
+	// Get evaluation stats from repository
+	stats, err := s.repo.GetEvaluationStats(ctx, appID, envID, orgID, timeRange)
+	if err != nil {
+		s.logger.Warn("failed to get evaluation stats", forge.F("error", err.Error()))
+		// Return basic analytics without stats
+		return &handlers.AnalyticsSummary{
+			TotalPolicies:    totalPolicies,
+			ActivePolicies:   activePolicies,
+			TotalEvaluations: 0,
+			AllowedCount:     0,
+			DeniedCount:      0,
+			AvgLatencyMs:     0,
+			CacheHitRate:     0,
+		}, nil
+	}
+
+	// Calculate cache hit rate
+	var cacheHitRate float64
+	if stats.TotalEvaluations > 0 {
+		cacheHitRate = float64(stats.CacheHits) / float64(stats.TotalEvaluations) * 100
+	}
+
 	return &handlers.AnalyticsSummary{
-		TotalEvaluations: 0,
-		AllowedCount:     0,
-		DeniedCount:      0,
-		AvgLatencyMs:     0,
-		CacheHitRate:     0,
+		TotalPolicies:    totalPolicies,
+		ActivePolicies:   activePolicies,
+		TotalEvaluations: stats.TotalEvaluations,
+		AllowedCount:     stats.AllowedCount,
+		DeniedCount:      stats.DeniedCount,
+		AvgLatencyMs:     stats.AvgLatencyMs,
+		CacheHitRate:     cacheHitRate,
 	}, nil
 }
 
 // =============================================================================
 // CACHE OPERATIONS
 // =============================================================================
+
+// WarmCache pre-loads and compiles all active policies for a given scope into the cache
+// This is called during plugin initialization to ensure fast permission evaluation from the start
+func (s *Service) WarmCache(ctx context.Context, appID, envID xid.ID, orgID *xid.ID) error {
+	if s.compiler == nil {
+		return fmt.Errorf("CEL compiler not initialized")
+	}
+
+	// Fetch all enabled policies for the scope
+	enabledFilter := true
+	policies, err := s.repo.ListPolicies(ctx, appID, envID, orgID, storage.PolicyFilters{
+		Enabled: &enabledFilter,
+		Limit:   1000, // Reasonable limit for initial cache warm
+	})
+	if err != nil {
+		return fmt.Errorf("failed to fetch policies for cache warming: %w", err)
+	}
+
+	if len(policies) == 0 {
+		s.logger.Debug("no policies found for cache warming")
+		return nil
+	}
+
+	// Compile and cache each policy
+	compiledCount := 0
+	failedCount := 0
+
+	for _, policy := range policies {
+		// Compile the policy (core.Policy is already the correct type)
+		compiled, err := s.compiler.Compile(policy)
+		if err != nil {
+			s.logger.Warn("failed to compile policy during cache warming",
+				forge.F("policy_id", policy.ID.String()),
+				forge.F("error", err.Error()),
+			)
+			failedCount++
+			continue
+		}
+
+		// Add to cache
+		s.cacheCompiledPolicy(compiled)
+		compiledCount++
+	}
+
+	s.logger.Info("cache warming completed",
+		forge.F("total_policies", len(policies)),
+		forge.F("compiled", compiledCount),
+		forge.F("failed", failedCount),
+		forge.F("app_id", appID.String()),
+		forge.F("env_id", envID.String()),
+	)
+
+	return nil
+}
+
+// WarmCacheForAllApps warms the cache for all apps and environments
+// This should be called sparingly as it can be resource intensive
+func (s *Service) WarmCacheForAllApps(ctx context.Context) error {
+	// Fetch all enabled policies without scope restriction
+	enabledFilter := true
+	policies, err := s.repo.ListPolicies(ctx, xid.NilID(), xid.NilID(), nil, storage.PolicyFilters{
+		Enabled: &enabledFilter,
+		Limit:   5000, // Higher limit for global warm
+	})
+	if err != nil {
+		return fmt.Errorf("failed to fetch policies for global cache warming: %w", err)
+	}
+
+	if len(policies) == 0 {
+		s.logger.Debug("no policies found for global cache warming")
+		return nil
+	}
+
+	compiledCount := 0
+	failedCount := 0
+
+	for _, policy := range policies {
+		compiled, err := s.compiler.Compile(policy)
+		if err != nil {
+			failedCount++
+			continue
+		}
+
+		s.cacheCompiledPolicy(compiled)
+		compiledCount++
+	}
+
+	s.logger.Info("global cache warming completed",
+		forge.F("total_policies", len(policies)),
+		forge.F("compiled", compiledCount),
+		forge.F("failed", failedCount),
+	)
+
+	return nil
+}
 
 // InvalidateUserCache invalidates the cache for a specific user
 func (s *Service) InvalidateUserCache(ctx context.Context, userID xid.ID) error {

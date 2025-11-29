@@ -892,7 +892,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Register routes from dashboard extensions
 	extensionRoutes := p.extensionRegistry.GetAllRoutes()
-	p.log.Info("registering extension routes", forge.F("count", len(extensionRoutes)))
+	p.log.Info("registering extension routes",
+		forge.F("count", len(extensionRoutes)),
+		forge.F("basePath", p.basePath))
+
 	for _, route := range extensionRoutes {
 		// Build full path with app context
 		fullPath := "/dashboard/app/:appId" + route.Path
@@ -912,7 +915,8 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		} else {
 			p.log.Warn("extension route handler is not a valid function",
 				forge.F("path", fullPath),
-				forge.F("name", route.Name))
+				forge.F("name", route.Name),
+				forge.F("handler_type", fmt.Sprintf("%T", route.Handler)))
 			continue
 		}
 
@@ -943,10 +947,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.F("path", fullPath))
 		}
 
-		p.log.Debug("registered extension route",
+		// Log at Info level to ensure visibility
+		p.log.Info("registered extension route",
 			forge.F("method", route.Method),
 			forge.F("path", fullPath),
-			forge.F("name", route.Name))
+			forge.F("name", route.Name),
+			forge.F("requireAuth", route.RequireAuth),
+			forge.F("requireAdmin", route.RequireAdmin))
 	}
 
 	return nil

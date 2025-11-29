@@ -75,7 +75,7 @@ func (r *bunRepository) GetPolicy(ctx context.Context, id xid.ID) (*core.Policy,
 
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
-			return nil, nil
+	return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
@@ -289,8 +289,8 @@ func (r *bunRepository) GetNamespace(ctx context.Context, id xid.ID) (*core.Name
 
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
-			return nil, nil
-		}
+	return nil, nil
+}
 		return nil, fmt.Errorf("failed to get namespace: %w", err)
 	}
 
@@ -319,7 +319,7 @@ func (r *bunRepository) GetNamespaceByScope(ctx context.Context, appID, envID xi
 
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
-			return nil, nil
+	return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get namespace by scope: %w", err)
 	}
@@ -802,6 +802,83 @@ func toCoreAttributes(attrs []schema.ResourceAttribute) []core.ResourceAttribute
 		}
 	}
 	return result
+}
+
+// =============================================================================
+// ANALYTICS OPERATIONS
+// =============================================================================
+
+// GetEvaluationStats retrieves aggregated evaluation statistics
+func (r *bunRepository) GetEvaluationStats(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, timeRange map[string]interface{}) (*EvaluationStats, error) {
+	if r.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	// Check if the stats table exists - for now return empty stats
+	// In a full implementation, you would query the PermissionEvaluationStats table
+	stats := &EvaluationStats{
+		TotalEvaluations: 0,
+		AllowedCount:     0,
+		DeniedCount:      0,
+		AvgLatencyMs:     0,
+		CacheHits:        0,
+		CacheMisses:      0,
+	}
+
+	// Try to query the stats table if it exists
+	var result struct {
+		TotalEvaluations int64   `bun:"total_evaluations"`
+		AllowedCount     int64   `bun:"allowed_count"`
+		DeniedCount      int64   `bun:"denied_count"`
+		AvgLatencyMs     float64 `bun:"avg_latency_ms"`
+		CacheHits        int64   `bun:"cache_hits"`
+		CacheMisses      int64   `bun:"cache_misses"`
+	}
+
+	query := r.db.NewSelect().
+		TableExpr("permission_evaluation_stats").
+		ColumnExpr("SUM(evaluation_count) as total_evaluations").
+		ColumnExpr("SUM(allowed_count) as allowed_count").
+		ColumnExpr("SUM(denied_count) as denied_count").
+		ColumnExpr("AVG(avg_latency_ms) as avg_latency_ms").
+		ColumnExpr("SUM(cache_hits) as cache_hits").
+		ColumnExpr("SUM(cache_misses) as cache_misses").
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID)
+
+	// Handle organization scope
+	if userOrgID != nil && !userOrgID.IsNil() {
+		query = query.Where("(user_organization_id = ? OR user_organization_id IS NULL)", *userOrgID)
+	}
+
+	// Apply time range filter if provided
+	if startTime, ok := timeRange["startTime"].(string); ok && startTime != "" {
+		parsedTime, err := time.Parse(time.RFC3339, startTime)
+		if err == nil {
+			query = query.Where("created_at >= ?", parsedTime)
+		}
+	}
+	if endTime, ok := timeRange["endTime"].(string); ok && endTime != "" {
+		parsedTime, err := time.Parse(time.RFC3339, endTime)
+		if err == nil {
+			query = query.Where("created_at <= ?", parsedTime)
+		}
+	}
+
+	err := query.Scan(ctx, &result)
+	if err != nil {
+		// Table might not exist yet, return empty stats
+		return stats, nil
+	}
+
+	stats.TotalEvaluations = result.TotalEvaluations
+	stats.AllowedCount = result.AllowedCount
+	stats.DeniedCount = result.DeniedCount
+	stats.AvgLatencyMs = result.AvgLatencyMs
+	stats.CacheHits = result.CacheHits
+	stats.CacheMisses = result.CacheMisses
+
+	return stats, nil
 }
 
 // Ensure unused import is used
