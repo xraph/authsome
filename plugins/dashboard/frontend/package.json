@@ -1,0 +1,22 @@
+{
+  "name": "authsome-dashboard",
+  "version": "1.0.0",
+  "description": "AuthSome Dashboard Frontend Assets",
+  "private": true,
+  "scripts": {
+    "build:css": "npx @tailwindcss/cli -i ./src/input.css -o ../static/css/dashboard.css --minify",
+    "build:js": "node build-js.mjs",
+    "build": "npm run build:css && npm run build:js",
+    "watch:css": "npx @tailwindcss/cli -i ./src/input.css -o ../static/css/dashboard.css --watch",
+    "watch": "npm run watch:css",
+    "dev": "npm run watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/cli": "^4.0.0",
+    "@tailwindcss/forms": "^0.5.10",
+    "preline": "^3.2.0",
+    "esbuild": "^0.24.2"
+  }
+}
+

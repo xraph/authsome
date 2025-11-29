@@ -35,45 +35,14 @@ func Signup(data SignupPageData) g.Node {
 				Meta(Name("viewport"), Content("width=device-width, initial-scale=1.0")),
 				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
 
-				// Tailwind CSS CDN
-				Script(Src("https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio")),
-				Script(g.Raw(`tailwind.config = { darkMode: 'class' }`)),
+				// Compiled Tailwind CSS + Preline UI styles
+				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
 
-				// Alpine.js
-				Script(Defer(), Src("https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js")),
+				// Bundled JavaScript (Preline + custom components)
+				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
 
-				// Custom CSS
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/custom.css")),
-
-				// Alpine.js x-cloak style
-				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
-
-				// Theme management
-				Script(g.Raw(`
-					function themeData() {
-						return {
-							isDark: localStorage.getItem('theme') === 'dark' || 
-								(!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches),
-							initTheme() {
-								if (this.isDark) {
-									document.documentElement.classList.add('dark');
-								} else {
-									document.documentElement.classList.remove('dark');
-								}
-							},
-							toggleTheme() {
-								this.isDark = !this.isDark;
-								if (this.isDark) {
-									document.documentElement.classList.add('dark');
-									localStorage.setItem('theme', 'dark');
-								} else {
-									document.documentElement.classList.remove('dark');
-									localStorage.setItem('theme', 'light');
-								}
-							}
-						}
-					}
-				`)),
+				// Alpine.js - Load LAST
+				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
 			),
 
 			Body(Class("antialiased"),

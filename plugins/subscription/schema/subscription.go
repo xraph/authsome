@@ -33,9 +33,10 @@ type SubscriptionPlan struct {
 	ProviderPriceID string `json:"providerPriceId" bun:"provider_price_id"`
 
 	// Relations
-	App      *mainschema.App          `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
-	Features []SubscriptionPlanFeature `json:"features,omitempty" bun:"rel:has-many,join:id=plan_id"`
-	Tiers    []SubscriptionPlanTier    `json:"tiers,omitempty" bun:"rel:has-many,join:id=plan_id"`
+	App          *mainschema.App           `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
+	Features     []SubscriptionPlanFeature `json:"features,omitempty" bun:"rel:has-many,join:id=plan_id"`
+	Tiers        []SubscriptionPlanTier    `json:"tiers,omitempty" bun:"rel:has-many,join:id=plan_id"`
+	FeatureLinks []PlanFeatureLink         `json:"featureLinks,omitempty" bun:"rel:has-many,join:id=plan_id"`
 }
 
 // SubscriptionPlanFeature represents a feature limit on a plan

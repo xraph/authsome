@@ -35,6 +35,7 @@ type Repository interface {
 	OAuthClient() *OAuthClientRepository
 	AuthorizationCode() *AuthorizationCodeRepository
 	SSOProvider() *SSOProviderRepository
+	SocialProviderConfig() SocialProviderConfigRepository
 
 	// Multi-factor Authentication
 	TwoFA() *TwoFARepository
@@ -88,10 +89,11 @@ type Repo struct {
 	notification notification.Repository
 
 	// OAuth & SSO
-	oauthToken        *OAuthTokenRepository
-	oauthClient       *OAuthClientRepository
-	authorizationCode *AuthorizationCodeRepository
-	ssoProvider       *SSOProviderRepository
+	oauthToken           *OAuthTokenRepository
+	oauthClient          *OAuthClientRepository
+	authorizationCode    *AuthorizationCodeRepository
+	ssoProvider          *SSOProviderRepository
+	socialProviderConfig SocialProviderConfigRepository
 
 	// Multi-factor Authentication
 	twoFA    *TwoFARepository
@@ -146,10 +148,11 @@ func NewRepo(db *bun.DB) Repository {
 		notification: NewNotificationRepository(db),
 
 		// OAuth & SSO
-		oauthToken:        NewOAuthTokenRepository(db),
-		oauthClient:       NewOAuthClientRepository(db),
-		authorizationCode: NewAuthorizationCodeRepository(db),
-		ssoProvider:       NewSSOProviderRepository(db),
+		oauthToken:           NewOAuthTokenRepository(db),
+		oauthClient:          NewOAuthClientRepository(db),
+		authorizationCode:    NewAuthorizationCodeRepository(db),
+		ssoProvider:          NewSSOProviderRepository(db),
+		socialProviderConfig: NewSocialProviderConfigRepository(db),
 
 		// Multi-factor Authentication
 		twoFA:    NewTwoFARepository(db),
@@ -255,6 +258,10 @@ func (r *Repo) AuthorizationCode() *AuthorizationCodeRepository {
 
 func (r *Repo) SSOProvider() *SSOProviderRepository {
 	return r.ssoProvider
+}
+
+func (r *Repo) SocialProviderConfig() SocialProviderConfigRepository {
+	return r.socialProviderConfig
 }
 
 // Multi-factor Authentication

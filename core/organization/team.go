@@ -76,6 +76,8 @@ type TeamMember struct {
 	TeamID   xid.ID    `json:"teamID"`
 	MemberID xid.ID    `json:"memberID"` // References OrganizationMember
 	JoinedAt time.Time `json:"joinedAt"`
+	// User info (populated when listing)
+	User *UserInfo `json:"user,omitempty"`
 	// Provisioning tracking
 	ProvisionedBy *string `json:"provisionedBy,omitempty"` // e.g., "scim"
 	// Audit fields

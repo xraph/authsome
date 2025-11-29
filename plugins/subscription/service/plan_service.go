@@ -400,6 +400,7 @@ func (s *PlanService) schemaToDomain(plan *schema.SubscriptionPlan, features []c
 }
 
 func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan {
+	// Convert legacy features first
 	features := make([]core.PlanFeature, len(plan.Features))
 	for i, f := range plan.Features {
 		var value interface{}
@@ -410,6 +411,41 @@ func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan
 			Description: f.Description,
 			Type:        core.FeatureType(f.Type),
 			Value:       value,
+		}
+	}
+
+	// Convert new feature links (if present)
+	// These take precedence over legacy features with same key
+	if len(plan.FeatureLinks) > 0 {
+		linkFeatureMap := make(map[string]core.PlanFeature)
+		for _, link := range plan.FeatureLinks {
+			if link.Feature != nil && !link.IsBlocked {
+				var value interface{}
+				json.Unmarshal([]byte(link.Value), &value)
+				linkFeatureMap[link.Feature.Key] = core.PlanFeature{
+					Key:         link.Feature.Key,
+					Name:        link.Feature.Name,
+					Description: link.Feature.Description,
+					Type:        core.FeatureType(link.Feature.Type),
+					Value:       value,
+				}
+			}
+		}
+
+		// Merge: new features override legacy features
+		existingKeys := make(map[string]bool)
+		for i, f := range features {
+			if newF, ok := linkFeatureMap[f.Key]; ok {
+				features[i] = newF
+				existingKeys[f.Key] = true
+			}
+		}
+
+		// Add any new features not in legacy
+		for key, f := range linkFeatureMap {
+			if !existingKeys[key] {
+				features = append(features, f)
+			}
 		}
 	}
 

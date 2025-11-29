@@ -1,6 +1,7 @@
 package organization
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/xraph/authsome/internal/errs"
@@ -32,6 +33,7 @@ const (
 	CodeNotOwner                     = "NOT_ORGANIZATION_OWNER"
 	CodeNotAdmin                     = "NOT_ORGANIZATION_ADMIN"
 	CodeOrganizationCreationDisabled = "ORGANIZATION_CREATION_DISABLED"
+	CodePermissionDenied             = "ORGANIZATION_PERMISSION_DENIED"
 )
 
 // =============================================================================
@@ -150,6 +152,13 @@ func NotAdmin() *errs.AuthsomeError {
 	return errs.New(CodeNotAdmin, "User is not an organization admin or owner", http.StatusForbidden)
 }
 
+// PermissionDenied creates a permission denied error for RBAC checks
+func PermissionDenied(action, resource string) *errs.AuthsomeError {
+	return errs.New(CodePermissionDenied, fmt.Sprintf("Permission denied: %s on %s", action, resource), http.StatusForbidden).
+		WithContext("action", action).
+		WithContext("resource", resource)
+}
+
 // =============================================================================
 // SENTINEL ERRORS (for use with errors.Is)
 // =============================================================================
@@ -177,4 +186,5 @@ var (
 	ErrNotAdmin                     = &errs.AuthsomeError{Code: CodeNotAdmin}
 	ErrInvalidRole                  = &errs.AuthsomeError{Code: CodeInvalidRole}
 	ErrInvalidStatus                = &errs.AuthsomeError{Code: CodeInvalidStatus}
+	ErrPermissionDenied             = &errs.AuthsomeError{Code: CodePermissionDenied}
 )

@@ -7,6 +7,16 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
+// UserInfo contains basic user information for display purposes
+type UserInfo struct {
+	ID              xid.ID `json:"id"`
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	Image           string `json:"image"`
+	Username        string `json:"username,omitempty"`
+	DisplayUsername string `json:"displayUsername,omitempty"`
+}
+
 // Member represents an organization member entity DTO (Data Transfer Object)
 // This is separate from schema.OrganizationMember to maintain proper separation of concerns
 type Member struct {
@@ -16,6 +26,8 @@ type Member struct {
 	Role           string    `json:"role"`   // owner, admin, member
 	Status         string    `json:"status"` // active, suspended, pending
 	JoinedAt       time.Time `json:"joinedAt"`
+	// User info (populated when listing)
+	User *UserInfo `json:"user,omitempty"`
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`

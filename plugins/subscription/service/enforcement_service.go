@@ -16,11 +16,13 @@ import (
 
 // EnforcementService handles subscription limit enforcement
 type EnforcementService struct {
-	subRepo    repository.SubscriptionRepository
-	planRepo   repository.PlanRepository
-	usageRepo  repository.UsageRepository
-	orgService *organization.Service
-	config     core.Config
+	subRepo         repository.SubscriptionRepository
+	planRepo        repository.PlanRepository
+	usageRepo       repository.UsageRepository
+	featureRepo     repository.FeatureRepository
+	featureUsageRepo repository.FeatureUsageRepository
+	orgService      *organization.Service
+	config          core.Config
 }
 
 // NewEnforcementService creates a new enforcement service
@@ -38,6 +40,12 @@ func NewEnforcementService(
 		orgService: orgService,
 		config:     config,
 	}
+}
+
+// SetFeatureRepositories sets the feature repositories for enhanced feature checking
+func (s *EnforcementService) SetFeatureRepositories(featureRepo repository.FeatureRepository, featureUsageRepo repository.FeatureUsageRepository) {
+	s.featureRepo = featureRepo
+	s.featureUsageRepo = featureUsageRepo
 }
 
 // CheckFeatureAccess checks if an organization has access to a feature
@@ -239,6 +247,164 @@ func (s *EnforcementService) EnforceTeamLimit(ctx context.Context, orgID xid.ID)
 	return nil
 }
 
+// CheckFeatureAccessEnhanced checks feature access using the new feature system
+// Falls back to legacy system if new system is not configured
+func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, orgID xid.ID, featureKey string) (*core.FeatureAccess, error) {
+	// Get subscription
+	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
+	if err != nil {
+		return &core.FeatureAccess{HasAccess: false}, nil
+	}
+
+	// Check subscription status
+	status := core.SubscriptionStatus(sub.Status)
+	if !status.IsActiveOrTrialing() {
+		return &core.FeatureAccess{HasAccess: false}, nil
+	}
+
+	// Try new feature system first if configured
+	if s.featureRepo != nil && sub.Plan != nil {
+		feature, err := s.featureRepo.FindByKey(ctx, sub.Plan.AppID, featureKey)
+		if err == nil && feature != nil {
+			link, err := s.featureRepo.GetPlanLink(ctx, sub.PlanID, feature.ID)
+			if err == nil && link != nil {
+				// Feature found in new system
+				if link.IsBlocked {
+					return &core.FeatureAccess{
+						HasAccess: false,
+						IsBlocked: true,
+					}, nil
+				}
+
+				// Determine access based on feature type
+				var hasAccess bool
+				var limit int64 = 0
+
+				switch feature.Type {
+				case "boolean":
+					var val bool
+					json.Unmarshal([]byte(link.Value), &val)
+					hasAccess = val
+				case "unlimited":
+					hasAccess = true
+					limit = -1
+				case "limit", "metered":
+					var val float64
+					json.Unmarshal([]byte(link.Value), &val)
+					limit = int64(val)
+					hasAccess = limit > 0
+				case "tiered":
+					hasAccess = true
+				}
+
+				// Get current usage
+				var currentUsage int64 = 0
+				if s.featureUsageRepo != nil {
+					usage, err := s.featureUsageRepo.FindUsage(ctx, orgID, feature.ID)
+					if err == nil && usage != nil {
+						currentUsage = usage.CurrentUsage
+					}
+				}
+
+				// Get granted extra
+				var grantedExtra int64 = 0
+				if s.featureUsageRepo != nil {
+					grantedExtra, _ = s.featureUsageRepo.GetTotalGrantedValue(ctx, orgID, feature.ID)
+				}
+
+				effectiveLimit := limit
+				if limit > 0 {
+					effectiveLimit = limit + grantedExtra
+				}
+
+				var remaining int64 = -1
+				if effectiveLimit > 0 {
+					remaining = effectiveLimit - currentUsage
+					if remaining < 0 {
+						remaining = 0
+					}
+				}
+
+				return &core.FeatureAccess{
+					HasAccess:    hasAccess,
+					IsBlocked:    false,
+					Limit:        effectiveLimit,
+					CurrentUsage: currentUsage,
+					Remaining:    remaining,
+					GrantedExtra: grantedExtra,
+					PlanValue:    link.Value,
+				}, nil
+			}
+		}
+	}
+
+	// Fall back to legacy system
+	hasAccess, err := s.CheckFeatureAccess(ctx, orgID, featureKey)
+	if err != nil {
+		return &core.FeatureAccess{HasAccess: false}, err
+	}
+
+	limit := s.getFeatureLimitInt(sub.Plan, featureKey)
+
+	return &core.FeatureAccess{
+		HasAccess: hasAccess,
+		Limit:     limit,
+		Remaining: limit, // Legacy doesn't track usage
+	}, nil
+}
+
+// GetEffectiveLimitEnhanced returns the effective limit for a feature including grants
+func (s *EnforcementService) GetEffectiveLimitEnhanced(ctx context.Context, orgID xid.ID, featureKey string) (int64, error) {
+	// Get subscription
+	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
+	if err != nil {
+		return 0, suberrors.ErrSubscriptionNotFound
+	}
+
+	// Try new feature system first
+	if s.featureRepo != nil && sub.Plan != nil {
+		feature, err := s.featureRepo.FindByKey(ctx, sub.Plan.AppID, featureKey)
+		if err == nil && feature != nil {
+			link, err := s.featureRepo.GetPlanLink(ctx, sub.PlanID, feature.ID)
+			if err == nil && link != nil {
+				if link.IsBlocked {
+					return 0, nil
+				}
+
+				var baseLimit int64 = 0
+				switch feature.Type {
+				case "unlimited":
+					return -1, nil
+				case "limit", "metered":
+					var val float64
+					json.Unmarshal([]byte(link.Value), &val)
+					baseLimit = int64(val)
+				case "boolean":
+					var val bool
+					json.Unmarshal([]byte(link.Value), &val)
+					if val {
+						return -1, nil
+					}
+					return 0, nil
+				case "tiered":
+					return -1, nil
+				}
+
+				// Add grants
+				if s.featureUsageRepo != nil {
+					grantedExtra, _ := s.featureUsageRepo.GetTotalGrantedValue(ctx, orgID, feature.ID)
+					return baseLimit + grantedExtra, nil
+				}
+
+				return baseLimit, nil
+			}
+		}
+	}
+
+	// Fall back to legacy
+	return s.getFeatureLimitInt(sub.Plan, featureKey), nil
+}
+
 // Helper methods
 
 func (s *EnforcementService) getFeatureLimitInt(plan *schema.SubscriptionPlan, key string) int64 {
@@ -246,6 +412,27 @@ func (s *EnforcementService) getFeatureLimitInt(plan *schema.SubscriptionPlan, k
 		return 0
 	}
 
+	// First check new feature links if available
+	if s.featureRepo != nil && len(plan.FeatureLinks) > 0 {
+		for _, link := range plan.FeatureLinks {
+			if link.Feature != nil && link.Feature.Key == key {
+				if link.IsBlocked {
+					return 0
+				}
+				switch link.Feature.Type {
+				case "unlimited":
+					return -1
+				case "limit", "metered":
+					var val float64
+					if err := json.Unmarshal([]byte(link.Value), &val); err == nil {
+						return int64(val)
+					}
+				}
+			}
+		}
+	}
+
+	// Fall back to legacy features
 	for _, f := range plan.Features {
 		if f.Key != key {
 			continue

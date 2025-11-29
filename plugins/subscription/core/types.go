@@ -109,6 +109,10 @@ const (
 	FeatureTypeLimit FeatureType = "limit"
 	// FeatureTypeUnlimited is no limit on the feature
 	FeatureTypeUnlimited FeatureType = "unlimited"
+	// FeatureTypeMetered is a usage-based billing feature
+	FeatureTypeMetered FeatureType = "metered"
+	// FeatureTypeTiered provides different values at different usage levels
+	FeatureTypeTiered FeatureType = "tiered"
 )
 
 // String returns the string representation of the feature type
@@ -119,7 +123,110 @@ func (f FeatureType) String() string {
 // IsValid checks if the feature type is valid
 func (f FeatureType) IsValid() bool {
 	switch f {
-	case FeatureTypeBoolean, FeatureTypeLimit, FeatureTypeUnlimited:
+	case FeatureTypeBoolean, FeatureTypeLimit, FeatureTypeUnlimited,
+		FeatureTypeMetered, FeatureTypeTiered:
+		return true
+	}
+	return false
+}
+
+// IsConsumable returns true if the feature type can be consumed (has usage tracking)
+func (f FeatureType) IsConsumable() bool {
+	switch f {
+	case FeatureTypeLimit, FeatureTypeMetered:
+		return true
+	}
+	return false
+}
+
+// ResetPeriod defines when feature usage should be reset
+type ResetPeriod string
+
+const (
+	// ResetPeriodNone means usage never resets (cumulative)
+	ResetPeriodNone ResetPeriod = "none"
+	// ResetPeriodDaily resets usage every day
+	ResetPeriodDaily ResetPeriod = "daily"
+	// ResetPeriodWeekly resets usage every week
+	ResetPeriodWeekly ResetPeriod = "weekly"
+	// ResetPeriodMonthly resets usage every month
+	ResetPeriodMonthly ResetPeriod = "monthly"
+	// ResetPeriodYearly resets usage every year
+	ResetPeriodYearly ResetPeriod = "yearly"
+	// ResetPeriodBillingCycle resets usage at each billing cycle
+	ResetPeriodBillingCycle ResetPeriod = "billing_period"
+)
+
+// String returns the string representation of the reset period
+func (r ResetPeriod) String() string {
+	return string(r)
+}
+
+// IsValid checks if the reset period is valid
+func (r ResetPeriod) IsValid() bool {
+	switch r {
+	case ResetPeriodNone, ResetPeriodDaily, ResetPeriodWeekly,
+		ResetPeriodMonthly, ResetPeriodYearly, ResetPeriodBillingCycle:
+		return true
+	}
+	return false
+}
+
+// FeatureGrantType defines the type of feature grant
+type FeatureGrantType string
+
+const (
+	// FeatureGrantTypeAddon is a grant from an add-on purchase
+	FeatureGrantTypeAddon FeatureGrantType = "addon"
+	// FeatureGrantTypeOverride is a manual override
+	FeatureGrantTypeOverride FeatureGrantType = "override"
+	// FeatureGrantTypePromotion is a promotional grant
+	FeatureGrantTypePromotion FeatureGrantType = "promotion"
+	// FeatureGrantTypeTrial is a trial grant
+	FeatureGrantTypeTrial FeatureGrantType = "trial"
+	// FeatureGrantTypeManual is a manually added grant
+	FeatureGrantTypeManual FeatureGrantType = "manual"
+)
+
+// String returns the string representation of the feature grant type
+func (f FeatureGrantType) String() string {
+	return string(f)
+}
+
+// IsValid checks if the feature grant type is valid
+func (f FeatureGrantType) IsValid() bool {
+	switch f {
+	case FeatureGrantTypeAddon, FeatureGrantTypeOverride, FeatureGrantTypePromotion,
+		FeatureGrantTypeTrial, FeatureGrantTypeManual:
+		return true
+	}
+	return false
+}
+
+// FeatureUsageAction defines the type of usage action
+type FeatureUsageAction string
+
+const (
+	// FeatureUsageActionConsume decrements the available quota
+	FeatureUsageActionConsume FeatureUsageAction = "consume"
+	// FeatureUsageActionGrant adds to the quota
+	FeatureUsageActionGrant FeatureUsageAction = "grant"
+	// FeatureUsageActionReset resets the usage counter
+	FeatureUsageActionReset FeatureUsageAction = "reset"
+	// FeatureUsageActionAdjust manually adjusts the usage
+	FeatureUsageActionAdjust FeatureUsageAction = "adjust"
+)
+
+// String returns the string representation of the feature usage action
+func (f FeatureUsageAction) String() string {
+	return string(f)
+}
+
+// IsValid checks if the feature usage action is valid
+func (f FeatureUsageAction) IsValid() bool {
+	switch f {
+	case FeatureUsageActionConsume, FeatureUsageActionGrant,
+		FeatureUsageActionReset, FeatureUsageActionAdjust:
 		return true
 	}
 	return false

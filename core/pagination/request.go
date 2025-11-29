@@ -63,6 +63,37 @@ type PageMeta struct {
 	HasPrev     bool  `json:"hasPrev" example:"false"`
 }
 
+// Pagination is a simple pagination response struct for use in services
+type Pagination struct {
+	Page       int `json:"page"`
+	PageSize   int `json:"pageSize"`
+	TotalItems int `json:"totalItems"`
+	TotalPages int `json:"totalPages"`
+}
+
+// HasNext returns true if there are more pages
+func (p *Pagination) HasNext() bool {
+	return p.Page < p.TotalPages
+}
+
+// HasPrev returns true if there are previous pages
+func (p *Pagination) HasPrev() bool {
+	return p.Page > 1
+}
+
+// ToPageMeta converts Pagination to PageMeta for compatibility
+func (p *Pagination) ToPageMeta() *PageMeta {
+	return &PageMeta{
+		Total:       int64(p.TotalItems),
+		Limit:       p.PageSize,
+		Offset:      (p.Page - 1) * p.PageSize,
+		CurrentPage: p.Page,
+		TotalPages:  p.TotalPages,
+		HasNext:     p.HasNext(),
+		HasPrev:     p.HasPrev(),
+	}
+}
+
 // CursorMeta contains cursor-based pagination metadata
 type CursorMeta struct {
 	NextCursor string `json:"nextCursor,omitempty" example:"eyJpZCI6IjEyMyIsInRzIjoxNjQwMDAwMDAwfQ=="`

@@ -23,6 +23,7 @@ type Service struct {
 	config      Config
 	providers   map[string]providers.Provider
 	socialRepo  repository.SocialAccountRepository
+	configRepo  repository.SocialProviderConfigRepository // For DB-backed config
 	userService *user.Service
 	stateStore  StateStore
 	audit       *audit.Service
@@ -510,4 +511,142 @@ func (s *Service) ListProviders() []string {
 // UnlinkAccount removes a social account link
 func (s *Service) UnlinkAccount(ctx context.Context, userID xid.ID, provider string) error {
 	return s.socialRepo.Unlink(ctx, userID, provider)
+}
+
+// SetConfigRepository sets the config repository for DB-backed configuration
+func (s *Service) SetConfigRepository(repo repository.SocialProviderConfigRepository) {
+	s.configRepo = repo
+}
+
+// LoadConfigForEnvironment loads provider configurations from the database for a specific environment
+// and merges them with the current configuration. DB configs take precedence over code-based configs.
+func (s *Service) LoadConfigForEnvironment(ctx context.Context, appID, envID xid.ID) error {
+	if s.configRepo == nil {
+		return fmt.Errorf("config repository not set")
+	}
+
+	// Get enabled configurations from database
+	configs, err := s.configRepo.ListEnabledByEnvironment(ctx, appID, envID)
+	if err != nil {
+		return fmt.Errorf("failed to load provider configs from database: %w", err)
+	}
+
+	// Keep the base URL from the existing config
+	baseURL := s.config.BaseURL
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
+	}
+
+	// Clear existing providers and reinitialize with DB-backed configs
+	s.providers = make(map[string]providers.Provider)
+
+	for _, cfg := range configs {
+		if !cfg.IsEnabled {
+			continue
+		}
+
+		// Build provider config
+		providerConfig := providers.ProviderConfig{
+			ClientID:     cfg.ClientID,
+			ClientSecret: cfg.ClientSecret,
+			Enabled:      true,
+		}
+
+		// Use custom redirect URL if set, otherwise build default
+		if cfg.RedirectURL != "" {
+			providerConfig.RedirectURL = cfg.RedirectURL
+		} else {
+			providerConfig.RedirectURL = baseURL + "/api/auth/callback/" + cfg.ProviderName
+		}
+
+		// Use custom scopes if set, otherwise use defaults
+		if len(cfg.Scopes) > 0 {
+			providerConfig.Scopes = cfg.Scopes
+		} else {
+			providerConfig.Scopes = schema.GetProviderDefaultScopes(cfg.ProviderName)
+		}
+
+		// Apply advanced config options if present
+		if cfg.AdvancedConfig != nil {
+			if accessType, ok := cfg.AdvancedConfig["accessType"].(string); ok {
+				providerConfig.AccessType = accessType
+			}
+			if prompt, ok := cfg.AdvancedConfig["prompt"].(string); ok {
+				providerConfig.Prompt = prompt
+			}
+		}
+
+		// Create provider instance
+		provider := s.createProviderInstance(cfg.ProviderName, providerConfig)
+		if provider != nil {
+			s.providers[cfg.ProviderName] = provider
+		}
+	}
+
+	return nil
+}
+
+// createProviderInstance creates a provider instance for the given provider name and config
+func (s *Service) createProviderInstance(providerName string, cfg providers.ProviderConfig) providers.Provider {
+	switch providerName {
+	case "google":
+		return providers.NewGoogleProvider(cfg)
+	case "github":
+		return providers.NewGitHubProvider(cfg)
+	case "microsoft":
+		return providers.NewMicrosoftProvider(cfg)
+	case "apple":
+		return providers.NewAppleProvider(cfg)
+	case "facebook":
+		return providers.NewFacebookProvider(cfg)
+	case "discord":
+		return providers.NewDiscordProvider(cfg)
+	case "twitter":
+		return providers.NewTwitterProvider(cfg)
+	case "linkedin":
+		return providers.NewLinkedInProvider(cfg)
+	case "spotify":
+		return providers.NewSpotifyProvider(cfg)
+	case "twitch":
+		return providers.NewTwitchProvider(cfg)
+	case "dropbox":
+		return providers.NewDropboxProvider(cfg)
+	case "gitlab":
+		return providers.NewGitLabProvider(cfg)
+	case "line":
+		return providers.NewLINEProvider(cfg)
+	case "reddit":
+		return providers.NewRedditProvider(cfg)
+	case "slack":
+		return providers.NewSlackProvider(cfg)
+	case "bitbucket":
+		return providers.NewBitbucketProvider(cfg)
+	case "notion":
+		return providers.NewNotionProvider(cfg)
+	default:
+		return nil
+	}
+}
+
+// GetProviderConfig returns the current provider configuration for a specific provider
+// This can be used to inspect what's currently configured
+func (s *Service) GetProviderConfig(providerName string) *providers.ProviderConfig {
+	provider, ok := s.providers[providerName]
+	if !ok {
+		return nil
+	}
+
+	oauth2Config := provider.GetOAuth2Config()
+	return &providers.ProviderConfig{
+		ClientID:    oauth2Config.ClientID,
+		RedirectURL: oauth2Config.RedirectURL,
+		Scopes:      oauth2Config.Scopes,
+		Enabled:     true,
+	}
+}
+
+// IsProviderEnabled checks if a provider is currently enabled and configured
+func (s *Service) IsProviderEnabled(providerName string) bool {
+	_, ok := s.providers[providerName]
+	return ok
 }

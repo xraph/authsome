@@ -101,6 +101,15 @@ type TeamRepository interface {
 
 	// IsTeamMember checks if a member belongs to a team
 	IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error)
+
+	// FindTeamMemberByID retrieves a team member by its ID
+	FindTeamMemberByID(ctx context.Context, id xid.ID) (*TeamMember, error)
+
+	// FindTeamMember retrieves a team member by team ID and member ID
+	FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*TeamMember, error)
+
+	// ListMemberTeams retrieves all teams that a member belongs to
+	ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error)
 }
 
 // InvitationRepository defines the interface for organization invitation data access

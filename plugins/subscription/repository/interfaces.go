@@ -287,3 +287,132 @@ type EventFilter struct {
 	PageSize       int
 }
 
+// FeatureRepository defines the interface for feature persistence operations
+type FeatureRepository interface {
+	// Create creates a new feature
+	Create(ctx context.Context, feature *schema.Feature) error
+
+	// Update updates an existing feature
+	Update(ctx context.Context, feature *schema.Feature) error
+
+	// Delete deletes a feature
+	Delete(ctx context.Context, id xid.ID) error
+
+	// FindByID retrieves a feature by ID
+	FindByID(ctx context.Context, id xid.ID) (*schema.Feature, error)
+
+	// FindByKey retrieves a feature by key within an app
+	FindByKey(ctx context.Context, appID xid.ID, key string) (*schema.Feature, error)
+
+	// List retrieves features with optional filters
+	List(ctx context.Context, filter *FeatureFilter) ([]*schema.Feature, int, error)
+
+	// CreateTier creates a feature tier
+	CreateTier(ctx context.Context, tier *schema.FeatureTier) error
+
+	// DeleteTiers deletes all tiers for a feature
+	DeleteTiers(ctx context.Context, featureID xid.ID) error
+
+	// GetTiers retrieves all tiers for a feature
+	GetTiers(ctx context.Context, featureID xid.ID) ([]*schema.FeatureTier, error)
+
+	// LinkToPlan links a feature to a plan
+	LinkToPlan(ctx context.Context, link *schema.PlanFeatureLink) error
+
+	// UpdatePlanLink updates a feature-plan link
+	UpdatePlanLink(ctx context.Context, link *schema.PlanFeatureLink) error
+
+	// UnlinkFromPlan removes a feature from a plan
+	UnlinkFromPlan(ctx context.Context, planID, featureID xid.ID) error
+
+	// GetPlanLinks retrieves all feature links for a plan
+	GetPlanLinks(ctx context.Context, planID xid.ID) ([]*schema.PlanFeatureLink, error)
+
+	// GetPlanLink retrieves a specific feature link
+	GetPlanLink(ctx context.Context, planID, featureID xid.ID) (*schema.PlanFeatureLink, error)
+
+	// GetFeaturePlans retrieves all plans that have a feature
+	GetFeaturePlans(ctx context.Context, featureID xid.ID) ([]*schema.PlanFeatureLink, error)
+}
+
+// FeatureFilter defines filters for listing features
+type FeatureFilter struct {
+	AppID    *xid.ID
+	Type     string
+	IsPublic *bool
+	Page     int
+	PageSize int
+}
+
+// FeatureUsageRepository defines the interface for feature usage persistence operations
+type FeatureUsageRepository interface {
+	// CreateUsage creates or updates feature usage for an organization
+	CreateUsage(ctx context.Context, usage *schema.OrganizationFeatureUsage) error
+
+	// UpdateUsage updates feature usage
+	UpdateUsage(ctx context.Context, usage *schema.OrganizationFeatureUsage) error
+
+	// FindUsage retrieves feature usage for an organization and feature
+	FindUsage(ctx context.Context, orgID, featureID xid.ID) (*schema.OrganizationFeatureUsage, error)
+
+	// FindUsageByKey retrieves feature usage by feature key
+	FindUsageByKey(ctx context.Context, orgID, appID xid.ID, featureKey string) (*schema.OrganizationFeatureUsage, error)
+
+	// ListUsage retrieves all feature usage for an organization
+	ListUsage(ctx context.Context, orgID xid.ID) ([]*schema.OrganizationFeatureUsage, error)
+
+	// IncrementUsage atomically increments usage by a quantity
+	IncrementUsage(ctx context.Context, orgID, featureID xid.ID, quantity int64) (*schema.OrganizationFeatureUsage, error)
+
+	// DecrementUsage atomically decrements usage by a quantity
+	DecrementUsage(ctx context.Context, orgID, featureID xid.ID, quantity int64) (*schema.OrganizationFeatureUsage, error)
+
+	// ResetUsage resets usage to zero
+	ResetUsage(ctx context.Context, orgID, featureID xid.ID) error
+
+	// CreateLog creates a usage log entry
+	CreateLog(ctx context.Context, log *schema.FeatureUsageLog) error
+
+	// ListLogs retrieves usage logs with filters
+	ListLogs(ctx context.Context, filter *FeatureUsageLogFilter) ([]*schema.FeatureUsageLog, int, error)
+
+	// FindLogByIdempotencyKey finds a log by idempotency key
+	FindLogByIdempotencyKey(ctx context.Context, key string) (*schema.FeatureUsageLog, error)
+
+	// CreateGrant creates a feature grant
+	CreateGrant(ctx context.Context, grant *schema.FeatureGrant) error
+
+	// UpdateGrant updates a feature grant
+	UpdateGrant(ctx context.Context, grant *schema.FeatureGrant) error
+
+	// DeleteGrant deletes a feature grant
+	DeleteGrant(ctx context.Context, id xid.ID) error
+
+	// FindGrantByID retrieves a grant by ID
+	FindGrantByID(ctx context.Context, id xid.ID) (*schema.FeatureGrant, error)
+
+	// ListGrants retrieves all active grants for an organization and feature
+	ListGrants(ctx context.Context, orgID, featureID xid.ID) ([]*schema.FeatureGrant, error)
+
+	// ListAllOrgGrants retrieves all active grants for an organization
+	ListAllOrgGrants(ctx context.Context, orgID xid.ID) ([]*schema.FeatureGrant, error)
+
+	// GetTotalGrantedValue calculates total granted quota for an organization and feature
+	GetTotalGrantedValue(ctx context.Context, orgID, featureID xid.ID) (int64, error)
+
+	// ExpireGrants marks expired grants as inactive
+	ExpireGrants(ctx context.Context) error
+
+	// GetUsageNeedingReset retrieves usage records that need to be reset
+	GetUsageNeedingReset(ctx context.Context, resetPeriod string) ([]*schema.OrganizationFeatureUsage, error)
+}
+
+// FeatureUsageLogFilter defines filters for listing usage logs
+type FeatureUsageLogFilter struct {
+	OrganizationID *xid.ID
+	FeatureID      *xid.ID
+	Action         string
+	Page           int
+	PageSize       int
+}
+

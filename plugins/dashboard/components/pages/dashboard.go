@@ -49,24 +49,43 @@ type PluginItem struct {
 }
 
 // DashboardPage renders the dashboard stats page content
-func DashboardPage(stats *DashboardStats, basePath string, appIDStr string) g.Node {
-	return g.Group([]g.Node{
-		// Stats Grid
-		statsGrid(stats, basePath, appIDStr),
+func DashboardPage(stats *DashboardStats, basePath string, appIDStr string, extensionWidgets []g.Node) g.Node {
+	return Div(
+		Class("min-h-screen"),
+		g.Group([]g.Node{
+			// Stats Grid
+			statsGrid(stats, basePath, appIDStr),
 
-		// Content Grid
+			// Content Grid
+			Div(
+				Class("grid grid-cols-1 gap-6 lg:grid-cols-2 mt-6"),
+				recentActivityCard(stats.RecentActivity),
+				systemStatusCard(stats.SystemStatus),
+			),
+
+			// Extension Widgets Section
+			g.If(len(extensionWidgets) > 0,
+				extensionWidgetsSection(extensionWidgets),
+			),
+
+			// Plugins Overview
+			pluginsOverviewCard(stats.Plugins, basePath, appIDStr),
+
+			// Quick Actions
+			quickActionsCard(basePath, appIDStr),
+		}),
+	)
+}
+
+// extensionWidgetsSection renders the extension widgets in a grid
+func extensionWidgetsSection(widgets []g.Node) g.Node {
+	return Div(
+		Class("mt-6"),
 		Div(
-			Class("grid grid-cols-1 gap-6 lg:grid-cols-2 mt-6"),
-			recentActivityCard(stats.RecentActivity),
-			systemStatusCard(stats.SystemStatus),
+			Class("grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3"),
+			g.Group(widgets),
 		),
-
-		// Plugins Overview
-		pluginsOverviewCard(stats.Plugins, basePath, appIDStr),
-
-		// Quick Actions
-		quickActionsCard(basePath, appIDStr),
-	})
+	)
 }
 
 func statsGrid(stats *DashboardStats, basePath string, appIDStr string) g.Node {

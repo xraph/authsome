@@ -185,20 +185,20 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	ctx := context.Background()
 
 	// Create platform app
-	platformOrg := &schema.App{
+	platformApp := &schema.App{
 		ID:         xid.New(),
 		Name:       "Platform App",
 		Slug:       "platform",
 		IsPlatform: true,
 		Metadata:   map[string]interface{}{},
 	}
-	platformOrg.CreatedAt = time.Now()
-	platformOrg.UpdatedAt = time.Now()
-	platformOrg.CreatedBy = platformOrg.ID
-	platformOrg.UpdatedBy = platformOrg.ID
-	platformOrg.Version = 1
+	platformApp.CreatedAt = time.Now()
+	platformApp.UpdatedAt = time.Now()
+	platformApp.CreatedBy = platformApp.ID
+	platformApp.UpdatedBy = platformApp.ID
+	platformApp.Version = 1
 
-	_, err := db.NewInsert().Model(platformOrg).Exec(ctx)
+	_, err := db.NewInsert().Model(platformApp).Exec(ctx)
 	require.NoError(t, err)
 
 	// Create role registry with roles
@@ -224,14 +224,14 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 
 	// Bootstrap roles
 	rbacService := NewService()
-	err = registry.Bootstrap(ctx, db, rbacService, platformOrg.ID)
+	err = registry.Bootstrap(ctx, db, rbacService, platformApp.ID)
 	require.NoError(t, err)
 
 	// Verify roles were created in database
 	var roles []schema.Role
 	err = db.NewSelect().
 		Model(&roles).
-		Where("app_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformApp.ID).
 		Scan(ctx)
 	require.NoError(t, err)
 
@@ -249,7 +249,7 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	var permissions []schema.Permission
 	err = db.NewSelect().
 		Model(&permissions).
-		Where("app_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformApp.ID).
 		Scan(ctx)
 	require.NoError(t, err)
 
@@ -270,20 +270,20 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	ctx := context.Background()
 
 	// Create platform app
-	platformOrg := &schema.App{
+	platformApp := &schema.App{
 		ID:         xid.New(),
 		Name:       "Platform App",
 		Slug:       "platform",
 		IsPlatform: true,
 		Metadata:   map[string]interface{}{},
 	}
-	platformOrg.CreatedAt = time.Now()
-	platformOrg.UpdatedAt = time.Now()
-	platformOrg.CreatedBy = platformOrg.ID
-	platformOrg.UpdatedBy = platformOrg.ID
-	platformOrg.Version = 1
+	platformApp.CreatedAt = time.Now()
+	platformApp.UpdatedAt = time.Now()
+	platformApp.CreatedBy = platformApp.ID
+	platformApp.UpdatedBy = platformApp.ID
+	platformApp.Version = 1
 
-	_, err := db.NewInsert().Model(platformOrg).Exec(ctx)
+	_, err := db.NewInsert().Model(platformApp).Exec(ctx)
 	require.NoError(t, err)
 
 	// Create role registry
@@ -299,13 +299,13 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 
 	// Bootstrap first time
 	rbacService := NewService()
-	err = registry.Bootstrap(ctx, db, rbacService, platformOrg.ID)
+	err = registry.Bootstrap(ctx, db, rbacService, platformApp.ID)
 	require.NoError(t, err)
 
 	// Count roles
 	count1, err := db.NewSelect().
 		Model((*schema.Role)(nil)).
-		Where("app_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformApp.ID).
 		Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count1)
@@ -321,13 +321,13 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bootstrap again (idempotent)
-	err = registry.Bootstrap(ctx, db, rbacService, platformOrg.ID)
+	err = registry.Bootstrap(ctx, db, rbacService, platformApp.ID)
 	require.NoError(t, err)
 
 	// Should still have only 1 role (updated, not duplicated)
 	count2, err := db.NewSelect().
 		Model((*schema.Role)(nil)).
-		Where("app_id = ?", platformOrg.ID).
+		Where("app_id = ?", platformApp.ID).
 		Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count2)
@@ -336,7 +336,7 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	var role schema.Role
 	err = db.NewSelect().
 		Model(&role).
-		Where("name = ? AND app_id = ?", RoleAdmin, platformOrg.ID).
+		Where("name = ? AND app_id = ?", RoleAdmin, platformApp.ID).
 		Scan(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "Administrator v2", role.Description)
@@ -355,7 +355,7 @@ func TestRoleRegistry_ValidateRoleAssignment(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Register org role
+	// Register app role
 	err = registry.RegisterRole(&RoleDefinition{
 		Name:        RoleAdmin,
 		Description: RoleDescAdmin,
@@ -367,18 +367,18 @@ func TestRoleRegistry_ValidateRoleAssignment(t *testing.T) {
 
 	// Test platform role validation
 	err = registry.ValidateRoleAssignment(RoleSuperAdmin, true)
-	assert.NoError(t, err, "Platform role should be assignable in platform org")
+	assert.NoError(t, err, "Platform role should be assignable in platform app")
 
 	err = registry.ValidateRoleAssignment(RoleSuperAdmin, false)
-	assert.Error(t, err, "Platform role should NOT be assignable in non-platform org")
+	assert.Error(t, err, "Platform role should NOT be assignable in non-platform app")
 	assert.Contains(t, err.Error(), "platform role")
 
-	// Test org role validation
+	// Test app role validation
 	err = registry.ValidateRoleAssignment(RoleAdmin, true)
-	assert.NoError(t, err, "Org role should be assignable in platform org")
+	assert.NoError(t, err, "App role should be assignable in platform app")
 
 	err = registry.ValidateRoleAssignment(RoleAdmin, false)
-	assert.NoError(t, err, "Org role should be assignable in non-platform org")
+	assert.NoError(t, err, "App role should be assignable in non-platform app")
 }
 
 func TestRoleRegistry_GetRoleHierarchy(t *testing.T) {

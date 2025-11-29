@@ -25,12 +25,13 @@ func NewService(
 	invitationRepo InvitationRepository,
 	cfg Config,
 	rbacSvc *rbac.Service,
+	roleRepo rbac.RoleRepository,
 ) *Service {
 	return &Service{
 		Organization: NewOrganizationService(orgRepo, cfg, rbacSvc),
-		Member:       NewMemberService(memberRepo, orgRepo, cfg, rbacSvc),
+		Member:       NewMemberService(memberRepo, orgRepo, cfg, rbacSvc, roleRepo),
 		Team:         NewTeamService(teamRepo, memberRepo, cfg, rbacSvc),
-		Invitation:   NewInvitationService(invitationRepo, memberRepo, orgRepo, cfg, rbacSvc),
+		Invitation:   NewInvitationService(invitationRepo, memberRepo, orgRepo, cfg, rbacSvc, roleRepo),
 	}
 }
 
@@ -94,6 +95,10 @@ func (s *Service) UpdateMember(ctx context.Context, id xid.ID, req *UpdateMember
 	return s.Member.UpdateMember(ctx, id, req, updaterUserID)
 }
 
+func (s *Service) UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, newRole string, updaterUserID xid.ID) (*Member, error) {
+	return s.Member.UpdateMemberRole(ctx, orgID, memberID, newRole, updaterUserID)
+}
+
 func (s *Service) RemoveMember(ctx context.Context, id, removerUserID xid.ID) error {
 	return s.Member.RemoveMember(ctx, id, removerUserID)
 }
@@ -124,6 +129,19 @@ func (s *Service) RequireOwner(ctx context.Context, orgID, userID xid.ID) error 
 
 func (s *Service) RequireAdmin(ctx context.Context, orgID, userID xid.ID) error {
 	return s.Member.RequireAdmin(ctx, orgID, userID)
+}
+
+// RBAC Permission methods delegation
+func (s *Service) CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error) {
+	return s.Member.CheckPermission(ctx, orgID, userID, action, resource)
+}
+
+func (s *Service) CheckPermissionWithContext(ctx context.Context, orgID, userID xid.ID, action, resource string, contextVars map[string]string) (bool, error) {
+	return s.Member.CheckPermissionWithContext(ctx, orgID, userID, action, resource, contextVars)
+}
+
+func (s *Service) RequirePermission(ctx context.Context, orgID, userID xid.ID, action, resource string) error {
+	return s.Member.RequirePermission(ctx, orgID, userID, action, resource)
 }
 
 // =============================================================================
@@ -168,6 +186,18 @@ func (s *Service) ListTeamMembers(ctx context.Context, filter *ListTeamMembersFi
 
 func (s *Service) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
 	return s.Team.IsTeamMember(ctx, teamID, memberID)
+}
+
+func (s *Service) FindTeamMemberByID(ctx context.Context, id xid.ID) (*TeamMember, error) {
+	return s.Team.FindTeamMemberByID(ctx, id)
+}
+
+func (s *Service) FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*TeamMember, error) {
+	return s.Team.FindTeamMember(ctx, teamID, memberID)
+}
+
+func (s *Service) ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error) {
+	return s.Team.ListMemberTeams(ctx, memberID, filter)
 }
 
 // =============================================================================

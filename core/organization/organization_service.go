@@ -52,10 +52,12 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 		return nil, MaxOrganizationsReached(s.config.MaxOrganizationsPerUser)
 	}
 
-	// Check if slug is already taken within this app+environment
-	existing, err := s.repo.FindBySlug(ctx, appID, environmentID, req.Slug)
-	if err == nil && existing != nil {
-		return nil, OrganizationSlugExists(req.Slug)
+	// Check if slug is already taken within this app+environment (if enforcement is enabled)
+	if s.config.EnforceUniqueSlug {
+		existing, err := s.repo.FindBySlug(ctx, appID, environmentID, req.Slug)
+		if err == nil && existing != nil {
+			return nil, OrganizationSlugExists(req.Slug)
+		}
 	}
 
 	// Handle logo (convert pointer to string)

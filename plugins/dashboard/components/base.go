@@ -9,6 +9,14 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
+// ExtensionNavItemData holds raw data for extension navigation items
+type ExtensionNavItemData struct {
+	Label    string
+	Icon     g.Node
+	URL      string
+	IsActive bool
+}
+
 // PageData represents common data for all pages
 type PageData struct {
 	Title              string
@@ -28,7 +36,8 @@ type PageData struct {
 	CurrentEnvironment *environment.Environment   // Current environment in context
 	UserEnvironments   []*environment.Environment // Environments for current app
 	ShowEnvSwitcher    bool                       // Whether to show environment switcher in header
-	ExtensionNavItems  []g.Node                   // Navigation items from dashboard extensions
+	ExtensionNavItems  []g.Node                   // Navigation items from dashboard extensions (for header nav)
+	ExtensionNavData   []ExtensionNavItemData     // Raw navigation item data for sidebar rendering
 	ExtensionWidgets   []g.Node                   // Dashboard widgets from extensions
 }
 
@@ -47,26 +56,20 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 				Meta(Name("viewport"), Content("width=device-width, initial-scale=1.0")),
 				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
 
-				// Tailwind CSS CDN
-				Script(Src("https://cdn.tailwindcss.com?plugins=forms,typography")),
-
-				// Custom CSS
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/custom.css")),
+				// Compiled Tailwind CSS + Preline UI styles
+				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
 
 				// Alpine.js x-cloak style
 				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
 
-				// Tailwind Configuration
-				tailwindConfig(),
-
-				// Load component functions BEFORE Alpine.js
+				// Load Pines Components and Dashboard JS BEFORE Alpine.js
 				Script(Src(data.BasePath+"/dashboard/static/js/pines-components.js")),
 				Script(Src(data.BasePath+"/dashboard/static/js/dashboard.js")),
 
-				Link(Href("https://cdn.jsdelivr.net/npm/daisyui@5"), Rel("stylesheet"), Type("text/css")),
-				Script(Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
+				// Bundled JavaScript (Preline UI) - loads before Alpine.js
+				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
 
-				// Alpine.js - Load LAST
+				// Alpine.js - Load LAST (components must be defined before Alpine initializes)
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
 			),
 
@@ -113,31 +116,76 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 	)
 }
 
-func tailwindConfig() g.Node {
-	return Script(g.Raw(`
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            DEFAULT: 'rgb(124 58 237)',
-                            50: 'rgb(250 245 255)',
-                            100: 'rgb(243 232 255)',
-                            200: 'rgb(233 213 255)',
-                            300: 'rgb(216 180 254)',
-                            400: 'rgb(192 132 252)',
-                            500: 'rgb(168 85 247)',
-                            600: 'rgb(147 51 234)',
-                            700: 'rgb(126 34 206)',
-                            800: 'rgb(107 33 168)',
-                            900: 'rgb(88 28 135)',
-                        }
-                    }
-                }
-            }
-        }
-    `))
+// BaseLayout renders the main HTML structure
+func EmptyLayout(data PageData, content g.Node) g.Node {
+	return Doctype(
+		HTML(
+			g.Attr("lang", "en"),
+			Class("h-full"),
+			g.Attr("x-data", "themeData()"),
+			g.Attr("x-init", "initTheme()"),
+			g.Attr(":class", "{ 'dark': isDark }"),
+
+			Head(
+				Meta(Charset("UTF-8")),
+				Meta(Name("viewport"), Content("width=device-width, initial-scale=1.0")),
+				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
+
+				// Compiled Tailwind CSS + Preline UI styles
+				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
+
+				// Alpine.js x-cloak style
+				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
+
+				// Load Pines Components and Dashboard JS BEFORE Alpine.js
+				Script(Src(data.BasePath+"/dashboard/static/js/pines-components.js")),
+				Script(Src(data.BasePath+"/dashboard/static/js/dashboard.js")),
+
+				// Bundled JavaScript (Preline UI) - loads before Alpine.js
+				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
+
+				// Alpine.js - Load LAST (components must be defined before Alpine initializes)
+				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
+			),
+
+			Body(
+				Class("w-full min-h-screen overflow-x-hidden bg-slate-50 dark:bg-gray-950"),
+				g.Attr("x-data", "{ userDropdownOpen: false, mobileNavOpen: false }"),
+
+				// Global notification container
+				notificationContainer(),
+
+				// Page container
+				Div(
+					ID("page-container"),
+					Class("mx-auto flex min-h-screen w-full min-w-[320px] flex-col"),
+
+					// Page Content
+					Main(
+						ID("page-content"),
+						Class("flex max-w-full flex-auto flex-col"),
+
+						// Page Heading
+						pageHeading(data),
+
+						// Page Section
+						Div(
+							Class("container mx-auto p-4 lg:p-8"),
+
+							// Flash Messages
+							flashMessages(data),
+
+							// Content
+							content,
+						),
+					),
+
+					// Page Footer
+					DashboardFooter(data),
+				),
+			),
+		),
+	)
 }
 
 func notificationContainer() g.Node {
@@ -244,10 +292,6 @@ func pageHeading(data PageData) g.Node {
 					Div(
 						Class("grow"),
 						H1(Class("mb-1 text-xl font-bold text-slate-900 dark:text-white"), g.Text(data.Title)),
-						// H2(
-						// 	Class("text-sm font-medium text-slate-500 dark:text-gray-400"),
-						// 	g.Text("Welcome to your AuthSome dashboard"),
-						// ),
 					),
 				),
 			),

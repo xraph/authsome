@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/ui"
+	"github.com/xraph/authsome/plugins/subscription/handlers"
 	"github.com/xraph/authsome/plugins/subscription/providers"
 	"github.com/xraph/authsome/plugins/subscription/providers/mock"
 	"github.com/xraph/authsome/plugins/subscription/providers/stripe"
@@ -29,24 +30,28 @@ type Plugin struct {
 	logger forge.Logger
 
 	// Services
-	planSvc         *service.PlanService
-	subscriptionSvc *service.SubscriptionService
-	addOnSvc        *service.AddOnService
-	invoiceSvc      *service.InvoiceService
-	usageSvc        *service.UsageService
-	paymentSvc      *service.PaymentService
-	customerSvc     *service.CustomerService
-	enforcementSvc  *service.EnforcementService
+	planSvc          *service.PlanService
+	subscriptionSvc  *service.SubscriptionService
+	addOnSvc         *service.AddOnService
+	invoiceSvc       *service.InvoiceService
+	usageSvc         *service.UsageService
+	paymentSvc       *service.PaymentService
+	customerSvc      *service.CustomerService
+	enforcementSvc   *service.EnforcementService
+	featureSvc       *service.FeatureService
+	featureUsageSvc  *service.FeatureUsageService
 
 	// Repositories
-	planRepo    repository.PlanRepository
-	subRepo     repository.SubscriptionRepository
-	addOnRepo   repository.AddOnRepository
-	invoiceRepo repository.InvoiceRepository
-	usageRepo   repository.UsageRepository
-	paymentRepo repository.PaymentMethodRepository
-	customerRepo repository.CustomerRepository
-	eventRepo   repository.EventRepository
+	planRepo         repository.PlanRepository
+	subRepo          repository.SubscriptionRepository
+	addOnRepo        repository.AddOnRepository
+	invoiceRepo      repository.InvoiceRepository
+	usageRepo        repository.UsageRepository
+	paymentRepo      repository.PaymentMethodRepository
+	customerRepo     repository.CustomerRepository
+	eventRepo        repository.EventRepository
+	featureRepo      repository.FeatureRepository
+	featureUsageRepo repository.FeatureUsageRepository
 
 	// Payment provider
 	provider providers.PaymentProvider
@@ -63,6 +68,10 @@ type Plugin struct {
 
 	// Default config (set via options)
 	defaultConfig Config
+
+	// Feature handlers
+	featureHandlers *handlers.FeatureHandlers
+	publicHandlers  *handlers.PublicHandlers
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -195,6 +204,13 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		(*schema.SubscriptionPaymentMethod)(nil),
 		(*schema.SubscriptionCustomer)(nil),
 		(*schema.SubscriptionEvent)(nil),
+		// Feature system models
+		(*schema.Feature)(nil),
+		(*schema.FeatureTier)(nil),
+		(*schema.PlanFeatureLink)(nil),
+		(*schema.OrganizationFeatureUsage)(nil),
+		(*schema.FeatureUsageLog)(nil),
+		(*schema.FeatureGrant)(nil),
 	)
 
 	// Get hook registry
@@ -221,6 +237,8 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	p.paymentRepo = repository.NewPaymentMethodRepository(p.db)
 	p.customerRepo = repository.NewCustomerRepository(p.db)
 	p.eventRepo = repository.NewEventRepository(p.db)
+	p.featureRepo = repository.NewFeatureRepository(p.db)
+	p.featureUsageRepo = repository.NewFeatureUsageRepository(p.db)
 
 	// Initialize payment provider
 	if p.config.IsStripeConfigured() {
@@ -266,6 +284,21 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.orgService,
 		p.config,
 	)
+	p.featureSvc = service.NewFeatureService(p.featureRepo, p.planRepo, p.eventRepo)
+	p.featureUsageSvc = service.NewFeatureUsageService(
+		p.featureUsageRepo,
+		p.featureRepo,
+		p.subRepo,
+		p.planRepo,
+		p.eventRepo,
+	)
+
+	// Set feature repositories on enforcement service for enhanced feature checking
+	p.enforcementSvc.SetFeatureRepositories(p.featureRepo, p.featureUsageRepo)
+
+	// Initialize handlers
+	p.featureHandlers = handlers.NewFeatureHandlers(p.featureSvc, p.featureUsageSvc)
+	p.publicHandlers = handlers.NewPublicHandlers(p.featureSvc, p.planSvc)
 
 	// Initialize dashboard extension
 	p.dashboardExt = NewDashboardExtension(p)
@@ -495,7 +528,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Subscription", "Webhooks"),
 	)
 
-	// Feature/limit check routes
+	// Feature/limit check routes (legacy)
 	router.GET("/subscription/features/:orgId/:feature", p.handleCheckFeature,
 		forge.WithName("subscription.features.check"),
 		forge.WithSummary("Check feature access"),
@@ -509,6 +542,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Get all limits and current usage for an organization"),
 		forge.WithTags("Subscription", "Limits"),
 	)
+
+	// Register feature management routes
+	p.registerFeatureRoutes(router)
+
+	// Register public API routes
+	p.registerPublicRoutes(router)
 
 	return nil
 }
@@ -584,6 +623,13 @@ func (p *Plugin) Migrate() error {
 		(*schema.SubscriptionPaymentMethod)(nil),
 		(*schema.SubscriptionCustomer)(nil),
 		(*schema.SubscriptionEvent)(nil),
+		// Feature system tables
+		(*schema.Feature)(nil),
+		(*schema.FeatureTier)(nil),
+		(*schema.PlanFeatureLink)(nil),
+		(*schema.OrganizationFeatureUsage)(nil),
+		(*schema.FeatureUsageLog)(nil),
+		(*schema.FeatureGrant)(nil),
 	}
 
 	for _, model := range tables {
@@ -647,5 +693,278 @@ func (p *Plugin) GetHookRegistry() *SubscriptionHookRegistry {
 // GetConfig returns the plugin configuration
 func (p *Plugin) GetConfig() Config {
 	return p.config
+}
+
+// GetFeatureService returns the feature service
+func (p *Plugin) GetFeatureService() *service.FeatureService {
+	return p.featureSvc
+}
+
+// GetFeatureUsageService returns the feature usage service
+func (p *Plugin) GetFeatureUsageService() *service.FeatureUsageService {
+	return p.featureUsageSvc
+}
+
+// registerFeatureRoutes registers feature management routes
+func (p *Plugin) registerFeatureRoutes(router forge.Router) {
+	// Feature CRUD routes
+	featureGroup := router.Group("/subscription/features")
+	{
+		featureGroup.POST("", p.handleCreateFeature,
+			forge.WithName("subscription.features.create"),
+			forge.WithSummary("Create feature"),
+			forge.WithDescription("Create a new feature definition"),
+			forge.WithTags("Subscription", "Features"),
+			forge.WithValidation(true),
+		)
+
+		featureGroup.GET("", p.handleListFeatures,
+			forge.WithName("subscription.features.list"),
+			forge.WithSummary("List features"),
+			forge.WithDescription("List all feature definitions"),
+			forge.WithTags("Subscription", "Features"),
+		)
+
+		featureGroup.GET("/:id", p.handleGetFeature,
+			forge.WithName("subscription.features.get"),
+			forge.WithSummary("Get feature"),
+			forge.WithDescription("Get a specific feature by ID"),
+			forge.WithTags("Subscription", "Features"),
+		)
+
+		featureGroup.PATCH("/:id", p.handleUpdateFeature,
+			forge.WithName("subscription.features.update"),
+			forge.WithSummary("Update feature"),
+			forge.WithDescription("Update an existing feature"),
+			forge.WithTags("Subscription", "Features"),
+			forge.WithValidation(true),
+		)
+
+		featureGroup.DELETE("/:id", p.handleDeleteFeature,
+			forge.WithName("subscription.features.delete"),
+			forge.WithSummary("Delete feature"),
+			forge.WithDescription("Delete a feature"),
+			forge.WithTags("Subscription", "Features"),
+		)
+	}
+
+	// Plan-Feature linking routes
+	planFeatureGroup := router.Group("/subscription/plans/:planId/features")
+	{
+		planFeatureGroup.POST("", p.handleLinkFeatureToPlan,
+			forge.WithName("subscription.plans.features.link"),
+			forge.WithSummary("Link feature to plan"),
+			forge.WithDescription("Link a feature to a plan with configuration"),
+			forge.WithTags("Subscription", "Plans", "Features"),
+			forge.WithValidation(true),
+		)
+
+		planFeatureGroup.GET("", p.handleGetPlanFeatures,
+			forge.WithName("subscription.plans.features.list"),
+			forge.WithSummary("Get plan features"),
+			forge.WithDescription("Get all features linked to a plan"),
+			forge.WithTags("Subscription", "Plans", "Features"),
+		)
+
+		planFeatureGroup.PATCH("/:featureId", p.handleUpdatePlanFeatureLink,
+			forge.WithName("subscription.plans.features.update"),
+			forge.WithSummary("Update plan feature link"),
+			forge.WithDescription("Update the feature-plan link configuration"),
+			forge.WithTags("Subscription", "Plans", "Features"),
+			forge.WithValidation(true),
+		)
+
+		planFeatureGroup.DELETE("/:featureId", p.handleUnlinkFeatureFromPlan,
+			forge.WithName("subscription.plans.features.unlink"),
+			forge.WithSummary("Unlink feature from plan"),
+			forge.WithDescription("Remove a feature from a plan"),
+			forge.WithTags("Subscription", "Plans", "Features"),
+		)
+	}
+
+	// Organization feature usage routes
+	orgFeatureGroup := router.Group("/subscription/organizations/:orgId/features")
+	{
+		orgFeatureGroup.GET("", p.handleGetOrgFeatures,
+			forge.WithName("subscription.organizations.features.list"),
+			forge.WithSummary("Get organization features"),
+			forge.WithDescription("Get all feature access for an organization"),
+			forge.WithTags("Subscription", "Organizations", "Features"),
+		)
+
+		orgFeatureGroup.GET("/:key/usage", p.handleGetFeatureUsage,
+			forge.WithName("subscription.organizations.features.usage"),
+			forge.WithSummary("Get feature usage"),
+			forge.WithDescription("Get usage for a specific feature"),
+			forge.WithTags("Subscription", "Organizations", "Features"),
+		)
+
+		orgFeatureGroup.GET("/:key/access", p.handleCheckFeatureAccess,
+			forge.WithName("subscription.organizations.features.access"),
+			forge.WithSummary("Check feature access"),
+			forge.WithDescription("Check if organization has access to a feature"),
+			forge.WithTags("Subscription", "Organizations", "Features"),
+		)
+
+		orgFeatureGroup.POST("/:key/consume", p.handleConsumeFeature,
+			forge.WithName("subscription.organizations.features.consume"),
+			forge.WithSummary("Consume feature quota"),
+			forge.WithDescription("Consume feature quota for an organization"),
+			forge.WithTags("Subscription", "Organizations", "Features"),
+			forge.WithValidation(true),
+		)
+
+		orgFeatureGroup.POST("/:key/grant", p.handleGrantFeature,
+			forge.WithName("subscription.organizations.features.grant"),
+			forge.WithSummary("Grant feature quota"),
+			forge.WithDescription("Grant additional feature quota to an organization"),
+			forge.WithTags("Subscription", "Organizations", "Features"),
+			forge.WithValidation(true),
+		)
+	}
+
+	// Grants management
+	router.GET("/subscription/organizations/:orgId/grants", p.handleListGrants,
+		forge.WithName("subscription.organizations.grants.list"),
+		forge.WithSummary("List grants"),
+		forge.WithDescription("List all active grants for an organization"),
+		forge.WithTags("Subscription", "Organizations", "Grants"),
+	)
+
+	router.DELETE("/subscription/grants/:grantId", p.handleRevokeGrant,
+		forge.WithName("subscription.grants.revoke"),
+		forge.WithSummary("Revoke grant"),
+		forge.WithDescription("Revoke a feature grant"),
+		forge.WithTags("Subscription", "Grants"),
+	)
+}
+
+// registerPublicRoutes registers public pricing page routes
+func (p *Plugin) registerPublicRoutes(router forge.Router) {
+	publicGroup := router.Group("/subscription/public")
+	{
+		publicGroup.GET("/plans", p.handleListPublicPlans,
+			forge.WithName("subscription.public.plans.list"),
+			forge.WithSummary("List public plans"),
+			forge.WithDescription("List all public plans with features for pricing pages"),
+			forge.WithTags("Subscription", "Public"),
+		)
+
+		publicGroup.GET("/plans/:slug", p.handleGetPublicPlan,
+			forge.WithName("subscription.public.plans.get"),
+			forge.WithSummary("Get public plan"),
+			forge.WithDescription("Get a public plan by slug"),
+			forge.WithTags("Subscription", "Public"),
+		)
+
+		publicGroup.GET("/plans/:slug/features", p.handleGetPublicPlanFeatures,
+			forge.WithName("subscription.public.plans.features"),
+			forge.WithSummary("Get public plan features"),
+			forge.WithDescription("Get features for a public plan"),
+			forge.WithTags("Subscription", "Public"),
+		)
+
+		publicGroup.GET("/features", p.handleListPublicFeatures,
+			forge.WithName("subscription.public.features.list"),
+			forge.WithSummary("List public features"),
+			forge.WithDescription("List all public features"),
+			forge.WithTags("Subscription", "Public"),
+		)
+
+		publicGroup.GET("/compare", p.handleComparePlans,
+			forge.WithName("subscription.public.compare"),
+			forge.WithSummary("Compare plans"),
+			forge.WithDescription("Compare features across plans"),
+			forge.WithTags("Subscription", "Public"),
+		)
+	}
+}
+
+// Feature handler wrappers
+
+func (p *Plugin) handleCreateFeature(c forge.Context) error {
+	return p.featureHandlers.HandleCreateFeature(c)
+}
+
+func (p *Plugin) handleListFeatures(c forge.Context) error {
+	return p.featureHandlers.HandleListFeatures(c)
+}
+
+func (p *Plugin) handleGetFeature(c forge.Context) error {
+	return p.featureHandlers.HandleGetFeature(c)
+}
+
+func (p *Plugin) handleUpdateFeature(c forge.Context) error {
+	return p.featureHandlers.HandleUpdateFeature(c)
+}
+
+func (p *Plugin) handleDeleteFeature(c forge.Context) error {
+	return p.featureHandlers.HandleDeleteFeature(c)
+}
+
+func (p *Plugin) handleLinkFeatureToPlan(c forge.Context) error {
+	return p.featureHandlers.HandleLinkFeatureToPlan(c)
+}
+
+func (p *Plugin) handleGetPlanFeatures(c forge.Context) error {
+	return p.featureHandlers.HandleGetPlanFeatures(c)
+}
+
+func (p *Plugin) handleUpdatePlanFeatureLink(c forge.Context) error {
+	return p.featureHandlers.HandleUpdatePlanFeatureLink(c)
+}
+
+func (p *Plugin) handleUnlinkFeatureFromPlan(c forge.Context) error {
+	return p.featureHandlers.HandleUnlinkFeatureFromPlan(c)
+}
+
+func (p *Plugin) handleGetOrgFeatures(c forge.Context) error {
+	return p.featureHandlers.HandleGetOrgFeatures(c)
+}
+
+func (p *Plugin) handleGetFeatureUsage(c forge.Context) error {
+	return p.featureHandlers.HandleGetFeatureUsage(c)
+}
+
+func (p *Plugin) handleCheckFeatureAccess(c forge.Context) error {
+	return p.featureHandlers.HandleCheckFeatureAccess(c)
+}
+
+func (p *Plugin) handleConsumeFeature(c forge.Context) error {
+	return p.featureHandlers.HandleConsumeFeature(c)
+}
+
+func (p *Plugin) handleGrantFeature(c forge.Context) error {
+	return p.featureHandlers.HandleGrantFeature(c)
+}
+
+func (p *Plugin) handleListGrants(c forge.Context) error {
+	return p.featureHandlers.HandleListGrants(c)
+}
+
+func (p *Plugin) handleRevokeGrant(c forge.Context) error {
+	return p.featureHandlers.HandleRevokeGrant(c)
+}
+
+// Public handler wrappers
+
+func (p *Plugin) handleListPublicPlans(c forge.Context) error {
+	return p.publicHandlers.HandleListPublicPlans(c)
+}
+
+func (p *Plugin) handleGetPublicPlan(c forge.Context) error {
+	return p.publicHandlers.HandleGetPublicPlan(c)
+}
+
+func (p *Plugin) handleGetPublicPlanFeatures(c forge.Context) error {
+	return p.publicHandlers.HandleGetPublicPlanFeatures(c)
+}
+
+func (p *Plugin) handleListPublicFeatures(c forge.Context) error {
+	return p.publicHandlers.HandleListPublicFeatures(c)
+}
+
+func (p *Plugin) handleComparePlans(c forge.Context) error {
+	return p.publicHandlers.HandleComparePlans(c)
 }
 

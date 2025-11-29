@@ -284,7 +284,7 @@ func appSwitcherLink(app *app.App, basePath string, isActive bool) g.Node {
 		Class("group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors "+activeClass),
 		Div(
 			Class("flex-shrink-0 w-8 h-8 rounded bg-primary/10 dark:bg-primary/20 flex items-center justify-center"),
-			Span(Class("text-xs font-bold text-primary"), g.Text(string(app.Name[0]))),
+			Span(Class("text-xs font-bold text-primary"), g.Text(getFirstChar(app.Name, "A"))),
 		),
 		Div(
 			Class("flex-1 min-w-0"),
@@ -380,7 +380,7 @@ func environmentSwitcherLink(env *environment.Environment, basePath string, appI
 			Class("w-full group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors "+activeClass),
 			Div(
 				Class("flex-shrink-0 w-8 h-8 rounded bg-primary/10 dark:bg-primary/20 flex items-center justify-center"),
-				Span(Class("text-xs font-bold text-primary"), g.Text(string(env.Name[0]))),
+				Span(Class("text-xs font-bold text-primary"), g.Text(getFirstChar(env.Name, "E"))),
 			),
 			Div(
 				Class("flex-1 min-w-0"),

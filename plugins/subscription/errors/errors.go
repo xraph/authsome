@@ -64,10 +64,21 @@ var (
 	ErrWebhookEventUnhandled   = errors.New("webhook event not handled")
 
 	// Feature/limit errors
-	ErrFeatureLimitExceeded = errors.New("feature limit exceeded")
-	ErrSeatLimitExceeded    = errors.New("seat limit exceeded")
-	ErrSubscriptionRequired = errors.New("subscription is required")
-	ErrTrialExpired         = errors.New("trial period has expired")
+	ErrFeatureLimitExceeded  = errors.New("feature limit exceeded")
+	ErrSeatLimitExceeded     = errors.New("seat limit exceeded")
+	ErrSubscriptionRequired  = errors.New("subscription is required")
+	ErrTrialExpired          = errors.New("trial period has expired")
+	ErrFeatureNotFound       = errors.New("feature not found")
+	ErrFeatureAlreadyExists  = errors.New("feature with this key already exists")
+	ErrFeatureInUse          = errors.New("feature is linked to plans and cannot be deleted")
+	ErrFeatureAlreadyLinked  = errors.New("feature is already linked to this plan")
+	ErrFeatureLinkNotFound   = errors.New("feature link not found")
+	ErrFeatureNotAvailable   = errors.New("feature is not available for this subscription")
+	ErrInvalidFeatureType    = errors.New("invalid feature type")
+	ErrInvalidResetPeriod    = errors.New("invalid reset period")
+	ErrInsufficientQuota     = errors.New("insufficient feature quota")
+	ErrFeatureGrantNotFound  = errors.New("feature grant not found")
+	ErrFeatureUsageNotFound  = errors.New("feature usage record not found")
 
 	// General errors
 	ErrInvalidCurrency = errors.New("invalid currency code")
@@ -129,7 +140,11 @@ func IsNotFoundError(err error) bool {
 		errors.Is(err, ErrInvoiceNotFound) ||
 		errors.Is(err, ErrUsageRecordNotFound) ||
 		errors.Is(err, ErrPaymentMethodNotFound) ||
-		errors.Is(err, ErrCustomerNotFound)
+		errors.Is(err, ErrCustomerNotFound) ||
+		errors.Is(err, ErrFeatureNotFound) ||
+		errors.Is(err, ErrFeatureLinkNotFound) ||
+		errors.Is(err, ErrFeatureGrantNotFound) ||
+		errors.Is(err, ErrFeatureUsageNotFound)
 }
 
 // IsValidationError checks if the error is a validation error
@@ -142,7 +157,9 @@ func IsValidationError(err error) bool {
 		errors.Is(err, ErrInvalidUsageAction) ||
 		errors.Is(err, ErrInvalidCurrency) ||
 		errors.Is(err, ErrInvalidAppID) ||
-		errors.Is(err, ErrInvalidOrgID)
+		errors.Is(err, ErrInvalidOrgID) ||
+		errors.Is(err, ErrInvalidFeatureType) ||
+		errors.Is(err, ErrInvalidResetPeriod)
 }
 
 // IsConflictError checks if the error is a conflict/duplicate error
@@ -152,14 +169,17 @@ func IsConflictError(err error) bool {
 		errors.Is(err, ErrAddOnAlreadyExists) ||
 		errors.Is(err, ErrAddOnAlreadyAttached) ||
 		errors.Is(err, ErrCustomerAlreadyExists) ||
-		errors.Is(err, ErrDuplicateUsageRecord)
+		errors.Is(err, ErrDuplicateUsageRecord) ||
+		errors.Is(err, ErrFeatureAlreadyExists) ||
+		errors.Is(err, ErrFeatureAlreadyLinked)
 }
 
 // IsLimitError checks if the error is a limit-related error
 func IsLimitError(err error) bool {
 	return errors.Is(err, ErrFeatureLimitExceeded) ||
 		errors.Is(err, ErrSeatLimitExceeded) ||
-		errors.Is(err, ErrAddOnMaxQuantity)
+		errors.Is(err, ErrAddOnMaxQuantity) ||
+		errors.Is(err, ErrInsufficientQuota)
 }
 
 // IsPaymentError checks if the error is payment-related

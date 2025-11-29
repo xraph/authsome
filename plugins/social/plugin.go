@@ -9,9 +9,11 @@ import (
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/social/providers"
+	"github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
@@ -24,6 +26,8 @@ type Plugin struct {
 	config        Config
 	defaultConfig Config
 	authInst      core.Authsome
+	configRepo    repository.SocialProviderConfigRepository
+	dashboardExt  *DashboardExtension
 }
 
 // PluginOption is a functional option for configuring the social plugin
@@ -174,6 +178,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Create social service
 	p.service = NewService(p.config, socialRepo, userSvc, stateStore, auditSvc)
 
+	// Create config repository for DB-backed provider configs
+	p.configRepo = repository.NewSocialProviderConfigRepository(db)
+
+	// Set config repository on service for environment-scoped loading
+	p.service.SetConfigRepository(p.configRepo)
+
 	// Create rate limiter (only if Redis is available)
 	var rateLimiter *RateLimiter
 	if p.config.StateStorage.UseRedis {
@@ -189,6 +199,10 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Create handler
 	p.handler = NewHandler(p.service, rateLimiter)
+
+	// Initialize dashboard extension
+	p.dashboardExt = NewDashboardExtension(p, p.configRepo)
+	fmt.Printf("[Social] Dashboard extension initialized\n")
 
 	return nil
 }
@@ -325,22 +339,56 @@ func (p *Plugin) Migrate() error {
 		return fmt.Errorf("failed to create social_accounts table: %w", err)
 	}
 
-	// Create indexes for performance
-	indexes := []struct {
+	// Create social_provider_configs table for dashboard-managed provider configs
+	_, err = p.db.NewCreateTable().
+		Model((*schema.SocialProviderConfig)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create social_provider_configs table: %w", err)
+	}
+
+	// Create indexes for social_accounts
+	accountIndexes := []struct {
 		name    string
 		columns []string
 	}{
 		{"idx_social_accounts_user_id", []string{"user_id"}},
 		{"idx_social_accounts_provider", []string{"provider"}},
 		{"idx_social_accounts_provider_id", []string{"provider_id"}},
-		{"idx_social_accounts_org_id", []string{"organization_id"}},
+		{"idx_social_accounts_app_id", []string{"app_id"}},
+		{"idx_social_accounts_user_org_id", []string{"user_organization_id"}},
 		{"idx_social_accounts_email", []string{"email"}},
-		{"idx_social_accounts_provider_provider_id_org", []string{"provider", "provider_id", "organization_id"}},
+		{"idx_social_accounts_provider_provider_id_app", []string{"provider", "provider_id", "app_id"}},
 	}
 
-	for _, idx := range indexes {
+	for _, idx := range accountIndexes {
 		_, err := p.db.NewCreateIndex().
 			Model((*schema.SocialAccount)(nil)).
+			Index(idx.name).
+			Column(idx.columns...).
+			IfNotExists().
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create index %s: %w", idx.name, err)
+		}
+	}
+
+	// Create indexes for social_provider_configs
+	configIndexes := []struct {
+		name    string
+		columns []string
+	}{
+		{"idx_spc_app_id", []string{"app_id"}},
+		{"idx_spc_environment_id", []string{"environment_id"}},
+		{"idx_spc_provider_name", []string{"provider_name"}},
+		{"idx_spc_app_env", []string{"app_id", "environment_id"}},
+		{"idx_spc_app_env_provider", []string{"app_id", "environment_id", "provider_name"}},
+	}
+
+	for _, idx := range configIndexes {
+		_, err := p.db.NewCreateIndex().
+			Model((*schema.SocialProviderConfig)(nil)).
 			Index(idx.name).
 			Column(idx.columns...).
 			IfNotExists().
@@ -356,6 +404,16 @@ func (p *Plugin) Migrate() error {
 // GetService returns the social service (for testing/internal use)
 func (p *Plugin) GetService() *Service {
 	return p.service
+}
+
+// DashboardExtension returns the dashboard extension for the social plugin
+func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	return p.dashboardExt
+}
+
+// GetConfigRepository returns the config repository (for testing/internal use)
+func (p *Plugin) GetConfigRepository() repository.SocialProviderConfigRepository {
+	return p.configRepo
 }
 
 // Type alias for error responses

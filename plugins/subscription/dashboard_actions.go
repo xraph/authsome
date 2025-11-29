@@ -1,7 +1,9 @@
 package subscription
 
 import (
+	"context"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -37,6 +39,7 @@ func (e *DashboardExtension) HandleCreatePlan(c forge.Context) error {
 
 	form := c.Request().Form
 	name := strings.TrimSpace(form.Get("name"))
+	slug := strings.TrimSpace(form.Get("slug"))
 	description := strings.TrimSpace(form.Get("description"))
 	priceStr := form.Get("price")
 	currency := form.Get("currency")
@@ -50,6 +53,11 @@ func (e *DashboardExtension) HandleCreatePlan(c forge.Context) error {
 		return c.String(http.StatusBadRequest, "Plan name is required")
 	}
 
+	// Generate slug from name if not provided
+	if slug == "" {
+		slug = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+	}
+
 	price, err := strconv.ParseInt(priceStr, 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "Invalid price")
@@ -57,10 +65,66 @@ func (e *DashboardExtension) HandleCreatePlan(c forge.Context) error {
 
 	trialDays, _ := strconv.Atoi(trialDaysStr)
 
+	// Build metadata based on billing pattern
+	metadata := make(map[string]any)
+	switch billingPattern {
+	case "per_seat":
+		if v := form.Get("seat_price"); v != "" {
+			if seatPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["seat_price"] = seatPrice
+			}
+		}
+		if v := form.Get("min_seats"); v != "" {
+			if minSeats, err := strconv.Atoi(v); err == nil {
+				metadata["min_seats"] = minSeats
+			}
+		}
+		if v := form.Get("max_seats"); v != "" {
+			if maxSeats, err := strconv.Atoi(v); err == nil {
+				metadata["max_seats"] = maxSeats
+			}
+		}
+	case "tiered":
+		if v := form.Get("tier_unit"); v != "" {
+			metadata["unit_name"] = v
+		}
+	case "usage":
+		if v := form.Get("unit_name"); v != "" {
+			metadata["unit_name"] = v
+		}
+		if v := form.Get("unit_price"); v != "" {
+			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["unit_price"] = unitPrice
+			}
+		}
+		if v := form.Get("usage_aggregation"); v != "" {
+			metadata["usage_aggregation"] = v
+		}
+	case "hybrid":
+		if v := form.Get("hybrid_base"); v != "" {
+			if hybridBase, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["hybrid_base_price"] = hybridBase
+			}
+		}
+		if v := form.Get("hybrid_unit_name"); v != "" {
+			metadata["unit_name"] = v
+		}
+		if v := form.Get("hybrid_unit_price"); v != "" {
+			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["unit_price"] = unitPrice
+			}
+		}
+		if v := form.Get("included_units"); v != "" {
+			if includedUnits, err := strconv.Atoi(v); err == nil {
+				metadata["included_units"] = includedUnits
+			}
+		}
+	}
+
 	// Create plan using service request
 	req := &core.CreatePlanRequest{
 		Name:            name,
-		Slug:            strings.ToLower(strings.ReplaceAll(name, " ", "-")),
+		Slug:            slug,
 		Description:     description,
 		BasePrice:       price,
 		Currency:        currency,
@@ -69,15 +133,19 @@ func (e *DashboardExtension) HandleCreatePlan(c forge.Context) error {
 		TrialDays:       trialDays,
 		IsActive:        isActive,
 		IsPublic:        isPublic,
+		Metadata:        metadata,
 	}
 
-	_, err = e.plugin.planSvc.Create(ctx, currentApp.ID, req)
+	plan, err := e.plugin.planSvc.Create(ctx, currentApp.ID, req)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to create plan: "+err.Error())
 	}
 
-	// Redirect to plans list
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans")
+	// Link selected features to the plan
+	e.linkFeaturesFromForm(ctx, plan.ID, form, currentApp.ID)
+
+	// Redirect to plan detail page
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String())
 }
 
 // HandleUpdatePlan handles plan update form submission
@@ -106,7 +174,7 @@ func (e *DashboardExtension) HandleUpdatePlan(c forge.Context) error {
 	}
 
 	// Verify plan exists
-	_, err = e.plugin.planSvc.GetByID(ctx, planID)
+	existingPlan, err := e.plugin.planSvc.GetByID(ctx, planID)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Plan not found")
 	}
@@ -123,6 +191,67 @@ func (e *DashboardExtension) HandleUpdatePlan(c forge.Context) error {
 	trialDays, _ := strconv.Atoi(form.Get("trial_days"))
 	isActive := form.Get("is_active") == "true"
 	isPublic := form.Get("is_public") == "true"
+	billingPattern := form.Get("billing_pattern")
+
+	// Build metadata based on billing pattern
+	metadata := existingPlan.Metadata
+	if metadata == nil {
+		metadata = make(map[string]any)
+	}
+
+	switch billingPattern {
+	case "per_seat":
+		if v := form.Get("seat_price"); v != "" {
+			if seatPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["seat_price"] = seatPrice
+			}
+		}
+		if v := form.Get("min_seats"); v != "" {
+			if minSeats, err := strconv.Atoi(v); err == nil {
+				metadata["min_seats"] = minSeats
+			}
+		}
+		if v := form.Get("max_seats"); v != "" {
+			if maxSeats, err := strconv.Atoi(v); err == nil {
+				metadata["max_seats"] = maxSeats
+			}
+		}
+	case "tiered":
+		if v := form.Get("tier_unit"); v != "" {
+			metadata["unit_name"] = v
+		}
+	case "usage":
+		if v := form.Get("unit_name"); v != "" {
+			metadata["unit_name"] = v
+		}
+		if v := form.Get("unit_price"); v != "" {
+			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["unit_price"] = unitPrice
+			}
+		}
+		if v := form.Get("usage_aggregation"); v != "" {
+			metadata["usage_aggregation"] = v
+		}
+	case "hybrid":
+		if v := form.Get("hybrid_base"); v != "" {
+			if hybridBase, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["hybrid_base_price"] = hybridBase
+			}
+		}
+		if v := form.Get("hybrid_unit_name"); v != "" {
+			metadata["unit_name"] = v
+		}
+		if v := form.Get("hybrid_unit_price"); v != "" {
+			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
+				metadata["unit_price"] = unitPrice
+			}
+		}
+		if v := form.Get("included_units"); v != "" {
+			if includedUnits, err := strconv.Atoi(v); err == nil {
+				metadata["included_units"] = includedUnits
+			}
+		}
+	}
 
 	updateReq := &core.UpdatePlanRequest{
 		Name:        &name,
@@ -131,12 +260,16 @@ func (e *DashboardExtension) HandleUpdatePlan(c forge.Context) error {
 		TrialDays:   &trialDays,
 		IsActive:    &isActive,
 		IsPublic:    &isPublic,
+		Metadata:    metadata,
 	}
 
 	_, err = e.plugin.planSvc.Update(ctx, planID, updateReq)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to update plan: "+err.Error())
 	}
+
+	// Update feature links
+	e.linkFeaturesFromForm(ctx, planID, form, currentApp.ID)
 
 	// Redirect to plan detail
 	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planID.String())
@@ -403,6 +536,62 @@ func (e *DashboardExtension) HandleCreateCoupon(c forge.Context) error {
 	// Coupon service not yet integrated into Plugin
 	// For now, redirect back to coupons page
 	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons")
+}
+
+// linkFeaturesFromForm processes the feature selection from the plan form
+func (e *DashboardExtension) linkFeaturesFromForm(ctx context.Context, planID xid.ID, form url.Values, appID xid.ID) {
+	// Get all features for the app
+	features, _, _ := e.plugin.featureSvc.List(ctx, appID, "", false, 1, 1000)
+
+	// Get existing linked features
+	existingLinks, _ := e.plugin.featureSvc.GetPlanFeatures(ctx, planID)
+	existingMap := make(map[string]bool)
+	for _, link := range existingLinks {
+		existingMap[link.FeatureID.String()] = true
+	}
+
+	// Process each feature
+	for _, feature := range features {
+		featureID := feature.ID.String()
+		isSelected := form.Get("feature_"+featureID) != ""
+		valueKey := "feature_value_" + featureID
+		value := form.Get(valueKey)
+
+		// Handle boolean features - checkbox value
+		if feature.Type == core.FeatureTypeBoolean {
+			if isSelected {
+				value = "true"
+			} else {
+				value = "false"
+			}
+		}
+
+		// Handle unlimited features
+		if feature.Type == core.FeatureTypeUnlimited && isSelected {
+			value = "-1"
+		}
+
+		if isSelected {
+			// Link or update feature
+			if existingMap[featureID] {
+				// Update existing link
+				updateReq := &core.UpdateLinkRequest{
+					Value: &value,
+				}
+				e.plugin.featureSvc.UpdatePlanLink(ctx, planID, feature.ID, updateReq)
+			} else {
+				// Create new link
+				linkReq := &core.LinkFeatureRequest{
+					FeatureID: feature.ID,
+					Value:     value,
+				}
+				e.plugin.featureSvc.LinkToPlan(ctx, planID, linkReq)
+			}
+		} else if existingMap[featureID] {
+			// Remove link if previously linked but now unselected
+			e.plugin.featureSvc.UnlinkFromPlan(ctx, planID, feature.ID)
+		}
+	}
 }
 
 // Suppress unused variable warnings

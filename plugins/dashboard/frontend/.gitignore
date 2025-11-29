@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build artifacts (generated files should be committed)
+src/.bundle-entry.js
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+

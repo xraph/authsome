@@ -1,0 +1,310 @@
+/* AuthSome Dashboard - Tailwind CSS + Preline UI */
+@import "tailwindcss";
+
+/* Source files for class detection */
+/* Go templates (gomponents) - dashboard plugin */
+@source "../../components/**/*.go";
+@source "../../*.go";
+/* Dashboard extensions from other plugins */
+@source "../../../**/dashboard_extension.go";
+@source "../../../**/pages/*.go";
+/* Static JS files */
+@source "../../static/js/*.js";
+/* Preline UI JS for its component classes */
+@source "../node_modules/preline/dist/*.js";
+
+/* Preline UI Variants */
+@import "../node_modules/preline/variants.css";
+
+/* Tailwind Forms Plugin */
+@plugin "@tailwindcss/forms";
+
+/* Theme Configuration */
+@theme {
+  /* Primary Color - Violet */
+  --color-primary-50: oklch(0.969 0.016 293.756);
+  --color-primary-100: oklch(0.943 0.029 294.588);
+  --color-primary-200: oklch(0.894 0.057 293.283);
+  --color-primary-300: oklch(0.811 0.111 293.571);
+  --color-primary-400: oklch(0.702 0.183 293.541);
+  --color-primary-500: oklch(0.606 0.25 292.717);
+  --color-primary-600: oklch(0.541 0.281 293.009);
+  --color-primary-700: oklch(0.491 0.27 292.581);
+  --color-primary-800: oklch(0.432 0.232 292.759);
+  --color-primary-900: oklch(0.38 0.189 293.745);
+  --color-primary-950: oklch(0.283 0.141 291.089);
+  --color-primary: var(--color-primary-600);
+
+  /* Slate Color Palette (commonly used in dashboards) */
+  --color-slate-50: oklch(0.984 0.003 247.858);
+  --color-slate-100: oklch(0.968 0.007 247.896);
+  --color-slate-200: oklch(0.929 0.013 255.508);
+  --color-slate-300: oklch(0.869 0.022 252.894);
+  --color-slate-400: oklch(0.704 0.04 256.788);
+  --color-slate-500: oklch(0.554 0.046 257.417);
+  --color-slate-600: oklch(0.446 0.043 257.281);
+  --color-slate-700: oklch(0.372 0.044 257.287);
+  --color-slate-800: oklch(0.279 0.041 260.031);
+  --color-slate-900: oklch(0.208 0.042 265.755);
+  --color-slate-950: oklch(0.129 0.042 264.695);
+
+  /* Violet Color Palette */
+  --color-violet-50: oklch(0.969 0.016 293.756);
+  --color-violet-100: oklch(0.943 0.029 294.588);
+  --color-violet-200: oklch(0.894 0.057 293.283);
+  --color-violet-300: oklch(0.811 0.111 293.571);
+  --color-violet-400: oklch(0.702 0.183 293.541);
+  --color-violet-500: oklch(0.606 0.25 292.717);
+  --color-violet-600: oklch(0.541 0.281 293.009);
+  --color-violet-700: oklch(0.491 0.27 292.581);
+  --color-violet-800: oklch(0.432 0.232 292.759);
+  --color-violet-900: oklch(0.38 0.189 293.745);
+  --color-violet-950: oklch(0.283 0.141 291.089);
+
+  /* Purple Color Palette */
+  --color-purple-50: oklch(0.977 0.014 308.299);
+  --color-purple-100: oklch(0.946 0.033 307.174);
+  --color-purple-200: oklch(0.902 0.063 306.703);
+  --color-purple-300: oklch(0.827 0.119 306.383);
+  --color-purple-400: oklch(0.714 0.203 305.504);
+  --color-purple-500: oklch(0.627 0.265 303.9);
+  --color-purple-600: oklch(0.558 0.288 302.321);
+  --color-purple-700: oklch(0.496 0.265 301.924);
+  --color-purple-800: oklch(0.438 0.218 303.724);
+  --color-purple-900: oklch(0.381 0.176 304.987);
+  --color-purple-950: oklch(0.291 0.149 302.717);
+
+  /* Indigo Color Palette */
+  --color-indigo-50: oklch(0.962 0.018 272.314);
+  --color-indigo-100: oklch(0.93 0.034 272.788);
+  --color-indigo-200: oklch(0.87 0.065 274.039);
+  --color-indigo-300: oklch(0.785 0.115 274.713);
+  --color-indigo-400: oklch(0.673 0.182 276.935);
+  --color-indigo-500: oklch(0.585 0.233 277.117);
+  --color-indigo-600: oklch(0.511 0.262 276.966);
+  --color-indigo-700: oklch(0.457 0.24 277.023);
+  --color-indigo-800: oklch(0.398 0.195 277.366);
+  --color-indigo-900: oklch(0.359 0.144 278.697);
+  --color-indigo-950: oklch(0.257 0.09 281.288);
+
+  /* Sky Color Palette */
+  --color-sky-50: oklch(0.977 0.013 236.62);
+  --color-sky-100: oklch(0.951 0.026 236.824);
+  --color-sky-200: oklch(0.901 0.058 230.902);
+  --color-sky-300: oklch(0.828 0.111 230.318);
+  --color-sky-400: oklch(0.746 0.16 232.661);
+  --color-sky-500: oklch(0.685 0.169 237.323);
+  --color-sky-600: oklch(0.588 0.158 241.966);
+  --color-sky-700: oklch(0.5 0.134 242.749);
+  --color-sky-800: oklch(0.443 0.11 240.79);
+  --color-sky-900: oklch(0.391 0.09 240.876);
+  --color-sky-950: oklch(0.293 0.066 243.157);
+
+  /* Rose Color Palette */
+  --color-rose-50: oklch(0.969 0.015 12.422);
+  --color-rose-100: oklch(0.941 0.03 12.58);
+  --color-rose-200: oklch(0.892 0.058 10.001);
+  --color-rose-300: oklch(0.81 0.117 11.638);
+  --color-rose-400: oklch(0.712 0.194 13.428);
+  --color-rose-500: oklch(0.645 0.246 16.439);
+  --color-rose-600: oklch(0.586 0.253 17.585);
+  --color-rose-700: oklch(0.514 0.222 16.935);
+  --color-rose-800: oklch(0.455 0.188 13.697);
+  --color-rose-900: oklch(0.41 0.159 10.272);
+  --color-rose-950: oklch(0.271 0.105 12.094);
+
+  /* Pink Color Palette */
+  --color-pink-50: oklch(0.971 0.014 343.198);
+  --color-pink-100: oklch(0.948 0.028 342.258);
+  --color-pink-200: oklch(0.899 0.061 343.231);
+  --color-pink-300: oklch(0.823 0.12 346.018);
+  --color-pink-400: oklch(0.718 0.202 349.761);
+  --color-pink-500: oklch(0.656 0.241 354.308);
+  --color-pink-600: oklch(0.592 0.249 0.584);
+  --color-pink-700: oklch(0.525 0.223 3.958);
+  --color-pink-800: oklch(0.459 0.187 3.815);
+  --color-pink-900: oklch(0.408 0.153 2.432);
+  --color-pink-950: oklch(0.284 0.109 3.907);
+
+  /* Gray 950 - for dark mode backgrounds */
+  --color-gray-950: oklch(0.13 0.028 261.692);
+
+  /* Orange Color Palette */
+  --color-orange-50: oklch(0.98 0.016 73.684);
+  --color-orange-100: oklch(0.954 0.038 75.164);
+  --color-orange-200: oklch(0.901 0.081 70.697);
+  --color-orange-300: oklch(0.837 0.128 66.29);
+  --color-orange-400: oklch(0.75 0.183 55.934);
+  --color-orange-500: oklch(0.705 0.213 47.604);
+  --color-orange-600: oklch(0.646 0.222 41.116);
+  --color-orange-700: oklch(0.553 0.195 38.402);
+  --color-orange-800: oklch(0.47 0.157 37.304);
+  --color-orange-900: oklch(0.408 0.123 38.172);
+  --color-orange-950: oklch(0.266 0.079 36.259);
+}
+
+/* Dark Mode */
+@variant dark (&:where(.dark, .dark *));
+
+/* Custom Base Styles */
+@layer base {
+  /* Smooth transitions for interactive elements */
+  * {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* Pointer cursor for buttons */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    background: #1f2937;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+}
+
+/* Custom Components */
+@layer components {
+  /* Card hover effect */
+  .card-hover {
+    @apply transition-all duration-200 ease-in-out;
+  }
+
+  .card-hover:hover {
+    @apply -translate-y-0.5 shadow-lg;
+  }
+
+  /* Focus ring styling */
+  .focus-ring:focus {
+    @apply outline-2 outline-primary-500 outline-offset-2;
+  }
+
+  /* Toast Notifications */
+  .toast {
+    @apply fixed bottom-4 right-4 max-w-md z-50;
+    animation: fadeInUp 0.3s ease-out;
+  }
+
+  .toast-success {
+    @apply bg-emerald-500 text-white;
+  }
+
+  .toast-error {
+    @apply bg-red-500 text-white;
+  }
+
+  .toast-warning {
+    @apply bg-amber-500 text-white;
+  }
+
+  .toast-info {
+    @apply bg-blue-500 text-white;
+  }
+}
+
+/* Custom Utilities */
+@layer utilities {
+  /* Animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.3s ease-out;
+  }
+}
+
+/* Print Styles */
+@media print {
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .shadow {
+    box-shadow: none !important;
+  }
+}
+
+/* Responsive Table */
+@media (max-width: 640px) {
+  table {
+    font-size: 0.875rem;
+  }
+
+  th,
+  td {
+    padding: 0.5rem !important;
+  }
+}
+
+/* Alpine.js cloak */
+[x-cloak] {
+  display: none !important;
+}
+

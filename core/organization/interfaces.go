@@ -52,6 +52,9 @@ type MemberOperations interface {
 	// UpdateMember updates a member's role or status
 	UpdateMember(ctx context.Context, id xid.ID, req *UpdateMemberRequest, updaterUserID xid.ID) (*Member, error)
 
+	// UpdateMemberRole updates only the role of a member within an organization
+	UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, newRole string, updaterUserID xid.ID) (*Member, error)
+
 	// RemoveMember removes a member from an organization
 	RemoveMember(ctx context.Context, id, removerUserID xid.ID) error
 
@@ -77,6 +80,17 @@ type MemberOperations interface {
 
 	// RequireAdmin checks if a user is an admin or owner and returns an error if not
 	RequireAdmin(ctx context.Context, orgID, userID xid.ID) error
+
+	// RBAC Permission methods - use member's role from organization_members as single source of truth
+
+	// CheckPermission checks if a user has permission to perform an action on a resource
+	CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error)
+
+	// CheckPermissionWithContext checks permission with additional context variables for conditional evaluation
+	CheckPermissionWithContext(ctx context.Context, orgID, userID xid.ID, action, resource string, contextVars map[string]string) (bool, error)
+
+	// RequirePermission checks permission and returns an error if denied
+	RequirePermission(ctx context.Context, orgID, userID xid.ID, action, resource string) error
 }
 
 // TeamOperations defines team management operations
@@ -112,6 +126,15 @@ type TeamOperations interface {
 
 	// IsTeamMember checks if a member belongs to a team
 	IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error)
+
+	// FindTeamMemberByID retrieves a team member by its ID
+	FindTeamMemberByID(ctx context.Context, id xid.ID) (*TeamMember, error)
+
+	// FindTeamMember retrieves a team member by team ID and member ID
+	FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*TeamMember, error)
+
+	// ListMemberTeams retrieves all teams that a member belongs to
+	ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error)
 }
 
 // InvitationOperations defines invitation management operations

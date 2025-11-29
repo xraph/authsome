@@ -59,6 +59,8 @@ func (r *planRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Subsc
 		Model(plan).
 		Relation("Features").
 		Relation("Tiers").
+		Relation("FeatureLinks").
+		Relation("FeatureLinks.Feature").
 		Where("sp.id = ?", id).
 		Scan(ctx)
 	if err != nil {
@@ -74,6 +76,8 @@ func (r *planRepository) FindBySlug(ctx context.Context, appID xid.ID, slug stri
 		Model(plan).
 		Relation("Features").
 		Relation("Tiers").
+		Relation("FeatureLinks").
+		Relation("FeatureLinks.Feature").
 		Where("sp.app_id = ?", appID).
 		Where("sp.slug = ?", slug).
 		Scan(ctx)
@@ -91,6 +95,8 @@ func (r *planRepository) List(ctx context.Context, filter *PlanFilter) ([]*schem
 		Model(&plans).
 		Relation("Features").
 		Relation("Tiers").
+		Relation("FeatureLinks").
+		Relation("FeatureLinks.Feature").
 		Order("display_order ASC", "created_at DESC")
 	
 	if filter != nil {

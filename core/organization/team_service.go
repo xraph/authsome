@@ -213,6 +213,32 @@ func (s *TeamService) IsTeamMember(ctx context.Context, teamID, memberID xid.ID)
 	return s.repo.IsTeamMember(ctx, teamID, memberID)
 }
 
+// FindTeamMemberByID retrieves a team member by its ID
+func (s *TeamService) FindTeamMemberByID(ctx context.Context, id xid.ID) (*TeamMember, error) {
+	teamMember, err := s.repo.FindTeamMemberByID(ctx, id)
+	if err != nil {
+		return nil, TeamMemberNotFound()
+	}
+	return teamMember, nil
+}
+
+// FindTeamMember retrieves a team member by team ID and member ID
+func (s *TeamService) FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*TeamMember, error) {
+	teamMember, err := s.repo.FindTeamMember(ctx, teamID, memberID)
+	if err != nil {
+		return nil, TeamMemberNotFound()
+	}
+	return teamMember, nil
+}
+
+// ListMemberTeams retrieves all teams that a member belongs to
+func (s *TeamService) ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error) {
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid pagination params: %w", err)
+	}
+	return s.repo.ListMemberTeams(ctx, memberID, filter)
+}
+
 // IsSCIMManaged checks if a team is managed via SCIM provisioning
 func (s *TeamService) IsSCIMManaged(team *Team) bool {
 	return team.ProvisionedBy != nil && *team.ProvisionedBy == "scim"

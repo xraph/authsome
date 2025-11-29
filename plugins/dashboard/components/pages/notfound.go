@@ -21,33 +21,11 @@ func NotFound(basePath string) g.Node {
 				Meta(Name("viewport"), Content("width=device-width, initial-scale=1.0")),
 				TitleEl(g.Text("404 - Page Not Found")),
 
-				// Tailwind CSS CDN
-				Script(Src("https://cdn.tailwindcss.com?plugins=forms,typography")),
+				// Compiled Tailwind CSS + Preline UI styles
+				Link(Rel("stylesheet"), Href(basePath+"/dashboard/static/css/dashboard.css")),
 
-				// Alpine.js x-cloak style
-				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
-
-				// Tailwind Configuration
-				Script(g.Raw(`
-                    tailwind.config = {
-                        darkMode: 'class',
-                        theme: {
-                            extend: {
-                                colors: {
-                                    primary: {
-                                        DEFAULT: 'rgb(124 58 237)',
-                                        500: 'rgb(168 85 247)',
-                                        600: 'rgb(147 51 234)',
-                                    }
-                                }
-                            }
-                        }
-                    }
-                `)),
-
-				// Load component functions BEFORE Alpine.js
-				Script(Src(basePath+"/dashboard/static/js/pines-components.js")),
-				Script(Src(basePath+"/dashboard/static/js/dashboard.js")),
+				// Bundled JavaScript (Preline + custom components)
+				Script(Src(basePath+"/dashboard/static/js/bundle.js")),
 
 				// Alpine.js - Load LAST
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),

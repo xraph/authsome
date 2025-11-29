@@ -38,13 +38,13 @@ type RoleRegistryInterface interface {
 	// ListRoles returns all registered role definitions
 	ListRoles() []*RoleDefinition
 
-	// Bootstrap applies all registered roles to the platform organization
+	// Bootstrap applies all registered roles to the platform app
 	// Called once during server startup after database migrations and plugin initialization
-	Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformOrgID xid.ID) error
+	Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformAppID xid.ID) error
 
-	// ValidateRoleAssignment checks if a role can be assigned to a user in an organization
-	// Platform roles (IsPlatform=true) can only be assigned in the platform organization
-	ValidateRoleAssignment(roleName string, isPlatformOrg bool) error
+	// ValidateRoleAssignment checks if a role can be assigned to a user in an app
+	// Platform roles (IsPlatform=true) can only be assigned in the platform app
+	ValidateRoleAssignment(roleName string, isPlatformApp bool) error
 
 	// GetRoleHierarchy returns roles in descending priority order (highest first)
 	GetRoleHierarchy() []*RoleDefinition
@@ -123,7 +123,7 @@ func (r *RoleRegistry) ListRoles() []*RoleDefinition {
 	return roles
 }
 
-// Bootstrap applies all registered roles to the platform organization
+// Bootstrap applies all registered roles to the platform app
 // Called once during server startup AFTER:
 // - Database migrations have run
 // - Plugins have initialized and registered their roles
@@ -132,8 +132,8 @@ func (r *RoleRegistry) ListRoles() []*RoleDefinition {
 // 1. Role records in the database
 // 2. Permission records in the database
 // 3. RBAC policy expressions in the policy engine
-func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformOrgID xid.ID) error {
-	fmt.Printf("[RoleBootstrap] Starting role bootstrap for platform org: %s\n", platformOrgID.String())
+func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformAppID xid.ID) error {
+	fmt.Printf("[RoleBootstrap] Starting role bootstrap for platform app: %s\n", platformAppID.String())
 	fmt.Printf("[RoleBootstrap] Registered roles: %d\n", len(r.roles))
 
 	// Resolve role inheritance and build final permission sets
@@ -153,14 +153,14 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 	// Upsert permissions in database
 	fmt.Printf("[RoleBootstrap] Creating %d unique permissions...\n", len(permissionMap))
 	for permName := range permissionMap {
-		if err := r.upsertPermission(ctx, db, platformOrgID, permName); err != nil {
+		if err := r.upsertPermission(ctx, db, platformAppID, permName); err != nil {
 			return fmt.Errorf("failed to upsert permission %s: %w", permName, err)
 		}
 	}
 
 	// Upsert roles in database
 	for _, roleDef := range resolvedRoles {
-		if err := r.upsertRole(ctx, db, platformOrgID, roleDef); err != nil {
+		if err := r.upsertRole(ctx, db, platformAppID, roleDef); err != nil {
 			return fmt.Errorf("failed to upsert role %s: %w", roleDef.Name, err)
 		}
 	}
@@ -273,13 +273,13 @@ func (r *RoleRegistry) resolveInheritance() ([]*RoleDefinition, error) {
 }
 
 // upsertPermission creates or updates a permission in the database
-func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, orgID xid.ID, permissionExpr string) error {
+func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, appID xid.ID, permissionExpr string) error {
 	// Find existing permission
 	var existingPerm schema.Permission
 	err := db.NewSelect().
 		Model(&existingPerm).
 		Where("name = ?", permissionExpr).
-		Where("app_id IS NULL OR app_id = ?", orgID).
+		Where("app_id IS NULL OR app_id = ?", appID).
 		Scan(ctx)
 
 	now := time.Now()
@@ -288,14 +288,14 @@ func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, orgID x
 		// Permission doesn't exist - create it
 		newPerm := &schema.Permission{
 			ID:          xid.New(),
-			AppID:       &orgID,
+			AppID:       &appID,
 			Name:        permissionExpr,
 			Description: fmt.Sprintf("Permission: %s", permissionExpr),
 		}
 		newPerm.CreatedAt = now
 		newPerm.UpdatedAt = now
-		newPerm.CreatedBy = orgID
-		newPerm.UpdatedBy = orgID
+		newPerm.CreatedBy = appID
+		newPerm.UpdatedBy = appID
 		newPerm.Version = 1
 
 		_, err = db.NewInsert().Model(newPerm).Exec(ctx)
@@ -313,13 +313,13 @@ func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, orgID x
 }
 
 // upsertRole creates or updates a role in the database
-func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID, def *RoleDefinition) error {
+func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID, def *RoleDefinition) error {
 	// Find existing role
 	var existingRole schema.Role
 	err := db.NewSelect().
 		Model(&existingRole).
 		Where("name = ?", def.Name).
-		Where("app_id IS NULL OR app_id = ?", orgID).
+		Where("app_id IS NULL OR app_id = ?", appID).
 		Scan(ctx)
 
 	now := time.Now()
@@ -328,14 +328,14 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID,
 		// Role doesn't exist - create it
 		newRole := &schema.Role{
 			ID:          xid.New(),
-			AppID:       &orgID, // Updated from OrganizationID to AppID
+			AppID:       &appID,
 			Name:        def.Name,
 			Description: def.Description,
 		}
 		newRole.CreatedAt = now
 		newRole.UpdatedAt = now
-		newRole.CreatedBy = orgID // Platform app is the creator
-		newRole.UpdatedBy = orgID
+		newRole.CreatedBy = appID // Platform app is the creator
+		newRole.UpdatedBy = appID
 		newRole.Version = 1
 
 		_, err = db.NewInsert().Model(newRole).Exec(ctx)
@@ -348,7 +348,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID,
 		// Role exists - update it
 		existingRole.Description = def.Description
 		existingRole.UpdatedAt = now
-		existingRole.UpdatedBy = orgID
+		existingRole.UpdatedBy = appID
 		existingRole.Version++
 
 		_, err = db.NewUpdate().
@@ -367,16 +367,16 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, orgID xid.ID,
 	return nil
 }
 
-// ValidateRoleAssignment checks if a role can be assigned to a user in an organization
-// Platform roles (IsPlatform=true) can only be assigned in the platform organization
-func (r *RoleRegistry) ValidateRoleAssignment(roleName string, isPlatformOrg bool) error {
+// ValidateRoleAssignment checks if a role can be assigned to a user in an app
+// Platform roles (IsPlatform=true) can only be assigned in the platform app
+func (r *RoleRegistry) ValidateRoleAssignment(roleName string, isPlatformApp bool) error {
 	role, exists := r.roles[roleName]
 	if !exists {
 		return fmt.Errorf("role %s not registered", roleName)
 	}
 
-	if role.IsPlatform && !isPlatformOrg {
-		return fmt.Errorf("role %s is a platform role and can only be assigned in the platform organization", roleName)
+	if role.IsPlatform && !isPlatformApp {
+		return fmt.Errorf("role %s is a platform role and can only be assigned in the platform app", roleName)
 	}
 
 	return nil

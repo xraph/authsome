@@ -27,7 +27,7 @@ const (
 )
 
 // Role platform flag constants
-// Platform roles can only be assigned in the platform organization
+// Platform roles can only be assigned in the platform app
 const (
 	RoleIsPlatformSuperAdmin = true
 	RoleIsPlatformOwner      = false

@@ -1,0 +1,207 @@
+# CMS Plugin - LLM Context
+
+## Overview
+
+The CMS plugin is a headless content management system for AuthSome. It provides schema-based content management with JSONB storage, relations, revisions, full-text search, and a dashboard UI.
+
+## Key Concepts
+
+### Content Types
+- Define the structure for content entries
+- Each has a unique slug within an app/environment
+- Contains field definitions and settings
+- Located in: schema/content_type.go, service/content_type.go
+
+### Content Fields
+- Define individual fields within a content type
+- 20+ field types (text, number, boolean, date, relation, etc.)
+- Support validation, indexing, uniqueness constraints
+- Located in: schema/content_field.go, service/content_field.go, core/field_types.go
+
+### Content Entries
+- Actual content instances of a content type
+- Data stored as JSONB for flexibility
+- Status workflow: draft -> published -> archived
+- Located in: schema/content_entry.go, service/content_entry.go
+
+### Relations
+- Links between content entries
+- Types: oneToOne, oneToMany, manyToOne, manyToMany
+- Stored in cms_content_relations table
+- Located in: repository/relation.go, service/relation.go
+
+### Revisions
+- Automatic version history on entry updates
+- Support comparison and rollback
+- Located in: schema/content_revision.go, service/revision.go
+
+## Code Patterns
+
+### Service Pattern
+```go
+type ContentTypeService struct {
+    repo            repository.ContentTypeRepository
+    fieldRepo       repository.ContentFieldRepository
+    config          ContentTypeServiceConfig
+    logger          forge.Logger
+}
+
+func NewContentTypeService(repo, fieldRepo, config) *ContentTypeService {
+    return &ContentTypeService{...}
+}
+
+func (s *ContentTypeService) Create(ctx, req) (*DTO, error) {
+    // 1. Validate request
+    // 2. Check uniqueness
+    // 3. Create model
+    // 4. Save to repo
+    // 5. Return DTO
+}
+```
+
+### Repository Pattern
+```go
+type ContentTypeRepository interface {
+    Create(ctx, model) error
+    FindByID(ctx, id) (*Model, error)
+    FindBySlug(ctx, slug) (*Model, error)
+    Update(ctx, model) error
+    Delete(ctx, id) error
+    List(ctx, query) ([]*Model, int, error)
+}
+```
+
+### Handler Pattern
+```go
+func (h *Handler) CreateContentType(c forge.Context) error {
+    ctx := c.Request().Context()
+    
+    var req CreateRequest
+    if err := c.Bind(&req); err != nil {
+        return handleError(c, ErrInvalidRequest(err.Error()))
+    }
+    
+    result, err := h.service.Create(ctx, &req)
+    if err != nil {
+        return handleError(c, err)
+    }
+    
+    return c.JSON(http.StatusCreated, result)
+}
+```
+
+## Query Language
+
+### URL Query Format
+```
+GET /api/cms/posts/entries?filter[status]=published&sort=-createdAt&page=1&pageSize=10
+```
+
+### JSON Query Format
+```json
+{
+  "filters": {
+    "$and": [
+      {"status": {"$eq": "published"}},
+      {"category": {"$in": ["tech", "news"]}}
+    ]
+  },
+  "sort": ["-createdAt"],
+  "populate": ["author"],
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+### Query Execution Flow
+1. Parse query (URL or JSON) into AST
+2. Validate field names against content type
+3. Build Bun query with JSONB operators
+4. Execute and paginate
+5. Optionally populate relations
+
+## Dashboard Extension
+
+The plugin integrates with AuthSome dashboard via ui.DashboardExtension interface:
+
+```go
+type DashboardExtension struct {
+    plugin   *Plugin
+    registry *dashboard.ExtensionRegistry
+}
+
+func (e *DashboardExtension) NavigationItems() []ui.NavigationItem
+func (e *DashboardExtension) Routes() []ui.Route
+func (e *DashboardExtension) SettingsPages() []ui.SettingsPage
+func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget
+```
+
+Pages use gomponents for server-side HTML rendering.
+
+## Database Queries
+
+### JSONB Field Access
+```sql
+-- Get field value
+data ->> 'title'
+
+-- Get nested value
+data -> 'author' ->> 'name'
+
+-- Filter by field
+WHERE data ->> 'status' = 'published'
+
+-- Full-text search
+WHERE to_tsvector('english', data::text) @@ plainto_tsquery('english', 'search term')
+```
+
+### Aggregations
+```sql
+-- Count by status
+SELECT status, COUNT(*) FROM cms_content_entries GROUP BY status
+
+-- Sum numeric field
+SELECT SUM((data ->> 'price')::numeric) FROM cms_content_entries
+
+-- Time series
+SELECT DATE_TRUNC('day', created_at), COUNT(*) 
+FROM cms_content_entries 
+GROUP BY 1 ORDER BY 1
+```
+
+## File Locations
+
+- **Main Plugin**: plugin.go
+- **Configuration**: config.go
+- **Dashboard**: dashboard_extension.go, pages/
+- **Core Types**: core/types.go, core/field_types.go, core/errors.go
+- **Database Models**: schema/
+- **Data Access**: repository/
+- **Business Logic**: service/
+- **HTTP Handlers**: handlers/
+- **Query Language**: query/
+
+## Common Tasks
+
+### Add a New Field Type
+1. Add constant to core/field_types.go
+2. Update GetAllFieldTypes() with metadata
+3. Add validation in service/validation.go
+4. Update form renderer in pages/entries.go
+
+### Add a New API Endpoint
+1. Add handler method in handlers/
+2. Register route in plugin.go RegisterRoutes()
+3. Add RBAC permission if needed
+
+### Add Dashboard Page
+1. Create page function in pages/
+2. Add route in dashboard_extension.go Routes()
+3. Add handler in dashboard_extension.go
+4. Update NavigationItems() if needed
+
+### Extend Query Language
+1. Add operator to query/operators.go
+2. Update query/builder.go to handle it
+3. Add tests to query/builder_test.go
+

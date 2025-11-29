@@ -8,7 +8,7 @@ help: ## Display this help message
 
 ##@ Building
 
-build: ## Build all binaries
+build: dashboard-build ## Build all binaries (includes dashboard assets)
 	@echo "Building all binaries..."
 	@go build -o authsome ./cmd/authsome-cli
 	@go build -o authsome-dev ./cmd/dev
@@ -38,6 +38,9 @@ clean: ## Remove build artifacts and generated files
 	@rm -rf clients/go clients/typescript clients/rust
 	@rm -f examples/comprehensive/comprehensive-server
 	@rm -f *.db *.db-journal *.db-wal *.db-shm
+	@rm -f plugins/dashboard/static/css/dashboard.css
+	@rm -f plugins/dashboard/static/js/bundle.js
+	@rm -f plugins/dashboard/frontend/src/.bundle-entry.js
 	@echo "✓ Cleaned"
 
 clean-all: clean security-clean ## Remove all artifacts including security reports
@@ -609,6 +612,34 @@ security-ci: security-setup security-gosec security-vuln security-secrets ## Fas
 
 security-pre-commit: security-secrets ## Quick security check before commit
 	@echo "✓ Pre-commit security check passed"
+
+##@ Dashboard Frontend
+
+dashboard-setup: ## Install dashboard frontend dependencies
+	@echo "Installing dashboard frontend dependencies..."
+	@cd plugins/dashboard/frontend && npm install
+	@echo "✓ Dashboard dependencies installed"
+
+dashboard-build: ## Build dashboard frontend assets (CSS + JS)
+	@echo "Building dashboard frontend assets..."
+	@cd plugins/dashboard/frontend && npm run build
+	@echo "✓ Dashboard assets built"
+	@echo "  - plugins/dashboard/static/css/dashboard.css"
+	@echo "  - plugins/dashboard/static/js/bundle.js"
+
+dashboard-watch: ## Watch dashboard CSS for changes (development)
+	@echo "Watching dashboard CSS (Ctrl+C to stop)..."
+	@cd plugins/dashboard/frontend && npm run watch
+
+dashboard-clean: ## Clean dashboard build artifacts
+	@echo "Cleaning dashboard build artifacts..."
+	@rm -f plugins/dashboard/static/css/dashboard.css
+	@rm -f plugins/dashboard/static/js/bundle.js
+	@rm -rf plugins/dashboard/frontend/node_modules
+	@rm -f plugins/dashboard/frontend/src/.bundle-entry.js
+	@echo "✓ Dashboard artifacts cleaned"
+
+dashboard-rebuild: dashboard-clean dashboard-setup dashboard-build ## Clean and rebuild dashboard assets
 
 ##@ Documentation
 

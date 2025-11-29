@@ -18,23 +18,46 @@ type InvitationService struct {
 	orgRepo    OrganizationRepository // For validation
 	config     Config
 	rbacSvc    *rbac.Service
+	roleRepo   rbac.RoleRepository // For RBAC role validation
 }
 
 // NewInvitationService creates a new invitation service
-func NewInvitationService(repo InvitationRepository, memberRepo MemberRepository, orgRepo OrganizationRepository, cfg Config, rbacSvc *rbac.Service) *InvitationService {
+func NewInvitationService(repo InvitationRepository, memberRepo MemberRepository, orgRepo OrganizationRepository, cfg Config, rbacSvc *rbac.Service, roleRepo rbac.RoleRepository) *InvitationService {
 	return &InvitationService{
 		repo:       repo,
 		memberRepo: memberRepo,
 		orgRepo:    orgRepo,
 		config:     cfg,
 		rbacSvc:    rbacSvc,
+		roleRepo:   roleRepo,
 	}
+}
+
+// validateRoleAgainstRBAC validates a role name against RBAC role definitions
+func (s *InvitationService) validateRoleAgainstRBAC(ctx context.Context, appID xid.ID, roleName string) error {
+	if s.roleRepo == nil {
+		// Fallback to static validation if no RBAC role repository
+		return validateRole(roleName)
+	}
+
+	// Check if role exists in RBAC definitions for the app
+	_, err := s.roleRepo.FindByNameAndApp(ctx, roleName, appID)
+	if err != nil {
+		return InvalidRole(roleName)
+	}
+	return nil
 }
 
 // InviteMember creates an invitation for a user to join an organization
 func (s *InvitationService) InviteMember(ctx context.Context, orgID xid.ID, req *InviteMemberRequest, inviterUserID xid.ID) (*Invitation, error) {
-	// Validate role
-	if err := validateRole(req.Role); err != nil {
+	// Get organization to access appID for role validation
+	org, err := s.orgRepo.FindByID(ctx, orgID)
+	if err != nil {
+		return nil, OrganizationNotFound()
+	}
+
+	// Validate role against RBAC definitions
+	if err := s.validateRoleAgainstRBAC(ctx, org.AppID, req.Role); err != nil {
 		return nil, err
 	}
 

@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -58,7 +59,6 @@ type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-
 // NewHandler creates a new dashboard handler
 func NewHandler(
 	assets embed.FS,
@@ -105,7 +105,7 @@ func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
 	// Get navigation items for main position
 	navItems := h.extensionRegistry.GetNavigationItems(ui.NavPositionMain, h.enabledPlugins)
 
-	// Render navigation items
+	// Render navigation items (for header nav)
 	if len(navItems) > 0 {
 		pageData.ExtensionNavItems = RenderNavigationItems(
 			navItems,
@@ -113,6 +113,23 @@ func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
 			pageData.CurrentApp,
 			pageData.ActivePage,
 		)
+
+		// Also populate raw nav data for sidebar rendering
+		pageData.ExtensionNavData = make([]components.ExtensionNavItemData, 0, len(navItems))
+		for _, item := range navItems {
+			isActive := false
+			if item.ActiveChecker != nil {
+				isActive = item.ActiveChecker(pageData.ActivePage)
+			}
+			url := item.URLBuilder(h.basePath, pageData.CurrentApp)
+
+			pageData.ExtensionNavData = append(pageData.ExtensionNavData, components.ExtensionNavItemData{
+				Label:    item.Label,
+				Icon:     item.Icon,
+				URL:      url,
+				IsActive: isActive,
+			})
+		}
 	}
 
 	// Get dashboard widgets
@@ -344,7 +361,7 @@ func (h *Handler) renderAppCards(c forge.Context, ctx context.Context, currentUs
 	}
 
 	content := pages.AppsListPage(appsListData)
-	return h.renderWithLayout(c, pageData, content)
+	return h.renderWithHeaderLayout(c, pageData, content)
 }
 
 // PageData represents common data for all pages
@@ -422,7 +439,7 @@ func (h *Handler) ServeDashboard(c forge.Context) error {
 		Plugins:        convertPluginItems(stats.Plugins),
 	}
 
-	content := pages.DashboardPage(pageStats, h.basePath, currentApp.ID.String())
+	content := pages.DashboardPage(pageStats, h.basePath, currentApp.ID.String(), pageData.ExtensionWidgets)
 	return h.renderWithLayout(c, pageData, content)
 }
 
@@ -2100,19 +2117,25 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 
 	// Read file from embedded assets
 	fullPath := filepath.Join("static", path)
-	fmt.Println("fullPath", fullPath, "path", path)
 	content, err := fs.ReadFile(h.assets, fullPath)
 	if err != nil {
-		fmt.Println("error", err)
 		return c.JSON(http.StatusNotFound, errs.NotFound("asset not found"))
 	}
 
-	// Set content type
-	contentType := getContentType(filepath.Ext(path))
-	c.SetHeader("Content-Type", contentType)
-	c.SetHeader("Cache-Control", "public, max-age=31536000") // 1 year cache
+	// Get content type - use Go's mime package first, fallback to our custom function
+	ext := filepath.Ext(path)
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		contentType = getContentType(ext)
+	}
 
-	return c.String(http.StatusOK, string(content))
+	// Write directly to response writer to ensure correct Content-Type
+	w := c.Response()
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000") // 1 year cache
+	w.WriteHeader(http.StatusOK)
+	_, writeErr := w.Write(content)
+	return writeErr
 }
 
 // Helper methods
@@ -2172,13 +2195,184 @@ func (h *Handler) RenderWithLayout(c forge.Context, pageData components.PageData
 	// Enrich with extension navigation items and widgets
 	h.enrichPageDataWithExtensions(&pageData)
 
+	page := components.BaseSidebarLayout(pageData, content)
+	return h.render(c, page)
+}
+
+// renderWithLayout renders content within the base layout
+// RenderWithLayout renders content with the dashboard layout (public for extensions)
+// This method automatically populates app, environment, and extension data
+func (h *Handler) RenderWithBaseLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	ctx := c.Request().Context()
+
+	// Set common fields
+	pageData.Year = time.Now().Year()
+	pageData.EnabledPlugins = h.enabledPlugins
+
+	// Get user if not already set
+	if pageData.User == nil {
+		pageData.User = h.getUserFromContext(c)
+	}
+
+	// Prepopulate app data if CurrentApp is set
+	if pageData.CurrentApp != nil {
+		// Get user apps for switcher if not already set
+		if pageData.UserApps == nil && pageData.User != nil {
+			userApps, _ := h.getUserApps(ctx, pageData.User.ID)
+			pageData.UserApps = userApps
+			pageData.ShowAppSwitcher = len(userApps) > 0
+		}
+
+		// Prepopulate environment data if not already set
+		if pageData.CurrentEnvironment == nil {
+			currentEnv, _ := h.getEnvironmentFromCookie(c, pageData.CurrentApp.ID)
+			if currentEnv == nil {
+				// Fall back to default environment
+				currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, pageData.CurrentApp.ID)
+				if currentEnv != nil {
+					h.setEnvironmentCookie(c, currentEnv.ID)
+				}
+			}
+			pageData.CurrentEnvironment = currentEnv
+		}
+
+		// Get user environments if not already set
+		if pageData.UserEnvironments == nil {
+			environments, _ := h.getUserEnvironments(ctx, pageData.CurrentApp.ID)
+			pageData.UserEnvironments = environments
+			pageData.ShowEnvSwitcher = len(environments) > 0
+		}
+	}
+
+	// Enrich with extension navigation items and widgets
+	h.enrichPageDataWithExtensions(&pageData)
+
+	page := components.EmptyLayout(pageData, content)
+	return h.render(c, page)
+}
+
+// renderWithLayout renders content within the base layout
+// RenderWithLayout renders content with the dashboard layout (public for extensions)
+// This method automatically populates app, environment, and extension data
+func (h *Handler) RenderWithHeaderLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	ctx := c.Request().Context()
+
+	// Set common fields
+	pageData.Year = time.Now().Year()
+	pageData.EnabledPlugins = h.enabledPlugins
+
+	// Get user if not already set
+	if pageData.User == nil {
+		pageData.User = h.getUserFromContext(c)
+	}
+
+	// Prepopulate app data if CurrentApp is set
+	if pageData.CurrentApp != nil {
+		// Get user apps for switcher if not already set
+		if pageData.UserApps == nil && pageData.User != nil {
+			userApps, _ := h.getUserApps(ctx, pageData.User.ID)
+			pageData.UserApps = userApps
+			pageData.ShowAppSwitcher = len(userApps) > 0
+		}
+
+		// Prepopulate environment data if not already set
+		if pageData.CurrentEnvironment == nil {
+			currentEnv, _ := h.getEnvironmentFromCookie(c, pageData.CurrentApp.ID)
+			if currentEnv == nil {
+				// Fall back to default environment
+				currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, pageData.CurrentApp.ID)
+				if currentEnv != nil {
+					h.setEnvironmentCookie(c, currentEnv.ID)
+				}
+			}
+			pageData.CurrentEnvironment = currentEnv
+		}
+
+		// Get user environments if not already set
+		if pageData.UserEnvironments == nil {
+			environments, _ := h.getUserEnvironments(ctx, pageData.CurrentApp.ID)
+			pageData.UserEnvironments = environments
+			pageData.ShowEnvSwitcher = len(environments) > 0
+		}
+	}
+
+	// Enrich with extension navigation items and widgets
+	h.enrichPageDataWithExtensions(&pageData)
+
 	page := components.BaseLayout(pageData, content)
+	return h.render(c, page)
+}
+
+// renderWithLayout renders content within the base layout
+// RenderWithLayout renders content with the dashboard layout (public for extensions)
+// This method automatically populates app, environment, and extension data
+func (h *Handler) RenderWithSidebarLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	ctx := c.Request().Context()
+
+	// Set common fields
+	pageData.Year = time.Now().Year()
+	pageData.EnabledPlugins = h.enabledPlugins
+
+	// Get user if not already set
+	if pageData.User == nil {
+		pageData.User = h.getUserFromContext(c)
+	}
+
+	// Prepopulate app data if CurrentApp is set
+	if pageData.CurrentApp != nil {
+		// Get user apps for switcher if not already set
+		if pageData.UserApps == nil && pageData.User != nil {
+			userApps, _ := h.getUserApps(ctx, pageData.User.ID)
+			pageData.UserApps = userApps
+			pageData.ShowAppSwitcher = len(userApps) > 0
+		}
+
+		// Prepopulate environment data if not already set
+		if pageData.CurrentEnvironment == nil {
+			currentEnv, _ := h.getEnvironmentFromCookie(c, pageData.CurrentApp.ID)
+			if currentEnv == nil {
+				// Fall back to default environment
+				currentEnv, _ = h.envService.GetDefaultEnvironment(ctx, pageData.CurrentApp.ID)
+				if currentEnv != nil {
+					h.setEnvironmentCookie(c, currentEnv.ID)
+				}
+			}
+			pageData.CurrentEnvironment = currentEnv
+		}
+
+		// Get user environments if not already set
+		if pageData.UserEnvironments == nil {
+			environments, _ := h.getUserEnvironments(ctx, pageData.CurrentApp.ID)
+			pageData.UserEnvironments = environments
+			pageData.ShowEnvSwitcher = len(environments) > 0
+		}
+	}
+
+	// Enrich with extension navigation items and widgets
+	h.enrichPageDataWithExtensions(&pageData)
+
+	page := components.BaseSidebarLayout(pageData, content)
 	return h.render(c, page)
 }
 
 // renderWithLayout is the internal version (kept for backward compatibility)
 func (h *Handler) renderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	return h.RenderWithLayout(c, pageData, content)
+}
+
+// renderWithLayout is the internal version (kept for backward compatibility)
+func (h *Handler) renderWithBaseLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	return h.RenderWithBaseLayout(c, pageData, content)
+}
+
+// renderWithLayout is the internal version (kept for backward compatibility)
+func (h *Handler) renderWithHeaderLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	return h.RenderWithHeaderLayout(c, pageData, content)
+}
+
+// renderWithLayout is the internal version (kept for backward compatibility)
+func (h *Handler) renderWithSidebarLayout(c forge.Context, pageData components.PageData, content g.Node) error {
+	return h.RenderWithSidebarLayout(c, pageData, content)
 }
 
 // renderError renders an error page

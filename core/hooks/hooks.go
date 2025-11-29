@@ -52,6 +52,12 @@ type HookRegistry struct {
 	// App hooks (for multi-app support)
 	beforeAppCreate []BeforeAppCreateHook
 	afterAppCreate  []AfterAppCreateHook
+
+	// Permission hooks (for permissions plugin)
+	beforePermissionEvaluate []BeforePermissionEvaluateHook
+	afterPermissionEvaluate  []AfterPermissionEvaluateHook
+	onPolicyChange           []OnPolicyChangeHook
+	onCacheInvalidate        []OnCacheInvalidateHook
 }
 
 // Hook function types
@@ -87,6 +93,30 @@ type AfterMemberAddHook func(ctx context.Context, member interface{}) error
 // App hooks (for multi-app support)
 type BeforeAppCreateHook func(ctx context.Context, req interface{}) error
 type AfterAppCreateHook func(ctx context.Context, app interface{}) error
+
+// Permission hooks (for permissions plugin)
+// PermissionEvaluateRequest is passed to before/after permission evaluate hooks
+type PermissionEvaluateRequest struct {
+	UserID       xid.ID
+	ResourceType string
+	ResourceID   string
+	Action       string
+	Context      map[string]interface{}
+}
+
+// PermissionDecision is passed to after permission evaluate hook
+type PermissionDecision struct {
+	Allowed         bool
+	MatchedPolicies []string
+	EvaluationTimeMs float64
+	CacheHit        bool
+	Error           string
+}
+
+type BeforePermissionEvaluateHook func(ctx context.Context, req *PermissionEvaluateRequest) error
+type AfterPermissionEvaluateHook func(ctx context.Context, req *PermissionEvaluateRequest, decision *PermissionDecision) error
+type OnPolicyChangeHook func(ctx context.Context, policyID xid.ID, action string) error
+type OnCacheInvalidateHook func(ctx context.Context, scope string, id xid.ID) error
 
 // NewHookRegistry creates a new hook registry
 func NewHookRegistry() *HookRegistry {
@@ -138,6 +168,10 @@ func (h *HookRegistry) GetHookCounts() map[string]int {
 		"afterMemberAdd":            len(h.afterMemberAdd),
 		"beforeAppCreate":           len(h.beforeAppCreate),
 		"afterAppCreate":            len(h.afterAppCreate),
+		"beforePermissionEvaluate":  len(h.beforePermissionEvaluate),
+		"afterPermissionEvaluate":   len(h.afterPermissionEvaluate),
+		"onPolicyChange":            len(h.onPolicyChange),
+		"onCacheInvalidate":         len(h.onCacheInvalidate),
 	}
 }
 
@@ -849,6 +883,142 @@ func (h *HookRegistry) ExecuteAfterAppCreate(ctx context.Context, app interface{
 		if err := hook(ctx, app); err != nil {
 			if debug {
 				log.Printf("[HookRegistry] AfterAppCreate hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// =============================================================================
+// PERMISSION HOOKS (for permissions plugin)
+// =============================================================================
+
+// RegisterBeforePermissionEvaluate registers a before permission evaluate hook
+func (h *HookRegistry) RegisterBeforePermissionEvaluate(hook BeforePermissionEvaluateHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.beforePermissionEvaluate = append(h.beforePermissionEvaluate, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered BeforePermissionEvaluate hook (total: %d)", len(h.beforePermissionEvaluate))
+	}
+}
+
+// RegisterAfterPermissionEvaluate registers an after permission evaluate hook
+func (h *HookRegistry) RegisterAfterPermissionEvaluate(hook AfterPermissionEvaluateHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.afterPermissionEvaluate = append(h.afterPermissionEvaluate, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered AfterPermissionEvaluate hook (total: %d)", len(h.afterPermissionEvaluate))
+	}
+}
+
+// RegisterOnPolicyChange registers an on policy change hook
+func (h *HookRegistry) RegisterOnPolicyChange(hook OnPolicyChangeHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onPolicyChange = append(h.onPolicyChange, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnPolicyChange hook (total: %d)", len(h.onPolicyChange))
+	}
+}
+
+// RegisterOnCacheInvalidate registers an on cache invalidate hook
+func (h *HookRegistry) RegisterOnCacheInvalidate(hook OnCacheInvalidateHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onCacheInvalidate = append(h.onCacheInvalidate, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnCacheInvalidate hook (total: %d)", len(h.onCacheInvalidate))
+	}
+}
+
+// ExecuteBeforePermissionEvaluate executes all before permission evaluate hooks
+func (h *HookRegistry) ExecuteBeforePermissionEvaluate(ctx context.Context, req *PermissionEvaluateRequest) error {
+	h.mu.RLock()
+	hooks := make([]BeforePermissionEvaluateHook, len(h.beforePermissionEvaluate))
+	copy(hooks, h.beforePermissionEvaluate)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d BeforePermissionEvaluate hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, req); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] BeforePermissionEvaluate hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteAfterPermissionEvaluate executes all after permission evaluate hooks
+func (h *HookRegistry) ExecuteAfterPermissionEvaluate(ctx context.Context, req *PermissionEvaluateRequest, decision *PermissionDecision) error {
+	h.mu.RLock()
+	hooks := make([]AfterPermissionEvaluateHook, len(h.afterPermissionEvaluate))
+	copy(hooks, h.afterPermissionEvaluate)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d AfterPermissionEvaluate hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, req, decision); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] AfterPermissionEvaluate hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteOnPolicyChange executes all on policy change hooks
+func (h *HookRegistry) ExecuteOnPolicyChange(ctx context.Context, policyID xid.ID, action string) error {
+	h.mu.RLock()
+	hooks := make([]OnPolicyChangeHook, len(h.onPolicyChange))
+	copy(hooks, h.onPolicyChange)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnPolicyChange hooks for policy %s action %s", len(hooks), policyID, action)
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, policyID, action); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnPolicyChange hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteOnCacheInvalidate executes all on cache invalidate hooks
+func (h *HookRegistry) ExecuteOnCacheInvalidate(ctx context.Context, scope string, id xid.ID) error {
+	h.mu.RLock()
+	hooks := make([]OnCacheInvalidateHook, len(h.onCacheInvalidate))
+	copy(hooks, h.onCacheInvalidate)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnCacheInvalidate hooks for scope %s id %s", len(hooks), scope, id)
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, scope, id); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnCacheInvalidate hook #%d failed: %v", i, err)
 			}
 			return err
 		}

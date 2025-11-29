@@ -8,6 +8,7 @@ type Config struct {
 	EnableUserCreation        bool `json:"enableUserCreation"`
 	RequireInvitation         bool `json:"requireInvitation"`
 	InvitationExpiryHours     int  `json:"invitationExpiryHours"`
+	EnforceUniqueSlug         bool `json:"enforceUniqueSlug"` // Enforce unique slugs within app+environment scope
 }
 
 // DefaultConfig returns sensible default configuration values
@@ -18,6 +19,7 @@ func DefaultConfig() Config {
 		MaxTeamsPerOrganization:   20,
 		EnableUserCreation:        true,
 		RequireInvitation:         false,
-		InvitationExpiryHours:     72, // 3 days
+		InvitationExpiryHours:     72,   // 3 days
+		EnforceUniqueSlug:         true, // Enforce unique slugs within app+environment by default
 	}
 }

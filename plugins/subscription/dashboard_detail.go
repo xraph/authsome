@@ -152,8 +152,14 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 			Div(
 				Class("rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 				Div(
-					Class("px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
+					Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
 					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Features")),
+					A(
+						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features"),
+						Class("inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"),
+						lucide.Settings(Class("size-4")),
+						g.Text("Manage"),
+					),
 				),
 				Div(
 					Class("px-6 py-4"),

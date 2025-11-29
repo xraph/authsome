@@ -17,7 +17,6 @@ import (
 	"github.com/xraph/authsome/plugins/dashboard"
 	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/authsome/plugins/notification/builder"
-	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -673,18 +672,17 @@ func (e *DashboardExtension) ServeProviderSettings(c forge.Context) error {
 	return handler.RenderSettingsPage(c, "notification-providers", content)
 }
 
-// TestProvider handles provider test requests
+// TestProvider handles provider test requests by actually sending a test notification
 func (e *DashboardExtension) TestProvider(c forge.Context) error {
-	_, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
 	}
 
 	var req struct {
-		ProviderType  string                 `json:"providerType"` // "email" or "sms"
-		ProviderName  string                 `json:"providerName"` // "smtp", "sendgrid", "twilio", etc.
-		Config        map[string]interface{} `json:"config"`
-		TestRecipient string                 `json:"testRecipient"`
+		ProviderType  string `json:"providerType"`  // "email" or "sms"
+		ProviderName  string `json:"providerName"`  // "smtp", "sendgrid", "twilio", etc.
+		TestRecipient string `json:"testRecipient"` // Email address or phone number
 	}
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
@@ -694,61 +692,98 @@ func (e *DashboardExtension) TestProvider(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Test recipient is required"})
 	}
 
-	// For now, we'll return a success response since actual provider testing
-	// would require implementing provider-specific logic
-	// In a full implementation, you would:
-	// 1. Create a temporary provider instance with the config
-	// 2. Send a test message through that provider
-	// 3. Return the result with timing information
-
 	startTime := time.Now()
 
-	// Simulate provider validation
-	if req.Config == nil || len(req.Config) == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Provider configuration is required",
+	// Use the plugin's notification service to send a test notification
+	if req.ProviderType == "email" {
+		// Send a test email using the configured provider
+		notif, err := e.plugin.service.Send(c.Context(), &notification.SendRequest{
+			AppID:     currentApp.ID,
+			Type:      notification.NotificationTypeEmail,
+			Recipient: req.TestRecipient,
+			Subject:   "Test Email from AuthSome",
+			Body: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Email</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f5; padding: 40px;">
+    <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h1 style="color: #333; margin: 0 0 20px 0;">✅ Email Configuration Working!</h1>
+        <p style="color: #555; line-height: 1.6;">This is a test email from AuthSome to verify your email provider configuration is working correctly.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #888; font-size: 14px;">
+            <strong>App:</strong> ` + currentApp.Name + `<br>
+            <strong>Provider:</strong> ` + req.ProviderName + `<br>
+            <strong>Sent at:</strong> ` + time.Now().Format(time.RFC1123) + `
+        </p>
+    </div>
+</body>
+</html>`,
+			Metadata: map[string]interface{}{
+				"test":     true,
+				"provider": req.ProviderName,
+			},
+		})
+
+		duration := time.Since(startTime)
+
+		if err != nil {
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":      false,
+				"error":        fmt.Sprintf("Failed to send test email: %v", err),
+				"deliveryTime": fmt.Sprintf("%.2fs", duration.Seconds()),
+				"recipient":    req.TestRecipient,
+				"providerName": req.ProviderName,
+			})
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":        true,
+			"message":        "Test email sent successfully! Check your inbox.",
+			"notificationId": notif.ID.String(),
+			"deliveryTime":   fmt.Sprintf("%.2fs", duration.Seconds()),
+			"recipient":      req.TestRecipient,
+			"providerName":   req.ProviderName,
+		})
+	} else if req.ProviderType == "sms" {
+		// Send a test SMS using the configured provider
+		notif, err := e.plugin.service.Send(c.Context(), &notification.SendRequest{
+			AppID:     currentApp.ID,
+			Type:      notification.NotificationTypeSMS,
+			Recipient: req.TestRecipient,
+			Body:      fmt.Sprintf("AuthSome Test: Your SMS configuration is working! App: %s, Provider: %s", currentApp.Name, req.ProviderName),
+			Metadata: map[string]interface{}{
+				"test":     true,
+				"provider": req.ProviderName,
+			},
+		})
+
+		duration := time.Since(startTime)
+
+		if err != nil {
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":      false,
+				"error":        fmt.Sprintf("Failed to send test SMS: %v", err),
+				"deliveryTime": fmt.Sprintf("%.2fs", duration.Seconds()),
+				"recipient":    req.TestRecipient,
+				"providerName": req.ProviderName,
+			})
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":        true,
+			"message":        "Test SMS sent successfully!",
+			"notificationId": notif.ID.String(),
+			"deliveryTime":   fmt.Sprintf("%.2fs", duration.Seconds()),
+			"recipient":      req.TestRecipient,
+			"providerName":   req.ProviderName,
 		})
 	}
 
-	// Basic validation based on provider type
-	if req.ProviderType == "email" {
-		if req.ProviderName == "smtp" {
-			required := []string{"host", "port", "username", "password", "from"}
-			for _, field := range required {
-				if _, exists := req.Config[field]; !exists {
-					return c.JSON(http.StatusBadRequest, map[string]string{
-						"error": fmt.Sprintf("Missing required field: %s", field),
-					})
-				}
-			}
-		} else if req.ProviderName == "sendgrid" || req.ProviderName == "resend" || req.ProviderName == "postmark" {
-			if _, exists := req.Config["api_key"]; !exists {
-				return c.JSON(http.StatusBadRequest, map[string]string{
-					"error": "API key is required",
-				})
-			}
-		}
-	} else if req.ProviderType == "sms" {
-		if req.ProviderName == "twilio" {
-			required := []string{"account_sid", "auth_token", "from"}
-			for _, field := range required {
-				if _, exists := req.Config[field]; !exists {
-					return c.JSON(http.StatusBadRequest, map[string]string{
-						"error": fmt.Sprintf("Missing required field: %s", field),
-					})
-				}
-			}
-		}
-	}
-
-	duration := time.Since(startTime)
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success":      true,
-		"message":      "Provider configuration validated successfully",
-		"deliveryTime": fmt.Sprintf("%.2fs", duration.Seconds()),
-		"recipient":    req.TestRecipient,
-		"providerName": req.ProviderName,
+	return c.JSON(http.StatusBadRequest, map[string]string{
+		"error": "Invalid provider type. Must be 'email' or 'sms'",
 	})
 }
 
@@ -960,8 +995,94 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		)
 	}
 
+	// Alpine.js data for modal handling
+	alpineInit := fmt.Sprintf(`{
+		showCreateModal: false,
+		showTestModal: false,
+		testTemplateId: '',
+		testRecipient: '',
+		testLoading: false,
+		testResult: null,
+		newTemplate: {
+			name: '',
+			templateKey: '',
+			subject: ''
+		},
+		createLoading: false,
+		createError: null,
+		generateKey() {
+			this.newTemplate.templateKey = 'custom.' + this.newTemplate.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+		},
+		async createAndOpenBuilder() {
+			if (!this.newTemplate.name || !this.newTemplate.templateKey) {
+				this.createError = 'Name and template key are required';
+				return;
+			}
+			this.createLoading = true;
+			this.createError = null;
+			try {
+				const res = await fetch('%s/dashboard/app/%s/notifications/templates/builder/save', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						name: this.newTemplate.name,
+						templateKey: this.newTemplate.templateKey,
+						subject: this.newTemplate.subject,
+						document: {
+							root: 'root',
+							blocks: {
+								root: {
+									type: 'EmailLayout',
+									data: {
+										backdropColor: '#F5F5F5',
+										canvasColor: '#FFFFFF',
+										textColor: '#242424',
+										fontFamily: 'MODERN_SANS',
+										childrenIds: []
+									}
+								}
+							}
+						}
+					})
+				});
+				const data = await res.json();
+				if (data.success && data.templateId) {
+					window.location.href = '%s/dashboard/app/%s/notifications/templates/builder/' + data.templateId;
+				} else {
+					this.createError = data.error || 'Failed to create template';
+				}
+			} catch (err) {
+				this.createError = err.message;
+			}
+			this.createLoading = false;
+		},
+		async sendTestNotification() {
+			if (!this.testTemplateId || !this.testRecipient) return;
+			this.testLoading = true;
+			this.testResult = null;
+			try {
+				const res = await fetch('%s/dashboard/app/%s/notifications/templates/' + this.testTemplateId + '/test', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ recipient: this.testRecipient })
+				});
+				this.testResult = await res.json();
+			} catch (err) {
+				this.testResult = { error: err.message };
+			}
+			this.testLoading = false;
+		},
+		openTestModal(templateId) {
+			this.testTemplateId = templateId;
+			this.testRecipient = '';
+			this.testResult = null;
+			this.showTestModal = true;
+		}
+	}`, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID)
+
 	return Div(
 		Class("space-y-6"),
+		g.Attr("x-data", alpineInit),
 
 		// Header with create buttons
 		Div(
@@ -974,9 +1095,10 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 			),
 			Div(
 				Class("flex items-center gap-3"),
-				// Visual Builder button (primary)
-				A(
-					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, currentApp.ID)),
+				// Visual Builder button (primary) - now opens modal
+				Button(
+					Type("button"),
+					g.Attr("@click", "showCreateModal = true"),
 					Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm"),
 					lucide.Sparkles(Class("h-4 w-4")),
 					g.Text("Visual Builder"),
@@ -1001,11 +1123,269 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		g.If(len(response.Data) > 0,
 			renderTemplatesTable(response.Data, basePath, currentApp),
 		),
+
+		// Create Template Modal for Visual Builder
+		renderCreateBuilderModal(),
+
+		// Test Send Modal
+		renderTestSendListModal(),
+	)
+}
+
+// renderCreateBuilderModal renders the modal for creating a template before opening the builder
+func renderCreateBuilderModal() g.Node {
+	return Div(
+		g.Attr("x-show", "showCreateModal"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
+		g.Attr("@keydown.escape.window", "showCreateModal = false"),
+
+		// Overlay
+		Div(
+			g.Attr("x-show", "showCreateModal"),
+			g.Attr("@click", "showCreateModal = false"),
+			Class("fixed inset-0 bg-black bg-opacity-50 transition-opacity"),
+		),
+
+		// Modal
+		Div(
+			Class("flex min-h-screen items-center justify-center p-4"),
+			Div(
+				g.Attr("x-show", "showCreateModal"),
+				g.Attr("@click.stop", ""),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+				g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+				Class("relative bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-md w-full p-6"),
+
+				// Header with icon
+				Div(
+					Class("flex items-center gap-4 mb-6"),
+					Div(
+						Class("flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg"),
+						lucide.Sparkles(Class("h-6 w-6 text-white")),
+					),
+					Div(
+						H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+							g.Text("Create Email Template")),
+						P(Class("text-sm text-slate-500 dark:text-gray-400"),
+							g.Text("Set up your template before designing")),
+					),
+				),
+
+				// Form
+				Div(
+					Class("space-y-4"),
+
+					// Template Name
+					Div(
+						Label(
+							For("modalTemplateName"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Template Name"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Input(
+							Type("text"),
+							ID("modalTemplateName"),
+							g.Attr("x-model", "newTemplate.name"),
+							g.Attr("@input", "generateKey()"),
+							g.Attr("placeholder", "e.g., Welcome Email"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+					),
+
+					// Template Key
+					Div(
+						Label(
+							For("modalTemplateKey"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Template Key"),
+							Span(Class("text-red-500"), g.Text(" *")),
+						),
+						Input(
+							Type("text"),
+							ID("modalTemplateKey"),
+							g.Attr("x-model", "newTemplate.templateKey"),
+							g.Attr("placeholder", "e.g., custom.welcome_email"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Auto-generated from name. Use lowercase letters, numbers, dots, and underscores.")),
+					),
+
+					// Subject Line
+					Div(
+						Label(
+							For("modalSubject"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Email Subject"),
+						),
+						Input(
+							Type("text"),
+							ID("modalSubject"),
+							g.Attr("x-model", "newTemplate.subject"),
+							g.Attr("placeholder", "e.g., Welcome to {{.app_name}}!"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Use {{.variable_name}} for dynamic content")),
+					),
+
+					// Error display
+					Div(
+						g.Attr("x-show", "createError"),
+						g.Attr("x-cloak", ""),
+						Class("rounded-md bg-red-50 p-3 dark:bg-red-900/20"),
+						P(Class("text-sm text-red-800 dark:text-red-200"),
+							Span(g.Attr("x-text", "createError")),
+						),
+					),
+				),
+
+				// Actions
+				Div(
+					Class("flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-gray-700"),
+					Button(
+						Type("button"),
+						g.Attr("@click", "showCreateModal = false"),
+						Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+						g.Text("Cancel"),
+					),
+					Button(
+						Type("button"),
+						g.Attr("@click", "createAndOpenBuilder()"),
+						g.Attr(":disabled", "createLoading || !newTemplate.name || !newTemplate.templateKey"),
+						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-indigo-600 rounded-lg hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"),
+						g.Attr("x-show", "!createLoading"),
+						lucide.Sparkles(Class("h-4 w-4")),
+						g.Text("Create & Open Builder"),
+					),
+					Button(
+						Type("button"),
+						Disabled(),
+						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg opacity-50"),
+						g.Attr("x-show", "createLoading"),
+						g.Attr("x-cloak", ""),
+						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+						g.Text("Creating..."),
+					),
+				),
+			),
+		),
+	)
+}
+
+// renderTestSendListModal renders the test send modal for the templates list
+func renderTestSendListModal() g.Node {
+	return Div(
+		g.Attr("x-show", "showTestModal"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
+		g.Attr("@keydown.escape.window", "showTestModal = false"),
+
+		// Overlay
+		Div(
+			g.Attr("x-show", "showTestModal"),
+			g.Attr("@click", "showTestModal = false"),
+			Class("fixed inset-0 bg-black bg-opacity-50 transition-opacity"),
+		),
+
+		// Modal
+		Div(
+			Class("flex min-h-screen items-center justify-center p-4"),
+			Div(
+				g.Attr("x-show", "showTestModal"),
+				g.Attr("@click.stop", ""),
+				Class("relative bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full p-6"),
+
+				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Send Test Notification")),
+
+				Div(
+					Class("space-y-4"),
+					Div(
+						Label(
+							For("testRecipientInput"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Recipient"),
+						),
+						Input(
+							Type("text"),
+							ID("testRecipientInput"),
+							g.Attr("x-model", "testRecipient"),
+							g.Attr("placeholder", "email@example.com or +1234567890"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Email address or phone number to send test to")),
+					),
+
+					// Test result display
+					Div(
+						g.Attr("x-show", "testResult"),
+						g.Attr("x-cloak", ""),
+						Div(
+							g.Attr("x-show", "testResult && testResult.success"),
+							Class("rounded-md bg-green-50 p-3 dark:bg-green-900/20"),
+							Div(Class("flex items-center gap-2"),
+								lucide.CircleCheck(Class("h-5 w-5 text-green-600 dark:text-green-400")),
+								P(Class("text-sm text-green-800 dark:text-green-200"),
+									g.Text("Test notification sent successfully!")),
+							),
+						),
+						Div(
+							g.Attr("x-show", "testResult && testResult.error"),
+							Class("rounded-md bg-red-50 p-3 dark:bg-red-900/20"),
+							Div(Class("flex items-center gap-2"),
+								lucide.CircleAlert(Class("h-5 w-5 text-red-600 dark:text-red-400")),
+								P(Class("text-sm text-red-800 dark:text-red-200"),
+									Span(g.Text("Error: ")),
+									Span(g.Attr("x-text", "testResult.error")),
+								),
+							),
+						),
+					),
+				),
+
+				Div(
+					Class("flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-gray-700"),
+					Button(
+						Type("button"),
+						g.Attr("@click", "showTestModal = false"),
+						Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+						g.Text("Close"),
+					),
+					Button(
+						Type("button"),
+						g.Attr("@click", "sendTestNotification()"),
+						g.Attr(":disabled", "testLoading || !testRecipient"),
+						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"),
+						g.Attr("x-show", "!testLoading"),
+						lucide.Send(Class("h-4 w-4")),
+						g.Text("Send Test"),
+					),
+					Button(
+						Type("button"),
+						Disabled(),
+						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg opacity-50"),
+						g.Attr("x-show", "testLoading"),
+						g.Attr("x-cloak", ""),
+						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+						g.Text("Sending..."),
+					),
+				),
+			),
+		),
 	)
 }
 
 // renderBuilderPromoCard renders a promotional card for the visual builder
 func renderBuilderPromoCard(basePath string, currentApp *app.App) g.Node {
+	// Unused but kept for API compatibility
+	_ = basePath
+	_ = currentApp
+
 	return Div(
 		Class("rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-violet-50 to-purple-50 p-6 dark:border-indigo-800 dark:from-indigo-900/20 dark:via-violet-900/20 dark:to-purple-900/20"),
 		Div(
@@ -1033,11 +1413,12 @@ func renderBuilderPromoCard(basePath string, currentApp *app.App) g.Node {
 					featureBadge("Mobile Responsive"),
 					featureBadge("Sample Templates"),
 				),
-				// CTA
+				// CTA - Now opens modal
 				Div(
 					Class("mt-5"),
-					A(
-						Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, currentApp.ID)),
+					Button(
+						Type("button"),
+						g.Attr("@click", "showCreateModal = true"),
 						Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm transition-all"),
 						lucide.Sparkles(Class("h-4 w-4")),
 						g.Text("Open Visual Builder"),
@@ -1071,9 +1452,10 @@ func renderEmptyTemplatesState(basePath string, currentApp *app.App) g.Node {
 			g.Text("Get started by creating your first notification template")),
 		Div(
 			Class("mt-6 flex items-center justify-center gap-3"),
-			// Visual Builder button (primary)
-			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, currentApp.ID)),
+			// Visual Builder button (primary) - now opens modal
+			Button(
+				Type("button"),
+				g.Attr("@click", "showCreateModal = true"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700"),
 				lucide.Sparkles(Class("h-4 w-4")),
 				g.Text("Use Visual Builder"),
@@ -1216,14 +1598,14 @@ func renderTemplateRow(template *notification.Template, basePath string, current
 					Type("button"),
 					Class("text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"),
 					Title("Test send"),
-					g.Attr("onclick", fmt.Sprintf("openTestSendModal('%s')", template.ID)),
+					g.Attr("@click", fmt.Sprintf("openTestModal('%s')", template.ID)),
 					lucide.Send(Class("h-4 w-4")),
 				),
 				Button(
 					Type("button"),
 					Class("text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"),
 					Title("Delete template"),
-					g.Attr("onclick", fmt.Sprintf("confirmDelete('%s', '%s')", template.ID, template.Name)),
+					g.Attr("@click", fmt.Sprintf("if(confirm('Delete template \"%s\"?')) window.location.href='%s/auth/notification/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates&_method=DELETE'", template.Name, basePath, template.ID, basePath, currentApp.ID)),
 					lucide.Trash2(Class("h-4 w-4")),
 				),
 			),
@@ -2001,32 +2383,98 @@ func (e *DashboardExtension) renderNotificationSettingsContent(currentApp *app.A
 
 // renderProviderSettingsContent renders the provider settings page
 func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, basePath string) g.Node {
-	// Fetch current providers from service - note: this would need providerSvc to be accessible
-	// For now, we'll render the forms without pre-population
-	var providers []*schema.NotificationProvider
-	var err error
-	_ = providers // Prevent unused variable error
-	_ = err       // Prevent unused variable error
+	// Get current configuration from plugin
+	cfg := e.plugin.config
 
-	var emailProvider, smsProvider *schema.NotificationProvider
-	if err == nil {
-		for _, p := range providers {
-			if p.ProviderType == "email" && p.IsDefault {
-				emailProvider = p
-			} else if p.ProviderType == "sms" && p.IsDefault {
-				smsProvider = p
+	// Get email provider config
+	emailProvider := cfg.Providers.Email.Provider
+	if emailProvider == "" {
+		emailProvider = "smtp"
+	}
+	emailFrom := cfg.Providers.Email.From
+	emailFromName := cfg.Providers.Email.FromName
+	emailConfig := cfg.Providers.Email.Config
+	if emailConfig == nil {
+		emailConfig = make(map[string]interface{})
+	}
+
+	// Get SMS provider config (optional)
+	var smsProvider string
+	var smsFrom string
+	var smsConfig map[string]interface{}
+	if cfg.Providers.SMS != nil {
+		smsProvider = cfg.Providers.SMS.Provider
+		smsFrom = cfg.Providers.SMS.From
+		smsConfig = cfg.Providers.SMS.Config
+	}
+	if smsProvider == "" {
+		smsProvider = "twilio"
+	}
+	if smsConfig == nil {
+		smsConfig = make(map[string]interface{})
+	}
+
+	// Build Alpine.js initialization with current config
+	alpineInit := fmt.Sprintf(`{
+			emailProviderType: '%s',
+			smsProviderType: '%s',
+			showEmailTest: false,
+			showSMSTest: false,
+			testEmail: '',
+			testPhone: '',
+			testResult: null,
+			testLoading: false,
+			async testEmailProvider() {
+				this.testLoading = true;
+				this.testResult = null;
+				try {
+					const res = await fetch('%s/dashboard/app/%s/settings/notifications/providers/test', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							providerType: 'email',
+							providerName: this.emailProviderType,
+							testRecipient: this.testEmail
+						})
+					});
+					this.testResult = await res.json();
+				} catch (err) {
+					this.testResult = { error: err.message };
+				}
+				this.testLoading = false;
+			},
+			async testSMSProvider() {
+				this.testLoading = true;
+				this.testResult = null;
+				try {
+					const res = await fetch('%s/dashboard/app/%s/settings/notifications/providers/test', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							providerType: 'sms',
+							providerName: this.smsProviderType,
+							testRecipient: this.testPhone
+						})
+					});
+					this.testResult = await res.json();
+				} catch (err) {
+					this.testResult = { error: err.message };
+				}
+				this.testLoading = false;
 			}
+		}`, emailProvider, smsProvider, basePath, currentApp.ID, basePath, currentApp.ID)
+
+	// Helper to get string from config
+	getConfigStr := func(config map[string]interface{}, key string) string {
+		if val, ok := config[key].(string); ok {
+			return val
 		}
+		return ""
 	}
 
 	return Div(
 		Class("space-y-6"),
-		g.Attr("x-data", `{
-			emailProviderType: 'smtp',
-			smsProviderType: 'twilio',
-			showEmailTest: false,
-			showSMSTest: false
-		}`),
+		g.Attr("x-data", alpineInit),
 
 		// Header
 		Div(
@@ -2057,13 +2505,12 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 				Class("flex items-center justify-between mb-4"),
 				H2(Class("text-lg font-semibold text-slate-900 dark:text-white"),
 					g.Text("Email Provider")),
-				g.If(emailProvider != nil,
-					Button(
-						Type("button"),
-						g.Attr("@click", "showEmailTest = true"),
-						Class("text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"),
-						g.Text("Test Connection"),
-					),
+				// Email provider is always configured, so show test button
+				Button(
+					Type("button"),
+					g.Attr("@click", "showEmailTest = true"),
+					Class("text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"),
+					g.Text("Test Connection"),
 				),
 			),
 
@@ -2085,10 +2532,10 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 						Name("providerName"),
 						g.Attr("x-model", "emailProviderType"),
 						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						Option(Value("smtp"), g.If(emailProvider == nil || emailProvider.ProviderName == "smtp", Selected()), g.Text("SMTP")),
-						Option(Value("sendgrid"), g.If(emailProvider != nil && emailProvider.ProviderName == "sendgrid", Selected()), g.Text("SendGrid")),
-						Option(Value("resend"), g.If(emailProvider != nil && emailProvider.ProviderName == "resend", Selected()), g.Text("Resend")),
-						Option(Value("postmark"), g.If(emailProvider != nil && emailProvider.ProviderName == "postmark", Selected()), g.Text("Postmark")),
+						Option(Value("smtp"), g.If(emailProvider == "" || emailProvider == "smtp", Selected()), g.Text("SMTP")),
+						Option(Value("sendgrid"), g.If(emailProvider == "sendgrid", Selected()), g.Text("SendGrid")),
+						Option(Value("resend"), g.If(emailProvider == "resend", Selected()), g.Text("Resend")),
+						Option(Value("postmark"), g.If(emailProvider == "postmark", Selected()), g.Text("Postmark")),
 					),
 				),
 
@@ -2098,11 +2545,11 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					g.Attr("x-cloak", ""),
 					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
 
-					renderProviderField("Host", "config[host]", "text", "smtp.example.com", "SMTP server hostname", true, ""),
-					renderProviderField("Port", "config[port]", "number", "587", "SMTP server port (587 for TLS, 465 for SSL)", true, ""),
-					renderProviderField("Username", "config[username]", "text", "your-username", "SMTP username", true, ""),
+					renderProviderField("Host", "config[host]", "text", "smtp.example.com", "SMTP server hostname", true, getConfigStr(emailConfig, "host")),
+					renderProviderField("Port", "config[port]", "number", "587", "SMTP server port (587 for TLS, 465 for SSL)", true, getConfigStr(emailConfig, "port")),
+					renderProviderField("Username", "config[username]", "text", "your-username", "SMTP username", true, getConfigStr(emailConfig, "username")),
 					renderProviderField("Password", "config[password]", "password", "", "SMTP password (will be encrypted)", true, ""),
-					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, emailFrom),
 
 					Div(
 						Label(
@@ -2111,7 +2558,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 								Type("checkbox"),
 								Name("config[use_tls]"),
 								Value("true"),
-								Checked(),
+								g.If(emailConfig["use_tls"] != false, Checked()),
 								Class("rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800"),
 							),
 							Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"),
@@ -2127,8 +2574,8 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
 
 					renderProviderField("API Key", "config[api_key]", "password", "", "SendGrid API key (will be encrypted)", true, ""),
-					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
-					renderProviderField("From Name", "config[from_name]", "text", "My App", "Default sender name", false, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, emailFrom),
+					renderProviderField("From Name", "config[from_name]", "text", "My App", "Default sender name", false, emailFromName),
 				),
 
 				// Resend Fields
@@ -2138,7 +2585,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
 
 					renderProviderField("API Key", "config[api_key]", "password", "", "Resend API key (will be encrypted)", true, ""),
-					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, emailFrom),
 				),
 
 				// Postmark Fields
@@ -2148,7 +2595,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
 
 					renderProviderField("Server Token", "config[server_token]", "password", "", "Postmark server token (will be encrypted)", true, ""),
-					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, ""),
+					renderProviderField("From Address", "config[from]", "email", "noreply@example.com", "Default sender email address", true, emailFrom),
 				),
 
 				// Hidden fields
@@ -2167,6 +2614,75 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					),
 				),
 			),
+
+			// Test Email Section
+			Div(
+				Class("mt-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+				H3(Class("text-sm font-medium text-slate-900 dark:text-white mb-3"),
+					g.Text("Test Email Configuration")),
+				Div(
+					Class("flex items-end gap-3"),
+					Div(
+						Class("flex-1"),
+						Label(
+							For("testEmail"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
+							g.Text("Test Email Address"),
+						),
+						Input(
+							Type("email"),
+							ID("testEmail"),
+							g.Attr("x-model", "testEmail"),
+							g.Attr("placeholder", "test@example.com"),
+							Class("block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+					),
+					Button(
+						Type("button"),
+						g.Attr("@click", "testEmailProvider()"),
+						g.Attr(":disabled", "testLoading || !testEmail"),
+						Class("inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"),
+						g.Attr("x-show", "!testLoading"),
+						lucide.Send(Class("h-4 w-4")),
+						g.Text("Send Test Email"),
+					),
+					Button(
+						Type("button"),
+						Disabled(),
+						Class("inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white opacity-50"),
+						g.Attr("x-show", "testLoading"),
+						g.Attr("x-cloak", ""),
+						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+						g.Text("Sending..."),
+					),
+				),
+				// Test result display
+				Div(
+					g.Attr("x-show", "testResult"),
+					g.Attr("x-cloak", ""),
+					Class("mt-3"),
+					Div(
+						g.Attr("x-show", "testResult && testResult.success"),
+						Class("rounded-md bg-green-50 p-3 dark:bg-green-900/20"),
+						Div(Class("flex items-center gap-2"),
+							lucide.CircleCheck(Class("h-5 w-5 text-green-600 dark:text-green-400")),
+							P(Class("text-sm text-green-800 dark:text-green-200"),
+								g.Text("Test email sent successfully!")),
+						),
+					),
+					Div(
+						g.Attr("x-show", "testResult && testResult.error"),
+						Class("rounded-md bg-red-50 p-3 dark:bg-red-900/20"),
+						Div(Class("flex items-center gap-2"),
+							lucide.CircleAlert(Class("h-5 w-5 text-red-600 dark:text-red-400")),
+							P(Class("text-sm text-red-800 dark:text-red-200"),
+								Span(g.Text("Error: ")),
+								Span(g.Attr("x-text", "testResult.error")),
+							),
+						),
+					),
+				),
+			),
 		),
 
 		// SMS Provider Section
@@ -2176,7 +2692,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 				Class("flex items-center justify-between mb-4"),
 				H2(Class("text-lg font-semibold text-slate-900 dark:text-white"),
 					g.Text("SMS Provider (Optional)")),
-				g.If(smsProvider != nil,
+				g.If(smsProvider != "",
 					Button(
 						Type("button"),
 						g.Attr("@click", "showSMSTest = true"),
@@ -2204,8 +2720,8 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 						Name("providerName"),
 						g.Attr("x-model", "smsProviderType"),
 						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						Option(Value("twilio"), g.If(smsProvider == nil || smsProvider.ProviderName == "twilio", Selected()), g.Text("Twilio")),
-						Option(Value("aws-sns"), g.If(smsProvider != nil && smsProvider.ProviderName == "aws-sns", Selected()), g.Text("AWS SNS")),
+						Option(Value("twilio"), g.If(smsProvider == "" || smsProvider == "twilio", Selected()), g.Text("Twilio")),
+						Option(Value("aws-sns"), g.If(smsProvider == "aws-sns", Selected()), g.Text("AWS SNS")),
 					),
 				),
 
@@ -2215,9 +2731,9 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					g.Attr("x-cloak", ""),
 					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
 
-					renderProviderField("Account SID", "config[account_sid]", "text", "ACxxxxxxxxxxxxx", "Twilio Account SID", true, ""),
+					renderProviderField("Account SID", "config[account_sid]", "text", "ACxxxxxxxxxxxxx", "Twilio Account SID", true, getConfigStr(smsConfig, "account_sid")),
 					renderProviderField("Auth Token", "config[auth_token]", "password", "", "Twilio Auth Token (will be encrypted)", true, ""),
-					renderProviderField("From Number", "config[from]", "tel", "+1234567890", "Twilio phone number", true, ""),
+					renderProviderField("From Number", "config[from]", "tel", "+1234567890", "Twilio phone number", true, smsFrom),
 				),
 
 				// AWS SNS Fields
@@ -2226,9 +2742,9 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 					g.Attr("x-cloak", ""),
 					Class("space-y-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
 
-					renderProviderField("Access Key ID", "config[access_key_id]", "text", "AKIAXXXXXXXXXXXXX", "AWS Access Key ID", true, ""),
+					renderProviderField("Access Key ID", "config[access_key_id]", "text", "AKIAXXXXXXXXXXXXX", "AWS Access Key ID", true, getConfigStr(smsConfig, "access_key_id")),
 					renderProviderField("Secret Access Key", "config[secret_access_key]", "password", "", "AWS Secret Access Key (will be encrypted)", true, ""),
-					renderProviderField("Region", "config[region]", "text", "us-east-1", "AWS Region", true, ""),
+					renderProviderField("Region", "config[region]", "text", "us-east-1", "AWS Region", true, getConfigStr(smsConfig, "region")),
 				),
 
 				// Hidden fields
@@ -2244,6 +2760,49 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 						Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 						lucide.Save(Class("h-4 w-4")),
 						g.Text("Save SMS Provider"),
+					),
+				),
+			),
+
+			// Test SMS Section
+			Div(
+				Class("mt-4 pt-4 border-t border-slate-200 dark:border-gray-700"),
+				H3(Class("text-sm font-medium text-slate-900 dark:text-white mb-3"),
+					g.Text("Test SMS Configuration")),
+				Div(
+					Class("flex items-end gap-3"),
+					Div(
+						Class("flex-1"),
+						Label(
+							For("testPhone"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
+							g.Text("Test Phone Number"),
+						),
+						Input(
+							Type("tel"),
+							ID("testPhone"),
+							g.Attr("x-model", "testPhone"),
+							g.Attr("placeholder", "+1234567890"),
+							Class("block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+					),
+					Button(
+						Type("button"),
+						g.Attr("@click", "testSMSProvider()"),
+						g.Attr(":disabled", "testLoading || !testPhone"),
+						Class("inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"),
+						g.Attr("x-show", "!testLoading"),
+						lucide.MessageSquare(Class("h-4 w-4")),
+						g.Text("Send Test SMS"),
+					),
+					Button(
+						Type("button"),
+						Disabled(),
+						Class("inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white opacity-50"),
+						g.Attr("x-show", "testLoading"),
+						g.Attr("x-cloak", ""),
+						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+						g.Text("Sending..."),
 					),
 				),
 			),
