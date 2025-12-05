@@ -158,20 +158,15 @@ func EmptyLayout(data PageData, content g.Node) g.Node {
 				// Page container
 				Div(
 					ID("page-container"),
-					Class("mx-auto flex min-h-screen w-full min-w-[320px] flex-col"),
+					Class("mx-auto flex min-h-screen w-full min-w-screen flex-col"),
 
 					// Page Content
 					Main(
 						ID("page-content"),
 						Class("flex max-w-full flex-auto flex-col"),
 
-						// Page Heading
-						pageHeading(data),
-
 						// Page Section
 						Div(
-							Class("container mx-auto p-4 lg:p-8"),
-
 							// Flash Messages
 							flashMessages(data),
 
@@ -179,9 +174,6 @@ func EmptyLayout(data PageData, content g.Node) g.Node {
 							content,
 						),
 					),
-
-					// Page Footer
-					DashboardFooter(data),
 				),
 			),
 		),

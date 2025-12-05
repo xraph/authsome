@@ -104,6 +104,10 @@ func (v *FieldValidator) Validate(value interface{}) *ValidationResult {
 		err = v.validateRelation(value)
 	case FieldTypeMedia:
 		err = v.validateMedia(value)
+	case FieldTypeObject:
+		err = v.validateObject(value)
+	case FieldTypeArray:
+		err = v.validateArray(value)
 	}
 
 	if err != nil {
@@ -543,6 +547,149 @@ func (v *FieldValidator) validateMedia(value interface{}) error {
 	_ = str
 
 	return nil
+}
+
+func (v *FieldValidator) validateObject(value interface{}) error {
+	// Object value should be a map
+	obj, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("must be an object")
+	}
+
+	// Validate nested fields if defined
+	if v.Options != nil && len(v.Options.NestedFields) > 0 {
+		return v.validateNestedFields(obj, v.Options.NestedFields)
+	}
+
+	return nil
+}
+
+func (v *FieldValidator) validateArray(value interface{}) error {
+	// Array value should be a slice
+	arr, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("must be an array")
+	}
+
+	// Validate array constraints
+	if v.Options != nil {
+		if v.Options.MinItems != nil && len(arr) < *v.Options.MinItems {
+			return fmt.Errorf("must have at least %d items", *v.Options.MinItems)
+		}
+		if v.Options.MaxItems != nil && len(arr) > *v.Options.MaxItems {
+			return fmt.Errorf("must have at most %d items", *v.Options.MaxItems)
+		}
+
+		// Validate each item if nested fields are defined
+		if len(v.Options.NestedFields) > 0 {
+			for i, item := range arr {
+				obj, ok := item.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("item %d must be an object", i+1)
+				}
+				if err := v.validateNestedFields(obj, v.Options.NestedFields); err != nil {
+					return fmt.Errorf("item %d: %w", i+1, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateNestedFields validates nested field values against their definitions
+func (v *FieldValidator) validateNestedFields(data map[string]interface{}, fields []NestedFieldDefDTO) error {
+	for _, field := range fields {
+		value, exists := data[field.Slug]
+
+		// Check required
+		if field.Required && (!exists || isEmptyValue(value)) {
+			return fmt.Errorf("field '%s' is required", field.Name)
+		}
+
+		// Skip validation if empty and not required
+		if !exists || isEmptyValue(value) {
+			continue
+		}
+
+		// Create validator for nested field
+		var options *FieldOptionsDTO
+		if field.Options != nil {
+			options = field.Options
+		}
+
+		nestedValidator := NewFieldValidator(
+			field.Slug,
+			FieldType(field.Type),
+			field.Required,
+			false, // Unique not supported in nested
+			options,
+		)
+
+		result := nestedValidator.Validate(value)
+		if !result.Valid && len(result.Errors) > 0 {
+			return fmt.Errorf("field '%s': %s", field.Name, result.Errors[0].Message)
+		}
+	}
+
+	return nil
+}
+
+// ValidateNestedData validates data against nested field definitions (exported for use by services)
+func ValidateNestedData(data map[string]interface{}, fields []NestedFieldDefDTO) *ValidationResult {
+	result := &ValidationResult{Valid: true}
+
+	validator := &FieldValidator{}
+	if err := validator.validateNestedFields(data, fields); err != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, ValidationError{
+			Field:   "data",
+			Message: err.Error(),
+			Code:    "invalid",
+		})
+	}
+
+	return result
+}
+
+// ValidateArrayData validates an array of data against nested field definitions
+func ValidateArrayData(items []map[string]interface{}, fields []NestedFieldDefDTO, minItems, maxItems *int) *ValidationResult {
+	result := &ValidationResult{Valid: true}
+
+	// Validate array constraints
+	if minItems != nil && len(items) < *minItems {
+		result.Valid = false
+		result.Errors = append(result.Errors, ValidationError{
+			Field:   "items",
+			Message: fmt.Sprintf("must have at least %d items", *minItems),
+			Code:    "min_items",
+		})
+		return result
+	}
+	if maxItems != nil && len(items) > *maxItems {
+		result.Valid = false
+		result.Errors = append(result.Errors, ValidationError{
+			Field:   "items",
+			Message: fmt.Sprintf("must have at most %d items", *maxItems),
+			Code:    "max_items",
+		})
+		return result
+	}
+
+	// Validate each item
+	validator := &FieldValidator{}
+	for i, item := range items {
+		if err := validator.validateNestedFields(item, fields); err != nil {
+			result.Valid = false
+			result.Errors = append(result.Errors, ValidationError{
+				Field:   fmt.Sprintf("items[%d]", i),
+				Message: err.Error(),
+				Code:    "invalid",
+			})
+		}
+	}
+
+	return result
 }
 
 // =============================================================================

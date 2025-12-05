@@ -16,7 +16,6 @@ import (
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -222,7 +221,7 @@ func (e *DashboardExtension) ServeAPIKeysListPage(c forge.Context) error {
 
 	currentUser := e.getUserFromContext(c)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, "/api/auth/dashboard/login")
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
 	}
 
 	currentApp, err := e.extractAppFromURL(c)
@@ -230,16 +229,10 @@ func (e *DashboardExtension) ServeAPIKeysListPage(c forge.Context) error {
 		return c.String(http.StatusBadRequest, "Invalid app context")
 	}
 
-	pageData := components.PageData{
-		Title:      "API Keys",
-		User:       currentUser,
-		ActivePage: "settings-api-keys",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
 	content := e.renderAPIKeysListContent(c, currentApp, currentUser)
-	return handler.RenderWithLayout(c, pageData, content)
+	
+	// Use the settings layout with sidebar navigation
+	return handler.RenderSettingsPage(c, "api-keys", content)
 }
 
 // ServeAPIKeysConfigPage renders the configuration page
@@ -251,7 +244,7 @@ func (e *DashboardExtension) ServeAPIKeysConfigPage(c forge.Context) error {
 
 	currentUser := e.getUserFromContext(c)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, "/api/auth/dashboard/login")
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
 	}
 
 	currentApp, err := e.extractAppFromURL(c)
@@ -259,16 +252,10 @@ func (e *DashboardExtension) ServeAPIKeysConfigPage(c forge.Context) error {
 		return c.String(http.StatusBadRequest, "Invalid app context")
 	}
 
-	pageData := components.PageData{
-		Title:      "API Key Configuration",
-		User:       currentUser,
-		ActivePage: "settings-api-keys-config",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
 	content := e.renderConfigContent(c, currentApp)
-	return handler.RenderWithLayout(c, pageData, content)
+	
+	// Use the settings layout with sidebar navigation
+	return handler.RenderSettingsPage(c, "api-keys-config", content)
 }
 
 // ServeAPIKeysSecurityPage renders the security settings page
@@ -280,7 +267,7 @@ func (e *DashboardExtension) ServeAPIKeysSecurityPage(c forge.Context) error {
 
 	currentUser := e.getUserFromContext(c)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, "/api/auth/dashboard/login")
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
 	}
 
 	currentApp, err := e.extractAppFromURL(c)
@@ -288,16 +275,10 @@ func (e *DashboardExtension) ServeAPIKeysSecurityPage(c forge.Context) error {
 		return c.String(http.StatusBadRequest, "Invalid app context")
 	}
 
-	pageData := components.PageData{
-		Title:      "API Key Security",
-		User:       currentUser,
-		ActivePage: "settings-api-keys-security",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
 	content := e.renderSecurityContent(c, currentApp)
-	return handler.RenderWithLayout(c, pageData, content)
+	
+	// Use the settings layout with sidebar navigation
+	return handler.RenderSettingsPage(c, "api-keys-security", content)
 }
 
 // CreateAPIKey handles API key creation

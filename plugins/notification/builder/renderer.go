@@ -95,6 +95,9 @@ func (r *Renderer) renderEmailLayout(block Block) g.Node {
 				Meta(Charset("utf-8")),
 				Meta(Name("viewport"), Content("width=device-width, initial-scale=1.0")),
 				Meta(g.Attr("http-equiv", "X-UA-Compatible"), Content("IE=edge")),
+				// Tailwind CSS CDN for utility classes support
+				Script(Src("https://cdn.tailwindcss.com")),
+				// Custom email styles
 				StyleEl(g.Raw(fmt.Sprintf(`
 					body { margin: 0; padding: 0; background-color: %s; font-family: %s; color: %s; }
 					table { border-collapse: collapse; }

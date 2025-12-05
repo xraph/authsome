@@ -17,11 +17,11 @@ var ErrNotImplemented = errors.New("paddle provider: not implemented")
 
 // Config holds Paddle-specific configuration
 type Config struct {
-	VendorID        string `json:"vendorId"`
-	VendorAuthCode  string `json:"vendorAuthCode"`
-	PublicKey       string `json:"publicKey"`
-	WebhookSecret   string `json:"webhookSecret"`
-	Sandbox         bool   `json:"sandbox"` // Use sandbox environment
+	VendorID       string `json:"vendorId"`
+	VendorAuthCode string `json:"vendorAuthCode"`
+	PublicKey      string `json:"publicKey"`
+	WebhookSecret  string `json:"webhookSecret"`
+	Sandbox        bool   `json:"sandbox"` // Use sandbox environment
 }
 
 // Provider implements the PaymentProvider interface for Paddle
@@ -179,6 +179,21 @@ func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature 
 	return nil, ErrNotImplemented
 }
 
+// ListProducts lists all products from Paddle
+func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, error) {
+	return nil, ErrNotImplemented
+}
+
+// GetProduct retrieves a single product from Paddle
+func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.ProviderProduct, error) {
+	return nil, ErrNotImplemented
+}
+
+// ListPrices lists all prices for a product from Paddle
+func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.ProviderPrice, error) {
+	return nil, ErrNotImplemented
+}
+
 // VerifyWebhookSignature verifies a Paddle webhook signature
 func (p *Provider) VerifyWebhookSignature(payload []byte, signature string) bool {
 	// Paddle uses PHP serialize format and public key verification
@@ -207,4 +222,3 @@ func (p *Provider) UpdateSubscriptionQuantity(ctx context.Context, subscriptionI
 func (p *Provider) GetSubscriptionPayments(ctx context.Context, subscriptionID string) ([]interface{}, error) {
 	return nil, ErrNotImplemented
 }
-

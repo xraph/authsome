@@ -21,6 +21,9 @@ type JSONQuery struct {
 	// Complex: {"$and": [{"status": "published"}, {"$or": [...]}]}
 	Filters interface{} `json:"filters,omitempty"`
 
+	// Filter is an alias for filters (singular form)
+	Filter interface{} `json:"filter,omitempty"`
+
 	// Alternative filter syntax
 	Where interface{} `json:"where,omitempty"`
 
@@ -70,8 +73,11 @@ func (p *JSONParser) Parse(data []byte) (*Query, error) {
 func (p *JSONParser) ParseJSONQuery(jq *JSONQuery) (*Query, error) {
 	q := NewQuery()
 
-	// Parse filters (use either filters or where)
+	// Parse filters (use filters, filter, or where - in order of precedence)
 	filters := jq.Filters
+	if filters == nil {
+		filters = jq.Filter
+	}
 	if filters == nil {
 		filters = jq.Where
 	}

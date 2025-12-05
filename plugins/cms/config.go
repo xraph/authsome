@@ -77,6 +77,11 @@ type LimitsConfig struct {
 	// MaxRelationsPerEntry is the maximum number of relations per entry
 	// Default: 100
 	MaxRelationsPerEntry int `json:"maxRelationsPerEntry" yaml:"maxRelationsPerEntry"`
+
+	// MaxComponentSchemas is the maximum number of component schemas per app/environment
+	// 0 means unlimited
+	// Default: 100
+	MaxComponentSchemas int `json:"maxComponentSchemas" yaml:"maxComponentSchemas"`
 }
 
 // RevisionsConfig holds revision settings
@@ -188,6 +193,7 @@ func DefaultConfig() *Config {
 			MaxEntriesPerType:    0, // Unlimited
 			MaxEntryDataSize:     1 * 1024 * 1024, // 1MB
 			MaxRelationsPerEntry: 100,
+			MaxComponentSchemas:  100,
 		},
 		Revisions: RevisionsConfig{
 			MaxRevisionsPerEntry: 50,
@@ -286,6 +292,9 @@ func (c *Config) Merge(other *Config) {
 	}
 	if other.Limits.MaxRelationsPerEntry > 0 {
 		c.Limits.MaxRelationsPerEntry = other.Limits.MaxRelationsPerEntry
+	}
+	if other.Limits.MaxComponentSchemas > 0 {
+		c.Limits.MaxComponentSchemas = other.Limits.MaxComponentSchemas
 	}
 
 	// Revisions

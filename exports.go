@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/contexts"
 	dev "github.com/xraph/authsome/core/device"
+	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/middleware"
@@ -51,6 +52,9 @@ type (
 	// Invitation represents an app invitation
 	Invitation = app.Invitation
 
+	// Environment represents an environment
+	Environment = environment.Environment
+
 	// CreateAppRequest is the request for creating an app
 	CreateAppRequest = app.CreateAppRequest
 
@@ -80,6 +84,9 @@ type (
 
 	// InvitationRepository defines the invitation repository interface
 	InvitationRepository = app.InvitationRepository
+
+	// EnvironmentRepository defines the environment repository interface
+	EnvironmentRepository = environment.Repository
 )
 
 // Auth Package Exports

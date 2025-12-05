@@ -437,6 +437,21 @@ func (e *DashboardExtension) ServeEditTemplate(c forge.Context) error {
 
 	basePath := handler.GetBasePath()
 
+	// Check if this is a visual builder template
+	template, err := e.plugin.service.GetTemplate(c.Context(), templateID)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
+	}
+
+	// If it's a visual builder template, redirect to the visual builder
+	if template.Metadata != nil {
+		if builderType, ok := template.Metadata["builderType"].(string); ok && builderType == "visual" {
+			builderURL := fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder/%s",
+				basePath, currentApp.ID, templateID)
+			return c.Redirect(http.StatusFound, builderURL)
+		}
+	}
+
 	pageData := components.PageData{
 		Title:      "Edit Template",
 		User:       currentUser,
@@ -531,7 +546,7 @@ func (e *DashboardExtension) TestSendTemplate(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Recipient is required"})
 	}
 
-	// Get template
+	// Get template directly by ID
 	template, err := e.plugin.service.GetTemplate(c.Context(), templateID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
@@ -552,19 +567,49 @@ func (e *DashboardExtension) TestSendTemplate(c forge.Context) error {
 	if _, exists := req.Variables["app_name"]; !exists {
 		req.Variables["app_name"] = currentApp.Name
 	}
+	if _, exists := req.Variables["userName"]; !exists {
+		req.Variables["userName"] = currentUser.Name
+	}
+	if _, exists := req.Variables["appName"]; !exists {
+		req.Variables["appName"] = currentApp.Name
+	}
 
-	// Send test notification
-	notif, err := e.plugin.templateSvc.SendWithTemplate(c.Context(), &SendWithTemplateRequest{
-		AppID:       currentApp.ID,
-		TemplateKey: template.TemplateKey,
-		Type:        template.Type,
-		Recipient:   req.Recipient,
-		Variables:   req.Variables,
-		Language:    template.Language,
+	// Render the template with variables
+	engine := e.plugin.service.GetTemplateEngine()
+
+	// Render subject if present
+	subject := template.Subject
+	if subject != "" && len(req.Variables) > 0 {
+		rendered, err := engine.Render(subject, req.Variables)
+		if err == nil {
+			subject = rendered
+		}
+	}
+
+	// Render body with variables
+	body := template.Body
+	if body != "" && len(req.Variables) > 0 {
+		rendered, err := engine.Render(body, req.Variables)
+		if err == nil {
+			body = rendered
+		}
+	}
+
+	// Directly send using the notification service with the rendered template content
+	// Don't set TemplateName to avoid redundant template lookup
+	notif, err := e.plugin.service.Send(c.Context(), &notification.SendRequest{
+		AppID:     currentApp.ID,
+		Type:      template.Type,
+		Recipient: req.Recipient,
+		Subject:   subject,
+		Body:      body,
 		Metadata: map[string]interface{}{
 			"test_send":     true,
 			"test_by_user":  currentUser.ID.String(),
 			"test_by_email": currentUser.Email,
+			"template_id":   templateID.String(),
+			"template_key":  template.TemplateKey,
+			"template_name": template.Name,
 		},
 	})
 	if err != nil {
@@ -1001,8 +1046,11 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		showTestModal: false,
 		testTemplateId: '',
 		testRecipient: '',
+		testVariables: '{\n  "user_name": "Test User",\n  "app_name": "My App"\n}',
 		testLoading: false,
 		testResult: null,
+		editorType: '', // 'visual' or 'manual' - empty means selection step
+		selectedSample: '', // Selected sample template name
 		newTemplate: {
 			name: '',
 			templateKey: '',
@@ -1010,25 +1058,60 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		},
 		createLoading: false,
 		createError: null,
+		resetModal() {
+			this.editorType = '';
+			this.selectedSample = '';
+			this.newTemplate = { name: '', templateKey: '', subject: '' };
+			this.createError = null;
+		},
+		openCreateModal() {
+			this.resetModal();
+			this.showCreateModal = true;
+		},
+		selectEditorType(type) {
+			this.editorType = type;
+		},
 		generateKey() {
 			this.newTemplate.templateKey = 'custom.' + this.newTemplate.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 		},
-		async createAndOpenBuilder() {
+		async createTemplate() {
 			if (!this.newTemplate.name || !this.newTemplate.templateKey) {
 				this.createError = 'Name and template key are required';
 				return;
 			}
 			this.createLoading = true;
 			this.createError = null;
-			try {
-				const res = await fetch('%s/dashboard/app/%s/notifications/templates/builder/save', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						name: this.newTemplate.name,
-						templateKey: this.newTemplate.templateKey,
-						subject: this.newTemplate.subject,
-						document: {
+			
+			if (this.editorType === 'visual') {
+				// Create visual builder template
+				try {
+					// Get document - either from sample or empty
+					let document;
+					if (this.selectedSample) {
+						// Fetch sample template
+						const sampleRes = await fetch('%s/dashboard/app/%s/notifications/templates/samples/' + this.selectedSample);
+						if (sampleRes.ok) {
+							document = await sampleRes.json();
+						} else {
+							// Fallback to empty
+							document = {
+								root: 'root',
+								blocks: {
+									root: {
+										type: 'EmailLayout',
+										data: {
+											backdropColor: '#F5F5F5',
+											canvasColor: '#FFFFFF',
+											textColor: '#242424',
+											fontFamily: 'MODERN_SANS',
+											childrenIds: []
+										}
+									}
+								}
+							};
+						}
+					} else {
+						document = {
 							root: 'root',
 							blocks: {
 								root: {
@@ -1042,17 +1125,54 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 									}
 								}
 							}
-						}
-					})
-				});
-				const data = await res.json();
-				if (data.success && data.templateId) {
-					window.location.href = '%s/dashboard/app/%s/notifications/templates/builder/' + data.templateId;
-				} else {
-					this.createError = data.error || 'Failed to create template';
+						};
+					}
+					
+					const res = await fetch('%s/dashboard/app/%s/notifications/templates/builder/save', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							name: this.newTemplate.name,
+							templateKey: this.newTemplate.templateKey,
+							subject: this.newTemplate.subject,
+							document: document
+						})
+					});
+					const data = await res.json();
+					if (data.success && data.templateId) {
+						window.location.href = '%s/dashboard/app/%s/notifications/templates/builder/' + data.templateId;
+					} else {
+						this.createError = data.error || 'Failed to create template';
+					}
+				} catch (err) {
+					this.createError = err.message;
 				}
-			} catch (err) {
-				this.createError = err.message;
+			} else {
+				// Create manual template and go to edit page
+				try {
+					const res = await fetch('%s/auth/notification/templates', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							appId: '%s',
+							name: this.newTemplate.name,
+							templateKey: this.newTemplate.templateKey,
+							type: 'email',
+							language: 'en',
+							subject: this.newTemplate.subject || 'Email Subject',
+							body: '<p>Your email content goes here...</p>',
+							active: true
+						})
+					});
+					const data = await res.json();
+					if (data.id) {
+						window.location.href = '%s/dashboard/app/%s/notifications/templates/' + data.id + '/edit';
+					} else {
+						this.createError = data.error || data.message || 'Failed to create template';
+					}
+				} catch (err) {
+					this.createError = err.message;
+				}
 			}
 			this.createLoading = false;
 		},
@@ -1061,10 +1181,21 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 			this.testLoading = true;
 			this.testResult = null;
 			try {
+				// Parse variables from JSON string
+				let variables = {};
+				if (this.testVariables && this.testVariables.trim()) {
+					try {
+						variables = JSON.parse(this.testVariables);
+					} catch (e) {
+						this.testResult = { error: 'Invalid JSON for variables: ' + e.message };
+						this.testLoading = false;
+						return;
+					}
+				}
 				const res = await fetch('%s/dashboard/app/%s/notifications/templates/' + this.testTemplateId + '/test', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ recipient: this.testRecipient })
+					body: JSON.stringify({ recipient: this.testRecipient, variables: variables })
 				});
 				this.testResult = await res.json();
 			} catch (err) {
@@ -1075,10 +1206,11 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		openTestModal(templateId) {
 			this.testTemplateId = templateId;
 			this.testRecipient = '';
+			this.testVariables = '{\n  "user_name": "Test User",\n  "app_name": "My App"\n}';
 			this.testResult = null;
 			this.showTestModal = true;
 		}
-	}`, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID)
+	}`, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID.String(), basePath, currentApp.ID, basePath, currentApp.ID)
 
 	return Div(
 		Class("space-y-6"),
@@ -1095,18 +1227,11 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 			),
 			Div(
 				Class("flex items-center gap-3"),
-				// Visual Builder button (primary) - now opens modal
+				// New Template button - opens modal with editor type choice
 				Button(
 					Type("button"),
-					g.Attr("@click", "showCreateModal = true"),
+					g.Attr("@click", "openCreateModal()"),
 					Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm"),
-					lucide.Sparkles(Class("h-4 w-4")),
-					g.Text("Visual Builder"),
-				),
-				// New Template button (secondary)
-				A(
-					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
-					Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
 					lucide.Plus(Class("h-4 w-4")),
 					g.Text("New Template"),
 				),
@@ -1132,7 +1257,7 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 	)
 }
 
-// renderCreateBuilderModal renders the modal for creating a template before opening the builder
+// renderCreateBuilderModal renders the modal for creating a template with editor type selection
 func renderCreateBuilderModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showCreateModal"),
@@ -1143,11 +1268,11 @@ func renderCreateBuilderModal() g.Node {
 		// Overlay
 		Div(
 			g.Attr("x-show", "showCreateModal"),
-			g.Attr("@click", "showCreateModal = false"),
+			g.Attr("@click", "showCreateModal = false; resetModal()"),
 			Class("fixed inset-0 bg-black bg-opacity-50 transition-opacity"),
 		),
 
-		// Modal
+		// Modal - wider when showing sample templates
 		Div(
 			Class("flex min-h-screen items-center justify-center p-4"),
 			Div(
@@ -1156,122 +1281,339 @@ func renderCreateBuilderModal() g.Node {
 				g.Attr("x-transition:enter", "ease-out duration-300"),
 				g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
 				g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
-				Class("relative bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-md w-full p-6"),
+				g.Attr(":class", "editorType === 'visual' ? 'max-w-4xl' : 'max-w-lg'"),
+				Class("relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full p-6"),
 
-				// Header with icon
+				// Step 1: Editor Type Selection (shown when editorType is empty)
 				Div(
-					Class("flex items-center gap-4 mb-6"),
-					Div(
-						Class("flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg"),
-						lucide.Sparkles(Class("h-6 w-6 text-white")),
-					),
-					Div(
-						H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
-							g.Text("Create Email Template")),
-						P(Class("text-sm text-slate-500 dark:text-gray-400"),
-							g.Text("Set up your template before designing")),
-					),
-				),
+					g.Attr("x-show", "!editorType"),
+					g.Attr("x-cloak", ""),
 
-				// Form
-				Div(
-					Class("space-y-4"),
-
-					// Template Name
+					// Header
 					Div(
-						Label(
-							For("modalTemplateName"),
-							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-							g.Text("Template Name"),
-							Span(Class("text-red-500"), g.Text(" *")),
+						Class("text-center mb-6"),
+						Div(
+							Class("mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg mb-4"),
+							lucide.Mail(Class("h-7 w-7 text-white")),
 						),
-						Input(
-							Type("text"),
-							ID("modalTemplateName"),
-							g.Attr("x-model", "newTemplate.name"),
-							g.Attr("@input", "generateKey()"),
-							g.Attr("placeholder", "e.g., Welcome Email"),
-							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						),
+						H3(Class("text-xl font-semibold text-slate-900 dark:text-white"),
+							g.Text("Create New Template")),
+						P(Class("mt-2 text-sm text-slate-500 dark:text-gray-400"),
+							g.Text("Choose how you want to design your email template")),
 					),
 
-					// Template Key
+					// Editor Type Options
 					Div(
-						Label(
-							For("modalTemplateKey"),
-							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-							g.Text("Template Key"),
-							Span(Class("text-red-500"), g.Text(" *")),
+						Class("grid grid-cols-2 gap-4 mb-6"),
+
+						// Visual Builder option
+						Button(
+							Type("button"),
+							g.Attr("@click", "selectEditorType('visual')"),
+							Class("group relative flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-violet-500 hover:bg-violet-50 dark:border-gray-700 dark:hover:border-violet-500 dark:hover:bg-violet-900/20 transition-all"),
+							Div(
+								Class("flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 group-hover:from-violet-200 group-hover:to-indigo-200 dark:from-violet-900/40 dark:to-indigo-900/40 mb-3"),
+								lucide.Sparkles(Class("h-7 w-7 text-violet-600 dark:text-violet-400")),
+							),
+							Span(Class("font-semibold text-slate-900 dark:text-white"), g.Text("Visual Builder")),
+							Span(Class("mt-1 text-xs text-slate-500 dark:text-gray-400 text-center"), g.Text("Drag & drop blocks, no coding required")),
+							Div(
+								Class("absolute top-2 right-2"),
+								Span(Class("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"),
+									g.Text("Recommended")),
+							),
 						),
-						Input(
-							Type("text"),
-							ID("modalTemplateKey"),
-							g.Attr("x-model", "newTemplate.templateKey"),
-							g.Attr("placeholder", "e.g., custom.welcome_email"),
-							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+
+						// Manual/Code Editor option
+						Button(
+							Type("button"),
+							g.Attr("@click", "selectEditorType('manual')"),
+							Class("group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-slate-400 hover:bg-slate-50 dark:border-gray-700 dark:hover:border-gray-500 dark:hover:bg-gray-800 transition-all"),
+							Div(
+								Class("flex h-14 w-14 items-center justify-center rounded-xl bg-slate-100 group-hover:bg-slate-200 dark:bg-gray-800 dark:group-hover:bg-gray-700 mb-3"),
+								lucide.Code(Class("h-7 w-7 text-slate-600 dark:text-gray-400")),
+							),
+							Span(Class("font-semibold text-slate-900 dark:text-white"), g.Text("Code Editor")),
+							Span(Class("mt-1 text-xs text-slate-500 dark:text-gray-400 text-center"), g.Text("Write HTML/templates directly")),
 						),
-						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
-							g.Text("Auto-generated from name. Use lowercase letters, numbers, dots, and underscores.")),
 					),
 
-					// Subject Line
+					// Cancel button
 					Div(
-						Label(
-							For("modalSubject"),
-							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-							g.Text("Email Subject"),
-						),
-						Input(
-							Type("text"),
-							ID("modalSubject"),
-							g.Attr("x-model", "newTemplate.subject"),
-							g.Attr("placeholder", "e.g., Welcome to {{.app_name}}!"),
-							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						),
-						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
-							g.Text("Use {{.variable_name}} for dynamic content")),
-					),
-
-					// Error display
-					Div(
-						g.Attr("x-show", "createError"),
-						g.Attr("x-cloak", ""),
-						Class("rounded-md bg-red-50 p-3 dark:bg-red-900/20"),
-						P(Class("text-sm text-red-800 dark:text-red-200"),
-							Span(g.Attr("x-text", "createError")),
+						Class("text-center"),
+						Button(
+							Type("button"),
+							g.Attr("@click", "showCreateModal = false; resetModal()"),
+							Class("text-sm text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"),
+							g.Text("Cancel"),
 						),
 					),
 				),
 
-				// Actions
+				// Step 2: Template Details Form (shown when editorType is selected)
 				Div(
-					Class("flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-gray-700"),
-					Button(
-						Type("button"),
-						g.Attr("@click", "showCreateModal = false"),
-						Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
-						g.Text("Cancel"),
+					g.Attr("x-show", "editorType"),
+					g.Attr("x-cloak", ""),
+
+					// Header with back button
+					Div(
+						Class("flex items-center gap-4 mb-6"),
+						Button(
+							Type("button"),
+							g.Attr("@click", "editorType = ''; selectedSample = ''"),
+							Class("flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-800"),
+							lucide.ArrowLeft(Class("h-5 w-5")),
+						),
+						Div(
+							Class("flex h-12 w-12 items-center justify-center rounded-xl shadow-lg"),
+							g.Attr(":class", "editorType === 'visual' ? 'bg-gradient-to-br from-violet-500 to-indigo-600' : 'bg-slate-600 dark:bg-gray-700'"),
+							g.Raw(`<template x-if="editorType === 'visual'">`),
+							lucide.Sparkles(Class("h-6 w-6 text-white")),
+							g.Raw(`</template>`),
+							g.Raw(`<template x-if="editorType === 'manual'">`),
+							lucide.Code(Class("h-6 w-6 text-white")),
+							g.Raw(`</template>`),
+						),
+						Div(
+							H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+								g.Raw(`<span x-text="editorType === 'visual' ? 'Visual Builder' : 'Code Editor'"></span>`),
+								g.Text(" Template")),
+							P(Class("text-sm text-slate-500 dark:text-gray-400"),
+								g.Raw(`<span x-text="editorType === 'visual' ? 'Choose a starting point or start from scratch' : 'Set up your template details'"></span>`)),
+						),
 					),
-					Button(
-						Type("button"),
-						g.Attr("@click", "createAndOpenBuilder()"),
-						g.Attr(":disabled", "createLoading || !newTemplate.name || !newTemplate.templateKey"),
-						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-indigo-600 rounded-lg hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"),
-						g.Attr("x-show", "!createLoading"),
-						lucide.Sparkles(Class("h-4 w-4")),
-						g.Text("Create & Open Builder"),
-					),
-					Button(
-						Type("button"),
-						Disabled(),
-						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg opacity-50"),
-						g.Attr("x-show", "createLoading"),
+
+					// Two-column layout for Visual Builder
+					Div(
+						g.Attr("x-show", "editorType === 'visual'"),
 						g.Attr("x-cloak", ""),
-						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
-						g.Text("Creating..."),
+						Class("grid grid-cols-2 gap-6"),
+
+						// Left: Sample Templates
+						Div(
+							Class("space-y-3"),
+							H4(Class("text-sm font-medium text-slate-700 dark:text-gray-300 mb-3"), g.Text("Start from a template")),
+							Div(
+								Class("space-y-2 max-h-80 overflow-y-auto pr-2"),
+								// Blank template option
+								renderSampleTemplateOption("", "Blank Template", "Start from scratch", "🆕", true),
+								// Sample templates
+								renderSampleTemplateOption("welcome", "Welcome Email", "Onboarding new users", "🎉", false),
+								renderSampleTemplateOption("otp", "Verification Code", "OTP/2FA authentication", "🔐", false),
+								renderSampleTemplateOption("reset_password", "Password Reset", "Reset password link", "🔑", false),
+								renderSampleTemplateOption("invitation", "Team Invitation", "Invite to organization", "👥", false),
+								renderSampleTemplateOption("magic_link", "Magic Link", "Passwordless sign-in", "✨", false),
+								renderSampleTemplateOption("order_confirmation", "Order Confirmation", "E-commerce receipt", "🛒", false),
+								renderSampleTemplateOption("newsletter", "Newsletter", "Marketing newsletter", "📰", false),
+								renderSampleTemplateOption("account_alert", "Security Alert", "Account security notice", "🚨", false),
+							),
+						),
+
+						// Right: Form fields
+						Div(
+							Class("space-y-4"),
+							// Template Name
+							Div(
+								Label(
+									For("modalTemplateName"),
+									Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+									g.Text("Template Name"),
+									Span(Class("text-red-500"), g.Text(" *")),
+								),
+								Input(
+									Type("text"),
+									ID("modalTemplateName"),
+									g.Attr("x-model", "newTemplate.name"),
+									g.Attr("@input", "generateKey()"),
+									g.Attr("placeholder", "e.g., Welcome Email"),
+									Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+								),
+							),
+
+							// Template Key
+							Div(
+								Label(
+									For("modalTemplateKey"),
+									Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+									g.Text("Template Key"),
+									Span(Class("text-red-500"), g.Text(" *")),
+								),
+								Input(
+									Type("text"),
+									ID("modalTemplateKey"),
+									g.Attr("x-model", "newTemplate.templateKey"),
+									g.Attr("placeholder", "e.g., custom.welcome_email"),
+									Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+								),
+								P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+									g.Text("Auto-generated from name")),
+							),
+
+							// Subject Line
+							Div(
+								Label(
+									For("modalSubject"),
+									Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+									g.Text("Email Subject"),
+								),
+								Input(
+									Type("text"),
+									ID("modalSubject"),
+									g.Attr("x-model", "newTemplate.subject"),
+									g.Attr("placeholder", "e.g., Welcome to {{.app_name}}!"),
+									Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+								),
+							),
+
+							// Error display
+							Div(
+								g.Attr("x-show", "createError"),
+								g.Attr("x-cloak", ""),
+								Class("rounded-md bg-red-50 p-3 dark:bg-red-900/20"),
+								P(Class("text-sm text-red-800 dark:text-red-200"),
+									Span(g.Attr("x-text", "createError")),
+								),
+							),
+						),
+					),
+
+					// Single column for Manual Editor
+					Div(
+						g.Attr("x-show", "editorType === 'manual'"),
+						g.Attr("x-cloak", ""),
+						Class("space-y-4"),
+
+						// Template Name
+						Div(
+							Label(
+								For("modalTemplateNameManual"),
+								Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Template Name"),
+								Span(Class("text-red-500"), g.Text(" *")),
+							),
+							Input(
+								Type("text"),
+								ID("modalTemplateNameManual"),
+								g.Attr("x-model", "newTemplate.name"),
+								g.Attr("@input", "generateKey()"),
+								g.Attr("placeholder", "e.g., Welcome Email"),
+								Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+							),
+						),
+
+						// Template Key
+						Div(
+							Label(
+								For("modalTemplateKeyManual"),
+								Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Template Key"),
+								Span(Class("text-red-500"), g.Text(" *")),
+							),
+							Input(
+								Type("text"),
+								ID("modalTemplateKeyManual"),
+								g.Attr("x-model", "newTemplate.templateKey"),
+								g.Attr("placeholder", "e.g., custom.welcome_email"),
+								Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+							),
+							P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+								g.Text("Auto-generated from name. Use lowercase letters, numbers, dots, and underscores.")),
+						),
+
+						// Subject Line
+						Div(
+							Label(
+								For("modalSubjectManual"),
+								Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+								g.Text("Email Subject"),
+							),
+							Input(
+								Type("text"),
+								ID("modalSubjectManual"),
+								g.Attr("x-model", "newTemplate.subject"),
+								g.Attr("placeholder", "e.g., Welcome to {{.app_name}}!"),
+								Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+							),
+							P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+								g.Text("Use {{.variable_name}} for dynamic content")),
+						),
+
+						// Error display
+						Div(
+							g.Attr("x-show", "createError"),
+							g.Attr("x-cloak", ""),
+							Class("rounded-md bg-red-50 p-3 dark:bg-red-900/20"),
+							P(Class("text-sm text-red-800 dark:text-red-200"),
+								Span(g.Attr("x-text", "createError")),
+							),
+						),
+					),
+
+					// Actions
+					Div(
+						Class("flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-gray-700"),
+						Button(
+							Type("button"),
+							g.Attr("@click", "showCreateModal = false; resetModal()"),
+							Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+							g.Text("Cancel"),
+						),
+						Button(
+							Type("button"),
+							g.Attr("@click", "createTemplate()"),
+							g.Attr(":disabled", "createLoading || !newTemplate.name || !newTemplate.templateKey"),
+							g.Attr(":class", "editorType === 'visual' ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700' : 'bg-slate-700 hover:bg-slate-800 dark:bg-gray-600 dark:hover:bg-gray-500'"),
+							Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"),
+							g.Attr("x-show", "!createLoading"),
+							g.Raw(`<template x-if="editorType === 'visual'">`),
+							lucide.Sparkles(Class("h-4 w-4")),
+							g.Raw(`</template>`),
+							g.Raw(`<template x-if="editorType === 'manual'">`),
+							lucide.Code(Class("h-4 w-4")),
+							g.Raw(`</template>`),
+							g.Raw(`<span x-text="editorType === 'visual' ? 'Create & Open Builder' : 'Create & Edit'"></span>`),
+						),
+						Button(
+							Type("button"),
+							Disabled(),
+							Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg opacity-50"),
+							g.Attr("x-show", "createLoading"),
+							g.Attr("x-cloak", ""),
+							lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+							g.Text("Creating..."),
+						),
 					),
 				),
 			),
+		),
+	)
+}
+
+// renderSampleTemplateOption renders a sample template option in the modal
+func renderSampleTemplateOption(id, name, description, icon string, isBlank bool) g.Node {
+	borderClass := "border-2 border-transparent"
+	if isBlank {
+		borderClass = "border-2 border-dashed border-slate-300 dark:border-gray-600"
+	}
+
+	return Button(
+		Type("button"),
+		g.Attr("@click", fmt.Sprintf("selectedSample = '%s'", id)),
+		g.Attr(":class", fmt.Sprintf("{'ring-2 ring-violet-500 border-violet-500 bg-violet-50 dark:bg-violet-900/20': selectedSample === '%s'}", id)),
+		Class("w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-800 transition-all text-left "+borderClass),
+		// Icon
+		Span(Class("text-xl flex-shrink-0"), g.Text(icon)),
+		// Info
+		Div(
+			Class("flex-1 min-w-0"),
+			Div(Class("font-medium text-sm text-slate-900 dark:text-white"), g.Text(name)),
+			Div(Class("text-xs text-slate-500 dark:text-gray-400 truncate"), g.Text(description)),
+		),
+		// Check icon when selected
+		Div(
+			g.Attr("x-show", fmt.Sprintf("selectedSample === '%s'", id)),
+			g.Attr("x-cloak", ""),
+			lucide.CircleCheck(Class("h-5 w-5 text-violet-600 flex-shrink-0")),
 		),
 	)
 }
@@ -1288,7 +1630,7 @@ func renderTestSendListModal() g.Node {
 		Div(
 			g.Attr("x-show", "showTestModal"),
 			g.Attr("@click", "showTestModal = false"),
-			Class("fixed inset-0 bg-black bg-opacity-50 transition-opacity"),
+			Class("fixed inset-0 bg-black/50 bg-opacity-50 transition-opacity"),
 		),
 
 		// Modal
@@ -1297,7 +1639,7 @@ func renderTestSendListModal() g.Node {
 			Div(
 				g.Attr("x-show", "showTestModal"),
 				g.Attr("@click.stop", ""),
-				Class("relative bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full p-6"),
+				Class("relative bg-white/50 dark:bg-gray-900/50 rounded-lg shadow-xl max-w-md w-full p-6"),
 
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
 					g.Text("Send Test Notification")),
@@ -1319,6 +1661,24 @@ func renderTestSendListModal() g.Node {
 						),
 						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
 							g.Text("Email address or phone number to send test to")),
+					),
+
+					// Test Variables
+					Div(
+						Label(
+							For("testVariablesInput"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Test Variables (JSON)"),
+						),
+						Textarea(
+							ID("testVariablesInput"),
+							g.Attr("x-model", "testVariables"),
+							g.Attr("placeholder", "{\n  \"user_name\": \"John\",\n  \"app_name\": \"MyApp\"\n}"),
+							Rows("5"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Variables to replace in template (e.g., {{.user_name}})")),
 					),
 
 					// Test result display
@@ -1413,15 +1773,15 @@ func renderBuilderPromoCard(basePath string, currentApp *app.App) g.Node {
 					featureBadge("Mobile Responsive"),
 					featureBadge("Sample Templates"),
 				),
-				// CTA - Now opens modal
+				// CTA - Now opens modal with type selection
 				Div(
 					Class("mt-5"),
 					Button(
 						Type("button"),
-						g.Attr("@click", "showCreateModal = true"),
+						g.Attr("@click", "openCreateModal()"),
 						Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm transition-all"),
-						lucide.Sparkles(Class("h-4 w-4")),
-						g.Text("Open Visual Builder"),
+						lucide.Plus(Class("h-4 w-4")),
+						g.Text("Create New Template"),
 					),
 				),
 			),
@@ -1440,6 +1800,10 @@ func featureBadge(text string) g.Node {
 
 // renderEmptyTemplatesState renders the empty state when no templates exist
 func renderEmptyTemplatesState(basePath string, currentApp *app.App) g.Node {
+	// Unused but kept for API compatibility
+	_ = basePath
+	_ = currentApp
+
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-12 text-center dark:border-gray-800 dark:bg-gray-900"),
 		Div(
@@ -1451,23 +1815,14 @@ func renderEmptyTemplatesState(basePath string, currentApp *app.App) g.Node {
 		P(Class("mt-2 text-sm text-slate-600 dark:text-gray-400"),
 			g.Text("Get started by creating your first notification template")),
 		Div(
-			Class("mt-6 flex items-center justify-center gap-3"),
-			// Visual Builder button (primary) - now opens modal
+			Class("mt-6 flex items-center justify-center"),
+			// Create template button - opens modal with type selection
 			Button(
 				Type("button"),
-				g.Attr("@click", "showCreateModal = true"),
+				g.Attr("@click", "openCreateModal()"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700"),
-				lucide.Sparkles(Class("h-4 w-4")),
-				g.Text("Use Visual Builder"),
-			),
-			// Or
-			Span(Class("text-sm text-slate-400 dark:text-gray-500"), g.Text("or")),
-			// Manual create
-			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/create", basePath, currentApp.ID)),
-				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"),
 				lucide.Plus(Class("h-4 w-4")),
-				g.Text("Create Manually"),
+				g.Text("Create Template"),
 			),
 		),
 	)
@@ -1524,14 +1879,31 @@ func renderTemplateRows(templates []*notification.Template, basePath string, cur
 
 // renderTemplateRow renders a single template row
 func renderTemplateRow(template *notification.Template, basePath string, currentApp *app.App) g.Node {
+	// Check if this is a visual builder template
+	isVisualBuilder := false
+	if template.Metadata != nil {
+		if builderType, ok := template.Metadata["builderType"].(string); ok && builderType == "visual" {
+			isVisualBuilder = true
+		}
+	}
+
 	return Tr(
 		Class("hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors"),
 
 		// Name and key
 		Td(Class("px-6 py-4 whitespace-nowrap"),
 			Div(
-				Div(Class("text-sm font-medium text-slate-900 dark:text-white"),
-					g.Text(template.Name)),
+				Div(Class("flex items-center gap-2"),
+					Span(Class("text-sm font-medium text-slate-900 dark:text-white"),
+						g.Text(template.Name)),
+					// Visual builder badge
+					g.If(isVisualBuilder,
+						Span(
+							Class("inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"),
+							lucide.Sparkles(Class("h-3 w-3")),
+						),
+					),
+				),
 				Div(Class("text-xs text-slate-500 dark:text-gray-400"),
 					g.Text(template.TemplateKey)),
 			),
@@ -1588,10 +1960,16 @@ func renderTemplateRow(template *notification.Template, basePath string, current
 		// Actions
 		Td(Class("px-6 py-4 whitespace-nowrap text-right text-sm font-medium"),
 			Div(Class("flex items-center justify-end gap-2"),
+				// Edit button - goes to /edit which auto-redirects based on template type
 				A(
 					Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/%s/edit", basePath, currentApp.ID, template.ID)),
 					Class("text-violet-600 hover:text-violet-900 dark:text-violet-400 dark:hover:text-violet-300"),
-					Title("Edit template"),
+					g.If(isVisualBuilder,
+						Title("Edit in Visual Builder"),
+					),
+					g.If(!isVisualBuilder,
+						Title("Edit template"),
+					),
 					lucide.Pencil(Class("h-4 w-4")),
 				),
 				Button(
@@ -1910,7 +2288,9 @@ func (e *DashboardExtension) renderEditTemplate(currentApp *app.App, basePath st
 			showDeleteConfirm: false,
 			showTestSend: false,
 			testRecipient: '',
-			testVars: {},
+			testVariables: '{\n  "user_name": "Test User",\n  "app_name": "My App"\n}',
+			testLoading: false,
+			testResult: null,
 			extractVariables() {
 				const regex = /\{\{\.(\w+)\}\}/g;
 				const vars = new Set();
@@ -1926,8 +2306,35 @@ func (e *DashboardExtension) renderEditTemplate(currentApp *app.App, basePath st
 				}
 				
 				this.extractedVars = Array.from(vars);
+			},
+			async sendTestNotification() {
+				if (!this.testRecipient) return;
+				this.testLoading = true;
+				this.testResult = null;
+				try {
+					// Parse variables from JSON string
+					let variables = {};
+					if (this.testVariables && this.testVariables.trim()) {
+						try {
+							variables = JSON.parse(this.testVariables);
+						} catch (e) {
+							this.testResult = { error: 'Invalid JSON for variables: ' + e.message };
+							this.testLoading = false;
+							return;
+						}
+					}
+					const res = await fetch('%s/dashboard/app/%s/notifications/templates/%s/test', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ recipient: this.testRecipient, variables: variables })
+					});
+					this.testResult = await res.json();
+				} catch (err) {
+					this.testResult = { error: err.message };
+				}
+				this.testLoading = false;
 			}
-		}`, template.Type, template.Type == notification.NotificationTypeEmail)),
+		}`, template.Type, template.Type == notification.NotificationTypeEmail, basePath, currentApp.ID, templateID)),
 
 		// Header with actions
 		Div(
@@ -2261,9 +2668,7 @@ func renderTestSendModal(templateID xid.ID, basePath string, currentApp *app.App
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
 					g.Text("Send Test Notification")),
 
-				FormEl(
-					Method("POST"),
-					Action(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/%s/test", basePath, currentApp.ID, templateID)),
+				Div(
 					Class("space-y-4"),
 
 					Div(
@@ -2272,34 +2677,96 @@ func renderTestSendModal(templateID xid.ID, basePath string, currentApp *app.App
 							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
 							g.Text("Recipient"),
 						),
-						Input(
-							Type("text"),
-							ID("testRecipient"),
-							Name("recipient"),
-							Required(),
-							g.Attr("placeholder", "email@example.com or +1234567890"),
-							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						),
-						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
-							g.Text("Email address or phone number to send test to")),
+					Input(
+						Type("text"),
+						ID("testRecipient"),
+						g.Attr("x-model", "testRecipient"),
+						g.Attr("placeholder", "email@example.com or +1234567890"),
+						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
 					),
+					P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+						g.Text("Email address or phone number to send test to")),
+				),
 
+				// Test Variables
+				Div(
+					Label(
+						For("testVariablesEdit"),
+						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+						g.Text("Test Variables (JSON)"),
+					),
+					Textarea(
+						ID("testVariablesEdit"),
+						g.Attr("x-model", "testVariables"),
+						g.Attr("placeholder", "{\n  \"user_name\": \"John\",\n  \"app_name\": \"MyApp\"\n}"),
+						Rows("5"),
+						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+					),
+					P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+						g.Text("Variables to replace in template (e.g., {{.user_name}})")),
+				),
+
+				// Test result display
+				Div(
+					g.Attr("x-show", "testResult"),
+					g.Attr("x-cloak", ""),
 					Div(
-						Class("flex items-center justify-end gap-3 pt-4"),
-						Button(
-							Type("button"),
-							g.Attr("@click", "showTestSend = false"),
-							Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
-							g.Text("Cancel"),
+						g.Attr("x-show", "testResult?.success"),
+						Class("rounded-md bg-green-50 p-4 dark:bg-green-900/20"),
+						Div(
+							Class("flex"),
+							lucide.Check(Class("h-5 w-5 text-green-400")),
+							Div(
+								Class("ml-3"),
+								P(Class("text-sm font-medium text-green-800 dark:text-green-200"),
+									g.Text("Test notification sent successfully!")),
+							),
 						),
-						Button(
-							Type("submit"),
-							Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"),
-							lucide.Send(Class("h-4 w-4")),
-							g.Text("Send Test"),
+					),
+					Div(
+						g.Attr("x-show", "testResult?.error"),
+						Class("rounded-md bg-red-50 p-4 dark:bg-red-900/20"),
+						Div(
+							Class("flex"),
+							lucide.X(Class("h-5 w-5 text-red-400")),
+							Div(
+								Class("ml-3"),
+								P(
+									Class("text-sm font-medium text-red-800 dark:text-red-200"),
+									g.Attr("x-text", "testResult?.error"),
+								),
+							),
 						),
 					),
 				),
+
+				Div(
+					Class("flex items-center justify-end gap-3 pt-4"),
+					Button(
+						Type("button"),
+						g.Attr("@click", "showTestSend = false; testResult = null"),
+						Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+						g.Text("Close"),
+					),
+					Button(
+						Type("button"),
+						g.Attr("@click", "sendTestNotification()"),
+						g.Attr(":disabled", "testLoading || !testRecipient"),
+						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"),
+						g.Attr("x-show", "!testLoading"),
+						lucide.Send(Class("h-4 w-4")),
+						g.Text("Send Test"),
+					),
+					Button(
+						Type("button"),
+						Disabled(),
+						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg opacity-50"),
+						g.Attr("x-show", "testLoading"),
+						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+						g.Text("Sending..."),
+					),
+				),
+			),
 			),
 		),
 	)
@@ -3115,7 +3582,7 @@ func (e *DashboardExtension) ServeEmailBuilder(c forge.Context) error {
 
 	content := e.renderEmailBuilder(doc, currentApp, basePath, "")
 
-	return handler.RenderWithLayout(c, pageData, content)
+	return handler.RenderWithBaseLayout(c, pageData, content)
 }
 
 // ServeEmailBuilderWithTemplate serves the builder with an existing template
@@ -3151,19 +3618,32 @@ func (e *DashboardExtension) ServeEmailBuilderWithTemplate(c forge.Context) erro
 	var doc *builder.Document
 	// Check if template has builder JSON content (stored in metadata)
 	isVisualBuilder := false
+	var builderBlocks string
+
 	if template.Metadata != nil {
 		if builderType, ok := template.Metadata["builderType"].(string); ok && builderType == "visual" {
 			isVisualBuilder = true
 		}
+		// Get builder blocks from metadata (new format)
+		if blocks, ok := template.Metadata["builderBlocks"].(string); ok {
+			builderBlocks = blocks
+		}
 	}
 
-	if isVisualBuilder && template.Body != "" {
+	if isVisualBuilder && builderBlocks != "" {
+		// New format: blocks stored in metadata
+		doc, err = builder.FromJSON(builderBlocks)
+		if err != nil {
+			doc = builder.NewDocument()
+		}
+	} else if isVisualBuilder && template.Body != "" {
+		// Legacy format: blocks stored in body (for backwards compatibility)
 		doc, err = builder.FromJSON(template.Body)
 		if err != nil {
 			doc = builder.NewDocument()
 		}
 	} else {
-		// Legacy template - create a document with HTML block
+		// Non-visual template - create a document with HTML block
 		doc = builder.NewDocument()
 		doc.AddBlock(builder.BlockTypeHTML, map[string]interface{}{
 			"style": map[string]interface{}{},
@@ -3183,7 +3663,7 @@ func (e *DashboardExtension) ServeEmailBuilderWithTemplate(c forge.Context) erro
 
 	content := e.renderEmailBuilder(doc, currentApp, basePath, templateID.String())
 
-	return handler.RenderWithLayout(c, pageData, content)
+	return handler.RenderWithBaseLayout(c, pageData, content)
 }
 
 // PreviewBuilderTemplate generates HTML preview from builder JSON
@@ -3249,7 +3729,7 @@ func (e *DashboardExtension) SaveBuilderTemplate(c forge.Context) error {
 		})
 	}
 
-	// Convert document to JSON string
+	// Convert document to JSON string for storage in metadata
 	jsonStr, err := req.Document.ToJSON()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -3257,9 +3737,15 @@ func (e *DashboardExtension) SaveBuilderTemplate(c forge.Context) error {
 		})
 	}
 
-	// Store both JSON and rendered HTML in the body with a marker
-	// The notification service will handle this appropriately
-	bodyContent := jsonStr
+	// Render the document to HTML for the body field
+	// This allows the notification service to send the email without needing builder knowledge
+	renderer := builder.NewRenderer(&req.Document)
+	htmlContent, err := renderer.RenderToHTML()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("Failed to render template: %v", err),
+		})
+	}
 
 	ctx := c.Context()
 
@@ -3279,10 +3765,11 @@ func (e *DashboardExtension) SaveBuilderTemplate(c forge.Context) error {
 		updateReq := &notification.UpdateTemplateRequest{
 			Name:    &req.Name,
 			Subject: &req.Subject,
-			Body:    &bodyContent,
+			Body:    &htmlContent, // Store rendered HTML
 			Metadata: map[string]interface{}{
 				"builderType":    "visual",
 				"builderVersion": "1.0",
+				"builderBlocks":  jsonStr, // Store JSON blocks for editing
 			},
 		}
 
@@ -3312,10 +3799,11 @@ func (e *DashboardExtension) SaveBuilderTemplate(c forge.Context) error {
 		Type:        notification.NotificationTypeEmail,
 		Language:    "en",
 		Subject:     req.Subject,
-		Body:        bodyContent,
+		Body:        htmlContent, // Store rendered HTML
 		Metadata: map[string]interface{}{
 			"builderType":    "visual",
 			"builderVersion": "1.0",
+			"builderBlocks":  jsonStr, // Store JSON blocks for editing
 		},
 	}
 
@@ -3349,35 +3837,16 @@ func (e *DashboardExtension) GetSampleTemplate(c forge.Context) error {
 
 // renderEmailBuilder renders the visual email builder interface
 func (e *DashboardExtension) renderEmailBuilder(doc *builder.Document, currentApp *app.App, basePath, templateID string) g.Node {
-	builderUI := builder.NewBuilderUI(
+	builderUI := builder.NewBuilderUIWithAutosave(
 		doc,
 		fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder/preview", basePath, currentApp.ID),
 		fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder/save", basePath, currentApp.ID),
+		fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID),
+		templateID,
 	)
 
 	return Div(
-		Class("space-y-6"),
-
-		// Header
-		Div(
-			Class("flex items-center justify-between"),
-			Div(
-				Div(
-					Class("flex items-center gap-3"),
-					A(
-						Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates", basePath, currentApp.ID)),
-						Class("inline-flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"),
-						lucide.ArrowLeft(Class("h-5 w-5")),
-					),
-					H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
-						g.If(templateID != "", g.Text("Edit Template")),
-						g.If(templateID == "", g.Text("Create Email Template")),
-					),
-				),
-				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400 ml-11"),
-					g.Text("Design beautiful email templates with our visual drag-and-drop builder")),
-			),
-		),
+		Class("h-screen overflow-hidden"),
 
 		// Hidden template ID for save
 		g.If(templateID != "",
@@ -3388,7 +3857,7 @@ func (e *DashboardExtension) renderEmailBuilder(doc *builder.Document, currentAp
 			),
 		),
 
-		// Builder UI
+		// Builder UI (full screen)
 		builderUI.Render(),
 	)
 }

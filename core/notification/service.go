@@ -390,3 +390,8 @@ func (s *Service) CleanupOldNotifications(ctx context.Context) error {
 func (s *Service) GetRepository() Repository {
 	return s.repo
 }
+
+// GetTemplateEngine returns the template engine for external rendering
+func (s *Service) GetTemplateEngine() TemplateEngine {
+	return s.engine
+}

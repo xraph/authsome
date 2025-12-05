@@ -15,10 +15,12 @@ import (
 
 // ContentFieldService handles content field business logic
 type ContentFieldService struct {
-	repo            repository.ContentFieldRepository
-	contentTypeRepo repository.ContentTypeRepository
-	maxFields       int
-	logger          forge.Logger
+	repo                   repository.ContentFieldRepository
+	contentTypeRepo        repository.ContentTypeRepository
+	componentSchemaRepo    repository.ComponentSchemaRepository
+	componentSchemaService *ComponentSchemaService
+	maxFields              int
+	logger                 forge.Logger
 }
 
 // ContentFieldServiceConfig holds configuration for the service
@@ -43,6 +45,16 @@ func NewContentFieldService(
 		maxFields:       maxFields,
 		logger:          config.Logger,
 	}
+}
+
+// SetComponentSchemaService sets the component schema service for resolving component refs
+func (s *ContentFieldService) SetComponentSchemaService(svc *ComponentSchemaService) {
+	s.componentSchemaService = svc
+}
+
+// SetComponentSchemaRepository sets the component schema repository
+func (s *ContentFieldService) SetComponentSchemaRepository(repo repository.ComponentSchemaRepository) {
+	s.componentSchemaRepo = repo
 }
 
 // =============================================================================
@@ -279,6 +291,17 @@ func (s *ContentFieldService) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
+// UpdateBySlug updates a content field by its slug within a content type
+func (s *ContentFieldService) UpdateBySlug(ctx context.Context, contentTypeID xid.ID, slug string, req *core.UpdateFieldRequest) (*core.ContentFieldDTO, error) {
+	// Find field by slug
+	field, err := s.repo.FindBySlug(ctx, contentTypeID, slug)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Update(ctx, field.ID, req)
+}
+
 // DeleteBySlug deletes a content field by its slug within a content type
 func (s *ContentFieldService) DeleteBySlug(ctx context.Context, contentTypeID xid.ID, slug string) error {
 	// Find field by slug
@@ -375,6 +398,18 @@ func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, opt
 		if options.SourceField == "" {
 			return core.ErrInvalidRequest("slug fields require sourceField")
 		}
+
+	case core.FieldTypeObject, core.FieldTypeArray:
+		// Object/array fields require either nestedFields or componentRef
+		if len(options.NestedFields) == 0 && options.ComponentRef == "" {
+			return core.ErrInvalidRequest("object/array fields require either nestedFields or componentRef")
+		}
+		// Validate minItems/maxItems for array fields
+		if fieldType == core.FieldTypeArray {
+			if options.MinItems != nil && options.MaxItems != nil && *options.MinItems > *options.MaxItems {
+				return core.ErrInvalidRequest("minItems cannot be greater than maxItems")
+			}
+		}
 	}
 
 	return nil
@@ -407,6 +442,11 @@ func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schem
 		MinDate:          dto.MinDate,
 		MaxDate:          dto.MaxDate,
 		DateFormat:       dto.DateFormat,
+		ComponentRef:     dto.ComponentRef,
+		MinItems:         dto.MinItems,
+		MaxItems:         dto.MaxItems,
+		Collapsible:      dto.Collapsible,
+		DefaultExpanded:  dto.DefaultExpanded,
 	}
 
 	// Convert choices
@@ -423,6 +463,68 @@ func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schem
 		}
 	}
 
+	// Convert nested fields
+	if len(dto.NestedFields) > 0 {
+		options.NestedFields = s.dtoToSchemaNestedFields(dto.NestedFields)
+	}
+
 	return options
+}
+
+// dtoToSchemaNestedFields converts DTO nested fields to schema nested fields
+func (s *ContentFieldService) dtoToSchemaNestedFields(fields []core.NestedFieldDefDTO) schema.NestedFieldDefs {
+	result := make(schema.NestedFieldDefs, len(fields))
+	for i, f := range fields {
+		result[i] = schema.NestedFieldDef{
+			Name:        f.Name,
+			Slug:        f.Slug,
+			Type:        f.Type,
+			Required:    f.Required,
+			Description: f.Description,
+		}
+		if f.Options != nil {
+			result[i].Options = s.buildFieldOptionsPtr(f.Options)
+		}
+	}
+	return result
+}
+
+// buildFieldOptionsPtr builds a pointer to schema.FieldOptions from DTO
+func (s *ContentFieldService) buildFieldOptionsPtr(dto *core.FieldOptionsDTO) *schema.FieldOptions {
+	if dto == nil {
+		return nil
+	}
+	opts := s.buildFieldOptions(dto)
+	return &opts
+}
+
+// ResolveNestedFields resolves nested fields for a field, handling component refs
+func (s *ContentFieldService) ResolveNestedFields(ctx context.Context, field *core.ContentFieldDTO) ([]core.NestedFieldDefDTO, error) {
+	if field.Options.ComponentRef != "" && s.componentSchemaService != nil {
+		return s.componentSchemaService.ResolveComponentSchema(ctx, field.Options.ComponentRef)
+	}
+	return field.Options.NestedFields, nil
+}
+
+// GetFieldWithResolvedNested returns a field DTO with resolved nested fields
+func (s *ContentFieldService) GetFieldWithResolvedNested(ctx context.Context, id xid.ID) (*core.ContentFieldDTO, error) {
+	field, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := fieldToDTO(field)
+
+	// If this is a nested field type with a component ref, resolve it
+	fieldType := core.FieldType(field.Type)
+	if fieldType.IsNested() && field.Options.ComponentRef != "" && s.componentSchemaService != nil {
+		resolvedFields, err := s.componentSchemaService.ResolveComponentSchema(ctx, field.Options.ComponentRef)
+		if err != nil {
+			return nil, err
+		}
+		dto.Options.NestedFields = resolvedFields
+	}
+
+	return dto, nil
 }
 

@@ -33,6 +33,8 @@ func NewContentTypeHandler(
 // ListContentTypes lists all content types
 // GET /cms/types
 func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	// Parse query params manually
 	query := core.ListContentTypesQuery{
 		Search:    c.Query("search"),
@@ -42,7 +44,7 @@ func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
 		PageSize:  parseIntDefault(c.Query("pageSize"), 20),
 	}
 
-	result, err := h.service.List(c.Request().Context(), &query)
+	result, err := h.service.List(ctx, &query)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -53,12 +55,14 @@ func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
 // CreateContentType creates a new content type
 // POST /cms/types
 func (h *ContentTypeHandler) CreateContentType(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	var req core.CreateContentTypeRequest
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.service.Create(c.Request().Context(), &req)
+	result, err := h.service.Create(ctx, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -69,12 +73,14 @@ func (h *ContentTypeHandler) CreateContentType(c forge.Context) error {
 // GetContentType retrieves a content type by slug
 // GET /cms/types/:slug
 func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	if slug == "" {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
-	result, err := h.service.GetBySlug(c.Request().Context(), slug)
+	result, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -85,13 +91,15 @@ func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
 // UpdateContentType updates a content type
 // PUT /cms/types/:slug
 func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	if slug == "" {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -108,7 +116,7 @@ func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	result, err := h.service.Update(c.Request().Context(), id, &req)
+	result, err := h.service.Update(ctx, id, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -119,13 +127,15 @@ func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 // DeleteContentType deletes a content type
 // DELETE /cms/types/:slug
 func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	if slug == "" {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -136,7 +146,7 @@ func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	if err := h.service.Delete(ctx, id); err != nil {
 		return handleError(c, err)
 	}
 
@@ -150,13 +160,15 @@ func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 // ListFields lists all fields for a content type
 // GET /cms/types/:slug/fields
 func (h *ContentTypeHandler) ListFields(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	if slug == "" {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -167,7 +179,7 @@ func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	fields, err := h.fieldService.List(c.Request().Context(), id)
+	fields, err := h.fieldService.List(ctx, id)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -180,13 +192,15 @@ func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 // AddField adds a new field to a content type
 // POST /cms/types/:slug/fields
 func (h *ContentTypeHandler) AddField(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	if slug == "" {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -203,7 +217,7 @@ func (h *ContentTypeHandler) AddField(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.fieldService.Create(c.Request().Context(), id, &req)
+	result, err := h.fieldService.Create(ctx, id, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -214,6 +228,8 @@ func (h *ContentTypeHandler) AddField(c forge.Context) error {
 // GetField retrieves a field by slug
 // GET /cms/types/:slug/fields/:fieldSlug
 func (h *ContentTypeHandler) GetField(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	fieldSlug := c.Param("fieldSlug")
 	if slug == "" || fieldSlug == "" {
@@ -221,7 +237,7 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -232,7 +248,7 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	field, err := h.fieldService.GetBySlug(c.Request().Context(), id, fieldSlug)
+	field, err := h.fieldService.GetBySlug(ctx, id, fieldSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -243,6 +259,8 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 // UpdateField updates a field
 // PUT /cms/types/:slug/fields/:fieldSlug
 func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	fieldSlug := c.Param("fieldSlug")
 	if slug == "" || fieldSlug == "" {
@@ -250,7 +268,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -262,7 +280,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	}
 
 	// Get the field
-	field, err := h.fieldService.GetBySlug(c.Request().Context(), contentTypeID, fieldSlug)
+	field, err := h.fieldService.GetBySlug(ctx, contentTypeID, fieldSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -279,7 +297,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.fieldService.Update(c.Request().Context(), fieldID, &req)
+	result, err := h.fieldService.Update(ctx, fieldID, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -290,6 +308,8 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 // DeleteField deletes a field
 // DELETE /cms/types/:slug/fields/:fieldSlug
 func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	fieldSlug := c.Param("fieldSlug")
 	if slug == "" || fieldSlug == "" {
@@ -297,7 +317,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -309,7 +329,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	}
 
 	// Get the field
-	field, err := h.fieldService.GetBySlug(c.Request().Context(), contentTypeID, fieldSlug)
+	field, err := h.fieldService.GetBySlug(ctx, contentTypeID, fieldSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -320,7 +340,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid field ID"})
 	}
 
-	if err := h.fieldService.Delete(c.Request().Context(), fieldID); err != nil {
+	if err := h.fieldService.Delete(ctx, fieldID); err != nil {
 		return handleError(c, err)
 	}
 
@@ -330,13 +350,15 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 // ReorderFields reorders fields in a content type
 // POST /cms/types/:slug/fields/reorder
 func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
+	ctx := getContextWithHeaders(c)
+
 	slug := c.Param("slug")
 	if slug == "" {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(c.Request().Context(), slug)
+	contentType, err := h.service.GetBySlug(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -353,7 +375,7 @@ func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	if err := h.fieldService.Reorder(c.Request().Context(), id, &req); err != nil {
+	if err := h.fieldService.Reorder(ctx, id, &req); err != nil {
 		return handleError(c, err)
 	}
 

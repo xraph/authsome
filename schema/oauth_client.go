@@ -22,8 +22,8 @@ type OAuthClient struct {
 	RedirectURI            string   `bun:"redirect_uri,notnull" json:"redirectURI"` // Legacy single URI, kept for backward compatibility
 	RedirectURIs           []string `bun:"redirect_uris,array,type:text[]" json:"redirectURIs"`
 	PostLogoutRedirectURIs []string `bun:"post_logout_redirect_uris,array,type:text[]" json:"postLogoutRedirectURIs,omitempty"`
-	GrantTypes             []string `bun:"grant_types,array,type:text[],default:'{\"{authorization_code}\",\"{refresh_token}\"}'" json:"grantTypes"`
-	ResponseTypes          []string `bun:"response_types,array,type:text[],default:'{\"code\"}'" json:"responseTypes"`
+	GrantTypes             []string `bun:"grant_types,array,type:text[]" json:"grantTypes"`             // Default: ["authorization_code", "refresh_token"] - set in application code
+	ResponseTypes          []string `bun:"response_types,array,type:text[]" json:"responseTypes"`       // Default: ["code"] - set in application code
 	AllowedScopes          []string `bun:"allowed_scopes,array,type:text[]" json:"allowedScopes,omitempty"`
 
 	// Client Authentication & Security

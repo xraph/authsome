@@ -18,6 +18,8 @@ type RoleDefinition struct {
 	Description  string   // Human-readable description
 	Permissions  []string // Permission expressions: "action on resource" or "* on *"
 	IsPlatform   bool     // Platform-level role (superadmin) vs org-level (owner, admin, member)
+	IsTemplate   bool     // Whether this role should be available as a template for organizations
+	IsOwnerRole  bool     // Whether this is the default owner role for new organizations
 	InheritsFrom string   // Parent role to inherit permissions from (for role hierarchy)
 	Priority     int      // Higher priority roles override lower priority (superadmin=100, owner=80, admin=60, member=40)
 }
@@ -331,6 +333,8 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID,
 			AppID:       &appID,
 			Name:        def.Name,
 			Description: def.Description,
+			IsTemplate:  def.IsTemplate,
+			IsOwnerRole: def.IsOwnerRole,
 		}
 		newRole.CreatedAt = now
 		newRole.UpdatedAt = now
@@ -343,17 +347,19 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID,
 			return fmt.Errorf("failed to insert role: %w", err)
 		}
 
-		fmt.Printf("[RoleBootstrap]   Created role: %s (ID: %s)\n", def.Name, newRole.ID.String())
+		fmt.Printf("[RoleBootstrap]   Created role: %s (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, newRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
 	} else {
 		// Role exists - update it
 		existingRole.Description = def.Description
+		existingRole.IsTemplate = def.IsTemplate
+		existingRole.IsOwnerRole = def.IsOwnerRole
 		existingRole.UpdatedAt = now
 		existingRole.UpdatedBy = appID
 		existingRole.Version++
 
 		_, err = db.NewUpdate().
 			Model(&existingRole).
-			Column("description", "updated_at", "updated_by", "version").
+			Column("description", "is_template", "is_owner_role", "updated_at", "updated_by", "version").
 			Where("id = ?", existingRole.ID).
 			Exec(ctx)
 
@@ -361,7 +367,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID,
 			return fmt.Errorf("failed to update role: %w", err)
 		}
 
-		fmt.Printf("[RoleBootstrap]   Updated role: %s (ID: %s)\n", def.Name, existingRole.ID.String())
+		fmt.Printf("[RoleBootstrap]   Updated role: %s (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, existingRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
 	}
 
 	return nil
@@ -403,10 +409,13 @@ func (r *RoleRegistry) GetRoleHierarchy() []*RoleDefinition {
 // Plugins can then extend or override these default roles
 func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// Superadmin - Platform owner with unrestricted access
+	// NOT a template - this is platform-only and cannot be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:        RoleSuperAdmin,
 		Description: RoleDescSuperAdmin,
 		IsPlatform:  RoleIsPlatformSuperAdmin,
+		IsTemplate:  false, // Platform-only, not a template
+		IsOwnerRole: false,
 		Priority:    RolePrioritySuperAdmin,
 		Permissions: []string{
 			"* on *", // Unrestricted access to everything
@@ -416,10 +425,13 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	}
 
 	// Owner - Organization owner with full org control
+	// This IS a template that can be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:        RoleOwner,
 		Description: RoleDescOwner,
 		IsPlatform:  RoleIsPlatformOwner,
+		IsTemplate:  true, // Available as template for organizations
+		IsOwnerRole: true, // This is the default owner role for new organizations
 		Priority:    RolePriorityOwner,
 		Permissions: []string{
 			"* on organization.*",
@@ -435,10 +447,13 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	}
 
 	// Admin - Organization administrator
+	// This IS a template that can be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:         RoleAdmin,
 		Description:  RoleDescAdmin,
 		IsPlatform:   RoleIsPlatformAdmin,
+		IsTemplate:   true, // Available as template for organizations
+		IsOwnerRole:  false,
 		InheritsFrom: RoleMember, // Inherits member permissions
 		Priority:     RolePriorityAdmin,
 		Permissions: []string{
@@ -454,10 +469,13 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	}
 
 	// Member - Regular user
+	// This IS a template that can be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:        RoleMember,
 		Description: RoleDescMember,
 		IsPlatform:  RoleIsPlatformMember,
+		IsTemplate:  true, // Available as template for organizations
+		IsOwnerRole: false,
 		Priority:    RolePriorityMember,
 		Permissions: []string{
 			"dashboard.view on dashboard",

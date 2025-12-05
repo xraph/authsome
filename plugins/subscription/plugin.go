@@ -30,16 +30,21 @@ type Plugin struct {
 	logger forge.Logger
 
 	// Services
-	planSvc          *service.PlanService
-	subscriptionSvc  *service.SubscriptionService
-	addOnSvc         *service.AddOnService
-	invoiceSvc       *service.InvoiceService
-	usageSvc         *service.UsageService
-	paymentSvc       *service.PaymentService
-	customerSvc      *service.CustomerService
-	enforcementSvc   *service.EnforcementService
-	featureSvc       *service.FeatureService
-	featureUsageSvc  *service.FeatureUsageService
+	planSvc         *service.PlanService
+	subscriptionSvc *service.SubscriptionService
+	addOnSvc        *service.AddOnService
+	invoiceSvc      *service.InvoiceService
+	usageSvc        *service.UsageService
+	paymentSvc      *service.PaymentService
+	customerSvc     *service.CustomerService
+	enforcementSvc  *service.EnforcementService
+	featureSvc      *service.FeatureService
+	featureUsageSvc *service.FeatureUsageService
+	alertSvc        *service.AlertService
+	analyticsSvc    *service.AnalyticsService
+	couponSvc       *service.CouponService
+	currencySvc     *service.CurrencyService
+	taxSvc          *service.TaxService
 
 	// Repositories
 	planRepo         repository.PlanRepository
@@ -52,13 +57,18 @@ type Plugin struct {
 	eventRepo        repository.EventRepository
 	featureRepo      repository.FeatureRepository
 	featureUsageRepo repository.FeatureUsageRepository
+	alertRepo        repository.AlertRepository
+	analyticsRepo    repository.AnalyticsRepository
+	couponRepo       repository.CouponRepository
+	currencyRepo     repository.CurrencyRepository
+	taxRepo          repository.TaxRepository
 
 	// Payment provider
 	provider providers.PaymentProvider
 
 	// Hook registries
-	hookRegistry     *hooks.HookRegistry
-	subHookRegistry  *SubscriptionHookRegistry
+	hookRegistry    *hooks.HookRegistry
+	subHookRegistry *SubscriptionHookRegistry
 
 	// Dashboard extension
 	dashboardExt *DashboardExtension
@@ -239,6 +249,11 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	p.eventRepo = repository.NewEventRepository(p.db)
 	p.featureRepo = repository.NewFeatureRepository(p.db)
 	p.featureUsageRepo = repository.NewFeatureUsageRepository(p.db)
+	p.alertRepo = repository.NewAlertRepository(p.db)
+	p.analyticsRepo = repository.NewAnalyticsRepository(p.db)
+	p.couponRepo = repository.NewCouponRepository(p.db)
+	p.currencyRepo = repository.NewCurrencyRepository(p.db)
+	p.taxRepo = repository.NewTaxRepository(p.db)
 
 	// Initialize payment provider
 	if p.config.IsStripeConfigured() {
@@ -292,6 +307,11 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.planRepo,
 		p.eventRepo,
 	)
+	p.alertSvc = service.NewAlertService(p.alertRepo, p.usageRepo, p.subRepo)
+	p.analyticsSvc = service.NewAnalyticsService(p.analyticsRepo, p.subRepo, p.planRepo)
+	p.couponSvc = service.NewCouponService(p.couponRepo, p.subRepo)
+	p.currencySvc = service.NewCurrencyService(p.currencyRepo)
+	p.taxSvc = service.NewTaxService(p.taxRepo)
 
 	// Set feature repositories on enforcement service for enhanced feature checking
 	p.enforcementSvc.SetFeatureRepositories(p.featureRepo, p.featureUsageRepo)
@@ -302,6 +322,13 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 
 	// Initialize dashboard extension
 	p.dashboardExt = NewDashboardExtension(p)
+
+	// Register services in Forge DI container if available
+	if container := forgeApp.Container(); container != nil {
+		if err := p.RegisterServices(container); err != nil {
+			p.logger.Warn("failed to register subscription services in DI container", forge.F("error", err.Error()))
+		}
+	}
 
 	p.logger.Info("subscription plugin initialized",
 		forge.F("require_subscription", p.config.RequireSubscription),
@@ -567,7 +594,58 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 
 // RegisterServiceDecorators registers service decorators
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
-	// No decorators needed - we expose our services through the plugin
+	// Register subscription services in the service registry for DI access
+	// This allows other plugins and components to retrieve subscription services
+	// Note: Uses constants defined in helpers.go for consistent keys
+	if err := services.Register(ServiceNamePlanService, p.planSvc); err != nil {
+		p.logger.Warn("failed to register plan service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameSubService, p.subscriptionSvc); err != nil {
+		p.logger.Warn("failed to register subscription service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameAddOnService, p.addOnSvc); err != nil {
+		p.logger.Warn("failed to register addon service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameInvoiceService, p.invoiceSvc); err != nil {
+		p.logger.Warn("failed to register invoice service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameUsageService, p.usageSvc); err != nil {
+		p.logger.Warn("failed to register usage service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNamePaymentService, p.paymentSvc); err != nil {
+		p.logger.Warn("failed to register payment service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameCustomerService, p.customerSvc); err != nil {
+		p.logger.Warn("failed to register customer service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameEnforcementService, p.enforcementSvc); err != nil {
+		p.logger.Warn("failed to register enforcement service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameFeatureService, p.featureSvc); err != nil {
+		p.logger.Warn("failed to register feature service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameFeatureUsageService, p.featureUsageSvc); err != nil {
+		p.logger.Warn("failed to register feature usage service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameAlertService, p.alertSvc); err != nil {
+		p.logger.Warn("failed to register alert service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameAnalyticsService, p.analyticsSvc); err != nil {
+		p.logger.Warn("failed to register analytics service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameCouponService, p.couponSvc); err != nil {
+		p.logger.Warn("failed to register coupon service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameCurrencyService, p.currencySvc); err != nil {
+		p.logger.Warn("failed to register currency service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameTaxService, p.taxSvc); err != nil {
+		p.logger.Warn("failed to register tax service", forge.F("error", err.Error()))
+	}
+	if err := services.Register(ServiceNameHookRegistry, p.subHookRegistry); err != nil {
+		p.logger.Warn("failed to register subscription hook registry", forge.F("error", err.Error()))
+	}
+
 	return nil
 }
 
@@ -703,6 +781,31 @@ func (p *Plugin) GetFeatureService() *service.FeatureService {
 // GetFeatureUsageService returns the feature usage service
 func (p *Plugin) GetFeatureUsageService() *service.FeatureUsageService {
 	return p.featureUsageSvc
+}
+
+// GetAlertService returns the alert service
+func (p *Plugin) GetAlertService() *service.AlertService {
+	return p.alertSvc
+}
+
+// GetAnalyticsService returns the analytics service
+func (p *Plugin) GetAnalyticsService() *service.AnalyticsService {
+	return p.analyticsSvc
+}
+
+// GetCouponService returns the coupon service
+func (p *Plugin) GetCouponService() *service.CouponService {
+	return p.couponSvc
+}
+
+// GetCurrencyService returns the currency service
+func (p *Plugin) GetCurrencyService() *service.CurrencyService {
+	return p.currencySvc
+}
+
+// GetTaxService returns the tax service
+func (p *Plugin) GetTaxService() *service.TaxService {
+	return p.taxSvc
 }
 
 // registerFeatureRoutes registers feature management routes
@@ -967,4 +1070,3 @@ func (p *Plugin) handleListPublicFeatures(c forge.Context) error {
 func (p *Plugin) handleComparePlans(c forge.Context) error {
 	return p.publicHandlers.HandleComparePlans(c)
 }
-

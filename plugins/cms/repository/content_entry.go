@@ -230,11 +230,14 @@ func (r *contentEntryRepository) List(ctx context.Context, contentTypeID xid.ID,
 
 // applyJSONBFilter applies a JSONB filter condition
 func (r *contentEntryRepository) applyJSONBFilter(q *bun.SelectQuery, field string, cond FilterCondition) *bun.SelectQuery {
+	// Convert value to string for text comparisons
+	valueStr := fmt.Sprintf("%v", cond.Value)
+
 	switch cond.Operator {
 	case "eq":
-		return q.Where("ce.data->>? = ?", field, cond.Value)
+		return q.Where("ce.data->>? = ?", field, valueStr)
 	case "ne":
-		return q.Where("ce.data->>? != ?", field, cond.Value)
+		return q.Where("ce.data->>? != ?", field, valueStr)
 	case "gt":
 		return q.Where("(ce.data->>?)::numeric > ?", field, cond.Value)
 	case "gte":
@@ -247,19 +250,33 @@ func (r *contentEntryRepository) applyJSONBFilter(q *bun.SelectQuery, field stri
 		return q.Where("ce.data->>? LIKE ?", field, cond.Value)
 	case "ilike":
 		return q.Where("ce.data->>? ILIKE ?", field, cond.Value)
+	case "contains":
+		// Text contains (case-insensitive)
+		return q.Where("ce.data->>? ILIKE ?", field, "%"+valueStr+"%")
+	case "startsWith":
+		return q.Where("ce.data->>? LIKE ?", field, valueStr+"%")
+	case "endsWith":
+		return q.Where("ce.data->>? LIKE ?", field, "%"+valueStr)
 	case "in":
 		return q.Where("ce.data->>? IN (?)", field, bun.In(cond.Value))
-	case "nin":
+	case "nin", "notIn":
 		return q.Where("ce.data->>? NOT IN (?)", field, bun.In(cond.Value))
-	case "null":
-		if cond.Value == true {
+	case "null", "isNull":
+		if cond.Value == true || cond.Value == "true" {
 			return q.Where("ce.data->>? IS NULL OR ce.data->>? = 'null'", field, field)
 		}
 		return q.Where("ce.data->>? IS NOT NULL AND ce.data->>? != 'null'", field, field)
-	case "contains":
+	case "exists":
+		if cond.Value == true || cond.Value == "true" {
+			return q.Where("ce.data ? ?", field)
+		}
+		return q.Where("NOT (ce.data ? ?)", field)
+	case "jsonContains":
 		return q.Where("ce.data->? @> ?", field, cond.Value)
+	case "jsonHasKey":
+		return q.Where("ce.data->? ? ?", field, cond.Value)
 	default:
-		return q.Where("ce.data->>? = ?", field, cond.Value)
+		return q.Where("ce.data->>? = ?", field, valueStr)
 	}
 }
 

@@ -444,6 +444,11 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 		MinDate:          field.Options.MinDate,
 		MaxDate:          field.Options.MaxDate,
 		DateFormat:       field.Options.DateFormat,
+		ComponentRef:     field.Options.ComponentRef,
+		MinItems:         field.Options.MinItems,
+		MaxItems:         field.Options.MaxItems,
+		Collapsible:      field.Options.Collapsible,
+		DefaultExpanded:  field.Options.DefaultExpanded,
 	}
 
 	// Convert choices
@@ -458,6 +463,89 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 				Disabled: choice.Disabled,
 			}
 		}
+	}
+
+	// Convert nested fields
+	if len(field.Options.NestedFields) > 0 {
+		dto.Options.NestedFields = schemaToNestedFieldDTOs(field.Options.NestedFields)
+	}
+
+	return dto
+}
+
+// schemaToNestedFieldDTOs converts schema nested fields to DTOs
+func schemaToNestedFieldDTOs(fields schema.NestedFieldDefs) []core.NestedFieldDefDTO {
+	if fields == nil {
+		return nil
+	}
+
+	dtos := make([]core.NestedFieldDefDTO, len(fields))
+	for i, f := range fields {
+		dtos[i] = core.NestedFieldDefDTO{
+			Name:        f.Name,
+			Slug:        f.Slug,
+			Type:        f.Type,
+			Required:    f.Required,
+			Description: f.Description,
+		}
+		if f.Options != nil {
+			dtos[i].Options = schemaOptionsToDTO(f.Options)
+		}
+	}
+	return dtos
+}
+
+// schemaOptionsToDTO converts schema field options to DTO
+func schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
+	if opts == nil {
+		return nil
+	}
+
+	dto := &core.FieldOptionsDTO{
+		MinLength:        opts.MinLength,
+		MaxLength:        opts.MaxLength,
+		Pattern:          opts.Pattern,
+		Min:              opts.Min,
+		Max:              opts.Max,
+		Step:             opts.Step,
+		Integer:          opts.Integer,
+		RelatedType:      opts.RelatedType,
+		RelationType:     opts.RelationType,
+		OnDelete:         opts.OnDelete,
+		InverseField:     opts.InverseField,
+		AllowHTML:        opts.AllowHTML,
+		MaxWords:         opts.MaxWords,
+		AllowedMimeTypes: opts.AllowedMimeTypes,
+		MaxFileSize:      opts.MaxFileSize,
+		SourceField:      opts.SourceField,
+		Schema:           opts.Schema,
+		MinDate:          opts.MinDate,
+		MaxDate:          opts.MaxDate,
+		DateFormat:       opts.DateFormat,
+		ComponentRef:     opts.ComponentRef,
+		MinItems:         opts.MinItems,
+		MaxItems:         opts.MaxItems,
+		Collapsible:      opts.Collapsible,
+		DefaultExpanded:  opts.DefaultExpanded,
+	}
+
+	// Convert choices
+	if len(opts.Choices) > 0 {
+		dto.Choices = make([]core.ChoiceDTO, len(opts.Choices))
+		for i, c := range opts.Choices {
+			dto.Choices[i] = core.ChoiceDTO{
+				Value:    c.Value,
+				Label:    c.Label,
+				Icon:     c.Icon,
+				Color:    c.Color,
+				Disabled: c.Disabled,
+			}
+		}
+	}
+
+	// Recursively convert nested fields
+	if len(opts.NestedFields) > 0 {
+		dto.NestedFields = schemaToNestedFieldDTOs(opts.NestedFields)
 	}
 
 	return dto

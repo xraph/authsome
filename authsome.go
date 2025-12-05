@@ -193,8 +193,14 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	// Audit service
 	a.auditService = aud.NewService(a.repo.Audit())
 
-	// RBAC service: load policies from storage
+	// RBAC service: load policies from storage and set repositories
 	a.rbacService = rbac.NewService()
+	a.rbacService.SetRepositories(
+		a.repo.Role(),
+		a.repo.Permission(),
+		a.repo.RolePermission(),
+		a.repo.UserRole(),
+	)
 	_ = a.rbacService.LoadPolicies(ctx, a.repo.Policy())
 	// Seed default policies if storage is empty
 	if exprs, err := a.repo.Policy().ListAll(ctx); err == nil && len(exprs) == 0 {

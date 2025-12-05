@@ -118,7 +118,17 @@ func (s *MemberService) assignSuperAdminRole(ctx context.Context, userID, appID 
 // =============================================================================
 
 // CreateMember adds a new member to an app
+// This operation is idempotent - if the member already exists, returns the existing member
 func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Member, error) {
+	// 🔥 IDEMPOTENCY CHECK: First check if member already exists
+	existingMember, err := s.repo.FindMember(ctx, member.AppID, member.UserID)
+	if err == nil && existingMember != nil {
+		// Member already exists - return existing member (idempotent behavior)
+		fmt.Printf("[MemberService] Member already exists for user %s in app %s - returning existing\n",
+			member.UserID, member.AppID)
+		return FromSchemaMember(existingMember), nil
+	}
+
 	if member.ID.IsNil() {
 		member.ID = xid.New()
 	}

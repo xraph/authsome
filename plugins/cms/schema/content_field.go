@@ -56,6 +56,14 @@ type FieldOptions struct {
 	// Decimal fields
 	Precision int `json:"precision,omitempty"`
 	Scale     int `json:"scale,omitempty"`
+
+	// Object/Array fields (nested structures)
+	NestedFields    []NestedFieldDef `json:"nestedFields,omitempty"`    // Inline sub-field definitions
+	ComponentRef    string           `json:"componentRef,omitempty"`    // Reference to ComponentSchema slug
+	MinItems        *int             `json:"minItems,omitempty"`        // For array: minimum items
+	MaxItems        *int             `json:"maxItems,omitempty"`        // For array: maximum items
+	Collapsible     bool             `json:"collapsible,omitempty"`     // UI: collapsible in form
+	DefaultExpanded bool             `json:"defaultExpanded,omitempty"` // UI: expanded by default
 }
 
 // Choice represents a choice option for select fields
@@ -278,5 +286,66 @@ func (cf *ContentField) HasLengthConstraint() bool {
 // HasNumericConstraint returns true if the field has numeric constraints
 func (cf *ContentField) HasNumericConstraint() bool {
 	return cf.Options.Min != nil || cf.Options.Max != nil
+}
+
+// IsObject returns true if the field is an object type
+func (cf *ContentField) IsObject() bool {
+	return cf.Type == "object"
+}
+
+// IsArray returns true if the field is an array type
+func (cf *ContentField) IsArray() bool {
+	return cf.Type == "array"
+}
+
+// IsNested returns true if the field is an object or array type
+func (cf *ContentField) IsNested() bool {
+	return cf.Type == "object" || cf.Type == "array"
+}
+
+// HasNestedFields returns true if the field has inline nested field definitions
+func (cf *ContentField) HasNestedFields() bool {
+	return len(cf.Options.NestedFields) > 0
+}
+
+// HasComponentRef returns true if the field references a component schema
+func (cf *ContentField) HasComponentRef() bool {
+	return cf.Options.ComponentRef != ""
+}
+
+// GetNestedFields returns the nested field definitions
+func (cf *ContentField) GetNestedFields() []NestedFieldDef {
+	return cf.Options.NestedFields
+}
+
+// GetComponentRef returns the component schema reference slug
+func (cf *ContentField) GetComponentRef() string {
+	return cf.Options.ComponentRef
+}
+
+// GetMinItems returns the minimum array items constraint
+func (cf *ContentField) GetMinItems() int {
+	if cf.Options.MinItems != nil {
+		return *cf.Options.MinItems
+	}
+	return 0
+}
+
+// GetMaxItems returns the maximum array items constraint (-1 for no limit)
+func (cf *ContentField) GetMaxItems() int {
+	if cf.Options.MaxItems != nil {
+		return *cf.Options.MaxItems
+	}
+	return -1
+}
+
+// IsCollapsible returns true if the nested field should be collapsible in UI
+func (cf *ContentField) IsCollapsible() bool {
+	return cf.Options.Collapsible
+}
+
+// IsDefaultExpanded returns true if the nested field should be expanded by default
+func (cf *ContentField) IsDefaultExpanded() bool {
+	return cf.Options.DefaultExpanded
 }
 

@@ -17,9 +17,18 @@ type Provider struct {
 	mu             sync.RWMutex
 	customers      map[string]*mockCustomer
 	subscriptions  map[string]*mockSubscription
+	products       map[string]*mockProduct
 	prices         map[string]*mockPrice
 	invoices       map[string]*mockInvoice
 	paymentMethods map[string]*mockPaymentMethod
+}
+
+type mockProduct struct {
+	ID          string
+	Name        string
+	Description string
+	Active      bool
+	Metadata    map[string]string
 }
 
 type mockCustomer struct {
@@ -76,6 +85,7 @@ func NewMockProvider() *Provider {
 	return &Provider{
 		customers:      make(map[string]*mockCustomer),
 		subscriptions:  make(map[string]*mockSubscription),
+		products:       make(map[string]*mockProduct),
 		prices:         make(map[string]*mockPrice),
 		invoices:       make(map[string]*mockInvoice),
 		paymentMethods: make(map[string]*mockPaymentMethod),
@@ -129,6 +139,22 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 
 	productID := "prod_mock_" + plan.ID.String()
 	priceID := "price_mock_" + plan.ID.String()
+
+	// Store the product with metadata
+	p.products[productID] = &mockProduct{
+		ID:          productID,
+		Name:        plan.Name,
+		Description: plan.Description,
+		Active:      plan.IsActive,
+		Metadata: map[string]string{
+			"authsome":         "true",
+			"plan_id":          plan.ID.String(),
+			"app_id":           plan.AppID.String(),
+			"slug":             plan.Slug,
+			"billing_pattern":  string(plan.BillingPattern),
+			"billing_interval": string(plan.BillingInterval),
+		},
+	}
 
 	p.prices[priceID] = &mockPrice{
 		ID:        priceID,
@@ -328,6 +354,67 @@ func (p *Provider) GetInvoicePDF(ctx context.Context, invoiceID string) (string,
 
 func (p *Provider) VoidInvoice(ctx context.Context, invoiceID string) error {
 	return nil
+}
+
+func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var products []*types.ProviderProduct
+	for _, prod := range p.products {
+		products = append(products, &types.ProviderProduct{
+			ID:          prod.ID,
+			Name:        prod.Name,
+			Description: prod.Description,
+			Active:      prod.Active,
+			Metadata:    prod.Metadata,
+		})
+	}
+	return products, nil
+}
+
+func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.ProviderProduct, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	prod, ok := p.products[productID]
+	if !ok {
+		return nil, fmt.Errorf("product not found: %s", productID)
+	}
+
+	return &types.ProviderProduct{
+		ID:          prod.ID,
+		Name:        prod.Name,
+		Description: prod.Description,
+		Active:      prod.Active,
+		Metadata:    prod.Metadata,
+	}, nil
+}
+
+func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.ProviderPrice, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var prices []*types.ProviderPrice
+	for _, pr := range p.prices {
+		if pr.ProductID == productID {
+			providerPrice := &types.ProviderPrice{
+				ID:         pr.ID,
+				ProductID:  pr.ProductID,
+				Active:     true,
+				Currency:   pr.Currency,
+				UnitAmount: pr.Amount,
+			}
+			if pr.Interval != "" && pr.Interval != "one_time" {
+				providerPrice.Recurring = &types.PriceRecurring{
+					Interval:      pr.Interval,
+					IntervalCount: 1,
+				}
+			}
+			prices = append(prices, providerPrice)
+		}
+	}
+	return prices, nil
 }
 
 func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature string) (*types.WebhookEvent, error) {

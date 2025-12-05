@@ -2002,25 +2002,10 @@ func (e *DashboardExtension) CreateRoleTemplate(c forge.Context) error {
 		}
 	}
 
-	// Create role template via repository
-	appID := currentApp.ID
-	role := &schema.Role{
-		ID:          xid.New(),
-		AppID:       &appID,
-		Name:        name,
-		Description: description,
-		IsTemplate:  true,
-		IsOwnerRole: isOwnerRole,
-	}
-
-	// Create role using database
-	if _, err := e.plugin.db.NewInsert().Model(role).Exec(ctx); err != nil {
+	// Create role template via RBAC service
+	_, err = e.plugin.rbacService.CreateRoleTemplate(ctx, currentApp.ID, name, description, isOwnerRole, permIDs)
+	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to create role template: "+err.Error())
-	}
-
-	// Assign permissions
-	if err := e.plugin.rbacService.AssignPermissionsToRole(ctx, role.ID, permIDs); err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to assign permissions: "+err.Error())
 	}
 
 	basePath := e.registry.GetHandler().GetBasePath()
@@ -2073,21 +2058,6 @@ func (e *DashboardExtension) UpdateRoleTemplate(c forge.Context) error {
 		return handler.RenderSettingsPage(c, "role-templates", content)
 	}
 
-	// Get existing role
-	role := &schema.Role{}
-	if err := e.plugin.db.NewSelect().Model(role).Where("id = ?", roleID).Scan(ctx); err != nil {
-		return c.String(http.StatusNotFound, "Role template not found")
-	}
-
-	// Update role
-	role.Name = name
-	role.Description = description
-	role.IsOwnerRole = isOwnerRole
-
-	if _, err := e.plugin.db.NewUpdate().Model(role).WherePK().Exec(ctx); err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to update role template: "+err.Error())
-	}
-
 	// Convert permission IDs
 	permIDs := make([]xid.ID, 0, len(permissionIDs))
 	for _, pidStr := range permissionIDs {
@@ -2097,17 +2067,10 @@ func (e *DashboardExtension) UpdateRoleTemplate(c forge.Context) error {
 		}
 	}
 
-	// Update permissions - remove all and add new ones
-	// First, remove existing permissions
-	existingPerms, _ := e.plugin.rbacService.GetRolePermissions(ctx, role.ID)
-	for _, perm := range existingPerms {
-		_ = e.plugin.rbacService.RemovePermissionsFromRole(ctx, role.ID, []xid.ID{perm.ID})
-	}
-	// Then assign new permissions
-	if len(permIDs) > 0 {
-		if err := e.plugin.rbacService.AssignPermissionsToRole(ctx, role.ID, permIDs); err != nil {
-			return c.String(http.StatusInternalServerError, "Failed to update permissions: "+err.Error())
-		}
+	// Update role template via RBAC service
+	_, err = e.plugin.rbacService.UpdateRoleTemplate(ctx, roleID, name, description, isOwnerRole, permIDs)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to update role template: "+err.Error())
 	}
 
 	basePath := e.registry.GetHandler().GetBasePath()
@@ -2134,8 +2097,8 @@ func (e *DashboardExtension) DeleteRoleTemplate(c forge.Context) error {
 
 	ctx := c.Request().Context()
 
-	// Delete role template
-	if _, err := e.plugin.db.NewDelete().Model((*schema.Role)(nil)).Where("id = ?", roleID).Exec(ctx); err != nil {
+	// Delete role template via RBAC service
+	if err := e.plugin.rbacService.DeleteRoleTemplate(ctx, roleID); err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to delete role template: "+err.Error())
 	}
 
@@ -3224,9 +3187,19 @@ func (e *DashboardExtension) renderCreateTeamModal(org *coreorg.Organization, cu
 
 func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, currentApp *app.App, basePath string) g.Node {
 	// Fetch role templates
-	roleTemplates, err := e.plugin.rbacService.GetRoleTemplates(ctx, currentApp.ID)
-	if err != nil {
+	var roleTemplates []*schema.Role
+	if e.plugin.rbacService == nil {
+		fmt.Printf("[DEBUG] rbacService is nil!\n")
 		roleTemplates = []*schema.Role{}
+	} else {
+		var err error
+		roleTemplates, err = e.plugin.rbacService.GetRoleTemplates(ctx, currentApp.ID)
+		if err != nil {
+			fmt.Printf("[DEBUG] GetRoleTemplates error for app %s: %v\n", currentApp.ID.String(), err)
+			roleTemplates = []*schema.Role{}
+		} else {
+			fmt.Printf("[DEBUG] GetRoleTemplates for app %s returned %d templates\n", currentApp.ID.String(), len(roleTemplates))
+		}
 	}
 
 	return ui.RoleManagementInterface(ui.RoleManagementInterfaceData{
@@ -3292,9 +3265,9 @@ func (e *DashboardExtension) renderCreateRoleTemplateForm(ctx context.Context, c
 }
 
 func (e *DashboardExtension) renderEditRoleTemplateForm(ctx context.Context, currentApp *app.App, roleID xid.ID, basePath string, errors map[string]string) g.Node {
-	// Fetch the role
-	role := &schema.Role{}
-	if err := e.plugin.db.NewSelect().Model(role).Where("id = ?", roleID).Scan(ctx); err != nil {
+	// Fetch the role template with permissions via RBAC service
+	roleWithPerms, err := e.plugin.rbacService.GetRoleTemplateWithPermissions(ctx, roleID)
+	if err != nil {
 		return Div(
 			Class("text-red-600"),
 			g.Text("Error: Role template not found"),
@@ -3307,15 +3280,9 @@ func (e *DashboardExtension) renderEditRoleTemplateForm(ctx context.Context, cur
 		permissions = []*schema.Permission{}
 	}
 
-	// Fetch role's current permissions
-	rolePerms, err := e.plugin.rbacService.GetRolePermissions(ctx, roleID)
-	if err != nil {
-		rolePerms = []*schema.Permission{}
-	}
-
-	// Build selected permission IDs map
+	// Build selected permission IDs map from role's current permissions
 	selectedPermIDs := make(map[xid.ID]bool)
-	for _, perm := range rolePerms {
+	for _, perm := range roleWithPerms.Permissions {
 		selectedPermIDs[perm.ID] = true
 	}
 
@@ -3347,7 +3314,7 @@ func (e *DashboardExtension) renderEditRoleTemplateForm(ctx context.Context, cur
 				Method("POST"),
 				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles/"+roleID.String()+"/edit"),
 				ui.RoleForm(ui.RoleFormData{
-					Role:            role,
+					Role:            roleWithPerms.Role,
 					Permissions:     permissions,
 					SelectedPermIDs: selectedPermIDs,
 					IsTemplate:      true,

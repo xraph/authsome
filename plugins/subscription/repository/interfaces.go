@@ -25,6 +25,9 @@ type PlanRepository interface {
 	// FindBySlug retrieves a plan by slug within an app
 	FindBySlug(ctx context.Context, appID xid.ID, slug string) (*schema.SubscriptionPlan, error)
 	
+	// FindByProviderID retrieves a plan by provider plan ID (e.g., Stripe product ID)
+	FindByProviderID(ctx context.Context, providerPlanID string) (*schema.SubscriptionPlan, error)
+	
 	// List retrieves plans with optional filters
 	List(ctx context.Context, filter *PlanFilter) ([]*schema.SubscriptionPlan, int, error)
 	

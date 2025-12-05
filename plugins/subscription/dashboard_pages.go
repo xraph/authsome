@@ -207,11 +207,26 @@ func (e *DashboardExtension) ServePlansListPage(c forge.Context) error {
 				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
 					g.Text("Manage your pricing plans and features")),
 			),
-			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/create"),
-				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
-				lucide.Plus(Class("size-4")),
-				g.Text("Create Plan"),
+			Div(
+				Class("flex items-center gap-3"),
+				// Sync from provider button
+				Form(
+					Method("POST"),
+					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/sync-all-from-provider"),
+					Button(
+						Type("submit"),
+						Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
+						lucide.CloudDownload(Class("size-4")),
+						g.Text("Sync from Stripe"),
+					),
+				),
+				// Create plan button
+				A(
+					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/create"),
+					Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+					lucide.Plus(Class("size-4")),
+					g.Text("Create Plan"),
+				),
 			),
 		),
 

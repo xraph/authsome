@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -20,6 +21,8 @@ func ContentTypeDetailPage(
 	basePath string,
 	contentType *core.ContentTypeDTO,
 	stats *core.ContentTypeStatsDTO,
+	environmentID string,
+	allContentTypes []*core.ContentTypeSummaryDTO,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Slug
@@ -113,7 +116,7 @@ func ContentTypeDetailPage(
 			Div(
 				g.Attr("x-show", "activeTab === 'fields'"),
 				g.Attr("x-cloak", ""),
-				fieldsSection(appBase, contentType),
+				fieldsSection(appBase, contentType, allContentTypes),
 			),
 
 			// Settings Tab
@@ -134,7 +137,7 @@ func ContentTypeDetailPage(
 			Div(
 				g.Attr("x-show", "activeTab === 'playground'"),
 				g.Attr("x-cloak", ""),
-				playgroundSection(apiBase, contentType),
+				playgroundSection(apiBase, contentType, currentApp.ID.String(), environmentID),
 			),
 		),
 	)
@@ -180,108 +183,122 @@ func tabButton(label string, active bool) g.Node {
 	)
 }
 
-// fieldsSection renders the fields management section with DaisyUI drawer
-func fieldsSection(appBase string, contentType *core.ContentTypeDTO) g.Node {
+// fieldsSection renders the fields management section with Preline/Alpine drawer
+func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO) g.Node {
 	typeBase := appBase + "/cms/types/" + contentType.Slug
-	drawerID := "add-field-drawer"
 
 	return Div(
-		Class("drawer drawer-end"),
+		g.Attr("x-data", "{ drawerOpen: false }"),
+		Class("relative"),
 
-		// Hidden checkbox that controls drawer state
-		Input(
-			ID(drawerID),
-			Type("checkbox"),
-			Class("drawer-toggle"),
-		),
-
-		// Main content (drawer-content)
-		Div(
-			Class("drawer-content"),
-			CardWithHeader(
-				"Fields",
-				[]g.Node{
-					// Trigger label for drawer
-					Label(
-						g.Attr("for", drawerID),
-						Class("inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"),
+		// Main content
+		CardWithHeader(
+			"Fields",
+			[]g.Node{
+				// Trigger button for drawer
+				Button(
+					Type("button"),
+					g.Attr("@click", "drawerOpen = true"),
+					Class("inline-flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
+					lucide.Plus(Class("size-4")),
+					g.Text("Add Field"),
+				),
+			},
+			g.If(len(contentType.Fields) == 0, func() g.Node {
+				return Div(
+					Class("text-center py-12"),
+					lucide.Layers(Class("mx-auto size-12 text-slate-300 dark:text-gray-600")),
+					H3(
+						Class("mt-4 text-sm font-medium text-slate-900 dark:text-white"),
+						g.Text("No fields defined"),
+					),
+					P(
+						Class("mt-2 text-sm text-slate-500 dark:text-gray-400"),
+						g.Text("Add fields to define the structure of your content entries."),
+					),
+					Button(
+						Type("button"),
+						g.Attr("@click", "drawerOpen = true"),
+						Class("mt-4 inline-flex items-center gap-2 py-2 px-4 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
 						lucide.Plus(Class("size-4")),
 						g.Text("Add Field"),
 					),
-				},
-				g.If(len(contentType.Fields) == 0, func() g.Node {
-					return Div(
-						Class("text-center py-12"),
-						lucide.Layers(Class("mx-auto size-12 text-slate-300 dark:text-gray-600")),
-						H3(
-							Class("mt-4 text-sm font-medium text-slate-900 dark:text-white"),
-							g.Text("No fields defined"),
-						),
-						P(
-							Class("mt-2 text-sm text-slate-500 dark:text-gray-400"),
-							g.Text("Add fields to define the structure of your content entries."),
-						),
-						Label(
-							g.Attr("for", drawerID),
-							Class("mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 cursor-pointer"),
-							lucide.Plus(Class("size-4")),
-							g.Text("Add Field"),
-						),
-					)
-				}()),
+				)
+			}()),
 
-				g.If(len(contentType.Fields) > 0, func() g.Node {
-					return fieldsTable(typeBase, contentType.Fields, drawerID)
-				}()),
-			),
+			g.If(len(contentType.Fields) > 0, func() g.Node {
+				return fieldsTable(typeBase, contentType.Fields, "")
+			}()),
 		),
 
-		// Drawer sidebar
+		// Preline-style Offcanvas/Drawer
 		Div(
-			Class("drawer-side z-50"),
-			// Overlay that closes drawer when clicked
-			Label(
-				g.Attr("for", drawerID),
-				g.Attr("aria-label", "close sidebar"),
-				Class("drawer-overlay"),
-			),
-			// Drawer content
+			g.Attr("x-show", "drawerOpen"),
+			g.Attr("x-cloak", ""),
+			Class("fixed inset-0 z-80"),
+			g.Attr("role", "dialog"),
+			g.Attr("aria-modal", "true"),
+
+			// Backdrop overlay
 			Div(
-				Class("min-h-full w-96 bg-white dark:bg-neutral-900 flex flex-col"),
+				g.Attr("x-show", "drawerOpen"),
+				g.Attr("x-transition:enter", "transition ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0"),
+				g.Attr("x-transition:enter-end", "opacity-100"),
+				g.Attr("x-transition:leave", "transition ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100"),
+				g.Attr("x-transition:leave-end", "opacity-0"),
+				g.Attr("@click", "drawerOpen = false"),
+				Class("fixed inset-0 bg-gray-900/50 dark:bg-neutral-900/80"),
+			),
+
+			// Drawer panel
+			Div(
+				g.Attr("x-show", "drawerOpen"),
+				g.Attr("x-transition:enter", "transition ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "translate-x-full"),
+				g.Attr("x-transition:enter-end", "translate-x-0"),
+				g.Attr("x-transition:leave", "transition ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "translate-x-0"),
+				g.Attr("x-transition:leave-end", "translate-x-full"),
+				Class("fixed top-0 end-0 h-full w-full max-w-md bg-white border-s border-gray-200 dark:bg-neutral-900 dark:border-neutral-700 flex flex-col"),
 
 				// Header
 				Div(
-					Class("flex justify-between items-center py-4 px-6 border-b border-slate-200 dark:border-neutral-700"),
+					Class("flex justify-between items-center py-3 px-4 border-b border-gray-200 dark:border-neutral-700"),
 					H3(
-						Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						Class("font-semibold text-gray-800 dark:text-neutral-200"),
 						g.Text("Add Field"),
 					),
-					Label(
-						g.Attr("for", drawerID),
-						Class("size-8 inline-flex justify-center items-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"),
-						lucide.X(Class("size-4")),
+					Button(
+						Type("button"),
+						g.Attr("@click", "drawerOpen = false"),
+						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400 dark:focus:bg-neutral-600"),
+						Span(Class("sr-only"), g.Text("Close")),
+						lucide.X(Class("shrink-0 size-4")),
 					),
 				),
 
 				// Form body
 				Div(
-					Class("flex-1 overflow-y-auto p-6"),
-					addFieldForm(typeBase, contentType),
+					Class("flex-1 overflow-y-auto p-4"),
+					addFieldForm(typeBase, contentType, allContentTypes),
 				),
 
 				// Footer
 				Div(
-					Class("flex justify-end items-center gap-3 py-4 px-6 border-t border-slate-200 dark:border-neutral-700"),
-					Label(
-						g.Attr("for", drawerID),
-						Class("px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700 dark:hover:bg-neutral-700"),
+					Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t border-gray-200 dark:border-neutral-700"),
+					Button(
+						Type("button"),
+						g.Attr("@click", "drawerOpen = false"),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
 						g.Text("Cancel"),
 					),
 					Button(
 						Type("submit"),
 						g.Attr("form", "add-field-form"),
-						Class("px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700"),
-						lucide.Plus(Class("size-4 mr-1")),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
+						lucide.Plus(Class("shrink-0 size-4")),
 						g.Text("Add Field"),
 					),
 				),
@@ -290,23 +307,33 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO) g.Node {
 	)
 }
 
-// addFieldForm renders the form for adding a new field
-func addFieldForm(typeBase string, contentType *core.ContentTypeDTO) g.Node {
-	fieldTypes := core.GetAllFieldTypes()
+// addFieldForm renders the form for adding a new field using Preline-style components with Alpine.js
+func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO) g.Node {
+	fieldTypesByCategory := core.GetFieldTypesByCategory()
+
+	// Build content type options for relations (exclude current type)
+	var contentTypeOptions []string
+	for _, ct := range allContentTypes {
+		if ct.ID != contentType.ID {
+			contentTypeOptions = append(contentTypeOptions, fmt.Sprintf(`<option value="%s">%s</option>`, ct.Slug, ct.Name))
+		}
+	}
+	contentTypeOptionsHTML := strings.Join(contentTypeOptions, "\n")
 
 	return FormEl(
 		ID("add-field-form"),
 		Method("POST"),
 		Action(typeBase+"/fields"),
 		Class("space-y-5"),
+		g.Attr("x-data", drawerFieldFormAlpineData()),
 
-		// Name field
+		// Name field with auto-slug
 		Div(
 			Label(
 				For("field-name"),
-				Class("block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1.5"),
+				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
 				g.Text("Name"),
-				Span(Class("text-red-500 ml-1"), g.Text("*")),
+				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
 			Input(
 				Type("text"),
@@ -314,11 +341,9 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 				Name("name"),
 				Required(),
 				Placeholder("e.g., Title, Content, Author"),
-				Class("w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"),
-			),
-			P(
-				Class("mt-1 text-xs text-slate-500 dark:text-neutral-500"),
-				g.Text("Human-readable field name"),
+				g.Attr("x-model", "name"),
+				g.Attr("@input", "updateSlug()"),
+				Class("py-2.5 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500 dark:focus:ring-violet-600"),
 			),
 		),
 
@@ -326,45 +351,56 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 		Div(
 			Label(
 				For("field-slug"),
-				Class("block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1.5"),
+				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
 				g.Text("Slug"),
+				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
 			Input(
 				Type("text"),
 				ID("field-slug"),
 				Name("slug"),
-				Placeholder("Auto-generated from name"),
-				Class("w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"),
-			),
-			P(
-				Class("mt-1 text-xs text-slate-500 dark:text-neutral-500"),
-				g.Text("Machine-readable identifier (optional)"),
+				Required(),
+				Placeholder("e.g., title, content, author"),
+				g.Attr("x-model", "slug"),
+				g.Attr("@input", "slugEdited = true"),
+				Class("py-2.5 px-3 block w-full border-gray-200 rounded-lg text-sm font-mono focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500 dark:focus:ring-violet-600"),
 			),
 		),
 
-		// Type field
+		// Type field with categories
 		Div(
 			Label(
 				For("field-type"),
-				Class("block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1.5"),
+				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
 				g.Text("Type"),
-				Span(Class("text-red-500 ml-1"), g.Text("*")),
+				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
 			Select(
 				ID("field-type"),
 				Name("type"),
 				Required(),
-				Class("w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"),
+				g.Attr("x-model", "fieldType"),
+				Class("py-2.5 px-3 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:focus:ring-violet-600"),
 				Option(Value(""), g.Text("Select a field type...")),
 				g.Group(func() []g.Node {
-					opts := make([]g.Node, len(fieldTypes))
-					for i, ft := range fieldTypes {
-						opts[i] = Option(
-							Value(ft.Type.String()),
-							g.Text(fmt.Sprintf("%s - %s", ft.Name, ft.Description)),
-						)
+					categories := []string{"text", "number", "date", "selection", "relation", "media", "advanced"}
+					categoryNames := map[string]string{
+						"text": "📝 Text", "number": "🔢 Number", "date": "📅 Date & Time",
+						"selection": "☑️ Selection", "relation": "🔗 Relations", "media": "🖼️ Media", "advanced": "⚙️ Advanced",
 					}
-					return opts
+					var groups []g.Node
+					for _, cat := range categories {
+						types, ok := fieldTypesByCategory[cat]
+						if !ok || len(types) == 0 {
+							continue
+						}
+						options := make([]g.Node, len(types))
+						for i, ft := range types {
+							options[i] = Option(Value(ft.Type.String()), g.Text(ft.Name))
+						}
+						groups = append(groups, OptGroup(g.Attr("label", categoryNames[cat]), g.Group(options)))
+					}
+					return groups
 				}()),
 			),
 		),
@@ -373,53 +409,234 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 		Div(
 			Label(
 				For("field-description"),
-				Class("block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1.5"),
+				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
 				g.Text("Description"),
 			),
 			Textarea(
 				ID("field-description"),
 				Name("description"),
 				Rows("2"),
-				Placeholder("Optional description for this field..."),
-				Class("w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"),
+				Placeholder("Help text for editors..."),
+				Class("py-2.5 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500 dark:focus:ring-violet-600 resize-none"),
 			),
 		),
 
-		// Options section
+		// Type-specific options section
+		g.Raw(fmt.Sprintf(`<div x-show="fieldType !== ''" x-transition class="border-t border-gray-200 dark:border-neutral-700 pt-4 space-y-4">
+			<p class="text-sm font-medium text-gray-800 dark:text-neutral-200">Field Configuration</p>
+			
+			<!-- Text type options -->
+			<div x-show="isTextType()" class="space-y-3">
+				<div class="grid grid-cols-2 gap-3">
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Min Length</label>
+						<input type="number" name="options.minLength" min="0" placeholder="0" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Max Length</label>
+						<input type="number" name="options.maxLength" min="0" placeholder="255" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+				</div>
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Regex Pattern</label>
+					<input type="text" name="options.regex" placeholder="e.g., ^[A-Za-z]+$" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+				</div>
+			</div>
+			
+			<!-- Number type options -->
+			<div x-show="isNumberType()" class="space-y-3">
+				<div class="grid grid-cols-3 gap-3">
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Min</label>
+						<input type="number" name="options.min" placeholder="0" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Max</label>
+						<input type="number" name="options.max" placeholder="100" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Step</label>
+						<input type="number" name="options.step" min="0" step="any" placeholder="1" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+				</div>
+			</div>
+			
+			<!-- Selection/Enum type options -->
+			<div x-show="isSelectionType()" class="space-y-3">
+				<div class="flex items-center justify-between">
+					<label class="text-xs font-medium text-gray-600 dark:text-neutral-400">Options</label>
+					<span class="text-xs text-gray-400" x-text="enumOptions.length + ' option(s)'"></span>
+				</div>
+				<div class="space-y-2 max-h-48 overflow-y-auto">
+					<template x-for="(opt, idx) in enumOptions" :key="idx">
+						<div class="flex gap-2 items-center">
+							<input type="text" x-model="opt.label" :name="'options.enum[' + idx + '].label'" placeholder="Label" class="flex-1 py-2 px-3 border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+							<input type="text" x-model="opt.value" :name="'options.enum[' + idx + '].value'" placeholder="Value" @input="if (!opt.value && opt.label) opt.value = opt.label.toLowerCase().replace(/\s+/g, '_')" class="flex-1 py-2 px-3 border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+							<button type="button" @click="removeOption(idx)" :disabled="enumOptions.length <= 1" class="p-2 text-gray-400 hover:text-red-500 disabled:opacity-30">
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+							</button>
+						</div>
+					</template>
+				</div>
+				<button type="button" @click="addOption()" class="w-full py-2 border-2 border-dashed border-gray-300 dark:border-neutral-600 rounded-lg text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 flex items-center justify-center gap-2">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+					Add Option
+				</button>
+			</div>
+			
+			<!-- Relation type options -->
+			<div x-show="fieldType === 'relation'" class="space-y-3">
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Related Content Type</label>
+					<select name="options.relatedType" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+						<option value="">Select content type...</option>
+						%s
+					</select>
+				</div>
+				<div>
+					<label class="block mb-2 text-xs font-medium text-gray-600 dark:text-neutral-400">Relation Type</label>
+					<div class="grid grid-cols-2 gap-2">
+						<label class="flex flex-col items-center p-3 border-2 rounded-lg cursor-pointer transition-all" :class="relationType === 'oneToOne' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700'">
+							<input type="radio" name="options.relationType" value="oneToOne" x-model="relationType" class="sr-only">
+							<span class="text-sm font-medium">One to One</span>
+							<span class="text-xs text-gray-500">1 → 1</span>
+						</label>
+						<label class="flex flex-col items-center p-3 border-2 rounded-lg cursor-pointer transition-all" :class="relationType === 'oneToMany' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700'">
+							<input type="radio" name="options.relationType" value="oneToMany" x-model="relationType" class="sr-only">
+							<span class="text-sm font-medium">One to Many</span>
+							<span class="text-xs text-gray-500">1 → N</span>
+						</label>
+						<label class="flex flex-col items-center p-3 border-2 rounded-lg cursor-pointer transition-all" :class="relationType === 'manyToOne' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700'">
+							<input type="radio" name="options.relationType" value="manyToOne" x-model="relationType" class="sr-only">
+							<span class="text-sm font-medium">Many to One</span>
+							<span class="text-xs text-gray-500">N → 1</span>
+						</label>
+						<label class="flex flex-col items-center p-3 border-2 rounded-lg cursor-pointer transition-all" :class="relationType === 'manyToMany' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700'">
+							<input type="radio" name="options.relationType" value="manyToMany" x-model="relationType" class="sr-only">
+							<span class="text-sm font-medium">Many to Many</span>
+							<span class="text-xs text-gray-500">N → N</span>
+						</label>
+					</div>
+				</div>
+			</div>
+			
+			<!-- Media type options -->
+			<div x-show="fieldType === 'media'" class="space-y-3">
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Allowed Media</label>
+					<select name="options.mediaType" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+						<option value="any">Any file type</option>
+						<option value="image">Images only</option>
+						<option value="video">Videos only</option>
+						<option value="audio">Audio only</option>
+						<option value="document">Documents only</option>
+					</select>
+				</div>
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Max File Size (MB)</label>
+					<input type="number" name="options.maxFileSize" min="1" max="100" placeholder="10" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+				</div>
+			</div>
+			
+			<!-- Slug type options -->
+			<div x-show="fieldType === 'slug'" class="space-y-3">
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Generate From Field</label>
+					<input type="text" name="options.sourceField" placeholder="e.g., title" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					<p class="mt-1 text-xs text-gray-500">Auto-generate slug from another field</p>
+				</div>
+			</div>
+			
+			<!-- Boolean type options -->
+			<div x-show="fieldType === 'boolean'" class="space-y-3">
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Default Value</label>
+					<select name="options.defaultBool" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+						<option value="">No default</option>
+						<option value="true">True</option>
+						<option value="false">False</option>
+					</select>
+				</div>
+			</div>
+		</div>`, contentTypeOptionsHTML)),
+
+		// Validation options section
 		Div(
-			Class("pt-3"),
+			Class("border-t border-gray-200 dark:border-neutral-700 pt-4"),
 			P(
-				Class("text-sm font-medium text-slate-700 dark:text-neutral-300 mb-3"),
-				g.Text("Field Options"),
+				Class("mb-3 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+				g.Text("Validation & Options"),
 			),
 			Div(
 				Class("space-y-3"),
-				drawerCheckbox("required", "Required", "This field must have a value"),
-				drawerCheckbox("unique", "Unique", "Values must be unique across entries"),
-				drawerCheckbox("indexed", "Indexed", "Enable fast searching on this field"),
-				drawerCheckbox("localized", "Localized", "Support multiple language versions"),
+				prelineCheckbox("required", "Required", "This field must have a value"),
+				prelineCheckbox("unique", "Unique", "Values must be unique across entries"),
+				prelineCheckbox("indexed", "Indexed", "Enable fast searching on this field"),
+				prelineCheckbox("localized", "Localized", "Support multiple language versions"),
 			),
 		),
 	)
 }
 
-// drawerCheckbox creates a checkbox for the drawer form
-func drawerCheckbox(name, label, description string) g.Node {
-	return Label(
-		Class("flex items-start gap-3 cursor-pointer"),
+// drawerFieldFormAlpineData returns the Alpine.js data for the drawer field form
+func drawerFieldFormAlpineData() string {
+	return `{
+		name: '',
+		slug: '',
+		fieldType: '',
+		relationType: 'oneToMany',
+		slugEdited: false,
+		enumOptions: [{label: '', value: ''}],
+		
+		updateSlug() {
+			if (!this.slugEdited) {
+				this.slug = this.name.toLowerCase().trim()
+					.replace(/[^\w\s-]/g, '')
+					.replace(/[\s_-]+/g, '_')
+					.replace(/^_+|_+$/g, '');
+			}
+		},
+		addOption() {
+			this.enumOptions.push({label: '', value: ''});
+		},
+		removeOption(idx) {
+			if (this.enumOptions.length > 1) {
+				this.enumOptions.splice(idx, 1);
+			}
+		},
+		isTextType() {
+			return ['text', 'textarea', 'richText', 'markdown', 'email', 'url', 'phone', 'password'].includes(this.fieldType);
+		},
+		isNumberType() {
+			return ['number', 'integer', 'float', 'decimal', 'bigInteger'].includes(this.fieldType);
+		},
+		isSelectionType() {
+			return ['select', 'multiSelect', 'enumeration'].includes(this.fieldType);
+		}
+	}`
+}
+
+// prelineCheckbox creates a Preline-style checkbox for the drawer form
+func prelineCheckbox(name, label, description string) g.Node {
+	checkboxID := "field-option-" + name
+	return Div(
+		Class("flex"),
 		Input(
 			Type("checkbox"),
+			ID(checkboxID),
 			Name(name),
 			Value("true"),
-			Class("mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-neutral-600 dark:bg-neutral-800"),
+			Class("shrink-0 mt-0.5 border-gray-200 rounded text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:checked:bg-violet-500 dark:checked:border-violet-500 dark:focus:ring-offset-neutral-800"),
 		),
-		Div(
+		Label(
+			For(checkboxID),
+			Class("ms-3"),
 			Span(
-				Class("block text-sm font-medium text-slate-700 dark:text-neutral-300"),
+				Class("block text-sm font-medium text-gray-800 dark:text-neutral-200"),
 				g.Text(label),
 			),
 			Span(
-				Class("block text-xs text-slate-500 dark:text-neutral-500"),
+				Class("block text-xs text-gray-500 dark:text-neutral-500"),
 				g.Text(description),
 			),
 		),
@@ -441,143 +658,160 @@ func fieldsTable(typeBase string, fields []*core.ContentFieldDTO, _ string) g.No
 
 // fieldRow renders a single field row
 func fieldRow(typeBase string, field *core.ContentFieldDTO) g.Node {
-	modalID := "delete-field-" + field.Slug
-
-	return g.Group([]g.Node{
-		TableRow(
-			// Field name and slug
-			TableCell(Div(
-				Class("flex items-center gap-3"),
-				Div(
-					Class("flex-shrink-0 rounded bg-slate-100 p-1.5 dark:bg-gray-800"),
-					fieldTypeIcon(field.Type),
+	return TableRow(
+		// Field name and slug
+		TableCell(Div(
+			Class("flex items-center gap-3"),
+			Div(
+				Class("flex-shrink-0 rounded bg-slate-100 p-1.5 dark:bg-gray-800"),
+				fieldTypeIcon(field.Type),
+			),
+			Div(
+				Div(Class("font-medium"), g.Text(field.Name)),
+				Code(
+					Class("text-xs text-slate-500 dark:text-gray-500"),
+					g.Text(field.Slug),
 				),
-				Div(
-					Div(Class("font-medium"), g.Text(field.Name)),
-					Code(
-						Class("text-xs text-slate-500 dark:text-gray-500"),
-						g.Text(field.Slug),
-					),
-				),
-			)),
+			),
+		)),
 
-			// Type
-			TableCellSecondary(Badge(field.Type, "bg-slate-100 text-slate-700 dark:bg-gray-800 dark:text-gray-300")),
+		// Type
+		TableCellSecondary(Badge(field.Type, "bg-slate-100 text-slate-700 dark:bg-gray-800 dark:text-gray-300")),
 
-			// Properties
-			TableCell(Div(
-				Class("flex flex-wrap gap-1"),
-				g.If(field.Required, func() g.Node {
-					return Badge("Required", "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")
-				}()),
-				g.If(field.Unique, func() g.Node {
-					return Badge("Unique", "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400")
-				}()),
-				g.If(field.Indexed, func() g.Node {
-					return Badge("Indexed", "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")
-				}()),
-				g.If(field.Localized, func() g.Node {
-					return Badge("Localized", "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400")
-				}()),
-			)),
+		// Properties
+		TableCell(Div(
+			Class("flex flex-wrap gap-1"),
+			g.If(field.Required, func() g.Node {
+				return Badge("Required", "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")
+			}()),
+			g.If(field.Unique, func() g.Node {
+				return Badge("Unique", "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400")
+			}()),
+			g.If(field.Indexed, func() g.Node {
+				return Badge("Indexed", "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")
+			}()),
+			g.If(field.Localized, func() g.Node {
+				return Badge("Localized", "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400")
+			}()),
+		)),
 
-			// Actions - using simple form with confirmation
-			TableCell(Div(
-				Class("flex items-center justify-end gap-1"),
-				// Delete button opens modal
-				Label(
-					g.Attr("for", modalID),
-					Class("inline-flex items-center justify-center size-8 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer dark:hover:bg-red-900/20"),
-					g.Attr("title", "Delete Field"),
-					lucide.Trash2(Class("size-4")),
-				),
-			)),
-		),
-
-		// Delete confirmation modal (DaisyUI style)
-		deleteFieldModal(modalID, typeBase, field),
-	})
+		// Actions - Delete button with inline modal
+		TableCell(Div(
+			Class("flex items-center justify-end gap-1"),
+			// Delete modal component (now contains both button and modal)
+			deleteFieldModal("delete-field-"+field.Slug, typeBase, field),
+		)),
+	)
 }
 
-// deleteFieldModal renders a DaisyUI-style confirmation modal for deleting a field
+// deleteFieldModal renders a Preline-style confirmation modal for deleting a field
 func deleteFieldModal(modalID, typeBase string, field *core.ContentFieldDTO) g.Node {
-	return g.Group([]g.Node{
-		// Hidden checkbox that controls modal
-		Input(
-			Type("checkbox"),
-			ID(modalID),
-			Class("modal-toggle"),
+	alpineID := "deleteModal_" + field.Slug
+	return Div(
+		g.Attr("x-data", fmt.Sprintf("{ %s: false }", alpineID)),
+
+		// Delete button that opens modal
+		Button(
+			Type("button"),
+			g.Attr("@click", fmt.Sprintf("%s = true", alpineID)),
+			Class("inline-flex items-center justify-center size-8 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"),
+			g.Attr("title", "Delete Field"),
+			lucide.Trash2(Class("size-4")),
 		),
 
-		// Modal container
+		// Modal
 		Div(
-			Class("modal modal-bottom sm:modal-middle"),
+			g.Attr("x-show", alpineID),
+			g.Attr("x-cloak", ""),
+			Class("fixed inset-0 z-80 overflow-y-auto"),
 			g.Attr("role", "dialog"),
+			g.Attr("aria-modal", "true"),
 
+			// Backdrop
 			Div(
-				Class("modal-box bg-white dark:bg-neutral-800"),
+				g.Attr("x-show", alpineID),
+				g.Attr("x-transition:enter", "ease-out duration-200"),
+				g.Attr("x-transition:enter-start", "opacity-0"),
+				g.Attr("x-transition:enter-end", "opacity-100"),
+				g.Attr("x-transition:leave", "ease-in duration-100"),
+				g.Attr("x-transition:leave-start", "opacity-100"),
+				g.Attr("x-transition:leave-end", "opacity-0"),
+				Class("fixed inset-0 bg-gray-900/50 dark:bg-neutral-900/80"),
+				g.Attr("@click", fmt.Sprintf("%s = false", alpineID)),
+			),
 
-				// Header with close button
+			// Modal content
+			Div(
+				Class("flex min-h-full items-center justify-center p-4"),
 				Div(
-					Class("flex justify-between items-center mb-4"),
-					H3(
-						Class("text-lg font-bold text-slate-900 dark:text-white"),
-						g.Text("Delete Field"),
-					),
-					Label(
-						g.Attr("for", modalID),
-						Class("btn btn-sm btn-circle btn-ghost"),
-						lucide.X(Class("size-4")),
-					),
-				),
+					g.Attr("x-show", alpineID),
+					g.Attr("x-transition:enter", "ease-out duration-200"),
+					g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+					g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+					g.Attr("x-transition:leave", "ease-in duration-100"),
+					g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
+					g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
+					Class("relative w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl dark:bg-neutral-800"),
 
-				// Body
-				Div(
-					Class("text-center py-4"),
+					// Header
 					Div(
-						Class("mx-auto flex items-center justify-center size-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4"),
-						lucide.TriangleAlert(Class("size-6 text-red-600 dark:text-red-400")),
-					),
-					P(
-						Class("text-slate-700 dark:text-neutral-200"),
-						g.Text("Are you sure you want to delete "),
-						Strong(g.Text(field.Name)),
-						g.Text("?"),
-					),
-					P(
-						Class("mt-2 text-sm text-slate-500 dark:text-neutral-500"),
-						g.Text("This action cannot be undone."),
-					),
-				),
-
-				// Actions
-				Div(
-					Class("modal-action"),
-					Label(
-						g.Attr("for", modalID),
-						Class("btn btn-ghost"),
-						g.Text("Cancel"),
-					),
-					FormEl(
-						Method("POST"),
-						Action(typeBase+"/fields/"+field.Slug+"/delete"),
+						Class("flex items-center justify-between py-3 px-4 border-b border-gray-200 dark:border-neutral-700"),
+						H3(
+							Class("font-semibold text-gray-800 dark:text-neutral-200"),
+							g.Text("Delete Field"),
+						),
 						Button(
-							Type("submit"),
-							Class("btn btn-error"),
-							lucide.Trash2(Class("size-4")),
-							g.Text("Delete"),
+							Type("button"),
+							g.Attr("@click", fmt.Sprintf("%s = false", alpineID)),
+							Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400"),
+							lucide.X(Class("shrink-0 size-4")),
+						),
+					),
+
+					// Body
+					Div(
+						Class("p-4 text-center"),
+						Div(
+							Class("mx-auto flex items-center justify-center size-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4"),
+							lucide.TriangleAlert(Class("size-6 text-red-600 dark:text-red-500")),
+						),
+						P(
+							Class("text-gray-800 dark:text-neutral-200"),
+							g.Text("Are you sure you want to delete "),
+							Strong(g.Text(field.Name)),
+							g.Text("?"),
+						),
+						P(
+							Class("mt-2 text-sm text-gray-500 dark:text-neutral-500"),
+							g.Text("This action cannot be undone."),
+						),
+					),
+
+					// Footer
+					Div(
+						Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t border-gray-200 dark:border-neutral-700"),
+						Button(
+							Type("button"),
+							g.Attr("@click", fmt.Sprintf("%s = false", alpineID)),
+							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"),
+							g.Text("Cancel"),
+						),
+						FormEl(
+							Method("POST"),
+							Action(typeBase+"/fields/"+field.Slug+"/delete"),
+							Class("inline"),
+							Button(
+								Type("submit"),
+								Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700"),
+								lucide.Trash2(Class("shrink-0 size-4")),
+								g.Text("Delete"),
+							),
 						),
 					),
 				),
 			),
-
-			// Backdrop - click to close
-			Label(
-				Class("modal-backdrop"),
-				g.Attr("for", modalID),
-			),
 		),
-	})
+	)
 }
 
 // fieldTypeIcon returns an icon for a field type
@@ -616,7 +850,7 @@ func fieldTypeIcon(fieldType string) g.Node {
 // Settings Section
 // =============================================================================
 
-// settingsSection renders the content type settings management section
+// settingsSection renders the content type settings management section using Preline-style components
 func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 	settings := contentType.Settings
 
@@ -637,9 +871,9 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 					Div(
 						Label(
 							For("name"),
-							Class("label"),
-							Span(Class("label-text"), g.Text("Name")),
-							Span(Class("label-text-alt text-red-500"), g.Text("*")),
+							Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+							g.Text("Name"),
+							Span(Class("text-red-500 ms-1"), g.Text("*")),
 						),
 						Input(
 							Type("text"),
@@ -647,16 +881,16 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 							Name("name"),
 							Value(contentType.Name),
 							Required(),
-							Class("input input-bordered w-full"),
+							Class("py-2 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"),
 						),
 					),
 					// Slug (read-only)
 					Div(
 						Label(
 							For("slug"),
-							Class("label"),
-							Span(Class("label-text"), g.Text("Slug")),
-							Span(Class("label-text-alt text-slate-500"), g.Text("(read-only)")),
+							Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+							g.Text("Slug"),
+							Span(Class("text-gray-500 ms-1 text-xs"), g.Text("(read-only)")),
 						),
 						Input(
 							Type("text"),
@@ -664,7 +898,7 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 							Name("slug"),
 							Value(contentType.Slug),
 							Disabled(),
-							Class("input input-bordered w-full bg-slate-50 dark:bg-gray-900"),
+							Class("py-2 px-3 block w-full border-gray-200 rounded-lg text-sm bg-gray-50 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-500 cursor-not-allowed"),
 						),
 					),
 				),
@@ -673,15 +907,15 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 				Div(
 					Label(
 						For("description"),
-						Class("label"),
-						Span(Class("label-text"), g.Text("Description")),
+						Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+						g.Text("Description"),
 					),
 					Textarea(
 						ID("description"),
 						Name("description"),
 						Rows("3"),
 						Placeholder("A brief description of this content type..."),
-						Class("textarea textarea-bordered w-full"),
+						Class("py-2 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500"),
 						g.Text(contentType.Description),
 					),
 				),
@@ -690,8 +924,8 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 				Div(
 					Label(
 						For("icon"),
-						Class("label"),
-						Span(Class("label-text"), g.Text("Icon (emoji)")),
+						Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+						g.Text("Icon (emoji)"),
 					),
 					Input(
 						Type("text"),
@@ -699,9 +933,9 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 						Name("icon"),
 						Value(contentType.Icon),
 						Placeholder("📄"),
-						Class("input input-bordered w-full"),
+						Class("py-2 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"),
 					),
-					P(Class("text-xs text-gray-500 mt-1"), g.Text("Use an emoji to visually identify this content type")),
+					P(Class("mt-1 text-xs text-gray-500 dark:text-neutral-500"), g.Text("Use an emoji to visually identify this content type")),
 				),
 
 				// Submit
@@ -709,8 +943,8 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 					Class("pt-4"),
 					Button(
 						Type("submit"),
-						Class("btn btn-primary"),
-						lucide.Save(Class("size-4")),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
+						lucide.Save(Class("shrink-0 size-4")),
 						g.Text("Save Changes"),
 					),
 				),
@@ -731,33 +965,33 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 					Div(
 						Label(
 							For("titleField"),
-							Class("label"),
-							Span(Class("label-text"), g.Text("Title Field")),
+							Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+							g.Text("Title Field"),
 						),
 						Select(
 							ID("titleField"),
 							Name("titleField"),
-							Class("select select-bordered w-full"),
+							Class("py-2 px-3 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"),
 							Option(Value(""), g.Text("Select a field...")),
 							g.Group(fieldSelectOptions(contentType.Fields, settings.TitleField, []string{"text", "string"})),
 						),
-						P(Class("text-xs text-gray-500 mt-1"), g.Text("Field used as the entry title in lists")),
+						P(Class("mt-1 text-xs text-gray-500 dark:text-neutral-500"), g.Text("Field used as the entry title in lists")),
 					),
 					// Description Field
 					Div(
 						Label(
 							For("descriptionField"),
-							Class("label"),
-							Span(Class("label-text"), g.Text("Description Field")),
+							Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+							g.Text("Description Field"),
 						),
 						Select(
 							ID("descriptionField"),
 							Name("descriptionField"),
-							Class("select select-bordered w-full"),
+							Class("py-2 px-3 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"),
 							Option(Value(""), g.Text("Select a field...")),
 							g.Group(fieldSelectOptions(contentType.Fields, settings.DescriptionField, []string{"text", "string", "richtext", "markdown"})),
 						),
-						P(Class("text-xs text-gray-500 mt-1"), g.Text("Field used as the entry description")),
+						P(Class("mt-1 text-xs text-gray-500 dark:text-neutral-500"), g.Text("Field used as the entry description")),
 					),
 				),
 
@@ -766,8 +1000,8 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 					Class("pt-4"),
 					Button(
 						Type("submit"),
-						Class("btn btn-primary"),
-						lucide.Save(Class("size-4")),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
+						lucide.Save(Class("shrink-0 size-4")),
 						g.Text("Save Display Settings"),
 					),
 				),
@@ -796,8 +1030,8 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 					Class("pt-4"),
 					Button(
 						Type("submit"),
-						Class("btn btn-primary"),
-						lucide.Save(Class("size-4")),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
+						lucide.Save(Class("shrink-0 size-4")),
 						g.Text("Save Features"),
 					),
 				),
@@ -815,8 +1049,8 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 				Div(
 					Label(
 						For("maxEntries"),
-						Class("label"),
-						Span(Class("label-text"), g.Text("Maximum Entries")),
+						Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+						g.Text("Maximum Entries"),
 					),
 					Input(
 						Type("number"),
@@ -825,9 +1059,9 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 						Value(fmt.Sprintf("%d", settings.MaxEntries)),
 						g.Attr("min", "0"),
 						Placeholder("0 = unlimited"),
-						Class("input input-bordered w-full max-w-xs"),
+						Class("py-2 px-3 block w-full max-w-xs border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"),
 					),
-					P(Class("text-xs text-gray-500 mt-1"), g.Text("Set to 0 for unlimited entries")),
+					P(Class("mt-1 text-xs text-gray-500 dark:text-neutral-500"), g.Text("Set to 0 for unlimited entries")),
 				),
 
 				// Submit
@@ -835,8 +1069,8 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 					Class("pt-4"),
 					Button(
 						Type("submit"),
-						Class("btn btn-primary"),
-						lucide.Save(Class("size-4")),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
+						lucide.Save(Class("shrink-0 size-4")),
 						g.Text("Save Limits"),
 					),
 				),
@@ -859,19 +1093,11 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 							g.Text("Permanently delete this content type and all its entries. This action cannot be undone."),
 						),
 					),
-					Button(
-						Type("button"),
-						g.Attr("onclick", "document.getElementById('delete-type-modal').checked = true"),
-						Class("btn btn-error btn-sm"),
-						lucide.Trash2(Class("size-4")),
-						g.Text("Delete"),
-					),
+					// Delete confirmation modal (includes button)
+					deleteContentTypeModal(typeBase, contentType),
 				),
 			),
 		),
-
-		// Delete confirmation modal
-		deleteContentTypeModal(typeBase, contentType),
 	)
 }
 
@@ -903,95 +1129,138 @@ func fieldSelectOptions(fields []*core.ContentFieldDTO, selectedValue string, al
 	return options
 }
 
-// featureToggle renders a feature toggle checkbox
+// featureToggle renders a Preline-style feature toggle checkbox
 func featureToggle(name, label, description string, checked bool) g.Node {
+	checkboxID := "feature-" + name
 	return Div(
-		Class("form-control"),
+		Class("flex"),
+		Input(
+			Type("checkbox"),
+			ID(checkboxID),
+			Name(name),
+			Value("true"),
+			g.If(checked, Checked()),
+			Class("shrink-0 mt-0.5 border-gray-200 rounded text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:checked:bg-violet-500 dark:checked:border-violet-500 dark:focus:ring-offset-neutral-800"),
+		),
 		Label(
-			Class("label cursor-pointer justify-start gap-4"),
-			Input(
-				Type("checkbox"),
-				Name(name),
-				Value("true"),
-				g.If(checked, Checked()),
-				Class("checkbox checkbox-primary"),
-			),
-			Div(
-				Span(Class("label-text font-medium"), g.Text(label)),
-				P(Class("text-xs text-gray-500 dark:text-gray-400"), g.Text(description)),
-			),
+			For(checkboxID),
+			Class("ms-3 cursor-pointer"),
+			Span(Class("block text-sm font-medium text-gray-800 dark:text-neutral-200"), g.Text(label)),
+			P(Class("text-xs text-gray-500 dark:text-neutral-500"), g.Text(description)),
 		),
 	)
 }
 
-// deleteContentTypeModal renders the delete confirmation modal
+// deleteContentTypeModal renders a Preline-style delete confirmation modal
 func deleteContentTypeModal(typeBase string, contentType *core.ContentTypeDTO) g.Node {
-	return g.Group([]g.Node{
-		Input(Type("checkbox"), ID("delete-type-modal"), Class("modal-toggle")),
+	return Div(
+		g.Attr("x-data", "{ deleteTypeModal: false }"),
+
+		// Delete button that opens modal
+		Button(
+			Type("button"),
+			g.Attr("@click", "deleteTypeModal = true"),
+			Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700"),
+			lucide.Trash2(Class("shrink-0 size-4")),
+			g.Text("Delete"),
+		),
+
+		// Modal
 		Div(
-			Class("modal modal-bottom sm:modal-middle"),
+			g.Attr("x-show", "deleteTypeModal"),
+			g.Attr("x-cloak", ""),
+			Class("fixed inset-0 z-80 overflow-y-auto"),
+			g.Attr("role", "dialog"),
+			g.Attr("aria-modal", "true"),
+
+			// Backdrop
 			Div(
-				Class("modal-box"),
+				g.Attr("x-show", "deleteTypeModal"),
+				g.Attr("x-transition:enter", "ease-out duration-200"),
+				g.Attr("x-transition:enter-start", "opacity-0"),
+				g.Attr("x-transition:enter-end", "opacity-100"),
+				g.Attr("x-transition:leave", "ease-in duration-100"),
+				g.Attr("x-transition:leave-start", "opacity-100"),
+				g.Attr("x-transition:leave-end", "opacity-0"),
+				Class("fixed inset-0 bg-gray-900/50 dark:bg-neutral-900/80"),
+				g.Attr("@click", "deleteTypeModal = false"),
+			),
 
-				// Header
+			// Modal content
+			Div(
+				Class("flex min-h-full items-center justify-center p-4"),
 				Div(
-					Class("flex items-center justify-between pb-4 border-b border-slate-200 dark:border-gray-700"),
-					H3(
-						Class("font-bold text-lg text-red-600 dark:text-red-400"),
-						g.Text("Delete Content Type"),
-					),
-					Label(
-						g.Attr("for", "delete-type-modal"),
-						Class("btn btn-sm btn-circle btn-ghost"),
-						lucide.X(Class("size-4")),
-					),
-				),
+					g.Attr("x-show", "deleteTypeModal"),
+					g.Attr("x-transition:enter", "ease-out duration-200"),
+					g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+					g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+					g.Attr("x-transition:leave", "ease-in duration-100"),
+					g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
+					g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
+					Class("relative w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl dark:bg-neutral-800"),
 
-				// Body
-				Div(
-					Class("py-6"),
+					// Header
 					Div(
-						Class("text-center"),
-						Div(
-							Class("mx-auto flex items-center justify-center size-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4"),
-							lucide.TriangleAlert(Class("size-8 text-red-600 dark:text-red-400")),
+						Class("flex items-center justify-between py-3 px-4 border-b border-gray-200 dark:border-neutral-700"),
+						H3(
+							Class("font-semibold text-red-600 dark:text-red-500"),
+							g.Text("Delete Content Type"),
 						),
-						P(
-							Class("text-lg font-medium text-slate-900 dark:text-white"),
-							g.Text("Delete \""),
-							g.Text(contentType.Name),
-							g.Text("\"?"),
-						),
-						P(
-							Class("mt-2 text-sm text-slate-600 dark:text-gray-400"),
-							g.Text("This will permanently delete all entries, fields, and revisions."),
-						),
-					),
-				),
-
-				// Actions
-				Div(
-					Class("modal-action"),
-					Label(
-						g.Attr("for", "delete-type-modal"),
-						Class("btn btn-ghost"),
-						g.Text("Cancel"),
-					),
-					FormEl(
-						Method("POST"),
-						Action(typeBase+"/delete"),
 						Button(
-							Type("submit"),
-							Class("btn btn-error"),
-							lucide.Trash2(Class("size-4")),
-							g.Text("Delete Forever"),
+							Type("button"),
+							g.Attr("@click", "deleteTypeModal = false"),
+							Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400"),
+							lucide.X(Class("shrink-0 size-4")),
+						),
+					),
+
+					// Body
+					Div(
+						Class("p-4"),
+						Div(
+							Class("text-center"),
+							Div(
+								Class("mx-auto flex items-center justify-center size-16 rounded-full bg-red-100 dark:bg-red-900/30 mb-4"),
+								lucide.TriangleAlert(Class("size-8 text-red-600 dark:text-red-500")),
+							),
+							P(
+								Class("text-lg font-medium text-gray-800 dark:text-neutral-200"),
+								g.Text("Delete \""),
+								g.Text(contentType.Name),
+								g.Text("\"?"),
+							),
+							P(
+								Class("mt-2 text-sm text-gray-500 dark:text-neutral-500"),
+								g.Text("This will permanently delete all entries, fields, and revisions."),
+							),
+						),
+					),
+
+					// Footer
+					Div(
+						Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t border-gray-200 dark:border-neutral-700"),
+						Button(
+							Type("button"),
+							g.Attr("@click", "deleteTypeModal = false"),
+							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"),
+							g.Text("Cancel"),
+						),
+						FormEl(
+							Method("POST"),
+							Action(typeBase+"/delete"),
+							Class("inline"),
+							Button(
+								Type("submit"),
+								Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700"),
+								lucide.Trash2(Class("shrink-0 size-4")),
+								g.Text("Delete Forever"),
+							),
 						),
 					),
 				),
 			),
-			Label(Class("modal-backdrop"), g.Attr("for", "delete-type-modal")),
 		),
-	})
+	)
 }
 
 // =============================================================================
@@ -1005,7 +1274,7 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 
 		// Quick Reference Card
 		CardWithHeader("API Endpoints", []g.Node{
-			Span(Class("badge badge-primary badge-outline"), g.Text("REST API")),
+			Span(Class("py-1 px-2.5 inline-flex items-center gap-x-1 text-xs font-medium bg-violet-100 text-violet-800 rounded-full dark:bg-violet-900 dark:text-violet-300"), g.Text("REST API")),
 		},
 			Div(
 				Class("space-y-4"),
@@ -1051,7 +1320,7 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 
 		// Query Parameters Card
 		CardWithHeader("Query Parameters", []g.Node{
-			Span(Class("badge badge-secondary badge-outline"), g.Text("GET requests")),
+			Span(Class("py-1 px-2.5 inline-flex items-center gap-x-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full dark:bg-neutral-700 dark:text-neutral-300"), g.Text("GET requests")),
 		},
 			Div(
 				Class("space-y-4"),
@@ -1121,7 +1390,7 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 
 		// Schema Card
 		CardWithHeader("Entry Schema", []g.Node{
-			Span(Class("badge badge-accent badge-outline"), g.Text(fmt.Sprintf("%d fields", len(contentType.Fields)))),
+			Span(Class("py-1 px-2.5 inline-flex items-center gap-x-1 text-xs font-medium bg-cyan-100 text-cyan-800 rounded-full dark:bg-cyan-900 dark:text-cyan-300"), g.Text(fmt.Sprintf("%d fields", len(contentType.Fields)))),
 		},
 			Div(
 				Class("overflow-x-auto"),
@@ -1155,20 +1424,20 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 
 // apiEndpointRow renders a row in the API endpoints table
 func apiEndpointRow(method, endpoint, description string) g.Node {
-	methodColor := "badge-info"
+	methodColor := "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400"
 	switch method {
 	case "GET":
-		methodColor = "badge-success"
+		methodColor = "bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-400"
 	case "POST":
-		methodColor = "badge-primary"
+		methodColor = "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-400"
 	case "PUT":
-		methodColor = "badge-warning"
+		methodColor = "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400"
 	case "DELETE":
-		methodColor = "badge-error"
+		methodColor = "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400"
 	}
 
 	return Tr(
-		Td(Span(Class("badge "+methodColor+" badge-sm font-mono"), g.Text(method))),
+		Td(Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-mono font-medium rounded "+methodColor), g.Text(method))),
 		Td(Code(Class("text-xs font-mono"), g.Text(endpoint))),
 		Td(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text(description)),
 	)
@@ -1194,13 +1463,13 @@ func schemaFieldRow(field *core.ContentFieldDTO) g.Node {
 				Code(Class("text-xs font-mono font-medium"), g.Text(field.Slug)),
 			),
 		),
-		Td(Span(Class("badge badge-ghost badge-sm"), g.Text(field.Type))),
+		Td(Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-gray-100 text-gray-600 rounded dark:bg-neutral-700 dark:text-neutral-400"), g.Text(field.Type))),
 		Td(
 			g.If(field.Required, func() g.Node {
-				return Span(Class("badge badge-error badge-xs"), g.Text("required"))
+				return Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-red-100 text-red-800 rounded dark:bg-red-900/50 dark:text-red-400"), g.Text("required"))
 			}()),
 			g.If(!field.Required, func() g.Node {
-				return Span(Class("badge badge-ghost badge-xs"), g.Text("optional"))
+				return Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-gray-100 text-gray-600 rounded dark:bg-neutral-700 dark:text-neutral-400"), g.Text("optional"))
 			}()),
 		),
 		Td(Class("text-xs text-slate-500 dark:text-gray-400"), g.Text(field.Description)),
@@ -1244,7 +1513,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 			// Create Entry Example
 			Div(
 				H4(Class("font-medium text-sm text-slate-900 dark:text-white mb-2 flex items-center gap-2"),
-					Span(Class("badge badge-primary badge-sm"), g.Text("POST")),
+					Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-violet-100 text-violet-800 rounded dark:bg-violet-900 dark:text-violet-300"), g.Text("POST")),
 					g.Text("Create Entry"),
 				),
 				Pre(
@@ -1262,7 +1531,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 			// List with Filters Example
 			Div(
 				H4(Class("font-medium text-sm text-slate-900 dark:text-white mb-2 flex items-center gap-2"),
-					Span(Class("badge badge-success badge-sm"), g.Text("GET")),
+					Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-teal-100 text-teal-800 rounded dark:bg-teal-900 dark:text-teal-300"), g.Text("GET")),
 					g.Text("List with Filters"),
 				),
 				Pre(
@@ -1278,7 +1547,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 			// Advanced Query Example
 			Div(
 				H4(Class("font-medium text-sm text-slate-900 dark:text-white mb-2 flex items-center gap-2"),
-					Span(Class("badge badge-primary badge-sm"), g.Text("POST")),
+					Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-violet-100 text-violet-800 rounded dark:bg-violet-900 dark:text-violet-300"), g.Text("POST")),
 					g.Text("Advanced Query"),
 				),
 				Pre(
@@ -1314,17 +1583,18 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 // =============================================================================
 
 // playgroundSection renders the API playground with Monaco Editor
-func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
+func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID string, environmentID string) g.Node {
 	// Default query example
-	defaultQuery := fmt.Sprintf(`{
+	defaultQuery := `{
   "filter": {
     "status": { "$eq": "published" }
   },
   "sort": ["-createdAt"],
   "page": 1,
   "pageSize": 10
-}`)
+}`
 
+	// Pass app ID and environment ID directly from server-side
 	return Div(
 		Class("space-y-6 mt-6"),
 		g.Attr("x-data", fmt.Sprintf(`{
@@ -1335,6 +1605,8 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 			viewMode: 'table',
 			endpoint: '%s',
 			method: 'GET',
+			appId: '%s',
+			envId: '%s',
 			
 			async executeQuery() {
 				this.loading = true;
@@ -1343,11 +1615,22 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 				
 				try {
 					let url = this.endpoint;
+					
+					let headers = {
+							'Content-Type': 'application/json'
+					};
+					
+					// Add app context headers
+					if (this.appId) {
+						headers['X-App-ID'] = this.appId;
+					}
+					if (this.envId) {
+						headers['X-Environment-ID'] = this.envId;
+					}
+					
 					let options = {
 						method: this.method,
-						headers: {
-							'Content-Type': 'application/json'
-						}
+						headers: headers
 					};
 					
 					if (this.method === 'POST') {
@@ -1420,7 +1703,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 				});
 				return Array.from(fields).slice(0, 10); // Limit to 10 fields
 			}
-		}`, "`"+defaultQuery+"`", apiBase)),
+		}`, "`"+defaultQuery+"`", apiBase, appID, environmentID)),
 
 		// Query Builder Card
 		CardWithHeader("Query Builder", []g.Node{
@@ -1429,7 +1712,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 				Class("flex items-center gap-2"),
 				Select(
 					g.Attr("x-model", "method"),
-					Class("select select-bordered select-sm"),
+					Class("py-1.5 px-3 border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400"),
 					Option(Value("GET"), g.Text("GET")),
 					Option(Value("POST"), g.Text("POST")),
 				),
@@ -1456,8 +1739,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 						Type("button"),
 						g.Attr("@click", "executeQuery()"),
 						g.Attr(":disabled", "loading"),
-						Class("btn btn-primary"),
-						g.Attr(":class", "loading ? 'loading' : ''"),
+						Class("py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:focus:ring-offset-neutral-800"),
 						lucide.Play(Class("size-4"), g.Attr("x-show", "!loading")),
 						Span(g.Attr("x-show", "loading"), g.Text("Executing...")),
 						Span(g.Attr("x-show", "!loading"), g.Text("Execute Query")),
@@ -1471,7 +1753,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 							page: 1,
 							pageSize: 10
 						}, null, 2); if(window.monacoEditor) window.monacoEditor.setValue(query);`),
-						Class("btn btn-ghost btn-sm"),
+						Class("py-1.5 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus:ring-neutral-700"),
 						g.Text("Published Entries"),
 					),
 					Button(
@@ -1482,7 +1764,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 							page: 1,
 							pageSize: 10
 						}, null, 2); if(window.monacoEditor) window.monacoEditor.setValue(query);`),
-						Class("btn btn-ghost btn-sm"),
+						Class("py-1.5 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus:ring-neutral-700"),
 						g.Text("Drafts"),
 					),
 					Button(
@@ -1492,7 +1774,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 							page: 1,
 							pageSize: 50
 						}, null, 2); if(window.monacoEditor) window.monacoEditor.setValue(query);`),
-						Class("btn btn-ghost btn-sm"),
+						Class("py-1.5 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus:ring-neutral-700"),
 						g.Text("All Entries"),
 					),
 				),
@@ -1506,20 +1788,20 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 			CardWithHeader("Results", []g.Node{
 				// View mode toggle
 				Div(
-					Class("join"),
+					Class("inline-flex rounded-lg shadow-sm"),
 					Button(
 						Type("button"),
 						g.Attr("@click", "viewMode = 'table'"),
-						g.Attr(":class", "viewMode === 'table' ? 'btn-active' : ''"),
-						Class("btn btn-sm join-item"),
+						g.Attr(":class", "viewMode === 'table' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300' : 'bg-white text-gray-700 dark:bg-neutral-800 dark:text-neutral-300'"),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 -ms-px first:rounded-s-lg first:ms-0 last:rounded-e-lg text-sm font-medium border border-gray-200 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:border-neutral-700 dark:hover:bg-neutral-700"),
 						lucide.Table(Class("size-4")),
 						g.Text("Table"),
 					),
 					Button(
 						Type("button"),
 						g.Attr("@click", "viewMode = 'json'"),
-						g.Attr(":class", "viewMode === 'json' ? 'btn-active' : ''"),
-						Class("btn btn-sm join-item"),
+						g.Attr(":class", "viewMode === 'json' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300' : 'bg-white text-gray-700 dark:bg-neutral-800 dark:text-neutral-300'"),
+						Class("py-2 px-3 inline-flex items-center gap-x-2 -ms-px first:rounded-s-lg first:ms-0 last:rounded-e-lg text-sm font-medium border border-gray-200 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:border-neutral-700 dark:hover:bg-neutral-700"),
 						lucide.Braces(Class("size-4")),
 						g.Text("JSON"),
 					),
@@ -1544,66 +1826,91 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 					// Success state - Table view
 					Div(
 						g.Attr("x-show", "response && viewMode === 'table'"),
-						Class("overflow-x-auto"),
 
 						// Summary stats
 						Div(
-							Class("mb-4 flex items-center gap-4 text-sm text-slate-600 dark:text-gray-400"),
+							Class("py-3 px-4 flex items-center gap-4 text-sm text-gray-600 dark:text-neutral-400 border-b border-gray-200 dark:border-neutral-700"),
 							Span(
 								g.Attr("x-show", "response?.total !== undefined"),
-								g.Attr("x-text", "'Total: ' + (response?.total || 0) + ' entries'"),
+								Class("inline-flex items-center gap-1.5"),
+								lucide.Database(Class("size-4")),
+								Span(g.Attr("x-text", "'Total: ' + (response?.total || 0) + ' entries'")),
 							),
 							Span(
 								g.Attr("x-show", "response?.page !== undefined"),
-								g.Attr("x-text", "'Page: ' + (response?.page || 1)"),
+								Class("inline-flex items-center gap-1.5"),
+								lucide.FileText(Class("size-4")),
+								Span(g.Attr("x-text", "'Page: ' + (response?.page || 1)")),
 							),
 						),
 
-						// Table
-						Table(
-							Class("table table-zebra w-full"),
-							THead(
-								Tr(
-									Th(g.Text("ID")),
-									Th(g.Text("Status")),
-									g.El("template",
-										g.Attr("x-for", "field in getFields()"),
-										g.El("th",
-											g.Attr("x-text", "field"),
-										),
-									),
-									Th(g.Text("Created")),
-								),
-							),
-							TBody(
-								g.El("template",
-									g.Attr("x-for", "entry in getEntries()"),
-									g.Attr(":key", "entry.id"),
+						// Table with Preline styling
+						Div(
+							Class("overflow-x-auto"),
+							Table(
+								Class("min-w-full divide-y divide-gray-200 dark:divide-neutral-700"),
+								THead(
+									Class("bg-gray-50 dark:bg-neutral-800"),
 									Tr(
-										Td(
-											Code(Class("text-xs font-mono"), g.Attr("x-text", "entry.id?.substring(0,8) + '...'")),
+										Th(
+											Class("px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-neutral-400"),
+											g.Text("ID"),
 										),
-										Td(
-											Span(
-												Class("badge badge-sm"),
-												g.Attr(":class", `{
-													'badge-success': entry.status === 'published',
-													'badge-warning': entry.status === 'draft',
-													'badge-ghost': entry.status === 'archived'
-												}`),
-												g.Attr("x-text", "entry.status"),
-											),
+										Th(
+											Class("px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-neutral-400"),
+											g.Text("Status"),
 										),
 										g.El("template",
 											g.Attr("x-for", "field in getFields()"),
-											Td(
-												Class("max-w-xs truncate text-sm"),
-												g.Attr("x-text", "typeof (entry.data?.[field] || entry[field]) === 'object' ? JSON.stringify(entry.data?.[field] || entry[field]) : (entry.data?.[field] || entry[field] || '-')"),
+											g.El("th",
+												g.Attr("class", "px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-neutral-400"),
+												g.Attr("x-text", "field"),
 											),
 										),
-										Td(
-											Class("text-xs text-slate-500"),
-											g.Attr("x-text", "entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'"),
+										Th(
+											Class("px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-neutral-400"),
+											g.Text("Created"),
+										),
+									),
+								),
+								TBody(
+									Class("divide-y divide-gray-200 dark:divide-neutral-700"),
+									g.El("template",
+										g.Attr("x-for", "(entry, index) in getEntries()"),
+										g.Attr(":key", "entry.id"),
+										g.El("tr",
+											g.Attr(":class", "index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-gray-50 dark:bg-neutral-800'"),
+											g.Attr("class", "hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"),
+											g.El("td",
+												g.Attr("class", "px-6 py-4 whitespace-nowrap text-sm"),
+												g.El("code",
+													g.Attr("class", "text-xs font-mono text-gray-900 dark:text-neutral-200 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded"),
+													g.Attr("x-text", "entry.id?.substring(0,8) + '...'"),
+												),
+											),
+											g.El("td",
+												g.Attr("class", "px-6 py-4 whitespace-nowrap"),
+												g.El("span",
+													g.Attr("class", "py-1 px-2 inline-flex items-center text-xs font-medium rounded-full"),
+													g.Attr(":class", `{
+														'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-400': entry.status === 'published',
+														'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400': entry.status === 'draft',
+														'bg-gray-100 text-gray-600 dark:bg-neutral-700 dark:text-neutral-400': entry.status === 'archived'
+												}`),
+													g.Attr("x-text", "entry.status"),
+												),
+											),
+											g.El("template",
+												g.Attr("x-for", "field in getFields()"),
+												g.El("td",
+													g.Attr("class", "px-6 py-4 whitespace-nowrap text-sm text-gray-800 dark:text-neutral-200 max-w-xs truncate"),
+													g.Attr("x-text", "typeof (entry.data?.[field] || entry[field]) === 'object' ? JSON.stringify(entry.data?.[field] || entry[field]) : (entry.data?.[field] || entry[field] || '-')"),
+												),
+											),
+											g.El("td",
+												g.Attr("class", "px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400"),
+												g.Attr("x-text", "entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'"),
+											),
 										),
 									),
 								),
@@ -1613,9 +1920,13 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO) g.Node 
 						// Empty state
 						Div(
 							g.Attr("x-show", "getEntries().length === 0"),
-							Class("text-center py-8 text-slate-500 dark:text-gray-400"),
-							lucide.Inbox(Class("mx-auto size-12 mb-4 opacity-50")),
-							P(g.Text("No entries found")),
+							Class("flex flex-col items-center justify-center py-12 text-center"),
+							Div(
+								Class("rounded-full bg-gray-100 dark:bg-neutral-800 p-3 mb-4"),
+								lucide.Inbox(Class("size-8 text-gray-400 dark:text-neutral-500")),
+							),
+							P(Class("text-sm font-medium text-gray-900 dark:text-neutral-200"), g.Text("No entries found")),
+							P(Class("text-sm text-gray-500 dark:text-neutral-400 mt-1"), g.Text("Try adjusting your query filters")),
 						),
 					),
 
@@ -1756,121 +2067,837 @@ func AddFieldPage(
 	currentApp *app.App,
 	basePath string,
 	contentType *core.ContentTypeDTO,
+	allContentTypes []*core.ContentTypeSummaryDTO,
 	err string,
+) g.Node {
+	return fieldFormPage(currentApp, basePath, contentType, allContentTypes, nil, err, false)
+}
+
+// EditFieldPage renders the edit field form
+func EditFieldPage(
+	currentApp *app.App,
+	basePath string,
+	contentType *core.ContentTypeDTO,
+	allContentTypes []*core.ContentTypeSummaryDTO,
+	field *core.ContentFieldDTO,
+	err string,
+) g.Node {
+	return fieldFormPage(currentApp, basePath, contentType, allContentTypes, field, err, true)
+}
+
+// fieldFormPage renders the add/edit field form
+func fieldFormPage(
+	currentApp *app.App,
+	basePath string,
+	contentType *core.ContentTypeDTO,
+	allContentTypes []*core.ContentTypeSummaryDTO,
+	field *core.ContentFieldDTO,
+	err string,
+	isEdit bool,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Slug
 
 	// Get all field types
-	fieldTypes := core.GetAllFieldTypes()
+	fieldTypesByCategory := core.GetFieldTypesByCategory()
+
+	// Determine action URL and title
+	actionURL := typeBase + "/fields/create"
+	pageTitle := "Add Field"
+	pageDesc := fmt.Sprintf("Configure a new field for %s", contentType.Name)
+	submitText := "Add Field"
+	if isEdit && field != nil {
+		actionURL = typeBase + "/fields/" + field.Slug + "/update"
+		pageTitle = "Edit Field"
+		pageDesc = fmt.Sprintf("Update %s field configuration", field.Name)
+		submitText = "Save Changes"
+	}
+
+	// Build content types options for relations
+	contentTypeOptions := make([]selectOption, 0, len(allContentTypes)+1)
+	contentTypeOptions = append(contentTypeOptions, selectOption{Value: "", Label: "Select content type..."})
+	for _, ct := range allContentTypes {
+		if ct.ID != contentType.ID {
+			contentTypeOptions = append(contentTypeOptions, selectOption{Value: ct.Slug, Label: ct.Name})
+		}
+	}
 
 	return Div(
-		Class("space-y-6 max-w-2xl"),
+		Class("space-y-6 max-w-4xl mx-auto"),
 
 		// Breadcrumbs
 		Breadcrumbs(
 			BreadcrumbItem{Label: "Content", Href: appBase + "/cms"},
 			BreadcrumbItem{Label: contentType.Name, Href: typeBase},
-			BreadcrumbItem{Label: "Add Field", Href: ""},
+			BreadcrumbItem{Label: pageTitle, Href: ""},
 		),
 
-		// Header
-		PageHeader(
-			"Add Field",
-			fmt.Sprintf("Add a new field to %s", contentType.Name),
+		// Header with icon
+		Div(
+			Class("flex items-center gap-4"),
+			Div(
+				Class("p-3 bg-violet-100 dark:bg-violet-900/30 rounded-xl"),
+				g.If(isEdit, lucide.Pencil(Class("size-6 text-violet-600 dark:text-violet-400"))),
+				g.If(!isEdit, lucide.Plus(Class("size-6 text-violet-600 dark:text-violet-400"))),
+			),
+			Div(
+				H1(Class("text-2xl font-semibold text-gray-900 dark:text-white"), g.Text(pageTitle)),
+				P(Class("text-sm text-gray-500 dark:text-gray-400"), g.Text(pageDesc)),
+			),
 		),
+
+		// Error message
+		g.If(err != "", func() g.Node {
+			return Div(
+				Class("p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 flex items-center gap-3"),
+				lucide.CircleAlert(Class("size-5 flex-shrink-0")),
+				g.Text(err),
+			)
+		}()),
 
 		// Form
-		Card(
-			Div(
-				Class("p-6"),
-				g.If(err != "", func() g.Node {
-					return Div(
-						Class("mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"),
-						g.Text(err),
-					)
-				}()),
+		FormEl(
+			Method("POST"),
+			Action(actionURL),
+			g.Attr("x-data", fieldBuilderAlpineData(field)),
 
-				FormEl(
-					Method("POST"),
-					Action(typeBase+"/fields/create"),
+			// Main content grid
+			Div(
+				Class("grid grid-cols-1 lg:grid-cols-3 gap-6"),
+
+				// Left column - Main settings
+				Div(
+					Class("lg:col-span-2 space-y-6"),
+
+					// Basic Info Card
+					Div(
+						Class("bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 overflow-hidden"),
+						Div(
+							Class("px-5 py-4 border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800"),
+							H3(Class("text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"),
+								lucide.Settings2(Class("size-4 text-gray-500")),
+								g.Text("Basic Information"),
+							),
+						),
+						Div(
+							Class("p-5 space-y-5"),
+
+							// Name & Slug row
+							Div(
+								Class("grid grid-cols-1 md:grid-cols-2 gap-4"),
+								fieldInput("name", "Field Name", "text", "e.g., Title, Author", true, "name", "@input", "updateSlug()"),
+								fieldInput("slug", "API Identifier", "text", "e.g., title, author", true, "slug", "@input", "slugManuallyEdited = true"),
+							),
+
+							// Type selector with icons
+							Div(
+								Label(
+									For("type"),
+									Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"),
+									g.Text("Field Type"),
+									Span(Class("text-red-500 ml-1"), g.Text("*")),
+								),
+								Select(
+									ID("type"),
+									Name("type"),
+									Required(),
+									g.Attr("x-model", "type"),
+									Class("block w-full px-4 py-3 text-sm border border-gray-200 rounded-xl bg-white dark:bg-neutral-800 dark:border-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"),
+									Option(Value(""), g.Text("Select a field type...")),
+									g.Group(func() []g.Node {
+										categories := []string{"text", "number", "date", "selection", "relation", "media", "advanced"}
+										categoryNames := map[string]string{
+											"text": "📝 Text Fields", "number": "🔢 Number Fields", "date": "📅 Date & Time",
+											"selection": "☑️ Selection Fields", "relation": "🔗 Relations", "media": "🖼️ Media", "advanced": "⚙️ Advanced",
+										}
+										var groups []g.Node
+										for _, cat := range categories {
+											types, ok := fieldTypesByCategory[cat]
+											if !ok || len(types) == 0 {
+												continue
+											}
+											options := make([]g.Node, len(types))
+											for i, ft := range types {
+												options[i] = Option(Value(ft.Type.String()), g.Text(ft.Name))
+											}
+											groups = append(groups, OptGroup(g.Attr("label", categoryNames[cat]), g.Group(options)))
+										}
+										return groups
+									}()),
+								),
+								// Type description
+								Div(
+									g.Attr("x-show", "type !== ''"),
+									g.Attr("x-transition", ""),
+									Class("mt-2 text-xs text-gray-500 dark:text-gray-400"),
+									g.Attr("x-text", "getTypeDescription()"),
+								),
+							),
+
+							// Description
+							Div(
+								Label(For("description"), Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"), g.Text("Description")),
+								Textarea(
+									ID("description"), Name("description"), Rows("2"),
+									Placeholder("Help text for content editors..."),
+									Class("block w-full px-4 py-3 text-sm border border-gray-200 rounded-xl bg-white dark:bg-neutral-800 dark:border-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all resize-none"),
+								),
+							),
+						),
+					),
+
+					// Type-specific configuration card
+					Div(
+						g.Attr("x-show", "type !== ''"),
+						g.Attr("x-transition:enter", "transition ease-out duration-200"),
+						g.Attr("x-transition:enter-start", "opacity-0 translate-y-2"),
+						g.Attr("x-transition:enter-end", "opacity-100 translate-y-0"),
+						Class("bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 overflow-hidden"),
+						Div(
+							Class("px-5 py-4 border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800"),
+							H3(Class("text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"),
+								lucide.SlidersHorizontal(Class("size-4 text-gray-500")),
+								g.Text("Field Configuration"),
+							),
+						),
+						Div(
+							Class("p-5"),
+
+							// Text type options
+							Div(
+								g.Attr("x-show", "isTextType()"),
+								Class("space-y-5"),
+								Div(
+									Class("grid grid-cols-1 md:grid-cols-2 gap-4"),
+									fieldInput("options.default", "Default Value", "text", "Enter default text", false, "", "", ""),
+									fieldInput("options.regex", "Validation Pattern", "text", "e.g., ^[A-Za-z]+$", false, "", "", ""),
+								),
+								Div(
+									Class("grid grid-cols-2 gap-4"),
+									numberInputPreline("options.minLength", "Min Length", 0, 10000, 0),
+									numberInputPreline("options.maxLength", "Max Length", 0, 10000, 0),
+								),
+								// Rich text specific
+								Div(
+									g.Attr("x-show", "type === 'richText' || type === 'markdown'"),
+									Class("grid grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-neutral-800"),
+									numberInputPreline("options.maxWords", "Max Words", 0, 100000, 0),
+									switchField("options.allowHtml", "Allow Raw HTML"),
+								),
+							),
+
+							// Number type options
+							Div(
+								g.Attr("x-show", "isNumberType()"),
+								Class("space-y-5"),
+								Div(
+									Class("grid grid-cols-2 md:grid-cols-4 gap-4"),
+									numberInputPreline("options.min", "Minimum", -1000000, 1000000, 0),
+									numberInputPreline("options.max", "Maximum", -1000000, 1000000, 0),
+									numberInputPreline("options.step", "Step", 0, 1000, 1),
+									fieldInput("options.defaultNumber", "Default", "number", "0", false, "", "", ""),
+								),
+								Div(
+									g.Attr("x-show", "type === 'decimal'"),
+									Class("grid grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-neutral-800"),
+									numberInputPreline("options.precision", "Precision", 0, 20, 2),
+									numberInputPreline("options.scale", "Scale", 0, 10, 2),
+								),
+							),
+
+							// Date type options
+							Div(
+								g.Attr("x-show", "isDateType()"),
+								Class("space-y-5"),
+								Div(
+									Class("grid grid-cols-1 md:grid-cols-2 gap-4"),
+									fieldInput("options.minDate", "Minimum Date", "date", "", false, "", "", ""),
+									fieldInput("options.maxDate", "Maximum Date", "date", "", false, "", "", ""),
+								),
+								Div(
+									Class("grid grid-cols-1 md:grid-cols-2 gap-4"),
+									selectField("options.dateFormat", "Display Format", []selectOption{
+										{Value: "", Label: "Default"},
+										{Value: "YYYY-MM-DD", Label: "2024-01-15"},
+										{Value: "DD/MM/YYYY", Label: "15/01/2024"},
+										{Value: "MM/DD/YYYY", Label: "01/15/2024"},
+										{Value: "MMMM D, YYYY", Label: "January 15, 2024"},
+									}),
+									switchField("options.includeTime", "Include Time"),
+								),
+							),
+
+							// Selection type options (enum builder) - using raw HTML for Alpine template
+							Div(
+								g.Attr("x-show", "isSelectionType()"),
+								Class("space-y-4"),
+								Div(
+									Class("flex items-center justify-between"),
+									Label(Class("text-sm font-medium text-gray-700 dark:text-gray-300"), g.Text("Options")),
+									Span(Class("text-xs text-gray-400"), g.Attr("x-text", "enumOptions.length + ' option(s)'")),
+								),
+								// Options list with Alpine template
+								g.Raw(`<div class="space-y-2 max-h-64 overflow-y-auto pr-2">
+									<template x-for="(option, index) in enumOptions" :key="index">
+										<div class="group flex gap-2 items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-violet-300 dark:hover:border-violet-700 transition-colors">
+											<div class="text-gray-400 cursor-move">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+											</div>
+											<div class="flex-1">
+												<input type="text" x-model="option.label" :name="'options.enum[' + index + '].label'" placeholder="Display label" class="w-full px-3 py-2 text-sm bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent">
+											</div>
+											<div class="flex-1">
+												<input type="text" x-model="option.value" :name="'options.enum[' + index + '].value'" placeholder="API value" @input="if (!option.value && option.label) option.value = option.label.toLowerCase().replace(/\s+/g, '_')" class="w-full px-3 py-2 text-sm bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono">
+											</div>
+											<button type="button" @click="removeOption(index)" :disabled="enumOptions.length <= 1" class="p-2 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+											</button>
+										</div>
+									</template>
+								</div>`),
+								// Add option button
+								Button(
+									Type("button"),
+									g.Attr("@click", "addOption()"),
+									Class("w-full py-2.5 border-2 border-dashed border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:border-violet-400 hover:text-violet-600 dark:hover:border-violet-500 dark:hover:text-violet-400 transition-colors flex items-center justify-center gap-2"),
+									lucide.Plus(Class("size-4")),
+									g.Text("Add Option"),
+								),
+								// Default value for selection
+								Div(
+									Class("pt-4 border-t border-gray-100 dark:border-neutral-800"),
+									fieldInput("options.defaultEnum", "Default Value", "text", "Enter default option value", false, "", "", ""),
+								),
+							),
+
+							// Relation type options with builder
+							Div(
+								g.Attr("x-show", "isRelationType()"),
+								Class("space-y-5"),
+								// Related type selector
+								selectField("options.relatedType", "Related Content Type", contentTypeOptions),
+								// Relation type visual selector
+								Div(
+									Label(Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"), g.Text("Relation Type")),
+									g.Raw(`<div class="grid grid-cols-2 gap-3">
+										<label class="relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all" :class="relationType === 'oneToOne' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300'">
+											<input type="radio" name="options.relationType" value="oneToOne" x-model="relationType" class="sr-only">
+											<div class="flex items-center gap-2 mb-2">
+												<div class="w-3 h-3 bg-violet-500 rounded-full"></div>
+												<div class="w-8 h-0.5 bg-gray-300"></div>
+												<div class="w-3 h-3 bg-violet-500 rounded-full"></div>
+											</div>
+											<span class="text-sm font-medium text-gray-900 dark:text-white">One to One</span>
+											<span class="text-xs text-gray-500">1 → 1</span>
+										</label>
+										<label class="relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all" :class="relationType === 'oneToMany' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300'">
+											<input type="radio" name="options.relationType" value="oneToMany" x-model="relationType" class="sr-only">
+											<div class="flex items-center gap-2 mb-2">
+												<div class="w-3 h-3 bg-violet-500 rounded-full"></div>
+												<div class="w-8 h-0.5 bg-gray-300"></div>
+												<div class="flex flex-col gap-0.5">
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+												</div>
+											</div>
+											<span class="text-sm font-medium text-gray-900 dark:text-white">One to Many</span>
+											<span class="text-xs text-gray-500">1 → N</span>
+										</label>
+										<label class="relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all" :class="relationType === 'manyToOne' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300'">
+											<input type="radio" name="options.relationType" value="manyToOne" x-model="relationType" class="sr-only">
+											<div class="flex items-center gap-2 mb-2">
+												<div class="flex flex-col gap-0.5">
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+												</div>
+												<div class="w-8 h-0.5 bg-gray-300"></div>
+												<div class="w-3 h-3 bg-violet-500 rounded-full"></div>
+											</div>
+											<span class="text-sm font-medium text-gray-900 dark:text-white">Many to One</span>
+											<span class="text-xs text-gray-500">N → 1</span>
+										</label>
+										<label class="relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all" :class="relationType === 'manyToMany' ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300'">
+											<input type="radio" name="options.relationType" value="manyToMany" x-model="relationType" class="sr-only">
+											<div class="flex items-center gap-2 mb-2">
+												<div class="flex flex-col gap-0.5">
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+												</div>
+												<div class="w-8 h-0.5 bg-gray-300"></div>
+												<div class="flex flex-col gap-0.5">
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+													<div class="w-2 h-2 bg-violet-500 rounded-full"></div>
+												</div>
+											</div>
+											<span class="text-sm font-medium text-gray-900 dark:text-white">Many to Many</span>
+											<span class="text-xs text-gray-500">N → N</span>
+										</label>
+									</div>`),
+								),
+								// Additional relation options
+								Div(
+									Class("grid grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-neutral-800"),
+									selectField("options.onDelete", "On Delete", []selectOption{
+										{Value: "restrict", Label: "Restrict (prevent delete)"},
+										{Value: "cascade", Label: "Cascade (delete related)"},
+										{Value: "setNull", Label: "Set Null (clear reference)"},
+									}),
+									fieldInput("options.inverseField", "Inverse Field Name", "text", "e.g., author_posts", false, "", "", ""),
+								),
+								// Relation display options
+								Div(
+									Class("grid grid-cols-2 gap-4"),
+									fieldInput("options.displayField", "Display Field", "text", "e.g., title, name", false, "", "", ""),
+									switchField("options.allowCreate", "Allow Creating New"),
+								),
+							),
+
+							// Media type options
+							Div(
+								g.Attr("x-show", "isMediaType()"),
+								Class("space-y-5"),
+								selectField("options.mediaType", "Allowed Media", []selectOption{
+									{Value: "any", Label: "Any file type"},
+									{Value: "image", Label: "Images only"},
+									{Value: "video", Label: "Videos only"},
+									{Value: "audio", Label: "Audio only"},
+									{Value: "document", Label: "Documents only"},
+								}),
+								Div(
+									Class("grid grid-cols-2 gap-4"),
+									numberInputPreline("options.maxFileSize", "Max Size (MB)", 1, 1000, 10),
+									numberInputPreline("options.maxFiles", "Max Files", 1, 100, 1),
+								),
+								fieldInput("options.allowedMimeTypes", "Allowed MIME Types", "text", "e.g., image/png, image/jpeg", false, "", "", ""),
+							),
+
+							// Slug type options
+							Div(
+								g.Attr("x-show", "type === 'slug'"),
+								Class("space-y-4"),
+								fieldInput("options.sourceField", "Generate From", "text", "e.g., title", false, "", "", ""),
+								P(Class("text-xs text-gray-500"), g.Text("Auto-generate slug from another field")),
+							),
+
+							// Boolean type options
+							Div(
+								g.Attr("x-show", "type === 'boolean'"),
+								Class("space-y-4"),
+								selectField("options.defaultBool", "Default Value", []selectOption{
+									{Value: "", Label: "No default"},
+									{Value: "true", Label: "True"},
+									{Value: "false", Label: "False"},
+								}),
+								Div(
+									Class("grid grid-cols-2 gap-4"),
+									fieldInput("options.trueLabel", "True Label", "text", "Yes", false, "", "", ""),
+									fieldInput("options.falseLabel", "False Label", "text", "No", false, "", "", ""),
+								),
+							),
+
+							// JSON type options
+							Div(
+								g.Attr("x-show", "type === 'json'"),
+								Class("space-y-4"),
+								Div(
+									Label(For("options.schema"), Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"), g.Text("JSON Schema (optional)")),
+									Textarea(
+										ID("options.schema"), Name("options.schema"), Rows("4"),
+										Placeholder(`{"type": "object", "properties": {...}}`),
+										Class("block w-full px-4 py-3 text-sm font-mono border border-gray-200 rounded-xl bg-white dark:bg-neutral-800 dark:border-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all resize-none"),
+									),
+								),
+							),
+
+							// Color type options
+							Div(
+								g.Attr("x-show", "type === 'color'"),
+								Class("space-y-4"),
+								selectField("options.colorFormat", "Color Format", []selectOption{
+									{Value: "hex", Label: "HEX (#ffffff)"},
+									{Value: "rgb", Label: "RGB (255, 255, 255)"},
+									{Value: "rgba", Label: "RGBA (255, 255, 255, 1)"},
+									{Value: "hsl", Label: "HSL (0, 0%, 100%)"},
+								}),
+								fieldInput("options.defaultColor", "Default Color", "color", "", false, "", "", ""),
+							),
+						),
+					),
+				),
+
+				// Right column - Settings sidebar
+				Div(
 					Class("space-y-6"),
 
-					// Name
-					formField("name", "Name", "text", "", "e.g., Title, Content, Author", true, "Human-readable field name"),
-
-					// Slug
-					formField("slug", "Slug", "text", "", "e.g., title, content, author", true, "Machine-readable identifier. Use lowercase letters, numbers, and underscores."),
-
-					// Type
+					// Validation card
 					Div(
-						Label(
-							For("type"),
-							Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-							g.Text("Type"),
-							Span(Class("text-red-500 ml-1"), g.Text("*")),
+						Class("bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 overflow-hidden"),
+						Div(
+							Class("px-5 py-4 border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800"),
+							H3(Class("text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"),
+								lucide.Shield(Class("size-4 text-gray-500")),
+								g.Text("Validation"),
+							),
 						),
-						Select(
-							ID("type"),
-							Name("type"),
-							Required(),
-							Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
-							Option(Value(""), g.Text("Select a field type...")),
-							g.Group(func() []g.Node {
-								opts := make([]g.Node, len(fieldTypes))
-								for i, ft := range fieldTypes {
-									opts[i] = Option(
-										Value(ft.Type.String()),
-										g.Text(fmt.Sprintf("%s - %s", ft.Name, ft.Description)),
-									)
-								}
-								return opts
-							}()),
+						Div(
+							Class("p-5 space-y-4"),
+							toggleOption("required", "Required", "Field must have a value", "text-red-500"),
+							toggleOption("unique", "Unique", "Values must be unique", "text-amber-500"),
 						),
 					),
 
-					// Description
+					// Indexing card
 					Div(
-						Label(
-							For("description"),
-							Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-							g.Text("Description"),
+						Class("bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 overflow-hidden"),
+						Div(
+							Class("px-5 py-4 border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800"),
+							H3(Class("text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"),
+								lucide.Search(Class("size-4 text-gray-500")),
+								g.Text("Search & Index"),
+							),
 						),
-						Textarea(
-							ID("description"),
-							Name("description"),
-							Rows("2"),
-							Placeholder("Optional description for this field..."),
-							Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						Div(
+							Class("p-5 space-y-4"),
+							toggleOption("indexed", "Database Index", "Faster queries on this field", "text-blue-500"),
+							toggleOption("searchable", "Full-text Search", "Include in search results", "text-green-500"),
 						),
 					),
 
-					// Options
+					// Advanced card
 					Div(
-						Class("grid grid-cols-2 gap-4"),
-						checkboxField("required", "Required", "This field must have a value"),
-						checkboxField("unique", "Unique", "Values must be unique across entries"),
-						checkboxField("indexed", "Indexed", "Enable fast searching on this field"),
-						checkboxField("localized", "Localized", "Support multiple language versions"),
-					),
-
-					// Submit buttons
-					Div(
-						Class("flex items-center gap-4 pt-4"),
-						Button(
-							Type("submit"),
-							Class("px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"),
-							g.Text("Add Field"),
+						Class("bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 overflow-hidden"),
+						Div(
+							Class("px-5 py-4 border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800"),
+							H3(Class("text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"),
+								lucide.Settings(Class("size-4 text-gray-500")),
+								g.Text("Advanced"),
+							),
 						),
-						A(
-							Href(typeBase),
-							Class("px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
-							g.Text("Cancel"),
+						Div(
+							Class("p-5 space-y-4"),
+							toggleOption("localized", "Localization", "Multiple language versions", "text-purple-500"),
+							toggleOption("hidden", "Hidden", "Hide from API responses", "text-gray-500"),
+							toggleOption("readOnly", "Read Only", "Cannot be modified via API", "text-orange-500"),
 						),
 					),
 				),
 			),
+
+			// Submit footer
+			Div(
+				Class("flex items-center justify-between pt-6 mt-6 border-t border-gray-200 dark:border-neutral-700"),
+				A(
+					Href(typeBase),
+					Class("px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"),
+					g.Text("Cancel"),
+				),
+				Button(
+					Type("submit"),
+					Class("px-6 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 focus:ring-4 focus:ring-violet-200 dark:focus:ring-violet-800 transition-all flex items-center gap-2"),
+					g.If(isEdit, lucide.Check(Class("size-4"))),
+					g.If(!isEdit, lucide.Plus(Class("size-4"))),
+					g.Text(submitText),
+				),
+			),
 		),
+	)
+}
+
+// fieldBuilderAlpineData returns the Alpine.js data for the field builder
+func fieldBuilderAlpineData(field *core.ContentFieldDTO) string {
+	// Default values
+	name := ""
+	slug := ""
+	fieldType := ""
+	relationType := "oneToMany"
+	enumOptionsJSON := "[{label: '', value: ''}]"
+	slugManuallyEdited := "false"
+
+	// Populate from existing field if editing
+	if field != nil {
+		name = field.Name
+		slug = field.Slug
+		fieldType = field.Type
+		slugManuallyEdited = "true"
+
+		// Extract enum options if present
+		if len(field.Options.Choices) > 0 {
+			var opts []string
+			for _, c := range field.Options.Choices {
+				opts = append(opts, fmt.Sprintf("{label: '%s', value: '%s'}", c.Label, c.Value))
+			}
+			if len(opts) > 0 {
+				enumOptionsJSON = "[" + opts[0]
+				for i := 1; i < len(opts); i++ {
+					enumOptionsJSON += ", " + opts[i]
+				}
+				enumOptionsJSON += "]"
+			}
+		}
+
+		// Extract relation type if present
+		if field.Options.RelationType != "" {
+			relationType = field.Options.RelationType
+		}
+	}
+
+	return fmt.Sprintf(`{
+		name: '%s',
+		slug: '%s',
+		type: '%s',
+		relationType: '%s',
+		slugManuallyEdited: %s,
+		enumOptions: %s,
+		
+		generateSlug(name) {
+			return name.toLowerCase().trim()
+				.replace(/[^\w\s-]/g, '')
+				.replace(/[\s_-]+/g, '_')
+				.replace(/^_+|_+$/g, '');
+		},
+		updateSlug() {
+			if (!this.slugManuallyEdited) {
+				this.slug = this.generateSlug(this.name);
+			}
+		},
+		addOption() {
+			this.enumOptions.push({label: '', value: ''});
+		},
+		removeOption(index) {
+			if (this.enumOptions.length > 1) {
+				this.enumOptions.splice(index, 1);
+			}
+		},
+		getTypeDescription() {
+			const descriptions = {
+				'text': 'Short text up to 255 characters',
+				'textarea': 'Multi-line text without formatting',
+				'richText': 'Formatted text with HTML support',
+				'markdown': 'Text with Markdown formatting',
+				'number': 'Any numeric value (integer or decimal)',
+				'integer': 'Whole numbers only',
+				'float': 'Decimal numbers',
+				'decimal': 'Precise decimal with fixed precision',
+				'bigInteger': 'Very large whole numbers',
+				'boolean': 'True/false toggle',
+				'date': 'Date without time',
+				'datetime': 'Date with time',
+				'time': 'Time only',
+				'email': 'Email address with validation',
+				'url': 'Web URL with validation',
+				'phone': 'Phone number',
+				'slug': 'URL-friendly identifier',
+				'uuid': 'Unique identifier (UUID v4)',
+				'color': 'Color picker',
+				'password': 'Encrypted password field',
+				'json': 'Arbitrary JSON data',
+				'select': 'Single choice from options',
+				'multiSelect': 'Multiple choices from options',
+				'enumeration': 'Predefined set of values',
+				'relation': 'Reference to another content type',
+				'media': 'File or image upload'
+			};
+			return descriptions[this.type] || '';
+		},
+		isTextType() {
+			return ['text', 'textarea', 'richText', 'markdown', 'email', 'url', 'phone', 'slug', 'password'].includes(this.type);
+		},
+		isNumberType() {
+			return ['number', 'integer', 'float', 'decimal', 'bigInteger'].includes(this.type);
+		},
+		isDateType() {
+			return ['date', 'datetime', 'time'].includes(this.type);
+		},
+		isSelectionType() {
+			return ['select', 'multiSelect', 'enumeration'].includes(this.type);
+		},
+		isRelationType() {
+			return ['relation'].includes(this.type);
+		},
+		isMediaType() {
+			return ['media'].includes(this.type);
+		}
+	}`, name, slug, fieldType, relationType, slugManuallyEdited, enumOptionsJSON)
+}
+
+// fieldInput creates a styled input field with optional Alpine bindings
+func fieldInput(name, label, inputType, placeholder string, required bool, xModel, eventName, eventHandler string) g.Node {
+	return Div(
+		Label(
+			For(name),
+			Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"),
+			g.Text(label),
+			g.If(required, Span(Class("text-red-500 ml-1"), g.Text("*"))),
+		),
+		Input(
+			Type(inputType),
+			ID(name),
+			Name(name),
+			Placeholder(placeholder),
+			g.If(required, Required()),
+			g.If(xModel != "", g.Attr("x-model", xModel)),
+			g.If(eventName != "", g.Attr(eventName, eventHandler)),
+			Class("block w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-white dark:bg-neutral-800 dark:border-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"),
+		),
+	)
+}
+
+// numberInputPreline creates a Preline-styled number input with increment/decrement
+func numberInputPreline(name, label string, min, max, defaultVal int) g.Node {
+	return Div(
+		Label(
+			For(name),
+			Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"),
+			g.Text(label),
+		),
+		Div(
+			Class("py-2 px-3 bg-white border border-gray-200 rounded-xl dark:bg-neutral-800 dark:border-neutral-700"),
+			g.Attr("data-hs-input-number", fmt.Sprintf(`{"min": %d, "max": %d}`, min, max)),
+			Div(
+				Class("flex items-center gap-x-1.5"),
+				Button(
+					Type("button"),
+					Class("size-7 inline-flex justify-center items-center text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 transition-all"),
+					g.Attr("data-hs-input-number-decrement", ""),
+					g.Attr("aria-label", "Decrease"),
+					lucide.Minus(Class("size-3.5")),
+				),
+				Input(
+					Type("text"),
+					ID(name),
+					Name(name),
+					Class("p-0 w-12 bg-transparent border-0 text-gray-800 text-center text-sm focus:ring-0 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"),
+					Value(fmt.Sprintf("%d", defaultVal)),
+					g.Attr("data-hs-input-number-input", ""),
+				),
+				Button(
+					Type("button"),
+					Class("size-7 inline-flex justify-center items-center text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 transition-all"),
+					g.Attr("data-hs-input-number-increment", ""),
+					g.Attr("aria-label", "Increase"),
+					lucide.Plus(Class("size-3.5")),
+				),
+			),
+		),
+	)
+}
+
+// selectOption represents an option for select fields
+type selectOption struct {
+	Value string
+	Label string
+}
+
+// selectField creates a styled select dropdown
+func selectField(name, label string, options []selectOption) g.Node {
+	return Div(
+		Label(
+			For(name),
+			Class("block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"),
+			g.Text(label),
+		),
+		Select(
+			ID(name),
+			Name(name),
+			Class("block w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-white dark:bg-neutral-800 dark:border-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"),
+			g.Group(func() []g.Node {
+				opts := make([]g.Node, len(options))
+				for i, opt := range options {
+					opts[i] = Option(Value(opt.Value), g.Text(opt.Label))
+				}
+				return opts
+			}()),
+		),
+	)
+}
+
+// switchField creates a toggle switch
+func switchField(name, label string) g.Node {
+	return Div(
+		Class("flex items-center justify-between"),
+		Label(For(name), Class("text-sm text-gray-700 dark:text-gray-300"), g.Text(label)),
+		Div(
+			Class("relative"),
+			Input(
+				Type("checkbox"),
+				ID(name),
+				Name(name),
+				Value("true"),
+				Class("sr-only peer"),
+			),
+			Label(
+				For(name),
+				Class("relative w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-violet-100 dark:peer-focus:ring-violet-800 rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-neutral-600 peer-checked:bg-violet-600 cursor-pointer"),
+			),
+		),
+	)
+}
+
+// toggleOption creates a toggle option for the sidebar
+func toggleOption(name, label, description, iconColor string) g.Node {
+	return Div(
+		Class("flex items-start gap-3"),
+		Div(
+			Class("flex items-center h-5"),
+			Input(
+				Type("checkbox"),
+				ID(name),
+				Name(name),
+				Value("true"),
+				Class("w-4 h-4 text-violet-600 bg-gray-100 border-gray-300 rounded focus:ring-violet-500 dark:focus:ring-violet-600 dark:ring-offset-neutral-800 focus:ring-2 dark:bg-neutral-700 dark:border-neutral-600"),
+			),
+		),
+		Label(
+			For(name),
+			Class("flex-1 cursor-pointer"),
+			Div(Class("text-sm font-medium text-gray-900 dark:text-white"), g.Text(label)),
+			Div(Class("text-xs text-gray-500 dark:text-gray-400"), g.Text(description)),
+		),
+	)
+}
+
+// inputNumber creates a numeric input with increment/decrement buttons (Preline style)
+func inputNumber(name, label string, min, max, step int, help string) g.Node {
+	return Div(
+		Label(
+			For(name),
+			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
+			g.Text(label),
+		),
+		Div(
+			Class("py-2 px-3 inline-block bg-white border border-gray-200 rounded-lg dark:bg-neutral-900 dark:border-neutral-700"),
+			g.Attr("data-hs-input-number", ""),
+			Div(
+				Class("flex items-center gap-x-1.5"),
+				Button(
+					Type("button"),
+					Class("size-6 inline-flex justify-center items-center gap-x-2 text-sm font-medium rounded-md border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-800"),
+					g.Attr("data-hs-input-number-decrement", ""),
+					lucide.Minus(Class("size-3.5")),
+				),
+				Input(
+					Type("text"),
+					Class("p-0 w-full bg-transparent border-0 text-gray-800 text-center focus:ring-0 dark:text-white"),
+					Name(name),
+					Value("0"),
+					g.Attr("data-hs-input-number-input", ""),
+				),
+				Button(
+					Type("button"),
+					Class("size-6 inline-flex justify-center items-center gap-x-2 text-sm font-medium rounded-md border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-800"),
+					g.Attr("data-hs-input-number-increment", ""),
+					lucide.Plus(Class("size-3.5")),
+				),
+			),
+		),
+		g.If(help != "", func() g.Node {
+			return P(
+				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text(help),
+			)
+		}()),
 	)
 }
 

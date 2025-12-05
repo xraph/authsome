@@ -194,6 +194,21 @@ func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature 
 	return nil, ErrNotImplemented
 }
 
+// ListProducts lists all products from PayPal
+func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, error) {
+	return nil, ErrNotImplemented
+}
+
+// GetProduct retrieves a single product from PayPal
+func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.ProviderProduct, error) {
+	return nil, ErrNotImplemented
+}
+
+// ListPrices lists all prices for a product from PayPal
+func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.ProviderPrice, error) {
+	return nil, ErrNotImplemented
+}
+
 // VerifyWebhookSignature verifies a PayPal webhook signature
 func (p *Provider) VerifyWebhookSignature(ctx context.Context, webhookID string, headers map[string]string, payload []byte) (bool, error) {
 	// PayPal requires an API call to verify webhook signatures

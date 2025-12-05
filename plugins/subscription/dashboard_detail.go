@@ -86,7 +86,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 						),
 					),
 				),
-				// Re-sync button (when already synced)
+				// Re-sync button (when already synced) - pushes to provider
 				g.If(plan.ProviderPlanID != "" && plan.ProviderPriceID != "",
 					Form(
 						Method("POST"),
@@ -95,8 +95,22 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 						Button(
 							Type("submit"),
 							Class("inline-flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/20"),
-							lucide.RefreshCw(Class("size-4")),
-							g.Text("Re-sync"),
+							lucide.CloudUpload(Class("size-4")),
+							g.Text("Push to Stripe"),
+						),
+					),
+				),
+				// Pull from provider button (when already synced) - pulls from provider
+				g.If(plan.ProviderPlanID != "",
+					Form(
+						Method("POST"),
+						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync-from-provider"),
+						Class("inline"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg border border-green-300 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20"),
+							lucide.CloudDownload(Class("size-4")),
+							g.Text("Pull from Stripe"),
 						),
 					),
 				),

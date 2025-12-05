@@ -179,10 +179,26 @@ func (s *ContentEntryService) List(ctx context.Context, contentTypeID xid.ID, qu
 	if len(query.Filters) > 0 {
 		repoQuery.Filters = make(map[string]repository.FilterCondition)
 		for field, value := range query.Filters {
-			// Simple equality filter for now
-			repoQuery.Filters[field] = repository.FilterCondition{
-				Operator: "eq",
-				Value:    value,
+			// Check if value contains operator and value
+			if filterMap, ok := value.(map[string]any); ok {
+				operator := "eq" // default
+				filterValue := value
+				if op, ok := filterMap["operator"].(string); ok {
+					operator = op
+				}
+				if val, ok := filterMap["value"]; ok {
+					filterValue = val
+				}
+				repoQuery.Filters[field] = repository.FilterCondition{
+					Operator: operator,
+					Value:    filterValue,
+				}
+			} else {
+				// Simple equality filter for backwards compatibility
+				repoQuery.Filters[field] = repository.FilterCondition{
+					Operator: "eq",
+					Value:    value,
+				}
 			}
 		}
 	}
@@ -566,4 +582,3 @@ func (s *ContentEntryService) GetStats(ctx context.Context, contentTypeID xid.ID
 		EntriesByStatus:  byStatus,
 	}, nil
 }
-

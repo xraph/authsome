@@ -2,6 +2,7 @@ package cms
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -65,7 +66,8 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 					activePage == "cms-entries" ||
 					activePage == "cms-entry-detail" ||
 					activePage == "cms-entry-create" ||
-					activePage == "cms-entry-edit"
+					activePage == "cms-entry-edit" ||
+					activePage == "cms-components"
 			},
 			RequiresPlugin: "cms",
 		},
@@ -75,6 +77,18 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 // Routes returns dashboard routes
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
+		// CMS Settings Page (in Settings section)
+		{
+			Method:       "GET",
+			Path:         "/settings/cms",
+			Handler:      e.ServeCMSSettings,
+			Name:         "cms.dashboard.settings",
+			Summary:      "CMS Settings",
+			Description:  "Configure CMS settings and content types",
+			Tags:         []string{"Dashboard", "Settings", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
 		// CMS Overview
 		{
 			Method:       "GET",
@@ -135,6 +149,18 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Delete Content Type action
+		{
+			Method:       "POST",
+			Path:         "/cms/types/:typeSlug/delete",
+			Handler:      e.HandleDeleteContentType,
+			Name:         "cms.dashboard.types.delete",
+			Summary:      "Delete Content Type",
+			Description:  "Delete a content type and all its fields",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
 		// Add Field action
 		{
 			Method:       "POST",
@@ -143,6 +169,18 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			Name:         "cms.dashboard.fields.create",
 			Summary:      "Add Field",
 			Description:  "Add a new field to a content type",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Update Field action
+		{
+			Method:       "POST",
+			Path:         "/cms/types/:typeSlug/fields/:fieldSlug/update",
+			Handler:      e.HandleUpdateField,
+			Name:         "cms.dashboard.fields.update",
+			Summary:      "Update Field",
+			Description:  "Update a field in a content type",
 			Tags:         []string{"Dashboard", "CMS"},
 			RequireAuth:  true,
 			RequireAdmin: true,
@@ -231,6 +269,78 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Component Schemas list
+		{
+			Method:       "GET",
+			Path:         "/cms/components",
+			Handler:      e.ServeComponentSchemasList,
+			Name:         "cms.dashboard.components.list",
+			Summary:      "Component Schemas",
+			Description:  "List all component schemas",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Create Component Schema page
+		{
+			Method:       "GET",
+			Path:         "/cms/components/create",
+			Handler:      e.ServeCreateComponentSchema,
+			Name:         "cms.dashboard.components.create",
+			Summary:      "Create Component Schema",
+			Description:  "Create a new component schema",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Create Component Schema action
+		{
+			Method:       "POST",
+			Path:         "/cms/components/create",
+			Handler:      e.HandleCreateComponentSchema,
+			Name:         "cms.dashboard.components.create.submit",
+			Summary:      "Submit Create Component Schema",
+			Description:  "Process component schema creation form",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Component Schema detail/edit
+		{
+			Method:       "GET",
+			Path:         "/cms/components/:componentSlug",
+			Handler:      e.ServeComponentSchemaDetail,
+			Name:         "cms.dashboard.components.detail",
+			Summary:      "Component Schema Detail",
+			Description:  "View/edit component schema",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Update Component Schema action
+		{
+			Method:       "POST",
+			Path:         "/cms/components/:componentSlug",
+			Handler:      e.HandleUpdateComponentSchema,
+			Name:         "cms.dashboard.components.update",
+			Summary:      "Update Component Schema",
+			Description:  "Process component schema update form",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Delete Component Schema action
+		{
+			Method:       "POST",
+			Path:         "/cms/components/:componentSlug/delete",
+			Handler:      e.HandleDeleteComponentSchema,
+			Name:         "cms.dashboard.components.delete",
+			Summary:      "Delete Component Schema",
+			Description:  "Delete a component schema",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
 	}
 }
 
@@ -313,8 +423,10 @@ func (e *DashboardExtension) injectContext(c forge.Context) context.Context {
 	ctx := c.Request().Context()
 
 	// Get app ID from URL
+	var appID xid.ID
 	if appIDStr := c.Param("appId"); appIDStr != "" {
-		if appID, err := xid.FromString(appIDStr); err == nil {
+		if id, err := xid.FromString(appIDStr); err == nil {
+			appID = id
 			ctx = contexts.SetAppID(ctx, appID)
 		}
 	}
@@ -329,6 +441,15 @@ func (e *DashboardExtension) injectContext(c forge.Context) context.Context {
 	// Try to get from existing context
 	if envID, ok := contexts.GetEnvironmentID(c.Request().Context()); ok {
 		ctx = contexts.SetEnvironmentID(ctx, envID)
+	}
+
+	// If no environment ID yet, try to get default environment for the app
+	if _, ok := contexts.GetEnvironmentID(ctx); !ok && !appID.IsNil() {
+		if envSvc := e.plugin.authInst.GetServiceRegistry().EnvironmentService(); envSvc != nil {
+			if defaultEnv, err := envSvc.GetDefaultEnvironment(ctx, appID); err == nil && defaultEnv != nil {
+				ctx = contexts.SetEnvironmentID(ctx, defaultEnv.ID)
+			}
+		}
 	}
 
 	return ctx
@@ -375,6 +496,202 @@ func (e *DashboardExtension) renderCMSWidget(currentApp *app.App) g.Node {
 				Div(
 					Class("text-xs text-slate-500 dark:text-gray-400"),
 					g.Text("Total Entries"),
+				),
+			),
+		),
+	)
+}
+
+// =============================================================================
+// CMS Settings Handler
+// =============================================================================
+
+func (e *DashboardExtension) ServeCMSSettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+
+	// Get content types for stats
+	result, err := e.plugin.contentTypeSvc.List(ctx, &core.ListContentTypesQuery{
+		PageSize: 100,
+	})
+	if err != nil {
+		result = &core.ListContentTypesResponse{ContentTypes: []*core.ContentTypeSummaryDTO{}}
+	}
+
+	// Get stats
+	stats, _ := e.plugin.contentTypeSvc.GetStats(ctx)
+
+	basePath := handler.GetBasePath()
+	content := e.renderCMSSettingsContent(currentApp, basePath, result.ContentTypes, stats)
+
+	// Use the settings layout with sidebar navigation
+	return handler.RenderSettingsPage(c, "cms-settings", content)
+}
+
+// renderCMSSettingsContent renders the CMS settings page content
+func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, basePath string, contentTypes []*core.ContentTypeSummaryDTO, stats *core.CMSStatsDTO) g.Node {
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Build stats display
+	var totalTypes, totalEntries int
+	if stats != nil {
+		totalTypes = stats.TotalContentTypes
+		totalEntries = stats.TotalEntries
+	}
+
+	return Div(
+		Class("space-y-6"),
+
+		// Header
+		Div(
+			H2(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+				g.Text("Content Management")),
+			P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
+				g.Text("Configure CMS settings and manage your content types")),
+		),
+
+		// Stats overview
+		Div(
+			Class("grid gap-4 md:grid-cols-2"),
+
+			// Content Types card
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/20"),
+						lucide.Database(Class("h-5 w-5 text-violet-600 dark:text-violet-400")),
+					),
+					Div(
+						H3(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+							g.Text(fmt.Sprintf("%d", totalTypes))),
+						P(Class("text-sm text-slate-600 dark:text-gray-400"),
+							g.Text("Content Types")),
+					),
+				),
+			),
+
+			// Entries card
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/20"),
+						lucide.FileText(Class("h-5 w-5 text-blue-600 dark:text-blue-400")),
+					),
+					Div(
+						H3(Class("text-2xl font-bold text-slate-900 dark:text-white"),
+							g.Text(fmt.Sprintf("%d", totalEntries))),
+						P(Class("text-sm text-slate-600 dark:text-gray-400"),
+							g.Text("Total Entries")),
+					),
+				),
+			),
+		),
+
+		// Quick actions
+		Div(
+			Class("grid gap-4 md:grid-cols-3"),
+
+			// Manage Content Types
+			A(
+				Href(appBase+"/cms/types"),
+				Class("block p-6 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/20"),
+						lucide.Layers(Class("h-5 w-5 text-violet-600 dark:text-violet-400")),
+					),
+					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						g.Text("Content Types")),
+				),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Define and manage your content schemas")),
+			),
+
+			// Create Content Type
+			A(
+				Href(appBase+"/cms/types/create"),
+				Class("block p-6 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/20"),
+						lucide.Plus(Class("h-5 w-5 text-green-600 dark:text-green-400")),
+					),
+					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						g.Text("New Content Type")),
+				),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("Create a new content type schema")),
+			),
+
+			// CMS Overview
+			A(
+				Href(appBase+"/cms"),
+				Class("block p-6 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center gap-3 mb-2"),
+					Div(
+						Class("flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-900/20"),
+						lucide.LayoutDashboard(Class("h-5 w-5 text-slate-600 dark:text-slate-400")),
+					),
+					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"),
+						g.Text("CMS Overview")),
+				),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"),
+					g.Text("View the full CMS dashboard")),
+			),
+		),
+
+		// Recent content types
+		g.If(len(contentTypes) > 0,
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
+					H3(Class("text-base font-semibold text-slate-900 dark:text-white"),
+						g.Text("Recent Content Types")),
+				),
+				Div(
+					Class("divide-y divide-slate-200 dark:divide-gray-800"),
+					g.Group(g.Map(contentTypes, func(ct *core.ContentTypeSummaryDTO) g.Node {
+						return A(
+							Href(appBase+"/cms/types/"+ct.Slug),
+							Class("flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors"),
+							Div(
+								Class("flex items-center gap-3"),
+								Div(
+									Class("flex h-8 w-8 items-center justify-center rounded bg-slate-100 dark:bg-gray-800"),
+									lucide.FileCode(Class("h-4 w-4 text-slate-600 dark:text-gray-400")),
+								),
+								Div(
+									H4(Class("text-sm font-medium text-slate-900 dark:text-white"),
+										g.Text(ct.Name)),
+									P(Class("text-xs text-slate-500 dark:text-gray-400"),
+										g.Textf("%d entries", ct.EntryCount)),
+								),
+							),
+							lucide.ChevronRight(Class("h-4 w-4 text-slate-400")),
+						)
+					})),
 				),
 			),
 		),
@@ -575,7 +892,20 @@ func (e *DashboardExtension) ServeContentTypeDetail(c forge.Context) error {
 	contentTypeID, _ := xid.FromString(contentType.ID)
 	stats, _ := e.plugin.entrySvc.GetStats(ctx, contentTypeID)
 
-	content := pages.ContentTypeDetailPage(currentApp, basePath, contentType, stats)
+	// Get environment ID from context (set by injectContext)
+	var envIDStr string
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok {
+		envIDStr = envID.String()
+	}
+
+	// Get all content types for relation field dropdown
+	allContentTypes := []*core.ContentTypeSummaryDTO{}
+	ctResult, _ := e.plugin.contentTypeSvc.List(ctx, &core.ListContentTypesQuery{PageSize: 100})
+	if ctResult != nil {
+		allContentTypes = ctResult.ContentTypes
+	}
+
+	content := pages.ContentTypeDetailPage(currentApp, basePath, contentType, stats, envIDStr, allContentTypes)
 
 	pageData := components.PageData{
 		Title:      contentType.Name,
@@ -623,12 +953,74 @@ func (e *DashboardExtension) HandleAddField(c forge.Context) error {
 		Unique:      c.FormValue("unique") == "true",
 		Indexed:     c.FormValue("indexed") == "true",
 		Localized:   c.FormValue("localized") == "true",
+		Options:     e.parseFieldOptions(c),
 	}
 
 	// Create the field
 	_, err = e.plugin.fieldSvc.Create(ctx, contentTypeID, req)
 	if err != nil {
 		// Redirect back with error
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
+	}
+
+	// Redirect back to content type detail
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug)
+}
+
+// HandleUpdateField handles updating a field in a content type
+func (e *DashboardExtension) HandleUpdateField(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	typeSlug := c.Param("typeSlug")
+	fieldSlug := c.Param("fieldSlug")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+	}
+
+	contentTypeID, _ := xid.FromString(contentType.ID)
+
+	// Parse form values for update
+	req := &core.UpdateFieldRequest{
+		Name:        c.FormValue("name"),
+		Description: c.FormValue("description"),
+		Options:     e.parseFieldOptions(c),
+	}
+
+	// Parse boolean fields
+	if c.FormValue("required") != "" {
+		v := c.FormValue("required") == "true"
+		req.Required = &v
+	}
+	if c.FormValue("unique") != "" {
+		v := c.FormValue("unique") == "true"
+		req.Unique = &v
+	}
+	if c.FormValue("indexed") != "" {
+		v := c.FormValue("indexed") == "true"
+		req.Indexed = &v
+	}
+	if c.FormValue("localized") != "" {
+		v := c.FormValue("localized") == "true"
+		req.Localized = &v
+	}
+
+	// Update the field
+	_, err = e.plugin.fieldSvc.UpdateBySlug(ctx, contentTypeID, fieldSlug, req)
+	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
 	}
 
@@ -670,6 +1062,47 @@ func (e *DashboardExtension) HandleDeleteField(c forge.Context) error {
 
 	// Redirect back to content type detail
 	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug)
+}
+
+// HandleDeleteContentType handles deleting a content type
+func (e *DashboardExtension) HandleDeleteContentType(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	typeSlug := c.Param("typeSlug")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get content type to get its ID
+	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+	}
+
+	contentTypeID, _ := xid.FromString(contentType.ID)
+
+	// Check if there are entries - if so, don't allow delete
+	entries, _ := e.plugin.entrySvc.List(ctx, contentTypeID, &core.ListEntriesQuery{PageSize: 1})
+	if entries != nil && entries.TotalItems > 0 {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error=Cannot+delete+content+type+with+existing+entries.+Delete+all+entries+first.")
+	}
+
+	// Delete the content type (this also deletes all fields)
+	err = e.plugin.contentTypeSvc.Delete(ctx, contentTypeID)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
+	}
+
+	// Redirect back to content types list
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?success=Content+type+deleted+successfully")
 }
 
 // =============================================================================
@@ -998,4 +1431,254 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 	}
 
 	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"/entries/"+entryIDStr)
+}
+
+// =============================================================================
+// Component Schema Handlers
+// =============================================================================
+
+func (e *DashboardExtension) ServeComponentSchemasList(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+
+	searchQuery := c.Query("search")
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize := 20
+
+	// Get component schemas
+	result, err := e.plugin.componentSchemaSvc.List(ctx, &core.ListComponentSchemasQuery{
+		Search:   searchQuery,
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		result = &core.ListComponentSchemasResponse{Components: []*core.ComponentSchemaSummaryDTO{}}
+	}
+
+	content := pages.ComponentSchemasPage(currentApp, basePath, result.Components, page, pageSize, result.TotalItems, searchQuery)
+
+	pageData := components.PageData{
+		Title:      "Component Schemas",
+		User:       currentUser,
+		ActivePage: "cms-components",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+func (e *DashboardExtension) ServeCreateComponentSchema(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+	errMsg := c.Query("error")
+
+	content := pages.CreateComponentSchemaPage(currentApp, basePath, errMsg)
+
+	pageData := components.PageData{
+		Title:      "Create Component Schema",
+		User:       currentUser,
+		ActivePage: "cms-components",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+func (e *DashboardExtension) HandleCreateComponentSchema(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Parse nested fields from JSON
+	var fields []core.NestedFieldDefDTO
+	fieldsJSON := c.FormValue("fields")
+	if fieldsJSON != "" {
+		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
+			return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/create?error=Invalid+fields+format")
+		}
+	}
+
+	// Create request
+	req := &core.CreateComponentSchemaRequest{
+		Name:        c.FormValue("name"),
+		Slug:        c.FormValue("slug"),
+		Description: c.FormValue("description"),
+		Icon:        c.FormValue("icon"),
+		Fields:      fields,
+	}
+
+	// Create component schema
+	result, err := e.plugin.componentSchemaSvc.Create(ctx, req)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/create?error="+err.Error())
+	}
+
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+result.Slug)
+}
+
+func (e *DashboardExtension) ServeComponentSchemaDetail(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	componentSlug := c.Param("componentSlug")
+	errMsg := c.Query("error")
+
+	// Get component schema
+	component, err := e.plugin.componentSchemaSvc.GetBySlug(ctx, componentSlug)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Component schema not found")
+	}
+
+	content := pages.EditComponentSchemaPage(currentApp, basePath, component, errMsg)
+
+	pageData := components.PageData{
+		Title:      "Edit " + component.Name,
+		User:       currentUser,
+		ActivePage: "cms-components",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+func (e *DashboardExtension) HandleUpdateComponentSchema(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	componentSlug := c.Param("componentSlug")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get existing component to get its ID
+	component, err := e.plugin.componentSchemaSvc.GetBySlug(ctx, componentSlug)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?error=Component+not+found")
+	}
+
+	componentID, _ := xid.FromString(component.ID)
+
+	// Parse nested fields from JSON
+	var fields []core.NestedFieldDefDTO
+	fieldsJSON := c.FormValue("fields")
+	if fieldsJSON != "" {
+		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
+			return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?error=Invalid+fields+format")
+		}
+	}
+
+	// Create update request
+	req := &core.UpdateComponentSchemaRequest{
+		Name:        c.FormValue("name"),
+		Description: c.FormValue("description"),
+		Icon:        c.FormValue("icon"),
+		Fields:      fields,
+	}
+
+	// Update component schema
+	_, err = e.plugin.componentSchemaSvc.Update(ctx, componentID, req)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?error="+err.Error())
+	}
+
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?success=Component+updated")
+}
+
+func (e *DashboardExtension) HandleDeleteComponentSchema(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	componentSlug := c.Param("componentSlug")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get existing component to get its ID
+	component, err := e.plugin.componentSchemaSvc.GetBySlug(ctx, componentSlug)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?error=Component+not+found")
+	}
+
+	componentID, _ := xid.FromString(component.ID)
+
+	// Delete component schema
+	err = e.plugin.componentSchemaSvc.Delete(ctx, componentID)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?error="+err.Error())
+	}
+
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?success=Component+deleted")
 }

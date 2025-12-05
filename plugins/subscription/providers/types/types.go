@@ -17,9 +17,14 @@ type PaymentProvider interface {
 	UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]interface{}) error
 	DeleteCustomer(ctx context.Context, customerID string) error
 
-	// Product/Price sync
+	// Product/Price sync (push to provider)
 	SyncPlan(ctx context.Context, plan *core.Plan) error
 	SyncAddOn(ctx context.Context, addon *core.AddOn) error
+
+	// Product/Price fetch (pull from provider)
+	ListProducts(ctx context.Context) ([]*ProviderProduct, error)
+	GetProduct(ctx context.Context, productID string) (*ProviderProduct, error)
+	ListPrices(ctx context.Context, productID string) ([]*ProviderPrice, error)
 
 	// Subscription management
 	CreateSubscription(ctx context.Context, customerID string, priceID string, quantity int, trialDays int, metadata map[string]interface{}) (subscriptionID string, err error)
@@ -67,6 +72,32 @@ type ProviderSubscription struct {
 	PriceID            string
 	Quantity           int
 	Metadata           map[string]interface{}
+}
+
+// ProviderProduct represents a product from the payment provider
+type ProviderProduct struct {
+	ID          string
+	Name        string
+	Description string
+	Active      bool
+	Metadata    map[string]string
+}
+
+// ProviderPrice represents a price from the payment provider
+type ProviderPrice struct {
+	ID         string
+	ProductID  string
+	Active     bool
+	Currency   string
+	UnitAmount int64
+	Recurring  *PriceRecurring
+	Metadata   map[string]string
+}
+
+// PriceRecurring represents recurring billing details for a price
+type PriceRecurring struct {
+	Interval      string // month, year, week, day
+	IntervalCount int
 }
 
 // ProviderInvoice represents invoice data from the provider

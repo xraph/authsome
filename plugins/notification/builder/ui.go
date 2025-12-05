@@ -13,6 +13,9 @@ type BuilderUI struct {
 	document   *Document
 	previewURL string
 	saveURL    string
+	backURL    string
+	templateID string
+	autosave   bool
 }
 
 // NewBuilderUI creates a new builder UI instance
@@ -21,6 +24,19 @@ func NewBuilderUI(doc *Document, previewURL, saveURL string) *BuilderUI {
 		document:   doc,
 		previewURL: previewURL,
 		saveURL:    saveURL,
+		autosave:   false,
+	}
+}
+
+// NewBuilderUIWithAutosave creates a new builder UI instance with autosave enabled
+func NewBuilderUIWithAutosave(doc *Document, previewURL, saveURL, backURL, templateID string) *BuilderUI {
+	return &BuilderUI{
+		document:   doc,
+		previewURL: previewURL,
+		saveURL:    saveURL,
+		backURL:    backURL,
+		templateID: templateID,
+		autosave:   true,
 	}
 }
 
@@ -28,9 +44,18 @@ func NewBuilderUI(doc *Document, previewURL, saveURL string) *BuilderUI {
 func (b *BuilderUI) Render() g.Node {
 	docJSON, _ := b.document.ToJSON()
 
+	// Build config object for the builder
+	configJSON := fmt.Sprintf(`{
+		"document": %s,
+		"saveURL": "%s",
+		"backURL": "%s",
+		"templateID": "%s",
+		"autosave": %t
+	}`, docJSON, b.saveURL, b.backURL, b.templateID, b.autosave)
+
 	return Div(
 		Class("email-builder-container"),
-		g.Attr("x-data", fmt.Sprintf(`emailBuilder(%s)`, docJSON)),
+		g.Attr("x-data", fmt.Sprintf(`emailBuilder(%s)`, configJSON)),
 
 		// Prism.js for syntax highlighting (CDN)
 		Link(Rel("stylesheet"), Href("https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css")),
@@ -72,7 +97,41 @@ func (b *BuilderUI) renderToolbar() g.Node {
 		Class("builder-toolbar"),
 		Div(
 			Class("toolbar-left"),
-			H1(Class("toolbar-title"), g.Text("EmailBuilder.js")),
+			// Back button
+			Button(
+				Class("toolbar-icon-btn back-btn"),
+				g.Attr("@click", "goBack()"),
+				Title("Back to templates"),
+				lucide.ArrowLeft(Class("size-4")),
+			),
+			// Save status indicator
+			Div(
+				Class("save-status"),
+				// Saving indicator
+				Span(
+					g.Attr("x-show", "saving"),
+					g.Attr("x-cloak", ""),
+					Class("save-status-text saving"),
+					lucide.RefreshCw(Class("size-3 animate-spin")),
+					g.Text("Saving..."),
+				),
+				// Saved indicator
+				Span(
+					g.Attr("x-show", "!saving && lastSaved"),
+					g.Attr("x-cloak", ""),
+					Class("save-status-text saved"),
+					lucide.Check(Class("size-3")),
+					g.Text("Saved"),
+				),
+				// Error indicator
+				Span(
+					g.Attr("x-show", "saveError"),
+					g.Attr("x-cloak", ""),
+					Class("save-status-text error"),
+					lucide.CircleAlert(Class("size-3")),
+					Span(g.Attr("x-text", "saveError")),
+				),
+			),
 		),
 		Div(
 			Class("toolbar-center"),
@@ -80,24 +139,28 @@ func (b *BuilderUI) renderToolbar() g.Node {
 				Class("toolbar-icon-btn"),
 				g.Attr(":class", "{'active': view === 'design'}"),
 				g.Attr("@click", "view = 'design'"),
+				Title("Design"),
 				lucide.Pencil(Class("size-4")),
 			),
 			Button(
 				Class("toolbar-icon-btn"),
 				g.Attr(":class", "{'active': view === 'preview'}"),
 				g.Attr("@click", "view = 'preview'"),
+				Title("Preview"),
 				lucide.Eye(Class("size-4")),
 			),
 			Button(
 				Class("toolbar-icon-btn"),
 				g.Attr(":class", "{'active': view === 'code'}"),
 				g.Attr("@click", "view = 'code'"),
+				Title("HTML Code"),
 				lucide.Code(Class("size-4")),
 			),
 			Button(
 				Class("toolbar-icon-btn"),
 				g.Attr(":class", "{'active': view === 'json'}"),
 				g.Attr("@click", "view = 'json'"),
+				Title("JSON"),
 				lucide.Braces(Class("size-4")),
 			),
 		),
@@ -110,12 +173,14 @@ func (b *BuilderUI) renderToolbar() g.Node {
 					Class("toolbar-icon-btn"),
 					g.Attr(":class", "{'active': deviceView === 'desktop'}"),
 					g.Attr("@click", "deviceView = 'desktop'"),
+					Title("Desktop view"),
 					lucide.Monitor(Class("size-4")),
 				),
 				Button(
 					Class("toolbar-icon-btn"),
 					g.Attr(":class", "{'active': deviceView === 'mobile'}"),
 					g.Attr("@click", "deviceView = 'mobile'"),
+					Title("Mobile view"),
 					lucide.Smartphone(Class("size-4")),
 				),
 			),
@@ -124,27 +189,27 @@ func (b *BuilderUI) renderToolbar() g.Node {
 				Class("toolbar-icon-btn"),
 				g.Attr("@click", "undo()"),
 				g.Attr(":disabled", "!canUndo"),
+				Title("Undo"),
 				lucide.Undo(Class("size-4")),
 			),
 			Button(
 				Class("toolbar-icon-btn"),
 				g.Attr("@click", "redo()"),
 				g.Attr(":disabled", "!canRedo"),
+				Title("Redo"),
 				lucide.Redo(Class("size-4")),
 			),
 			Button(
 				Class("toolbar-icon-btn"),
 				g.Attr("@click", "downloadHTML()"),
+				Title("Download HTML"),
 				lucide.Download(Class("size-4")),
 			),
 			Button(
 				Class("toolbar-icon-btn"),
 				g.Attr("@click", "uploadJSON()"),
+				Title("Upload JSON"),
 				lucide.Upload(Class("size-4")),
-			),
-			Button(
-				Class("toolbar-icon-btn"),
-				lucide.Share(Class("size-4")),
 			),
 		),
 	)
@@ -163,29 +228,24 @@ func (b *BuilderUI) renderLeftSidebar() g.Node {
 				g.Text("Empty"),
 			),
 			H3(Class("sidebar-section-title"), g.Text("SAMPLE TEMPLATES")),
-			b.renderTemplateNavItem("welcome", "Welcome email"),
-			b.renderTemplateNavItem("otp", "One-time passcode (OTP)"),
-			b.renderTemplateNavItem("reset_password", "Reset password"),
-			b.renderTemplateNavItem("ecommerce", "E-commerce receipt"),
-			b.renderTemplateNavItem("subscription", "Subscription receipt"),
-			b.renderTemplateNavItem("reservation", "Reservation reminder"),
-			b.renderTemplateNavItem("metrics", "Post metrics"),
-			b.renderTemplateNavItem("inquiry", "Respond to inquiry"),
-
-			Div(
-				Class("sidebar-footer"),
-				A(Href("#"), Class("sidebar-link"), g.Text("Learn more")),
-				A(Href("#"), Class("sidebar-link"), g.Text("View on GitHub")),
-			),
+			b.renderTemplateNavItem("welcome", "Welcome Email", "🎉"),
+			b.renderTemplateNavItem("otp", "Verification Code", "🔐"),
+			b.renderTemplateNavItem("reset_password", "Password Reset", "🔑"),
+			b.renderTemplateNavItem("invitation", "Team Invitation", "👥"),
+			b.renderTemplateNavItem("magic_link", "Magic Link", "✨"),
+			b.renderTemplateNavItem("order_confirmation", "Order Confirmation", "🛒"),
+			b.renderTemplateNavItem("newsletter", "Newsletter", "📰"),
+			b.renderTemplateNavItem("account_alert", "Security Alert", "🚨"),
 		),
 	)
 }
 
-func (b *BuilderUI) renderTemplateNavItem(id, label string) g.Node {
+func (b *BuilderUI) renderTemplateNavItem(id, label, icon string) g.Node {
 	return Div(
 		Class("sidebar-nav-item"),
-		g.Attr("@click", fmt.Sprintf("loadTemplate('%s')", id)),
-		g.Text(label),
+		g.Attr("@click", fmt.Sprintf("loadSampleTemplate('%s')", id)),
+		Span(Class("sidebar-nav-icon"), g.Text(icon)),
+		Span(g.Text(label)),
 	)
 }
 
@@ -659,6 +719,23 @@ func (b *BuilderUI) renderBlockInspector() g.Node {
 			),
 		),
 
+		// HTML Block properties
+		Div(
+			g.Attr("x-show", "selectedBlockType === 'HTML'"),
+			Div(
+				Class("property-group"),
+				Label(Class("property-label"), g.Text("HTML Content")),
+				P(Class("property-hint"), g.Text("Supports Tailwind CSS classes")),
+				Textarea(
+					Class("text-input code-textarea"),
+					g.Attr("x-model", "selectedBlockData.props.html"),
+					Rows("12"),
+					Placeholder("<div class=\"bg-blue-500 text-white p-4 rounded-lg\">\n  Your content here...\n</div>"),
+					g.Attr("style", "font-family: monospace; font-size: 13px;"),
+				),
+			),
+		),
+
 		// Background Color (common)
 		b.renderColorPickerWithPlus("Background color", "selectedBlockData.style.backgroundColor", ""),
 
@@ -851,6 +928,24 @@ const builderCSS = `
 	.toolbar-icon-btn:hover { background: #f0f0f0; color: #333; }
 	.toolbar-icon-btn.active { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); color: #000; }
 	.toolbar-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+	
+	.toolbar-left { display: flex; align-items: center; gap: 12px; }
+	.back-btn { margin-right: 4px; }
+	
+	.save-status { display: flex; align-items: center; }
+	.save-status-text {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 12px;
+		padding: 4px 8px;
+		border-radius: 4px;
+	}
+	.save-status-text.saving { color: #666; }
+	.save-status-text.saved { color: #22c55e; }
+	.save-status-text.error { color: #ef4444; background: #fef2f2; }
+	
+	[x-cloak] { display: none !important; }
 
 	/* Sidebars */
 	.builder-sidebar {
@@ -876,12 +971,22 @@ const builderCSS = `
 	.sidebar-section-title:first-child { margin-top: 0; }
 
 	.sidebar-nav-item {
-		padding: 8px 0;
+		padding: 10px 12px;
 		cursor: pointer;
 		font-size: 14px;
 		color: #333;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		border-radius: 8px;
+		margin: 2px 0;
+		transition: all 0.15s ease;
 	}
-	.sidebar-nav-item:hover { color: #000; }
+	.sidebar-nav-item:hover { 
+		background: #f3f4f6; 
+		color: #000; 
+	}
+	.sidebar-nav-icon { font-size: 16px; }
 
 	.sidebar-footer { margin-top: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #e0e0e0; }
 	.sidebar-link { font-size: 13px; color: #666; text-decoration: none; }
@@ -935,6 +1040,19 @@ const builderCSS = `
 		border: 1px solid #e0e0e0;
 		border-radius: 4px;
 		font-size: 14px;
+	}
+	.text-input.code-textarea {
+		font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+		font-size: 12px;
+		line-height: 1.5;
+		background: #f8f9fa;
+		resize: vertical;
+		min-height: 150px;
+	}
+	.property-hint {
+		font-size: 11px;
+		color: #6b7280;
+		margin: 4px 0 8px 0;
 		transition: all 0.2s;
 		background: #fff;
 		resize: vertical;
@@ -1049,10 +1167,10 @@ const builderCSS = `
 	}
 
 	.canvas-document, .canvas-preview {
-		min-height: 100%;
+		min-height: auto;
 		position: relative;
 		box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-		/* Canvas color is applied via inline style */
+		/* Canvas color is applied via inline style - height adjusts to content */
 	}
 
 	.canvas-code-wrapper {
@@ -1226,15 +1344,26 @@ const builderCSS = `
 	.column-width-input .text-input.small { width: 60px; padding: 4px 8px; font-size: 12px; }
 	.column-width-input span { font-size: 12px; color: #999; }
 
-	/* Column add button in preview */
-	.column-add-btn { transition: transform 0.2s, background 0.2s; }
-	.column-add-btn:hover { transform: scale(1.1); background: #1976d2 !important; }
+	/* Column and container add buttons */
+	.column-add-btn, .container-add-btn { transition: transform 0.2s, background 0.2s, opacity 0.2s; }
+	.column-add-btn:hover, .container-add-btn:hover { 
+		transform: translateX(-50%) scale(1.1); 
+		background: #4f46e5 !important; 
+		opacity: 1 !important;
+	}
+	.column-cell:hover .column-add-btn, .container-block:hover .container-add-btn {
+		opacity: 1 !important;
+	}
 `
 
 const builderJS = `
-	function emailBuilder(initialDoc) {
+	function emailBuilder(config) {
 		return {
-			document: initialDoc,
+			document: config.document,
+			saveURL: config.saveURL || '',
+			backURL: config.backURL || '',
+			templateID: config.templateID || '',
+			autosave: config.autosave || false,
 			view: 'design',
 			deviceView: 'desktop',
 			selectedBlock: null,
@@ -1243,8 +1372,15 @@ const builderJS = `
 			pickerTop: 0,
 			pickerLeft: 0,
 			insertTargetId: null,
+			insertTargetColumn: null,
+			insertTargetContainer: null,
 			history: [],
 			historyIndex: -1,
+			saving: false,
+			lastSaved: null,
+			saveError: null,
+			saveTimeout: null,
+			dirty: false,
 			
 			get blocks() {
 				const root = this.document.blocks[this.document.root];
@@ -1272,6 +1408,65 @@ const builderJS = `
 			
 			get canUndo() { return this.historyIndex > 0; },
 			get canRedo() { return this.historyIndex < this.history.length - 1; },
+
+			// Go back to templates list
+			goBack() {
+				if (this.backURL) {
+					window.location.href = this.backURL;
+				} else {
+					window.history.back();
+				}
+			},
+
+			// Schedule autosave
+			scheduleAutosave() {
+				if (!this.autosave || !this.templateID) return;
+				
+				this.dirty = true;
+				this.saveError = null;
+				
+				// Clear existing timeout
+				if (this.saveTimeout) {
+					clearTimeout(this.saveTimeout);
+				}
+				
+				// Schedule save after 1 second of inactivity
+				this.saveTimeout = setTimeout(() => {
+					this.autoSave();
+				}, 1000);
+			},
+
+			// Perform autosave
+			async autoSave() {
+				if (!this.autosave || !this.templateID || !this.dirty || this.saving) return;
+				
+				this.saving = true;
+				this.saveError = null;
+				
+				try {
+					const res = await fetch(this.saveURL, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							templateId: this.templateID,
+							document: this.document
+						})
+					});
+					
+					const data = await res.json();
+					
+					if (data.success) {
+						this.lastSaved = new Date();
+						this.dirty = false;
+					} else {
+						this.saveError = data.error || 'Save failed';
+					}
+				} catch (err) {
+					this.saveError = 'Network error';
+				}
+				
+				this.saving = false;
+			},
 
 			// Watch for column count changes
 			updateColumnsCount(blockId, newCount) {
@@ -1315,16 +1510,42 @@ const builderJS = `
 				// Listen for column add button clicks
 				document.addEventListener('click', (e) => {
 					if (e.target.classList.contains('column-add-btn')) {
+						e.stopPropagation();
 						const colId = e.target.dataset.columnId;
 						const colIndex = parseInt(e.target.dataset.columnIndex);
 						const parentId = e.target.dataset.parentId;
 						this.openColumnBlockPicker(parentId, colId, colIndex);
 					}
+					// Listen for container add button clicks
+					if (e.target.classList.contains('container-add-btn')) {
+						e.stopPropagation();
+						const containerId = e.target.dataset.containerId;
+						this.openContainerBlockPicker(containerId);
+					}
 				});
+				
+				// Watch for document changes to trigger autosave
+				this.$watch('document', () => {
+					this.scheduleAutosave();
+				}, { deep: true });
+				
+				// Mark as saved initially if we have a template ID
+				if (this.templateID) {
+					this.lastSaved = new Date();
+				}
 			},
 
 			openColumnBlockPicker(parentId, columnId, columnIndex) {
 				this.insertTargetColumn = { parentId, columnId, columnIndex };
+				this.insertTargetContainer = null;
+				this.showPicker = true;
+				this.pickerTop = window.innerHeight / 2 - 100;
+				this.pickerLeft = window.innerWidth / 2 - 160;
+			},
+
+			openContainerBlockPicker(containerId) {
+				this.insertTargetContainer = containerId;
+				this.insertTargetColumn = null;
 				this.showPicker = true;
 				this.pickerTop = window.innerHeight / 2 - 100;
 				this.pickerLeft = window.innerWidth / 2 - 160;
@@ -1337,6 +1558,7 @@ const builderJS = `
 
 			getCanvasStyle() {
 				const root = this.document.blocks[this.document.root]?.data || {};
+				// Canvas color applies to email content area (default white)
 				let style = 'background-color: ' + (root.canvasColor || '#FFFFFF') + ';';
 				style += 'color: ' + (root.textColor || '#242424') + ';';
 				style += 'font-family: ' + this.getFontFamily(root.fontFamily) + ';';
@@ -1398,6 +1620,14 @@ const builderJS = `
 					}
 					
 					this.insertTargetColumn = null;
+				} else if (this.insertTargetContainer) {
+					// Add to container
+					const container = this.document.blocks[this.insertTargetContainer];
+					if (container) {
+						container.data.childrenIds = container.data.childrenIds || [];
+						container.data.childrenIds.push(blockId);
+					}
+					this.insertTargetContainer = null;
 				} else {
 					// Add to root
 					const root = this.document.blocks[this.document.root];
@@ -1477,6 +1707,13 @@ const builderJS = `
 				if (block.type === 'Container') {
 					return this.renderContainerPreview(block);
 				}
+				if (block.type === 'HTML') {
+					const html = props.html || '';
+					if (html) {
+						return '<div style="' + style + '">' + html + '</div>';
+					}
+					return '<div style="padding:20px;background:#f8f9fa;border:2px dashed #dee2e6;border-radius:8px;text-align:center;color:#6c757d;' + style + '"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:8px;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><br/>HTML Block<br/><small>Click to add HTML with Tailwind CSS</small></div>';
+				}
 				
 				return '<div style="padding:16px;border:1px dashed #ccc;text-align:center;color:#999;">' + block.type + '</div>';
 			},
@@ -1497,23 +1734,24 @@ const builderJS = `
 					const colId = columnIds[i];
 					const colBlock = colId ? this.document.blocks[colId] : null;
 					const colData = colBlock?.data || {};
-					const colBg = colData.style?.backgroundColor || '#f8f8f8';
+					const colBg = colData.style?.backgroundColor || 'transparent';
 					const colChildrenIds = colData.childrenIds || [];
 					
-					html += '<div style="flex:1;min-height:60px;background:' + colBg + ';border-radius:4px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;">';
+					html += '<div class="column-cell" data-column-id="' + (colId || '') + '" data-column-index="' + i + '" data-parent-id="' + block.id + '" style="flex:1;min-height:60px;background:' + colBg + ';border:1px dashed #e0e0e0;border-radius:4px;position:relative;">';
 					
 					if (colChildrenIds.length > 0) {
 						// Render children
+						html += '<div style="padding:8px;">';
 						for (const childId of colChildrenIds) {
 							const childBlock = this.document.blocks[childId];
 							if (childBlock) {
 								html += this.renderBlockPreview({ id: childId, type: childBlock.type, data: childBlock.data });
 							}
 						}
-					} else {
-						// Empty column - show add button
-						html += '<div class="column-add-btn" data-column-id="' + (colId || '') + '" data-column-index="' + i + '" data-parent-id="' + block.id + '" style="width:28px;height:28px;background:#2196f3;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:18px;">+</div>';
+						html += '</div>';
 					}
+					// Always show add button at bottom
+					html += '<div class="column-add-btn" data-column-id="' + (colId || '') + '" data-column-index="' + i + '" data-parent-id="' + block.id + '" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:24px;height:24px;background:#6366f1;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:14px;opacity:0.7;transition:opacity 0.2s;">+</div>';
 					
 					html += '</div>';
 				}
@@ -1529,7 +1767,7 @@ const builderJS = `
 				const padding = style.padding || { top: 16, bottom: 16, left: 24, right: 24 };
 				const childrenIds = data.childrenIds || [];
 				
-				let html = '<div style="background:' + bgColor + ';padding:' + padding.top + 'px ' + padding.right + 'px ' + padding.bottom + 'px ' + padding.left + 'px;">';
+				let html = '<div class="container-block" data-container-id="' + block.id + '" style="background:' + bgColor + ';padding:' + padding.top + 'px ' + padding.right + 'px ' + padding.bottom + 'px ' + padding.left + 'px;border:1px dashed #e0e0e0;border-radius:4px;position:relative;min-height:60px;">';
 				
 				if (childrenIds.length > 0) {
 					for (const childId of childrenIds) {
@@ -1538,29 +1776,34 @@ const builderJS = `
 							html += this.renderBlockPreview({ id: childId, type: childBlock.type, data: childBlock.data });
 						}
 					}
-				} else {
-					html += '<div style="min-height:40px;border:2px dashed #ddd;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#999;">Drop blocks here</div>';
 				}
+				// Always show add button
+				html += '<div class="container-add-btn" data-container-id="' + block.id + '" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:24px;height:24px;background:#6366f1;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:14px;opacity:0.7;transition:opacity 0.2s;">+</div>';
 				
 				html += '</div>';
 				return html;
 			},
 
 			getRenderedHTML() {
-				// Generate full HTML email output
+				// Generate full HTML email output with Tailwind CSS support
 				const root = this.document.blocks[this.document.root]?.data || {};
 				const fontFamily = this.getFontFamily(root.fontFamily);
 				
-				let html = '<!doctype html>\\n<html>\\n<body>\\n';
-				html += '<div style="background-color:' + (root.backdropColor || '#F5F5F5') + ';color:' + (root.textColor || '#262626') + ';font-family:' + fontFamily + ';font-size:16px;font-weight:400;">\\n';
-				html += '<table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:' + (root.canvasColor || '#FFFFFF') + ';border-radius:' + (root.borderRadius || 0) + 'px" role="presentation" cellspacing="0" cellpadding="0" border="0">\\n';
-				html += '<tbody><tr style="width:100%"><td>\\n';
+				let html = '<!doctype html><html><head>';
+				html += '<meta charset="UTF-8">';
+				html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+				// Include Tailwind CSS CDN for styling
+				html += '<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"><\/script>';
+				html += '</head><body style="margin:0;padding:0;background-color:#f4f7fa;line-height:1.6;">';
+				html += '<div style="background-color:' + (root.backdropColor || '#F5F5F5') + ';color:' + (root.textColor || '#262626') + ';font-family:' + fontFamily + ';font-size:16px;font-weight:400;padding:20px 0;">';
+				html += '<table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:' + (root.canvasColor || '#FFFFFF') + ';border-radius:' + (root.borderRadius || 0) + 'px" role="presentation" cellspacing="0" cellpadding="0" border="0">';
+				html += '<tbody><tr style="width:100%"><td>';
 				
 				for (const block of this.blocks) {
-					html += this.renderBlockToHTML(block) + '\\n';
+					html += this.renderBlockToHTML(block);
 				}
 				
-				html += '</td></tr></tbody></table>\\n</div>\\n</body>\\n</html>';
+				html += '</td></tr></tbody></table></div></body></html>';
 				return html;
 			},
 
@@ -1570,25 +1813,82 @@ const builderJS = `
 				const style = data.style || {};
 				const padding = style.padding || { top: 16, bottom: 16, left: 24, right: 24 };
 				const paddingStr = padding.top + 'px ' + padding.right + 'px ' + padding.bottom + 'px ' + padding.left + 'px';
+				const bgColor = style.backgroundColor || 'transparent';
+				const textColor = style.color || 'inherit';
+				const textAlign = style.textAlign || 'left';
+				const borderRadius = style.borderRadius || 0;
 				
 				if (block.type === 'Heading') {
 					const level = props.level || 'h2';
 					const fontSize = level === 'h1' ? 32 : (level === 'h2' ? 24 : 20);
-					return '<' + level + ' style="font-weight:bold;margin:0;font-size:' + fontSize + 'px;padding:' + paddingStr + '">' + (props.text || '') + '</' + level + '>';
+					return '<' + level + ' style="font-weight:bold;margin:0;font-size:' + fontSize + 'px;padding:' + paddingStr + ';color:' + textColor + ';text-align:' + textAlign + ';">' + (props.text || '') + '</' + level + '>';
 				}
 				if (block.type === 'Text') {
-					return '<div style="padding:' + paddingStr + '">' + (props.text || '') + '</div>';
+					return '<div style="padding:' + paddingStr + ';color:' + textColor + ';text-align:' + textAlign + ';">' + (props.text || '') + '</div>';
 				}
 				if (block.type === 'Button') {
 					const btnStyle = props.buttonStyle || 'rounded';
-					const radius = btnStyle === 'pill' ? '24px' : (btnStyle === 'rounded' ? '4px' : '0');
-					return '<div style="padding:' + paddingStr + '"><a href="' + (props.url || '#') + '" style="color:#FFFFFF;font-size:16px;font-weight:bold;background-color:' + (props.buttonColor || '#999999') + ';display:inline-block;padding:12px 20px;text-decoration:none;border-radius:' + radius + '" target="_blank">' + (props.text || 'Button') + '</a></div>';
+					const radius = btnStyle === 'pill' ? '24px' : (btnStyle === 'rounded' ? '8px' : '0');
+					const fullWidth = props.fullWidth === true || props.fullWidth === 'true';
+					const btnWidth = fullWidth ? 'width:100%;text-align:center;' : '';
+					return '<div style="padding:' + paddingStr + ';text-align:' + textAlign + ';"><a href="' + (props.url || '#') + '" style="color:' + (props.textColor || '#FFFFFF') + ';font-size:16px;font-weight:bold;background-color:' + (props.buttonColor || '#999999') + ';display:inline-block;padding:12px 24px;text-decoration:none;border-radius:' + radius + ';' + btnWidth + '" target="_blank">' + (props.text || 'Button') + '</a></div>';
 				}
 				if (block.type === 'Divider') {
-					return '<hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 24px;" />';
+					const lineColor = props.lineColor || '#e0e0e0';
+					const lineHeight = props.lineHeight || 1;
+					return '<hr style="border:none;border-top:' + lineHeight + 'px solid ' + lineColor + ';margin:0;padding:' + paddingStr + ';" />';
 				}
 				if (block.type === 'Spacer') {
 					return '<div style="height:' + (props.height || 20) + 'px;"></div>';
+				}
+				if (block.type === 'Image') {
+					const imgUrl = props.url || '';
+					const alt = props.alt || '';
+					const align = props.contentAlignment || 'center';
+					if (imgUrl) {
+						return '<div style="padding:' + paddingStr + ';text-align:' + align + ';"><img src="' + imgUrl + '" alt="' + alt + '" style="max-width:100%;height:auto;" /></div>';
+					}
+					return '';
+				}
+				if (block.type === 'Container') {
+					const childrenIds = data.childrenIds || [];
+					let html = '<div style="background-color:' + (props.backgroundColor || bgColor) + ';padding:' + paddingStr + ';border-radius:' + borderRadius + 'px;">';
+					for (const childId of childrenIds) {
+						const childBlock = this.document.blocks[childId];
+						if (childBlock) {
+							html += this.renderBlockToHTML({ id: childId, type: childBlock.type, data: childBlock.data });
+						}
+					}
+					html += '</div>';
+					return html;
+				}
+				if (block.type === 'Columns') {
+					const columnsCount = props.columnsCount || 2;
+					const columnsGap = props.columnsGap || 16;
+					const childrenIds = data.childrenIds || [];
+					let html = '<table width="100%" style="padding:' + paddingStr + ';" cellspacing="0" cellpadding="0" border="0"><tr>';
+					for (let i = 0; i < columnsCount; i++) {
+						const colId = childrenIds[i];
+						const colBlock = colId ? this.document.blocks[colId] : null;
+						const colData = colBlock?.data || {};
+						const colBg = colData.style?.backgroundColor || 'transparent';
+						const colPadding = colData.style?.padding || { top: 8, bottom: 8, left: 8, right: 8 };
+						const colChildrenIds = colData.childrenIds || [];
+						html += '<td width="' + Math.floor(100/columnsCount) + '%" style="vertical-align:top;background-color:' + colBg + ';padding:' + colPadding.top + 'px ' + colPadding.right + 'px ' + colPadding.bottom + 'px ' + colPadding.left + 'px;' + (i < columnsCount - 1 ? 'padding-right:' + (columnsGap/2) + 'px;' : '') + (i > 0 ? 'padding-left:' + (columnsGap/2) + 'px;' : '') + '">';
+						for (const childId of colChildrenIds) {
+							const childBlock = this.document.blocks[childId];
+							if (childBlock) {
+								html += this.renderBlockToHTML({ id: childId, type: childBlock.type, data: childBlock.data });
+							}
+						}
+						html += '</td>';
+					}
+					html += '</tr></table>';
+					return html;
+				}
+				if (block.type === 'HTML') {
+					const htmlContent = props.html || '';
+					return '<div style="padding:' + paddingStr + ';">' + htmlContent + '</div>';
 				}
 				return '';
 			},
@@ -1639,6 +1939,8 @@ const builderJS = `
 					defaults.childrenIds = [col1Id, col2Id];
 				} else if (blockType === 'Container') {
 					defaults.props = {};
+				} else if (blockType === 'HTML') {
+					defaults.props = { html: '' };
 				} else {
 					defaults.props = { text: 'New ' + blockType };
 				}
@@ -1717,6 +2019,25 @@ const builderJS = `
 					};
 					this.selectedBlock = null;
 					this.saveHistory();
+				}
+			},
+
+			async loadSampleTemplate(name) {
+				// Get the samples API URL from the save URL by replacing the builder endpoint
+				const baseUrl = this.saveURL.replace('/builder/save', '/samples/' + name);
+				try {
+					const res = await fetch(baseUrl);
+					if (!res.ok) {
+						console.error('Failed to load sample template:', name);
+						return;
+					}
+					const doc = await res.json();
+					this.document = doc;
+					this.selectedBlock = null;
+					this.saveHistory();
+					this.scheduleAutosave();
+				} catch (err) {
+					console.error('Error loading sample template:', err);
 				}
 			},
 

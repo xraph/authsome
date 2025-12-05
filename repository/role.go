@@ -88,16 +88,21 @@ func (r *RoleRepository) FindByNameAndApp(ctx context.Context, name string, appI
 // GetRoleTemplates gets all role templates for an app (templates have organization_id = NULL and is_template = true)
 func (r *RoleRepository) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error) {
 	var roles []*schema.Role
-	err := r.db.NewSelect().
+	query := r.db.NewSelect().
 		Model(&roles).
 		Where("app_id = ?", appID).
 		Where("organization_id IS NULL").
 		Where("is_template = ?", true).
-		Order("name ASC").
-		Scan(ctx)
+		Order("name ASC")
+	
+	fmt.Printf("[DEBUG REPO] GetRoleTemplates SQL: %s, appID: %s\n", query.String(), appID.String())
+	
+	err := query.Scan(ctx)
 	if err != nil {
+		fmt.Printf("[DEBUG REPO] GetRoleTemplates error: %v\n", err)
 		return nil, err
 	}
+	fmt.Printf("[DEBUG REPO] GetRoleTemplates found %d roles\n", len(roles))
 	return roles, nil
 }
 

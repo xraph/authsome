@@ -137,9 +137,152 @@ func (s *Service) LoadPolicies(ctx context.Context, repo PolicyRepository) error
 // GetRoleTemplates gets all role templates for an app
 func (s *Service) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error) {
 	if s.roleRepo == nil {
+		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: roleRepo is nil\n")
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	return s.roleRepo.GetRoleTemplates(ctx, appID)
+	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: calling roleRepo.GetRoleTemplates for app %s\n", appID.String())
+	roles, err := s.roleRepo.GetRoleTemplates(ctx, appID)
+	if err != nil {
+		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: error: %v\n", err)
+		return nil, err
+	}
+	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: found %d templates\n", len(roles))
+	return roles, nil
+}
+
+// GetRoleTemplate gets a single role template by ID
+func (s *Service) GetRoleTemplate(ctx context.Context, roleID xid.ID) (*schema.Role, error) {
+	if s.roleRepo == nil {
+		return nil, fmt.Errorf("role repository not initialized")
+	}
+
+	role, err := s.roleRepo.FindByID(ctx, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find role template: %w", err)
+	}
+
+	// Verify it's a template
+	if !role.IsTemplate {
+		return nil, fmt.Errorf("role %s is not a template", roleID.String())
+	}
+
+	return role, nil
+}
+
+// GetRoleTemplateWithPermissions gets a role template with its permissions loaded
+func (s *Service) GetRoleTemplateWithPermissions(ctx context.Context, roleID xid.ID) (*RoleWithPermissions, error) {
+	if s.roleRepo == nil {
+		return nil, fmt.Errorf("role repository not initialized")
+	}
+
+	role, err := s.roleRepo.GetOrgRoleWithPermissions(ctx, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find role template: %w", err)
+	}
+
+	// Verify it's a template
+	if !role.IsTemplate {
+		return nil, fmt.Errorf("role %s is not a template", roleID.String())
+	}
+
+	// Convert []Permission to []*Permission
+	permissions := make([]*schema.Permission, len(role.Permissions))
+	for i := range role.Permissions {
+		permissions[i] = &role.Permissions[i]
+	}
+
+	return &RoleWithPermissions{
+		Role:        role,
+		Permissions: permissions,
+	}, nil
+}
+
+// CreateRoleTemplate creates a new role template for an app
+func (s *Service) CreateRoleTemplate(ctx context.Context, appID xid.ID, name, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error) {
+	if s.roleRepo == nil {
+		return nil, fmt.Errorf("role repository not initialized")
+	}
+
+	// Create the role template
+	role := &schema.Role{
+		ID:          xid.New(),
+		AppID:       &appID,
+		Name:        name,
+		Description: description,
+		IsTemplate:  true,
+		IsOwnerRole: isOwnerRole,
+	}
+
+	if err := s.roleRepo.Create(ctx, role); err != nil {
+		return nil, fmt.Errorf("failed to create role template: %w", err)
+	}
+
+	// Assign permissions if provided
+	if len(permissionIDs) > 0 && s.rolePermissionRepo != nil {
+		if err := s.AssignPermissionsToRole(ctx, role.ID, permissionIDs); err != nil {
+			// Rollback: delete the created role
+			_ = s.roleRepo.Delete(ctx, role.ID)
+			return nil, fmt.Errorf("failed to assign permissions: %w", err)
+		}
+	}
+
+	return role, nil
+}
+
+// UpdateRoleTemplate updates an existing role template
+func (s *Service) UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error) {
+	if s.roleRepo == nil {
+		return nil, fmt.Errorf("role repository not initialized")
+	}
+
+	// Get the existing role
+	role, err := s.roleRepo.FindByID(ctx, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find role template: %w", err)
+	}
+
+	// Verify it's a template
+	if !role.IsTemplate {
+		return nil, fmt.Errorf("role %s is not a template", roleID.String())
+	}
+
+	// Update role fields
+	role.Name = name
+	role.Description = description
+	role.IsOwnerRole = isOwnerRole
+
+	if err := s.roleRepo.Update(ctx, role); err != nil {
+		return nil, fmt.Errorf("failed to update role template: %w", err)
+	}
+
+	// Update permissions if provided
+	if permissionIDs != nil && s.rolePermissionRepo != nil {
+		if err := s.rolePermissionRepo.ReplaceRolePermissions(ctx, roleID, permissionIDs); err != nil {
+			return nil, fmt.Errorf("failed to update role permissions: %w", err)
+		}
+	}
+
+	return role, nil
+}
+
+// DeleteRoleTemplate deletes a role template
+func (s *Service) DeleteRoleTemplate(ctx context.Context, roleID xid.ID) error {
+	if s.roleRepo == nil {
+		return fmt.Errorf("role repository not initialized")
+	}
+
+	// Get the role first to verify it's a template
+	role, err := s.roleRepo.FindByID(ctx, roleID)
+	if err != nil {
+		return fmt.Errorf("failed to find role template: %w", err)
+	}
+
+	// Verify it's a template
+	if !role.IsTemplate {
+		return fmt.Errorf("role %s is not a template", roleID.String())
+	}
+
+	return s.roleRepo.Delete(ctx, roleID)
 }
 
 // GetOwnerRole gets the role marked as the owner role for an app

@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"io"
 	"strconv"
 
+	"github.com/rs/xid"
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/internal/errs"
 )
 
@@ -28,6 +31,35 @@ func handleError(c forge.Context, err error) error {
 	return c.JSON(500, map[string]string{
 		"error": err.Error(),
 	})
+}
+
+// getContextWithHeaders extracts app and environment IDs from request headers
+// and injects them into the context. This allows API clients to specify
+// the app context via X-App-ID and X-Environment-ID headers.
+func getContextWithHeaders(c forge.Context) context.Context {
+	ctx := c.Request().Context()
+
+	// Check if context already has app ID
+	if _, ok := contexts.GetAppID(ctx); !ok {
+		// Try to get from X-App-ID header
+		if appIDStr := c.Request().Header.Get("X-App-ID"); appIDStr != "" {
+			if appID, err := xid.FromString(appIDStr); err == nil {
+				ctx = contexts.SetAppID(ctx, appID)
+			}
+		}
+	}
+
+	// Check if context already has environment ID
+	if _, ok := contexts.GetEnvironmentID(ctx); !ok {
+		// Try to get from X-Environment-ID header
+		if envIDStr := c.Request().Header.Get("X-Environment-ID"); envIDStr != "" {
+			if envID, err := xid.FromString(envIDStr); err == nil {
+				ctx = contexts.SetEnvironmentID(ctx, envID)
+			}
+		}
+	}
+
+	return ctx
 }
 
 // ErrorResponse represents an error response

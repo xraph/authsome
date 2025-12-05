@@ -95,13 +95,24 @@ func (p *Provider) DeleteCustomer(ctx context.Context, customerID string) error 
 
 // SyncPlan syncs a plan to Stripe (creates Product and Price)
 func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
+	// Build metadata for AuthSome plan identification and recovery
+	metadata := map[string]string{
+		"authsome":         "true", // Marker to identify AuthSome-created products
+		"plan_id":          plan.ID.String(),
+		"app_id":           plan.AppID.String(),
+		"slug":             plan.Slug,
+		"billing_pattern":  string(plan.BillingPattern),
+		"billing_interval": string(plan.BillingInterval),
+	}
+
 	// Create or update product
 	var productID string
 	if plan.ProviderPlanID != "" {
 		// Update existing product
 		params := &stripe.ProductParams{
-			Name:   stripe.String(plan.Name),
-			Active: stripe.Bool(plan.IsActive),
+			Name:     stripe.String(plan.Name),
+			Active:   stripe.Bool(plan.IsActive),
+			Metadata: metadata,
 		}
 		// Only set description if not empty (Stripe rejects empty strings)
 		if plan.Description != "" {
@@ -115,12 +126,9 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 	} else {
 		// Create new product
 		params := &stripe.ProductParams{
-			Name:   stripe.String(plan.Name),
-			Active: stripe.Bool(plan.IsActive),
-			Metadata: map[string]string{
-				"plan_id": plan.ID.String(),
-				"slug":    plan.Slug,
-			},
+			Name:     stripe.String(plan.Name),
+			Active:   stripe.Bool(plan.IsActive),
+			Metadata: metadata,
 		}
 		// Only set description if not empty (Stripe rejects empty strings)
 		if plan.Description != "" {
@@ -499,6 +507,106 @@ func (p *Provider) VoidInvoice(ctx context.Context, invoiceID string) error {
 	return err
 }
 
+// ListProducts lists all products from Stripe, filtering for AuthSome-created products
+func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, error) {
+	var products []*types.ProviderProduct
+
+	params := &stripe.ProductListParams{}
+	params.Limit = stripe.Int64(100)
+
+	iter := product.List(params)
+	for iter.Next() {
+		prod := iter.Product()
+
+		// Convert metadata
+		metadata := make(map[string]string)
+		for k, v := range prod.Metadata {
+			metadata[k] = v
+		}
+
+		products = append(products, &types.ProviderProduct{
+			ID:          prod.ID,
+			Name:        prod.Name,
+			Description: prod.Description,
+			Active:      prod.Active,
+			Metadata:    metadata,
+		})
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list Stripe products: %w", err)
+	}
+
+	return products, nil
+}
+
+// GetProduct retrieves a single product from Stripe
+func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.ProviderProduct, error) {
+	prod, err := product.Get(productID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Stripe product: %w", err)
+	}
+
+	// Convert metadata
+	metadata := make(map[string]string)
+	for k, v := range prod.Metadata {
+		metadata[k] = v
+	}
+
+	return &types.ProviderProduct{
+		ID:          prod.ID,
+		Name:        prod.Name,
+		Description: prod.Description,
+		Active:      prod.Active,
+		Metadata:    metadata,
+	}, nil
+}
+
+// ListPrices lists all prices for a product from Stripe
+func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.ProviderPrice, error) {
+	var prices []*types.ProviderPrice
+
+	params := &stripe.PriceListParams{}
+	params.Product = stripe.String(productID)
+	params.Limit = stripe.Int64(100)
+
+	iter := price.List(params)
+	for iter.Next() {
+		pr := iter.Price()
+
+		// Convert metadata
+		metadata := make(map[string]string)
+		for k, v := range pr.Metadata {
+			metadata[k] = v
+		}
+
+		providerPrice := &types.ProviderPrice{
+			ID:         pr.ID,
+			ProductID:  pr.Product.ID,
+			Active:     pr.Active,
+			Currency:   string(pr.Currency),
+			UnitAmount: pr.UnitAmount,
+			Metadata:   metadata,
+		}
+
+		// Add recurring info if present
+		if pr.Recurring != nil {
+			providerPrice.Recurring = &types.PriceRecurring{
+				Interval:      string(pr.Recurring.Interval),
+				IntervalCount: int(pr.Recurring.IntervalCount),
+			}
+		}
+
+		prices = append(prices, providerPrice)
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list Stripe prices: %w", err)
+	}
+
+	return prices, nil
+}
+
 // HandleWebhook handles a Stripe webhook
 func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature string) (*types.WebhookEvent, error) {
 	event, err := webhook.ConstructEvent(payload, signature, p.webhookSecret)
@@ -519,4 +627,3 @@ func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature 
 		Timestamp: event.Created,
 	}, nil
 }
-

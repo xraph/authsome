@@ -38,8 +38,10 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(c.Request().Context(), typeSlug)
+	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -69,7 +71,19 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 	}
 
 	if len(q.Sort) > 0 {
-		listQuery.SortBy = q.Sort[0].Field
+		// Convert camelCase sort fields to snake_case for repository
+		sortField := q.Sort[0].Field
+		switch sortField {
+		case "createdAt":
+			sortField = "created_at"
+		case "updatedAt":
+			sortField = "updated_at"
+		case "publishedAt":
+			sortField = "published_at"
+		case "scheduledAt":
+			sortField = "scheduled_at"
+		}
+		listQuery.SortBy = sortField
 		if q.Sort[0].Descending {
 			listQuery.SortOrder = "desc"
 		} else {
@@ -77,11 +91,22 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 		}
 	}
 
-	// Convert filters
+	// Convert filters - handle status as system field, others as JSONB
 	if q.Filters != nil {
 		listQuery.Filters = make(map[string]any)
 		for _, cond := range q.Filters.Conditions {
-			listQuery.Filters[cond.Field] = cond.Value
+			// Handle status filter specially - it's a system field
+			if cond.Field == "status" {
+				if val, ok := cond.Value.(string); ok {
+					listQuery.Status = val
+				}
+				continue
+			}
+			// Store operator and value together for JSONB fields
+			listQuery.Filters[cond.Field] = map[string]any{
+				"operator": string(cond.Operator),
+				"value":    cond.Value,
+			}
 		}
 	}
 
@@ -89,7 +114,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 		listQuery.Populate = append(listQuery.Populate, pop.Path)
 	}
 
-	result, err := h.entryService.List(c.Request().Context(), contentTypeID, listQuery)
+	result, err := h.entryService.List(ctx, contentTypeID, listQuery)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -105,8 +130,10 @@ func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(c.Request().Context(), typeSlug)
+	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -123,7 +150,7 @@ func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.entryService.Create(c.Request().Context(), contentTypeID, &req)
+	result, err := h.entryService.Create(ctx, contentTypeID, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -140,13 +167,15 @@ func (h *ContentEntryHandler) GetEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Parse entry ID
 	id, err := xid.FromString(entryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
-	result, err := h.entryService.GetByID(c.Request().Context(), id)
+	result, err := h.entryService.GetByID(ctx, id)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -163,6 +192,8 @@ func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Parse entry ID
 	id, err := xid.FromString(entryID)
 	if err != nil {
@@ -175,7 +206,7 @@ func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.entryService.Update(c.Request().Context(), id, &req)
+	result, err := h.entryService.Update(ctx, id, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -192,13 +223,15 @@ func (h *ContentEntryHandler) DeleteEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Parse entry ID
 	id, err := xid.FromString(entryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
-	if err := h.entryService.Delete(c.Request().Context(), id); err != nil {
+	if err := h.entryService.Delete(ctx, id); err != nil {
 		return handleError(c, err)
 	}
 
@@ -218,6 +251,8 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Parse entry ID
 	id, err := xid.FromString(entryID)
 	if err != nil {
@@ -228,7 +263,7 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 	var req core.PublishEntryRequest
 	_ = c.BindJSON(&req) // Ignore error, body is optional
 
-	result, err := h.entryService.Publish(c.Request().Context(), id, &req)
+	result, err := h.entryService.Publish(ctx, id, &req)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -245,13 +280,15 @@ func (h *ContentEntryHandler) UnpublishEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Parse entry ID
 	id, err := xid.FromString(entryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
-	result, err := h.entryService.Unpublish(c.Request().Context(), id)
+	result, err := h.entryService.Unpublish(ctx, id)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -268,13 +305,15 @@ func (h *ContentEntryHandler) ArchiveEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Parse entry ID
 	id, err := xid.FromString(entryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
-	result, err := h.entryService.Archive(c.Request().Context(), id)
+	result, err := h.entryService.Archive(ctx, id)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -294,8 +333,10 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(c.Request().Context(), typeSlug)
+	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -329,7 +370,19 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 	}
 
 	if len(q.Sort) > 0 {
-		listQuery.SortBy = q.Sort[0].Field
+		// Convert camelCase sort fields to snake_case for repository
+		sortField := q.Sort[0].Field
+		switch sortField {
+		case "createdAt":
+			sortField = "created_at"
+		case "updatedAt":
+			sortField = "updated_at"
+		case "publishedAt":
+			sortField = "published_at"
+		case "scheduledAt":
+			sortField = "scheduled_at"
+		}
+		listQuery.SortBy = sortField
 		if q.Sort[0].Descending {
 			listQuery.SortOrder = "desc"
 		} else {
@@ -337,11 +390,40 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 		}
 	}
 
-	// Convert filters
+	// Convert filters - store as map with operator and value
 	if q.Filters != nil {
 		listQuery.Filters = make(map[string]any)
 		for _, cond := range q.Filters.Conditions {
-			listQuery.Filters[cond.Field] = cond.Value
+			// Handle status filter specially - it's a system field
+			if cond.Field == "status" {
+				if val, ok := cond.Value.(string); ok {
+					listQuery.Status = val
+				}
+				continue
+			}
+			// Store operator and value together
+			listQuery.Filters[cond.Field] = map[string]any{
+				"operator": string(cond.Operator),
+				"value":    cond.Value,
+			}
+		}
+		// Also check nested groups for status filter
+		for _, group := range q.Filters.Groups {
+			for _, cond := range group.Conditions {
+				if cond.Field == "status" {
+					if val, ok := cond.Value.(string); ok {
+						listQuery.Status = val
+					}
+				} else {
+					if listQuery.Filters == nil {
+						listQuery.Filters = make(map[string]any)
+					}
+					listQuery.Filters[cond.Field] = map[string]any{
+						"operator": string(cond.Operator),
+						"value":    cond.Value,
+					}
+				}
+			}
 		}
 	}
 
@@ -349,7 +431,7 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 		listQuery.Populate = append(listQuery.Populate, pop.Path)
 	}
 
-	result, err := h.entryService.List(c.Request().Context(), contentTypeID, listQuery)
+	result, err := h.entryService.List(ctx, contentTypeID, listQuery)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -374,6 +456,8 @@ func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	var req BulkRequest
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
@@ -388,7 +472,7 @@ func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
 		ids[i] = id
 	}
 
-	if err := h.entryService.BulkPublish(c.Request().Context(), ids); err != nil {
+	if err := h.entryService.BulkPublish(ctx, ids); err != nil {
 		return handleError(c, err)
 	}
 
@@ -406,6 +490,8 @@ func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	var req BulkRequest
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
@@ -420,7 +506,7 @@ func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
 		ids[i] = id
 	}
 
-	if err := h.entryService.BulkUnpublish(c.Request().Context(), ids); err != nil {
+	if err := h.entryService.BulkUnpublish(ctx, ids); err != nil {
 		return handleError(c, err)
 	}
 
@@ -438,6 +524,8 @@ func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	var req BulkRequest
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
@@ -452,7 +540,7 @@ func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 		ids[i] = id
 	}
 
-	if err := h.entryService.BulkDelete(c.Request().Context(), ids); err != nil {
+	if err := h.entryService.BulkDelete(ctx, ids); err != nil {
 		return handleError(c, err)
 	}
 
@@ -474,8 +562,10 @@ func (h *ContentEntryHandler) GetEntryStats(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "type is required"})
 	}
 
+	ctx := getContextWithHeaders(c)
+
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(c.Request().Context(), typeSlug)
+	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -486,7 +576,7 @@ func (h *ContentEntryHandler) GetEntryStats(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	stats, err := h.entryService.GetStats(c.Request().Context(), contentTypeID)
+	stats, err := h.entryService.GetStats(ctx, contentTypeID)
 	if err != nil {
 		return handleError(c, err)
 	}

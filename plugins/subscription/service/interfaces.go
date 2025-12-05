@@ -19,6 +19,8 @@ type PlanServiceInterface interface {
 	SetActive(ctx context.Context, id xid.ID, active bool) error
 	SetPublic(ctx context.Context, id xid.ID, public bool) error
 	SyncToProvider(ctx context.Context, id xid.ID) error
+	SyncFromProvider(ctx context.Context, providerPlanID string) (*core.Plan, error)
+	SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]*core.Plan, error)
 }
 
 // SubscriptionServiceInterface defines the subscription service interface

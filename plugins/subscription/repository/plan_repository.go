@@ -87,10 +87,27 @@ func (r *planRepository) FindBySlug(ctx context.Context, appID xid.ID, slug stri
 	return plan, nil
 }
 
+// FindByProviderID retrieves a plan by provider plan ID
+func (r *planRepository) FindByProviderID(ctx context.Context, providerPlanID string) (*schema.SubscriptionPlan, error) {
+	plan := new(schema.SubscriptionPlan)
+	err := r.db.NewSelect().
+		Model(plan).
+		Relation("Features").
+		Relation("Tiers").
+		Relation("FeatureLinks").
+		Relation("FeatureLinks.Feature").
+		Where("sp.provider_plan_id = ?", providerPlanID).
+		Scan(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find plan by provider ID: %w", err)
+	}
+	return plan, nil
+}
+
 // List retrieves plans with optional filters
 func (r *planRepository) List(ctx context.Context, filter *PlanFilter) ([]*schema.SubscriptionPlan, int, error) {
 	var plans []*schema.SubscriptionPlan
-	
+
 	query := r.db.NewSelect().
 		Model(&plans).
 		Relation("Features").
@@ -98,7 +115,7 @@ func (r *planRepository) List(ctx context.Context, filter *PlanFilter) ([]*schem
 		Relation("FeatureLinks").
 		Relation("FeatureLinks.Feature").
 		Order("display_order ASC", "created_at DESC")
-	
+
 	if filter != nil {
 		if filter.AppID != nil {
 			query = query.Where("sp.app_id = ?", *filter.AppID)
@@ -109,7 +126,7 @@ func (r *planRepository) List(ctx context.Context, filter *PlanFilter) ([]*schem
 		if filter.IsPublic != nil {
 			query = query.Where("sp.is_public = ?", *filter.IsPublic)
 		}
-		
+
 		// Pagination
 		pageSize := filter.PageSize
 		if pageSize <= 0 {
@@ -122,12 +139,12 @@ func (r *planRepository) List(ctx context.Context, filter *PlanFilter) ([]*schem
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
-	
+
 	count, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list plans: %w", err)
 	}
-	
+
 	return plans, count, nil
 }
 
@@ -172,4 +189,3 @@ func (r *planRepository) DeleteTiers(ctx context.Context, planID xid.ID) error {
 	}
 	return nil
 }
-

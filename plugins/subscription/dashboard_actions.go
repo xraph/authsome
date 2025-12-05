@@ -343,6 +343,81 @@ func (e *DashboardExtension) HandleSyncPlan(c forge.Context) error {
 	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planID.String())
 }
 
+// HandleSyncPlanFromProvider syncs a single plan from the payment provider
+func (e *DashboardExtension) HandleSyncPlanFromProvider(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	planID, err := xid.FromString(c.Param("id"))
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid plan ID")
+	}
+
+	// Get the existing plan to find its provider plan ID
+	existingPlan, err := e.plugin.planSvc.GetByID(ctx, planID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Plan not found")
+	}
+
+	if existingPlan.ProviderPlanID == "" {
+		return c.String(http.StatusBadRequest, "Plan is not synced to provider - cannot sync from provider")
+	}
+
+	// Sync plan from provider
+	_, err = e.plugin.planSvc.SyncFromProvider(ctx, existingPlan.ProviderPlanID)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to sync plan from provider: "+err.Error())
+	}
+
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planID.String())
+}
+
+// HandleSyncAllPlansFromProvider syncs all plans from the payment provider
+func (e *DashboardExtension) HandleSyncAllPlansFromProvider(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Sync all plans from provider for this app
+	syncedPlans, err := e.plugin.planSvc.SyncAllFromProvider(ctx, currentApp.ID)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to sync plans from provider: "+err.Error())
+	}
+
+	// Redirect to plans list with success message (plans count synced)
+	_ = syncedPlans // Could show success message with count
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans")
+}
+
 // HandleDeletePlan handles permanent plan deletion
 func (e *DashboardExtension) HandleDeletePlan(c forge.Context) error {
 	handler := e.registry.GetHandler()

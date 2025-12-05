@@ -56,6 +56,10 @@ const (
 	FieldTypeBigInteger FieldType = "bigInteger"
 	// FieldTypeDecimal is a decimal field with precision
 	FieldTypeDecimal FieldType = "decimal"
+	// FieldTypeObject is a nested object with sub-fields
+	FieldTypeObject FieldType = "object"
+	// FieldTypeArray is an array of objects with sub-fields
+	FieldTypeArray FieldType = "array"
 )
 
 // String returns the string representation of the field type
@@ -72,7 +76,7 @@ func (t FieldType) IsValid() bool {
 		FieldTypeRelation, FieldTypeMedia, FieldTypeSlug, FieldTypeUUID,
 		FieldTypeColor, FieldTypePassword, FieldTypePhone, FieldTypeTextarea,
 		FieldTypeMarkdown, FieldTypeEnumeration, FieldTypeInteger, FieldTypeFloat,
-		FieldTypeBigInteger, FieldTypeDecimal:
+		FieldTypeBigInteger, FieldTypeDecimal, FieldTypeObject, FieldTypeArray:
 		return true
 	default:
 		return false
@@ -132,11 +136,32 @@ func (t FieldType) IsSelectable() bool {
 // RequiresOptions returns true if the field type requires options configuration
 func (t FieldType) RequiresOptions() bool {
 	switch t {
-	case FieldTypeSelect, FieldTypeMultiSelect, FieldTypeEnumeration, FieldTypeRelation:
+	case FieldTypeSelect, FieldTypeMultiSelect, FieldTypeEnumeration, FieldTypeRelation,
+		FieldTypeObject, FieldTypeArray:
 		return true
 	default:
 		return false
 	}
+}
+
+// IsNested returns true if the field type supports nested sub-fields
+func (t FieldType) IsNested() bool {
+	switch t {
+	case FieldTypeObject, FieldTypeArray:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsObject returns true if the field type is an object
+func (t FieldType) IsObject() bool {
+	return t == FieldTypeObject
+}
+
+// IsArray returns true if the field type is an array
+func (t FieldType) IsArray() bool {
+	return t == FieldTypeArray
 }
 
 // SupportsUnique returns true if the field type supports unique constraint
@@ -216,6 +241,8 @@ func GetAllFieldTypes() []FieldTypeInfo {
 		{Type: FieldTypeEnumeration, Name: "Enumeration", Description: "Predefined set of values", Category: "selection", Icon: "List", SupportsIndex: true, RequiresOptions: true},
 		{Type: FieldTypeRelation, Name: "Relation", Description: "Reference to another content type", Category: "relation", Icon: "GitBranch", RequiresOptions: true},
 		{Type: FieldTypeMedia, Name: "Media", Description: "File or image upload", Category: "media", Icon: "Image"},
+		{Type: FieldTypeObject, Name: "Object", Description: "Nested object with sub-fields", Category: "nested", Icon: "Braces", RequiresOptions: true},
+		{Type: FieldTypeArray, Name: "Array", Description: "Array of objects with sub-fields", Category: "nested", Icon: "List", RequiresOptions: true},
 	}
 }
 

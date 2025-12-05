@@ -34,11 +34,13 @@ type Plan struct {
 
 // PlanFeature represents a feature or limit included in a plan
 type PlanFeature struct {
-	Key         string      `json:"key"`         // Feature identifier (e.g., "max_members")
-	Name        string      `json:"name"`        // Display name
-	Description string      `json:"description"` // Feature description
-	Type        FeatureType `json:"type"`        // boolean, limit, or unlimited
-	Value       any         `json:"value"`       // The feature value (true, 100, -1 for unlimited)
+	Key           string      `json:"key"`                     // Feature identifier (e.g., "max_members")
+	Name          string      `json:"name"`                    // Display name
+	Description   string      `json:"description"`             // Feature description
+	Type          FeatureType `json:"type"`                    // boolean, limit, or unlimited
+	Value         any         `json:"value"`                   // The feature value (true, 100, -1 for unlimited)
+	Unit          string      `json:"unit,omitempty"`          // Unit of measurement (e.g., "seats", "GB", "API calls")
+	IsHighlighted bool        `json:"isHighlighted,omitempty"` // Highlight in pricing comparison
 }
 
 // PriceTier represents a pricing tier for tiered or usage-based billing

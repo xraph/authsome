@@ -216,6 +216,76 @@ type ContentTypeSummaryDTO struct {
 }
 
 // =============================================================================
+// COMPONENT SCHEMA DTOs
+// =============================================================================
+
+// ComponentSchemaDTO is the API response for a component schema
+type ComponentSchemaDTO struct {
+	ID            string               `json:"id"`
+	AppID         string               `json:"appId"`
+	EnvironmentID string               `json:"environmentId"`
+	Name          string               `json:"name"`
+	Slug          string               `json:"slug"`
+	Description   string               `json:"description,omitempty"`
+	Icon          string               `json:"icon,omitempty"`
+	Fields        []NestedFieldDefDTO  `json:"fields"`
+	UsageCount    int                  `json:"usageCount,omitempty"`
+	CreatedBy     string               `json:"createdBy,omitempty"`
+	UpdatedBy     string               `json:"updatedBy,omitempty"`
+	CreatedAt     time.Time            `json:"createdAt"`
+	UpdatedAt     time.Time            `json:"updatedAt"`
+}
+
+// ComponentSchemaSummaryDTO is a lightweight component schema for lists
+type ComponentSchemaSummaryDTO struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description string    `json:"description,omitempty"`
+	Icon        string    `json:"icon,omitempty"`
+	FieldCount  int       `json:"fieldCount"`
+	UsageCount  int       `json:"usageCount"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// NestedFieldDefDTO represents a field definition within a nested object or component schema
+type NestedFieldDefDTO struct {
+	Name        string            `json:"name"`
+	Slug        string            `json:"slug"`
+	Type        string            `json:"type"`
+	Required    bool              `json:"required,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Options     *FieldOptionsDTO  `json:"options,omitempty"`
+}
+
+// CreateComponentSchemaRequest is the request to create a component schema
+type CreateComponentSchemaRequest struct {
+	Name        string              `json:"name" validate:"required,min=1,max=100"`
+	Slug        string              `json:"slug" validate:"required,slug"`
+	Description string              `json:"description,omitempty"`
+	Icon        string              `json:"icon,omitempty"`
+	Fields      []NestedFieldDefDTO `json:"fields,omitempty"`
+}
+
+// UpdateComponentSchemaRequest is the request to update a component schema
+type UpdateComponentSchemaRequest struct {
+	Name        string              `json:"name,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Icon        string              `json:"icon,omitempty"`
+	Fields      []NestedFieldDefDTO `json:"fields,omitempty"`
+}
+
+// ListComponentSchemasResponse is the response for listing component schemas
+type ListComponentSchemasResponse struct {
+	Components []*ComponentSchemaSummaryDTO `json:"components"`
+	Page       int                          `json:"page"`
+	PageSize   int                          `json:"pageSize"`
+	TotalItems int                          `json:"totalItems"`
+	TotalPages int                          `json:"totalPages"`
+}
+
+// =============================================================================
 // CONTENT FIELD DTOs
 // =============================================================================
 
@@ -280,6 +350,14 @@ type FieldOptionsDTO struct {
 	MinDate    *time.Time `json:"minDate,omitempty"`
 	MaxDate    *time.Time `json:"maxDate,omitempty"`
 	DateFormat string     `json:"dateFormat,omitempty"`
+	
+	// Object/Array fields (nested structures)
+	NestedFields    []NestedFieldDefDTO `json:"nestedFields,omitempty"`    // Inline sub-field definitions
+	ComponentRef    string              `json:"componentRef,omitempty"`    // Reference to ComponentSchema slug
+	MinItems        *int                `json:"minItems,omitempty"`        // For array: minimum items
+	MaxItems        *int                `json:"maxItems,omitempty"`        // For array: maximum items
+	Collapsible     bool                `json:"collapsible,omitempty"`     // UI: collapsible in form
+	DefaultExpanded bool                `json:"defaultExpanded,omitempty"` // UI: expanded by default
 }
 
 // ChoiceDTO represents a choice option for select fields
@@ -439,6 +517,15 @@ type RollbackEntryRequest struct {
 
 // ListContentTypesQuery defines query parameters for listing content types
 type ListContentTypesQuery struct {
+	Search    string `json:"search,omitempty"`
+	SortBy    string `json:"sortBy,omitempty"`
+	SortOrder string `json:"sortOrder,omitempty"`
+	Page      int    `json:"page,omitempty"`
+	PageSize  int    `json:"pageSize,omitempty"`
+}
+
+// ListComponentSchemasQuery defines query parameters for listing component schemas
+type ListComponentSchemasQuery struct {
 	Search    string `json:"search,omitempty"`
 	SortBy    string `json:"sortBy,omitempty"`
 	SortOrder string `json:"sortOrder,omitempty"`

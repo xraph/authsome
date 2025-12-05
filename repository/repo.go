@@ -25,6 +25,7 @@ type Repository interface {
 	Security() *SecurityRepository
 	Policy() *PolicyRepository
 	Permission() *PermissionRepository
+	RolePermission() *RolePermissionRepository
 	UserRole() *UserRoleRepository
 	UserBan() *UserBanRepository
 
@@ -74,16 +75,17 @@ type Repo struct {
 	socialAccount SocialAccountRepository
 
 	// Authentication & Security
-	apiKey     *APIKeyRepository
-	audit      *AuditRepository
-	device     *DeviceRepository
-	jwtKey     *JWTKeyRepository
-	role       *RoleRepository
-	security   *SecurityRepository
-	policy     *PolicyRepository
-	permission *PermissionRepository
-	userRole   *UserRoleRepository
-	userBan    *UserBanRepository
+	apiKey         *APIKeyRepository
+	audit          *AuditRepository
+	device         *DeviceRepository
+	jwtKey         *JWTKeyRepository
+	role           *RoleRepository
+	security       *SecurityRepository
+	policy         *PolicyRepository
+	permission     *PermissionRepository
+	rolePermission *RolePermissionRepository
+	userRole       *UserRoleRepository
+	userBan        *UserBanRepository
 
 	// Notification
 	notification notification.Repository
@@ -133,16 +135,17 @@ func NewRepo(db *bun.DB) Repository {
 		socialAccount: NewSocialAccountRepository(db),
 
 		// Authentication & Security
-		apiKey:     NewAPIKeyRepository(db),
-		audit:      NewAuditRepository(db),
-		device:     NewDeviceRepository(db),
-		jwtKey:     NewJWTKeyRepository(db),
-		role:       NewRoleRepository(db),
-		security:   NewSecurityRepository(db),
-		policy:     NewPolicyRepository(db),
-		permission: NewPermissionRepository(db),
-		userRole:   NewUserRoleRepository(db),
-		userBan:    NewUserBanRepository(db),
+		apiKey:         NewAPIKeyRepository(db),
+		audit:          NewAuditRepository(db),
+		device:         NewDeviceRepository(db),
+		jwtKey:         NewJWTKeyRepository(db),
+		role:           NewRoleRepository(db),
+		security:       NewSecurityRepository(db),
+		policy:         NewPolicyRepository(db),
+		permission:     NewPermissionRepository(db),
+		rolePermission: NewRolePermissionRepository(db),
+		userRole:       NewUserRoleRepository(db),
+		userBan:        NewUserBanRepository(db),
 
 		// Notification
 		notification: NewNotificationRepository(db),
@@ -229,6 +232,10 @@ func (r *Repo) Policy() *PolicyRepository {
 
 func (r *Repo) Permission() *PermissionRepository {
 	return r.permission
+}
+
+func (r *Repo) RolePermission() *RolePermissionRepository {
+	return r.rolePermission
 }
 
 func (r *Repo) UserRole() *UserRoleRepository {

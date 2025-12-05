@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"encoding/json"
 	"fmt"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -694,6 +695,14 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 						Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
 					),
 				}
+			case "object":
+				return []g.Node{
+					renderObjectField(field, fieldName, value),
+				}
+			case "array":
+				return []g.Node{
+					renderArrayField(field, fieldName, value),
+				}
 			default:
 				// Default text input
 				return []g.Node{
@@ -715,6 +724,588 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
 				g.Text(field.Description),
 			)
+		}()),
+	)
+}
+
+// =============================================================================
+// Nested Object/Array Field Rendering
+// =============================================================================
+
+// renderObjectField renders a nested object field with sub-fields
+func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
+	// Get nested fields from options
+	nestedFields := field.Options.NestedFields
+	if len(nestedFields) == 0 {
+		return Div(
+			Class("text-sm text-slate-500 dark:text-gray-400 italic"),
+			g.Text("No nested fields defined"),
+		)
+	}
+
+	// Convert value to map
+	valueMap := make(map[string]any)
+	if value != nil {
+		if m, ok := value.(map[string]any); ok {
+			valueMap = m
+		}
+	}
+
+	// Serialize the current value for Alpine.js
+	valueJSON, _ := json.Marshal(valueMap)
+
+	isCollapsible := field.Options.Collapsible
+	defaultExpanded := field.Options.DefaultExpanded
+
+	return Div(
+		Class("border border-slate-200 rounded-lg dark:border-gray-700"),
+		g.Attr("x-data", fmt.Sprintf(`{
+			expanded: %v,
+			data: %s,
+			toggleExpanded() { this.expanded = !this.expanded; }
+		}`, defaultExpanded || !isCollapsible, string(valueJSON))),
+
+		// Header (collapsible)
+		g.If(isCollapsible, func() g.Node {
+			return Div(
+				Class("flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-gray-800/50 cursor-pointer rounded-t-lg"),
+				g.Attr("@click", "toggleExpanded()"),
+				Div(
+					Class("flex items-center gap-2"),
+					lucide.Braces(Class("size-4 text-indigo-500")),
+					Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Object Fields")),
+				),
+				Div(
+					g.Attr("x-show", "expanded"),
+					lucide.ChevronUp(Class("size-4 text-slate-400")),
+				),
+				Div(
+					g.Attr("x-show", "!expanded"),
+					lucide.ChevronDown(Class("size-4 text-slate-400")),
+				),
+			)
+		}()),
+
+		// Content
+		Div(
+			g.If(isCollapsible, g.Attr("x-show", "expanded")),
+			Class("p-4 space-y-4"),
+
+			// Nested fields
+			g.Group(func() []g.Node {
+				fields := make([]g.Node, len(nestedFields))
+				for i, nf := range nestedFields {
+					subFieldName := fieldName + "[" + nf.Slug + "]"
+					subValue := valueMap[nf.Slug]
+					fields[i] = renderNestedFieldInput(nf, subFieldName, subValue, 1)
+				}
+				return fields
+			}()),
+
+			// Hidden input to store the full JSON
+			Input(
+				Type("hidden"),
+				Name(fieldName + "_json"),
+				g.Attr(":value", "JSON.stringify(data)"),
+			),
+		),
+	)
+}
+
+// renderArrayField renders an array of objects with add/remove functionality
+func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
+	// Get nested fields from options
+	nestedFields := field.Options.NestedFields
+	if len(nestedFields) == 0 {
+		return Div(
+			Class("text-sm text-slate-500 dark:text-gray-400 italic"),
+			g.Text("No nested fields defined"),
+		)
+	}
+
+	// Convert value to slice
+	var items []map[string]any
+	if value != nil {
+		if arr, ok := value.([]any); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					items = append(items, m)
+				}
+			}
+		}
+	}
+
+	// Serialize the current value for Alpine.js
+	itemsJSON, _ := json.Marshal(items)
+	if len(items) == 0 {
+		itemsJSON = []byte("[]")
+	}
+
+	// Build empty item template
+	emptyItem := make(map[string]any)
+	for _, nf := range nestedFields {
+		emptyItem[nf.Slug] = ""
+	}
+	emptyItemJSON, _ := json.Marshal(emptyItem)
+
+	minItems := 0
+	maxItems := -1
+	if field.Options.MinItems != nil {
+		minItems = *field.Options.MinItems
+	}
+	if field.Options.MaxItems != nil {
+		maxItems = *field.Options.MaxItems
+	}
+
+	isCollapsible := field.Options.Collapsible
+	defaultExpanded := field.Options.DefaultExpanded
+
+	return Div(
+		Class("border border-slate-200 rounded-lg dark:border-gray-700"),
+		g.Attr("x-data", fmt.Sprintf(`{
+			expanded: %v,
+			items: %s,
+			emptyItem: %s,
+			minItems: %d,
+			maxItems: %d,
+			toggleExpanded() { this.expanded = !this.expanded; },
+			addItem() {
+				if (this.maxItems === -1 || this.items.length < this.maxItems) {
+					this.items.push(JSON.parse(JSON.stringify(this.emptyItem)));
+				}
+			},
+			removeItem(index) {
+				if (this.items.length > this.minItems) {
+					this.items.splice(index, 1);
+				}
+			},
+			canAdd() {
+				return this.maxItems === -1 || this.items.length < this.maxItems;
+			},
+			canRemove() {
+				return this.items.length > this.minItems;
+			}
+		}`, defaultExpanded || !isCollapsible, string(itemsJSON), string(emptyItemJSON), minItems, maxItems)),
+
+		// Header
+		Div(
+			Class("flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-gray-800/50 rounded-t-lg"),
+			Div(
+				Class("flex items-center gap-2"),
+				g.If(isCollapsible, func() g.Node {
+					return Div(
+						Class("cursor-pointer"),
+						g.Attr("@click", "toggleExpanded()"),
+						Div(
+							g.Attr("x-show", "expanded"),
+							lucide.ChevronUp(Class("size-4 text-slate-400")),
+						),
+						Div(
+							g.Attr("x-show", "!expanded"),
+							lucide.ChevronDown(Class("size-4 text-slate-400")),
+						),
+					)
+				}()),
+				lucide.List(Class("size-4 text-indigo-500")),
+				Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Array Items")),
+				Span(
+					Class("text-xs text-slate-500 dark:text-gray-400 ml-2"),
+					g.Attr("x-text", "items.length + ' item(s)'"),
+				),
+			),
+			Button(
+				Type("button"),
+				g.Attr("@click", "addItem()"),
+				g.Attr(":disabled", "!canAdd()"),
+				Class("inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 bg-violet-50 rounded hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50"),
+				lucide.Plus(Class("size-3")),
+				g.Text("Add Item"),
+			),
+		),
+
+		// Content
+		Div(
+			g.If(isCollapsible, g.Attr("x-show", "expanded")),
+			Class("p-4"),
+
+			// Items list
+			Div(
+				Class("space-y-4"),
+				Template(
+					g.Attr("x-for", "(item, index) in items"),
+					g.Attr(":key", "index"),
+					renderArrayItemEditor(nestedFields, fieldName),
+				),
+			),
+
+			// Empty state
+			Div(
+				g.Attr("x-show", "items.length === 0"),
+				Class("py-8 text-center"),
+				P(
+					Class("text-sm text-slate-500 dark:text-gray-400"),
+					g.Text("No items yet. Click \"Add Item\" to add your first item."),
+				),
+			),
+
+			// Hidden input to store the full JSON
+			Input(
+				Type("hidden"),
+				Name(fieldName + "_json"),
+				g.Attr(":value", "JSON.stringify(items)"),
+			),
+		),
+	)
+}
+
+// renderArrayItemEditor renders the editor for a single array item
+func renderArrayItemEditor(nestedFields []core.NestedFieldDefDTO, fieldName string) g.Node {
+	return Div(
+		Class("relative p-4 border border-slate-200 rounded-lg dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/30"),
+
+		// Item header with remove button
+		Div(
+			Class("flex items-center justify-between mb-4"),
+			Span(
+				Class("text-sm font-medium text-slate-600 dark:text-gray-400"),
+				g.Text("Item "),
+				Span(g.Attr("x-text", "index + 1")),
+			),
+			Button(
+				Type("button"),
+				g.Attr("@click", "removeItem(index)"),
+				g.Attr(":disabled", "!canRemove()"),
+				Class("p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-red-900/30"),
+				lucide.Trash2(Class("size-4")),
+			),
+		),
+
+		// Item fields
+		Div(
+			Class("grid grid-cols-1 md:grid-cols-2 gap-4"),
+			g.Group(func() []g.Node {
+				fields := make([]g.Node, len(nestedFields))
+				for i, nf := range nestedFields {
+					fields[i] = renderArrayItemField(nf, fieldName, i)
+				}
+				return fields
+			}()),
+		),
+	)
+}
+
+// renderArrayItemField renders a single field within an array item
+func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldIndex int) g.Node {
+	// Note: This function creates a template that will be used with x-for
+	// The actual field name and value binding happens through Alpine.js
+
+	return Div(
+		Label(
+			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
+			g.Text(field.Name),
+			g.If(field.Required, func() g.Node {
+				return Span(Class("text-red-500 ml-1"), g.Text("*"))
+			}()),
+		),
+
+		// Render input based on type
+		g.Group(func() []g.Node {
+			xModel := fmt.Sprintf("item.%s", field.Slug)
+
+			switch field.Type {
+			case "boolean":
+				return []g.Node{
+					Div(
+						Class("flex items-center gap-2"),
+						Input(
+							Type("checkbox"),
+							g.Attr("x-model", xModel),
+							Class("h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"),
+						),
+						Span(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text("Yes")),
+					),
+				}
+			case "textarea", "text":
+				return []g.Node{
+					Textarea(
+						Rows("2"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "number", "integer", "float":
+				return []g.Node{
+					Input(
+						Type("number"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "date":
+				return []g.Node{
+					Input(
+						Type("date"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "datetime":
+				return []g.Node{
+					Input(
+						Type("datetime-local"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "email":
+				return []g.Node{
+					Input(
+						Type("email"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "url":
+				return []g.Node{
+					Input(
+						Type("url"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "color":
+				return []g.Node{
+					Input(
+						Type("color"),
+						g.Attr("x-model", xModel),
+						Class("block w-12 h-10 rounded border border-slate-300 dark:border-gray-700"),
+					),
+				}
+			case "select":
+				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+				if field.Options != nil && field.Options.Choices != nil {
+					for _, choice := range field.Options.Choices {
+						opts = append(opts, Option(Value(choice.Value), g.Text(choice.Label)))
+					}
+				}
+				return []g.Node{
+					Select(
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						g.Group(opts),
+					),
+				}
+			default:
+				// Default: text input
+				return []g.Node{
+					Input(
+						Type("text"),
+						g.Attr("x-model", xModel),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			}
+		}()),
+
+		// Description
+		g.If(field.Description != "", func() g.Node {
+			return P(
+				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text(field.Description),
+			)
+		}()),
+	)
+}
+
+// renderNestedFieldInput renders an input for a nested field (used in object fields)
+func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, value any, depth int) g.Node {
+	valueStr := ""
+	if value != nil {
+		valueStr = fmt.Sprintf("%v", value)
+	}
+
+	return Div(
+		Label(
+			For(fieldName),
+			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
+			g.Text(field.Name),
+			g.If(field.Required, func() g.Node {
+				return Span(Class("text-red-500 ml-1"), g.Text("*"))
+			}()),
+		),
+
+		// Render input based on type
+		g.Group(func() []g.Node {
+			switch field.Type {
+			case "boolean":
+				checked := false
+				if b, ok := value.(bool); ok {
+					checked = b
+				}
+				return []g.Node{
+					Div(
+						Class("flex items-center gap-2"),
+						Input(
+							Type("checkbox"),
+							ID(fieldName),
+							Name(fieldName),
+							Value("true"),
+							g.If(checked, Checked()),
+							Class("h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"),
+						),
+						Span(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text("Yes")),
+					),
+				}
+			case "textarea", "text":
+				return []g.Node{
+					Textarea(
+						ID(fieldName),
+						Name(fieldName),
+						Rows("3"),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						g.Text(valueStr),
+					),
+				}
+			case "number", "integer", "float":
+				return []g.Node{
+					Input(
+						Type("number"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "date":
+				return []g.Node{
+					Input(
+						Type("date"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "datetime":
+				return []g.Node{
+					Input(
+						Type("datetime-local"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "email":
+				return []g.Node{
+					Input(
+						Type("email"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "url":
+				return []g.Node{
+					Input(
+						Type("url"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "color":
+				return []g.Node{
+					Input(
+						Type("color"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						Class("block w-12 h-10 rounded border border-slate-300 dark:border-gray-700"),
+					),
+				}
+			case "select":
+				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+				if field.Options != nil && field.Options.Choices != nil {
+					for _, choice := range field.Options.Choices {
+						opts = append(opts, Option(
+							Value(choice.Value),
+							g.If(valueStr == choice.Value, Selected()),
+							g.Text(choice.Label),
+						))
+					}
+				}
+				return []g.Node{
+					Select(
+						ID(fieldName),
+						Name(fieldName),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						g.Group(opts),
+					),
+				}
+			case "object":
+				// Nested object - recurse with increased depth
+				if depth < 3 && field.Options != nil && len(field.Options.NestedFields) > 0 {
+					return []g.Node{
+						renderNestedObjectFieldInput(field.Options.NestedFields, fieldName, value, depth+1),
+					}
+				}
+				return []g.Node{
+					P(Class("text-xs text-slate-400"), g.Text("Max nesting depth reached")),
+				}
+			default:
+				// Default: text input
+				return []g.Node{
+					Input(
+						Type("text"),
+						ID(fieldName),
+						Name(fieldName),
+						Value(valueStr),
+						g.If(field.Required, Required()),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			}
+		}()),
+
+		// Description
+		g.If(field.Description != "", func() g.Node {
+			return P(
+				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text(field.Description),
+			)
+		}()),
+	)
+}
+
+// renderNestedObjectFieldInput renders inputs for nested object fields within an object
+func renderNestedObjectFieldInput(fields []core.NestedFieldDefDTO, baseName string, value any, depth int) g.Node {
+	valueMap := make(map[string]any)
+	if value != nil {
+		if m, ok := value.(map[string]any); ok {
+			valueMap = m
+		}
+	}
+
+	return Div(
+		Class("pl-4 border-l-2 border-slate-200 dark:border-gray-700 space-y-4"),
+		g.Group(func() []g.Node {
+			nodes := make([]g.Node, len(fields))
+			for i, f := range fields {
+				subFieldName := baseName + "[" + f.Slug + "]"
+				subValue := valueMap[f.Slug]
+				nodes[i] = renderNestedFieldInput(f, subFieldName, subValue, depth)
+			}
+			return nodes
 		}()),
 	)
 }

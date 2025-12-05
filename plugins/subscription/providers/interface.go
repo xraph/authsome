@@ -10,6 +10,9 @@ type (
 	PaymentProvider      = types.PaymentProvider
 	ProviderSubscription = types.ProviderSubscription
 	ProviderInvoice      = types.ProviderInvoice
+	ProviderProduct      = types.ProviderProduct
+	ProviderPrice        = types.ProviderPrice
+	PriceRecurring       = types.PriceRecurring
 	CheckoutRequest      = types.CheckoutRequest
 	CheckoutMode         = types.CheckoutMode
 	CheckoutSession      = types.CheckoutSession

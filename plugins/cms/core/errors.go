@@ -22,6 +22,13 @@ const (
 	ErrCodeInvalidFieldType = "CMS_INVALID_FIELD_TYPE"
 	ErrCodeFieldRequired    = "CMS_FIELD_REQUIRED"
 	
+	// Component Schema errors
+	ErrCodeComponentSchemaNotFound   = "CMS_COMPONENT_SCHEMA_NOT_FOUND"
+	ErrCodeComponentSchemaExists     = "CMS_COMPONENT_SCHEMA_EXISTS"
+	ErrCodeComponentSchemaInUse      = "CMS_COMPONENT_SCHEMA_IN_USE"
+	ErrCodeInvalidComponentSchemaSlug = "CMS_INVALID_COMPONENT_SCHEMA_SLUG"
+	ErrCodeCircularComponentRef      = "CMS_CIRCULAR_COMPONENT_REF"
+	
 	// Content Entry errors
 	ErrCodeEntryNotFound         = "CMS_ENTRY_NOT_FOUND"
 	ErrCodeEntryValidationFailed = "CMS_ENTRY_VALIDATION_FAILED"
@@ -122,6 +129,47 @@ func ErrFieldRequired(fieldName string) error {
 	return errs.New(
 		ErrCodeFieldRequired,
 		"required field missing: "+fieldName,
+		http.StatusBadRequest,
+	)
+}
+
+// =============================================================================
+// Component Schema Errors
+// =============================================================================
+
+// ErrComponentSchemaNotFound returns a not found error for a component schema
+func ErrComponentSchemaNotFound(identifier string) error {
+	return errs.New(ErrCodeComponentSchemaNotFound, "component schema not found: "+identifier, http.StatusNotFound)
+}
+
+// ErrComponentSchemaExists returns a conflict error when a component schema already exists
+func ErrComponentSchemaExists(slug string) error {
+	return errs.New(ErrCodeComponentSchemaExists, "component schema already exists with slug: "+slug, http.StatusConflict)
+}
+
+// ErrComponentSchemaInUse returns an error when trying to delete a component schema that is in use
+func ErrComponentSchemaInUse(slug string, usageCount int) error {
+	return errs.New(
+		ErrCodeComponentSchemaInUse,
+		fmt.Sprintf("cannot delete component schema '%s': used by %d field(s)", slug, usageCount),
+		http.StatusConflict,
+	)
+}
+
+// ErrInvalidComponentSchemaSlug returns a bad request error for invalid component schema slug format
+func ErrInvalidComponentSchemaSlug(slug, reason string) error {
+	msg := "invalid component schema slug: " + slug
+	if reason != "" {
+		msg += " (" + reason + ")"
+	}
+	return errs.New(ErrCodeInvalidComponentSchemaSlug, msg, http.StatusBadRequest)
+}
+
+// ErrCircularComponentRef returns an error when a circular component reference is detected
+func ErrCircularComponentRef(path string) error {
+	return errs.New(
+		ErrCodeCircularComponentRef,
+		"circular component reference detected: "+path,
 		http.StatusBadRequest,
 	)
 }

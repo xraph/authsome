@@ -298,16 +298,34 @@ func CreateContentTypePage(
 					)
 				}()),
 
-				FormEl(
-					Method("POST"),
-					Action(appBase+"/cms/types/create"),
-					Class("space-y-6"),
+			FormEl(
+				Method("POST"),
+				Action(appBase+"/cms/types/create"),
+				Class("space-y-6"),
+				g.Attr("x-data", `{
+					name: '',
+					slug: '',
+					slugManuallyEdited: false,
+					generateSlug(name) {
+						return name
+							.toLowerCase()
+							.trim()
+							.replace(/[^\w\s-]/g, '')
+							.replace(/[\s_-]+/g, '-')
+							.replace(/^-+|-+$/g, '');
+					},
+					updateSlug() {
+						if (!this.slugManuallyEdited) {
+							this.slug = this.generateSlug(this.name);
+						}
+					}
+				}`),
 
-					// Name
-					formField("name", "Name", "text", "", "e.g., Blog Posts, Products, Events", true, ""),
+				// Name
+				formFieldWithAlpine("name", "Name", "text", "", "e.g., Blog Posts, Products, Events", true, "", "name", "@input", "updateSlug()"),
 
-					// Slug
-					formField("slug", "Slug", "text", "", "e.g., blog-posts, products, events", true, "URL-friendly identifier. Use lowercase letters, numbers, and hyphens."),
+				// Slug  
+				formFieldWithAlpine("slug", "Slug", "text", "", "e.g., blog-posts, products, events", true, "URL-friendly identifier. Use lowercase letters, numbers, and hyphens.", "slug", "@input", "slugManuallyEdited = true"),
 
 					// Description
 					Div(
@@ -366,6 +384,37 @@ func formField(name, label, inputType, value, placeholder string, required bool,
 			Value(value),
 			Placeholder(placeholder),
 			g.If(required, Required()),
+			Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+		),
+		g.If(help != "", func() g.Node {
+			return P(
+				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text(help),
+			)
+		}()),
+	)
+}
+
+// formFieldWithAlpine creates a form field with Alpine.js x-model and event binding
+func formFieldWithAlpine(name, label, inputType, value, placeholder string, required bool, help string, xModel string, eventName string, eventHandler string) g.Node {
+	return Div(
+		Label(
+			For(name),
+			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
+			g.Text(label),
+			g.If(required, func() g.Node {
+				return Span(Class("text-red-500 ml-1"), g.Text("*"))
+			}()),
+		),
+		Input(
+			Type(inputType),
+			ID(name),
+			Name(name),
+			Value(value),
+			Placeholder(placeholder),
+			g.If(required, Required()),
+			g.Attr("x-model", xModel),
+			g.If(eventName != "", g.Attr(eventName, eventHandler)),
 			Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
 		),
 		g.If(help != "", func() g.Node {

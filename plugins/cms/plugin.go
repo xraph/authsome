@@ -41,10 +41,11 @@ type Plugin struct {
 	authInst      core.Authsome
 
 	// Services
-	contentTypeSvc *service.ContentTypeService
-	fieldSvc       *service.ContentFieldService
-	entrySvc       *service.ContentEntryService
-	revisionSvc    *service.RevisionService
+	contentTypeSvc     *service.ContentTypeService
+	fieldSvc           *service.ContentFieldService
+	entrySvc           *service.ContentEntryService
+	revisionSvc        *service.RevisionService
+	componentSchemaSvc *service.ComponentSchemaService
 
 	// Dashboard extension
 	dashboardExt *DashboardExtension
@@ -230,6 +231,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	fieldRepo := repository.NewContentFieldRepository(p.db)
 	entryRepo := repository.NewContentEntryRepository(p.db)
 	revisionRepo := repository.NewRevisionRepository(p.db)
+	componentSchemaRepo := repository.NewComponentSchemaRepository(p.db)
 
 	// Initialize services
 	p.contentTypeSvc = service.NewContentTypeService(
@@ -263,8 +265,23 @@ func (p *Plugin) Init(auth core.Authsome) error {
 
 	p.revisionSvc = service.NewRevisionService(revisionRepo, p.logger)
 
+	p.componentSchemaSvc = service.NewComponentSchemaService(
+		componentSchemaRepo,
+		service.ComponentSchemaServiceConfig{
+			MaxComponentSchemas: p.config.Limits.MaxComponentSchemas,
+			Logger:              p.logger,
+		},
+	)
+
 	// Initialize dashboard extension
 	p.dashboardExt = NewDashboardExtension(p)
+
+	// Register services in DI container if available
+	if container := forgeApp.Container(); container != nil {
+		if err := p.RegisterServices(container); err != nil {
+			p.logger.Warn("failed to register CMS services in DI container", forge.F("error", err.Error()))
+		}
+	}
 
 	p.logger.Info("CMS plugin initialized",
 		forge.F("enableRevisions", p.config.Features.EnableRevisions),
@@ -701,6 +718,14 @@ func (p *Plugin) Migrate() error {
 		return fmt.Errorf("failed to create cms_content_type_relations table: %w", err)
 	}
 
+	// Create cms_component_schemas table
+	if _, err := p.db.NewCreateTable().
+		Model((*schema.ComponentSchema)(nil)).
+		IfNotExists().
+		Exec(ctx); err != nil {
+		return fmt.Errorf("failed to create cms_component_schemas table: %w", err)
+	}
+
 	// Create indexes
 	indexes := []string{
 		// Content Types
@@ -732,6 +757,10 @@ func (p *Plugin) Migrate() error {
 		// Content Type Relations
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_type_relations_source ON cms_content_type_relations(source_content_type_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_type_relations_target ON cms_content_type_relations(target_content_type_id)`,
+
+		// Component Schemas
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_component_schemas_slug ON cms_component_schemas(app_id, environment_id, slug) WHERE deleted_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_cms_component_schemas_app_env ON cms_component_schemas(app_id, environment_id) WHERE deleted_at IS NULL`,
 	}
 
 	for _, idx := range indexes {
@@ -763,4 +792,3 @@ func (p *Plugin) Logger() forge.Logger {
 func (p *Plugin) DB() *bun.DB {
 	return p.db
 }
-
