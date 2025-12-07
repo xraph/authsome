@@ -60,6 +60,8 @@ const (
 	FieldTypeObject FieldType = "object"
 	// FieldTypeArray is an array of objects with sub-fields
 	FieldTypeArray FieldType = "array"
+	// FieldTypeOneOf is a discriminated union - schema determined by another field's value
+	FieldTypeOneOf FieldType = "oneOf"
 )
 
 // String returns the string representation of the field type
@@ -76,7 +78,8 @@ func (t FieldType) IsValid() bool {
 		FieldTypeRelation, FieldTypeMedia, FieldTypeSlug, FieldTypeUUID,
 		FieldTypeColor, FieldTypePassword, FieldTypePhone, FieldTypeTextarea,
 		FieldTypeMarkdown, FieldTypeEnumeration, FieldTypeInteger, FieldTypeFloat,
-		FieldTypeBigInteger, FieldTypeDecimal, FieldTypeObject, FieldTypeArray:
+		FieldTypeBigInteger, FieldTypeDecimal, FieldTypeObject, FieldTypeArray,
+		FieldTypeOneOf:
 		return true
 	default:
 		return false
@@ -137,7 +140,7 @@ func (t FieldType) IsSelectable() bool {
 func (t FieldType) RequiresOptions() bool {
 	switch t {
 	case FieldTypeSelect, FieldTypeMultiSelect, FieldTypeEnumeration, FieldTypeRelation,
-		FieldTypeObject, FieldTypeArray:
+		FieldTypeObject, FieldTypeArray, FieldTypeOneOf:
 		return true
 	default:
 		return false
@@ -147,11 +150,16 @@ func (t FieldType) RequiresOptions() bool {
 // IsNested returns true if the field type supports nested sub-fields
 func (t FieldType) IsNested() bool {
 	switch t {
-	case FieldTypeObject, FieldTypeArray:
+	case FieldTypeObject, FieldTypeArray, FieldTypeOneOf:
 		return true
 	default:
 		return false
 	}
+}
+
+// IsOneOf returns true if the field type is a discriminated union
+func (t FieldType) IsOneOf() bool {
+	return t == FieldTypeOneOf
 }
 
 // IsObject returns true if the field type is an object
@@ -243,6 +251,7 @@ func GetAllFieldTypes() []FieldTypeInfo {
 		{Type: FieldTypeMedia, Name: "Media", Description: "File or image upload", Category: "media", Icon: "Image"},
 		{Type: FieldTypeObject, Name: "Object", Description: "Nested object with sub-fields", Category: "nested", Icon: "Braces", RequiresOptions: true},
 		{Type: FieldTypeArray, Name: "Array", Description: "Array of objects with sub-fields", Category: "nested", Icon: "List", RequiresOptions: true},
+		{Type: FieldTypeOneOf, Name: "OneOf", Description: "Discriminated union - schema based on another field", Category: "nested", Icon: "GitMerge", RequiresOptions: true},
 	}
 }
 

@@ -88,7 +88,7 @@ func contentTypesGrid(currentApp *app.App, basePath string, contentTypes []*core
 // contentTypeCard renders a single content type card
 func contentTypeCard(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 	return A(
-		Href(appBase+"/cms/types/"+ct.Slug),
+		Href(appBase+"/cms/types/"+ct.Name),
 		Class("block"),
 		Card(
 			Div(
@@ -113,7 +113,7 @@ func contentTypeCard(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 						),
 						P(
 							Class("text-sm text-slate-500 dark:text-gray-400"),
-							g.Text(ct.Slug),
+							g.Text(ct.Name),
 						),
 					),
 				),
@@ -204,7 +204,7 @@ func contentTypesTable(currentApp *app.App, basePath string, contentTypes []*cor
 
 	return Div(
 		Card(DataTable(
-			[]string{"Name", "Slug", "Fields", "Entries", "Updated", "Actions"},
+			[]string{"Name", "Name", "Fields", "Entries", "Updated", "Actions"},
 			rows,
 		)),
 		Pagination(page, totalPages, appBase+"/cms/types"),
@@ -240,7 +240,7 @@ func contentTypeRow(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 		// Slug
 		TableCellSecondary(Code(
 			Class("text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"),
-			g.Text(ct.Slug),
+			g.Text(ct.Name),
 		)),
 
 		// Fields
@@ -254,8 +254,8 @@ func contentTypeRow(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 
 		// Actions
 		TableCellActions(
-			IconButton(appBase+"/cms/types/"+ct.Slug+"/entries", lucide.FileText(Class("size-4")), "View Entries", "text-blue-600"),
-			IconButton(appBase+"/cms/types/"+ct.Slug, lucide.Settings(Class("size-4")), "Edit Type", "text-slate-600"),
+			IconButton(appBase+"/cms/types/"+ct.Name+"/entries", lucide.FileText(Class("size-4")), "View Entries", "text-blue-600"),
+			IconButton(appBase+"/cms/types/"+ct.Name, lucide.Settings(Class("size-4")), "Edit Type", "text-slate-600"),
 		),
 	)
 }
@@ -325,7 +325,7 @@ func CreateContentTypePage(
 				formFieldWithAlpine("name", "Name", "text", "", "e.g., Blog Posts, Products, Events", true, "", "name", "@input", "updateSlug()"),
 
 				// Slug  
-				formFieldWithAlpine("slug", "Slug", "text", "", "e.g., blog-posts, products, events", true, "URL-friendly identifier. Use lowercase letters, numbers, and hyphens.", "slug", "@input", "slugManuallyEdited = true"),
+				formFieldWithAlpine("slug", "Name", "text", "", "e.g., blog-posts, products, events", true, "URL-friendly identifier. Use lowercase letters, numbers, and hyphens.", "slug", "@input", "slugManuallyEdited = true"),
 
 					// Description
 					Div(

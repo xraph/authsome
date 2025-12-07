@@ -135,6 +135,7 @@ document.addEventListener('alpine:init', () => {
             window.history.pushState({}, '', url);
         }
     }));
+    
 });
 
 /**

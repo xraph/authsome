@@ -308,3 +308,89 @@
   display: none !important;
 }
 
+/* CodeMirror JSON Editor Styles */
+@layer components {
+  /* Editor container */
+  .cm-editor {
+    height: 100%;
+    max-height: 400px;
+    font-size: 14px;
+  }
+
+  /* Ensure proper scrolling */
+  .cm-scroller {
+    overflow: auto;
+  }
+
+  /* Line numbers gutter */
+  .cm-gutters {
+    min-width: 40px;
+  }
+
+  /* Better focus state */
+  .cm-editor.cm-focused {
+    outline: none;
+  }
+
+  /* JSON Editor toolbar */
+  .json-editor-toolbar {
+    @apply flex items-center justify-between p-2 bg-slate-50 border border-b-0 border-slate-200 rounded-t-lg;
+  }
+
+  .dark .json-editor-toolbar {
+    @apply bg-gray-800 border-gray-700;
+  }
+
+  /* Editor wrapper with toolbar */
+  .json-editor-wrapper .cm-editor {
+    @apply rounded-t-none;
+  }
+
+  /* Validation status */
+  .json-editor-valid {
+    @apply text-green-600;
+  }
+
+  .dark .json-editor-valid {
+    @apply text-green-400;
+  }
+
+  .json-editor-invalid {
+    @apply text-red-600;
+  }
+
+  .dark .json-editor-invalid {
+    @apply text-red-400;
+  }
+
+  /* Override CodeMirror tooltip styles for dark mode */
+  .dark .cm-tooltip {
+    @apply bg-gray-800 border-gray-700 text-gray-200;
+  }
+
+  .dark .cm-tooltip-autocomplete > ul > li {
+    @apply text-gray-200;
+  }
+
+  .dark .cm-tooltip-autocomplete > ul > li[aria-selected] {
+    @apply bg-violet-900/50 text-white;
+  }
+
+  /* Lint panel styling */
+  .cm-panels {
+    @apply border-t border-slate-200;
+  }
+
+  .dark .cm-panels {
+    @apply border-gray-700 bg-gray-800;
+  }
+
+  .cm-panel {
+    @apply p-2 text-sm;
+  }
+
+  .dark .cm-panel {
+    @apply text-gray-300;
+  }
+}
+

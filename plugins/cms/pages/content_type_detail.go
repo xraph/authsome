@@ -23,10 +23,11 @@ func ContentTypeDetailPage(
 	stats *core.ContentTypeStatsDTO,
 	environmentID string,
 	allContentTypes []*core.ContentTypeSummaryDTO,
+	allComponentSchemas []*core.ComponentSchemaSummaryDTO,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
-	typeBase := appBase + "/cms/types/" + contentType.Slug
-	apiBase := basePath + "/cms/" + contentType.Slug
+	typeBase := appBase + "/cms/types/" + contentType.Name
+	apiBase := basePath + "/cms/" + contentType.Name
 
 	// Build icon node
 	var iconNode g.Node
@@ -81,7 +82,7 @@ func ContentTypeDetailPage(
 						Class("mt-1 text-sm text-slate-500 dark:text-gray-400"),
 						Code(
 							Class("text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"),
-							g.Text(contentType.Slug),
+							g.Text(contentType.Name),
 						),
 					),
 					descNode,
@@ -116,7 +117,7 @@ func ContentTypeDetailPage(
 			Div(
 				g.Attr("x-show", "activeTab === 'fields'"),
 				g.Attr("x-cloak", ""),
-				fieldsSection(appBase, contentType, allContentTypes),
+				fieldsSection(appBase, contentType, allContentTypes, allComponentSchemas),
 			),
 
 			// Settings Tab
@@ -184,8 +185,8 @@ func tabButton(label string, active bool) g.Node {
 }
 
 // fieldsSection renders the fields management section with Preline/Alpine drawer
-func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO) g.Node {
-	typeBase := appBase + "/cms/types/" + contentType.Slug
+func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO, allComponentSchemas []*core.ComponentSchemaSummaryDTO) g.Node {
+	typeBase := appBase + "/cms/types/" + contentType.Name
 
 	return Div(
 		g.Attr("x-data", "{ drawerOpen: false }"),
@@ -282,7 +283,7 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentT
 				// Form body
 				Div(
 					Class("flex-1 overflow-y-auto p-4"),
-					addFieldForm(typeBase, contentType, allContentTypes),
+					addFieldForm(typeBase, contentType, allContentTypes, allComponentSchemas),
 				),
 
 				// Footer
@@ -308,17 +309,24 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentT
 }
 
 // addFieldForm renders the form for adding a new field using Preline-style components with Alpine.js
-func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO) g.Node {
+func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO, allComponentSchemas []*core.ComponentSchemaSummaryDTO) g.Node {
 	fieldTypesByCategory := core.GetFieldTypesByCategory()
 
 	// Build content type options for relations (exclude current type)
 	var contentTypeOptions []string
 	for _, ct := range allContentTypes {
 		if ct.ID != contentType.ID {
-			contentTypeOptions = append(contentTypeOptions, fmt.Sprintf(`<option value="%s">%s</option>`, ct.Slug, ct.Name))
+			contentTypeOptions = append(contentTypeOptions, fmt.Sprintf(`<option value="%s">%s</option>`, ct.Name, ct.Name))
 		}
 	}
 	contentTypeOptionsHTML := strings.Join(contentTypeOptions, "\n")
+
+	// Build component schema options for nested fields
+	var componentSchemaOptions []string
+	for _, cs := range allComponentSchemas {
+		componentSchemaOptions = append(componentSchemaOptions, fmt.Sprintf(`<option value="%s">%s</option>`, cs.Name, cs.Name))
+	}
+	componentSchemaOptionsHTML := strings.Join(componentSchemaOptions, "\n")
 
 	return FormEl(
 		ID("add-field-form"),
@@ -352,7 +360,7 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 			Label(
 				For("field-slug"),
 				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
-				g.Text("Slug"),
+				g.Text("Name"),
 				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
 			Input(
@@ -383,10 +391,11 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 				Class("py-2.5 px-3 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:focus:ring-violet-600"),
 				Option(Value(""), g.Text("Select a field type...")),
 				g.Group(func() []g.Node {
-					categories := []string{"text", "number", "date", "selection", "relation", "media", "advanced"}
+					categories := []string{"text", "number", "date", "selection", "relation", "media", "nested", "advanced"}
 					categoryNames := map[string]string{
 						"text": "📝 Text", "number": "🔢 Number", "date": "📅 Date & Time",
-						"selection": "☑️ Selection", "relation": "🔗 Relations", "media": "🖼️ Media", "advanced": "⚙️ Advanced",
+						"selection": "☑️ Selection", "relation": "🔗 Relations", "media": "🖼️ Media",
+						"nested": "📦 Nested", "advanced": "⚙️ Advanced",
 					}
 					var groups []g.Node
 					for _, cat := range categories {
@@ -558,7 +567,146 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 					</select>
 				</div>
 			</div>
-		</div>`, contentTypeOptionsHTML)),
+			
+			<!-- Nested type options (object/array) -->
+			<div x-show="isNestedType()" class="space-y-3">
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Schema Source</label>
+					<select name="schemaSource" x-model="schemaSource" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+						<option value="component">Use Component Schema</option>
+						<option value="inline">Define Inline</option>
+					</select>
+				</div>
+				<div x-show="schemaSource === 'component'">
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Component Schema</label>
+					<select name="options.componentRef" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+						<option value="">Select a component schema...</option>
+						%s
+					</select>
+					<p class="mt-1 text-xs text-gray-500">Reusable schema defined in Component Schemas</p>
+				</div>
+				<div x-show="schemaSource === 'inline'" class="text-xs text-amber-600 dark:text-amber-400">
+					<p>Inline field definitions can be added after creating the field, or use a Component Schema for reusable schemas.</p>
+				</div>
+				<div x-show="fieldType === 'array'" class="grid grid-cols-2 gap-3 mt-3">
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Min Items</label>
+						<input type="number" name="options.minItems" min="0" placeholder="0" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Max Items</label>
+						<input type="number" name="options.maxItems" min="0" placeholder="No limit" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+				</div>
+				<div class="flex items-center gap-3 mt-2">
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" name="options.collapsible" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+						<span class="text-xs text-gray-600 dark:text-neutral-400">Collapsible in form</span>
+					</label>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" name="options.defaultExpanded" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+						<span class="text-xs text-gray-600 dark:text-neutral-400">Expanded by default</span>
+					</label>
+				</div>
+			</div>
+			
+			<!-- OneOf type options -->
+			<div x-show="fieldType === 'oneOf'" class="space-y-3">
+				<div class="bg-violet-50 dark:bg-violet-900/20 p-3 rounded-lg border border-violet-200 dark:border-violet-800">
+					<p class="text-xs font-medium text-violet-700 dark:text-violet-300 mb-1">Discriminated Union</p>
+					<p class="text-xs text-violet-600 dark:text-violet-400">The schema displayed depends on the value of another field (discriminator).</p>
+				</div>
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Discriminator Field</label>
+					<input type="text" name="options.discriminatorField" placeholder="e.g., auth-type, config-type" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					<p class="mt-1 text-xs text-gray-500">Slug of another field (typically a select) whose value determines which schema to show</p>
+				</div>
+				<div>
+					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Schema Mappings</label>
+					<div class="space-y-2 max-h-64 overflow-y-auto">
+						<template x-for="(schema, idx) in oneOfSchemas" :key="idx">
+							<div class="p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700">
+								<div class="flex gap-2 items-start">
+									<div class="flex-1 space-y-2">
+										<input type="text" x-model="schema.key" :name="'options.schemas[' + idx + '].key'" placeholder="Discriminator value (e.g., oauth2)" class="w-full py-2 px-3 border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+										<input type="text" x-model="schema.label" :name="'options.schemas[' + idx + '].label'" placeholder="Display label (e.g., OAuth2 Configuration)" class="w-full py-2 px-3 border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+										<select x-model="schema.componentRef" :name="'options.schemas[' + idx + '].componentRef'" class="w-full py-2 px-3 border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+											<option value="">Select component schema...</option>
+											%s
+										</select>
+									</div>
+									<button type="button" @click="removeOneOfSchema(idx)" :disabled="oneOfSchemas.length <= 1" class="p-2 text-gray-400 hover:text-red-500 disabled:opacity-30">
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+									</button>
+								</div>
+							</div>
+						</template>
+					</div>
+					<button type="button" @click="addOneOfSchema()" class="mt-2 w-full py-2 border-2 border-dashed border-gray-300 dark:border-neutral-600 rounded-lg text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 flex items-center justify-center gap-2">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+						Add Schema Mapping
+					</button>
+				</div>
+				<label class="flex items-center gap-2 cursor-pointer mt-2">
+					<input type="checkbox" name="options.clearOnDiscriminatorChange" value="true" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+					<span class="text-xs text-gray-600 dark:text-neutral-400">Clear data when discriminator changes</span>
+				</label>
+				<div class="flex items-center gap-3">
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" name="options.collapsible" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+						<span class="text-xs text-gray-600 dark:text-neutral-400">Collapsible</span>
+					</label>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" name="options.defaultExpanded" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+						<span class="text-xs text-gray-600 dark:text-neutral-400">Expanded by default</span>
+					</label>
+				</div>
+			</div>
+			
+			<!-- Conditional Visibility options (for all field types) -->
+			<div x-show="fieldType !== ''" class="border-t border-gray-200 dark:border-neutral-700 pt-4 mt-4 space-y-3">
+				<div class="flex items-center justify-between">
+					<p class="text-sm font-medium text-gray-800 dark:text-neutral-200">Conditional Visibility</p>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" x-model="hasCondition" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+						<span class="text-xs text-gray-600 dark:text-neutral-400">Enable</span>
+					</label>
+				</div>
+				<div x-show="hasCondition" x-transition class="space-y-3">
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Condition Type</label>
+						<select x-model="conditionType" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+							<option value="showWhen">Show When</option>
+							<option value="hideWhen">Hide When</option>
+						</select>
+					</div>
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Watch Field</label>
+						<input type="text" :name="conditionType + '.field'" x-model="conditionField" placeholder="Field name to watch (e.g., status)" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+					</div>
+					<div>
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Operator</label>
+						<select :name="conditionType + '.operator'" x-model="conditionOperator" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+							<option value="eq">Equals (eq)</option>
+							<option value="ne">Not Equals (ne)</option>
+							<option value="in">In List (in)</option>
+							<option value="notIn">Not In List (notIn)</option>
+							<option value="exists">Exists (has value)</option>
+							<option value="notExists">Not Exists (empty)</option>
+						</select>
+					</div>
+					<div x-show="!['exists', 'notExists'].includes(conditionOperator)">
+						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Value</label>
+						<input type="text" :name="conditionType + '.value'" x-model="conditionValue" placeholder="Value to compare" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
+						<p class="mt-1 text-xs text-gray-500">For 'in' or 'notIn', enter comma-separated values</p>
+					</div>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" name="options.clearWhenHidden" value="true" class="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700">
+						<span class="text-xs text-gray-600 dark:text-neutral-400">Clear field value when hidden</span>
+					</label>
+				</div>
+			</div>
+		</div>`, contentTypeOptionsHTML, componentSchemaOptionsHTML, componentSchemaOptionsHTML)),
 
 		// Validation options section
 		Div(
@@ -585,8 +733,17 @@ func drawerFieldFormAlpineData() string {
 		slug: '',
 		fieldType: '',
 		relationType: 'oneToMany',
+		schemaSource: 'component',
 		slugEdited: false,
 		enumOptions: [{label: '', value: ''}],
+		oneOfSchemas: [{key: '', label: '', componentRef: ''}],
+		
+		// Conditional visibility
+		hasCondition: false,
+		conditionType: 'showWhen',
+		conditionField: '',
+		conditionOperator: 'eq',
+		conditionValue: '',
 		
 		updateSlug() {
 			if (!this.slugEdited) {
@@ -604,6 +761,14 @@ func drawerFieldFormAlpineData() string {
 				this.enumOptions.splice(idx, 1);
 			}
 		},
+		addOneOfSchema() {
+			this.oneOfSchemas.push({key: '', label: '', componentRef: ''});
+		},
+		removeOneOfSchema(idx) {
+			if (this.oneOfSchemas.length > 1) {
+				this.oneOfSchemas.splice(idx, 1);
+			}
+		},
 		isTextType() {
 			return ['text', 'textarea', 'richText', 'markdown', 'email', 'url', 'phone', 'password'].includes(this.fieldType);
 		},
@@ -612,6 +777,9 @@ func drawerFieldFormAlpineData() string {
 		},
 		isSelectionType() {
 			return ['select', 'multiSelect', 'enumeration'].includes(this.fieldType);
+		},
+		isNestedType() {
+			return ['object', 'array'].includes(this.fieldType);
 		}
 	}`
 }
@@ -670,7 +838,7 @@ func fieldRow(typeBase string, field *core.ContentFieldDTO) g.Node {
 				Div(Class("font-medium"), g.Text(field.Name)),
 				Code(
 					Class("text-xs text-slate-500 dark:text-gray-500"),
-					g.Text(field.Slug),
+					g.Text(field.Name),
 				),
 			),
 		)),
@@ -699,14 +867,14 @@ func fieldRow(typeBase string, field *core.ContentFieldDTO) g.Node {
 		TableCell(Div(
 			Class("flex items-center justify-end gap-1"),
 			// Delete modal component (now contains both button and modal)
-			deleteFieldModal("delete-field-"+field.Slug, typeBase, field),
+			deleteFieldModal("delete-field-"+field.Name, typeBase, field),
 		)),
 	)
 }
 
 // deleteFieldModal renders a Preline-style confirmation modal for deleting a field
 func deleteFieldModal(modalID, typeBase string, field *core.ContentFieldDTO) g.Node {
-	alpineID := "deleteModal_" + field.Slug
+	alpineID := "deleteModal_" + field.Name
 	return Div(
 		g.Attr("x-data", fmt.Sprintf("{ %s: false }", alpineID)),
 
@@ -798,7 +966,7 @@ func deleteFieldModal(modalID, typeBase string, field *core.ContentFieldDTO) g.N
 						),
 						FormEl(
 							Method("POST"),
-							Action(typeBase+"/fields/"+field.Slug+"/delete"),
+							Action(typeBase+"/fields/"+field.Name+"/delete"),
 							Class("inline"),
 							Button(
 								Type("submit"),
@@ -889,14 +1057,14 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 						Label(
 							For("slug"),
 							Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
-							g.Text("Slug"),
+							g.Text("Name"),
 							Span(Class("text-gray-500 ms-1 text-xs"), g.Text("(read-only)")),
 						),
 						Input(
 							Type("text"),
 							ID("slug"),
 							Name("slug"),
-							Value(contentType.Slug),
+							Value(contentType.Name),
 							Disabled(),
 							Class("py-2 px-3 block w-full border-gray-200 rounded-lg text-sm bg-gray-50 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-500 cursor-not-allowed"),
 						),
@@ -1118,9 +1286,9 @@ func fieldSelectOptions(fields []*core.ContentFieldDTO, selectedValue string, al
 				continue
 			}
 		}
-		isSelected := field.Slug == selectedValue
+		isSelected := field.Name == selectedValue
 		option := Option(
-			Value(field.Slug),
+			Value(field.Name),
 			g.If(isSelected, Selected()),
 			g.Text(field.Name),
 		)
@@ -1342,17 +1510,17 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 						g.Text("?filter[fieldName]=op.value")),
 					Div(
 						Class("mt-2 space-y-1"),
-						filterOpExample("eq", "Equals", "filter[status]=eq.published"),
-						filterOpExample("ne", "Not equals", "filter[status]=ne.draft"),
+						filterOpExample("eq", "Equals", "filter[_meta.status]=eq.published"),
+						filterOpExample("ne", "Not equals", "filter[_meta.status]=ne.draft"),
 						filterOpExample("gt", "Greater than", "filter[price]=gt.100"),
 						filterOpExample("gte", "Greater or equal", "filter[price]=gte.100"),
 						filterOpExample("lt", "Less than", "filter[price]=lt.50"),
 						filterOpExample("lte", "Less or equal", "filter[price]=lte.50"),
 						filterOpExample("like", "Contains (case-sensitive)", "filter[title]=like.hello"),
 						filterOpExample("ilike", "Contains (case-insensitive)", "filter[title]=ilike.hello"),
-						filterOpExample("in", "In list", "filter[status]=in.(draft,published)"),
-						filterOpExample("nin", "Not in list", "filter[status]=nin.(archived)"),
-						filterOpExample("null", "Is null", "filter[deletedAt]=null.true"),
+						filterOpExample("in", "In list", "filter[_meta.status]=in.(draft,published)"),
+						filterOpExample("nin", "Not in list", "filter[_meta.status]=nin.(archived)"),
+						filterOpExample("null", "Is null", "filter[_meta.deletedAt]=null.true"),
 					),
 				),
 
@@ -1460,7 +1628,7 @@ func schemaFieldRow(field *core.ContentFieldDTO) g.Node {
 			Div(
 				Class("flex items-center gap-2"),
 				fieldTypeIcon(field.Type),
-				Code(Class("text-xs font-mono font-medium"), g.Text(field.Slug)),
+				Code(Class("text-xs font-mono font-medium"), g.Text(field.Name)),
 			),
 		),
 		Td(Span(Class("py-0.5 px-2 inline-flex items-center text-xs font-medium bg-gray-100 text-gray-600 rounded dark:bg-neutral-700 dark:text-neutral-400"), g.Text(field.Type))),
@@ -1484,7 +1652,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 		if i > 0 {
 			sampleData += ",\n"
 		}
-		sampleData += fmt.Sprintf(`    "%s": `, field.Slug)
+		sampleData += fmt.Sprintf(`    "%s": `, field.Name)
 		switch field.Type {
 		case "text", "string", "email", "url", "richtext", "markdown":
 			sampleData += `"sample value"`
@@ -1538,7 +1706,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 					Class("bg-slate-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto"),
 					Code(
 						Class("text-sm text-emerald-400 font-mono whitespace-pre"),
-						g.Text(fmt.Sprintf(`curl "%s?filter[status]=eq.published&sort=-createdAt&page=1&pageSize=10" \
+						g.Text(fmt.Sprintf(`curl "%s?filter[_meta.status]=eq.published&sort=-createdAt&page=1&pageSize=10" \
   -H "Authorization: Bearer YOUR_TOKEN"`, apiBase)),
 					),
 				),
@@ -1560,7 +1728,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
   -d '{
     "filter": {
       "$and": [
-        { "status": { "$eq": "published" } },
+        { "_meta.status": { "$eq": "published" } },
         { "$or": [
           { "featured": { "$eq": true } },
           { "views": { "$gte": 1000 } }
@@ -1587,7 +1755,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID s
 	// Default query example
 	defaultQuery := `{
   "filter": {
-    "status": { "$eq": "published" }
+    "_meta.status": { "$eq": "published" }
   },
   "sort": ["-createdAt"],
   "page": 1,
@@ -1748,7 +1916,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID s
 					Button(
 						Type("button"),
 						g.Attr("@click", `query = JSON.stringify({
-							filter: { status: { "$eq": "published" } },
+							filter: { "_meta.status": { "$eq": "published" } },
 							sort: ["-createdAt"],
 							page: 1,
 							pageSize: 10
@@ -1759,7 +1927,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID s
 					Button(
 						Type("button"),
 						g.Attr("@click", `query = JSON.stringify({
-							filter: { status: { "$eq": "draft" } },
+							filter: { "_meta.status": { "$eq": "draft" } },
 							sort: ["-updatedAt"],
 							page: 1,
 							pageSize: 10
@@ -1955,7 +2123,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID s
 						nodes[i] = Div(
 							Class("flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-gray-800 rounded text-sm"),
 							fieldTypeIcon(field.Type),
-							Code(Class("font-mono text-xs"), g.Text(field.Slug)),
+							Code(Class("font-mono text-xs"), g.Text(field.Name)),
 							Span(Class("text-slate-400 text-xs"), g.Text("("+field.Type+")")),
 						)
 					}
@@ -2096,7 +2264,7 @@ func fieldFormPage(
 	isEdit bool,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
-	typeBase := appBase + "/cms/types/" + contentType.Slug
+	typeBase := appBase + "/cms/types/" + contentType.Name
 
 	// Get all field types
 	fieldTypesByCategory := core.GetFieldTypesByCategory()
@@ -2107,7 +2275,7 @@ func fieldFormPage(
 	pageDesc := fmt.Sprintf("Configure a new field for %s", contentType.Name)
 	submitText := "Add Field"
 	if isEdit && field != nil {
-		actionURL = typeBase + "/fields/" + field.Slug + "/update"
+		actionURL = typeBase + "/fields/" + field.Name + "/update"
 		pageTitle = "Edit Field"
 		pageDesc = fmt.Sprintf("Update %s field configuration", field.Name)
 		submitText = "Save Changes"
@@ -2118,7 +2286,7 @@ func fieldFormPage(
 	contentTypeOptions = append(contentTypeOptions, selectOption{Value: "", Label: "Select content type..."})
 	for _, ct := range allContentTypes {
 		if ct.ID != contentType.ID {
-			contentTypeOptions = append(contentTypeOptions, selectOption{Value: ct.Slug, Label: ct.Name})
+			contentTypeOptions = append(contentTypeOptions, selectOption{Value: ct.Name, Label: ct.Name})
 		}
 	}
 
@@ -2205,10 +2373,11 @@ func fieldFormPage(
 									Class("block w-full px-4 py-3 text-sm border border-gray-200 rounded-xl bg-white dark:bg-neutral-800 dark:border-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"),
 									Option(Value(""), g.Text("Select a field type...")),
 									g.Group(func() []g.Node {
-										categories := []string{"text", "number", "date", "selection", "relation", "media", "advanced"}
+										categories := []string{"text", "number", "date", "selection", "relation", "media", "nested", "advanced"}
 										categoryNames := map[string]string{
 											"text": "📝 Text Fields", "number": "🔢 Number Fields", "date": "📅 Date & Time",
-											"selection": "☑️ Selection Fields", "relation": "🔗 Relations", "media": "🖼️ Media", "advanced": "⚙️ Advanced",
+											"selection": "☑️ Selection Fields", "relation": "🔗 Relations", "media": "🖼️ Media",
+											"nested": "📦 Nested Fields", "advanced": "⚙️ Advanced",
 										}
 										var groups []g.Node
 										for _, cat := range categories {
@@ -2618,7 +2787,7 @@ func fieldBuilderAlpineData(field *core.ContentFieldDTO) string {
 	// Populate from existing field if editing
 	if field != nil {
 		name = field.Name
-		slug = field.Slug
+		slug = field.Name
 		fieldType = field.Type
 		slugManuallyEdited = "true"
 

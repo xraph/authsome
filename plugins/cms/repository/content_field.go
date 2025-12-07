@@ -17,7 +17,7 @@ type ContentFieldRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, field *schema.ContentField) error
 	FindByID(ctx context.Context, id xid.ID) (*schema.ContentField, error)
-	FindBySlug(ctx context.Context, contentTypeID xid.ID, slug string) (*schema.ContentField, error)
+	FindByName(ctx context.Context, contentTypeID xid.ID, name string) (*schema.ContentField, error)
 	ListByContentType(ctx context.Context, contentTypeID xid.ID) ([]*schema.ContentField, error)
 	Update(ctx context.Context, field *schema.ContentField) error
 	Delete(ctx context.Context, id xid.ID) error
@@ -30,7 +30,7 @@ type ContentFieldRepository interface {
 
 	// Stats operations
 	Count(ctx context.Context, contentTypeID xid.ID) (int, error)
-	ExistsWithSlug(ctx context.Context, contentTypeID xid.ID, slug string) (bool, error)
+	ExistsWithName(ctx context.Context, contentTypeID xid.ID, name string) (bool, error)
 }
 
 // FieldOrder represents a field ID and its order
@@ -91,16 +91,16 @@ func (r *contentFieldRepository) FindByID(ctx context.Context, id xid.ID) (*sche
 }
 
 // FindBySlug finds a content field by slug within a content type
-func (r *contentFieldRepository) FindBySlug(ctx context.Context, contentTypeID xid.ID, slug string) (*schema.ContentField, error) {
+func (r *contentFieldRepository) FindByName(ctx context.Context, contentTypeID xid.ID, name string) (*schema.ContentField, error) {
 	field := new(schema.ContentField)
 	err := r.db.NewSelect().
 		Model(field).
 		Where("cf.content_type_id = ?", contentTypeID).
-		Where("cf.slug = ?", slug).
+		Where("LOWER(cf.name) = LOWER(?)", name).
 		Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, core.ErrFieldNotFound(slug)
+			return nil, core.ErrFieldNotFound(name)
 		}
 		return nil, err
 	}
@@ -210,12 +210,12 @@ func (r *contentFieldRepository) Count(ctx context.Context, contentTypeID xid.ID
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a field with the given slug exists in a content type
-func (r *contentFieldRepository) ExistsWithSlug(ctx context.Context, contentTypeID xid.ID, slug string) (bool, error) {
+// ExistsWithSlug checks if a field with the given name exists in a content type
+func (r *contentFieldRepository) ExistsWithName(ctx context.Context, contentTypeID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ContentField)(nil)).
 		Where("content_type_id = ?", contentTypeID).
-		Where("slug = ?", slug).
+		Where("LOWER(name) = LOWER(?)", name).
 		Count(ctx)
 	if err != nil {
 		return false, err

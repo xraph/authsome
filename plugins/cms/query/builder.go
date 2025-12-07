@@ -21,7 +21,7 @@ type QueryBuilder struct {
 func NewQueryBuilder(db *bun.DB, contentTypeID xid.ID, fields []*schema.ContentField) *QueryBuilder {
 	fieldMap := make(map[string]*schema.ContentField)
 	for _, f := range fields {
-		fieldMap[f.Slug] = f
+		fieldMap[f.Name] = f
 	}
 	return &QueryBuilder{
 		db:            db,
@@ -181,7 +181,9 @@ func (b *QueryBuilder) applyConditionOr(q *bun.SelectQuery, cond FilterCondition
 
 // applySystemFieldCondition applies a condition on a system field
 func (b *QueryBuilder) applySystemFieldCondition(q *bun.SelectQuery, cond FilterCondition) *bun.SelectQuery {
-	column := "ce." + toSnakeCase(cond.Field)
+	// Extract the actual field name (strips _meta. prefix if present)
+	fieldName := getSystemFieldName(cond.Field)
+	column := "ce." + toSnakeCase(fieldName)
 
 	switch cond.Operator {
 	case OpEqual:
@@ -212,7 +214,9 @@ func (b *QueryBuilder) applySystemFieldCondition(q *bun.SelectQuery, cond Filter
 
 // applySystemFieldConditionOr applies a condition on a system field with OR
 func (b *QueryBuilder) applySystemFieldConditionOr(q *bun.SelectQuery, cond FilterCondition) *bun.SelectQuery {
-	column := "ce." + toSnakeCase(cond.Field)
+	// Extract the actual field name (strips _meta. prefix if present)
+	fieldName := getSystemFieldName(cond.Field)
+	column := "ce." + toSnakeCase(fieldName)
 
 	switch cond.Operator {
 	case OpEqual:
@@ -410,7 +414,9 @@ func (b *QueryBuilder) applySort(q *bun.SelectQuery, sorts []SortField) *bun.Sel
 		}
 
 		if isSystemField(sort.Field) {
-			column := "ce." + toSnakeCase(sort.Field)
+			// Extract actual field name (strips _meta. prefix if present)
+			fieldName := getSystemFieldName(sort.Field)
+			column := "ce." + toSnakeCase(fieldName)
 			q = q.OrderExpr(fmt.Sprintf("%s %s NULLS LAST", column, direction))
 		} else {
 			// Sort by JSONB field

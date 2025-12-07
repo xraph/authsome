@@ -78,7 +78,7 @@ func (r *bunRelationRepository) DeleteRelationByEntries(ctx context.Context, sou
 		Model((*schema.ContentRelation)(nil)).
 		Where("source_entry_id = ?", sourceID).
 		Where("target_entry_id = ?", targetID).
-		Where("field_slug = ?", fieldSlug).
+		Where("field_name = ?", fieldSlug).
 		Exec(ctx)
 	if err != nil {
 		return core.ErrDatabaseError("failed to delete relation", err)
@@ -103,7 +103,7 @@ func (r *bunRelationRepository) DeleteAllForField(ctx context.Context, entryID x
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentRelation)(nil)).
 		Where("source_entry_id = ?", entryID).
-		Where("field_slug = ?", fieldSlug).
+		Where("field_name = ?", fieldSlug).
 		Exec(ctx)
 	if err != nil {
 		return core.ErrDatabaseError("failed to delete relations for field", err)
@@ -117,7 +117,7 @@ func (r *bunRelationRepository) FindRelations(ctx context.Context, sourceID xid.
 	err := r.db.NewSelect().
 		Model(&relations).
 		Where("source_entry_id = ?", sourceID).
-		Where("field_slug = ?", fieldSlug).
+		Where("field_name = ?", fieldSlug).
 		OrderExpr("\"order\" ASC").
 		Relation("TargetEntry").
 		Scan(ctx)
@@ -133,7 +133,7 @@ func (r *bunRelationRepository) FindReverseRelations(ctx context.Context, target
 	err := r.db.NewSelect().
 		Model(&relations).
 		Where("target_entry_id = ?", targetID).
-		Where("field_slug = ?", fieldSlug).
+		Where("field_name = ?", fieldSlug).
 		OrderExpr("\"order\" ASC").
 		Relation("SourceEntry").
 		Scan(ctx)
@@ -149,7 +149,7 @@ func (r *bunRelationRepository) FindAllRelations(ctx context.Context, entryID xi
 	err := r.db.NewSelect().
 		Model(&relations).
 		Where("source_entry_id = ?", entryID).
-		OrderExpr("field_slug ASC, \"order\" ASC").
+		OrderExpr("field_name ASC, \"order\" ASC").
 		Relation("TargetEntry").
 		Scan(ctx)
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *bunRelationRepository) BulkUpdateOrder(ctx context.Context, sourceID xi
 				Set("\"order\" = ?", i).
 				Where("source_entry_id = ?", sourceID).
 				Where("target_entry_id = ?", targetID).
-				Where("field_slug = ?", fieldSlug).
+				Where("field_name = ?", fieldSlug).
 				Exec(ctx)
 			if err != nil {
 				return core.ErrDatabaseError("failed to update relation order", err)
@@ -263,13 +263,13 @@ func (r *bunRelationRepository) FindTypeRelationByID(ctx context.Context, id xid
 	return relation, nil
 }
 
-// FindTypeRelationByField finds a type relation by content type and field slug
+// FindTypeRelationByField finds a type relation by content type and field name
 func (r *bunRelationRepository) FindTypeRelationByField(ctx context.Context, contentTypeID xid.ID, fieldSlug string) (*schema.ContentTypeRelation, error) {
 	relation := new(schema.ContentTypeRelation)
 	err := r.db.NewSelect().
 		Model(relation).
 		Where("source_content_type_id = ?", contentTypeID).
-		Where("source_field_slug = ?", fieldSlug).
+		Where("source_field_name = ?", fieldSlug).
 		Relation("SourceContentType").
 		Relation("TargetContentType").
 		Scan(ctx)
@@ -303,7 +303,7 @@ func (r *bunRelationRepository) FindInverseRelation(ctx context.Context, targetT
 	err := r.db.NewSelect().
 		Model(relation).
 		Where("target_content_type_id = ?", targetTypeID).
-		Where("target_field_slug = ?", targetField).
+		Where("target_field_name = ?", targetField).
 		Relation("SourceContentType").
 		Relation("TargetContentType").
 		Scan(ctx)

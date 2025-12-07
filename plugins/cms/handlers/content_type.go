@@ -80,7 +80,7 @@ func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "slug is required"})
 	}
 
-	result, err := h.service.GetBySlug(ctx, slug)
+	result, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -99,7 +99,7 @@ func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -135,7 +135,7 @@ func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -168,7 +168,7 @@ func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -200,7 +200,7 @@ func (h *ContentTypeHandler) AddField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -237,7 +237,7 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -248,7 +248,7 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	field, err := h.fieldService.GetBySlug(ctx, id, fieldSlug)
+	field, err := h.fieldService.GetByName(ctx, id, fieldSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -268,7 +268,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -280,7 +280,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	}
 
 	// Get the field
-	field, err := h.fieldService.GetBySlug(ctx, contentTypeID, fieldSlug)
+	field, err := h.fieldService.GetByName(ctx, contentTypeID, fieldSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -317,7 +317,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -329,7 +329,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	}
 
 	// Get the field
-	field, err := h.fieldService.GetBySlug(ctx, contentTypeID, fieldSlug)
+	field, err := h.fieldService.GetByName(ctx, contentTypeID, fieldSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -358,7 +358,7 @@ func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetBySlug(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, slug)
 	if err != nil {
 		return handleError(c, err)
 	}

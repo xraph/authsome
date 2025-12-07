@@ -263,8 +263,8 @@ func (s *RelationService) CreateTypeRelation(ctx context.Context, req *core.Crea
 	relation := schema.NewContentTypeRelation(
 		req.SourceContentTypeID,
 		req.TargetContentTypeID,
-		req.SourceFieldSlug,
-		req.TargetFieldSlug,
+		req.SourceFieldName,
+		req.TargetFieldName,
 		req.RelationType,
 		string(onDelete),
 	)
@@ -284,8 +284,8 @@ func (s *RelationService) UpdateTypeRelation(ctx context.Context, id xid.ID, req
 	}
 
 	// Update fields
-	if req.TargetFieldSlug != nil {
-		relation.TargetFieldSlug = *req.TargetFieldSlug
+	if req.TargetFieldName != nil {
+		relation.TargetFieldName = *req.TargetFieldName
 	}
 	if req.OnDelete != nil {
 		onDelete := core.OnDeleteAction(*req.OnDelete)
@@ -434,7 +434,7 @@ func (s *RelationService) checkCircularRelation(ctx context.Context, sourceID, t
 
 	// Check each relation from target
 	for _, rel := range relations {
-		if err := s.checkCircularRelation(ctx, targetID, rel.TargetEntryID, rel.FieldSlug, visited); err != nil {
+		if err := s.checkCircularRelation(ctx, targetID, rel.TargetEntryID, rel.FieldName, visited); err != nil {
 			return err
 		}
 	}
@@ -466,8 +466,8 @@ func (s *RelationService) typeRelationToDTO(rel *schema.ContentTypeRelation, sou
 		ID:                  rel.ID.String(),
 		SourceContentTypeID: rel.SourceContentTypeID.String(),
 		TargetContentTypeID: rel.TargetContentTypeID.String(),
-		SourceFieldSlug:     rel.SourceFieldSlug,
-		TargetFieldSlug:     rel.TargetFieldSlug,
+		SourceFieldName:     rel.SourceFieldName,
+		TargetFieldName:     rel.TargetFieldName,
 		RelationType:        rel.RelationType,
 		OnDelete:            rel.OnDelete,
 		CreatedAt:           rel.CreatedAt,
@@ -475,11 +475,11 @@ func (s *RelationService) typeRelationToDTO(rel *schema.ContentTypeRelation, sou
 
 	if source != nil {
 		dto.SourceContentTypeName = source.Name
-		dto.SourceContentTypeSlug = source.Slug
+		dto.SourceContentTypeName = source.Name
 	}
 	if target != nil {
 		dto.TargetContentTypeName = target.Name
-		dto.TargetContentTypeSlug = target.Slug
+		dto.TargetContentTypeName = target.Name
 	}
 
 	return dto

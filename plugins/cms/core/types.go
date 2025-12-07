@@ -115,33 +115,33 @@ type RelatedEntryDTO struct {
 
 // TypeRelationDTO represents a type relation definition
 type TypeRelationDTO struct {
-	ID                    string    `json:"id"`
-	SourceContentTypeID   string    `json:"sourceContentTypeId"`
-	TargetContentTypeID   string    `json:"targetContentTypeId"`
-	SourceContentTypeName string    `json:"sourceContentTypeName,omitempty"`
-	SourceContentTypeSlug string    `json:"sourceContentTypeSlug,omitempty"`
-	TargetContentTypeName string    `json:"targetContentTypeName,omitempty"`
-	TargetContentTypeSlug string    `json:"targetContentTypeSlug,omitempty"`
-	SourceFieldSlug       string    `json:"sourceFieldSlug"`
-	TargetFieldSlug       string    `json:"targetFieldSlug,omitempty"`
-	RelationType          string    `json:"relationType"`
-	OnDelete              string    `json:"onDelete"`
-	CreatedAt             time.Time `json:"createdAt"`
+	ID                     string    `json:"id"`
+	SourceContentTypeID    string    `json:"sourceContentTypeId"`
+	TargetContentTypeID    string    `json:"targetContentTypeId"`
+	SourceContentTypeTitle string    `json:"sourceContentTypeTitle,omitempty"`
+	SourceContentTypeName  string    `json:"sourceContentTypeName,omitempty"`
+	TargetContentTypeTitle string    `json:"targetContentTypeTitle,omitempty"`
+	TargetContentTypeName  string    `json:"targetContentTypeName,omitempty"`
+	SourceFieldName        string    `json:"sourceFieldName"`
+	TargetFieldName        string    `json:"targetFieldName,omitempty"`
+	RelationType           string    `json:"relationType"`
+	OnDelete               string    `json:"onDelete"`
+	CreatedAt              time.Time `json:"createdAt"`
 }
 
 // CreateTypeRelationRequest is the request to create a type relation
 type CreateTypeRelationRequest struct {
 	SourceContentTypeID xid.ID `json:"sourceContentTypeId"`
 	TargetContentTypeID xid.ID `json:"targetContentTypeId"`
-	SourceFieldSlug     string `json:"sourceFieldSlug"`
-	TargetFieldSlug     string `json:"targetFieldSlug,omitempty"`
+	SourceFieldName     string `json:"sourceFieldName"`
+	TargetFieldName     string `json:"targetFieldName,omitempty"`
 	RelationType        string `json:"relationType"`
 	OnDelete            string `json:"onDelete,omitempty"`
 }
 
 // UpdateTypeRelationRequest is the request to update a type relation
 type UpdateTypeRelationRequest struct {
-	TargetFieldSlug *string `json:"targetFieldSlug,omitempty"`
+	TargetFieldName *string `json:"targetFieldName,omitempty"`
 	OnDelete        *string `json:"onDelete,omitempty"`
 }
 
@@ -169,8 +169,8 @@ type ContentTypeDTO struct {
 	ID            string                  `json:"id"`
 	AppID         string                  `json:"appId"`
 	EnvironmentID string                  `json:"environmentId"`
+	Title         string                  `json:"title"`
 	Name          string                  `json:"name"`
-	Slug          string                  `json:"slug"`
 	Description   string                  `json:"description,omitempty"`
 	Icon          string                  `json:"icon,omitempty"`
 	Settings      ContentTypeSettingsDTO  `json:"settings"`
@@ -205,8 +205,8 @@ type ContentTypeSettingsDTO struct {
 // ContentTypeSummaryDTO is a lightweight content type for lists
 type ContentTypeSummaryDTO struct {
 	ID          string    `json:"id"`
+	Title       string    `json:"title"`
 	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
 	Description string    `json:"description,omitempty"`
 	Icon        string    `json:"icon,omitempty"`
 	EntryCount  int       `json:"entryCount"`
@@ -224,8 +224,8 @@ type ComponentSchemaDTO struct {
 	ID            string               `json:"id"`
 	AppID         string               `json:"appId"`
 	EnvironmentID string               `json:"environmentId"`
+	Title         string               `json:"title"`
 	Name          string               `json:"name"`
-	Slug          string               `json:"slug"`
 	Description   string               `json:"description,omitempty"`
 	Icon          string               `json:"icon,omitempty"`
 	Fields        []NestedFieldDefDTO  `json:"fields"`
@@ -239,8 +239,8 @@ type ComponentSchemaDTO struct {
 // ComponentSchemaSummaryDTO is a lightweight component schema for lists
 type ComponentSchemaSummaryDTO struct {
 	ID          string    `json:"id"`
+	Title       string    `json:"title"`
 	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
 	Description string    `json:"description,omitempty"`
 	Icon        string    `json:"icon,omitempty"`
 	FieldCount  int       `json:"fieldCount"`
@@ -251,8 +251,8 @@ type ComponentSchemaSummaryDTO struct {
 
 // NestedFieldDefDTO represents a field definition within a nested object or component schema
 type NestedFieldDefDTO struct {
+	Title       string            `json:"title"`
 	Name        string            `json:"name"`
-	Slug        string            `json:"slug"`
 	Type        string            `json:"type"`
 	Required    bool              `json:"required,omitempty"`
 	Description string            `json:"description,omitempty"`
@@ -261,8 +261,8 @@ type NestedFieldDefDTO struct {
 
 // CreateComponentSchemaRequest is the request to create a component schema
 type CreateComponentSchemaRequest struct {
-	Name        string              `json:"name" validate:"required,min=1,max=100"`
-	Slug        string              `json:"slug" validate:"required,slug"`
+	Title       string              `json:"title" validate:"required,min=1,max=100"`
+	Name        string              `json:"name" validate:"required"`
 	Description string              `json:"description,omitempty"`
 	Icon        string              `json:"icon,omitempty"`
 	Fields      []NestedFieldDefDTO `json:"fields,omitempty"`
@@ -270,7 +270,7 @@ type CreateComponentSchemaRequest struct {
 
 // UpdateComponentSchemaRequest is the request to update a component schema
 type UpdateComponentSchemaRequest struct {
-	Name        string              `json:"name,omitempty"`
+	Title       string              `json:"title,omitempty"`
 	Description string              `json:"description,omitempty"`
 	Icon        string              `json:"icon,omitempty"`
 	Fields      []NestedFieldDefDTO `json:"fields,omitempty"`
@@ -293,8 +293,8 @@ type ListComponentSchemasResponse struct {
 type ContentFieldDTO struct {
 	ID            string          `json:"id"`
 	ContentTypeID string          `json:"contentTypeId"`
+	Title         string          `json:"title"`
 	Name          string          `json:"name"`
-	Slug          string          `json:"slug"`
 	Description   string          `json:"description,omitempty"`
 	Type          string          `json:"type"`
 	Required      bool            `json:"required"`
@@ -358,6 +358,30 @@ type FieldOptionsDTO struct {
 	MaxItems        *int                `json:"maxItems,omitempty"`        // For array: maximum items
 	Collapsible     bool                `json:"collapsible,omitempty"`     // UI: collapsible in form
 	DefaultExpanded bool                `json:"defaultExpanded,omitempty"` // UI: expanded by default
+
+	// OneOf fields (discriminated union)
+	DiscriminatorField         string                        `json:"discriminatorField,omitempty"`         // Field name to watch for schema selection
+	Schemas                    map[string]OneOfSchemaOptionDTO `json:"schemas,omitempty"`                    // Value -> schema mapping
+	ClearOnDiscriminatorChange bool                          `json:"clearOnDiscriminatorChange,omitempty"` // Clear data when discriminator changes
+
+	// Conditional visibility
+	ShowWhen        *FieldConditionDTO `json:"showWhen,omitempty"`        // Show field when condition is met
+	HideWhen        *FieldConditionDTO `json:"hideWhen,omitempty"`        // Hide field when condition is met
+	ClearWhenHidden bool               `json:"clearWhenHidden,omitempty"` // Clear value when hidden
+}
+
+// OneOfSchemaOptionDTO defines a schema option for oneOf fields
+type OneOfSchemaOptionDTO struct {
+	ComponentRef string              `json:"componentRef,omitempty"` // Reference to ComponentSchema slug
+	NestedFields []NestedFieldDefDTO `json:"nestedFields,omitempty"` // Or inline field definitions
+	Label        string              `json:"label,omitempty"`        // Display label for this option
+}
+
+// FieldConditionDTO defines a condition for showing/hiding fields
+type FieldConditionDTO struct {
+	Field    string `json:"field"`           // Field name to watch
+	Operator string `json:"operator"`        // eq, ne, in, notIn, exists, notExists
+	Value    any    `json:"value,omitempty"` // Value(s) to compare
 }
 
 // ChoiceDTO represents a choice option for select fields
@@ -389,7 +413,7 @@ type ContentEntryDTO struct {
 	UpdatedBy     string                 `json:"updatedBy,omitempty"`
 	CreatedAt     time.Time              `json:"createdAt"`
 	UpdatedAt     time.Time              `json:"updatedAt"`
-	// Relations maps field slugs to related entry IDs
+	// Relations maps field names to related entry IDs
 	Relations     map[string][]string    `json:"relations,omitempty"`
 }
 
@@ -427,8 +451,8 @@ type ContentRevisionDTO struct {
 
 // CreateContentTypeRequest is the request to create a content type
 type CreateContentTypeRequest struct {
-	Name        string                  `json:"name" validate:"required,min=1,max=100"`
-	Slug        string                  `json:"slug" validate:"required,slug"`
+	Title       string                  `json:"title" validate:"required,min=1,max=100"`
+	Name        string                  `json:"name" validate:"required"`
 	Description string                  `json:"description,omitempty"`
 	Icon        string                  `json:"icon,omitempty"`
 	Settings    *ContentTypeSettingsDTO `json:"settings,omitempty"`
@@ -436,7 +460,7 @@ type CreateContentTypeRequest struct {
 
 // UpdateContentTypeRequest is the request to update a content type
 type UpdateContentTypeRequest struct {
-	Name        string                  `json:"name,omitempty"`
+	Title       string                  `json:"title,omitempty"`
 	Description string                  `json:"description,omitempty"`
 	Icon        string                  `json:"icon,omitempty"`
 	Settings    *ContentTypeSettingsDTO `json:"settings,omitempty"`
@@ -444,8 +468,8 @@ type UpdateContentTypeRequest struct {
 
 // CreateFieldRequest is the request to create a content field
 type CreateFieldRequest struct {
-	Name         string          `json:"name" validate:"required,min=1,max=100"`
-	Slug         string          `json:"slug" validate:"required,slug"`
+	Title        string          `json:"title" validate:"required,min=1,max=100"`
+	Name         string          `json:"name" validate:"required"`
 	Description  string          `json:"description,omitempty"`
 	Type         string          `json:"type" validate:"required"`
 	Required     bool            `json:"required"`
@@ -461,7 +485,7 @@ type CreateFieldRequest struct {
 
 // UpdateFieldRequest is the request to update a content field
 type UpdateFieldRequest struct {
-	Name         string          `json:"name,omitempty"`
+	Title        string          `json:"title,omitempty"`
 	Description  string          `json:"description,omitempty"`
 	Required     *bool           `json:"required,omitempty"`
 	Unique       *bool           `json:"unique,omitempty"`

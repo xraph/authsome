@@ -15,7 +15,7 @@ type ContentRelation struct {
 	ID              xid.ID    `bun:"id,pk,type:varchar(20)" json:"id"`
 	SourceEntryID   xid.ID    `bun:"source_entry_id,notnull,type:varchar(20)" json:"sourceEntryId"`
 	TargetEntryID   xid.ID    `bun:"target_entry_id,notnull,type:varchar(20)" json:"targetEntryId"`
-	FieldSlug       string    `bun:"field_slug,notnull" json:"fieldSlug"`
+	FieldName       string    `bun:"field_name,notnull" json:"fieldName"`
 	Order           int       `bun:"\"order\",notnull,default:0" json:"order"`
 	Metadata        EntryData `bun:"metadata,type:jsonb,nullzero" json:"metadata,omitempty"`
 	CreatedAt       time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
@@ -39,24 +39,24 @@ func (cr *ContentRelation) BeforeInsert() {
 }
 
 // NewRelation creates a new relation between two entries
-func NewRelation(sourceID, targetID xid.ID, fieldSlug string) *ContentRelation {
+func NewRelation(sourceID, targetID xid.ID, fieldName string) *ContentRelation {
 	return &ContentRelation{
 		ID:            xid.New(),
 		SourceEntryID: sourceID,
 		TargetEntryID: targetID,
-		FieldSlug:     fieldSlug,
+		FieldName:     fieldName,
 		Order:         0,
 		CreatedAt:     time.Now(),
 	}
 }
 
 // NewOrderedRelation creates a new relation with ordering
-func NewOrderedRelation(sourceID, targetID xid.ID, fieldSlug string, order int) *ContentRelation {
+func NewOrderedRelation(sourceID, targetID xid.ID, fieldName string, order int) *ContentRelation {
 	return &ContentRelation{
 		ID:            xid.New(),
 		SourceEntryID: sourceID,
 		TargetEntryID: targetID,
-		FieldSlug:     fieldSlug,
+		FieldName:     fieldName,
 		Order:         order,
 		CreatedAt:     time.Now(),
 	}
@@ -70,8 +70,8 @@ type ContentTypeRelation struct {
 	ID                  xid.ID    `bun:"id,pk,type:varchar(20)" json:"id"`
 	SourceContentTypeID xid.ID    `bun:"source_content_type_id,notnull,type:varchar(20)" json:"sourceContentTypeId"`
 	TargetContentTypeID xid.ID    `bun:"target_content_type_id,notnull,type:varchar(20)" json:"targetContentTypeId"`
-	SourceFieldSlug     string    `bun:"source_field_slug,notnull" json:"sourceFieldSlug"`
-	TargetFieldSlug     string    `bun:"target_field_slug,nullzero" json:"targetFieldSlug,omitempty"`
+	SourceFieldName     string    `bun:"source_field_name,notnull" json:"sourceFieldName"`
+	TargetFieldName     string    `bun:"target_field_name,nullzero" json:"targetFieldName,omitempty"`
 	RelationType        string    `bun:"relation_type,notnull" json:"relationType"`
 	OnDelete            string    `bun:"on_delete,notnull,default:'setNull'" json:"onDelete"`
 	CreatedAt           time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
@@ -119,7 +119,7 @@ func (ctr *ContentTypeRelation) IsManyToMany() bool {
 
 // IsBidirectional returns true if this relation has an inverse field
 func (ctr *ContentTypeRelation) IsBidirectional() bool {
-	return ctr.TargetFieldSlug != ""
+	return ctr.TargetFieldName != ""
 }
 
 // RequiresJoinTable returns true if this relation needs a join table
@@ -149,8 +149,8 @@ func NewContentTypeRelation(
 		ID:                  xid.New(),
 		SourceContentTypeID: sourceTypeID,
 		TargetContentTypeID: targetTypeID,
-		SourceFieldSlug:     sourceField,
-		TargetFieldSlug:     targetField,
+		SourceFieldName:     sourceField,
+		TargetFieldName:     targetField,
 		RelationType:        relationType,
 		OnDelete:            onDelete,
 		CreatedAt:           time.Now(),

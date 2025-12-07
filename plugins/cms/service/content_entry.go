@@ -75,7 +75,7 @@ func (s *ContentEntryService) Create(ctx context.Context, contentTypeID xid.ID, 
 			return nil, err
 		}
 		if count >= contentType.Settings.MaxEntries {
-			return nil, core.ErrEntryLimitReached(contentType.Slug, contentType.Settings.MaxEntries)
+			return nil, core.ErrEntryLimitReached(contentType.Name, contentType.Settings.MaxEntries)
 		}
 	}
 
@@ -498,8 +498,8 @@ func (s *ContentEntryService) toDTO(entry *schema.ContentEntry, contentType *sch
 	if contentType != nil {
 		dto.ContentType = &core.ContentTypeSummaryDTO{
 			ID:          contentType.ID.String(),
+			Title: contentType.Title,
 			Name:        contentType.Name,
-			Slug:        contentType.Slug,
 			Description: contentType.Description,
 			Icon:        contentType.Icon,
 		}

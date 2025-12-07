@@ -63,29 +63,31 @@ func (s *ContentFieldService) SetComponentSchemaRepository(repo repository.Compo
 
 // generateFieldSlug creates a slug from a field name
 func generateFieldSlug(name string) string {
-	// Convert to lowercase
-	slug := strings.ToLower(strings.TrimSpace(name))
+	// Trim whitespace but preserve casing
+	slug := strings.TrimSpace(name)
 
-	// Replace spaces and underscores with underscores (fields often use snake_case)
+	// Replace spaces with underscores (or can be converted to camelCase)
 	slug = strings.ReplaceAll(slug, " ", "_")
-	slug = strings.ReplaceAll(slug, "-", "_")
 
-	// Remove non-alphanumeric characters except underscores
+	// Remove invalid characters (keep letters, numbers, underscores, hyphens)
 	var result strings.Builder
 	for _, r := range slug {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			result.WriteRune(r)
 		}
 	}
 	slug = result.String()
 
-	// Remove multiple consecutive underscores
+	// Remove multiple consecutive underscores or hyphens
 	for strings.Contains(slug, "__") {
 		slug = strings.ReplaceAll(slug, "__", "_")
 	}
+	for strings.Contains(slug, "--") {
+		slug = strings.ReplaceAll(slug, "--", "-")
+	}
 
-	// Remove leading/trailing underscores
-	slug = strings.Trim(slug, "_")
+	// Remove leading/trailing underscores and hyphens
+	slug = strings.Trim(slug, "_-")
 
 	// Ensure it starts with a letter
 	if len(slug) > 0 && slug[0] >= '0' && slug[0] <= '9' {
@@ -113,18 +115,18 @@ func (s *ContentFieldService) Create(ctx context.Context, contentTypeID xid.ID, 
 	}
 
 	// Auto-generate slug from name if not provided
-	slug := strings.ToLower(strings.TrimSpace(req.Slug))
+	slug := strings.TrimSpace(req.Name)
 	if slug == "" {
 		slug = generateFieldSlug(req.Name)
 	}
 
 	// Validate slug
 	if !isValidSlug(slug) {
-		return nil, core.ErrInvalidFieldSlug(slug, "must be lowercase, start with a letter, and contain only letters, numbers, and hyphens")
+		return nil, core.ErrInvalidFieldSlug(slug, "must start with a letter and contain only letters, numbers, underscores, and hyphens")
 	}
 
 	// Check if slug already exists
-	exists, err := s.repo.ExistsWithSlug(ctx, contentTypeID, slug)
+	exists, err := s.repo.ExistsWithName(ctx, contentTypeID, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +161,8 @@ func (s *ContentFieldService) Create(ctx context.Context, contentTypeID xid.ID, 
 	field := &schema.ContentField{
 		ID:            xid.New(),
 		ContentTypeID: contentTypeID,
-		Name:          strings.TrimSpace(req.Name),
-		Slug:          slug,
+		Title:         strings.TrimSpace(req.Title),
+		Name:          slug,
 		Description:   strings.TrimSpace(req.Description),
 		Type:          string(fieldType),
 		Required:      req.Required,
@@ -197,8 +199,8 @@ func (s *ContentFieldService) GetByID(ctx context.Context, id xid.ID) (*core.Con
 }
 
 // GetBySlug retrieves a content field by slug
-func (s *ContentFieldService) GetBySlug(ctx context.Context, contentTypeID xid.ID, slug string) (*core.ContentFieldDTO, error) {
-	field, err := s.repo.FindBySlug(ctx, contentTypeID, slug)
+func (s *ContentFieldService) GetByName(ctx context.Context, contentTypeID xid.ID, name string) (*core.ContentFieldDTO, error) {
+	field, err := s.repo.FindByName(ctx, contentTypeID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -227,8 +229,8 @@ func (s *ContentFieldService) Update(ctx context.Context, id xid.ID, req *core.U
 	}
 
 	// Update basic fields
-	if req.Name != "" {
-		field.Name = strings.TrimSpace(req.Name)
+	if req.Title != "" {
+		field.Title = strings.TrimSpace(req.Title)
 	}
 	if req.Description != "" {
 		field.Description = strings.TrimSpace(req.Description)
@@ -291,10 +293,10 @@ func (s *ContentFieldService) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// UpdateBySlug updates a content field by its slug within a content type
-func (s *ContentFieldService) UpdateBySlug(ctx context.Context, contentTypeID xid.ID, slug string, req *core.UpdateFieldRequest) (*core.ContentFieldDTO, error) {
-	// Find field by slug
-	field, err := s.repo.FindBySlug(ctx, contentTypeID, slug)
+// UpdateBySlug updates a content field by its name within a content type
+func (s *ContentFieldService) UpdateByName(ctx context.Context, contentTypeID xid.ID, name string, req *core.UpdateFieldRequest) (*core.ContentFieldDTO, error) {
+	// Find field by name
+	field, err := s.repo.FindByName(ctx, contentTypeID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -302,10 +304,10 @@ func (s *ContentFieldService) UpdateBySlug(ctx context.Context, contentTypeID xi
 	return s.Update(ctx, field.ID, req)
 }
 
-// DeleteBySlug deletes a content field by its slug within a content type
-func (s *ContentFieldService) DeleteBySlug(ctx context.Context, contentTypeID xid.ID, slug string) error {
-	// Find field by slug
-	field, err := s.repo.FindBySlug(ctx, contentTypeID, slug)
+// DeleteBySlug deletes a content field by its name within a content type
+func (s *ContentFieldService) DeleteByName(ctx context.Context, contentTypeID xid.ID, name string) error {
+	// Find field by name
+	field, err := s.repo.FindByName(ctx, contentTypeID, name)
 	if err != nil {
 		return err
 	}
@@ -410,6 +412,83 @@ func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, opt
 				return core.ErrInvalidRequest("minItems cannot be greater than maxItems")
 			}
 		}
+
+	case core.FieldTypeOneOf:
+		// OneOf fields require discriminatorField and at least one schema
+		if options.DiscriminatorField == "" {
+			return core.ErrInvalidRequest("oneOf fields require discriminatorField")
+		}
+		if len(options.Schemas) == 0 {
+			return core.ErrInvalidRequest("oneOf fields require at least one schema in schemas map")
+		}
+		// Validate each schema option - allow empty schemas for "no config needed" cases
+		// (e.g., a "custom" option where config comes from a separate JSON field)
+		// Schema options can have componentRef, nestedFields, or be empty (just a label)
+	}
+
+	// Validate conditional visibility options (can apply to any field type)
+	if err := s.validateConditionalVisibility(options); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateConditionalVisibility validates showWhen/hideWhen conditions
+func (s *ContentFieldService) validateConditionalVisibility(options *core.FieldOptionsDTO) error {
+	if options == nil {
+		return nil
+	}
+
+	// Validate showWhen condition
+	if options.ShowWhen != nil {
+		if err := s.validateFieldCondition(options.ShowWhen); err != nil {
+			return core.ErrInvalidRequest("invalid showWhen: " + err.Error())
+		}
+	}
+
+	// Validate hideWhen condition
+	if options.HideWhen != nil {
+		if err := s.validateFieldCondition(options.HideWhen); err != nil {
+			return core.ErrInvalidRequest("invalid hideWhen: " + err.Error())
+		}
+	}
+
+	// Cannot have both showWhen and hideWhen on the same field
+	if options.ShowWhen != nil && options.HideWhen != nil {
+		return core.ErrInvalidRequest("field cannot have both showWhen and hideWhen conditions")
+	}
+
+	return nil
+}
+
+// validateFieldCondition validates a field condition
+func (s *ContentFieldService) validateFieldCondition(condition *core.FieldConditionDTO) error {
+	if condition.Field == "" {
+		return core.ErrInvalidRequest("condition field is required")
+	}
+
+	// Validate operator
+	validOperators := map[string]bool{
+		"eq":        true,
+		"ne":        true,
+		"in":        true,
+		"notIn":     true,
+		"exists":    true,
+		"notExists": true,
+	}
+	if !validOperators[condition.Operator] {
+		return core.ErrInvalidRequest("invalid operator: " + condition.Operator + ". Valid operators: eq, ne, in, notIn, exists, notExists")
+	}
+
+	// exists/notExists don't need a value
+	if condition.Operator == "exists" || condition.Operator == "notExists" {
+		return nil
+	}
+
+	// Other operators require a value
+	if condition.Value == nil {
+		return core.ErrInvalidRequest("operator '" + condition.Operator + "' requires a value")
 	}
 
 	return nil
@@ -422,31 +501,34 @@ func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schem
 	}
 
 	options := schema.FieldOptions{
-		MinLength:        dto.MinLength,
-		MaxLength:        dto.MaxLength,
-		Pattern:          dto.Pattern,
-		Min:              dto.Min,
-		Max:              dto.Max,
-		Step:             dto.Step,
-		Integer:          dto.Integer,
-		RelatedType:      dto.RelatedType,
-		RelationType:     dto.RelationType,
-		OnDelete:         dto.OnDelete,
-		InverseField:     dto.InverseField,
-		AllowHTML:        dto.AllowHTML,
-		MaxWords:         dto.MaxWords,
-		AllowedMimeTypes: dto.AllowedMimeTypes,
-		MaxFileSize:      dto.MaxFileSize,
-		SourceField:      dto.SourceField,
-		Schema:           dto.Schema,
-		MinDate:          dto.MinDate,
-		MaxDate:          dto.MaxDate,
-		DateFormat:       dto.DateFormat,
-		ComponentRef:     dto.ComponentRef,
-		MinItems:         dto.MinItems,
-		MaxItems:         dto.MaxItems,
-		Collapsible:      dto.Collapsible,
-		DefaultExpanded:  dto.DefaultExpanded,
+		MinLength:                  dto.MinLength,
+		MaxLength:                  dto.MaxLength,
+		Pattern:                    dto.Pattern,
+		Min:                        dto.Min,
+		Max:                        dto.Max,
+		Step:                       dto.Step,
+		Integer:                    dto.Integer,
+		RelatedType:                dto.RelatedType,
+		RelationType:               dto.RelationType,
+		OnDelete:                   dto.OnDelete,
+		InverseField:               dto.InverseField,
+		AllowHTML:                  dto.AllowHTML,
+		MaxWords:                   dto.MaxWords,
+		AllowedMimeTypes:           dto.AllowedMimeTypes,
+		MaxFileSize:                dto.MaxFileSize,
+		SourceField:                dto.SourceField,
+		Schema:                     dto.Schema,
+		MinDate:                    dto.MinDate,
+		MaxDate:                    dto.MaxDate,
+		DateFormat:                 dto.DateFormat,
+		ComponentRef:               dto.ComponentRef,
+		MinItems:                   dto.MinItems,
+		MaxItems:                   dto.MaxItems,
+		Collapsible:                dto.Collapsible,
+		DefaultExpanded:            dto.DefaultExpanded,
+		DiscriminatorField:         dto.DiscriminatorField,
+		ClearOnDiscriminatorChange: dto.ClearOnDiscriminatorChange,
+		ClearWhenHidden:            dto.ClearWhenHidden,
 	}
 
 	// Convert choices
@@ -468,6 +550,34 @@ func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schem
 		options.NestedFields = s.dtoToSchemaNestedFields(dto.NestedFields)
 	}
 
+	// Convert oneOf schemas
+	if len(dto.Schemas) > 0 {
+		options.Schemas = make(map[string]schema.OneOfSchemaOption, len(dto.Schemas))
+		for key, schemaOpt := range dto.Schemas {
+			options.Schemas[key] = schema.OneOfSchemaOption{
+				ComponentRef: schemaOpt.ComponentRef,
+				NestedFields: s.dtoToSchemaNestedFields(schemaOpt.NestedFields),
+				Label:        schemaOpt.Label,
+			}
+		}
+	}
+
+	// Convert conditional visibility
+	if dto.ShowWhen != nil {
+		options.ShowWhen = &schema.FieldCondition{
+			Field:    dto.ShowWhen.Field,
+			Operator: dto.ShowWhen.Operator,
+			Value:    dto.ShowWhen.Value,
+		}
+	}
+	if dto.HideWhen != nil {
+		options.HideWhen = &schema.FieldCondition{
+			Field:    dto.HideWhen.Field,
+			Operator: dto.HideWhen.Operator,
+			Value:    dto.HideWhen.Value,
+		}
+	}
+
 	return options
 }
 
@@ -476,8 +586,8 @@ func (s *ContentFieldService) dtoToSchemaNestedFields(fields []core.NestedFieldD
 	result := make(schema.NestedFieldDefs, len(fields))
 	for i, f := range fields {
 		result[i] = schema.NestedFieldDef{
+			Title:       f.Title,
 			Name:        f.Name,
-			Slug:        f.Slug,
 			Type:        f.Type,
 			Required:    f.Required,
 			Description: f.Description,
@@ -527,4 +637,3 @@ func (s *ContentFieldService) GetFieldWithResolvedNested(ctx context.Context, id
 
 	return dto, nil
 }
-

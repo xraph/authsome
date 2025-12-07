@@ -41,7 +41,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
+	contentType, err := h.contentTypeService.GetByName(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -91,15 +91,19 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 		}
 	}
 
-	// Convert filters - handle status as system field, others as JSONB
+	// Convert filters - handle system fields (with _meta prefix) vs JSONB content fields
 	if q.Filters != nil {
 		listQuery.Filters = make(map[string]any)
 		for _, cond := range q.Filters.Conditions {
-			// Handle status filter specially - it's a system field
-			if cond.Field == "status" {
+			// Handle status filter specially - supports both "status" and "_meta.status"
+			if cond.Field == "status" || cond.Field == query.MetaPrefix+"status" {
 				if val, ok := cond.Value.(string); ok {
 					listQuery.Status = val
 				}
+				continue
+			}
+			// Skip other system fields from JSONB filters
+			if query.IsSystemField(cond.Field) {
 				continue
 			}
 			// Store operator and value together for JSONB fields
@@ -133,7 +137,7 @@ func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
+	contentType, err := h.contentTypeService.GetByName(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -336,7 +340,7 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
+	contentType, err := h.contentTypeService.GetByName(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -390,15 +394,19 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 		}
 	}
 
-	// Convert filters - store as map with operator and value
+	// Convert filters - handle system fields (with _meta prefix) vs JSONB content fields
 	if q.Filters != nil {
 		listQuery.Filters = make(map[string]any)
 		for _, cond := range q.Filters.Conditions {
-			// Handle status filter specially - it's a system field
-			if cond.Field == "status" {
+			// Handle status filter specially - supports both "status" and "_meta.status"
+			if cond.Field == "status" || cond.Field == query.MetaPrefix+"status" {
 				if val, ok := cond.Value.(string); ok {
 					listQuery.Status = val
 				}
+				continue
+			}
+			// Skip other system fields from JSONB filters
+			if query.IsSystemField(cond.Field) {
 				continue
 			}
 			// Store operator and value together
@@ -410,11 +418,13 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 		// Also check nested groups for status filter
 		for _, group := range q.Filters.Groups {
 			for _, cond := range group.Conditions {
-				if cond.Field == "status" {
+				// Handle status filter - supports both "status" and "_meta.status"
+				if cond.Field == "status" || cond.Field == query.MetaPrefix+"status" {
 					if val, ok := cond.Value.(string); ok {
 						listQuery.Status = val
 					}
-				} else {
+				} else if !query.IsSystemField(cond.Field) {
+					// Only add non-system fields to JSONB filters
 					if listQuery.Filters == nil {
 						listQuery.Filters = make(map[string]any)
 					}
@@ -565,7 +575,7 @@ func (h *ContentEntryHandler) GetEntryStats(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
 	// Get the content type
-	contentType, err := h.contentTypeService.GetBySlug(ctx, typeSlug)
+	contentType, err := h.contentTypeService.GetByName(ctx, typeSlug)
 	if err != nil {
 		return handleError(c, err)
 	}

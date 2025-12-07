@@ -3,6 +3,8 @@
 package query
 
 import (
+	"strings"
+
 	"github.com/xraph/authsome/plugins/cms/core"
 )
 
@@ -329,14 +331,56 @@ func (q *Query) validateFilterGroup(group *FilterGroup, fields map[string]*core.
 	return nil
 }
 
-// isSystemField returns true if the field is a system field (not user-defined)
-func isSystemField(field string) bool {
-	switch field {
-	case "id", "status", "version", "createdAt", "updatedAt", "publishedAt", "scheduledAt", "createdBy", "updatedBy":
-		return true
-	default:
-		return false
+// MetaPrefix is the prefix used for system/internal fields to avoid conflicts with user-defined fields
+const MetaPrefix = "_meta."
+
+// SystemFields lists all valid system field names (without the _meta prefix)
+var SystemFields = map[string]bool{
+	"id":          true,
+	"status":      true,
+	"version":     true,
+	"createdAt":   true,
+	"updatedAt":   true,
+	"publishedAt": true,
+	"scheduledAt": true,
+	"createdBy":   true,
+	"updatedBy":   true,
+}
+
+// IsSystemField returns true if the field is a system field (not user-defined)
+// Supports both legacy format (e.g., "status") and new meta format (e.g., "_meta.status")
+func IsSystemField(field string) bool {
+	// Check for _meta prefixed fields
+	if strings.HasPrefix(field, MetaPrefix) {
+		actualField := strings.TrimPrefix(field, MetaPrefix)
+		return SystemFields[actualField]
 	}
+	// Legacy support: direct field names
+	return SystemFields[field]
+}
+
+// isSystemField is an internal alias for backward compatibility within the package
+func isSystemField(field string) bool {
+	return IsSystemField(field)
+}
+
+// IsMetaField returns true if the field uses the _meta prefix format
+func IsMetaField(field string) bool {
+	return strings.HasPrefix(field, MetaPrefix)
+}
+
+// GetSystemFieldName extracts the actual field name from a potentially _meta prefixed field
+// e.g., "_meta.status" -> "status", "status" -> "status"
+func GetSystemFieldName(field string) string {
+	if strings.HasPrefix(field, MetaPrefix) {
+		return strings.TrimPrefix(field, MetaPrefix)
+	}
+	return field
+}
+
+// getSystemFieldName is an internal alias for backward compatibility within the package
+func getSystemFieldName(field string) string {
+	return GetSystemFieldName(field)
 }
 
 // isValidSortField returns true if the field can be sorted

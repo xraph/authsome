@@ -64,6 +64,30 @@ type FieldOptions struct {
 	MaxItems        *int             `json:"maxItems,omitempty"`        // For array: maximum items
 	Collapsible     bool             `json:"collapsible,omitempty"`     // UI: collapsible in form
 	DefaultExpanded bool             `json:"defaultExpanded,omitempty"` // UI: expanded by default
+
+	// OneOf fields (discriminated union)
+	DiscriminatorField         string                     `json:"discriminatorField,omitempty"`         // Field name to watch for schema selection
+	Schemas                    map[string]OneOfSchemaOption `json:"schemas,omitempty"`                    // Value -> schema mapping
+	ClearOnDiscriminatorChange bool                       `json:"clearOnDiscriminatorChange,omitempty"` // Clear data when discriminator changes
+
+	// Conditional visibility
+	ShowWhen        *FieldCondition `json:"showWhen,omitempty"`        // Show field when condition is met
+	HideWhen        *FieldCondition `json:"hideWhen,omitempty"`        // Hide field when condition is met
+	ClearWhenHidden bool            `json:"clearWhenHidden,omitempty"` // Clear value when hidden
+}
+
+// OneOfSchemaOption defines a schema option for oneOf fields
+type OneOfSchemaOption struct {
+	ComponentRef string           `json:"componentRef,omitempty"` // Reference to ComponentSchema slug
+	NestedFields []NestedFieldDef `json:"nestedFields,omitempty"` // Or inline field definitions
+	Label        string           `json:"label,omitempty"`        // Display label for this option
+}
+
+// FieldCondition defines a condition for showing/hiding fields
+type FieldCondition struct {
+	Field    string `json:"field"`              // Field name to watch
+	Operator string `json:"operator"`           // eq, ne, in, notIn, exists, notExists
+	Value    any    `json:"value,omitempty"`    // Value(s) to compare
 }
 
 // Choice represents a choice option for select fields
@@ -108,8 +132,8 @@ type ContentField struct {
 
 	ID            xid.ID       `bun:"id,pk,type:varchar(20)" json:"id"`
 	ContentTypeID xid.ID       `bun:"content_type_id,notnull,type:varchar(20)" json:"contentTypeId"`
+	Title         string       `bun:"title,notnull" json:"title"`
 	Name          string       `bun:"name,notnull" json:"name"`
-	Slug          string       `bun:"slug,notnull" json:"slug"`
 	Description   string       `bun:"description,nullzero" json:"description"`
 	Type          string       `bun:"type,notnull" json:"type"`
 	Required      bool         `bun:"required,notnull,default:false" json:"required"`
@@ -298,9 +322,14 @@ func (cf *ContentField) IsArray() bool {
 	return cf.Type == "array"
 }
 
-// IsNested returns true if the field is an object or array type
+// IsNested returns true if the field is an object, array, or oneOf type
 func (cf *ContentField) IsNested() bool {
-	return cf.Type == "object" || cf.Type == "array"
+	return cf.Type == "object" || cf.Type == "array" || cf.Type == "oneOf"
+}
+
+// IsOneOf returns true if the field is a oneOf type
+func (cf *ContentField) IsOneOf() bool {
+	return cf.Type == "oneOf"
 }
 
 // HasNestedFields returns true if the field has inline nested field definitions
@@ -347,5 +376,66 @@ func (cf *ContentField) IsCollapsible() bool {
 // IsDefaultExpanded returns true if the nested field should be expanded by default
 func (cf *ContentField) IsDefaultExpanded() bool {
 	return cf.Options.DefaultExpanded
+}
+
+// HasDiscriminatorField returns true if the field has a discriminator field configured
+func (cf *ContentField) HasDiscriminatorField() bool {
+	return cf.Options.DiscriminatorField != ""
+}
+
+// GetDiscriminatorField returns the discriminator field name
+func (cf *ContentField) GetDiscriminatorField() string {
+	return cf.Options.DiscriminatorField
+}
+
+// GetSchemas returns the oneOf schema options
+func (cf *ContentField) GetSchemas() map[string]OneOfSchemaOption {
+	return cf.Options.Schemas
+}
+
+// GetSchemaForValue returns the schema option for a discriminator value
+func (cf *ContentField) GetSchemaForValue(value string) *OneOfSchemaOption {
+	if cf.Options.Schemas == nil {
+		return nil
+	}
+	if schema, ok := cf.Options.Schemas[value]; ok {
+		return &schema
+	}
+	return nil
+}
+
+// ShouldClearOnDiscriminatorChange returns true if data should be cleared when discriminator changes
+func (cf *ContentField) ShouldClearOnDiscriminatorChange() bool {
+	return cf.Options.ClearOnDiscriminatorChange
+}
+
+// HasShowCondition returns true if the field has a show condition
+func (cf *ContentField) HasShowCondition() bool {
+	return cf.Options.ShowWhen != nil
+}
+
+// HasHideCondition returns true if the field has a hide condition
+func (cf *ContentField) HasHideCondition() bool {
+	return cf.Options.HideWhen != nil
+}
+
+// GetShowCondition returns the show condition
+func (cf *ContentField) GetShowCondition() *FieldCondition {
+	return cf.Options.ShowWhen
+}
+
+// GetHideCondition returns the hide condition
+func (cf *ContentField) GetHideCondition() *FieldCondition {
+	return cf.Options.HideWhen
+}
+
+// ShouldClearWhenHidden returns true if data should be cleared when field is hidden
+func (cf *ContentField) ShouldClearWhenHidden() bool {
+	return cf.Options.ClearWhenHidden
+}
+
+// HasConditionalVisibility returns true if the field has any conditional visibility rules
+func (cf *ContentField) HasConditionalVisibility() bool {
+	return cf.Options.ShowWhen != nil || cf.Options.HideWhen != nil
 }
 

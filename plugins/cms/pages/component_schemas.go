@@ -76,7 +76,7 @@ func componentSchemasTable(currentApp *app.App, basePath string, components []*c
 
 	return Div(
 		Card(DataTable(
-			[]string{"Name", "Slug", "Fields", "Usage", "Updated", "Actions"},
+			[]string{"Name", "Name", "Fields", "Usage", "Updated", "Actions"},
 			rows,
 		)),
 		Pagination(page, totalPages, appBase+"/cms/components"),
@@ -112,7 +112,7 @@ func componentSchemaRow(appBase string, cs *core.ComponentSchemaSummaryDTO) g.No
 		// Slug
 		TableCellSecondary(Code(
 			Class("text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"),
-			g.Text(cs.Slug),
+			g.Text(cs.Name),
 		)),
 
 		// Fields
@@ -140,10 +140,10 @@ func componentSchemaRow(appBase string, cs *core.ComponentSchemaSummaryDTO) g.No
 
 		// Actions
 		TableCellActions(
-			IconButton(appBase+"/cms/components/"+cs.Slug, lucide.Pencil(Class("size-4")), "Edit Component", "text-slate-600"),
+			IconButton(appBase+"/cms/components/"+cs.Name, lucide.Pencil(Class("size-4")), "Edit Component", "text-slate-600"),
 			g.If(cs.UsageCount == 0, func() g.Node {
 				return ConfirmButton(
-					appBase+"/cms/components/"+cs.Slug+"/delete",
+					appBase+"/cms/components/"+cs.Name+"/delete",
 					"POST",
 					"",
 					"Are you sure you want to delete this component schema?",
@@ -209,7 +209,7 @@ func CreateComponentSchemaPage(
 						Div(
 							Class("grid grid-cols-1 md:grid-cols-2 gap-4"),
 							formFieldWithAlpine("name", "Name", "text", "", "e.g., Address, Contact Info", true, "", "name", "@input", "updateSlug()"),
-							formFieldWithAlpine("slug", "Slug", "text", "", "e.g., address, contact-info", true, "URL-friendly identifier", "slug", "@input", "slugManuallyEdited = true"),
+							formFieldWithAlpine("slug", "Name", "text", "", "e.g., address, contact-info", true, "URL-friendly identifier", "slug", "@input", "slugManuallyEdited = true"),
 						),
 
 						// Description
@@ -325,7 +325,7 @@ func EditComponentSchemaPage(
 			fmt.Sprintf("Edit the %s component schema", component.Name),
 			g.If(component.UsageCount == 0, func() g.Node {
 				return ConfirmButton(
-					appBase+"/cms/components/"+component.Slug+"/delete",
+					appBase+"/cms/components/"+component.Name+"/delete",
 					"POST",
 					"Delete",
 					"Are you sure you want to delete this component schema?",
@@ -369,9 +369,9 @@ func EditComponentSchemaPage(
 
 				FormEl(
 					Method("POST"),
-					Action(appBase+"/cms/components/"+component.Slug),
+					Action(appBase+"/cms/components/"+component.Name),
 					Class("space-y-6"),
-					g.Attr("x-data", componentSchemaFormDataWithValues(component.Name, component.Slug, string(fieldsJSON))),
+					g.Attr("x-data", componentSchemaFormDataWithValues(component.Name, component.Name, string(fieldsJSON))),
 
 					// Basic info section
 					Div(
@@ -386,13 +386,13 @@ func EditComponentSchemaPage(
 								Label(
 									For("slug"),
 									Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-									g.Text("Slug"),
+									g.Text("Name"),
 								),
 								Input(
 									Type("text"),
 									ID("slug"),
 									Name("slug"),
-									Value(component.Slug),
+									Value(component.Name),
 									Disabled(),
 									Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-slate-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 cursor-not-allowed"),
 								),
@@ -620,7 +620,7 @@ func nestedFieldEditor() g.Node {
 			Div(
 				Label(
 					Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-					g.Text("Slug"),
+					g.Text("Name"),
 					Span(Class("text-red-500 ml-1"), g.Text("*")),
 				),
 				Input(
@@ -696,14 +696,14 @@ func nestedFieldEditor() g.Node {
 // =============================================================================
 
 // ComponentSchemaSelector renders a select dropdown for choosing a component schema
-func ComponentSchemaSelector(components []*core.ComponentSchemaSummaryDTO, selectedSlug string) g.Node {
+func ComponentSchemaSelector(components []*core.ComponentSchemaSummaryDTO, selectedName string) g.Node {
 	options := make([]g.Node, len(components)+1)
 	options[0] = Option(Value(""), g.Text("-- Select a component schema --"))
 
 	for i, cs := range components {
 		options[i+1] = Option(
-			Value(cs.Slug),
-			g.If(cs.Slug == selectedSlug, Selected()),
+			Value(cs.Name),
+			g.If(cs.Name == selectedName, Selected()),
 			g.Text(fmt.Sprintf("%s (%d fields)", cs.Name, cs.FieldCount)),
 		)
 	}

@@ -65,8 +65,8 @@ type ContentType struct {
 	ID            xid.ID              `bun:"id,pk,type:varchar(20)" json:"id"`
 	AppID         xid.ID              `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
 	EnvironmentID xid.ID              `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
+	Title         string              `bun:"title,notnull" json:"title"`
 	Name          string              `bun:"name,notnull" json:"name"`
-	Slug          string              `bun:"slug,notnull" json:"slug"`
 	Description   string              `bun:"description,nullzero" json:"description"`
 	Icon          string              `bun:"icon,nullzero" json:"icon"`
 	Settings      ContentTypeSettings `bun:"settings,type:jsonb,notnull" json:"settings"`
@@ -115,7 +115,7 @@ func (ct *ContentType) BeforeUpdate() {
 	ct.UpdatedAt = time.Now()
 }
 
-// GetTitleField returns the field slug to use as title
+// GetTitleField returns the field name to use as title
 func (ct *ContentType) GetTitleField() string {
 	if ct.Settings.TitleField != "" {
 		return ct.Settings.TitleField
@@ -123,7 +123,7 @@ func (ct *ContentType) GetTitleField() string {
 	// Default to common field names
 	for _, name := range []string{"title", "name", "label"} {
 		for _, f := range ct.Fields {
-			if f.Slug == name {
+			if f.Name == name {
 				return name
 			}
 		}
@@ -131,7 +131,7 @@ func (ct *ContentType) GetTitleField() string {
 	return ""
 }
 
-// GetDescriptionField returns the field slug to use as description
+// GetDescriptionField returns the field name to use as description
 func (ct *ContentType) GetDescriptionField() string {
 	if ct.Settings.DescriptionField != "" {
 		return ct.Settings.DescriptionField
@@ -139,7 +139,7 @@ func (ct *ContentType) GetDescriptionField() string {
 	// Default to common field names
 	for _, name := range []string{"description", "summary", "excerpt", "content"} {
 		for _, f := range ct.Fields {
-			if f.Slug == name {
+			if f.Name == name {
 				return name
 			}
 		}
@@ -162,10 +162,10 @@ func (ct *ContentType) HasScheduling() bool {
 	return ct.Settings.EnableScheduling
 }
 
-// GetFieldBySlug returns a field by its slug
-func (ct *ContentType) GetFieldBySlug(slug string) *ContentField {
+// GetFieldByName returns a field by its name
+func (ct *ContentType) GetFieldByName(name string) *ContentField {
 	for _, f := range ct.Fields {
-		if f.Slug == slug {
+		if f.Name == name {
 			return f
 		}
 	}

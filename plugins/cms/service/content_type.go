@@ -16,34 +16,37 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// slugPattern defines valid slug format: lowercase letters, numbers, and hyphens
-var slugPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$`)
+// slugPattern defines valid slug format: letters, numbers, underscores, and hyphens
+// Must start with a letter (case-insensitive)
+var slugPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
-// generateSlug creates a URL-friendly slug from a name
+// generateSlug creates an identifier from a name, preserving casing
 func generateSlug(name string) string {
-	// Convert to lowercase
-	slug := strings.ToLower(strings.TrimSpace(name))
+	// Trim whitespace but preserve casing
+	slug := strings.TrimSpace(name)
 
-	// Replace spaces and underscores with hyphens
+	// Replace spaces with hyphens
 	slug = strings.ReplaceAll(slug, " ", "-")
-	slug = strings.ReplaceAll(slug, "_", "-")
 
-	// Remove non-alphanumeric characters except hyphens
+	// Remove invalid characters (keep letters, numbers, underscores, hyphens)
 	var result strings.Builder
 	for _, r := range slug {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			result.WriteRune(r)
 		}
 	}
 	slug = result.String()
 
-	// Remove multiple consecutive hyphens
+	// Remove multiple consecutive hyphens or underscores
 	for strings.Contains(slug, "--") {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
+	for strings.Contains(slug, "__") {
+		slug = strings.ReplaceAll(slug, "__", "_")
+	}
 
-	// Remove leading/trailing hyphens
-	slug = strings.Trim(slug, "-")
+	// Remove leading/trailing hyphens and underscores
+	slug = strings.Trim(slug, "-_")
 
 	// Ensure it starts with a letter
 	if len(slug) > 0 && slug[0] >= '0' && slug[0] <= '9' {
@@ -107,18 +110,18 @@ func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContent
 	}
 
 	// Auto-generate slug from name if not provided
-	slug := strings.ToLower(strings.TrimSpace(req.Slug))
+	slug := strings.TrimSpace(req.Name)
 	if slug == "" {
 		slug = generateSlug(req.Name)
 	}
 
 	// Validate slug
 	if !isValidSlug(slug) {
-		return nil, core.ErrInvalidContentTypeSlug(slug, "must be lowercase, start with a letter, and contain only letters, numbers, and hyphens")
+		return nil, core.ErrInvalidContentTypeSlug(slug, "must start with a letter and contain only letters, numbers, underscores, and hyphens")
 	}
 
 	// Check if slug already exists
-	exists, err := s.repo.ExistsWithSlug(ctx, appID, envID, slug)
+	exists, err := s.repo.ExistsWithName(ctx, appID, envID, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -154,17 +157,17 @@ func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContent
 
 	// Create content type
 	contentType := &schema.ContentType{
-		ID:            xid.New(),
-		AppID:         appID,
-		EnvironmentID: envID,
-		Name:          strings.TrimSpace(req.Name),
-		Slug:          slug,
-		Description:   strings.TrimSpace(req.Description),
-		Icon:          req.Icon,
-		Settings:      settings,
-		CreatedBy:     userID,
-		UpdatedBy:     userID,
-	}
+	ID:            xid.New(),
+	AppID:         appID,
+	EnvironmentID: envID,
+	Title:         strings.TrimSpace(req.Title),
+	Name:          slug,
+	Description:   strings.TrimSpace(req.Description),
+	Icon:          req.Icon,
+	Settings:      settings,
+	CreatedBy:     userID,
+	UpdatedBy:     userID,
+}
 
 	if err := s.repo.Create(ctx, contentType); err != nil {
 		return nil, err
@@ -183,7 +186,7 @@ func (s *ContentTypeService) GetByID(ctx context.Context, id xid.ID) (*core.Cont
 }
 
 // GetBySlug retrieves a content type by slug
-func (s *ContentTypeService) GetBySlug(ctx context.Context, slug string) (*core.ContentTypeDTO, error) {
+func (s *ContentTypeService) GetByName(ctx context.Context, name string) (*core.ContentTypeDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
@@ -193,7 +196,7 @@ func (s *ContentTypeService) GetBySlug(ctx context.Context, slug string) (*core.
 		return nil, core.ErrEnvContextMissing()
 	}
 
-	contentType, err := s.repo.FindBySlugWithFields(ctx, appID, envID, slug)
+	contentType, err := s.repo.FindByNameWithFields(ctx, appID, envID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -225,8 +228,8 @@ func (s *ContentTypeService) List(ctx context.Context, query *core.ListContentTy
 
 		dtos[i] = &core.ContentTypeSummaryDTO{
 			ID:          ct.ID.String(),
+			Title: ct.Title,
 			Name:        ct.Name,
-			Slug:        ct.Slug,
 			Description: ct.Description,
 			Icon:        ct.Icon,
 			EntryCount:  entryCount,
@@ -266,8 +269,8 @@ func (s *ContentTypeService) Update(ctx context.Context, id xid.ID, req *core.Up
 	userID, _ := contexts.GetUserID(ctx)
 
 	// Update fields
-	if req.Name != "" {
-		contentType.Name = strings.TrimSpace(req.Name)
+	if req.Title != "" {
+		contentType.Title = strings.TrimSpace(req.Title)
 	}
 	if req.Description != "" {
 		contentType.Description = strings.TrimSpace(req.Description)
@@ -322,7 +325,7 @@ func (s *ContentTypeService) Delete(ctx context.Context, id xid.ID) error {
 		return err
 	}
 	if entryCount > 0 {
-		return core.ErrContentTypeHasEntries(contentType.Slug, entryCount)
+		return core.ErrContentTypeHasEntries(contentType.Name, entryCount)
 	}
 
 	// Soft delete
@@ -353,14 +356,14 @@ func (s *ContentTypeService) toDTO(ct *schema.ContentType) *core.ContentTypeDTO 
 	}
 
 	dto := &core.ContentTypeDTO{
-		ID:            ct.ID.String(),
-		AppID:         ct.AppID.String(),
-		EnvironmentID: ct.EnvironmentID.String(),
-		Name:          ct.Name,
-		Slug:          ct.Slug,
-		Description:   ct.Description,
-		Icon:          ct.Icon,
-		Settings: core.ContentTypeSettingsDTO{
+	ID:            ct.ID.String(),
+	AppID:         ct.AppID.String(),
+	EnvironmentID: ct.EnvironmentID.String(),
+	Title:         ct.Title,
+	Name:          ct.Name,
+	Description:   ct.Description,
+	Icon:          ct.Icon,
+	Settings: core.ContentTypeSettingsDTO{
 			TitleField:         ct.Settings.TitleField,
 			DescriptionField:   ct.Settings.DescriptionField,
 			EnableRevisions:    ct.Settings.EnableRevisions,
@@ -402,8 +405,8 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 	dto := &core.ContentFieldDTO{
 		ID:            field.ID.String(),
 		ContentTypeID: field.ContentTypeID.String(),
+		Title: field.Title,
 		Name:          field.Name,
-		Slug:          field.Slug,
 		Description:   field.Description,
 		Type:          field.Type,
 		Required:      field.Required,
@@ -424,31 +427,34 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 
 	// Convert options
 	dto.Options = core.FieldOptionsDTO{
-		MinLength:        field.Options.MinLength,
-		MaxLength:        field.Options.MaxLength,
-		Pattern:          field.Options.Pattern,
-		Min:              field.Options.Min,
-		Max:              field.Options.Max,
-		Step:             field.Options.Step,
-		Integer:          field.Options.Integer,
-		RelatedType:      field.Options.RelatedType,
-		RelationType:     field.Options.RelationType,
-		OnDelete:         field.Options.OnDelete,
-		InverseField:     field.Options.InverseField,
-		AllowHTML:        field.Options.AllowHTML,
-		MaxWords:         field.Options.MaxWords,
-		AllowedMimeTypes: field.Options.AllowedMimeTypes,
-		MaxFileSize:      field.Options.MaxFileSize,
-		SourceField:      field.Options.SourceField,
-		Schema:           field.Options.Schema,
-		MinDate:          field.Options.MinDate,
-		MaxDate:          field.Options.MaxDate,
-		DateFormat:       field.Options.DateFormat,
-		ComponentRef:     field.Options.ComponentRef,
-		MinItems:         field.Options.MinItems,
-		MaxItems:         field.Options.MaxItems,
-		Collapsible:      field.Options.Collapsible,
-		DefaultExpanded:  field.Options.DefaultExpanded,
+		MinLength:                  field.Options.MinLength,
+		MaxLength:                  field.Options.MaxLength,
+		Pattern:                    field.Options.Pattern,
+		Min:                        field.Options.Min,
+		Max:                        field.Options.Max,
+		Step:                       field.Options.Step,
+		Integer:                    field.Options.Integer,
+		RelatedType:                field.Options.RelatedType,
+		RelationType:               field.Options.RelationType,
+		OnDelete:                   field.Options.OnDelete,
+		InverseField:               field.Options.InverseField,
+		AllowHTML:                  field.Options.AllowHTML,
+		MaxWords:                   field.Options.MaxWords,
+		AllowedMimeTypes:           field.Options.AllowedMimeTypes,
+		MaxFileSize:                field.Options.MaxFileSize,
+		SourceField:                field.Options.SourceField,
+		Schema:                     field.Options.Schema,
+		MinDate:                    field.Options.MinDate,
+		MaxDate:                    field.Options.MaxDate,
+		DateFormat:                 field.Options.DateFormat,
+		ComponentRef:               field.Options.ComponentRef,
+		MinItems:                   field.Options.MinItems,
+		MaxItems:                   field.Options.MaxItems,
+		Collapsible:                field.Options.Collapsible,
+		DefaultExpanded:            field.Options.DefaultExpanded,
+		DiscriminatorField:         field.Options.DiscriminatorField,
+		ClearOnDiscriminatorChange: field.Options.ClearOnDiscriminatorChange,
+		ClearWhenHidden:            field.Options.ClearWhenHidden,
 	}
 
 	// Convert choices
@@ -470,6 +476,22 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 		dto.Options.NestedFields = schemaToNestedFieldDTOs(field.Options.NestedFields)
 	}
 
+	// Convert oneOf schemas
+	if len(field.Options.Schemas) > 0 {
+		dto.Options.Schemas = make(map[string]core.OneOfSchemaOptionDTO, len(field.Options.Schemas))
+		for key, schemaOpt := range field.Options.Schemas {
+			dto.Options.Schemas[key] = schemaOneOfOptionToDTO(schemaOpt)
+		}
+	}
+
+	// Convert conditional visibility
+	if field.Options.ShowWhen != nil {
+		dto.Options.ShowWhen = schemaConditionToDTO(field.Options.ShowWhen)
+	}
+	if field.Options.HideWhen != nil {
+		dto.Options.HideWhen = schemaConditionToDTO(field.Options.HideWhen)
+	}
+
 	return dto
 }
 
@@ -482,8 +504,8 @@ func schemaToNestedFieldDTOs(fields schema.NestedFieldDefs) []core.NestedFieldDe
 	dtos := make([]core.NestedFieldDefDTO, len(fields))
 	for i, f := range fields {
 		dtos[i] = core.NestedFieldDefDTO{
+			Title:       f.Title,
 			Name:        f.Name,
-			Slug:        f.Slug,
 			Type:        f.Type,
 			Required:    f.Required,
 			Description: f.Description,
@@ -502,31 +524,34 @@ func schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
 	}
 
 	dto := &core.FieldOptionsDTO{
-		MinLength:        opts.MinLength,
-		MaxLength:        opts.MaxLength,
-		Pattern:          opts.Pattern,
-		Min:              opts.Min,
-		Max:              opts.Max,
-		Step:             opts.Step,
-		Integer:          opts.Integer,
-		RelatedType:      opts.RelatedType,
-		RelationType:     opts.RelationType,
-		OnDelete:         opts.OnDelete,
-		InverseField:     opts.InverseField,
-		AllowHTML:        opts.AllowHTML,
-		MaxWords:         opts.MaxWords,
-		AllowedMimeTypes: opts.AllowedMimeTypes,
-		MaxFileSize:      opts.MaxFileSize,
-		SourceField:      opts.SourceField,
-		Schema:           opts.Schema,
-		MinDate:          opts.MinDate,
-		MaxDate:          opts.MaxDate,
-		DateFormat:       opts.DateFormat,
-		ComponentRef:     opts.ComponentRef,
-		MinItems:         opts.MinItems,
-		MaxItems:         opts.MaxItems,
-		Collapsible:      opts.Collapsible,
-		DefaultExpanded:  opts.DefaultExpanded,
+		MinLength:                  opts.MinLength,
+		MaxLength:                  opts.MaxLength,
+		Pattern:                    opts.Pattern,
+		Min:                        opts.Min,
+		Max:                        opts.Max,
+		Step:                       opts.Step,
+		Integer:                    opts.Integer,
+		RelatedType:                opts.RelatedType,
+		RelationType:               opts.RelationType,
+		OnDelete:                   opts.OnDelete,
+		InverseField:               opts.InverseField,
+		AllowHTML:                  opts.AllowHTML,
+		MaxWords:                   opts.MaxWords,
+		AllowedMimeTypes:           opts.AllowedMimeTypes,
+		MaxFileSize:                opts.MaxFileSize,
+		SourceField:                opts.SourceField,
+		Schema:                     opts.Schema,
+		MinDate:                    opts.MinDate,
+		MaxDate:                    opts.MaxDate,
+		DateFormat:                 opts.DateFormat,
+		ComponentRef:               opts.ComponentRef,
+		MinItems:                   opts.MinItems,
+		MaxItems:                   opts.MaxItems,
+		Collapsible:                opts.Collapsible,
+		DefaultExpanded:            opts.DefaultExpanded,
+		DiscriminatorField:         opts.DiscriminatorField,
+		ClearOnDiscriminatorChange: opts.ClearOnDiscriminatorChange,
+		ClearWhenHidden:            opts.ClearWhenHidden,
 	}
 
 	// Convert choices
@@ -548,7 +573,47 @@ func schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
 		dto.NestedFields = schemaToNestedFieldDTOs(opts.NestedFields)
 	}
 
+	// Convert oneOf schemas
+	if len(opts.Schemas) > 0 {
+		dto.Schemas = make(map[string]core.OneOfSchemaOptionDTO, len(opts.Schemas))
+		for key, schemaOpt := range opts.Schemas {
+			dto.Schemas[key] = schemaOneOfOptionToDTO(schemaOpt)
+		}
+	}
+
+	// Convert conditional visibility
+	if opts.ShowWhen != nil {
+		dto.ShowWhen = schemaConditionToDTO(opts.ShowWhen)
+	}
+	if opts.HideWhen != nil {
+		dto.HideWhen = schemaConditionToDTO(opts.HideWhen)
+	}
+
 	return dto
+}
+
+// schemaOneOfOptionToDTO converts a schema OneOfSchemaOption to DTO
+func schemaOneOfOptionToDTO(opt schema.OneOfSchemaOption) core.OneOfSchemaOptionDTO {
+	dto := core.OneOfSchemaOptionDTO{
+		ComponentRef: opt.ComponentRef,
+		Label:        opt.Label,
+	}
+	if len(opt.NestedFields) > 0 {
+		dto.NestedFields = schemaToNestedFieldDTOs(opt.NestedFields)
+	}
+	return dto
+}
+
+// schemaConditionToDTO converts a schema FieldCondition to DTO
+func schemaConditionToDTO(cond *schema.FieldCondition) *core.FieldConditionDTO {
+	if cond == nil {
+		return nil
+	}
+	return &core.FieldConditionDTO{
+		Field:    cond.Field,
+		Operator: cond.Operator,
+		Value:    cond.Value,
+	}
 }
 
 // isValidSlug validates a slug format

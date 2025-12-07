@@ -19,7 +19,7 @@ type ContentTypeRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, contentType *schema.ContentType) error
 	FindByID(ctx context.Context, id xid.ID) (*schema.ContentType, error)
-	FindBySlug(ctx context.Context, appID, envID xid.ID, slug string) (*schema.ContentType, error)
+	FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error)
 	List(ctx context.Context, appID, envID xid.ID, query *core.ListContentTypesQuery) ([]*schema.ContentType, int, error)
 	Update(ctx context.Context, contentType *schema.ContentType) error
 	Delete(ctx context.Context, id xid.ID) error
@@ -27,12 +27,12 @@ type ContentTypeRepository interface {
 
 	// Relation queries
 	FindWithFields(ctx context.Context, id xid.ID) (*schema.ContentType, error)
-	FindBySlugWithFields(ctx context.Context, appID, envID xid.ID, slug string) (*schema.ContentType, error)
+	FindByNameWithFields(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error)
 
 	// Stats operations
 	Count(ctx context.Context, appID, envID xid.ID) (int, error)
 	CountEntries(ctx context.Context, contentTypeID xid.ID) (int, error)
-	ExistsWithSlug(ctx context.Context, appID, envID xid.ID, slug string) (bool, error)
+	ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error)
 }
 
 // contentTypeRepository implements ContentTypeRepository using Bun ORM
@@ -82,18 +82,18 @@ func (r *contentTypeRepository) FindByID(ctx context.Context, id xid.ID) (*schem
 }
 
 // FindBySlug finds a content type by slug within an app/environment
-func (r *contentTypeRepository) FindBySlug(ctx context.Context, appID, envID xid.ID, slug string) (*schema.ContentType, error) {
+func (r *contentTypeRepository) FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
 	err := r.db.NewSelect().
 		Model(contentType).
 		Where("ct.app_id = ?", appID).
 		Where("ct.environment_id = ?", envID).
-		Where("ct.slug = ?", slug).
+		Where("LOWER(ct.name) = LOWER(?)", name).
 		Where("ct.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, core.ErrContentTypeNotFound(slug)
+			return nil, core.ErrContentTypeNotFound(name)
 		}
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (r *contentTypeRepository) FindWithFields(ctx context.Context, id xid.ID) (
 }
 
 // FindBySlugWithFields finds a content type by slug with its fields loaded
-func (r *contentTypeRepository) FindBySlugWithFields(ctx context.Context, appID, envID xid.ID, slug string) (*schema.ContentType, error) {
+func (r *contentTypeRepository) FindByNameWithFields(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
 	err := r.db.NewSelect().
 		Model(contentType).
@@ -252,12 +252,12 @@ func (r *contentTypeRepository) FindBySlugWithFields(ctx context.Context, appID,
 		}).
 		Where("ct.app_id = ?", appID).
 		Where("ct.environment_id = ?", envID).
-		Where("ct.slug = ?", slug).
+		Where("LOWER(ct.name) = LOWER(?)", name).
 		Where("ct.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, core.ErrContentTypeNotFound(slug)
+			return nil, core.ErrContentTypeNotFound(name)
 		}
 		return nil, err
 	}
@@ -287,13 +287,13 @@ func (r *contentTypeRepository) CountEntries(ctx context.Context, contentTypeID 
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a content type with the given slug exists
-func (r *contentTypeRepository) ExistsWithSlug(ctx context.Context, appID, envID xid.ID, slug string) (bool, error) {
+// ExistsWithSlug checks if a content type with the given name exists
+func (r *contentTypeRepository) ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ContentType)(nil)).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
-		Where("slug = ?", slug).
+		Where("LOWER(name) = LOWER(?)", name).
 		Where("deleted_at IS NULL").
 		Count(ctx)
 	if err != nil {
@@ -301,4 +301,3 @@ func (r *contentTypeRepository) ExistsWithSlug(ctx context.Context, appID, envID
 	}
 	return count > 0, nil
 }
-

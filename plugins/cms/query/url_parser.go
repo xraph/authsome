@@ -19,7 +19,7 @@ func NewURLParser() *URLParser {
 
 // Parse parses URL query parameters into a Query object
 // Supported formats:
-//   - filter[field]=op.value (e.g., filter[status]=eq.published)
+//   - filter[field]=op.value (e.g., filter[_meta.status]=eq.published)
 //   - filter[field]=value (shorthand for eq)
 //   - sort=-field (descending) or sort=field (ascending)
 //   - page=1&pageSize=20
@@ -27,7 +27,9 @@ func NewURLParser() *URLParser {
 //   - select=field1,field2
 //   - populate=relation1,relation2
 //   - search=text
-//   - status=published (shorthand for filter[status]=eq.published)
+//
+// System fields use _meta prefix: _meta.status, _meta.createdAt, _meta.updatedAt, etc.
+// Legacy format (e.g., "status") is still supported for backward compatibility.
 func (p *URLParser) Parse(values url.Values) (*Query, error) {
 	q := NewQuery()
 

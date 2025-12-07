@@ -106,9 +106,9 @@ func ErrFieldExists(slug string) error {
 	return errs.New(ErrCodeFieldExists, "field already exists with slug: "+slug, http.StatusConflict)
 }
 
-// ErrInvalidFieldSlug returns a bad request error for invalid field slug
+// ErrInvalidFieldSlug returns a bad request error for invalid field name
 func ErrInvalidFieldSlug(slug, reason string) error {
-	msg := "invalid field slug: " + slug
+	msg := "invalid field name: " + slug
 	if reason != "" {
 		msg += " (" + reason + ")"
 	}

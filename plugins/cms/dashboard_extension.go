@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -13,6 +14,7 @@ import (
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/cms/core"
 	"github.com/xraph/authsome/plugins/cms/pages"
 	"github.com/xraph/authsome/plugins/dashboard"
@@ -140,7 +142,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Content Type detail
 		{
 			Method:       "GET",
-			Path:         "/cms/types/:typeSlug",
+			Path:         "/cms/types/:typeName",
 			Handler:      e.ServeContentTypeDetail,
 			Name:         "cms.dashboard.types.detail",
 			Summary:      "Content Type Detail",
@@ -152,7 +154,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Delete Content Type action
 		{
 			Method:       "POST",
-			Path:         "/cms/types/:typeSlug/delete",
+			Path:         "/cms/types/:typeName/delete",
 			Handler:      e.HandleDeleteContentType,
 			Name:         "cms.dashboard.types.delete",
 			Summary:      "Delete Content Type",
@@ -164,7 +166,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Add Field action
 		{
 			Method:       "POST",
-			Path:         "/cms/types/:typeSlug/fields",
+			Path:         "/cms/types/:typeName/fields",
 			Handler:      e.HandleAddField,
 			Name:         "cms.dashboard.fields.create",
 			Summary:      "Add Field",
@@ -176,7 +178,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Update Field action
 		{
 			Method:       "POST",
-			Path:         "/cms/types/:typeSlug/fields/:fieldSlug/update",
+			Path:         "/cms/types/:typeName/fields/:fieldName/update",
 			Handler:      e.HandleUpdateField,
 			Name:         "cms.dashboard.fields.update",
 			Summary:      "Update Field",
@@ -188,7 +190,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Delete Field action
 		{
 			Method:       "POST",
-			Path:         "/cms/types/:typeSlug/fields/:fieldSlug/delete",
+			Path:         "/cms/types/:typeName/fields/:fieldName/delete",
 			Handler:      e.HandleDeleteField,
 			Name:         "cms.dashboard.fields.delete",
 			Summary:      "Delete Field",
@@ -200,7 +202,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Content Entries list
 		{
 			Method:       "GET",
-			Path:         "/cms/types/:typeSlug/entries",
+			Path:         "/cms/types/:typeName/entries",
 			Handler:      e.ServeEntriesList,
 			Name:         "cms.dashboard.entries.list",
 			Summary:      "Content Entries",
@@ -212,7 +214,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Create Entry page
 		{
 			Method:       "GET",
-			Path:         "/cms/types/:typeSlug/entries/create",
+			Path:         "/cms/types/:typeName/entries/create",
 			Handler:      e.ServeCreateEntry,
 			Name:         "cms.dashboard.entries.create",
 			Summary:      "Create Entry",
@@ -224,7 +226,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Create Entry action
 		{
 			Method:       "POST",
-			Path:         "/cms/types/:typeSlug/entries/create",
+			Path:         "/cms/types/:typeName/entries/create",
 			Handler:      e.HandleCreateEntry,
 			Name:         "cms.dashboard.entries.create.submit",
 			Summary:      "Submit Create Entry",
@@ -236,7 +238,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Entry detail
 		{
 			Method:       "GET",
-			Path:         "/cms/types/:typeSlug/entries/:entryId",
+			Path:         "/cms/types/:typeName/entries/:entryId",
 			Handler:      e.ServeEntryDetail,
 			Name:         "cms.dashboard.entries.detail",
 			Summary:      "Entry Detail",
@@ -248,7 +250,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Edit Entry page
 		{
 			Method:       "GET",
-			Path:         "/cms/types/:typeSlug/entries/:entryId/edit",
+			Path:         "/cms/types/:typeName/entries/:entryId/edit",
 			Handler:      e.ServeEditEntry,
 			Name:         "cms.dashboard.entries.edit",
 			Summary:      "Edit Entry",
@@ -260,11 +262,23 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		// Update Entry action
 		{
 			Method:       "POST",
-			Path:         "/cms/types/:typeSlug/entries/:entryId/update",
+			Path:         "/cms/types/:typeName/entries/:entryId/update",
 			Handler:      e.HandleUpdateEntry,
 			Name:         "cms.dashboard.entries.update",
 			Summary:      "Update Entry",
 			Description:  "Process entry update form",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Delete Entry action
+		{
+			Method:       "POST",
+			Path:         "/cms/types/:typeName/entries/:entryId/delete",
+			Handler:      e.HandleDeleteEntry,
+			Name:         "cms.dashboard.entries.delete",
+			Summary:      "Delete Entry",
+			Description:  "Delete a content entry",
 			Tags:         []string{"Dashboard", "CMS"},
 			RequireAuth:  true,
 			RequireAdmin: true,
@@ -674,7 +688,7 @@ func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, baseP
 					Class("divide-y divide-slate-200 dark:divide-gray-800"),
 					g.Group(g.Map(contentTypes, func(ct *core.ContentTypeSummaryDTO) g.Node {
 						return A(
-							Href(appBase+"/cms/types/"+ct.Slug),
+							Href(appBase+"/cms/types/"+ct.Name),
 							Class("flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors"),
 							Div(
 								Class("flex items-center gap-3"),
@@ -847,8 +861,8 @@ func (e *DashboardExtension) HandleCreateContentType(c forge.Context) error {
 
 	// Parse form
 	req := &core.CreateContentTypeRequest{
-		Name:        c.FormValue("name"),
-		Slug:        c.FormValue("slug"),
+		Title:       c.FormValue("name"),
+		Name:        c.FormValue("slug"),
 		Description: c.FormValue("description"),
 		Icon:        c.FormValue("icon"),
 	}
@@ -859,7 +873,7 @@ func (e *DashboardExtension) HandleCreateContentType(c forge.Context) error {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/create?error="+err.Error())
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+result.Slug)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+result.Name)
 }
 
 func (e *DashboardExtension) ServeContentTypeDetail(c forge.Context) error {
@@ -880,10 +894,10 @@ func (e *DashboardExtension) ServeContentTypeDetail(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
@@ -905,7 +919,14 @@ func (e *DashboardExtension) ServeContentTypeDetail(c forge.Context) error {
 		allContentTypes = ctResult.ContentTypes
 	}
 
-	content := pages.ContentTypeDetailPage(currentApp, basePath, contentType, stats, envIDStr, allContentTypes)
+	// Get all component schemas for nested field dropdowns
+	allComponentSchemas := []*core.ComponentSchemaSummaryDTO{}
+	csResult, _ := e.plugin.componentSchemaSvc.List(ctx, &core.ListComponentSchemasQuery{PageSize: 100})
+	if csResult != nil {
+		allComponentSchemas = csResult.Components
+	}
+
+	content := pages.ContentTypeDetailPage(currentApp, basePath, contentType, stats, envIDStr, allContentTypes, allComponentSchemas)
 
 	pageData := components.PageData{
 		Title:      contentType.Name,
@@ -932,11 +953,11 @@ func (e *DashboardExtension) HandleAddField(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
 	}
@@ -945,8 +966,8 @@ func (e *DashboardExtension) HandleAddField(c forge.Context) error {
 
 	// Parse form values
 	req := &core.CreateFieldRequest{
-		Name:        c.FormValue("name"),
-		Slug:        c.FormValue("slug"),
+		Title:       c.FormValue("name"),
+		Name:        c.FormValue("slug"),
 		Type:        c.FormValue("type"),
 		Description: c.FormValue("description"),
 		Required:    c.FormValue("required") == "true",
@@ -960,11 +981,11 @@ func (e *DashboardExtension) HandleAddField(c forge.Context) error {
 	_, err = e.plugin.fieldSvc.Create(ctx, contentTypeID, req)
 	if err != nil {
 		// Redirect back with error
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
 }
 
 // HandleUpdateField handles updating a field in a content type
@@ -981,12 +1002,12 @@ func (e *DashboardExtension) HandleUpdateField(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
-	fieldSlug := c.Param("fieldSlug")
+	typeName := c.Param("typeName")
+	fieldName := c.Param("fieldName")
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
 	}
@@ -995,7 +1016,7 @@ func (e *DashboardExtension) HandleUpdateField(c forge.Context) error {
 
 	// Parse form values for update
 	req := &core.UpdateFieldRequest{
-		Name:        c.FormValue("name"),
+		Title:       c.FormValue("name"),
 		Description: c.FormValue("description"),
 		Options:     e.parseFieldOptions(c),
 	}
@@ -1019,13 +1040,13 @@ func (e *DashboardExtension) HandleUpdateField(c forge.Context) error {
 	}
 
 	// Update the field
-	_, err = e.plugin.fieldSvc.UpdateBySlug(ctx, contentTypeID, fieldSlug, req)
+	_, err = e.plugin.fieldSvc.UpdateByName(ctx, contentTypeID, fieldName, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
 }
 
 // HandleDeleteField handles deleting a field from a content type
@@ -1042,12 +1063,12 @@ func (e *DashboardExtension) HandleDeleteField(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
-	fieldSlug := c.Param("fieldSlug")
+	typeName := c.Param("typeName")
+	fieldName := c.Param("fieldName")
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
 	}
@@ -1055,13 +1076,13 @@ func (e *DashboardExtension) HandleDeleteField(c forge.Context) error {
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Delete the field
-	err = e.plugin.fieldSvc.DeleteBySlug(ctx, contentTypeID, fieldSlug)
+	err = e.plugin.fieldSvc.DeleteByName(ctx, contentTypeID, fieldName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
 }
 
 // HandleDeleteContentType handles deleting a content type
@@ -1078,11 +1099,11 @@ func (e *DashboardExtension) HandleDeleteContentType(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get content type to get its ID
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
 	}
@@ -1092,13 +1113,13 @@ func (e *DashboardExtension) HandleDeleteContentType(c forge.Context) error {
 	// Check if there are entries - if so, don't allow delete
 	entries, _ := e.plugin.entrySvc.List(ctx, contentTypeID, &core.ListEntriesQuery{PageSize: 1})
 	if entries != nil && entries.TotalItems > 0 {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error=Cannot+delete+content+type+with+existing+entries.+Delete+all+entries+first.")
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error=Cannot+delete+content+type+with+existing+entries.+Delete+all+entries+first.")
 	}
 
 	// Delete the content type (this also deletes all fields)
 	err = e.plugin.contentTypeSvc.Delete(ctx, contentTypeID)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"?error="+err.Error())
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
 	}
 
 	// Redirect back to content types list
@@ -1127,7 +1148,7 @@ func (e *DashboardExtension) ServeEntriesList(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	searchQuery := c.Query("search")
 	statusFilter := c.Query("status")
 	page, _ := strconv.Atoi(c.Query("page"))
@@ -1137,7 +1158,7 @@ func (e *DashboardExtension) ServeEntriesList(c forge.Context) error {
 	pageSize := 20
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
@@ -1188,14 +1209,17 @@ func (e *DashboardExtension) ServeCreateEntry(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	errMsg := c.Query("error")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
+
+	// Resolve component references for object/array fields
+	e.resolveComponentReferences(ctx, contentType)
 
 	content := pages.CreateEntryPage(currentApp, basePath, contentType, errMsg)
 
@@ -1223,11 +1247,11 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
@@ -1237,9 +1261,27 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 	// Parse form data into map
 	data := make(map[string]any)
 	for _, field := range contentType.Fields {
-		value := c.FormValue("data[" + field.Slug + "]")
+		value := c.FormValue("data[" + field.Name + "]")
+
+		// Handle boolean fields specially (checkboxes send "true" string or nothing)
+		if field.Type == "boolean" {
+			data[field.Name] = value == "true" || value == "on" || value == "1"
+			continue
+		}
+
 		if value != "" {
-			data[field.Slug] = value
+			// Parse JSON for object, array, oneOf, and json field types
+			if field.Type == "object" || field.Type == "array" || field.Type == "oneOf" || field.Type == "json" {
+				var parsedValue any
+				if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
+					data[field.Name] = parsedValue
+				} else {
+					// If parsing fails, store as-is (validation will catch it)
+					data[field.Name] = value
+				}
+			} else {
+				data[field.Name] = value
+			}
 		}
 	}
 
@@ -1251,10 +1293,25 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 
 	result, err := e.plugin.entrySvc.Create(ctx, contentTypeID, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"/entries/create?error="+err.Error())
+		// Format validation errors with field details if available
+		errorMsg := err.Error()
+
+		// Try to extract validation details from the error
+		if cmsErr, ok := err.(*errs.AuthsomeError); ok {
+			if cmsErr.Code == core.ErrCodeEntryValidationFailed {
+				if details, ok := cmsErr.Details.(map[string]string); ok && len(details) > 0 {
+					errorMsg = "Validation failed:\n"
+					for field, msg := range details {
+						errorMsg += fmt.Sprintf("• %s: %s\n", field, msg)
+					}
+				}
+			}
+		}
+
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/create?error="+url.QueryEscape(errorMsg))
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"/entries/"+result.ID)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/"+result.ID)
 }
 
 func (e *DashboardExtension) ServeEntryDetail(c forge.Context) error {
@@ -1275,11 +1332,11 @@ func (e *DashboardExtension) ServeEntryDetail(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	entryIDStr := c.Param("entryId")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
@@ -1346,15 +1403,18 @@ func (e *DashboardExtension) ServeEditEntry(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	entryIDStr := c.Param("entryId")
 	errMsg := c.Query("error")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
+
+	// Resolve component references for object/array fields
+	e.resolveComponentReferences(ctx, contentType)
 
 	// Get entry
 	entryID, err := xid.FromString(entryIDStr)
@@ -1393,12 +1453,12 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 
 	ctx := e.injectContext(c)
 	basePath := handler.GetBasePath()
-	typeSlug := c.Param("typeSlug")
+	typeName := c.Param("typeName")
 	entryIDStr := c.Param("entryId")
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetBySlug(ctx, typeSlug)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Content type not found")
 	}
@@ -1412,9 +1472,27 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 	// Parse form data into map
 	data := make(map[string]any)
 	for _, field := range contentType.Fields {
-		value := c.FormValue("data[" + field.Slug + "]")
+		value := c.FormValue("data[" + field.Name + "]")
+
+		// Handle boolean fields specially (checkboxes send "true" string or nothing)
+		if field.Type == "boolean" {
+			data[field.Name] = value == "true" || value == "on" || value == "1"
+			continue
+		}
+
 		if value != "" {
-			data[field.Slug] = value
+			// Parse JSON for object, array, oneOf, and json field types
+			if field.Type == "object" || field.Type == "array" || field.Type == "oneOf" || field.Type == "json" {
+				var parsedValue any
+				if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
+					data[field.Name] = parsedValue
+				} else {
+					// If parsing fails, store as-is (validation will catch it)
+					data[field.Name] = value
+				}
+			} else {
+				data[field.Name] = value
+			}
 		}
 	}
 
@@ -1427,10 +1505,58 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 
 	_, err = e.plugin.entrySvc.Update(ctx, entryID, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"/entries/"+entryIDStr+"/edit?error="+err.Error())
+		// Format validation errors with field details if available
+		errorMsg := err.Error()
+
+		// Try to extract validation details from the error
+		if cmsErr, ok := err.(*errs.AuthsomeError); ok {
+			if cmsErr.Code == core.ErrCodeEntryValidationFailed {
+				if details, ok := cmsErr.Details.(map[string]string); ok && len(details) > 0 {
+					errorMsg = "Validation failed:\n"
+					for field, msg := range details {
+						errorMsg += fmt.Sprintf("• %s: %s\n", field, msg)
+					}
+				}
+			}
+		}
+
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr+"/edit?error="+url.QueryEscape(errorMsg))
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeSlug+"/entries/"+entryIDStr)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr)
+}
+
+// HandleDeleteEntry handles deleting a content entry
+func (e *DashboardExtension) HandleDeleteEntry(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	typeName := c.Param("typeName")
+	entryIDStr := c.Param("entryId")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get entry ID
+	entryID, err := xid.FromString(entryIDStr)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries?error=Invalid+entry+ID")
+	}
+
+	// Delete the entry
+	err = e.plugin.entrySvc.Delete(ctx, entryID)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries?error="+url.QueryEscape(err.Error()))
+	}
+
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries?success=Entry+deleted+successfully")
 }
 
 // =============================================================================
@@ -1544,8 +1670,8 @@ func (e *DashboardExtension) HandleCreateComponentSchema(c forge.Context) error 
 
 	// Create request
 	req := &core.CreateComponentSchemaRequest{
-		Name:        c.FormValue("name"),
-		Slug:        c.FormValue("slug"),
+		Title:       c.FormValue("name"),
+		Name:        c.FormValue("slug"),
 		Description: c.FormValue("description"),
 		Icon:        c.FormValue("icon"),
 		Fields:      fields,
@@ -1557,7 +1683,7 @@ func (e *DashboardExtension) HandleCreateComponentSchema(c forge.Context) error 
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/create?error="+err.Error())
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+result.Slug)
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+result.Name)
 }
 
 func (e *DashboardExtension) ServeComponentSchemaDetail(c forge.Context) error {
@@ -1582,7 +1708,7 @@ func (e *DashboardExtension) ServeComponentSchemaDetail(c forge.Context) error {
 	errMsg := c.Query("error")
 
 	// Get component schema
-	component, err := e.plugin.componentSchemaSvc.GetBySlug(ctx, componentSlug)
+	component, err := e.plugin.componentSchemaSvc.GetByName(ctx, componentSlug)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Component schema not found")
 	}
@@ -1617,7 +1743,7 @@ func (e *DashboardExtension) HandleUpdateComponentSchema(c forge.Context) error 
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get existing component to get its ID
-	component, err := e.plugin.componentSchemaSvc.GetBySlug(ctx, componentSlug)
+	component, err := e.plugin.componentSchemaSvc.GetByName(ctx, componentSlug)
 	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?error=Component+not+found")
 	}
@@ -1635,7 +1761,7 @@ func (e *DashboardExtension) HandleUpdateComponentSchema(c forge.Context) error 
 
 	// Create update request
 	req := &core.UpdateComponentSchemaRequest{
-		Name:        c.FormValue("name"),
+		Title:       c.FormValue("name"),
 		Description: c.FormValue("description"),
 		Icon:        c.FormValue("icon"),
 		Fields:      fields,
@@ -1667,7 +1793,7 @@ func (e *DashboardExtension) HandleDeleteComponentSchema(c forge.Context) error 
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
 
 	// Get existing component to get its ID
-	component, err := e.plugin.componentSchemaSvc.GetBySlug(ctx, componentSlug)
+	component, err := e.plugin.componentSchemaSvc.GetByName(ctx, componentSlug)
 	if err != nil {
 		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?error=Component+not+found")
 	}
@@ -1681,4 +1807,133 @@ func (e *DashboardExtension) HandleDeleteComponentSchema(c forge.Context) error 
 	}
 
 	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?success=Component+deleted")
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+// resolveComponentReferences resolves ComponentRef to NestedFields for object/array fields
+func (e *DashboardExtension) resolveComponentReferences(ctx context.Context, contentType *core.ContentTypeDTO) {
+	if contentType == nil || len(contentType.Fields) == 0 {
+		return
+	}
+
+	// Fields is []*ContentFieldDTO, so contentType.Fields[i] is already a pointer
+	for i := range contentType.Fields {
+		e.resolveFieldComponentRef(ctx, contentType.Fields[i])
+	}
+}
+
+// resolveFieldComponentRef resolves a single field's ComponentRef recursively
+func (e *DashboardExtension) resolveFieldComponentRef(ctx context.Context, field *core.ContentFieldDTO) {
+	if field == nil {
+		return
+	}
+
+	// Handle object and array types
+	if field.Type == "object" || field.Type == "array" {
+		// If ComponentRef is set and NestedFields is empty, resolve the reference
+		if field.Options.ComponentRef != "" && len(field.Options.NestedFields) == 0 {
+			componentSchema, err := e.plugin.componentSchemaSvc.GetByName(ctx, field.Options.ComponentRef)
+			if err == nil && componentSchema != nil && len(componentSchema.Fields) > 0 {
+				field.Options.NestedFields = componentSchema.Fields
+			}
+		}
+
+		// Recursively resolve nested fields that might have their own ComponentRef
+		for i := range field.Options.NestedFields {
+			nestedField := &field.Options.NestedFields[i]
+			if nestedField.Options != nil && nestedField.Options.ComponentRef != "" {
+				e.resolveNestedFieldComponentRef(ctx, nestedField)
+			}
+		}
+		return
+	}
+
+	// Handle oneOf type - resolve ComponentRef for each schema option
+	if field.Type == "oneOf" && len(field.Options.Schemas) > 0 {
+		for key, schemaOpt := range field.Options.Schemas {
+			modified := false
+
+			// If this schema option has a ComponentRef, resolve it to NestedFields
+			if schemaOpt.ComponentRef != "" && len(schemaOpt.NestedFields) == 0 {
+				componentSchema, err := e.plugin.componentSchemaSvc.GetByName(ctx, schemaOpt.ComponentRef)
+				if err == nil && componentSchema != nil && len(componentSchema.Fields) > 0 {
+					schemaOpt.NestedFields = componentSchema.Fields
+					modified = true
+				}
+			}
+
+			// Recursively resolve nested fields within the schema option
+			for i := range schemaOpt.NestedFields {
+				nestedField := &schemaOpt.NestedFields[i]
+				if nestedField.Options != nil && nestedField.Options.ComponentRef != "" {
+					e.resolveNestedFieldComponentRef(ctx, nestedField)
+					modified = true
+				}
+			}
+
+			// Write back to map if any changes were made
+			if modified {
+				field.Options.Schemas[key] = schemaOpt
+			}
+		}
+	}
+}
+
+// resolveNestedFieldComponentRef resolves ComponentRef for nested fields recursively
+func (e *DashboardExtension) resolveNestedFieldComponentRef(ctx context.Context, field *core.NestedFieldDefDTO) {
+	if field == nil || field.Options == nil {
+		return
+	}
+
+	// Handle object and array types
+	if field.Type == "object" || field.Type == "array" {
+		// If ComponentRef is set and NestedFields is empty, resolve the reference
+		if field.Options.ComponentRef != "" && len(field.Options.NestedFields) == 0 {
+			componentSchema, err := e.plugin.componentSchemaSvc.GetByName(ctx, field.Options.ComponentRef)
+			if err == nil && componentSchema != nil && len(componentSchema.Fields) > 0 {
+				field.Options.NestedFields = componentSchema.Fields
+			}
+		}
+
+		// Recursively resolve nested fields that might have their own ComponentRef
+		for i := range field.Options.NestedFields {
+			nestedField := &field.Options.NestedFields[i]
+			if nestedField.Options != nil && nestedField.Options.ComponentRef != "" {
+				e.resolveNestedFieldComponentRef(ctx, nestedField)
+			}
+		}
+		return
+	}
+
+	// Handle oneOf type in nested fields
+	if field.Type == "oneOf" && len(field.Options.Schemas) > 0 {
+		for key, schemaOpt := range field.Options.Schemas {
+			modified := false
+
+			if schemaOpt.ComponentRef != "" && len(schemaOpt.NestedFields) == 0 {
+				componentSchema, err := e.plugin.componentSchemaSvc.GetByName(ctx, schemaOpt.ComponentRef)
+				if err == nil && componentSchema != nil && len(componentSchema.Fields) > 0 {
+					schemaOpt.NestedFields = componentSchema.Fields
+					modified = true
+				}
+			}
+
+			// Recursively resolve nested fields within the schema option
+			for i := range schemaOpt.NestedFields {
+				nestedField := &schemaOpt.NestedFields[i]
+				if nestedField.Options != nil && nestedField.Options.ComponentRef != "" {
+					e.resolveNestedFieldComponentRef(ctx, nestedField)
+					modified = true
+				}
+			}
+
+			// Write back to map if any changes were made
+			if modified {
+				field.Options.Schemas[key] = schemaOpt
+			}
+		}
+	}
 }

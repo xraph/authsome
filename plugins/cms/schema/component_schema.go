@@ -12,8 +12,8 @@ import (
 
 // NestedFieldDef defines a field within a nested object or component schema
 type NestedFieldDef struct {
+	Title       string        `json:"title"`
 	Name        string        `json:"name"`
-	Slug        string        `json:"slug"`
 	Type        string        `json:"type"`
 	Required    bool          `json:"required,omitempty"`
 	Description string        `json:"description,omitempty"`
@@ -61,8 +61,8 @@ type ComponentSchema struct {
 	ID            xid.ID          `bun:"id,pk,type:varchar(20)" json:"id"`
 	AppID         xid.ID          `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
 	EnvironmentID xid.ID          `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
+	Title         string          `bun:"title,notnull" json:"title"`
 	Name          string          `bun:"name,notnull" json:"name"`
-	Slug          string          `bun:"slug,notnull" json:"slug"`
 	Description   string          `bun:"description,nullzero" json:"description"`
 	Icon          string          `bun:"icon,nullzero" json:"icon"`
 	Fields        NestedFieldDefs `bun:"fields,type:jsonb,notnull" json:"fields"`
@@ -100,10 +100,10 @@ func (cs *ComponentSchema) BeforeUpdate() {
 	cs.UpdatedAt = time.Now()
 }
 
-// GetFieldBySlug returns a nested field by its slug
-func (cs *ComponentSchema) GetFieldBySlug(slug string) *NestedFieldDef {
+// GetFieldByName returns a nested field by its name
+func (cs *ComponentSchema) GetFieldByName(name string) *NestedFieldDef {
 	for i := range cs.Fields {
-		if cs.Fields[i].Slug == slug {
+		if cs.Fields[i].Name == name {
 			return &cs.Fields[i]
 		}
 	}
@@ -131,56 +131,56 @@ func (cs *ComponentSchema) HasNestedObjects() bool {
 	return false
 }
 
-// GetAllFieldSlugs returns all field slugs (including nested ones recursively)
-func (cs *ComponentSchema) GetAllFieldSlugs() []string {
-	var slugs []string
+// GetAllFieldNames returns all field names (including nested ones recursively)
+func (cs *ComponentSchema) GetAllFieldNames() []string {
+	var names []string
 	for _, f := range cs.Fields {
-		slugs = append(slugs, f.Slug)
-		slugs = append(slugs, getNestedSlugs(f, f.Slug)...)
+		names = append(names, f.Name)
+		names = append(names, getNestedNames(f, f.Name)...)
 	}
-	return slugs
+	return names
 }
 
-// getNestedSlugs recursively collects nested field slugs
-func getNestedSlugs(field NestedFieldDef, prefix string) []string {
-	var slugs []string
+// getNestedNames recursively collects nested field names
+func getNestedNames(field NestedFieldDef, prefix string) []string {
+	var names []string
 	if field.Options != nil && len(field.Options.NestedFields) > 0 {
 		for _, nested := range field.Options.NestedFields {
-			fullSlug := prefix + "." + nested.Slug
-			slugs = append(slugs, fullSlug)
-			slugs = append(slugs, getNestedSlugs(nested, fullSlug)...)
+			fullName := prefix + "." + nested.Name
+			names = append(names, fullName)
+			names = append(names, getNestedNames(nested, fullName)...)
 		}
 	}
-	return slugs
+	return names
 }
 
 // ValidateFields validates all nested field definitions
 func (cs *ComponentSchema) ValidateFields() error {
 	seen := make(map[string]bool)
 	for _, f := range cs.Fields {
+		if f.Title == "" {
+			return ErrFieldTitleRequired
+		}
 		if f.Name == "" {
 			return ErrFieldNameRequired
-		}
-		if f.Slug == "" {
-			return ErrFieldSlugRequired
 		}
 		if f.Type == "" {
 			return ErrFieldTypeRequired
 		}
-		if seen[f.Slug] {
-			return ErrDuplicateFieldSlug
+		if seen[f.Name] {
+			return ErrDuplicateFieldName
 		}
-		seen[f.Slug] = true
+		seen[f.Name] = true
 	}
 	return nil
 }
 
 // Component schema specific errors
 var (
-	ErrFieldNameRequired  = &ComponentSchemaError{Message: "field name is required"}
-	ErrFieldSlugRequired  = &ComponentSchemaError{Message: "field slug is required"}
-	ErrFieldTypeRequired  = &ComponentSchemaError{Message: "field type is required"}
-	ErrDuplicateFieldSlug = &ComponentSchemaError{Message: "duplicate field slug"}
+	ErrFieldTitleRequired  = &ComponentSchemaError{Message: "field title is required"}
+	ErrFieldNameRequired   = &ComponentSchemaError{Message: "field name is required"}
+	ErrFieldTypeRequired   = &ComponentSchemaError{Message: "field type is required"}
+	ErrDuplicateFieldName  = &ComponentSchemaError{Message: "duplicate field name"}
 )
 
 // ComponentSchemaError represents a component schema validation error

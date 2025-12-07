@@ -60,16 +60,16 @@ func (s *ComponentSchemaService) Create(ctx context.Context, req *core.CreateCom
 	}
 
 	// Validate slug format
-	slug := req.Slug
+	slug := req.Name
 	if slug == "" {
 		slug = generateSlug(req.Name)
 	}
 	if !slugPattern.MatchString(slug) {
-		return nil, core.ErrInvalidComponentSchemaSlug(slug, "must start with a letter, contain only lowercase letters, numbers, and hyphens")
+		return nil, core.ErrInvalidComponentSchemaSlug(slug, "must start with a letter and contain only letters, numbers, underscores, and hyphens")
 	}
 
 	// Check for duplicates
-	exists, err := s.repo.ExistsWithSlug(ctx, appID, envID, slug)
+	exists, err := s.repo.ExistsWithName(ctx, appID, envID, slug)
 	if err != nil {
 		return nil, core.ErrDatabaseError("failed to check slug existence", err)
 	}
@@ -90,8 +90,8 @@ func (s *ComponentSchemaService) Create(ctx context.Context, req *core.CreateCom
 		ID:            xid.New(),
 		AppID:         appID,
 		EnvironmentID: envID,
-		Name:          req.Name,
-		Slug:          slug,
+		Title:         req.Title,
+		Name:          slug,
 		Description:   req.Description,
 		Icon:          req.Icon,
 		Fields:        s.dtoToSchemaFields(req.Fields),
@@ -121,14 +121,14 @@ func (s *ComponentSchemaService) GetByID(ctx context.Context, id xid.ID) (*core.
 
 	usageCount := 0
 	if !appID.IsNil() && !envID.IsNil() {
-		usageCount, _ = s.repo.CountUsages(ctx, appID, envID, component.Slug)
+		usageCount, _ = s.repo.CountUsages(ctx, appID, envID, component.Name)
 	}
 
 	return s.toDTO(component, usageCount), nil
 }
 
 // GetBySlug retrieves a component schema by slug
-func (s *ComponentSchemaService) GetBySlug(ctx context.Context, slug string) (*core.ComponentSchemaDTO, error) {
+func (s *ComponentSchemaService) GetByName(ctx context.Context, name string) (*core.ComponentSchemaDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
@@ -138,12 +138,12 @@ func (s *ComponentSchemaService) GetBySlug(ctx context.Context, slug string) (*c
 		return nil, core.ErrEnvContextMissing()
 	}
 
-	component, err := s.repo.FindBySlug(ctx, appID, envID, slug)
+	component, err := s.repo.FindByName(ctx, appID, envID, name)
 	if err != nil {
 		return nil, err
 	}
 
-	usageCount, _ := s.repo.CountUsages(ctx, appID, envID, slug)
+	usageCount, _ := s.repo.CountUsages(ctx, appID, envID, name)
 
 	return s.toDTO(component, usageCount), nil
 }
@@ -174,7 +174,7 @@ func (s *ComponentSchemaService) List(ctx context.Context, query *core.ListCompo
 	// Convert to DTOs
 	dtos := make([]*core.ComponentSchemaSummaryDTO, len(components))
 	for i, component := range components {
-		usageCount, _ := s.repo.CountUsages(ctx, appID, envID, component.Slug)
+		usageCount, _ := s.repo.CountUsages(ctx, appID, envID, component.Name)
 		dtos[i] = s.toSummaryDTO(component, usageCount)
 	}
 
@@ -204,8 +204,8 @@ func (s *ComponentSchemaService) Update(ctx context.Context, id xid.ID, req *cor
 	}
 
 	// Update fields
-	if req.Name != "" {
-		component.Name = req.Name
+	if req.Title != "" {
+		component.Title = req.Title
 	}
 	if req.Description != "" {
 		component.Description = req.Description
@@ -226,7 +226,7 @@ func (s *ComponentSchemaService) Update(ctx context.Context, id xid.ID, req *cor
 	// Get usage count
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
-	usageCount, _ := s.repo.CountUsages(ctx, appID, envID, component.Slug)
+	usageCount, _ := s.repo.CountUsages(ctx, appID, envID, component.Name)
 
 	return s.toDTO(component, usageCount), nil
 }
@@ -242,12 +242,12 @@ func (s *ComponentSchemaService) Delete(ctx context.Context, id xid.ID) error {
 	// Check if in use
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
-	usageCount, err := s.repo.CountUsages(ctx, appID, envID, component.Slug)
+	usageCount, err := s.repo.CountUsages(ctx, appID, envID, component.Name)
 	if err != nil {
 		return core.ErrDatabaseError("failed to check component usage", err)
 	}
 	if usageCount > 0 {
-		return core.ErrComponentSchemaInUse(component.Slug, usageCount)
+		return core.ErrComponentSchemaInUse(component.Name, usageCount)
 	}
 
 	return s.repo.Delete(ctx, id)
@@ -268,7 +268,7 @@ func (s *ComponentSchemaService) validateNestedFields(fields []core.NestedFieldD
 		if field.Name == "" {
 			return core.ErrFieldRequired("name")
 		}
-		if field.Slug == "" {
+		if field.Name == "" {
 			return core.ErrFieldRequired("slug")
 		}
 		if field.Type == "" {
@@ -276,15 +276,15 @@ func (s *ComponentSchemaService) validateNestedFields(fields []core.NestedFieldD
 		}
 
 		// Validate slug format
-		if !slugPattern.MatchString(field.Slug) {
-			return core.ErrInvalidFieldSlug(field.Slug, "must start with a letter, contain only lowercase letters, numbers, and hyphens")
+		if !slugPattern.MatchString(field.Name) {
+			return core.ErrInvalidFieldSlug(field.Name, "must start with a letter and contain only letters, numbers, underscores, and hyphens")
 		}
 
 		// Check for duplicate slugs
-		if seenSlugs[field.Slug] {
-			return core.ErrFieldExists(field.Slug)
+		if seenSlugs[field.Name] {
+			return core.ErrFieldExists(field.Name)
 		}
-		seenSlugs[field.Slug] = true
+		seenSlugs[field.Name] = true
 
 		// Validate field type
 		fieldType := core.FieldType(field.Type)
@@ -328,7 +328,7 @@ func (s *ComponentSchemaService) ValidateComponentRef(ctx context.Context, compo
 	}
 
 	// Check if component exists
-	component, err := s.repo.FindBySlug(ctx, appID, envID, componentSlug)
+	component, err := s.repo.FindByName(ctx, appID, envID, componentSlug)
 	if err != nil {
 		return err
 	}
@@ -369,28 +369,28 @@ func buildRefPath(visited []string, current string) string {
 // toDTO converts a schema component to a DTO
 func (s *ComponentSchemaService) toDTO(component *schema.ComponentSchema, usageCount int) *core.ComponentSchemaDTO {
 	return &core.ComponentSchemaDTO{
-		ID:            component.ID.String(),
-		AppID:         component.AppID.String(),
-		EnvironmentID: component.EnvironmentID.String(),
-		Name:          component.Name,
-		Slug:          component.Slug,
-		Description:   component.Description,
-		Icon:          component.Icon,
-		Fields:        s.schemaToFieldDTOs(component.Fields),
-		UsageCount:    usageCount,
-		CreatedBy:     component.CreatedBy.String(),
-		UpdatedBy:     component.UpdatedBy.String(),
-		CreatedAt:     component.CreatedAt,
-		UpdatedAt:     component.UpdatedAt,
-	}
+	ID:            component.ID.String(),
+	AppID:         component.AppID.String(),
+	EnvironmentID: component.EnvironmentID.String(),
+	Title:         component.Title,
+	Name:          component.Name,
+	Description:   component.Description,
+	Icon:          component.Icon,
+	Fields:        s.schemaToFieldDTOs(component.Fields),
+	UsageCount:    usageCount,
+	CreatedBy:     component.CreatedBy.String(),
+	UpdatedBy:     component.UpdatedBy.String(),
+	CreatedAt:     component.CreatedAt,
+	UpdatedAt:     component.UpdatedAt,
+}
 }
 
 // toSummaryDTO converts a schema component to a summary DTO
 func (s *ComponentSchemaService) toSummaryDTO(component *schema.ComponentSchema, usageCount int) *core.ComponentSchemaSummaryDTO {
 	return &core.ComponentSchemaSummaryDTO{
 		ID:          component.ID.String(),
+		Title:       component.Title,
 		Name:        component.Name,
-		Slug:        component.Slug,
 		Description: component.Description,
 		Icon:        component.Icon,
 		FieldCount:  len(component.Fields),
@@ -409,8 +409,8 @@ func (s *ComponentSchemaService) schemaToFieldDTOs(fields schema.NestedFieldDefs
 	dtos := make([]core.NestedFieldDefDTO, len(fields))
 	for i, field := range fields {
 		dtos[i] = core.NestedFieldDefDTO{
+			Title:       field.Title,
 			Name:        field.Name,
-			Slug:        field.Slug,
 			Type:        field.Type,
 			Required:    field.Required,
 			Description: field.Description,
@@ -487,8 +487,8 @@ func (s *ComponentSchemaService) dtoToSchemaFields(fields []core.NestedFieldDefD
 	schemaFields := make(schema.NestedFieldDefs, len(fields))
 	for i, field := range fields {
 		schemaFields[i] = schema.NestedFieldDef{
+			Title:       field.Title,
 			Name:        field.Name,
-			Slug:        field.Slug,
 			Type:        field.Type,
 			Required:    field.Required,
 			Description: field.Description,
@@ -561,8 +561,8 @@ func (s *ComponentSchemaService) dtoToSchemaOptions(opts *core.FieldOptionsDTO) 
 // =============================================================================
 
 // ResolveComponentSchema resolves a component reference and returns the nested fields
-func (s *ComponentSchemaService) ResolveComponentSchema(ctx context.Context, componentSlug string) ([]core.NestedFieldDefDTO, error) {
-	dto, err := s.GetBySlug(ctx, componentSlug)
+func (s *ComponentSchemaService) ResolveComponentSchema(ctx context.Context, componentName string) ([]core.NestedFieldDefDTO, error) {
+	dto, err := s.GetByName(ctx, componentName)
 	if err != nil {
 		return nil, err
 	}

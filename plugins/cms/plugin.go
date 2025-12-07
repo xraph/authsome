@@ -351,7 +351,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	types.GET("/:slug", contentTypeHandler.GetContentType,
 		forge.WithName("cms.content_types.get"),
 		forge.WithSummary("Get content type"),
-		forge.WithDescription("Returns a specific content type by its slug"),
+		forge.WithDescription("Returns a specific content type by its name"),
 		forge.WithTags("CMS", "Content Types"),
 	)
 
@@ -726,14 +726,31 @@ func (p *Plugin) Migrate() error {
 		return fmt.Errorf("failed to create cms_component_schemas table: %w", err)
 	}
 
-	// Create indexes
+	// Drop old indexes with old column names
+	dropIndexes := []string{
+		`DROP INDEX IF EXISTS idx_cms_content_types_slug`,
+		`DROP INDEX IF EXISTS idx_cms_content_fields_slug`,
+		`DROP INDEX IF EXISTS idx_cms_component_schemas_slug`,
+		`DROP INDEX IF EXISTS idx_cms_content_relations_unique`,
+		`DROP INDEX IF EXISTS idx_cms_content_types_name`,
+		`DROP INDEX IF EXISTS idx_cms_content_fields_name`,
+		`DROP INDEX IF EXISTS idx_cms_component_schemas_name`,
+	}
+
+	for _, idx := range dropIndexes {
+		if _, err := p.db.ExecContext(ctx, idx); err != nil {
+			p.logger.Warn("failed to drop old index", forge.F("error", err.Error()))
+		}
+	}
+
+	// Create indexes (case-insensitive for name fields)
 	indexes := []string{
-		// Content Types
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_types_slug ON cms_content_types(app_id, environment_id, slug) WHERE deleted_at IS NULL`,
+		// Content Types - CASE INSENSITIVE
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_types_name ON cms_content_types(app_id, environment_id, LOWER(name)) WHERE deleted_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_types_app_env ON cms_content_types(app_id, environment_id) WHERE deleted_at IS NULL`,
 
-		// Content Fields
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_fields_slug ON cms_content_fields(content_type_id, slug)`,
+		// Content Fields - CASE INSENSITIVE
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_fields_name ON cms_content_fields(content_type_id, LOWER(name))`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_fields_type ON cms_content_fields(content_type_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_fields_order ON cms_content_fields(content_type_id, "order")`,
 
@@ -749,17 +766,17 @@ func (p *Plugin) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_revisions_entry ON cms_content_revisions(entry_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_revisions_version ON cms_content_revisions(entry_id, version)`,
 
-		// Content Relations (many-to-many)
+		// Content Relations (many-to-many) - CASE INSENSITIVE for field_name
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_relations_source ON cms_content_relations(source_entry_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_relations_target ON cms_content_relations(target_entry_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_relations_unique ON cms_content_relations(source_entry_id, target_entry_id, field_slug)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_content_relations_unique ON cms_content_relations(source_entry_id, target_entry_id, LOWER(field_name))`,
 
 		// Content Type Relations
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_type_relations_source ON cms_content_type_relations(source_content_type_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_content_type_relations_target ON cms_content_type_relations(target_content_type_id)`,
 
-		// Component Schemas
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_component_schemas_slug ON cms_component_schemas(app_id, environment_id, slug) WHERE deleted_at IS NULL`,
+		// Component Schemas - CASE INSENSITIVE
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cms_component_schemas_name ON cms_component_schemas(app_id, environment_id, LOWER(name)) WHERE deleted_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_cms_component_schemas_app_env ON cms_component_schemas(app_id, environment_id) WHERE deleted_at IS NULL`,
 	}
 

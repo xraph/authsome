@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/rs/xid"
 
 	"github.com/xraph/authsome/plugins/cms/core"
@@ -17,7 +19,7 @@ type EntryValidator struct {
 func NewEntryValidator(contentType *schema.ContentType) *EntryValidator {
 	fields := make(map[string]*schema.ContentField)
 	for _, f := range contentType.Fields {
-		fields[f.Slug] = f
+		fields[f.Name] = f
 	}
 	return &EntryValidator{
 		contentType: contentType,
@@ -62,7 +64,49 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 		// Build field options DTO for validator
 		options := v.buildOptionsDTO(field)
 
-		// Create validator
+		// Special handling for oneOf fields
+		if field.Type == "oneOf" {
+			// Get the discriminator field value from data
+			discriminatorValue := ""
+			if options.DiscriminatorField != "" {
+				if discVal, ok := data[options.DiscriminatorField]; ok {
+					discriminatorValue = fmt.Sprint(discVal)
+				}
+			}
+
+			// Validate oneOf with discriminator
+			if value != nil {
+				objValue, ok := value.(map[string]interface{})
+				if !ok {
+					result.Valid = false
+					result.Errors = append(result.Errors, core.ValidationError{
+						Field:   slug,
+						Message: "must be an object",
+						Code:    "invalid_type",
+					})
+					continue
+				}
+
+				oneOfResult := core.ValidateOneOfWithDiscriminator(objValue, discriminatorValue, options)
+				if !oneOfResult.Valid {
+					result.Valid = false
+					for _, err := range oneOfResult.Errors {
+						err.Field = slug
+						result.Errors = append(result.Errors, err)
+					}
+				}
+			} else if field.Required {
+				result.Valid = false
+				result.Errors = append(result.Errors, core.ValidationError{
+					Field:   slug,
+					Message: "this field is required",
+					Code:    "required",
+				})
+			}
+			continue
+		}
+
+		// Create validator for non-oneOf fields
 		fieldValidator := core.NewFieldValidator(
 			field.Name,
 			core.FieldType(field.Type),

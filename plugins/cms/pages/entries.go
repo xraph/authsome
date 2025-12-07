@@ -3,6 +3,7 @@ package pages
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -26,7 +27,7 @@ func EntriesListPage(
 	searchQuery, statusFilter string,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
-	typeBase := appBase + "/cms/types/" + contentType.Slug
+	typeBase := appBase + "/cms/types/" + contentType.Name
 	totalPages := (totalItems + pageSize - 1) / pageSize
 
 	// Build stats node only if stats is not nil
@@ -100,7 +101,7 @@ func entriesFilters(typeBase, searchQuery, statusFilter string) g.Node {
 
 // entriesTable renders the entries table
 func entriesTable(appBase string, contentType *core.ContentTypeDTO, entries []*core.ContentEntryDTO, page, totalPages int) g.Node {
-	typeBase := appBase + "/cms/types/" + contentType.Slug
+	typeBase := appBase + "/cms/types/" + contentType.Name
 
 	if len(entries) == 0 {
 		return Card(
@@ -181,6 +182,14 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 			g.If(entry.Status == "draft", func() g.Node {
 				return IconButton(typeBase+"/entries/"+entry.ID+"/publish", lucide.Send(Class("size-4")), "Publish", "text-green-600")
 			}()),
+			ConfirmButton(
+				typeBase+"/entries/"+entry.ID+"/delete",
+				"POST",
+				"Delete",
+				"Are you sure you want to delete this entry? This action cannot be undone.",
+				"text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20",
+				lucide.Trash2(Class("size-4")),
+			),
 		),
 	)
 }
@@ -198,7 +207,7 @@ func EntryDetailPage(
 	revisions []*core.ContentRevisionDTO,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
-	typeBase := appBase + "/cms/types/" + contentType.Slug
+	typeBase := appBase + "/cms/types/" + contentType.Name
 	entryBase := typeBase + "/entries/" + entry.ID
 
 	// Get title
@@ -252,6 +261,14 @@ func EntryDetailPage(
 				g.If(entry.Status == "published", func() g.Node {
 					return SecondaryButton(entryBase+"/unpublish", "Unpublish", lucide.X(Class("size-4")))
 				}()),
+				ConfirmButton(
+					entryBase+"/delete",
+					"POST",
+					"Delete",
+					"Are you sure you want to delete this entry? This action cannot be undone.",
+					"text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30",
+					lucide.Trash2(Class("size-4")),
+				),
 			),
 		),
 
@@ -283,7 +300,7 @@ func entryDataCard(contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO
 	rows := make([]g.Node, 0)
 
 	for _, field := range contentType.Fields {
-		value, exists := entry.Data[field.Slug]
+		value, exists := entry.Data[field.Name]
 		if !exists {
 			value = nil
 		}
@@ -309,7 +326,7 @@ func entryFieldRow(field *core.ContentFieldDTO, value any) g.Node {
 				),
 				Code(
 					Class("text-xs text-slate-500 dark:text-gray-500"),
-					g.Text(field.Slug),
+					g.Text(field.Name),
 				),
 			),
 			// Value
@@ -477,7 +494,7 @@ func entryForm(
 	err, title string,
 ) g.Node {
 	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
-	typeBase := appBase + "/cms/types/" + contentType.Slug
+	typeBase := appBase + "/cms/types/" + contentType.Name
 
 	isEdit := entry != nil
 	formAction := typeBase + "/entries/create"
@@ -507,7 +524,7 @@ func entryForm(
 			)
 		}()),
 
-		// Form
+		// Form with Alpine.js state management
 		Card(
 			Div(
 				Class("p-6"),
@@ -515,16 +532,22 @@ func entryForm(
 					Method("POST"),
 					Action(formAction),
 					Class("space-y-6"),
+					// Alpine.js form-level state for reactive field management
+					g.Attr("x-data", buildFormAlpineData(contentType, entry)),
 
-					// Dynamic fields based on content type
+					// Dynamic fields based on content type (skip hidden fields)
 					g.Group(func() []g.Node {
-						fields := make([]g.Node, len(contentType.Fields))
-						for i, field := range contentType.Fields {
+						var fields []g.Node
+						for _, field := range contentType.Fields {
+							// Skip hidden fields in the form
+							if field.Hidden {
+								continue
+							}
 							var value any
 							if entry != nil {
-								value = entry.Data[field.Slug]
+								value = entry.Data[field.Name]
 							}
-							fields[i] = entryFormField(field, value)
+							fields = append(fields, entryFormField(field, value))
 						}
 						return fields
 					}()),
@@ -569,15 +592,39 @@ func entryForm(
 	)
 }
 
+// buildFormAlpineData builds the Alpine.js data object for the entry form
+func buildFormAlpineData(contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO) string {
+	// Build initial state from entry data
+	formData := make(map[string]any)
+	if entry != nil && entry.Data != nil {
+		formData = entry.Data
+	}
+
+	// Serialize form data for Alpine
+	formDataJSON, _ := json.Marshal(formData)
+
+	return fmt.Sprintf(`{
+		formData: %s,
+		init() {
+			// Initialize any watchers or setup needed
+		}
+	}`, string(formDataJSON))
+}
+
 // entryFormField renders a form field based on field type
 func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
-	fieldName := "data[" + field.Slug + "]"
+	fieldName := "data[" + field.Name + "]"
 	valueStr := ""
 	if value != nil {
 		valueStr = fmt.Sprintf("%v", value)
 	}
 
-	return Div(
+	// Build conditional visibility attributes
+	hasConditional := field.Options.ShowWhen != nil || field.Options.HideWhen != nil
+	conditionalAttrs := buildConditionalVisibilityAttrs(field)
+
+	// The actual field content
+	fieldContent := Div(
 		Label(
 			For(fieldName),
 			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
@@ -605,7 +652,7 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 						Span(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text("Yes")),
 					),
 				}
-			case "richtext", "markdown", "text":
+			case "richtext", "markdown", "textarea":
 				return []g.Node{
 					Textarea(
 						ID(fieldName),
@@ -616,6 +663,28 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 						g.Text(valueStr),
 					),
 				}
+			case "text":
+				// Build text input with optional constraints
+				inputAttrs := []g.Node{
+					Type("text"),
+					ID(fieldName),
+					Name(fieldName),
+					Value(valueStr),
+					Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+				}
+				if field.Required {
+					inputAttrs = append(inputAttrs, Required())
+				}
+				if field.Options.MinLength > 0 {
+					inputAttrs = append(inputAttrs, g.Attr("minlength", fmt.Sprintf("%d", field.Options.MinLength)))
+				}
+				if field.Options.MaxLength > 0 {
+					inputAttrs = append(inputAttrs, g.Attr("maxlength", fmt.Sprintf("%d", field.Options.MaxLength)))
+				}
+				if field.Options.Pattern != "" {
+					inputAttrs = append(inputAttrs, g.Attr("pattern", field.Options.Pattern))
+				}
+				return []g.Node{Input(inputAttrs...)}
 			case "select":
 				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
 				if field.Options.Choices != nil {
@@ -633,6 +702,8 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 						Name(fieldName),
 						g.If(field.Required, Required()),
 						Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						// Bind to Alpine.js state for reactivity
+						g.Attr("x-model", fmt.Sprintf("formData['%s']", field.Name)),
 						g.Group(opts),
 					),
 				}
@@ -695,6 +766,10 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 						Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
 					),
 				}
+			case "slug":
+				return []g.Node{
+					renderSlugField(field, fieldName, valueStr),
+				}
 			case "object":
 				return []g.Node{
 					renderObjectField(field, fieldName, value),
@@ -702,6 +777,14 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 			case "array":
 				return []g.Node{
 					renderArrayField(field, fieldName, value),
+				}
+			case "oneOf":
+				return []g.Node{
+					renderOneOfField(field, fieldName, value),
+				}
+			case "json":
+				return []g.Node{
+					renderJsonEditorField(field, fieldName, value),
 				}
 			default:
 				// Default text input
@@ -726,6 +809,143 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 			)
 		}()),
 	)
+
+	// Wrap with conditional visibility if needed
+	if hasConditional {
+		return Div(
+			g.Group(conditionalAttrs),
+			fieldContent,
+		)
+	}
+
+	return fieldContent
+}
+
+// buildConditionalVisibilityAttrs builds Alpine.js attributes for conditional visibility
+func buildConditionalVisibilityAttrs(field *core.ContentFieldDTO) []g.Node {
+	attrs := []g.Node{}
+
+	if field.Options.ShowWhen != nil {
+		cond := field.Options.ShowWhen
+		attrs = append(attrs,
+			g.Attr("x-data", fmt.Sprintf(`{
+				conditionField: '%s',
+				conditionOp: '%s',
+				conditionValue: %s,
+				clearWhenHidden: %v,
+				fieldName: 'data[%s]',
+				
+				checkCondition() {
+					const fieldInput = document.querySelector('[name="data[' + this.conditionField + ']"]');
+					if (!fieldInput) return false;
+					const value = fieldInput.type === 'checkbox' ? fieldInput.checked : fieldInput.value;
+					return this.evaluateCondition(value);
+				},
+				
+				evaluateCondition(value) {
+					switch (this.conditionOp) {
+						case 'eq': return value === this.conditionValue;
+						case 'ne': return value !== this.conditionValue;
+						case 'in': return Array.isArray(this.conditionValue) && this.conditionValue.includes(value);
+						case 'notIn': return Array.isArray(this.conditionValue) && !this.conditionValue.includes(value);
+						case 'exists': return value !== null && value !== undefined && value !== '';
+						case 'notExists': return value === null || value === undefined || value === '';
+						default: return true;
+					}
+				},
+				
+				visible: false,
+				
+				init() {
+					this.visible = this.checkCondition();
+					const fieldInput = document.querySelector('[name="data[' + this.conditionField + ']"]');
+					if (fieldInput) {
+						fieldInput.addEventListener('change', () => {
+							const wasVisible = this.visible;
+							this.visible = this.checkCondition();
+							if (wasVisible && !this.visible && this.clearWhenHidden) {
+								const thisInput = document.querySelector('[name="' + this.fieldName + '"]');
+								if (thisInput) thisInput.value = '';
+							}
+						});
+					}
+				}
+			}`, cond.Field, cond.Operator, conditionValueToJS(cond.Value), field.Options.ClearWhenHidden, field.Name)),
+			g.Attr("x-show", "visible"),
+		)
+	} else if field.Options.HideWhen != nil {
+		cond := field.Options.HideWhen
+		attrs = append(attrs,
+			g.Attr("x-data", fmt.Sprintf(`{
+				conditionField: '%s',
+				conditionOp: '%s',
+				conditionValue: %s,
+				clearWhenHidden: %v,
+				fieldName: 'data[%s]',
+				
+				checkCondition() {
+					const fieldInput = document.querySelector('[name="data[' + this.conditionField + ']"]');
+					if (!fieldInput) return false;
+					const value = fieldInput.type === 'checkbox' ? fieldInput.checked : fieldInput.value;
+					return this.evaluateCondition(value);
+				},
+				
+				evaluateCondition(value) {
+					switch (this.conditionOp) {
+						case 'eq': return value === this.conditionValue;
+						case 'ne': return value !== this.conditionValue;
+						case 'in': return Array.isArray(this.conditionValue) && this.conditionValue.includes(value);
+						case 'notIn': return Array.isArray(this.conditionValue) && !this.conditionValue.includes(value);
+						case 'exists': return value !== null && value !== undefined && value !== '';
+						case 'notExists': return value === null || value === undefined || value === '';
+						default: return false;
+					}
+				},
+				
+				visible: true,
+				
+				init() {
+					this.visible = !this.checkCondition();
+					const fieldInput = document.querySelector('[name="data[' + this.conditionField + ']"]');
+					if (fieldInput) {
+						fieldInput.addEventListener('change', () => {
+							const wasVisible = this.visible;
+							this.visible = !this.checkCondition();
+							if (wasVisible && !this.visible && this.clearWhenHidden) {
+								const thisInput = document.querySelector('[name="' + this.fieldName + '"]');
+								if (thisInput) thisInput.value = '';
+							}
+						});
+					}
+				}
+			}`, cond.Field, cond.Operator, conditionValueToJS(cond.Value), field.Options.ClearWhenHidden, field.Name)),
+			g.Attr("x-show", "visible"),
+		)
+	}
+
+	return attrs
+}
+
+// buildConditionExpression builds an Alpine.js expression for a field condition
+func buildConditionExpression(cond *core.FieldConditionDTO) string {
+	switch cond.Operator {
+	case "eq", "ne", "in", "notIn", "exists", "notExists":
+		return "checkCondition()"
+	default:
+		return "true"
+	}
+}
+
+// conditionValueToJS converts a condition value to JavaScript representation
+func conditionValueToJS(value any) string {
+	if value == nil {
+		return "null"
+	}
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return "null"
+	}
+	return string(bytes)
 }
 
 // =============================================================================
@@ -734,12 +954,35 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 
 // renderObjectField renders a nested object field with sub-fields
 func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
-	// Get nested fields from options
+	// Get nested fields from options (should be resolved from ComponentRef if applicable)
 	nestedFields := field.Options.NestedFields
 	if len(nestedFields) == 0 {
+		// Show helpful message based on whether ComponentRef was set
+		if field.Options.ComponentRef != "" {
+			return Div(
+				Class("p-3 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800"),
+				Div(
+					Class("flex items-center gap-2 text-amber-700 dark:text-amber-400"),
+					lucide.CircleAlert(Class("size-4")),
+					Span(Class("text-sm font-medium"), g.Text("Component schema not found")),
+				),
+				P(
+					Class("mt-1 text-xs text-amber-600 dark:text-amber-500"),
+					g.Text(fmt.Sprintf("The component schema '%s' could not be resolved. Please ensure it exists.", field.Options.ComponentRef)),
+				),
+			)
+		}
 		return Div(
-			Class("text-sm text-slate-500 dark:text-gray-400 italic"),
-			g.Text("No nested fields defined"),
+			Class("p-3 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800/50 dark:border-gray-700"),
+			Div(
+				Class("flex items-center gap-2 text-slate-600 dark:text-gray-400"),
+				lucide.Info(Class("size-4")),
+				Span(Class("text-sm"), g.Text("No nested fields defined")),
+			),
+			P(
+				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text("Configure this field with nested fields or a component schema reference."),
+			),
 		)
 	}
 
@@ -795,8 +1038,8 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 			g.Group(func() []g.Node {
 				fields := make([]g.Node, len(nestedFields))
 				for i, nf := range nestedFields {
-					subFieldName := fieldName + "[" + nf.Slug + "]"
-					subValue := valueMap[nf.Slug]
+					subFieldName := fieldName + "[" + nf.Name + "]"
+					subValue := valueMap[nf.Name]
 					fields[i] = renderNestedFieldInput(nf, subFieldName, subValue, 1)
 				}
 				return fields
@@ -805,7 +1048,7 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 			// Hidden input to store the full JSON
 			Input(
 				Type("hidden"),
-				Name(fieldName + "_json"),
+				Name(fieldName),
 				g.Attr(":value", "JSON.stringify(data)"),
 			),
 		),
@@ -814,12 +1057,35 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 
 // renderArrayField renders an array of objects with add/remove functionality
 func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
-	// Get nested fields from options
+	// Get nested fields from options (should be resolved from ComponentRef if applicable)
 	nestedFields := field.Options.NestedFields
 	if len(nestedFields) == 0 {
+		// Show helpful message based on whether ComponentRef was set
+		if field.Options.ComponentRef != "" {
+			return Div(
+				Class("p-3 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800"),
+				Div(
+					Class("flex items-center gap-2 text-amber-700 dark:text-amber-400"),
+					lucide.CircleAlert(Class("size-4")),
+					Span(Class("text-sm font-medium"), g.Text("Component schema not found")),
+				),
+				P(
+					Class("mt-1 text-xs text-amber-600 dark:text-amber-500"),
+					g.Text(fmt.Sprintf("The component schema '%s' could not be resolved. Please ensure it exists.", field.Options.ComponentRef)),
+				),
+			)
+		}
 		return Div(
-			Class("text-sm text-slate-500 dark:text-gray-400 italic"),
-			g.Text("No nested fields defined"),
+			Class("p-3 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800/50 dark:border-gray-700"),
+			Div(
+				Class("flex items-center gap-2 text-slate-600 dark:text-gray-400"),
+				lucide.Info(Class("size-4")),
+				Span(Class("text-sm"), g.Text("No item schema defined")),
+			),
+			P(
+				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text("Configure this array field with nested fields or a component schema reference for array items."),
+			),
 		)
 	}
 
@@ -844,7 +1110,7 @@ func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) 
 	// Build empty item template
 	emptyItem := make(map[string]any)
 	for _, nf := range nestedFields {
-		emptyItem[nf.Slug] = ""
+		emptyItem[nf.Name] = ""
 	}
 	emptyItemJSON, _ := json.Marshal(emptyItem)
 
@@ -951,8 +1217,216 @@ func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) 
 			// Hidden input to store the full JSON
 			Input(
 				Type("hidden"),
-				Name(fieldName + "_json"),
+				Name(fieldName),
 				g.Attr(":value", "JSON.stringify(items)"),
+			),
+		),
+	)
+}
+
+// renderOneOfField renders a oneOf (discriminated union) field
+func renderOneOfField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
+	// Get discriminator field and schemas from options
+	discriminatorField := field.Options.DiscriminatorField
+	schemas := field.Options.Schemas
+	clearOnChange := field.Options.ClearOnDiscriminatorChange
+
+	if discriminatorField == "" || len(schemas) == 0 {
+		return Div(
+			Class("p-3 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800"),
+			Div(
+				Class("flex items-center gap-2 text-amber-700 dark:text-amber-400"),
+				lucide.CircleAlert(Class("size-4")),
+				Span(Class("text-sm font-medium"), g.Text("OneOf configuration incomplete")),
+			),
+			P(
+				Class("mt-1 text-xs text-amber-600 dark:text-amber-500"),
+				g.Text("This field requires a discriminatorField and at least one schema."),
+			),
+		)
+	}
+
+	// Convert value to map
+	valueMap := make(map[string]any)
+	if value != nil {
+		if m, ok := value.(map[string]any); ok {
+			valueMap = m
+		}
+	}
+
+	// Serialize current value
+	valueJSON, _ := json.Marshal(valueMap)
+	if len(valueMap) == 0 {
+		valueJSON = []byte("{}")
+	}
+
+	// Build schema options for Alpine.js
+	schemasJSON, _ := json.Marshal(schemas)
+
+	isCollapsible := field.Options.Collapsible
+	defaultExpanded := field.Options.DefaultExpanded
+
+	return Div(
+		Class("border border-slate-200 rounded-lg dark:border-gray-700"),
+		g.Attr("x-data", fmt.Sprintf(`{
+			expanded: %v,
+			discriminatorField: '%s',
+			schemas: %s,
+			data: %s,
+			clearOnChange: %v,
+			_discriminatorValue: '',
+			
+			toggleExpanded() { this.expanded = !this.expanded; },
+			
+			get discriminatorValue() {
+				// Try to get from root formData first, fallback to internal state
+				if ($root && $root.formData && $root.formData[this.discriminatorField] !== undefined) {
+					return $root.formData[this.discriminatorField];
+				}
+				return this._discriminatorValue || '';
+			},
+			
+			getActiveSchema() {
+				return this.schemas[this.discriminatorValue] || null;
+			},
+			
+			updateDiscriminator() {
+				const discInput = document.querySelector('[name="data[' + this.discriminatorField + ']"]');
+				if (discInput) {
+					this._discriminatorValue = discInput.value || '';
+				}
+			},
+			
+			init() {
+				// Initial value
+				this.updateDiscriminator();
+				
+				// Watch for changes in the discriminator field
+				const discInput = document.querySelector('[name="data[' + this.discriminatorField + ']"]');
+				if (discInput) {
+					discInput.addEventListener('change', () => {
+						const oldValue = this._discriminatorValue;
+						this.updateDiscriminator();
+						if (this.clearOnChange && this._discriminatorValue !== oldValue) {
+							this.data = {};
+						}
+					});
+				}
+				
+				// Also try Alpine watch if $root exists
+				if ($root && $root.formData) {
+					this.$watch('$root.formData["%s"]', (newValue, oldValue) => {
+						this._discriminatorValue = newValue || '';
+						if (this.clearOnChange && newValue !== oldValue && oldValue !== undefined) {
+							this.data = {};
+						}
+					});
+				}
+			}
+		}`, defaultExpanded || !isCollapsible, discriminatorField, string(schemasJSON), string(valueJSON), clearOnChange, discriminatorField)),
+
+		// Header (collapsible)
+		g.If(isCollapsible, func() g.Node {
+			return Div(
+				Class("flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-gray-800/50 cursor-pointer rounded-t-lg"),
+				g.Attr("@click", "toggleExpanded()"),
+				Div(
+					Class("flex items-center gap-2"),
+					lucide.GitMerge(Class("size-4 text-indigo-500")),
+					Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Conditional Fields")),
+					Span(
+						Class("text-xs text-slate-500 dark:text-gray-400 ml-2"),
+						g.Text("Based on: "),
+						Code(Class("px-1 py-0.5 bg-slate-200 dark:bg-gray-700 rounded"), g.Text(discriminatorField)),
+					),
+				),
+				Div(
+					g.Attr("x-show", "expanded"),
+					lucide.ChevronUp(Class("size-4 text-slate-400")),
+				),
+				Div(
+					g.Attr("x-show", "!expanded"),
+					lucide.ChevronDown(Class("size-4 text-slate-400")),
+				),
+			)
+		}()),
+
+		// Content
+		Div(
+			g.If(isCollapsible, g.Attr("x-show", "expanded")),
+			Class("p-4"),
+
+			// Active schema label
+			Div(
+				g.Attr("x-show", "getActiveSchema()"),
+				Class("mb-4 pb-3 border-b border-slate-200 dark:border-gray-700"),
+				Div(
+					Class("flex items-center gap-2"),
+					lucide.Layers(Class("size-4 text-violet-500")),
+					Span(
+						Class("text-sm font-medium text-slate-700 dark:text-gray-300"),
+						g.Text("Active Schema: "),
+						Span(
+							Class("text-violet-600 dark:text-violet-400"),
+							g.Attr("x-text", "getActiveSchema()?.label || discriminatorValue"),
+						),
+					),
+				),
+			),
+
+			// Render schema fields dynamically based on discriminator value
+			g.Group(func() []g.Node {
+				nodes := make([]g.Node, 0, len(schemas))
+				for schemaKey, schemaOpt := range schemas {
+					// Render each schema's fields, shown only when active
+					if len(schemaOpt.NestedFields) > 0 {
+						nodes = append(nodes, Div(
+							g.Attr("x-show", fmt.Sprintf("discriminatorValue === '%s'", schemaKey)),
+							Class("space-y-4"),
+							g.Group(func() []g.Node {
+								fields := make([]g.Node, len(schemaOpt.NestedFields))
+								for i, nf := range schemaOpt.NestedFields {
+									fields[i] = renderOneOfNestedFieldInput(nf, nf.Name)
+								}
+								return fields
+							}()),
+						))
+					} else if schemaOpt.ComponentRef != "" {
+						// Component reference not resolved - show message
+						nodes = append(nodes, Div(
+							g.Attr("x-show", fmt.Sprintf("discriminatorValue === '%s'", schemaKey)),
+							Class("p-3 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800"),
+							Div(
+								Class("flex items-center gap-2 text-amber-700 dark:text-amber-400"),
+								lucide.CircleAlert(Class("size-4")),
+								Span(Class("text-sm font-medium"), g.Text("Component schema not resolved")),
+							),
+							P(
+								Class("mt-1 text-xs text-amber-600 dark:text-amber-500"),
+								g.Text(fmt.Sprintf("Component '%s' needs to be resolved server-side.", schemaOpt.ComponentRef)),
+							),
+						))
+					}
+				}
+				return nodes
+			}()),
+
+			// No schema selected message
+			Div(
+				g.Attr("x-show", "!getActiveSchema()"),
+				Class("py-6 text-center"),
+				Div(
+					Class("flex flex-col items-center gap-2 text-slate-500 dark:text-gray-400"),
+					lucide.CircleHelp(Class("size-8 opacity-50")),
+					P(Class("text-sm"), g.Text("Select a value for \""+discriminatorField+"\" to see the relevant fields.")),
+				),
+			),
+
+			// Hidden input to store the full JSON
+			Input(
+				Type("hidden"),
+				Name(fieldName),
+				g.Attr(":value", "JSON.stringify(data)"),
 			),
 		),
 	)
@@ -1010,7 +1484,7 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 
 		// Render input based on type
 		g.Group(func() []g.Node {
-			xModel := fmt.Sprintf("item.%s", field.Slug)
+			xModel := fmt.Sprintf("item.%s", field.Name)
 
 			switch field.Type {
 			case "boolean":
@@ -1111,6 +1585,148 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 		g.If(field.Description != "", func() g.Node {
 			return P(
 				Class("mt-1 text-xs text-slate-500 dark:text-gray-500"),
+				g.Text(field.Description),
+			)
+		}()),
+	)
+}
+
+// renderOneOfNestedFieldInput renders a nested field input within a oneOf field using Alpine.js binding
+func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string) g.Node {
+	xModel := fmt.Sprintf("data['%s']", fieldName)
+
+	return Div(
+		Class("space-y-1"),
+		Label(
+			Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+			g.Text(field.Name),
+			g.If(field.Required, func() g.Node {
+				return Span(Class("text-red-500 ml-1"), g.Text("*"))
+			}()),
+		),
+
+		// Render input based on type
+		g.Group(func() []g.Node {
+			switch field.Type {
+			case "boolean":
+				return []g.Node{
+					Div(
+						Class("flex items-center gap-2"),
+						Input(
+							Type("checkbox"),
+							g.Attr("x-model", xModel),
+							Class("h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"),
+						),
+						Span(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text("Yes")),
+					),
+				}
+			case "textarea", "richtext", "markdown":
+				return []g.Node{
+					Textarea(
+						Rows("3"),
+						g.Attr("x-model", xModel),
+						// Don't add required attribute - validation happens server-side for oneOf fields
+						Placeholder(field.Description),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "number", "integer", "float":
+				return []g.Node{
+					Input(
+						Type("number"),
+						g.Attr("x-model", xModel),
+						// Don't add required attribute - validation happens server-side for oneOf fields
+						Placeholder(field.Description),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			case "select":
+				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+				if field.Options != nil && len(field.Options.Choices) > 0 {
+					for _, choice := range field.Options.Choices {
+						opts = append(opts, Option(Value(choice.Value), g.Text(choice.Label)))
+					}
+				}
+				return []g.Node{
+					Select(
+						g.Attr("x-model", xModel),
+						// Don't add required attribute - validation happens server-side for oneOf fields
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						g.Group(opts),
+					),
+				}
+			case "json":
+				// JSON editor with Alpine.js validation and formatting
+				jsonEditorID := "json-editor-" + fieldName
+				return []g.Node{
+					Div(
+						g.Attr("x-data", fmt.Sprintf(`{
+							value: %s || {},
+							error: '',
+							format() {
+								try {
+									const parsed = typeof this.value === 'string' ? JSON.parse(this.value) : this.value;
+									this.value = JSON.stringify(parsed, null, 2);
+									this.error = '';
+									%s = parsed;
+								} catch (e) {
+									this.error = 'Invalid JSON: ' + e.message;
+								}
+							},
+							init() {
+								this.value = typeof %s === 'string' ? %s : JSON.stringify(%s || {}, null, 2);
+							}
+						}`, xModel, xModel, xModel, xModel, xModel)),
+						Div(Class("space-y-2"),
+							Textarea(
+								ID(jsonEditorID),
+								Rows("6"),
+								g.Attr("x-model", "value"),
+								g.Attr("@blur", "format()"),
+								Placeholder(`{"key": "value"}`),
+								Class("block w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+							),
+							Div(Class("flex gap-2"),
+								Button(
+									Type("button"),
+									g.Attr("@click", "format()"),
+									Class("px-3 py-1 text-xs font-medium text-violet-700 bg-violet-50 rounded-md hover:bg-violet-100 dark:bg-violet-900/20 dark:text-violet-400 dark:hover:bg-violet-900/30"),
+									g.Text("Format JSON"),
+								),
+							),
+							Div(
+								g.Attr("x-show", "error"),
+								g.Attr("x-text", "error"),
+								Class("text-xs text-red-600 dark:text-red-400"),
+							),
+						),
+					),
+				}
+			default: // text, email, url, etc.
+				inputType := "text"
+				if field.Type == "email" {
+					inputType = "email"
+				} else if field.Type == "url" {
+					inputType = "url"
+				} else if field.Type == "date" {
+					inputType = "date"
+				}
+				return []g.Node{
+					Input(
+						Type(inputType),
+						g.Attr("x-model", xModel),
+						// Don't add required attribute - validation happens server-side for oneOf fields
+						Placeholder(field.Description),
+						Class("block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+					),
+				}
+			}
+		}()),
+
+		// Description
+		g.If(field.Description != "", func() g.Node {
+			return P(
+				Class("text-xs text-slate-500 dark:text-gray-500 mt-1"),
 				g.Text(field.Description),
 			)
 		}()),
@@ -1262,6 +1878,67 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 				return []g.Node{
 					P(Class("text-xs text-slate-400"), g.Text("Max nesting depth reached")),
 				}
+			case "json":
+				// JSON editor for nested fields
+				jsonValue := "{}"
+				if value != nil {
+					if jsonBytes, err := json.Marshal(value); err == nil {
+						jsonValue = string(jsonBytes)
+					}
+				}
+				jsonEditorID := "json-editor-" + fieldName
+				return []g.Node{
+					Div(
+						g.Attr("x-data", fmt.Sprintf(`{
+							value: %s,
+							error: '',
+							format() {
+								try {
+									const parsed = JSON.parse(this.value);
+									this.value = JSON.stringify(parsed, null, 2);
+									this.error = '';
+								} catch (e) {
+									this.error = 'Invalid JSON: ' + e.message;
+								}
+							},
+							init() {
+								try {
+									const parsed = JSON.parse(this.value);
+									this.value = JSON.stringify(parsed, null, 2);
+								} catch (e) {}
+							}
+						}`, strconv.Quote(jsonValue))),
+						Div(Class("space-y-2"),
+							Textarea(
+								ID(jsonEditorID),
+								Rows("6"),
+								g.Attr("x-model", "value"),
+								g.Attr("@blur", "format()"),
+								Placeholder(`{"key": "value"}`),
+								Class("block w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+							),
+							// Hidden input for form submission
+							Input(
+								Type("hidden"),
+								Name(fieldName),
+								g.Attr("x-bind:value", "value"),
+							),
+							Div(Class("flex gap-2"),
+								Button(
+									Type("button"),
+									g.Attr("@click", "format()"),
+									Class("px-3 py-1 text-xs font-medium text-violet-700 bg-violet-50 rounded-md hover:bg-violet-100 dark:bg-violet-900/20 dark:text-violet-400 dark:hover:bg-violet-900/30"),
+									g.Text("Format JSON"),
+								),
+							),
+							Div(
+								g.Attr("x-show", "error"),
+								g.Attr("x-text", "error"),
+								Class("text-xs text-red-600 dark:text-red-400"),
+							),
+						),
+					),
+				}
 			default:
 				// Default: text input
 				return []g.Node{
@@ -1301,8 +1978,8 @@ func renderNestedObjectFieldInput(fields []core.NestedFieldDefDTO, baseName stri
 		g.Group(func() []g.Node {
 			nodes := make([]g.Node, len(fields))
 			for i, f := range fields {
-				subFieldName := baseName + "[" + f.Slug + "]"
-				subValue := valueMap[f.Slug]
+				subFieldName := baseName + "[" + f.Name + "]"
+				subValue := valueMap[f.Name]
 				nodes[i] = renderNestedFieldInput(f, subFieldName, subValue, depth)
 			}
 			return nodes
@@ -1310,3 +1987,226 @@ func renderNestedObjectFieldInput(fields []core.NestedFieldDefDTO, baseName stri
 	)
 }
 
+// =============================================================================
+// JSON Editor Field (Monaco Editor)
+// =============================================================================
+
+// renderJsonEditorField renders a JSON editor for JSON fields
+func renderJsonEditorField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
+	// Convert value to JSON string
+	jsonValue := "{}"
+	if value != nil {
+		switch v := value.(type) {
+		case string:
+			jsonValue = v
+		case map[string]any, []any:
+			if bytes, err := json.MarshalIndent(v, "", "  "); err == nil {
+				jsonValue = string(bytes)
+			}
+		default:
+			if bytes, err := json.MarshalIndent(v, "", "  "); err == nil {
+				jsonValue = string(bytes)
+			}
+		}
+	}
+
+	// Escape JSON for JavaScript string
+	escapedJSON := escapeJSONForJS(jsonValue)
+
+	return Div(
+		Class("space-y-2"),
+		// Monaco Editor using simpler textarea with JSON validation
+		Div(
+			Class("flex flex-col relative w-full border border-slate-300 dark:border-gray-700 rounded-lg overflow-hidden"),
+			g.Attr("x-data", fmt.Sprintf(`{
+				content: %s,
+				isValid: true,
+				errorMessage: '',
+				
+				validateJson() {
+					try {
+						JSON.parse(this.content);
+						this.isValid = true;
+						this.errorMessage = '';
+					} catch (e) {
+						this.isValid = false;
+						this.errorMessage = e.message;
+					}
+				},
+				
+				formatJson() {
+					if (!this.isValid) return;
+					try {
+						const parsed = JSON.parse(this.content);
+						this.content = JSON.stringify(parsed, null, 2);
+					} catch (e) {}
+				},
+				
+				init() {
+					this.validateJson();
+					this.$watch('content', () => this.validateJson());
+				}
+			}`, escapedJSON)),
+
+			// Toolbar
+			Div(
+				Class("flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-gray-800 border-b border-slate-200 dark:border-gray-700"),
+				Div(
+					Class("flex items-center gap-2"),
+					// Validation status
+					Div(
+						g.Attr("x-show", "isValid"),
+						Class("flex items-center gap-1 text-xs text-green-600 dark:text-green-400"),
+						lucide.Check(Class("size-3")),
+						Span(g.Text("Valid JSON")),
+					),
+					Div(
+						g.Attr("x-show", "!isValid"),
+						Class("flex items-center gap-1 text-xs text-red-600 dark:text-red-400"),
+						lucide.CircleAlert(Class("size-3")),
+						Span(g.Attr("x-text", "errorMessage.substring(0, 50) || 'Invalid JSON'")),
+					),
+				),
+				// Format button
+				Button(
+					Type("button"),
+					g.Attr("@click", "formatJson()"),
+					g.Attr(":disabled", "!isValid"),
+					Class("inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600"),
+					lucide.Braces(Class("size-3")),
+					g.Text("Format"),
+				),
+			),
+
+			// Textarea editor
+			Textarea(
+				g.Attr("x-model", "content"),
+				Name(fieldName),
+				ID(fieldName),
+				Rows("12"),
+				Class("block w-full px-3 py-2 text-sm font-mono border-0 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-0"),
+				Placeholder("{}"),
+				g.If(field.Required, Required()),
+			),
+		),
+	)
+}
+
+// escapeJSONForJS escapes a JSON string for safe embedding in JavaScript
+func escapeJSONForJS(jsonStr string) string {
+	// Parse and re-marshal to ensure valid JSON
+	var parsed any
+	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+		return `{}`
+	}
+
+	// Marshal with indentation for readability
+	bytes, err := json.MarshalIndent(parsed, "", "  ")
+	if err != nil {
+		return `{}`
+	}
+
+	// Escape for JavaScript string context
+	escaped := string(bytes)
+	escaped = fmt.Sprintf("`%s`", escaped)
+	return escaped
+}
+
+// =============================================================================
+// Slug Field with Auto-Generation
+// =============================================================================
+
+// renderSlugField renders a slug field with optional auto-generation from another field
+func renderSlugField(field *core.ContentFieldDTO, fieldName string, value string) g.Node {
+	sourceField := field.Options.SourceField
+	hasSourceField := sourceField != ""
+
+	// If no source field, render a simple text input
+	if !hasSourceField {
+		inputAttrs := []g.Node{
+			Type("text"),
+			ID(fieldName),
+			Name(fieldName),
+			Value(value),
+			Placeholder("e.g., my-slug"),
+			Class("block w-full px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono"),
+		}
+		if field.Required {
+			inputAttrs = append(inputAttrs, Required())
+		}
+		return Input(inputAttrs...)
+	}
+
+	// With source field - add Alpine.js auto-generation
+	return Div(
+		Class("space-y-2"),
+		g.Attr("x-data", fmt.Sprintf(`{
+			slug: '%s',
+			manuallyEdited: %v,
+			sourceFieldId: 'data[%s]',
+			
+			slugify(text) {
+				return text
+					.toLowerCase()
+					.trim()
+					.replace(/[^\w\s-]/g, '')
+					.replace(/[\s_-]+/g, '-')
+					.replace(/^-+|-+$/g, '');
+			},
+			
+			generateSlug() {
+				const sourceInput = document.querySelector('[name="' + this.sourceFieldId + '"]');
+				if (sourceInput) {
+					this.slug = this.slugify(sourceInput.value);
+				}
+			},
+			
+			watchSource() {
+				const sourceInput = document.querySelector('[name="' + this.sourceFieldId + '"]');
+				if (sourceInput) {
+					sourceInput.addEventListener('input', (e) => {
+						if (!this.manuallyEdited) {
+							this.slug = this.slugify(e.target.value);
+						}
+					});
+				}
+			},
+			
+			init() {
+				this.$nextTick(() => this.watchSource());
+			}
+		}`, value, value != "", sourceField)),
+
+		// Input with generate button
+		Div(
+			Class("flex gap-2"),
+			Input(
+				Type("text"),
+				ID(fieldName),
+				Name(fieldName),
+				g.Attr("x-model", "slug"),
+				g.Attr("@input", "manuallyEdited = true"),
+				Placeholder("e.g., my-slug"),
+				g.If(field.Required, Required()),
+				Class("flex-1 px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono"),
+			),
+			Button(
+				Type("button"),
+				g.Attr("@click", "generateSlug(); manuallyEdited = false"),
+				Class("inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 border border-slate-300 rounded-lg hover:bg-slate-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600"),
+				lucide.RefreshCw(Class("size-4")),
+				g.Text("Generate"),
+			),
+		),
+
+		// Hint about source field
+		P(
+			Class("text-xs text-slate-500 dark:text-gray-400"),
+			g.Text("Auto-generates from: "),
+			Code(
+				Class("px-1 py-0.5 bg-slate-100 dark:bg-gray-700 rounded text-xs"),
+				g.Text(sourceField),
+			),
+		),
+	)
+}

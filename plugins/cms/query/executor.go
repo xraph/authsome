@@ -34,9 +34,9 @@ func (e *QueryExecutor) Execute(ctx context.Context, contentType *schema.Content
 	// Validate query against content type fields
 	fieldMap := make(map[string]*core.ContentFieldDTO)
 	for _, f := range contentType.Fields {
-		fieldMap[f.Slug] = &core.ContentFieldDTO{
+		fieldMap[f.Name] = &core.ContentFieldDTO{
 			ID:   f.ID.String(),
-			Slug: f.Slug,
+			Name: f.Name,
 			Type: f.Type,
 		}
 	}

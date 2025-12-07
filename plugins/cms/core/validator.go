@@ -108,6 +108,8 @@ func (v *FieldValidator) Validate(value interface{}) *ValidationResult {
 		err = v.validateObject(value)
 	case FieldTypeArray:
 		err = v.validateArray(value)
+	case FieldTypeOneOf:
+		err = v.validateOneOf(value)
 	}
 
 	if err != nil {
@@ -597,10 +599,86 @@ func (v *FieldValidator) validateArray(value interface{}) error {
 	return nil
 }
 
+func (v *FieldValidator) validateOneOf(value interface{}) error {
+	// OneOf value should be a map with the data
+	obj, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("must be an object")
+	}
+
+	// OneOf requires options with discriminator field and schemas
+	if v.Options == nil {
+		return fmt.Errorf("oneOf field requires options configuration")
+	}
+
+	if v.Options.DiscriminatorField == "" {
+		return fmt.Errorf("oneOf field requires discriminatorField in options")
+	}
+
+	if len(v.Options.Schemas) == 0 {
+		return fmt.Errorf("oneOf field requires schemas in options")
+	}
+
+	// The discriminator value is used to select which schema to validate against
+	// Note: The discriminator field value is read from a sibling field, not from within this object
+	// So we just validate the object structure against whatever schema is active
+	// The actual discriminator value should be passed separately or resolved at runtime
+
+	// For now, if no nested fields are resolved, we just validate it's a valid object
+	// The actual schema selection happens at runtime based on the discriminator field
+	if len(v.Options.NestedFields) > 0 {
+		// If nested fields are already resolved (from the active schema), validate against them
+		return v.validateNestedFields(obj, v.Options.NestedFields)
+	}
+
+	return nil
+}
+
+// ValidateOneOfWithDiscriminator validates oneOf data with a specific discriminator value
+func ValidateOneOfWithDiscriminator(data map[string]interface{}, discriminatorValue string, options *FieldOptionsDTO) *ValidationResult {
+	result := &ValidationResult{Valid: true}
+
+	if options == nil || len(options.Schemas) == 0 {
+		return result
+	}
+
+	// Find the schema for the discriminator value
+	schemaOpt, exists := options.Schemas[discriminatorValue]
+	if !exists {
+		result.Valid = false
+		result.Errors = append(result.Errors, ValidationError{
+			Field:   "data",
+			Message: fmt.Sprintf("no schema defined for discriminator value '%s'", discriminatorValue),
+			Code:    "invalid_discriminator",
+		})
+		return result
+	}
+
+	// Validate against the selected schema's nested fields
+	var fieldsToValidate []NestedFieldDefDTO
+	if len(schemaOpt.NestedFields) > 0 {
+		fieldsToValidate = schemaOpt.NestedFields
+	}
+
+	if len(fieldsToValidate) > 0 {
+		validator := &FieldValidator{}
+		if err := validator.validateNestedFields(data, fieldsToValidate); err != nil {
+			result.Valid = false
+			result.Errors = append(result.Errors, ValidationError{
+				Field:   "data",
+				Message: err.Error(),
+				Code:    "invalid",
+			})
+		}
+	}
+
+	return result
+}
+
 // validateNestedFields validates nested field values against their definitions
 func (v *FieldValidator) validateNestedFields(data map[string]interface{}, fields []NestedFieldDefDTO) error {
 	for _, field := range fields {
-		value, exists := data[field.Slug]
+		value, exists := data[field.Name]
 
 		// Check required
 		if field.Required && (!exists || isEmptyValue(value)) {
@@ -619,7 +697,7 @@ func (v *FieldValidator) validateNestedFields(data map[string]interface{}, field
 		}
 
 		nestedValidator := NewFieldValidator(
-			field.Slug,
+			field.Name,
 			FieldType(field.Type),
 			field.Required,
 			false, // Unique not supported in nested

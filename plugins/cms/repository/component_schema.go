@@ -19,7 +19,7 @@ type ComponentSchemaRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, component *schema.ComponentSchema) error
 	FindByID(ctx context.Context, id xid.ID) (*schema.ComponentSchema, error)
-	FindBySlug(ctx context.Context, appID, envID xid.ID, slug string) (*schema.ComponentSchema, error)
+	FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ComponentSchema, error)
 	List(ctx context.Context, appID, envID xid.ID, query *core.ListComponentSchemasQuery) ([]*schema.ComponentSchema, int, error)
 	Update(ctx context.Context, component *schema.ComponentSchema) error
 	Delete(ctx context.Context, id xid.ID) error
@@ -27,7 +27,7 @@ type ComponentSchemaRepository interface {
 
 	// Stats operations
 	Count(ctx context.Context, appID, envID xid.ID) (int, error)
-	ExistsWithSlug(ctx context.Context, appID, envID xid.ID, slug string) (bool, error)
+	ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error)
 
 	// Usage queries
 	FindUsages(ctx context.Context, appID, envID xid.ID, componentSlug string) ([]*schema.ContentField, error)
@@ -85,18 +85,18 @@ func (r *componentSchemaRepository) FindByID(ctx context.Context, id xid.ID) (*s
 }
 
 // FindBySlug finds a component schema by slug within an app/environment
-func (r *componentSchemaRepository) FindBySlug(ctx context.Context, appID, envID xid.ID, slug string) (*schema.ComponentSchema, error) {
+func (r *componentSchemaRepository) FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ComponentSchema, error) {
 	component := new(schema.ComponentSchema)
 	err := r.db.NewSelect().
 		Model(component).
 		Where("cs.app_id = ?", appID).
 		Where("cs.environment_id = ?", envID).
-		Where("cs.slug = ?", slug).
+		Where("LOWER(cs.name) = LOWER(?)", name).
 		Where("cs.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, core.ErrComponentSchemaNotFound(slug)
+			return nil, core.ErrComponentSchemaNotFound(name)
 		}
 		return nil, err
 	}
@@ -235,13 +235,13 @@ func (r *componentSchemaRepository) Count(ctx context.Context, appID, envID xid.
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a component schema with the given slug exists
-func (r *componentSchemaRepository) ExistsWithSlug(ctx context.Context, appID, envID xid.ID, slug string) (bool, error) {
+// ExistsWithSlug checks if a component schema with the given name exists
+func (r *componentSchemaRepository) ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ComponentSchema)(nil)).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
-		Where("slug = ?", slug).
+		Where("LOWER(name) = LOWER(?)", name).
 		Where("deleted_at IS NULL").
 		Count(ctx)
 	if err != nil {
