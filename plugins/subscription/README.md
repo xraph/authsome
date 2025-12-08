@@ -2,6 +2,20 @@
 
 A comprehensive SaaS subscription and billing plugin for AuthSome, providing complete subscription management with organization-scoped billing.
 
+## 🆕 New Features (December 2025)
+
+### Export & Import
+- **Export** all features and plans as JSON for backup or migration
+- **Import** features and plans from JSON to quickly set up new environments
+- Perfect for local development and multi-environment deployments
+- See [Export/Import Guide](./SUBSCRIPTION_SYNC_EXPORT_IMPORT_GUIDE.md)
+
+### Enhanced Stripe Sync
+- **Sync FROM Stripe** - Import existing Stripe products into AuthSome
+- **Sync TO Stripe** - Push AuthSome plans to Stripe  
+- Automatic metadata management for seamless bi-directional sync
+- Bulk sync all plans with one click
+
 ## Features
 
 - **Plan Management**: Create and manage subscription plans with flexible pricing

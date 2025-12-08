@@ -2,13 +2,16 @@ package subscription
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/subscription/core"
+	"github.com/xraph/authsome/plugins/subscription/service"
 	"github.com/xraph/forge"
 )
 
@@ -667,6 +670,246 @@ func (e *DashboardExtension) linkFeaturesFromForm(ctx context.Context, planID xi
 			e.plugin.featureSvc.UnlinkFromPlan(ctx, planID, feature.ID)
 		}
 	}
+}
+
+// HandleExportFeaturesAndPlans exports features and plans as JSON
+func (e *DashboardExtension) HandleExportFeaturesAndPlans(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid app context"})
+	}
+
+	ctx := c.Request().Context()
+
+	// Export features and plans
+	exportData, err := e.plugin.exportImportSvc.ExportFeaturesAndPlans(ctx, currentApp.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to export data: " + err.Error()})
+	}
+
+	// Set headers for JSON download
+	c.Response().Header().Set("Content-Type", "application/json")
+	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=features-plans-export-%s.json", time.Now().Format("2006-01-02")))
+
+	return c.JSON(http.StatusOK, exportData)
+}
+
+// HandleImportFeaturesAndPlans imports features and plans from JSON
+func (e *DashboardExtension) HandleImportFeaturesAndPlans(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Parse import data
+	var importData service.ExportData
+	if err := c.BindJSON(&importData); err != nil {
+		return c.String(http.StatusBadRequest, "Invalid import data: "+err.Error())
+	}
+
+	// Get overwrite flag from query param
+	overwriteExisting := c.Query("overwrite") == "true"
+
+	// Import features and plans
+	result, err := e.plugin.exportImportSvc.ImportFeaturesAndPlans(ctx, currentApp.ID, &importData, overwriteExisting)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to import data: "+err.Error())
+	}
+
+	// Return result as JSON for AJAX requests or redirect for form submissions
+	if c.Header("Accept") == "application/json" {
+		return c.JSON(http.StatusOK, result)
+	}
+
+	// Redirect with success message
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features")
+}
+
+// HandleShowImportForm displays the import form page
+func (e *DashboardExtension) HandleShowImportForm(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	// Render import form page
+	html := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Import Features & Plans</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        h1 { color: #333; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        textarea { width: 100%%; height: 400px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; }
+        .checkbox-group { margin: 10px 0; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #007bff; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+        .info { background-color: #e7f3ff; padding: 15px; border-left: 4px solid #007bff; margin-bottom: 20px; }
+        .file-input { margin-bottom: 10px; }
+        #result { margin-top: 20px; padding: 15px; border-radius: 4px; display: none; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+    </style>
+</head>
+<body>
+    <a href="%s/dashboard/app/%s/billing/features" class="back-link">&larr; Back to Features</a>
+    <h1>Import Features & Plans</h1>
+    
+    <div class="info">
+        <strong>Import Instructions:</strong>
+        <ul>
+            <li>Upload a JSON file exported from another environment</li>
+            <li>Features will be created or updated based on their unique keys</li>
+            <li>Plans will be created (existing plans with same slug will be skipped)</li>
+            <li>Check "Overwrite Existing" to update existing features with imported data</li>
+        </ul>
+    </div>
+
+    <form id="importForm">
+        <div class="form-group">
+            <label for="fileInput">Select Export File:</label>
+            <input type="file" id="fileInput" accept=".json" class="file-input">
+        </div>
+
+        <div class="form-group">
+            <label for="importData">Or Paste JSON Data:</label>
+            <textarea id="importData" placeholder="Paste your exported JSON data here..."></textarea>
+        </div>
+
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" id="overwrite" name="overwrite">
+                Overwrite existing features
+            </label>
+        </div>
+
+        <button type="submit">Import Data</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('importData').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        document.getElementById('importForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const jsonData = document.getElementById('importData').value;
+            const overwrite = document.getElementById('overwrite').checked;
+            const resultDiv = document.getElementById('result');
+            
+            if (!jsonData.trim()) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = 'Please select a file or paste JSON data';
+                resultDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const data = JSON.parse(jsonData);
+                
+                const response = await fetch('%s/dashboard/app/%s/billing/import?overwrite=' + overwrite, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'success';
+                    let message = '<strong>Import Successful!</strong><br>';
+                    message += 'Features created: ' + result.featuresCreated + '<br>';
+                    message += 'Features skipped: ' + result.featuresSkipped + '<br>';
+                    message += 'Plans created: ' + result.plansCreated + '<br>';
+                    message += 'Plans skipped: ' + result.plansSkipped;
+                    
+                    if (result.errors && result.errors.length > 0) {
+                        message += '<br><br><strong>Errors:</strong><br>';
+                        result.errors.forEach(err => {
+                            message += '- ' + err + '<br>';
+                        });
+                    }
+                    
+                    resultDiv.innerHTML = message;
+                    resultDiv.style.display = 'block';
+
+                    // Clear form after success
+                    setTimeout(() => {
+                        window.location.href = '%s/dashboard/app/%s/billing/features';
+                    }, 3000);
+                } else {
+                    resultDiv.className = 'error';
+                    resultDiv.textContent = 'Error: ' + (result.error || 'Import failed');
+                    resultDiv.style.display = 'block';
+                }
+            } catch (err) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = 'Error: ' + err.message;
+                resultDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
+`, basePath, currentApp.ID.String(), basePath, currentApp.ID.String(), basePath, currentApp.ID.String())
+
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.Response().WriteHeader(http.StatusOK)
+	_, err = c.Response().Write([]byte(html))
+	return err
 }
 
 // Suppress unused variable warnings

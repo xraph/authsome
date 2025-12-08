@@ -435,34 +435,61 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	// Create multiple admins and targets
 	admin1 := &schema.User{ID: xid.New(), Email: "admin1@example.com", Name: "Admin 1"}
 	admin2 := &schema.User{ID: xid.New(), Email: "admin2@example.com", Name: "Admin 2"}
+	admin3 := &schema.User{ID: xid.New(), Email: "admin3@example.com", Name: "Admin 3"}
+	admin4 := &schema.User{ID: xid.New(), Email: "admin4@example.com", Name: "Admin 4"}
 	target1 := &schema.User{ID: xid.New(), Email: "target1@example.com", Name: "Target 1"}
 	target2 := &schema.User{ID: xid.New(), Email: "target2@example.com", Name: "Target 2"}
 
-	for _, user := range []*schema.User{admin1, admin2, target1, target2} {
+	for _, user := range []*schema.User{admin1, admin2, admin3, admin4, target1, target2} {
 		userSvc.users[user.ID.String()] = user
 	}
 
-	// Create various impersonation combinations
-	combinations := []struct {
-		admin  *schema.User
-		target *schema.User
-	}{
-		{admin1, target1},
-		{admin1, target2},
-		{admin2, target1},
-		{admin2, target2},
+	// Create impersonations - using unique admins to avoid "already impersonating" error
+	sessions := make(map[string]*impersonation.StartResponse)
+	
+	// admin1 -> target1
+	startReq := &impersonation.StartRequest{
+		AppID:          orgID,
+		ImpersonatorID: admin1.ID,
+		TargetUserID:   target1.ID,
+		Reason:         "Testing filter combinations",
 	}
+	resp, err := service.Start(ctx, startReq)
+	require.NoError(t, err)
+	sessions["admin1_target1"] = resp
 
-	for _, combo := range combinations {
-		startReq := &impersonation.StartRequest{
-			AppID:          orgID,
-			ImpersonatorID: combo.admin.ID,
-			TargetUserID:   combo.target.ID,
-			Reason:         "Testing filter combinations",
-		}
-		_, err := service.Start(ctx, startReq)
-		require.NoError(t, err)
+	// admin2 -> target2
+	startReq = &impersonation.StartRequest{
+		AppID:          orgID,
+		ImpersonatorID: admin2.ID,
+		TargetUserID:   target2.ID,
+		Reason:         "Testing filter combinations",
 	}
+	resp, err = service.Start(ctx, startReq)
+	require.NoError(t, err)
+	sessions["admin2_target2"] = resp
+
+	// admin3 -> target1
+	startReq = &impersonation.StartRequest{
+		AppID:          orgID,
+		ImpersonatorID: admin3.ID,
+		TargetUserID:   target1.ID,
+		Reason:         "Testing filter combinations",
+	}
+	resp, err = service.Start(ctx, startReq)
+	require.NoError(t, err)
+	sessions["admin3_target1"] = resp
+
+	// admin4 -> target2
+	startReq = &impersonation.StartRequest{
+		AppID:          orgID,
+		ImpersonatorID: admin4.ID,
+		TargetUserID:   target2.ID,
+		Reason:         "Testing filter combinations",
+	}
+	resp, err = service.Start(ctx, startReq)
+	require.NoError(t, err)
+	sessions["admin4_target2"] = resp
 
 	// Filter by impersonator (admin1)
 	activeOnly := true
@@ -474,7 +501,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	listFilter.Limit = 10
 	listResp, err := service.List(ctx, listFilter)
 	require.NoError(t, err)
-	assert.Len(t, listResp.Data, 2) // admin1 -> target1 and admin1 -> target2
+	assert.Len(t, listResp.Data, 1) // admin1 -> target1
 
 	// Filter by target (target1)
 	listFilter = &impersonation.ListSessionsFilter{
@@ -485,7 +512,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	listFilter.Limit = 10
 	listResp, err = service.List(ctx, listFilter)
 	require.NoError(t, err)
-	assert.Len(t, listResp.Data, 2) // admin1 -> target1 and admin2 -> target1
+	assert.Len(t, listResp.Data, 2) // admin1 -> target1 and admin3 -> target1
 
 	// Filter by both impersonator and target
 	listFilter = &impersonation.ListSessionsFilter{

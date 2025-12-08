@@ -44,14 +44,30 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 	return Div(
 		Class("space-y-6"),
 		g.Attr("x-data", `{
+			showCreateModal: false,
+			showViewKeyModal: false,
+			showRevokeModal: false,
 			newAPIKey: '',
 			revokeKeyID: '',
 			revokeKeyName: '',
 			copied: false,
+			selectedKeyType: 'rk',
+			selectedScopes: [],
 			openRevokeModal(id, name) {
 				this.revokeKeyID = id;
 				this.revokeKeyName = name;
-				HSOverlay.open('#revoke-apikey-modal');
+				this.showRevokeModal = true;
+			},
+			toggleScope(scope) {
+				if (this.selectedScopes.includes(scope)) {
+					this.selectedScopes = this.selectedScopes.filter(s => s !== scope);
+				} else {
+					this.selectedScopes.push(scope);
+				}
+				document.getElementById('scopes').value = this.selectedScopes.join(',');
+			},
+			isScopeSelected(scope) {
+				return this.selectedScopes.includes(scope);
 			},
 			async createAPIKey(event) {
 				const formData = new FormData(event.target);
@@ -62,8 +78,8 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 				const result = await response.json();
 				if (result.success) {
 					this.newAPIKey = result.key;
-					HSOverlay.close('#create-apikey-modal');
-					HSOverlay.open('#view-apikey-modal');
+					this.showCreateModal = false;
+					this.showViewKeyModal = true;
 				} else {
 					alert('Error: ' + (result.error || 'Failed to create API key'));
 				}
@@ -81,7 +97,7 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 				
 				if (result.success) {
 					this.newAPIKey = result.key;
-					HSOverlay.open('#view-apikey-modal');
+					this.showViewKeyModal = true;
 				} else {
 					alert('Error: ' + (result.error || 'Failed to rotate API key'));
 				}
@@ -94,7 +110,7 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 				});
 				const result = await response.json();
 				if (result.success) {
-					HSOverlay.close('#revoke-apikey-modal');
+					this.showRevokeModal = false;
 					window.location.reload();
 				} else {
 					alert('Error: ' + (result.error || 'Failed to revoke API key'));
@@ -120,10 +136,7 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 			Button(
 				Type("button"),
 				Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700 disabled:opacity-50 disabled:pointer-events-none"),
-				g.Attr("aria-haspopup", "dialog"),
-				g.Attr("aria-expanded", "false"),
-				g.Attr("aria-controls", "create-apikey-modal"),
-				g.Attr("data-hs-overlay", "#create-apikey-modal"),
+				g.Attr("@click", "showCreateModal = true"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create API Key"),
 			),
@@ -359,22 +372,6 @@ func (e *DashboardExtension) renderScopeSelector() g.Node {
 	scopesByCategory := e.getScopeDefinitions()
 
 	return Div(
-		g.Attr("x-data", `{
-			selectedScopes: [],
-			toggleScope(scope) {
-				if (this.selectedScopes.includes(scope)) {
-					this.selectedScopes = this.selectedScopes.filter(s => s !== scope);
-				} else {
-					this.selectedScopes.push(scope);
-				}
-				// Update hidden input
-				document.getElementById('scopes').value = this.selectedScopes.join(',');
-			},
-			isScopeSelected(scope) {
-				return this.selectedScopes.includes(scope);
-			}
-		}`),
-
 		Div(Class("space-y-4"),
 			// Header
 			Div(Class("flex items-center justify-between"),
@@ -383,7 +380,7 @@ func (e *DashboardExtension) renderScopeSelector() g.Node {
 				Button(
 					Type("button"),
 					Class("text-xs text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300"),
-					g.Attr("@click", "selectedScopes = []"),
+					g.Attr("@click", "selectedScopes = []; document.getElementById('scopes').value = ''"),
 					g.Text("Clear All"),
 				),
 			),
@@ -523,51 +520,63 @@ func (e *DashboardExtension) renderEmptyState() g.Node {
 		Button(
 			Type("button"),
 			Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700 disabled:opacity-50 disabled:pointer-events-none"),
-			g.Attr("aria-haspopup", "dialog"),
-			g.Attr("aria-expanded", "false"),
-			g.Attr("aria-controls", "create-apikey-modal"),
-			g.Attr("data-hs-overlay", "#create-apikey-modal"),
+			g.Attr("@click", "showCreateModal = true"),
 			lucide.Plus(Class("size-4")),
 			g.Text("Create API Key"),
 		),
 	)
 }
 
-// renderCreateModal renders the create API key modal using Preline HSOverlay pattern
+// renderCreateModal renders the create API key modal using Alpine.js/Pines dialog pattern
 func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath string) g.Node {
 	actionURL := fmt.Sprintf("%s/dashboard/app/%s/settings/api-keys/create", basePath, currentApp.ID.String())
 
 	return Div(
-		// HSOverlay Modal
-		ID("create-apikey-modal"),
-		Class("hs-overlay hidden size-full fixed top-0 start-0 z-[80] overflow-x-hidden overflow-y-auto pointer-events-none"),
-		g.Attr("role", "dialog"),
-		g.Attr("tabindex", "-1"),
-		g.Attr("aria-labelledby", "create-apikey-modal-label"),
+		g.Attr("x-show", "showCreateModal"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
+		g.Attr("@keydown.escape.window", "showCreateModal = false"),
 
-		Div(
-			Class("hs-overlay-open:mt-7 hs-overlay-open:opacity-100 hs-overlay-open:duration-500 mt-0 opacity-0 ease-out transition-all sm:max-w-2xl sm:w-full m-3 sm:mx-auto min-h-[calc(100%-3.5rem)] flex items-center"),
+		Div(Class("flex min-h-screen items-center justify-center p-4"),
+			// Backdrop
 			Div(
-				Class("w-full flex flex-col bg-white border shadow-sm rounded-xl pointer-events-auto dark:bg-neutral-800 dark:border-neutral-700 dark:shadow-neutral-700/70"),
+				g.Attr("x-show", "showCreateModal"),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0"),
+				g.Attr("x-transition:enter-end", "opacity-100"),
+				g.Attr("x-transition:leave", "ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100"),
+				g.Attr("x-transition:leave-end", "opacity-0"),
+				Class("fixed inset-0 bg-black/50 dark:bg-black/70"),
+				g.Attr("@click", "showCreateModal = false"),
+			),
+
+			// Modal Content
+			Div(
+				g.Attr("x-show", "showCreateModal"),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+				g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+				g.Attr("x-transition:leave", "ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
+				g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
+				Class("relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[70vh] flex flex-col"),
 
 				// Modal Header
 				Div(
-					Class("flex justify-between items-center py-3 px-4 border-b dark:border-neutral-700"),
+					Class("flex justify-between items-center py-4 px-6 border-b border-gray-200 dark:border-neutral-700 shrink-0"),
 					Div(
 						Class("flex items-center gap-2"),
 						lucide.Key(Class("size-5 text-violet-600 dark:text-violet-400")),
 						H3(
-							ID("create-apikey-modal-label"),
 							Class("font-bold text-gray-800 dark:text-white"),
 							g.Text("Create API Key"),
 						),
 					),
 					Button(
 						Type("button"),
-						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400 dark:focus:bg-neutral-600"),
-						g.Attr("aria-label", "Close"),
-						g.Attr("data-hs-overlay", "#create-apikey-modal"),
-						Span(Class("sr-only"), g.Text("Close")),
+						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400 dark:focus:bg-neutral-600"),
+						g.Attr("@click", "showCreateModal = false"),
 						lucide.X(Class("shrink-0 size-4")),
 					),
 				),
@@ -577,9 +586,9 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 					g.Attr("method", "POST"),
 					g.Attr("action", actionURL),
 					g.Attr("@submit.prevent", "createAPIKey($event)"),
-					g.Attr("x-data", "{ selectedKeyType: 'rk' }"),
+					Class("flex flex-col overflow-hidden"),
 
-					Div(Class("p-4 overflow-y-auto max-h-[60vh] space-y-5"),
+					Div(Class("p-6 overflow-y-auto flex-1 space-y-5"),
 						// Name Field
 						Div(
 							Label(
@@ -593,7 +602,7 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 								ID("key_name"),
 								Name("name"),
 								Required(),
-								Class("py-3 px-4 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500 dark:focus:ring-neutral-600"),
+								Class("py-3 px-4 block w-full border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500"),
 								g.Attr("placeholder", "e.g., Production API Key"),
 							),
 							P(Class("mt-1 text-xs text-gray-500 dark:text-neutral-500"),
@@ -613,7 +622,7 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 								Name("key_type"),
 								Required(),
 								g.Attr("x-model", "selectedKeyType"),
-								Class("py-3 px-4 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500 dark:focus:ring-neutral-600"),
+								Class("py-3 px-4 pe-9 block w-full border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-300"),
 								Option(Value("pk"), g.Text("Publishable Key (pk) - Frontend-safe")),
 								Option(Value("sk"), g.Text("Secret Key (sk) - Backend admin")),
 								Option(Value("rk"), Selected(), g.Text("Restricted Key (rk) - Backend scoped")),
@@ -716,7 +725,7 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 									Name("rate_limit"),
 									Value(fmt.Sprintf("%d", e.plugin.config.DefaultRateLimit)),
 									g.Attr("min", "0"),
-									Class("py-3 px-4 pe-20 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500 dark:focus:ring-neutral-600"),
+									Class("py-3 px-4 pe-20 block w-full border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-300"),
 								),
 								Div(
 									Class("absolute inset-y-0 end-0 flex items-center pointer-events-none pe-4"),
@@ -742,7 +751,7 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 									Name("expires_in"),
 									g.Attr("min", "1"),
 									g.Attr("max", "365"),
-									Class("py-3 px-4 pe-16 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500 dark:focus:ring-neutral-600"),
+									Class("py-3 px-4 pe-16 block w-full border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-300"),
 									g.Attr("placeholder", "Leave empty for no expiration"),
 								),
 								Div(
@@ -757,16 +766,16 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 
 					// Modal Footer
 					Div(
-						Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t dark:border-neutral-700"),
+						Class("flex justify-end items-center gap-x-2 py-4 px-6 border-t border-gray-200 dark:border-neutral-700 shrink-0"),
 						Button(
 							Type("button"),
-							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
-							g.Attr("data-hs-overlay", "#create-apikey-modal"),
+							Class("py-2 px-4 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 transition-colors"),
+							g.Attr("@click", "showCreateModal = false"),
 							g.Text("Cancel"),
 						),
 						Button(
 							Type("submit"),
-							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700 disabled:opacity-50 disabled:pointer-events-none"),
+							Class("py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors"),
 							lucide.Plus(Class("size-4")),
 							g.Text("Create Key"),
 						),
@@ -777,23 +786,40 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 	)
 }
 
-// renderViewKeyModal renders the modal to display newly created API key using Preline HSOverlay
+// renderViewKeyModal renders the modal to display newly created API key using Alpine.js/Pines dialog pattern
 func (e *DashboardExtension) renderViewKeyModal() g.Node {
 	return Div(
-		ID("view-apikey-modal"),
-		Class("hs-overlay hidden size-full fixed top-0 start-0 z-[80] overflow-x-hidden overflow-y-auto pointer-events-none"),
-		g.Attr("role", "dialog"),
-		g.Attr("tabindex", "-1"),
-		g.Attr("aria-labelledby", "view-apikey-modal-label"),
+		g.Attr("x-show", "showViewKeyModal"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
 
-		Div(
-			Class("hs-overlay-open:mt-7 hs-overlay-open:opacity-100 hs-overlay-open:duration-500 mt-0 opacity-0 ease-out transition-all sm:max-w-lg sm:w-full m-3 sm:mx-auto min-h-[calc(100%-3.5rem)] flex items-center"),
+		Div(Class("flex min-h-screen items-center justify-center p-4"),
+			// Backdrop
 			Div(
-				Class("w-full flex flex-col bg-white border shadow-sm rounded-xl pointer-events-auto dark:bg-neutral-800 dark:border-neutral-700 dark:shadow-neutral-700/70"),
+				g.Attr("x-show", "showViewKeyModal"),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0"),
+				g.Attr("x-transition:enter-end", "opacity-100"),
+				g.Attr("x-transition:leave", "ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100"),
+				g.Attr("x-transition:leave-end", "opacity-0"),
+				Class("fixed inset-0 bg-black/50 dark:bg-black/70"),
+			),
+
+			// Modal Content
+			Div(
+				g.Attr("x-show", "showViewKeyModal"),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+				g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+				g.Attr("x-transition:leave", "ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
+				g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
+				Class("relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full max-h-[70vh] flex flex-col"),
 
 				// Modal Header
 				Div(
-					Class("flex justify-between items-center py-3 px-4 border-b dark:border-neutral-700"),
+					Class("flex justify-between items-center py-4 px-6 border-b border-gray-200 dark:border-neutral-700 shrink-0"),
 					Div(
 						Class("flex items-center gap-2"),
 						Div(
@@ -801,29 +827,23 @@ func (e *DashboardExtension) renderViewKeyModal() g.Node {
 							lucide.Check(Class("size-4 text-teal-600 dark:text-teal-400")),
 						),
 						H3(
-							ID("view-apikey-modal-label"),
 							Class("font-bold text-gray-800 dark:text-white"),
 							g.Text("API Key Created"),
 						),
 					),
 					Button(
 						Type("button"),
-						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400 dark:focus:bg-neutral-600"),
-						g.Attr("aria-label", "Close"),
-						g.Attr("data-hs-overlay", "#view-apikey-modal"),
-						g.Attr("@click", "setTimeout(() => window.location.reload(), 100)"),
-						Span(Class("sr-only"), g.Text("Close")),
+						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400"),
+						g.Attr("@click", "showViewKeyModal = false; newAPIKey = ''; setTimeout(() => window.location.reload(), 100)"),
 						lucide.X(Class("shrink-0 size-4")),
 					),
 				),
 
 				// Modal Body
-				Div(Class("p-4 space-y-4"),
+				Div(Class("p-6 space-y-4 overflow-y-auto flex-1"),
 					// Warning Alert
 					Div(
 						Class("bg-amber-50 border border-amber-200 text-sm text-amber-800 rounded-lg p-4 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400"),
-						g.Attr("role", "alert"),
-						g.Attr("tabindex", "-1"),
 						Div(
 							Class("flex"),
 							Div(
@@ -854,12 +874,12 @@ func (e *DashboardExtension) renderViewKeyModal() g.Node {
 								Type("text"),
 								g.Attr("x-model", "newAPIKey"),
 								g.Attr("readonly", ""),
-								Class("py-3 px-4 block w-full border-gray-200 rounded-lg text-sm bg-gray-50 font-mono focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400"),
+								Class("py-3 px-4 block w-full border border-gray-200 rounded-lg text-sm bg-gray-50 font-mono dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-300"),
 							),
 							Button(
 								Type("button"),
 								g.Attr("@click", "copyToClipboard(newAPIKey)"),
-								Class("py-3 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
+								Class("py-3 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 transition-colors"),
 								g.Attr("x-text", "copied ? 'Copied!' : 'Copy'"),
 								g.Attr(":class", "copied ? 'bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800' : ''"),
 							),
@@ -869,12 +889,11 @@ func (e *DashboardExtension) renderViewKeyModal() g.Node {
 
 				// Modal Footer
 				Div(
-					Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t dark:border-neutral-700"),
+					Class("flex justify-end items-center gap-x-2 py-4 px-6 border-t border-gray-200 dark:border-neutral-700 shrink-0"),
 					Button(
 						Type("button"),
-						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700 disabled:opacity-50 disabled:pointer-events-none"),
-						g.Attr("data-hs-overlay", "#view-apikey-modal"),
-						g.Attr("@click", "newAPIKey = ''; setTimeout(() => window.location.reload(), 100)"),
+						Class("py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors"),
+						g.Attr("@click", "showViewKeyModal = false; newAPIKey = ''; setTimeout(() => window.location.reload(), 100)"),
 						lucide.Check(Class("size-4")),
 						g.Text("I've Saved The Key"),
 					),
@@ -884,25 +903,44 @@ func (e *DashboardExtension) renderViewKeyModal() g.Node {
 	)
 }
 
-// renderRevokeModal renders the confirmation modal for revoking an API key using Preline HSOverlay
+// renderRevokeModal renders the confirmation modal for revoking an API key using Alpine.js/Pines dialog pattern
 func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath string) g.Node {
 	actionURL := fmt.Sprintf("%s/dashboard/app/%s/settings/api-keys/revoke", basePath, currentApp.ID.String())
 
 	return Div(
-		ID("revoke-apikey-modal"),
-		Class("hs-overlay hidden size-full fixed top-0 start-0 z-[80] overflow-x-hidden overflow-y-auto pointer-events-none"),
-		g.Attr("role", "dialog"),
-		g.Attr("tabindex", "-1"),
-		g.Attr("aria-labelledby", "revoke-apikey-modal-label"),
+		g.Attr("x-show", "showRevokeModal"),
+		g.Attr("x-cloak", ""),
+		Class("fixed inset-0 z-50 overflow-y-auto"),
+		g.Attr("@keydown.escape.window", "showRevokeModal = false"),
 
-		Div(
-			Class("hs-overlay-open:mt-7 hs-overlay-open:opacity-100 hs-overlay-open:duration-500 mt-0 opacity-0 ease-out transition-all sm:max-w-md sm:w-full m-3 sm:mx-auto min-h-[calc(100%-3.5rem)] flex items-center"),
+		Div(Class("flex min-h-screen items-center justify-center p-4"),
+			// Backdrop
 			Div(
-				Class("w-full flex flex-col bg-white border shadow-sm rounded-xl pointer-events-auto dark:bg-neutral-800 dark:border-neutral-700 dark:shadow-neutral-700/70"),
+				g.Attr("x-show", "showRevokeModal"),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0"),
+				g.Attr("x-transition:enter-end", "opacity-100"),
+				g.Attr("x-transition:leave", "ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100"),
+				g.Attr("x-transition:leave-end", "opacity-0"),
+				Class("fixed inset-0 bg-black/50 dark:bg-black/70"),
+				g.Attr("@click", "showRevokeModal = false"),
+			),
+
+			// Modal Content
+			Div(
+				g.Attr("x-show", "showRevokeModal"),
+				g.Attr("x-transition:enter", "ease-out duration-300"),
+				g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
+				g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
+				g.Attr("x-transition:leave", "ease-in duration-200"),
+				g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
+				g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
+				Class("relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full max-h-[70vh] flex flex-col"),
 
 				// Modal Header
 				Div(
-					Class("flex justify-between items-center py-3 px-4 border-b dark:border-neutral-700"),
+					Class("flex justify-between items-center py-4 px-6 border-b border-gray-200 dark:border-neutral-700 shrink-0"),
 					Div(
 						Class("flex items-center gap-2"),
 						Div(
@@ -910,17 +948,14 @@ func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath str
 							lucide.Ban(Class("size-4 text-red-600 dark:text-red-400")),
 						),
 						H3(
-							ID("revoke-apikey-modal-label"),
 							Class("font-bold text-gray-800 dark:text-white"),
 							g.Text("Revoke API Key"),
 						),
 					),
 					Button(
 						Type("button"),
-						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400 dark:focus:bg-neutral-600"),
-						g.Attr("aria-label", "Close"),
-						g.Attr("data-hs-overlay", "#revoke-apikey-modal"),
-						Span(Class("sr-only"), g.Text("Close")),
+						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400"),
+						g.Attr("@click", "showRevokeModal = false"),
 						lucide.X(Class("shrink-0 size-4")),
 					),
 				),
@@ -930,14 +965,14 @@ func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath str
 					g.Attr("method", "POST"),
 					g.Attr("action", actionURL),
 					g.Attr("@submit.prevent", "revokeAPIKey($event)"),
+					Class("flex flex-col overflow-hidden"),
 
 					Input(Type("hidden"), Name("key_id"), g.Attr("x-model", "revokeKeyID")),
 
-					Div(Class("p-4 space-y-4"),
+					Div(Class("p-6 space-y-4 overflow-y-auto flex-1"),
 						// Danger Alert
 						Div(
 							Class("bg-red-50 border border-red-200 text-sm text-red-800 rounded-lg p-4 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"),
-							g.Attr("role", "alert"),
 							Div(
 								Class("flex"),
 								Div(
@@ -968,16 +1003,16 @@ func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath str
 
 					// Modal Footer
 					Div(
-						Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t dark:border-neutral-700"),
+						Class("flex justify-end items-center gap-x-2 py-4 px-6 border-t border-gray-200 dark:border-neutral-700 shrink-0"),
 						Button(
 							Type("button"),
-							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
-							g.Attr("data-hs-overlay", "#revoke-apikey-modal"),
+							Class("py-2 px-4 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 transition-colors"),
+							g.Attr("@click", "showRevokeModal = false"),
 							g.Text("Cancel"),
 						),
 						Button(
 							Type("submit"),
-							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700 disabled:opacity-50 disabled:pointer-events-none"),
+							Class("py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"),
 							lucide.Ban(Class("size-4")),
 							g.Text("Revoke Key"),
 						),

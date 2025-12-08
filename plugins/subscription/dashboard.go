@@ -435,6 +435,37 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Export/Import Features and Plans
+		{
+			Method:       "GET",
+			Path:         "/billing/export",
+			Handler:      e.HandleExportFeaturesAndPlans,
+			Name:         "subscription.export",
+			Summary:      "Export Features and Plans",
+			Description:  "Export all features and plans as JSON for backup or migration",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "GET",
+			Path:         "/billing/import",
+			Handler:      e.HandleShowImportForm,
+			Name:         "subscription.import.form",
+			Summary:      "Show Import Form",
+			Description:  "Display the import form for features and plans",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/billing/import",
+			Handler:      e.HandleImportFeaturesAndPlans,
+			Name:         "subscription.import",
+			Summary:      "Import Features and Plans",
+			Description:  "Import features and plans from JSON",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
 		// Plan Features Management
 		{
 			Method:      "GET",

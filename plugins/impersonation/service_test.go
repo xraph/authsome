@@ -341,7 +341,7 @@ func TestService_Start_CannotImpersonateSelf(t *testing.T) {
 	_, err := service.Start(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Equal(t, impersonation.ErrCannotImpersonateSelf, err)
+	assert.Contains(t, err.Error(), "CANNOT_IMPERSONATE_SELF")
 }
 
 func TestService_Start_ReasonTooShort(t *testing.T) {
@@ -359,7 +359,7 @@ func TestService_Start_ReasonTooShort(t *testing.T) {
 	_, err := service.Start(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Equal(t, impersonation.ErrInvalidReason, err)
+	assert.Contains(t, err.Error(), "INVALID_IMPERSONATION_REASON")
 }
 
 func TestService_Start_AlreadyImpersonating(t *testing.T) {
@@ -390,7 +390,7 @@ func TestService_Start_AlreadyImpersonating(t *testing.T) {
 	_, err := service.Start(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Equal(t, impersonation.ErrAlreadyImpersonating, err)
+	assert.Contains(t, err.Error(), "ALREADY_IMPERSONATING")
 }
 
 func TestService_Start_UserNotFound(t *testing.T) {
@@ -407,7 +407,7 @@ func TestService_Start_UserNotFound(t *testing.T) {
 	_, err := service.Start(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get impersonator")
+	assert.Contains(t, err.Error(), "IMPERSONATOR_NOT_FOUND")
 }
 
 func TestService_End_Success(t *testing.T) {
@@ -467,7 +467,7 @@ func TestService_End_NotFound(t *testing.T) {
 	_, err := service.End(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Equal(t, impersonation.ErrImpersonationNotFound, err)
+	assert.Contains(t, err.Error(), "IMPERSONATION_NOT_FOUND")
 }
 
 func TestService_End_WrongImpersonator(t *testing.T) {
@@ -503,7 +503,7 @@ func TestService_End_WrongImpersonator(t *testing.T) {
 	_, err := service.End(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Equal(t, impersonation.ErrPermissionDenied, err)
+	assert.Contains(t, err.Error(), "IMPERSONATION_PERMISSION_DENIED")
 }
 
 func TestService_List_Success(t *testing.T) {

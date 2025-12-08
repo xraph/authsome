@@ -45,6 +45,7 @@ type Plugin struct {
 	couponSvc       *service.CouponService
 	currencySvc     *service.CurrencyService
 	taxSvc          *service.TaxService
+	exportImportSvc *service.ExportImportService
 
 	// Repositories
 	planRepo         repository.PlanRepository
@@ -312,6 +313,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	p.couponSvc = service.NewCouponService(p.couponRepo, p.subRepo)
 	p.currencySvc = service.NewCurrencyService(p.currencyRepo)
 	p.taxSvc = service.NewTaxService(p.taxRepo)
+	p.exportImportSvc = service.NewExportImportService(p.featureRepo, p.planRepo, p.eventRepo)
 
 	// Set feature repositories on enforcement service for enhanced feature checking
 	p.enforcementSvc.SetFeatureRepositories(p.featureRepo, p.featureUsageRepo)
@@ -806,6 +808,11 @@ func (p *Plugin) GetCurrencyService() *service.CurrencyService {
 // GetTaxService returns the tax service
 func (p *Plugin) GetTaxService() *service.TaxService {
 	return p.taxSvc
+}
+
+// GetExportImportService returns the export/import service
+func (p *Plugin) GetExportImportService() *service.ExportImportService {
+	return p.exportImportSvc
 }
 
 // registerFeatureRoutes registers feature management routes
