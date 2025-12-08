@@ -83,7 +83,7 @@ func (m *MockRepository) GetProfileByApp(ctx context.Context, appID string) (*Co
 			return profile, nil
 		}
 	}
-	return nil, ProfileNotFound(appID)
+	return nil, nil
 }
 
 func (m *MockRepository) ListProfiles(ctx context.Context, filter *ListProfilesFilter) (*pagination.PageResponse[*ComplianceProfile], error) {

@@ -91,7 +91,7 @@ func (m *MockRepository) CountUsers(ctx context.Context, filter *CountUsersFilte
 func newTestService(repo Repository) *Service {
 	return NewService(repo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
-	}, nil)
+	}, nil, nil)
 }
 
 func testAppID() xid.ID {
@@ -329,7 +329,6 @@ func TestService_FindByAppAndEmail(t *testing.T) {
 
 func TestService_Update(t *testing.T) {
 	appID := testAppID()
-	testUser := FromSchemaUser(testSchemaUser(appID))
 
 	newName := "Updated Name"
 	newEmail := "updated@example.com"
@@ -343,7 +342,7 @@ func TestService_Update(t *testing.T) {
 	}{
 		{
 			name: "successful name update",
-			user: testUser,
+			user: FromSchemaUser(testSchemaUser(appID)),
 			request: &UpdateUserRequest{
 				Name: &newName,
 			},
@@ -354,7 +353,7 @@ func TestService_Update(t *testing.T) {
 		},
 		{
 			name: "successful email update",
-			user: testUser,
+			user: FromSchemaUser(testSchemaUser(appID)),
 			request: &UpdateUserRequest{
 				Email: &newEmail,
 			},
@@ -367,7 +366,7 @@ func TestService_Update(t *testing.T) {
 		},
 		{
 			name: "email already taken",
-			user: testUser,
+			user: FromSchemaUser(testSchemaUser(appID)),
 			request: &UpdateUserRequest{
 				Email: &newEmail,
 			},

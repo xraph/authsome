@@ -309,6 +309,9 @@ func TestMemberService_CreateMember_SyncsWithRBAC(t *testing.T) {
 	// Expected: Check member count (not first user)
 	memberRepo.On("CountMembers", ctx, appID).Return(5, nil)
 
+	// Expected idempotency check
+	memberRepo.On("FindMember", ctx, appID, userID).Return(nil, nil)
+
 	// Expected role lookup
 	roleRepo.On("FindByNameAndApp", ctx, rbac.RoleAdmin, appID).Return(&schema.Role{
 		ID:   roleID,

@@ -149,7 +149,7 @@ func TestService_CreateProfileFromTemplate(t *testing.T) {
 func setupTestService(t *testing.T) *Service {
 	t.Helper()
 
-	mockRepo := &MockRepository{}
+	mockRepo := NewMockRepository()
 	mockAudit := &MockAuditService{}
 	mockUser := &MockUserService{}
 	mockApp := &MockAppService{}

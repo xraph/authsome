@@ -18,6 +18,27 @@ type MockRepository struct {
 	mock.Mock
 }
 
+// FindSessionByRefreshToken implements Repository.
+func (m *MockRepository) FindSessionByRefreshToken(ctx context.Context, refreshToken string) (*schema.Session, error) {
+	args := m.Called(ctx, refreshToken)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.Session), args.Error(1)
+}
+
+// RefreshSessionTokens implements Repository.
+func (m *MockRepository) RefreshSessionTokens(ctx context.Context, id xid.ID, newAccessToken string, accessTokenExpiresAt time.Time, newRefreshToken string, refreshTokenExpiresAt time.Time) error {
+	args := m.Called(ctx, id, newAccessToken, accessTokenExpiresAt, newRefreshToken, refreshTokenExpiresAt)
+	return args.Error(0)
+}
+
+// UpdateSessionExpiry implements Repository.
+func (m *MockRepository) UpdateSessionExpiry(ctx context.Context, id xid.ID, expiresAt time.Time) error {
+	args := m.Called(ctx, id, expiresAt)
+	return args.Error(0)
+}
+
 func (m *MockRepository) CreateSession(ctx context.Context, session *schema.Session) error {
 	args := m.Called(ctx, session)
 	return args.Error(0)
@@ -73,7 +94,7 @@ func newTestService(repo Repository, cfg ...Config) *Service {
 	if len(cfg) > 0 {
 		config = cfg[0]
 	}
-	return NewService(repo, config, nil)
+	return NewService(repo, config, nil, nil)
 }
 
 func TestService_Create(t *testing.T) {

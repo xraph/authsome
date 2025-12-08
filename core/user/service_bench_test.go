@@ -26,7 +26,7 @@ func BenchmarkService_Create(b *testing.B) {
 
 	svc := NewService(mockRepo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
-	}, nil)
+	}, nil, nil)
 
 	req := &CreateUserRequest{
 		AppID:    appID,
@@ -53,7 +53,7 @@ func BenchmarkService_FindByID(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("FindByID", mock.Anything, userID).Return(existingUser, nil)
 
-	svc := NewService(mockRepo, Config{}, nil)
+	svc := NewService(mockRepo, Config{}, nil, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -72,7 +72,7 @@ func BenchmarkService_FindByAppAndEmail(b *testing.B) {
 	mockRepo.On("FindByAppAndEmail", mock.Anything, appID, "test@example.com").
 		Return(existingUser, nil)
 
-	svc := NewService(mockRepo, Config{}, nil)
+	svc := NewService(mockRepo, Config{}, nil, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -97,7 +97,7 @@ func BenchmarkService_Update(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
 
-	svc := NewService(mockRepo, Config{}, nil)
+	svc := NewService(mockRepo, Config{}, nil, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -129,7 +129,7 @@ func BenchmarkService_ListUsers(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("ListUsers", mock.Anything, mock.Anything).Return(pageResp, nil)
 
-	svc := NewService(mockRepo, Config{}, nil)
+	svc := NewService(mockRepo, Config{}, nil, nil)
 
 	filter := &ListUsersFilter{
 		PaginationParams: pagination.PaginationParams{
@@ -153,7 +153,7 @@ func BenchmarkService_CountUsers(b *testing.B) {
 	mockRepo := new(MockRepository)
 	mockRepo.On("CountUsers", mock.Anything, mock.Anything).Return(100, nil)
 
-	svc := NewService(mockRepo, Config{}, nil)
+	svc := NewService(mockRepo, Config{}, nil, nil)
 
 	filter := &CountUsersFilter{
 		AppID: appID,
@@ -177,7 +177,7 @@ func BenchmarkService_Create_Parallel(b *testing.B) {
 
 	svc := NewService(mockRepo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
-	}, nil)
+	}, nil, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()

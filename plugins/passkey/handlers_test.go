@@ -374,7 +374,7 @@ func setupTestService(t *testing.T) (*bun.DB, *Service) {
 	sessionRepo := repo.NewSessionRepository(db)
 	sessionSvc := session.NewService(sessionRepo, session.Config{}, nil, nil)
 	userSvc := user.NewService(userRepo, user.Config{}, nil, nil)
-	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{})
+	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{}, nil)
 	auditSvc := audit.NewService(repo.NewAuditRepository(db))
 
 	// Create passkey service with test config

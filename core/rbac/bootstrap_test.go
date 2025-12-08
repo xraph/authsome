@@ -21,6 +21,9 @@ func setupTestDB(t *testing.T) *bun.DB {
 
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 
+	// Register models for m2m relationships
+	db.RegisterModel((*schema.RolePermission)(nil))
+
 	// Create necessary tables
 	ctx := context.Background()
 
@@ -41,6 +44,13 @@ func setupTestDB(t *testing.T) *bun.DB {
 	// Permissions table
 	_, err = db.NewCreateTable().
 		Model((*schema.Permission)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	require.NoError(t, err)
+
+	// RolePermissions m2m table
+	_, err = db.NewCreateTable().
+		Model((*schema.RolePermission)(nil)).
 		IfNotExists().
 		Exec(ctx)
 	require.NoError(t, err)

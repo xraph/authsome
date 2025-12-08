@@ -43,6 +43,13 @@ func (m *mockAuth) GetPluginRegistry() core.PluginRegistry           { return ni
 func (m *mockAuth) IsPluginEnabled(pluginID string) bool             { return false }
 func (m *mockAuth) Repository() repository.Repository                { return nil }
 func (m *mockAuth) Logger() forge.Logger                             { return nil }
+func (m *mockAuth) AuthMiddleware() forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
+		return next
+	}
+}
+func (m *mockAuth) GetGlobalRoutesOptions() []forge.RouteOption       { return nil }
+func (m *mockAuth) GetGlobalGroupRoutesOptions() []forge.GroupOption { return nil }
 
 func TestPluginID(t *testing.T) {
 	plugin := NewPlugin(WithDefaultConfig(DefaultConfig()))

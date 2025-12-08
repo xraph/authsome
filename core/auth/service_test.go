@@ -93,6 +93,24 @@ type MockSessionService struct {
 	mock.Mock
 }
 
+// RefreshSession implements session.ServiceInterface.
+func (m *MockSessionService) RefreshSession(ctx context.Context, refreshToken string) (*session.RefreshResponse, error) {
+	args := m.Called(ctx, refreshToken)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*session.RefreshResponse), args.Error(1)
+}
+
+// TouchSession implements session.ServiceInterface.
+func (m *MockSessionService) TouchSession(ctx context.Context, sess *session.Session) (*session.Session, bool, error) {
+	args := m.Called(ctx, sess)
+	if args.Get(0) == nil {
+		return nil, args.Bool(1), args.Error(2)
+	}
+	return args.Get(0).(*session.Session), args.Bool(1), args.Error(2)
+}
+
 func (m *MockSessionService) Create(ctx context.Context, req *session.CreateSessionRequest) (*session.Session, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -141,7 +159,7 @@ func newTestService(userSvc user.ServiceInterface, sessionSvc session.ServiceInt
 	if len(cfg) > 0 {
 		config = cfg[0]
 	}
-	return NewService(userSvc, sessionSvc, config)
+	return NewService(userSvc, sessionSvc, config, nil)
 }
 
 func TestService_SignUp(t *testing.T) {

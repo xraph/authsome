@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins/social/providers"
 	"github.com/xraph/authsome/schema"
 )
@@ -64,10 +65,10 @@ func TestCallbackDataResponse_JSON(t *testing.T) {
 	userID := xid.New()
 
 	resp := CallbackDataResponse{
-		User: &schema.User{
+		User: user.FromSchemaUser(&schema.User{
 			ID:    userID,
 			Email: "test@example.com",
-		},
+		}),
 		IsNewUser: true,
 		Action:    "signup",
 	}

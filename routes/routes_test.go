@@ -310,6 +310,39 @@ func (m *memSessionRepo) CleanupExpiredSessions(_ context.Context) (int, error) 
 	// For testing purposes, return 0 as we don't clean up expired sessions
 	return 0, nil
 }
+func (m *memSessionRepo) FindSessionByRefreshToken(_ context.Context, refreshToken string) (*schema.Session, error) {
+	for _, s := range m.byID {
+		if s.RefreshToken != nil && *s.RefreshToken == refreshToken {
+			return s, nil
+		}
+	}
+	return nil, nil
+}
+func (m *memSessionRepo) UpdateSessionExpiry(_ context.Context, id xid.ID, expiresAt time.Time) error {
+	if s, ok := m.byID[id]; ok {
+		s.ExpiresAt = expiresAt
+		s.UpdatedAt = time.Now()
+		return nil
+	}
+	return nil
+}
+func (m *memSessionRepo) RefreshSessionTokens(_ context.Context, id xid.ID, newAccessToken string, accessTokenExpiresAt time.Time, newRefreshToken string, refreshTokenExpiresAt time.Time) error {
+	s, ok := m.byID[id]
+	if !ok {
+		return nil
+	}
+	// Update the token maps
+	delete(m.byToken, s.Token)
+	s.Token = newAccessToken
+	s.ExpiresAt = accessTokenExpiresAt
+	s.RefreshToken = &newRefreshToken
+	s.RefreshTokenExpiresAt = &refreshTokenExpiresAt
+	now := time.Now()
+	s.LastRefreshedAt = &now
+	s.UpdatedAt = now
+	m.byToken[newAccessToken] = s
+	return nil
+}
 
 func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// Create mock services for dependencies
@@ -317,16 +350,16 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	webhookSvc := webhook.NewService(webhook.Config{}, &mockWebhookRepo{}, auditSvc)
 
 	// Services
-	uSvc := user.NewService(newMemUserRepo(), user.Config{PasswordRequirements: validator.DefaultPasswordRequirements()}, webhookSvc)
-	sSvc := session.NewService(newMemSessionRepo(), session.Config{}, webhookSvc)
-	aSvc := auth.NewService(uSvc, sSvc, auth.Config{})
+	uSvc := user.NewService(newMemUserRepo(), user.Config{PasswordRequirements: validator.DefaultPasswordRequirements()}, webhookSvc, nil)
+	sSvc := session.NewService(newMemSessionRepo(), session.Config{}, webhookSvc, nil)
+	aSvc := auth.NewService(uSvc, sSvc, auth.Config{}, nil)
 	// rate limit service for tests
 	rlStorage := store.NewMemoryStorage()
 	rlSvc := ratelimit.NewService(rlStorage, ratelimit.Config{})
 	// device service is optional for tests; pass nil to keep scope minimal
 	var dSvc *dev.Service
 	// security and audit services optional for tests; pass nil
-	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, nil, nil, "authsome_session")
+	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, auditSvc, nil, nil, nil)
 
 	// Create a test AppID
 	testAppID := xid.New()
@@ -390,7 +423,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 
 	// GetSession via cookie
 	req3, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/auth/session", nil)
-	req3.AddCookie(&http.Cookie{Name: "session_token", Value: signinRes.Token})
+	req3.AddCookie(&http.Cookie{Name: "authsome_session", Value: signinRes.Token})
 	resp3, err := http.DefaultClient.Do(req3)
 	if err != nil {
 		t.Fatalf("get session error: %v", err)

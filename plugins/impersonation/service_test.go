@@ -248,11 +248,15 @@ func (s *mockSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-func (s *mockSessionService) List(ctx context.Context, filter *session.ListSessionsFilter) (*pagination.PageResponse[*session.Session], error) {
+func (s *mockSessionService) RefreshSession(ctx context.Context, refreshToken string) (*session.RefreshResponse, error) {
 	return nil, nil
 }
 
-func (s *mockSessionService) ListSessions(ctx context.Context, filter *session.ListSessionsFilter) (*pagination.PageResponse[*session.Session], error) {
+func (s *mockSessionService) TouchSession(ctx context.Context, sess *session.Session) (*session.Session, bool, error) {
+	return sess, false, nil
+}
+
+func (s *mockSessionService) ListSessions(ctx context.Context, filter *session.ListSessionsFilter) (*session.ListSessionsResponse, error) {
 	return nil, nil
 }
 

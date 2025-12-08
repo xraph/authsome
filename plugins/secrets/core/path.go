@@ -29,7 +29,12 @@ var segmentRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_\-]*[a-zA-Z0-9])?
 // ParsePath parses a secret path into segments and extracts the key (leaf node)
 // Returns the parent segments, the key name, and any error
 func ParsePath(path string) (segments []string, key string, err error) {
-	// Normalize path first
+	// Check for double slashes before normalization
+	if strings.Contains(path, "//") {
+		return nil, "", ErrInvalidPath(path, "path cannot contain consecutive slashes")
+	}
+	
+	// Normalize path
 	path = NormalizePath(path)
 
 	if path == "" {

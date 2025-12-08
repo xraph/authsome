@@ -105,6 +105,14 @@ func (m *mockSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
 	return err
 }
 
+func (m *mockSessionService) RefreshSession(ctx context.Context, refreshToken string) (*session.RefreshResponse, error) {
+	return nil, nil
+}
+
+func (m *mockSessionService) TouchSession(ctx context.Context, sess *session.Session) (*session.Session, bool, error) {
+	return sess, false, nil
+}
+
 // TestService_ListSessions tests the List method
 func TestService_ListSessions(t *testing.T) {
 	db := setupTestDB(t)

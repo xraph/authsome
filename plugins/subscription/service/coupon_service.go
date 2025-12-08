@@ -208,7 +208,7 @@ func (s *CouponService) RedeemCoupon(ctx context.Context, appID xid.ID, req *cor
 	}
 	errs := s.validateCouponUsage(ctx, coupon, validateReq)
 	if len(errs) > 0 {
-		return nil, fmt.Errorf(errs[0])
+		return nil, fmt.Errorf("%s", errs[0])
 	}
 
 	// Get subscription to calculate discount

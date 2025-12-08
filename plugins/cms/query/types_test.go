@@ -39,9 +39,9 @@ func TestIsSystemField(t *testing.T) {
 
 func TestIsValidSortField(t *testing.T) {
 	fields := map[string]*core.ContentFieldDTO{
-		"title":    {Slug: "title"},
-		"content":  {Slug: "content"},
-		"category": {Slug: "category"},
+		"title":    {Name: "title"},
+		"content":  {Name: "content"},
+		"category": {Name: "category"},
 	}
 
 	tests := []struct {
@@ -95,9 +95,9 @@ func TestNewQuery(t *testing.T) {
 
 func TestQuery_Validate(t *testing.T) {
 	fields := map[string]*core.ContentFieldDTO{
-		"title":    {Slug: "title"},
-		"content":  {Slug: "content"},
-		"category": {Slug: "category"},
+		"title":    {Name: "title"},
+		"content":  {Name: "content"},
+		"category": {Name: "category"},
 	}
 
 	t.Run("valid query with system field filter", func(t *testing.T) {
