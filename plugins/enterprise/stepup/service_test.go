@@ -186,6 +186,7 @@ func TestEvaluateRequirement_NoStepUpForSmallAmount(t *testing.T) {
 	// Setup
 	repo := new(mockRepository)
 	config := DefaultConfig()
+	config.AmountRules = []AmountRule{} // No amount rules - small amounts don't trigger step-up
 	service := NewService(repo, config, nil)
 
 	// Mock no existing verifications

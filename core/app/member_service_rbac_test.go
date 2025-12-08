@@ -371,6 +371,9 @@ func TestMemberService_CreateMember_FirstUserPromotedToOwner(t *testing.T) {
 	// Expected: Check member count (first user!)
 	memberRepo.On("CountMembers", ctx, platformAppID).Return(0, nil)
 
+	// Expected idempotency check
+	memberRepo.On("FindMember", ctx, platformAppID, userID).Return(nil, nil)
+
 	// Expected: Get platform app to check if this is platform app
 	appRepo.On("GetPlatformApp", ctx).Return(&schema.App{
 		ID:         platformAppID,
@@ -448,6 +451,9 @@ func TestMemberService_CreateMember_RollsBackOnRBACFailure(t *testing.T) {
 
 	// Expected: Check member count (not first user)
 	memberRepo.On("CountMembers", ctx, appID).Return(3, nil)
+
+	// Expected idempotency check
+	memberRepo.On("FindMember", ctx, appID, userID).Return(nil, nil)
 
 	// Expected role lookup
 	roleRepo.On("FindByNameAndApp", ctx, rbac.RoleAdmin, appID).Return(&schema.Role{
