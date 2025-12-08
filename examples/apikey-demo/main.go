@@ -224,7 +224,7 @@ func createDemoAPIKey(service *apikey.Service) {
 	demoAppID := xid.New()
 	demoEnvID := xid.New()
 	demoUserID := xid.New()
-	
+
 	req := &apikey.CreateAPIKeyRequest{
 		AppID:         demoAppID,
 		EnvironmentID: demoEnvID,

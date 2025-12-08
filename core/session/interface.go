@@ -15,10 +15,10 @@ type ServiceInterface interface {
 	ListSessions(ctx context.Context, filter *ListSessionsFilter) (*ListSessionsResponse, error)
 	Revoke(ctx context.Context, token string) error
 	RevokeByID(ctx context.Context, id xid.ID) error
-	
+
 	// Sliding session renewal (Option 1)
 	TouchSession(ctx context.Context, sess *Session) (*Session, bool, error)
-	
+
 	// Refresh token pattern (Option 3)
 	RefreshSession(ctx context.Context, refreshToken string) (*RefreshResponse, error)
 }

@@ -109,13 +109,13 @@ func (r *subscriptionRepository) FindByProviderID(ctx context.Context, providerS
 // List retrieves subscriptions with optional filters
 func (r *subscriptionRepository) List(ctx context.Context, filter *SubscriptionFilter) ([]*schema.Subscription, int, error) {
 	var subs []*schema.Subscription
-	
+
 	query := r.db.NewSelect().
 		Model(&subs).
 		Relation("Plan").
 		Relation("Organization").
 		Order("sub.created_at DESC")
-	
+
 	if filter != nil {
 		if filter.AppID != nil {
 			query = query.
@@ -131,7 +131,7 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *SubscriptionF
 		if filter.Status != "" {
 			query = query.Where("sub.status = ?", filter.Status)
 		}
-		
+
 		// Pagination
 		pageSize := filter.PageSize
 		if pageSize <= 0 {
@@ -144,12 +144,12 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *SubscriptionF
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
-	
+
 	count, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
-	
+
 	return subs, count, nil
 }
 
@@ -188,4 +188,3 @@ func (r *subscriptionRepository) GetAddOnItems(ctx context.Context, subscription
 	}
 	return items, nil
 }
-

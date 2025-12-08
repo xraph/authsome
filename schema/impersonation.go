@@ -39,9 +39,9 @@ type ImpersonationSession struct {
 	// Relationships (for joins)
 	Impersonator *User         `bun:"rel:belongs-to,join:impersonator_id=id" json:"impersonator,omitempty"`
 	TargetUser   *User         `bun:"rel:belongs-to,join:target_user_id=id" json:"targetUser,omitempty"`
-	App          *App          `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`                         // Platform app
-	Environment  *Environment  `bun:"rel:belongs-to,join:environment_id=id" json:"environment,omitempty"`         // Environment (optional)
-	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`       // User-created org (optional)
+	App          *App          `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`                   // Platform app
+	Environment  *Environment  `bun:"rel:belongs-to,join:environment_id=id" json:"environment,omitempty"`   // Environment (optional)
+	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"` // User-created org (optional)
 }
 
 // IsExpired checks if the impersonation session has expired

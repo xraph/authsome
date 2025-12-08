@@ -49,7 +49,7 @@ func (s *CurrencyService) SetDefaultCurrency(ctx context.Context, code string) e
 	if currency == nil {
 		return fmt.Errorf("currency not found: %s", code)
 	}
-	
+
 	currency.IsDefault = true
 	return s.repo.UpdateCurrency(ctx, currency)
 }
@@ -67,14 +67,14 @@ func (s *CurrencyService) CreateExchangeRate(ctx context.Context, req *core.Crea
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	
+
 	if rate.ValidFrom.IsZero() {
 		rate.ValidFrom = time.Now()
 	}
 	if rate.Source == "" {
 		rate.Source = "manual"
 	}
-	
+
 	if err := s.repo.CreateExchangeRate(ctx, rate); err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (s *CurrencyService) Convert(ctx context.Context, req *core.ConvertCurrency
 			ConvertedAt:       time.Now(),
 		}, nil
 	}
-	
+
 	rate, err := s.repo.GetExchangeRate(ctx, req.FromCurrency, req.ToCurrency)
 	if err != nil {
 		return nil, err
@@ -118,9 +118,9 @@ func (s *CurrencyService) Convert(ctx context.Context, req *core.ConvertCurrency
 	if rate == nil {
 		return nil, fmt.Errorf("exchange rate not found for %s to %s", req.FromCurrency, req.ToCurrency)
 	}
-	
+
 	convertedAmount := int64(float64(req.Amount) * rate.Rate)
-	
+
 	return &core.ConvertCurrencyResponse{
 		OriginalAmount:    req.Amount,
 		OriginalCurrency:  req.FromCurrency,
@@ -135,4 +135,3 @@ func (s *CurrencyService) Convert(ctx context.Context, req *core.ConvertCurrency
 func (s *CurrencyService) FormatAmount(amount int64, currency string) string {
 	return core.FormatAmount(amount, currency)
 }
-

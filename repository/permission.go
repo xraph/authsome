@@ -64,13 +64,13 @@ func (r *PermissionRepository) FindByName(ctx context.Context, name string, appI
 		Model(&perm).
 		Where("name = ?", name).
 		Where("app_id = ?", appID)
-	
+
 	if orgID != nil {
 		q = q.Where("organization_id = ?", *orgID)
 	} else {
 		q = q.Where("organization_id IS NULL")
 	}
-	
+
 	err := q.Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -130,13 +130,13 @@ func (r *PermissionRepository) CreateCustomPermission(ctx context.Context, name,
 		IsCustom:       true,
 		Category:       category,
 	}
-	
+
 	perm.CreatedAt = now
 	perm.UpdatedAt = now
 	perm.CreatedBy = orgID // Use org ID as creator
 	perm.UpdatedBy = orgID
 	perm.Version = 1
-	
+
 	_, err := r.db.NewInsert().Model(perm).Exec(ctx)
 	if err != nil {
 		return nil, err

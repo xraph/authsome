@@ -52,9 +52,9 @@ func TestValidatePassword(t *testing.T) {
 		{
 			name: "invalid password - missing uppercase",
 			config: Config{
-				MinPasswordLength:  8,
-				MaxPasswordLength:  128,
-				RequireUppercase:   true,
+				MinPasswordLength: 8,
+				MaxPasswordLength: 128,
+				RequireUppercase:  true,
 			},
 			password:    "password123",
 			expectError: true,
@@ -63,9 +63,9 @@ func TestValidatePassword(t *testing.T) {
 		{
 			name: "valid password - has uppercase",
 			config: Config{
-				MinPasswordLength:  8,
-				MaxPasswordLength:  128,
-				RequireUppercase:   true,
+				MinPasswordLength: 8,
+				MaxPasswordLength: 128,
+				RequireUppercase:  true,
 			},
 			password:    "Password123",
 			expectError: false,
@@ -73,9 +73,9 @@ func TestValidatePassword(t *testing.T) {
 		{
 			name: "invalid password - missing lowercase",
 			config: Config{
-				MinPasswordLength:  8,
-				MaxPasswordLength:  128,
-				RequireLowercase:   true,
+				MinPasswordLength: 8,
+				MaxPasswordLength: 128,
+				RequireLowercase:  true,
 			},
 			password:    "PASSWORD123",
 			expectError: true,
@@ -84,9 +84,9 @@ func TestValidatePassword(t *testing.T) {
 		{
 			name: "valid password - has lowercase",
 			config: Config{
-				MinPasswordLength:  8,
-				MaxPasswordLength:  128,
-				RequireLowercase:   true,
+				MinPasswordLength: 8,
+				MaxPasswordLength: 128,
+				RequireLowercase:  true,
 			},
 			password:    "Password123",
 			expectError: false,
@@ -94,9 +94,9 @@ func TestValidatePassword(t *testing.T) {
 		{
 			name: "invalid password - missing number",
 			config: Config{
-				MinPasswordLength:  8,
-				MaxPasswordLength:  128,
-				RequireNumber:      true,
+				MinPasswordLength: 8,
+				MaxPasswordLength: 128,
+				RequireNumber:     true,
 			},
 			password:    "Password",
 			expectError: true,
@@ -105,9 +105,9 @@ func TestValidatePassword(t *testing.T) {
 		{
 			name: "valid password - has number",
 			config: Config{
-				MinPasswordLength:  8,
-				MaxPasswordLength:  128,
-				RequireNumber:      true,
+				MinPasswordLength: 8,
+				MaxPasswordLength: 128,
+				RequireNumber:     true,
 			},
 			password:    "Password123",
 			expectError: false,
@@ -412,4 +412,3 @@ func TestAccountLockoutError(t *testing.T) {
 	assert.Contains(t, err.Error(), "account locked")
 	assert.Contains(t, err.Error(), "15 minutes")
 }
-

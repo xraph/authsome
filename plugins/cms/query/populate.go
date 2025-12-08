@@ -231,4 +231,3 @@ func PopulateEntryDTO(entry *schema.ContentEntry, dto *core.ContentEntryDTO) {
 		dto.Relations[fieldSlug] = ids
 	}
 }
-

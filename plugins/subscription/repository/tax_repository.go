@@ -394,4 +394,3 @@ func customerTaxIDToSchema(t *core.CustomerTaxID) *schema.SubscriptionCustomerTa
 		UpdatedAt:      t.UpdatedAt,
 	}
 }
-

@@ -20,11 +20,11 @@ type Session struct {
 	UserAgent      string    `json:"userAgent"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
-	
+
 	// Refresh token support (Option 3)
-	RefreshToken         *string    `json:"refreshToken,omitempty"`
+	RefreshToken          *string    `json:"refreshToken,omitempty"`
 	RefreshTokenExpiresAt *time.Time `json:"refreshTokenExpiresAt,omitempty"`
-	LastRefreshedAt      *time.Time `json:"lastRefreshedAt,omitempty"`
+	LastRefreshedAt       *time.Time `json:"lastRefreshedAt,omitempty"`
 }
 
 // ToSchema converts Session DTO to schema.Session

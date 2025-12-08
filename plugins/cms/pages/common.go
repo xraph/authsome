@@ -404,4 +404,3 @@ func ConfirmButton(formAction, method, text, confirmMessage, colorClass string, 
 		),
 	)
 }
-

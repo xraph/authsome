@@ -19,7 +19,7 @@ type CurrencyRepository interface {
 	GetCurrency(ctx context.Context, code string) (*core.SupportedCurrency, error)
 	CreateCurrency(ctx context.Context, currency *core.SupportedCurrency) error
 	UpdateCurrency(ctx context.Context, currency *core.SupportedCurrency) error
-	
+
 	// Exchange rate operations
 	CreateExchangeRate(ctx context.Context, rate *core.ExchangeRate) error
 	GetExchangeRate(ctx context.Context, fromCurrency, toCurrency string) (*core.ExchangeRate, error)
@@ -240,4 +240,3 @@ func exchangeRateToSchema(r *core.ExchangeRate) *schema.SubscriptionExchangeRate
 		UpdatedAt:    r.UpdatedAt,
 	}
 }
-

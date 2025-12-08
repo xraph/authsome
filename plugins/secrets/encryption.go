@@ -249,4 +249,3 @@ func (e *EncryptionService) TestEncryption() error {
 
 	return nil
 }
-

@@ -81,7 +81,7 @@ type SecretAccessLog struct {
 	AppID         xid.ID    `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
 	EnvironmentID xid.ID    `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
 	Path          string    `bun:"path,notnull" json:"path"`
-	Action        string    `bun:"action,notnull" json:"action"`        // read, create, update, delete, rollback, reveal
+	Action        string    `bun:"action,notnull" json:"action"` // read, create, update, delete, rollback, reveal
 	AccessedBy    xid.ID    `bun:"accessed_by,type:varchar(20)" json:"accessedBy"`
 	AccessMethod  string    `bun:"access_method,notnull" json:"accessMethod"` // api, dashboard, configsource
 	IPAddress     string    `bun:"ip_address,nullzero" json:"ipAddress"`
@@ -118,4 +118,3 @@ func (s *Secret) IsExpired() bool {
 func (s *Secret) GetFullPath() string {
 	return s.Path
 }
-

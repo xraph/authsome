@@ -203,4 +203,3 @@ func (r *revisionRepository) GetLatestVersion(ctx context.Context, entryID xid.I
 	}
 	return version, nil
 }
-

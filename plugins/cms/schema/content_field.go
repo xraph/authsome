@@ -66,9 +66,9 @@ type FieldOptions struct {
 	DefaultExpanded bool             `json:"defaultExpanded,omitempty"` // UI: expanded by default
 
 	// OneOf fields (discriminated union)
-	DiscriminatorField         string                     `json:"discriminatorField,omitempty"`         // Field name to watch for schema selection
+	DiscriminatorField         string                       `json:"discriminatorField,omitempty"`         // Field name to watch for schema selection
 	Schemas                    map[string]OneOfSchemaOption `json:"schemas,omitempty"`                    // Value -> schema mapping
-	ClearOnDiscriminatorChange bool                       `json:"clearOnDiscriminatorChange,omitempty"` // Clear data when discriminator changes
+	ClearOnDiscriminatorChange bool                         `json:"clearOnDiscriminatorChange,omitempty"` // Clear data when discriminator changes
 
 	// Conditional visibility
 	ShowWhen        *FieldCondition `json:"showWhen,omitempty"`        // Show field when condition is met
@@ -85,9 +85,9 @@ type OneOfSchemaOption struct {
 
 // FieldCondition defines a condition for showing/hiding fields
 type FieldCondition struct {
-	Field    string `json:"field"`              // Field name to watch
-	Operator string `json:"operator"`           // eq, ne, in, notIn, exists, notExists
-	Value    any    `json:"value,omitempty"`    // Value(s) to compare
+	Field    string `json:"field"`           // Field name to watch
+	Operator string `json:"operator"`        // eq, ne, in, notIn, exists, notExists
+	Value    any    `json:"value,omitempty"` // Value(s) to compare
 }
 
 // Choice represents a choice option for select fields
@@ -438,4 +438,3 @@ func (cf *ContentField) ShouldClearWhenHidden() bool {
 func (cf *ContentField) HasConditionalVisibility() bool {
 	return cf.Options.ShowWhen != nil || cf.Options.HideWhen != nil
 }
-

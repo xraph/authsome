@@ -226,4 +226,3 @@ func (ct *ContentType) GetRelationFields() []*ContentField {
 	}
 	return relations
 }
-

@@ -218,9 +218,9 @@ func (s *ABTestService) CalculateStatisticalSignificance(variant1, variant2 Vari
 
 // ABTestResults represents the results of an A/B test
 type ABTestResults struct {
-	ABTestGroup string                `json:"abTestGroup"`
-	Variants    []VariantPerformance  `json:"variants"`
-	Winner      *xid.ID               `json:"winner,omitempty"`
+	ABTestGroup  string                   `json:"abTestGroup"`
+	Variants     []VariantPerformance     `json:"variants"`
+	Winner       *xid.ID                  `json:"winner,omitempty"`
 	Significance *StatisticalSignificance `json:"significance,omitempty"`
 }
 
@@ -245,4 +245,3 @@ type StatisticalSignificance struct {
 	ConfidenceLevel   float64 `json:"confidenceLevel"`
 	DifferencePercent float64 `json:"differencePercent"`
 }
-

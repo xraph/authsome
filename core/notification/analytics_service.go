@@ -216,4 +216,3 @@ func (s *AnalyticsService) TrackConversion(ctx context.Context, notificationID x
 
 	return s.TrackEvent(ctx, notificationID, templateID, notification.AppID, nil, string(schema.NotificationEventConverted), eventData)
 }
-

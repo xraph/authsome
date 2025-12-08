@@ -369,20 +369,20 @@ func buildRefPath(visited []string, current string) string {
 // toDTO converts a schema component to a DTO
 func (s *ComponentSchemaService) toDTO(component *schema.ComponentSchema, usageCount int) *core.ComponentSchemaDTO {
 	return &core.ComponentSchemaDTO{
-	ID:            component.ID.String(),
-	AppID:         component.AppID.String(),
-	EnvironmentID: component.EnvironmentID.String(),
-	Title:         component.Title,
-	Name:          component.Name,
-	Description:   component.Description,
-	Icon:          component.Icon,
-	Fields:        s.schemaToFieldDTOs(component.Fields),
-	UsageCount:    usageCount,
-	CreatedBy:     component.CreatedBy.String(),
-	UpdatedBy:     component.UpdatedBy.String(),
-	CreatedAt:     component.CreatedAt,
-	UpdatedAt:     component.UpdatedAt,
-}
+		ID:            component.ID.String(),
+		AppID:         component.AppID.String(),
+		EnvironmentID: component.EnvironmentID.String(),
+		Title:         component.Title,
+		Name:          component.Name,
+		Description:   component.Description,
+		Icon:          component.Icon,
+		Fields:        s.schemaToFieldDTOs(component.Fields),
+		UsageCount:    usageCount,
+		CreatedBy:     component.CreatedBy.String(),
+		UpdatedBy:     component.UpdatedBy.String(),
+		CreatedAt:     component.CreatedAt,
+		UpdatedAt:     component.UpdatedAt,
+	}
 }
 
 // toSummaryDTO converts a schema component to a summary DTO
@@ -576,4 +576,3 @@ func (s *ComponentSchemaService) GetEffectiveFields(ctx context.Context, field *
 	}
 	return field.Options.NestedFields, nil
 }
-

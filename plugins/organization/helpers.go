@@ -173,4 +173,3 @@ func (p *Plugin) GetInvitationService() *organization.InvitationService {
 	}
 	return nil
 }
-

@@ -207,4 +207,3 @@ func (r *UsernameRepository) CleanupOldPasswordHistory(ctx context.Context, user
 		Exec(ctx)
 	return err
 }
-

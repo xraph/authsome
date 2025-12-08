@@ -9,21 +9,21 @@ import (
 
 // Error codes for the secrets plugin
 const (
-	ErrCodeSecretNotFound     = "SECRET_NOT_FOUND"
-	ErrCodeSecretExists       = "SECRET_EXISTS"
-	ErrCodeInvalidPath        = "INVALID_PATH"
-	ErrCodeInvalidValueType   = "INVALID_VALUE_TYPE"
-	ErrCodeValidationFailed   = "VALIDATION_FAILED"
-	ErrCodeSchemaInvalid      = "SCHEMA_INVALID"
-	ErrCodeDecryptionFailed   = "DECRYPTION_FAILED"
-	ErrCodeEncryptionFailed   = "ENCRYPTION_FAILED"
-	ErrCodeMasterKeyRequired  = "MASTER_KEY_REQUIRED"
-	ErrCodeMasterKeyInvalid   = "MASTER_KEY_INVALID"
-	ErrCodeSecretExpired      = "SECRET_EXPIRED"
-	ErrCodeVersionNotFound    = "VERSION_NOT_FOUND"
-	ErrCodeRollbackFailed     = "ROLLBACK_FAILED"
-	ErrCodeAccessDenied       = "ACCESS_DENIED"
-	ErrCodeInvalidRequest     = "INVALID_REQUEST"
+	ErrCodeSecretNotFound    = "SECRET_NOT_FOUND"
+	ErrCodeSecretExists      = "SECRET_EXISTS"
+	ErrCodeInvalidPath       = "INVALID_PATH"
+	ErrCodeInvalidValueType  = "INVALID_VALUE_TYPE"
+	ErrCodeValidationFailed  = "VALIDATION_FAILED"
+	ErrCodeSchemaInvalid     = "SCHEMA_INVALID"
+	ErrCodeDecryptionFailed  = "DECRYPTION_FAILED"
+	ErrCodeEncryptionFailed  = "ENCRYPTION_FAILED"
+	ErrCodeMasterKeyRequired = "MASTER_KEY_REQUIRED"
+	ErrCodeMasterKeyInvalid  = "MASTER_KEY_INVALID"
+	ErrCodeSecretExpired     = "SECRET_EXPIRED"
+	ErrCodeVersionNotFound   = "VERSION_NOT_FOUND"
+	ErrCodeRollbackFailed    = "ROLLBACK_FAILED"
+	ErrCodeAccessDenied      = "ACCESS_DENIED"
+	ErrCodeInvalidRequest    = "INVALID_REQUEST"
 )
 
 // =============================================================================

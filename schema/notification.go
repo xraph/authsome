@@ -28,11 +28,11 @@ type NotificationTemplate struct {
 	DefaultHash    string                 `bun:"default_hash" json:"defaultHash"`                     // Hash of default content for comparison
 
 	// Versioning fields
-	Version  int     `bun:"version,notnull,default:1" json:"version"`     // Current version number
+	Version  int     `bun:"version,notnull,default:1" json:"version"`             // Current version number
 	ParentID *xid.ID `bun:"parent_id,type:varchar(20)" json:"parentId,omitempty"` // ID of template this was cloned from
 
 	// A/B Testing fields
-	ABTestGroup   string `bun:"ab_test_group" json:"abTestGroup,omitempty"`       // Group identifier for variants
+	ABTestGroup   string `bun:"ab_test_group" json:"abTestGroup,omitempty"`                 // Group identifier for variants
 	ABTestEnabled bool   `bun:"ab_test_enabled,notnull,default:false" json:"abTestEnabled"` // Is this variant active in A/B test
 	ABTestWeight  int    `bun:"ab_test_weight,notnull,default:100" json:"abTestWeight"`     // Weight for variant selection (0-100)
 

@@ -43,7 +43,7 @@ func (m *mockUserRoleRepo) setUserRoles(userID string, roles []schema.Role) {
 
 func TestPermissionChecker_Can(t *testing.T) {
 	t.Skip("Skipping: RBAC service integration tests require full RBAC system setup - see core/rbac tests")
-	
+
 	// Setup
 	rbacSvc := rbac.NewService()
 	mockRepo := newMockUserRoleRepo()
@@ -90,7 +90,7 @@ func TestPermissionChecker_Can(t *testing.T) {
 
 func TestPermissionChecker_HasRole(t *testing.T) {
 	t.Skip("Skipping: RBAC service integration tests require full RBAC system setup - see core/rbac tests")
-	
+
 	rbacSvc := rbac.NewService()
 	mockRepo := newMockUserRoleRepo()
 	checker := NewPermissionChecker(rbacSvc, mockRepo)
@@ -157,7 +157,7 @@ func TestPermissionChecker_HasAnyRole(t *testing.T) {
 
 func TestPermissionChecker_CanAny(t *testing.T) {
 	t.Skip("Skipping: RBAC service integration tests require full RBAC system setup - see core/rbac tests")
-	
+
 	rbacSvc := rbac.NewService()
 	mockRepo := newMockUserRoleRepo()
 	checker := NewPermissionChecker(rbacSvc, mockRepo)
@@ -197,7 +197,7 @@ func TestPermissionChecker_CanAny(t *testing.T) {
 
 func TestPermissionChecker_CanAll(t *testing.T) {
 	t.Skip("Skipping: RBAC service integration tests require full RBAC system setup - see core/rbac tests")
-	
+
 	rbacSvc := rbac.NewService()
 	mockRepo := newMockUserRoleRepo()
 	checker := NewPermissionChecker(rbacSvc, mockRepo)
@@ -237,7 +237,7 @@ func TestPermissionChecker_CanAll(t *testing.T) {
 
 func TestPermissionBuilder_FluentAPI(t *testing.T) {
 	t.Skip("Skipping: RBAC service integration tests require full RBAC system setup - see core/rbac tests")
-	
+
 	rbacSvc := rbac.NewService()
 	mockRepo := newMockUserRoleRepo()
 	checker := NewPermissionChecker(rbacSvc, mockRepo)
@@ -288,7 +288,7 @@ func TestPermissionBuilder_FluentAPI(t *testing.T) {
 
 func TestDashboardPermissions(t *testing.T) {
 	t.Skip("Skipping: RBAC service integration tests require full RBAC system setup - see core/rbac tests")
-	
+
 	rbacSvc := rbac.NewService()
 	mockRepo := newMockUserRoleRepo()
 	checker := NewPermissionChecker(rbacSvc, mockRepo)

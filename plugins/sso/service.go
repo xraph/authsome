@@ -27,12 +27,12 @@ type Service struct {
 	repo      *repo.SSOProviderRepository
 	saml      *samsvc.Service
 	oidc      *oidcsvc.Service
-	
+
 	// User provisioning dependencies
 	userSvc    user.ServiceInterface
 	sessionSvc session.ServiceInterface
 	config     Config
-	
+
 	// OIDC state storage for PKCE and nonce
 	stateStore *StateStore
 }
@@ -78,16 +78,16 @@ func (s *Service) GetProvider(ctx context.Context, providerID string) (*schema.S
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
-	
+
 	cacheKey := fmt.Sprintf("%s:%s:%s:%s", appID.String(), envID.String(), orgID.String(), providerID)
-	
+
 	s.mu.RLock()
 	p, ok := s.providers[cacheKey]
 	s.mu.RUnlock()
 	if ok {
 		return p, nil
 	}
-	
+
 	// Fetch from database with tenant filtering
 	if s.repo != nil {
 		dbp, err := s.repo.FindByProviderID(ctx, providerID)
@@ -102,7 +102,7 @@ func (s *Service) GetProvider(ctx context.Context, providerID string) (*schema.S
 			return dbp, nil
 		}
 	}
-	
+
 	return nil, errs.NotFound("SSO provider not found")
 }
 
@@ -333,7 +333,7 @@ func (s *Service) ProvisionUser(
 
 	// Create new user from SSO attributes
 	createReq := s.buildCreateUserRequest(ctx, email, attributes, provider)
-	
+
 	// Create user via user service
 	createdUser, err := s.userSvc.Create(ctx, createReq)
 	if err != nil {
@@ -355,7 +355,7 @@ func (s *Service) applyAttributeMapping(usr *user.User, attributes map[string][]
 	for userField, ssoAttr := range mapping {
 		if values, ok := attributes[ssoAttr]; ok && len(values) > 0 {
 			value := values[0] // Take first value
-			
+
 			switch userField {
 			case "name":
 				usr.Name = value
@@ -363,7 +363,7 @@ func (s *Service) applyAttributeMapping(usr *user.User, attributes map[string][]
 				// Don't override email - it's the identifier
 			case "image":
 				usr.Image = value
-			// Add more field mappings as needed
+				// Add more field mappings as needed
 			}
 		}
 	}
@@ -396,7 +396,7 @@ func (s *Service) buildCreateUserRequest(
 		"commonName",
 		"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
 	}
-	
+
 	for _, attr := range nameAttrs {
 		if values, ok := attributes[attr]; ok && len(values) > 0 {
 			req.Name = values[0]

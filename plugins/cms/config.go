@@ -190,7 +190,7 @@ func DefaultConfig() *Config {
 		Limits: LimitsConfig{
 			MaxContentTypes:      100,
 			MaxFieldsPerType:     50,
-			MaxEntriesPerType:    0, // Unlimited
+			MaxEntriesPerType:    0,               // Unlimited
 			MaxEntryDataSize:     1 * 1024 * 1024, // 1MB
 			MaxRelationsPerEntry: 100,
 			MaxComponentSchemas:  100,
@@ -335,4 +335,3 @@ func (c *Config) Merge(other *Config) {
 		c.Dashboard.EntriesPerPage = other.Dashboard.EntriesPerPage
 	}
 }
-

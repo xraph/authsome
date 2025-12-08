@@ -244,4 +244,3 @@ func (e *DashboardExtension) HandleDeleteProvider(c forge.Context) error {
 
 	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+deleted+successfully")
 }
-

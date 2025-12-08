@@ -378,4 +378,3 @@ func BenchmarkNormalizePath(b *testing.B) {
 		NormalizePath(path)
 	}
 }
-

@@ -78,7 +78,7 @@ func (p *MailerSendProvider) Send(ctx context.Context, notif *notification.Notif
 		if tags, ok := notif.Metadata["tags"].([]string); ok && len(tags) > 0 {
 			payload["tags"] = tags
 		}
-		
+
 		// Add template variables if available
 		if variables, ok := notif.Metadata["variables"].([]map[string]interface{}); ok && len(variables) > 0 {
 			payload["variables"] = variables
@@ -184,4 +184,3 @@ func (p *MailerSendProvider) MapWebhookEventToStatus(eventType string) notificat
 		return notification.NotificationStatusPending
 	}
 }
-

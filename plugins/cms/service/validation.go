@@ -44,7 +44,7 @@ func (v *EntryValidator) ValidateUpdate(data map[string]interface{}, existingEnt
 	for k, v := range data {
 		mergedData[k] = v
 	}
-	
+
 	return v.validateData(mergedData, existingEntry)
 }
 
@@ -325,4 +325,3 @@ func ValidationResultToMap(result *core.ValidationResult) map[string]string {
 	}
 	return errors
 }
-

@@ -39,7 +39,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID
 	// Validate requested scope (must be subset of original scope)
 	originalScopes := strings.Split(token.Scope, " ")
 	effectiveScope := token.Scope
-	
+
 	if requestedScope != "" {
 		requestedScopes := strings.Split(requestedScope, " ")
 		if !isScopeSubset(requestedScopes, originalScopes) {
@@ -87,7 +87,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID
 
 	// Token rotation: generate new refresh token and revoke old one
 	newRefreshToken := "refresh_" + xid.New().String()
-	
+
 	// Create new token record
 	newTokenRecord := &schema.OAuthToken{
 		AppID:            token.AppID,
@@ -108,7 +108,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID
 		ACR:              token.ACR,
 		AMR:              token.AMR,
 		ExpiresAt:        time.Now().Add(time.Hour), // 1 hour
-		RefreshExpiresAt: token.RefreshExpiresAt,     // Keep same refresh expiry
+		RefreshExpiresAt: token.RefreshExpiresAt,    // Keep same refresh expiry
 	}
 
 	// Store new token
@@ -149,7 +149,7 @@ func (s *Service) GenerateClientCredentialsToken(ctx context.Context, client *sc
 	// Validate scope against client's allowed scopes
 	// TODO: Implement proper scope validation
 	// For now, we'll allow any scope but this should be restricted
-	
+
 	effectiveScope := scope
 	if effectiveScope == "" {
 		// Default M2M scopes
@@ -211,4 +211,3 @@ func isScopeSubset(requested, original []string) bool {
 
 	return true
 }
-

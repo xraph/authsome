@@ -461,4 +461,3 @@ func (r *bunRepository) CountExpiringSecrets(ctx context.Context, appID, envID x
 		Where("expires_at > ?", time.Now()).
 		Count(ctx)
 }
-

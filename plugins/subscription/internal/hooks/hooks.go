@@ -309,4 +309,3 @@ func (r *SubscriptionHookRegistry) ExecuteAfterPlanChange(ctx context.Context, s
 	}
 	return nil
 }
-

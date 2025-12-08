@@ -40,11 +40,11 @@ func (s *TaxService) CreateTaxRate(ctx context.Context, appID xid.ID, req *core.
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	if rate.ValidFrom.IsZero() {
 		rate.ValidFrom = time.Now()
 	}
-	
+
 	if err := s.repo.CreateTaxRate(ctx, rate); err != nil {
 		return nil, fmt.Errorf("failed to create tax rate: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *TaxService) UpdateTaxRate(ctx context.Context, id xid.ID, req *core.Upd
 	if rate == nil {
 		return nil, fmt.Errorf("tax rate not found")
 	}
-	
+
 	if req.Name != nil {
 		rate.Name = *req.Name
 	}
@@ -97,9 +97,9 @@ func (s *TaxService) UpdateTaxRate(ctx context.Context, id xid.ID, req *core.Upd
 	if req.ValidUntil != nil {
 		rate.ValidUntil = req.ValidUntil
 	}
-	
+
 	rate.UpdatedAt = time.Now()
-	
+
 	if err := s.repo.UpdateTaxRate(ctx, rate); err != nil {
 		return nil, fmt.Errorf("failed to update tax rate: %w", err)
 	}
@@ -127,7 +127,7 @@ func (s *TaxService) CalculateTax(ctx context.Context, appID xid.ID, req *core.C
 			}, nil
 		}
 	}
-	
+
 	// Get applicable tax rate
 	var rate *core.TaxRate
 	var err error
@@ -137,7 +137,7 @@ func (s *TaxService) CalculateTax(ctx context.Context, appID xid.ID, req *core.C
 			return nil, fmt.Errorf("failed to get tax rate: %w", err)
 		}
 	}
-	
+
 	if rate == nil {
 		// No tax rate found - return zero tax
 		return &core.TaxCalculation{
@@ -148,18 +148,18 @@ func (s *TaxService) CalculateTax(ctx context.Context, appID xid.ID, req *core.C
 			IsExempt:      false,
 		}, nil
 	}
-	
+
 	// Calculate tax
 	taxAmount := int64(float64(req.Amount) * rate.Percentage / 100)
 	totalAmount := req.Amount
-	
+
 	if rate.Behavior == core.TaxBehaviorExclusive {
 		totalAmount = req.Amount + taxAmount
 	} else {
 		// Tax is inclusive - calculate the tax portion
 		taxAmount = int64(float64(req.Amount) * (rate.Percentage / (100 + rate.Percentage)))
 	}
-	
+
 	return &core.TaxCalculation{
 		TaxRateID:     rate.ID,
 		TaxRateName:   rate.Name,
@@ -188,7 +188,7 @@ func (s *TaxService) CreateTaxExemption(ctx context.Context, appID xid.ID, req *
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
-	
+
 	if err := s.repo.CreateTaxExemption(ctx, exemption); err != nil {
 		return nil, fmt.Errorf("failed to create tax exemption: %w", err)
 	}
@@ -209,11 +209,11 @@ func (s *TaxService) VerifyTaxExemption(ctx context.Context, id xid.ID) error {
 	if exemption == nil {
 		return fmt.Errorf("exemption not found")
 	}
-	
+
 	now := time.Now()
 	exemption.VerifiedAt = &now
 	exemption.UpdatedAt = now
-	
+
 	return s.repo.UpdateTaxExemption(ctx, exemption)
 }
 
@@ -230,7 +230,7 @@ func (s *TaxService) CreateCustomerTaxID(ctx context.Context, appID xid.ID, req 
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
-	
+
 	if err := s.repo.CreateCustomerTaxID(ctx, taxID); err != nil {
 		return nil, fmt.Errorf("failed to create tax ID: %w", err)
 	}
@@ -252,4 +252,3 @@ func (s *TaxService) ValidateVAT(ctx context.Context, countryCode, vatNumber str
 		Message:     "Validation not implemented - stub returns valid",
 	}, nil
 }
-

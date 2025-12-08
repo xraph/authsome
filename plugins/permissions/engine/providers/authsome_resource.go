@@ -91,9 +91,9 @@ func (r *ResourceProviderRegistry) List() []string {
 
 // AuthsomeResourceAttributeProvider provides resource attributes using the registry
 type AuthsomeResourceAttributeProvider struct {
-	registry       *ResourceProviderRegistry
-	defaultLoader  ResourceLoader
-	fallbackAttrs  map[string]interface{} // Default attributes for unknown resources
+	registry      *ResourceProviderRegistry
+	defaultLoader ResourceLoader
+	fallbackAttrs map[string]interface{} // Default attributes for unknown resources
 }
 
 // AuthsomeResourceProviderConfig configures the resource provider
@@ -183,7 +183,7 @@ func (p *AuthsomeResourceAttributeProvider) GetAttributes(ctx context.Context, k
 // GetBatchAttributes fetches attributes for multiple resources
 func (p *AuthsomeResourceAttributeProvider) GetBatchAttributes(ctx context.Context, keys []string) (map[string]map[string]interface{}, error) {
 	// Group by resource type for batch loading
-	grouped := make(map[string][]string) // resourceType -> []resourceIDs
+	grouped := make(map[string][]string)  // resourceType -> []resourceIDs
 	keyMapping := make(map[string]string) // resourceID -> original key
 
 	for _, key := range keys {
@@ -362,4 +362,3 @@ func ResourceWithOwnership(resourceType, resourceID, ownerID, orgID, teamID stri
 		"status":     "active",
 	}
 }
-

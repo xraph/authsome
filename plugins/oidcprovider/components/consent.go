@@ -115,7 +115,7 @@ func consentHeader(data ConsentPageData) g.Node {
 
 		P(
 			Class("text-gray-600 dark:text-gray-300"),
-			g.Text(data.ClientName + " wants to access your account"),
+			g.Text(data.ClientName+" wants to access your account"),
 		),
 	)
 }
@@ -255,4 +255,3 @@ func scopesToString(scopes []ScopeInfo) string {
 	}
 	return strings.Join(scopeStrs, " ")
 }
-

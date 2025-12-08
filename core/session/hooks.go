@@ -15,4 +15,3 @@ type HookExecutor interface {
 	ExecuteBeforeSessionRevoke(ctx context.Context, token string) error
 	ExecuteAfterSessionRevoke(ctx context.Context, sessionID xid.ID) error
 }
-

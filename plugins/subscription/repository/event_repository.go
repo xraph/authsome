@@ -44,11 +44,11 @@ func (r *eventRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Subs
 // List retrieves events with optional filters
 func (r *eventRepository) List(ctx context.Context, filter *EventFilter) ([]*schema.SubscriptionEvent, int, error) {
 	var events []*schema.SubscriptionEvent
-	
+
 	query := r.db.NewSelect().
 		Model(&events).
 		Order("se.created_at DESC")
-	
+
 	if filter != nil {
 		if filter.SubscriptionID != nil {
 			query = query.Where("se.subscription_id = ?", *filter.SubscriptionID)
@@ -59,7 +59,7 @@ func (r *eventRepository) List(ctx context.Context, filter *EventFilter) ([]*sch
 		if filter.EventType != "" {
 			query = query.Where("se.event_type = ?", filter.EventType)
 		}
-		
+
 		// Pagination
 		pageSize := filter.PageSize
 		if pageSize <= 0 {
@@ -72,12 +72,11 @@ func (r *eventRepository) List(ctx context.Context, filter *EventFilter) ([]*sch
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
-	
+
 	count, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list events: %w", err)
 	}
-	
+
 	return events, count, nil
 }
-

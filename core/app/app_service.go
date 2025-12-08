@@ -255,7 +255,7 @@ func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*sessio
 
 	// Parse the cookie config from metadata
 	var appCookieConfig session.CookieConfig
-	
+
 	// Handle different possible types in metadata
 	switch v := cookieConfigData.(type) {
 	case map[string]interface{}:

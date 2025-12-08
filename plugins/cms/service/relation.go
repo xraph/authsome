@@ -360,12 +360,12 @@ func (s *RelationService) PopulateRelations(ctx context.Context, entries []*sche
 		for _, fieldSlug := range fieldSlugs {
 			relations, err := s.repo.FindRelations(ctx, entry.ID, fieldSlug)
 			if err != nil {
-			if s.logger != nil {
-				s.logger.Warn("failed to populate relation",
-					forge.F("entryID", entry.ID.String()),
-					forge.F("field", fieldSlug),
-					forge.F("error", err.Error()))
-			}
+				if s.logger != nil {
+					s.logger.Warn("failed to populate relation",
+						forge.F("entryID", entry.ID.String()),
+						forge.F("field", fieldSlug),
+						forge.F("error", err.Error()))
+				}
 				continue
 			}
 
@@ -484,4 +484,3 @@ func (s *RelationService) typeRelationToDTO(rel *schema.ContentTypeRelation, sou
 
 	return dto
 }
-

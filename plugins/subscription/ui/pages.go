@@ -177,7 +177,7 @@ func renderPlanRows(plans []*core.Plan, basePath string) []g.Node {
 		if plan.IsActive {
 			statusBadge = Badge("Active", "success")
 		}
-		
+
 		rows[i] = TableRow(
 			TableCell(html.Div(
 				html.Span(html.Class("font-medium"), g.Text(plan.Name)),

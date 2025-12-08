@@ -397,4 +397,3 @@ func formatValue(value interface{}) string {
 		return ""
 	}
 }
-

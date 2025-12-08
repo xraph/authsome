@@ -138,15 +138,15 @@ func TestGenerateSecureCode(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			
+
 			require.NoError(t, err)
 			assert.Len(t, code, tt.length)
-			
+
 			// Verify it's numeric
 			matched, err := regexp.MatchString(`^\d+$`, code)
 			require.NoError(t, err)
 			assert.True(t, matched, "code should be numeric")
-			
+
 			// Verify it has leading zeros if needed
 			if tt.length > 0 {
 				assert.Equal(t, tt.length, len(code))
@@ -160,13 +160,13 @@ func TestGenerateSecureCodeRandomness(t *testing.T) {
 	codes := make(map[string]bool)
 	iterations := 100
 	length := 6
-	
+
 	for i := 0; i < iterations; i++ {
 		code, err := generateSecureCode(length)
 		require.NoError(t, err)
 		codes[code] = true
 	}
-	
+
 	// We should have close to 100 unique codes (very unlikely to have many duplicates)
 	uniqueCount := len(codes)
 	assert.Greater(t, uniqueCount, 90, "should generate mostly unique codes")
@@ -178,7 +178,7 @@ func TestServiceErrors(t *testing.T) {
 		err := validatePhone("invalid-phone")
 		assert.ErrorIs(t, err, ErrInvalidPhoneFormat)
 	})
-	
+
 	t.Run("missing phone", func(t *testing.T) {
 		err := validatePhone("")
 		assert.ErrorIs(t, err, ErrMissingPhone)
@@ -188,7 +188,7 @@ func TestServiceErrors(t *testing.T) {
 // TestRateLimitConfig tests rate limit configuration
 func TestRateLimitConfig(t *testing.T) {
 	config := DefaultConfig()
-	
+
 	assert.True(t, config.RateLimit.Enabled)
 	assert.False(t, config.RateLimit.UseRedis)
 	assert.Equal(t, 1*time.Minute, config.RateLimit.SendCodePerPhone.Window)
@@ -203,32 +203,32 @@ func TestConfigOptions(t *testing.T) {
 		p := NewPlugin(WithCodeLength(8))
 		assert.Equal(t, 8, p.defaultConfig.CodeLength)
 	})
-	
+
 	t.Run("WithExpiryMinutes", func(t *testing.T) {
 		p := NewPlugin(WithExpiryMinutes(15))
 		assert.Equal(t, 15, p.defaultConfig.ExpiryMinutes)
 	})
-	
+
 	t.Run("WithMaxAttempts", func(t *testing.T) {
 		p := NewPlugin(WithMaxAttempts(3))
 		assert.Equal(t, 3, p.defaultConfig.MaxAttempts)
 	})
-	
+
 	t.Run("WithSMSProvider", func(t *testing.T) {
 		p := NewPlugin(WithSMSProvider("aws_sns"))
 		assert.Equal(t, "aws_sns", p.defaultConfig.SMSProvider)
 	})
-	
+
 	t.Run("WithAllowImplicitSignup", func(t *testing.T) {
 		p := NewPlugin(WithAllowImplicitSignup(false))
 		assert.False(t, p.defaultConfig.AllowImplicitSignup)
 	})
-	
+
 	t.Run("WithDevExposeCode", func(t *testing.T) {
 		p := NewPlugin(WithDevExposeCode(true))
 		assert.True(t, p.defaultConfig.DevExposeCode)
 	})
-	
+
 	t.Run("multiple options", func(t *testing.T) {
 		p := NewPlugin(
 			WithCodeLength(8),
@@ -237,7 +237,7 @@ func TestConfigOptions(t *testing.T) {
 			WithSMSProvider("twilio"),
 			WithDevExposeCode(true),
 		)
-		
+
 		assert.Equal(t, 8, p.defaultConfig.CodeLength)
 		assert.Equal(t, 20, p.defaultConfig.ExpiryMinutes)
 		assert.Equal(t, 10, p.defaultConfig.MaxAttempts)
@@ -264,4 +264,3 @@ func TestPluginID(t *testing.T) {
 //
 // These should be implemented in a separate integration test file
 // with proper test fixtures and database setup.
-

@@ -479,16 +479,16 @@ type LogsResponse struct {
 
 // StatsResponse represents provisioning statistics
 type StatsResponse struct {
-	TotalOperations int                `json:"totalOperations"`
-	SuccessCount    int                `json:"successCount"`
-	FailureCount    int                `json:"failureCount"`
-	SuccessRate     float64            `json:"successRate"`
-	ByOperation     map[string]int     `json:"byOperation"`
-	ByResourceType  map[string]int     `json:"byResourceType"`
-	ByStatus        map[string]int     `json:"byStatus"`
-	Recent          []ProvisioningLog  `json:"recent"`
-	StartDate       *time.Time         `json:"startDate,omitempty"`
-	EndDate         *time.Time         `json:"endDate,omitempty"`
+	TotalOperations int               `json:"totalOperations"`
+	SuccessCount    int               `json:"successCount"`
+	FailureCount    int               `json:"failureCount"`
+	SuccessRate     float64           `json:"successRate"`
+	ByOperation     map[string]int    `json:"byOperation"`
+	ByResourceType  map[string]int    `json:"byResourceType"`
+	ByStatus        map[string]int    `json:"byStatus"`
+	Recent          []ProvisioningLog `json:"recent"`
+	StartDate       *time.Time        `json:"startDate,omitempty"`
+	EndDate         *time.Time        `json:"endDate,omitempty"`
 }
 
 // UsersResponse wraps user list response for clarity

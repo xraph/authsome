@@ -55,7 +55,7 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 			ctx = contexts.SetEnvironmentID(ctx, provToken.EnvironmentID)
 			ctx = contexts.SetOrganizationID(ctx, provToken.OrganizationID)
 			c.Request().WithContext(ctx)
-			
+
 			// Also store in Forge context for backwards compatibility with other middleware
 			c.Set("app_id", provToken.AppID)
 			c.Set("environment_id", provToken.EnvironmentID)
@@ -196,7 +196,7 @@ func (p *Plugin) LoggingMiddleware() func(func(forge.Context) error) func(forge.
 			if ok && !orgID.IsNil() {
 				// Record metrics
 				metrics.RecordRequestDuration(c.Request().Method+" "+c.Request().URL.Path, duration)
-				
+
 				// TODO: Create provisioning log entry in database
 				// This would call service.CreateProvisioningLog() with operation details
 				_ = orgID // Use orgID for logging

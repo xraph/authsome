@@ -25,7 +25,7 @@ func (r *RolePermissionRepository) AssignPermission(ctx context.Context, roleID,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	
+
 	_, err := r.db.NewInsert().
 		Model(rp).
 		On("CONFLICT (role_id, permission_id) DO NOTHING").
@@ -81,7 +81,7 @@ func (r *RolePermissionRepository) ReplaceRolePermissions(ctx context.Context, r
 		if err != nil {
 			return err
 		}
-		
+
 		// Insert new associations
 		if len(permissionIDs) > 0 {
 			now := time.Now()
@@ -95,7 +95,7 @@ func (r *RolePermissionRepository) ReplaceRolePermissions(ctx context.Context, r
 					UpdatedAt:    now,
 				})
 			}
-			
+
 			_, err = tx.NewInsert().
 				Model(&rolePermissions).
 				Exec(ctx)
@@ -103,8 +103,7 @@ func (r *RolePermissionRepository) ReplaceRolePermissions(ctx context.Context, r
 				return err
 			}
 		}
-		
+
 		return nil
 	})
 }
-

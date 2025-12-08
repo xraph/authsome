@@ -20,7 +20,7 @@ import (
 func ExamplePlugin_basic() {
 	// Create AuthSome instance
 	auth := authsome.New(
-		// Configure with valid options
+	// Configure with valid options
 	)
 
 	// Register SCIM plugin

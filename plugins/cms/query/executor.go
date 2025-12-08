@@ -314,4 +314,3 @@ func (e *QueryExecutor) ExecuteDistinct(ctx context.Context, contentType *schema
 
 	return values, nil
 }
-

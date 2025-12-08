@@ -38,11 +38,11 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 	if req.Token == "" {
 		return nil, errs.BadRequest("token parameter is required")
 	}
-	
+
 	// Try to find token based on hint or try both types
 	var token *schema.OAuthToken
 	var err error
-	
+
 	switch req.TokenTypeHint {
 	case "access_token", "":
 		// Try access token first
@@ -50,7 +50,7 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 		if err != nil {
 			return nil, errs.InternalError(err)
 		}
-		
+
 		// If not found and no explicit hint, try refresh token
 		if token == nil && req.TokenTypeHint == "" {
 			token, err = s.tokenRepo.FindByRefreshToken(ctx, req.Token)
@@ -58,33 +58,33 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 				return nil, errs.InternalError(err)
 			}
 		}
-		
+
 	case "refresh_token":
 		token, err = s.tokenRepo.FindByRefreshToken(ctx, req.Token)
 		if err != nil {
 			return nil, errs.InternalError(err)
 		}
-		
+
 	default:
 		return nil, errs.BadRequest("invalid token_type_hint")
 	}
-	
+
 	// If token not found, return inactive
 	if token == nil {
 		return &TokenIntrospectionResponse{Active: false}, nil
 	}
-	
+
 	// Check if token is valid (not expired, not revoked, nbf check)
 	if !token.IsValid() {
 		return &TokenIntrospectionResponse{Active: false}, nil
 	}
-	
+
 	// Authorization check: client can only introspect their own tokens
 	if token.ClientID != requestingClientID {
 		// Return inactive instead of error for security (don't leak token existence)
 		return &TokenIntrospectionResponse{Active: false}, nil
 	}
-	
+
 	// Build introspection response
 	response := &TokenIntrospectionResponse{
 		Active:    true,
@@ -98,12 +98,12 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 		Iss:       token.Issuer,
 		Aud:       token.Audience,
 	}
-	
+
 	// Add optional fields
 	if token.NotBefore != nil {
 		response.Nbf = token.NotBefore.Unix()
 	}
-	
+
 	// Get username if available
 	if s.userSvc != nil {
 		userObj, err := s.userSvc.FindByID(ctx, token.UserID)
@@ -118,7 +118,7 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 			}
 		}
 	}
-	
+
 	return response, nil
 }
 
@@ -127,7 +127,7 @@ func (s *IntrospectionService) ValidateIntrospectionRequest(req *TokenIntrospect
 	if req.Token == "" {
 		return errs.BadRequest("token parameter is required")
 	}
-	
+
 	// Validate token_type_hint if provided
 	if req.TokenTypeHint != "" {
 		validHints := []string{"access_token", "refresh_token"}
@@ -142,7 +142,7 @@ func (s *IntrospectionService) ValidateIntrospectionRequest(req *TokenIntrospect
 			return errs.BadRequest("invalid token_type_hint: must be 'access_token' or 'refresh_token'")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -151,26 +151,26 @@ func (s *IntrospectionService) IntrospectByJTI(ctx context.Context, jti string, 
 	if jti == "" {
 		return nil, errs.BadRequest("jti parameter is required")
 	}
-	
+
 	token, err := s.tokenRepo.FindByJTI(ctx, jti)
 	if err != nil {
 		return nil, errs.InternalError(err)
 	}
-	
+
 	if token == nil {
 		return &TokenIntrospectionResponse{Active: false}, nil
 	}
-	
+
 	// Check validity
 	if !token.IsValid() {
 		return &TokenIntrospectionResponse{Active: false}, nil
 	}
-	
+
 	// Authorization check
 	if token.ClientID != requestingClientID {
 		return &TokenIntrospectionResponse{Active: false}, nil
 	}
-	
+
 	// Build response
 	response := &TokenIntrospectionResponse{
 		Active:    true,
@@ -184,11 +184,11 @@ func (s *IntrospectionService) IntrospectByJTI(ctx context.Context, jti string, 
 		Iss:       token.Issuer,
 		Aud:       token.Audience,
 	}
-	
+
 	if token.NotBefore != nil {
 		response.Nbf = token.NotBefore.Unix()
 	}
-	
+
 	return response, nil
 }
 
@@ -210,4 +210,3 @@ func HasScope(tokenScope, requiredScope string) bool {
 	}
 	return false
 }
-

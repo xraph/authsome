@@ -389,4 +389,3 @@ func (h *ContentTypeHandler) GetFieldTypes(c forge.Context) error {
 		"fieldTypes": core.GetAllFieldTypes(),
 	})
 }
-

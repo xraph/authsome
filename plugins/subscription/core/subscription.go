@@ -29,18 +29,18 @@ type Subscription struct {
 	UpdatedAt          time.Time          `json:"updatedAt"`
 
 	// Relations (populated when loaded)
-	Plan     *Plan              `json:"plan,omitempty"`
-	AddOns   []SubscriptionAddOn `json:"addOns,omitempty"`
+	Plan   *Plan               `json:"plan,omitempty"`
+	AddOns []SubscriptionAddOn `json:"addOns,omitempty"`
 }
 
 // SubscriptionAddOn represents an add-on attached to a subscription
 type SubscriptionAddOn struct {
-	ID                  xid.ID    `json:"id"`
-	SubscriptionID      xid.ID    `json:"subscriptionId"`
-	AddOnID             xid.ID    `json:"addOnId"`
-	Quantity            int       `json:"quantity"`
-	ProviderSubItemID   string    `json:"providerSubItemId"` // Stripe Subscription Item ID
-	CreatedAt           time.Time `json:"createdAt"`
+	ID                xid.ID    `json:"id"`
+	SubscriptionID    xid.ID    `json:"subscriptionId"`
+	AddOnID           xid.ID    `json:"addOnId"`
+	Quantity          int       `json:"quantity"`
+	ProviderSubItemID string    `json:"providerSubItemId"` // Stripe Subscription Item ID
+	CreatedAt         time.Time `json:"createdAt"`
 
 	// Relations
 	AddOn *AddOn `json:"addOn,omitempty"`
@@ -174,9 +174,9 @@ type CreateSubscriptionRequest struct {
 
 // UpdateSubscriptionRequest represents a request to update a subscription
 type UpdateSubscriptionRequest struct {
-	PlanID    *xid.ID        `json:"planId,omitempty"`
-	Quantity  *int           `json:"quantity,omitempty" validate:"omitempty,min=1"`
-	Metadata  map[string]any `json:"metadata,omitempty"`
+	PlanID   *xid.ID        `json:"planId,omitempty"`
+	Quantity *int           `json:"quantity,omitempty" validate:"omitempty,min=1"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // CancelSubscriptionRequest represents a request to cancel a subscription
@@ -190,4 +190,3 @@ type PauseSubscriptionRequest struct {
 	ResumeAt *time.Time `json:"resumeAt"` // Optional date to auto-resume
 	Reason   string     `json:"reason"`   // Pause reason
 }
-

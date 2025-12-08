@@ -282,4 +282,3 @@ func SortByPath(paths []string) {
 		return len(si) < len(sj)
 	})
 }
-

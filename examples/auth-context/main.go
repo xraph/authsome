@@ -97,51 +97,51 @@ func handleStatus(c forge.Context) error {
 	// Public endpoint - no authentication required
 	// But auth context is still available if user is authenticated
 	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
-	
+
 	response := map[string]interface{}{
-		"status": "ok",
+		"status":        "ok",
 		"authenticated": authCtx != nil && authCtx.IsAuthenticated,
 	}
-	
+
 	if authCtx != nil && authCtx.IsAuthenticated {
 		response["method"] = string(authCtx.Method)
 	}
-	
+
 	return c.JSON(200, response)
 }
 
 func handleProfile(c forge.Context) error {
 	// Works with either API key OR user session
 	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
-	
+
 	if authCtx.IsUserAuth {
 		// User is logged in via session
 		return c.JSON(200, map[string]interface{}{
-			"type": "user",
-			"user": authCtx.User,
+			"type":    "user",
+			"user":    authCtx.User,
 			"session": authCtx.Session,
 		})
 	}
-	
+
 	if authCtx.IsAPIKeyAuth {
 		// Authenticated via API key
 		return c.JSON(200, map[string]interface{}{
 			"type": "api_key",
 			"api_key": map[string]interface{}{
-				"name":    authCtx.APIKey.Name,
-				"type":    authCtx.APIKey.KeyType,
-				"scopes":  authCtx.APIKeyScopes,
+				"name":   authCtx.APIKey.Name,
+				"type":   authCtx.APIKey.KeyType,
+				"scopes": authCtx.APIKeyScopes,
 			},
 		})
 	}
-	
+
 	return c.JSON(401, map[string]string{"error": "not authenticated"})
 }
 
 func handleGetMe(c forge.Context) error {
 	// Requires user session (enforced by RequireUser middleware)
 	user, _ := contexts.RequireUser(c.Request().Context())
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"id":       user.ID,
 		"email":    user.Email,
@@ -153,15 +153,15 @@ func handleGetMe(c forge.Context) error {
 func handleUpdateMe(c forge.Context) error {
 	user, _ := contexts.RequireUser(c.Request().Context())
 	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
-	
+
 	// Check if API key also present (dual authentication)
 	if authCtx.HasAPIKey() {
 		// Log that both session and API key are present
 		log.Printf("Dual auth: User %s with API key %s", user.Email, authCtx.APIKey.Name)
 	}
-	
+
 	// Update logic here...
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"message": "profile updated",
 		"user":    user,
@@ -170,7 +170,7 @@ func handleUpdateMe(c forge.Context) error {
 
 func handleListSessions(c forge.Context) error {
 	user, _ := contexts.RequireUser(c.Request().Context())
-	
+
 	// User can only see their own sessions
 	return c.JSON(200, map[string]interface{}{
 		"user_id":  user.ID,
@@ -181,7 +181,7 @@ func handleListSessions(c forge.Context) error {
 func handleStats(c forge.Context) error {
 	// Requires API key (any type)
 	apiKey, _ := contexts.RequireAPIKey(c.Request().Context())
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"api_key_type": apiKey.KeyType,
 		"api_key_name": apiKey.Name,
@@ -209,19 +209,19 @@ func handleListAllUsers(c forge.Context) error {
 
 func handleDeleteUser(c forge.Context) error {
 	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
-	
+
 	// Double-check admin privileges
 	if !authCtx.CanPerformAdminOp() {
 		return c.JSON(403, map[string]string{
 			"error": "admin privileges required",
 		})
 	}
-	
+
 	userID := c.Param("id")
-	
+
 	// Delete user logic here...
 	log.Printf("Admin deleted user: %s", userID)
-	
+
 	return c.JSON(200, map[string]interface{}{
 		"message": "user deleted",
 		"user_id": userID,
@@ -230,28 +230,28 @@ func handleDeleteUser(c forge.Context) error {
 
 func handleCreateAPIKey(c forge.Context) error {
 	_, _ = contexts.GetAuthContext(c.Request().Context())
-	
+
 	// Parse request
 	var req struct {
-		Name        string                `json:"name"`
-		KeyType     apikey.KeyType       `json:"keyType"`
-		Scopes      []string              `json:"scopes"`
-		Description string                `json:"description"`
+		Name        string         `json:"name"`
+		KeyType     apikey.KeyType `json:"keyType"`
+		Scopes      []string       `json:"scopes"`
+		Description string         `json:"description"`
 	}
-	
+
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, map[string]string{
 			"error": "invalid request body",
 		})
 	}
-	
+
 	// Validate key type
 	if !req.KeyType.IsValid() {
 		return c.JSON(400, map[string]string{
 			"error": "invalid key type: must be pk, sk, or rk",
 		})
 	}
-	
+
 	// For publishable keys, ensure only safe scopes
 	if req.KeyType == apikey.KeyTypePublishable {
 		for _, scope := range req.Scopes {
@@ -263,24 +263,24 @@ func handleCreateAPIKey(c forge.Context) error {
 			}
 		}
 	}
-	
+
 	return c.JSON(201, map[string]interface{}{
-		"message": "API key created",
-		"key_type": req.KeyType,
+		"message":        "API key created",
+		"key_type":       req.KeyType,
 		"example_prefix": string(req.KeyType) + "_prod_abc123xyz",
 	})
 }
 
 func handleTrackEvent(c forge.Context) error {
 	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
-	
+
 	// Verify scope (middleware already checked, this is extra validation)
 	if !authCtx.HasScope("analytics:write") {
 		return c.JSON(403, map[string]string{
 			"error": "insufficient scope",
 		})
 	}
-	
+
 	return c.JSON(201, map[string]interface{}{
 		"message": "event tracked",
 		"api_key": authCtx.APIKey.Name,
@@ -289,19 +289,18 @@ func handleTrackEvent(c forge.Context) error {
 
 func handleExportData(c forge.Context) error {
 	authCtx, _ := contexts.GetAuthContext(c.Request().Context())
-	
+
 	// Verify multiple scopes
 	if !authCtx.HasAllScopesOf("data:read", "data:export") {
 		return c.JSON(403, map[string]interface{}{
-			"error": "insufficient scopes",
+			"error":    "insufficient scopes",
 			"required": []string{"data:read", "data:export"},
-			"current": authCtx.APIKeyScopes,
+			"current":  authCtx.APIKeyScopes,
 		})
 	}
-	
+
 	return c.JSON(200, map[string]interface{}{
-		"message": "data export started",
+		"message":   "data export started",
 		"export_id": "export_123",
 	})
 }
-

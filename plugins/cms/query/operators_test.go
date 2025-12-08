@@ -772,4 +772,3 @@ func BenchmarkJSONParser_ParseFilters(b *testing.B) {
 		})
 	}
 }
-

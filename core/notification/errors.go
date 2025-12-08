@@ -19,22 +19,22 @@ const (
 	CodeTemplateRenderFailed  = "TEMPLATE_RENDER_FAILED"
 
 	// Notification errors
-	CodeNotificationNotFound  = "NOTIFICATION_NOT_FOUND"
-	CodeNotificationFailed    = "NOTIFICATION_FAILED"
+	CodeNotificationNotFound   = "NOTIFICATION_NOT_FOUND"
+	CodeNotificationFailed     = "NOTIFICATION_FAILED"
 	CodeNotificationSendFailed = "NOTIFICATION_SEND_FAILED"
 
 	// Provider errors
-	CodeProviderNotConfigured = "PROVIDER_NOT_CONFIGURED"
-	CodeProviderNotFound      = "PROVIDER_NOT_FOUND"
+	CodeProviderNotConfigured    = "PROVIDER_NOT_CONFIGURED"
+	CodeProviderNotFound         = "PROVIDER_NOT_FOUND"
 	CodeProviderValidationFailed = "PROVIDER_VALIDATION_FAILED"
 
 	// Version errors
-	CodeVersionNotFound = "VERSION_NOT_FOUND"
+	CodeVersionNotFound      = "VERSION_NOT_FOUND"
 	CodeVersionRestoreFailed = "VERSION_RESTORE_FAILED"
 
 	// Test errors
 	CodeTestNotFound = "TEST_NOT_FOUND"
-	CodeTestFailed = "TEST_FAILED"
+	CodeTestFailed   = "TEST_FAILED"
 
 	// Validation errors
 	CodeInvalidNotificationType = "INVALID_NOTIFICATION_TYPE"
@@ -139,23 +139,22 @@ func MissingTemplateVariable(variable string) *errs.AuthsomeError {
 // =============================================================================
 
 var (
-	ErrTemplateNotFound          = &errs.AuthsomeError{Code: CodeTemplateNotFound}
-	ErrTemplateAlreadyExists     = &errs.AuthsomeError{Code: CodeTemplateAlreadyExists}
-	ErrInvalidTemplate           = &errs.AuthsomeError{Code: CodeInvalidTemplate}
-	ErrTemplateInactive          = &errs.AuthsomeError{Code: CodeTemplateInactive}
-	ErrTemplateRenderFailed      = &errs.AuthsomeError{Code: CodeTemplateRenderFailed}
-	ErrNotificationNotFound      = &errs.AuthsomeError{Code: CodeNotificationNotFound}
-	ErrNotificationFailed        = &errs.AuthsomeError{Code: CodeNotificationFailed}
-	ErrNotificationSendFailed    = &errs.AuthsomeError{Code: CodeNotificationSendFailed}
-	ErrProviderNotConfigured     = &errs.AuthsomeError{Code: CodeProviderNotConfigured}
-	ErrProviderNotFound          = &errs.AuthsomeError{Code: CodeProviderNotFound}
-	ErrProviderValidationFailed  = &errs.AuthsomeError{Code: CodeProviderValidationFailed}
-	ErrVersionNotFound           = &errs.AuthsomeError{Code: CodeVersionNotFound}
-	ErrVersionRestoreFailed      = &errs.AuthsomeError{Code: CodeVersionRestoreFailed}
-	ErrTestNotFound              = &errs.AuthsomeError{Code: CodeTestNotFound}
-	ErrTestFailed                = &errs.AuthsomeError{Code: CodeTestFailed}
-	ErrInvalidNotificationType   = &errs.AuthsomeError{Code: CodeInvalidNotificationType}
-	ErrInvalidRecipient          = &errs.AuthsomeError{Code: CodeInvalidRecipient}
-	ErrMissingTemplateVariable   = &errs.AuthsomeError{Code: CodeMissingTemplateVariable}
+	ErrTemplateNotFound         = &errs.AuthsomeError{Code: CodeTemplateNotFound}
+	ErrTemplateAlreadyExists    = &errs.AuthsomeError{Code: CodeTemplateAlreadyExists}
+	ErrInvalidTemplate          = &errs.AuthsomeError{Code: CodeInvalidTemplate}
+	ErrTemplateInactive         = &errs.AuthsomeError{Code: CodeTemplateInactive}
+	ErrTemplateRenderFailed     = &errs.AuthsomeError{Code: CodeTemplateRenderFailed}
+	ErrNotificationNotFound     = &errs.AuthsomeError{Code: CodeNotificationNotFound}
+	ErrNotificationFailed       = &errs.AuthsomeError{Code: CodeNotificationFailed}
+	ErrNotificationSendFailed   = &errs.AuthsomeError{Code: CodeNotificationSendFailed}
+	ErrProviderNotConfigured    = &errs.AuthsomeError{Code: CodeProviderNotConfigured}
+	ErrProviderNotFound         = &errs.AuthsomeError{Code: CodeProviderNotFound}
+	ErrProviderValidationFailed = &errs.AuthsomeError{Code: CodeProviderValidationFailed}
+	ErrVersionNotFound          = &errs.AuthsomeError{Code: CodeVersionNotFound}
+	ErrVersionRestoreFailed     = &errs.AuthsomeError{Code: CodeVersionRestoreFailed}
+	ErrTestNotFound             = &errs.AuthsomeError{Code: CodeTestNotFound}
+	ErrTestFailed               = &errs.AuthsomeError{Code: CodeTestFailed}
+	ErrInvalidNotificationType  = &errs.AuthsomeError{Code: CodeInvalidNotificationType}
+	ErrInvalidRecipient         = &errs.AuthsomeError{Code: CodeInvalidRecipient}
+	ErrMissingTemplateVariable  = &errs.AuthsomeError{Code: CodeMissingTemplateVariable}
 )
-

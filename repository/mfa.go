@@ -277,13 +277,13 @@ func (r *MFARepository) CleanupExpiredDevices(ctx context.Context) (int, error) 
 func (r *MFARepository) GetPolicy(ctx context.Context, appID xid.ID, orgID *xid.ID) (*schema.MFAPolicy, error) {
 	policy := new(schema.MFAPolicy)
 	query := r.db.NewSelect().Model(policy).Where("app_id = ?", appID)
-	
+
 	if orgID != nil && !orgID.IsNil() {
 		query = query.Where("organization_id = ?", orgID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	err := query.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -296,13 +296,13 @@ func (r *MFARepository) UpsertPolicy(ctx context.Context, policy *schema.MFAPoli
 	// Try to find existing policy
 	existing := new(schema.MFAPolicy)
 	query := r.db.NewSelect().Model(existing).Where("app_id = ?", policy.AppID)
-	
+
 	if policy.OrganizationID != nil && !policy.OrganizationID.IsNil() {
 		query = query.Where("organization_id = ?", policy.OrganizationID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	err := query.Scan(ctx)
 
 	if err == sql.ErrNoRows {

@@ -137,7 +137,7 @@ type UserVerificationStatusResponse struct {
 
 // WebhookResponse represents a webhook processing response
 type WebhookResponse struct {
-	Received  bool   `json:"received"`
+	Received        bool   `json:"received"`
 	ProcessedStatus string `json:"status,omitempty"`
 }
 

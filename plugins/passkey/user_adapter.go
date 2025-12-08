@@ -81,4 +81,3 @@ func (u *UserAdapter) UpdateCredential(credentialID []byte, signCount uint32) {
 		}
 	}
 }
-

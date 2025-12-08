@@ -47,38 +47,38 @@ func CreateSubscriptionTables(ctx context.Context, db *bun.DB) error {
 		{"subscription_plans", "idx_subscription_plans_app_id", "app_id"},
 		{"subscription_plans", "idx_subscription_plans_slug", "app_id, slug"},
 		{"subscription_plans", "idx_subscription_plans_active", "is_active"},
-		
+
 		// Subscription indexes
 		{"subscriptions", "idx_subscriptions_org_id", "organization_id"},
 		{"subscriptions", "idx_subscriptions_plan_id", "plan_id"},
 		{"subscriptions", "idx_subscriptions_status", "status"},
 		{"subscriptions", "idx_subscriptions_provider_sub_id", "provider_sub_id"},
-		
+
 		// Add-on indexes
 		{"subscription_addons", "idx_subscription_addons_app_id", "app_id"},
 		{"subscription_addons", "idx_subscription_addons_slug", "app_id, slug"},
-		
+
 		// Invoice indexes
 		{"subscription_invoices", "idx_subscription_invoices_org_id", "organization_id"},
 		{"subscription_invoices", "idx_subscription_invoices_sub_id", "subscription_id"},
 		{"subscription_invoices", "idx_subscription_invoices_status", "status"},
 		{"subscription_invoices", "idx_subscription_invoices_number", "number"},
-		
+
 		// Usage indexes
 		{"subscription_usage_records", "idx_subscription_usage_sub_id", "subscription_id"},
 		{"subscription_usage_records", "idx_subscription_usage_org_id", "organization_id"},
 		{"subscription_usage_records", "idx_subscription_usage_metric", "metric_key"},
 		{"subscription_usage_records", "idx_subscription_usage_reported", "reported"},
 		{"subscription_usage_records", "idx_subscription_usage_timestamp", "timestamp"},
-		
+
 		// Payment method indexes
 		{"subscription_payment_methods", "idx_subscription_pm_org_id", "organization_id"},
 		{"subscription_payment_methods", "idx_subscription_pm_provider_id", "provider_method_id"},
-		
+
 		// Customer indexes
 		{"subscription_customers", "idx_subscription_customers_org_id", "organization_id"},
 		{"subscription_customers", "idx_subscription_customers_provider_id", "provider_customer_id"},
-		
+
 		// Event indexes
 		{"subscription_events", "idx_subscription_events_sub_id", "subscription_id"},
 		{"subscription_events", "idx_subscription_events_org_id", "organization_id"},
@@ -131,4 +131,3 @@ func DropSubscriptionTables(ctx context.Context, db *bun.DB) error {
 
 	return nil
 }
-

@@ -113,18 +113,17 @@ type ProviderDetailResponse struct {
 	Type             string            `json:"type"`
 	Domain           string            `json:"domain,omitempty"`
 	AttributeMapping map[string]string `json:"attributeMapping,omitempty"`
-	
+
 	// SAML info (without sensitive data)
 	SAMLEntryPoint string `json:"samlEntryPoint,omitempty"`
 	SAMLIssuer     string `json:"samlIssuer,omitempty"`
 	HasSAMLCert    bool   `json:"hasSamlCert,omitempty"`
-	
+
 	// OIDC info (without sensitive data)
 	OIDCClientID    string `json:"oidcClientID,omitempty"`
 	OIDCIssuer      string `json:"oidcIssuer,omitempty"`
 	OIDCRedirectURI string `json:"oidcRedirectURI,omitempty"`
-	
+
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 }
-

@@ -11,7 +11,7 @@ type Permission struct {
 	bun.BaseModel  `bun:"table:permissions,alias:perm"`
 
 	ID             xid.ID  `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID          *xid.ID `json:"appID" bun:"app_id,type:varchar(20)"`          // App-scoped permissions
+	AppID          *xid.ID `json:"appID" bun:"app_id,type:varchar(20)"`                   // App-scoped permissions
 	OrganizationID *xid.ID `json:"organizationID" bun:"organization_id,type:varchar(20)"` // Org-scoped permissions (NULL = app-level)
 	Name           string  `json:"name" bun:"name,notnull"`
 	Description    string  `json:"description" bun:"description"`

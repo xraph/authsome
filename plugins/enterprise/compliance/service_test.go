@@ -154,7 +154,7 @@ func setupTestService(t *testing.T) *Service {
 	mockUser := &MockUserService{}
 	mockApp := &MockAppService{}
 	mockEmail := &MockEmailService{}
-	
+
 	config := DefaultConfig()
 
 	service := NewService(

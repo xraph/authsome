@@ -46,7 +46,7 @@ type Config struct {
 	SMSProvider string `json:"smsProvider"`
 	// DevExposeCode exposes the code in dev mode (for testing)
 	DevExposeCode bool `json:"devExposeCode"`
-	
+
 	// Rate limiting configuration
 	RateLimit RateLimitConfig `json:"rateLimit"`
 }
@@ -63,7 +63,7 @@ type RateLimitConfig struct {
 	RedisPassword string `json:"redisPassword"`
 	// RedisDB is the Redis database number
 	RedisDB int `json:"redisDb"`
-	
+
 	// SendCodePerPhone limits send code requests per phone number
 	SendCodePerPhone RateLimitRule `json:"sendCodePerPhone"`
 	// SendCodePerIP limits send code requests per IP address
@@ -237,7 +237,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 			}
 		}
 	}
-	
+
 	if p.notifAdapter == nil {
 		p.logger.Warn("notification adapter not available, SMS sending will be skipped")
 	}
@@ -261,7 +261,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
-	
+
 	// Setup rate limiting storage
 	var rateLimitStorage rl.Storage
 	if p.config.RateLimit.Enabled {
@@ -272,7 +272,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				Password: p.config.RateLimit.RedisPassword,
 				DB:       p.config.RateLimit.RedisDB,
 			})
-			
+
 			// Test Redis connection
 			ctx := context.Background()
 			if err := redisClient.Ping(ctx).Err(); err != nil {
@@ -291,7 +291,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	} else {
 		rateLimitStorage = storage.NewMemoryStorage()
 	}
-	
+
 	// Configure rate limiting rules
 	rules := map[string]rl.Rule{
 		"/phone/send-code": {
@@ -307,16 +307,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			Max:    p.config.RateLimit.VerifyPerPhone.Max,
 		},
 	}
-	
+
 	rls := rl.NewService(rateLimitStorage, rl.Config{
 		Enabled: p.config.RateLimit.Enabled,
 		Rules:   rules,
 	})
 	h := NewHandler(p.service, rls, p.authInst)
-	
+
 	// Get authentication middleware for API key validation
 	authMw := p.authInst.AuthMiddleware()
-	
+
 	// Wrap handler with middleware if available
 	wrapHandler := func(handler func(forge.Context) error) func(forge.Context) error {
 		if authMw != nil {
@@ -324,7 +324,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		}
 		return handler
 	}
-	
+
 	router.POST("/phone/send-code", wrapHandler(h.SendCode),
 		forge.WithName("phone.sendcode"),
 		forge.WithSummary("Send phone verification code"),

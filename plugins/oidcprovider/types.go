@@ -192,29 +192,29 @@ type JWKResponse = JWK
 
 // DiscoveryResponse represents the OIDC discovery document
 type DiscoveryResponse struct {
-	Issuer                                     string   `json:"issuer" example:"https://auth.example.com"`
-	AuthorizationEndpoint                      string   `json:"authorization_endpoint" example:"https://auth.example.com/oauth2/authorize"`
-	TokenEndpoint                              string   `json:"token_endpoint" example:"https://auth.example.com/oauth2/token"`
-	UserInfoEndpoint                           string   `json:"userinfo_endpoint" example:"https://auth.example.com/oauth2/userinfo"`
-	JwksURI                                    string   `json:"jwks_uri" example:"https://auth.example.com/oauth2/jwks"`
-	RegistrationEndpoint                       string   `json:"registration_endpoint,omitempty" example:"https://auth.example.com/oauth2/register"`
-	IntrospectionEndpoint                      string   `json:"introspection_endpoint,omitempty" example:"https://auth.example.com/oauth2/introspect"`
-	RevocationEndpoint                         string   `json:"revocation_endpoint,omitempty" example:"https://auth.example.com/oauth2/revoke"`
-	ResponseTypesSupported                     []string `json:"response_types_supported" example:"code,token,id_token"`
-	ResponseModesSupported                     []string `json:"response_modes_supported,omitempty" example:"query,fragment,form_post"`
-	GrantTypesSupported                        []string `json:"grant_types_supported" example:"authorization_code,refresh_token,client_credentials"`
-	SubjectTypesSupported                      []string `json:"subject_types_supported" example:"public"`
-	IDTokenSigningAlgValuesSupported           []string `json:"id_token_signing_alg_values_supported" example:"RS256"`
-	ScopesSupported                            []string `json:"scopes_supported" example:"openid,profile,email"`
-	TokenEndpointAuthMethodsSupported          []string `json:"token_endpoint_auth_methods_supported" example:"client_secret_basic,client_secret_post"`
-	ClaimsSupported                            []string `json:"claims_supported" example:"sub,name,email,picture"`
-	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported,omitempty" example:"S256,plain"`
-	IntrospectionEndpointAuthMethodsSupported  []string `json:"introspection_endpoint_auth_methods_supported,omitempty"`
-	RevocationEndpointAuthMethodsSupported     []string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
-	RequestParameterSupported                  bool     `json:"request_parameter_supported,omitempty"`
-	RequestURIParameterSupported               bool     `json:"request_uri_parameter_supported,omitempty"`
-	RequireRequestURIRegistration              bool     `json:"require_request_uri_registration,omitempty"`
-	ClaimsParameterSupported                   bool     `json:"claims_parameter_supported,omitempty"`
+	Issuer                                    string   `json:"issuer" example:"https://auth.example.com"`
+	AuthorizationEndpoint                     string   `json:"authorization_endpoint" example:"https://auth.example.com/oauth2/authorize"`
+	TokenEndpoint                             string   `json:"token_endpoint" example:"https://auth.example.com/oauth2/token"`
+	UserInfoEndpoint                          string   `json:"userinfo_endpoint" example:"https://auth.example.com/oauth2/userinfo"`
+	JwksURI                                   string   `json:"jwks_uri" example:"https://auth.example.com/oauth2/jwks"`
+	RegistrationEndpoint                      string   `json:"registration_endpoint,omitempty" example:"https://auth.example.com/oauth2/register"`
+	IntrospectionEndpoint                     string   `json:"introspection_endpoint,omitempty" example:"https://auth.example.com/oauth2/introspect"`
+	RevocationEndpoint                        string   `json:"revocation_endpoint,omitempty" example:"https://auth.example.com/oauth2/revoke"`
+	ResponseTypesSupported                    []string `json:"response_types_supported" example:"code,token,id_token"`
+	ResponseModesSupported                    []string `json:"response_modes_supported,omitempty" example:"query,fragment,form_post"`
+	GrantTypesSupported                       []string `json:"grant_types_supported" example:"authorization_code,refresh_token,client_credentials"`
+	SubjectTypesSupported                     []string `json:"subject_types_supported" example:"public"`
+	IDTokenSigningAlgValuesSupported          []string `json:"id_token_signing_alg_values_supported" example:"RS256"`
+	ScopesSupported                           []string `json:"scopes_supported" example:"openid,profile,email"`
+	TokenEndpointAuthMethodsSupported         []string `json:"token_endpoint_auth_methods_supported" example:"client_secret_basic,client_secret_post"`
+	ClaimsSupported                           []string `json:"claims_supported" example:"sub,name,email,picture"`
+	CodeChallengeMethodsSupported             []string `json:"code_challenge_methods_supported,omitempty" example:"S256,plain"`
+	IntrospectionEndpointAuthMethodsSupported []string `json:"introspection_endpoint_auth_methods_supported,omitempty"`
+	RevocationEndpointAuthMethodsSupported    []string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
+	RequestParameterSupported                 bool     `json:"request_parameter_supported,omitempty"`
+	RequestURIParameterSupported              bool     `json:"request_uri_parameter_supported,omitempty"`
+	RequireRequestURIRegistration             bool     `json:"require_request_uri_registration,omitempty"`
+	ClaimsParameterSupported                  bool     `json:"claims_parameter_supported,omitempty"`
 }
 
 // =============================================================================
@@ -314,8 +314,7 @@ type ConsentDecision struct {
 
 // ClientAuthResult represents the result of client authentication
 type ClientAuthResult struct {
-	ClientID     string
+	ClientID      string
 	Authenticated bool
-	Method       string // basic, post, none
+	Method        string // basic, post, none
 }
-

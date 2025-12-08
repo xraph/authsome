@@ -64,21 +64,21 @@ var (
 	ErrWebhookEventUnhandled   = errors.New("webhook event not handled")
 
 	// Feature/limit errors
-	ErrFeatureLimitExceeded  = errors.New("feature limit exceeded")
-	ErrSeatLimitExceeded     = errors.New("seat limit exceeded")
-	ErrSubscriptionRequired  = errors.New("subscription is required")
-	ErrTrialExpired          = errors.New("trial period has expired")
-	ErrFeatureNotFound       = errors.New("feature not found")
-	ErrFeatureAlreadyExists  = errors.New("feature with this key already exists")
-	ErrFeatureInUse          = errors.New("feature is linked to plans and cannot be deleted")
-	ErrFeatureAlreadyLinked  = errors.New("feature is already linked to this plan")
-	ErrFeatureLinkNotFound   = errors.New("feature link not found")
-	ErrFeatureNotAvailable   = errors.New("feature is not available for this subscription")
-	ErrInvalidFeatureType    = errors.New("invalid feature type")
-	ErrInvalidResetPeriod    = errors.New("invalid reset period")
-	ErrInsufficientQuota     = errors.New("insufficient feature quota")
-	ErrFeatureGrantNotFound  = errors.New("feature grant not found")
-	ErrFeatureUsageNotFound  = errors.New("feature usage record not found")
+	ErrFeatureLimitExceeded = errors.New("feature limit exceeded")
+	ErrSeatLimitExceeded    = errors.New("seat limit exceeded")
+	ErrSubscriptionRequired = errors.New("subscription is required")
+	ErrTrialExpired         = errors.New("trial period has expired")
+	ErrFeatureNotFound      = errors.New("feature not found")
+	ErrFeatureAlreadyExists = errors.New("feature with this key already exists")
+	ErrFeatureInUse         = errors.New("feature is linked to plans and cannot be deleted")
+	ErrFeatureAlreadyLinked = errors.New("feature is already linked to this plan")
+	ErrFeatureLinkNotFound  = errors.New("feature link not found")
+	ErrFeatureNotAvailable  = errors.New("feature is not available for this subscription")
+	ErrInvalidFeatureType   = errors.New("invalid feature type")
+	ErrInvalidResetPeriod   = errors.New("invalid reset period")
+	ErrInsufficientQuota    = errors.New("insufficient feature quota")
+	ErrFeatureGrantNotFound = errors.New("feature grant not found")
+	ErrFeatureUsageNotFound = errors.New("feature usage record not found")
 
 	// General errors
 	ErrInvalidCurrency = errors.New("invalid currency code")
@@ -190,4 +190,3 @@ func IsPaymentError(err error) bool {
 		errors.Is(err, ErrProviderNotConfigured) ||
 		errors.Is(err, ErrProviderAPIError)
 }
-

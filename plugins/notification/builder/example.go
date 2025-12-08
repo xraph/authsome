@@ -10,7 +10,7 @@ import (
 func ExampleCreateTemplate() {
 	// Create a new document
 	doc := NewDocument()
-	
+
 	// Add a spacer
 	doc.AddBlock(BlockTypeSpacer, map[string]interface{}{
 		"style": map[string]interface{}{},
@@ -18,7 +18,7 @@ func ExampleCreateTemplate() {
 			"height": 20,
 		},
 	}, doc.Root)
-	
+
 	// Add a heading
 	doc.AddBlock(BlockTypeHeading, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -33,7 +33,7 @@ func ExampleCreateTemplate() {
 			"level": "h1",
 		},
 	}, doc.Root)
-	
+
 	// Add text content
 	doc.AddBlock(BlockTypeText, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -47,7 +47,7 @@ func ExampleCreateTemplate() {
 			"text": "Thank you for joining us. We're excited to have you on board!",
 		},
 	}, doc.Root)
-	
+
 	// Add a button
 	doc.AddBlock(BlockTypeButton, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -63,7 +63,7 @@ func ExampleCreateTemplate() {
 			"borderRadius": 6,
 		},
 	}, doc.Root)
-	
+
 	// Render to HTML
 	renderer := NewRenderer(doc)
 	html, err := renderer.RenderToHTML()
@@ -71,16 +71,16 @@ func ExampleCreateTemplate() {
 		fmt.Printf("Error rendering: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Generated HTML (%d bytes)\n", len(html))
-	
+
 	// Get JSON representation
 	jsonStr, err := doc.ToJSON()
 	if err != nil {
 		fmt.Printf("Error converting to JSON: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("JSON document (%d bytes)\n", len(jsonStr))
 }
 
@@ -92,19 +92,19 @@ func ExampleUseSampleTemplate() {
 		fmt.Printf("Error loading template: %v\n", err)
 		return
 	}
-	
+
 	// Render with variables
 	html, err := RenderTemplate(doc, map[string]interface{}{
 		"AppName":      "My Awesome App",
 		"UserName":     "John Doe",
 		"DashboardURL": "https://example.com/dashboard",
 	})
-	
+
 	if err != nil {
 		fmt.Printf("Error rendering: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Rendered email with variables (%d bytes)\n", len(html))
 }
 
@@ -116,7 +116,7 @@ func ExampleModifyTemplate() {
 		fmt.Printf("Error loading template: %v\n", err)
 		return
 	}
-	
+
 	// Find and modify the OTP block
 	for blockID, block := range doc.Blocks {
 		if block.Type == BlockTypeText {
@@ -130,7 +130,7 @@ func ExampleModifyTemplate() {
 			}
 		}
 	}
-	
+
 	// Render modified template
 	renderer := NewRenderer(doc)
 	html, err := renderer.RenderToHTML()
@@ -138,14 +138,14 @@ func ExampleModifyTemplate() {
 		fmt.Printf("Error rendering: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Modified template rendered (%d bytes)\n", len(html))
 }
 
 // ExampleComplexLayout shows how to create a complex layout with columns
 func ExampleComplexLayout() {
 	doc := NewDocument()
-	
+
 	// Add heading
 	doc.AddBlock(BlockTypeHeading, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -159,7 +159,7 @@ func ExampleComplexLayout() {
 			"level": "h2",
 		},
 	}, doc.Root)
-	
+
 	// Add columns
 	columnsID, _ := doc.AddBlock(BlockTypeColumns, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -173,7 +173,7 @@ func ExampleComplexLayout() {
 		},
 		"childrenIds": []string{},
 	}, doc.Root)
-	
+
 	// Add first column
 	col1ID, _ := doc.AddBlock(BlockTypeColumn, map[string]interface{}{
 		"style": map[string]interface{}{},
@@ -182,17 +182,17 @@ func ExampleComplexLayout() {
 		},
 		"childrenIds": []string{},
 	}, columnsID)
-	
+
 	// Add image to first column
 	doc.AddBlock(BlockTypeImage, map[string]interface{}{
 		"style": map[string]interface{}{},
 		"props": map[string]interface{}{
-			"url":    "https://via.placeholder.com/300x200",
-			"alt":    "Product 1",
-			"width":  "100%",
+			"url":   "https://via.placeholder.com/300x200",
+			"alt":   "Product 1",
+			"width": "100%",
 		},
 	}, col1ID)
-	
+
 	// Add text to first column
 	doc.AddBlock(BlockTypeText, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -204,7 +204,7 @@ func ExampleComplexLayout() {
 			"text": "<strong>Premium Plan</strong><br/>$29/month",
 		},
 	}, col1ID)
-	
+
 	// Add second column
 	col2ID, _ := doc.AddBlock(BlockTypeColumn, map[string]interface{}{
 		"style": map[string]interface{}{},
@@ -213,17 +213,17 @@ func ExampleComplexLayout() {
 		},
 		"childrenIds": []string{},
 	}, columnsID)
-	
+
 	// Add image to second column
 	doc.AddBlock(BlockTypeImage, map[string]interface{}{
 		"style": map[string]interface{}{},
 		"props": map[string]interface{}{
-			"url":    "https://via.placeholder.com/300x200",
-			"alt":    "Product 2",
-			"width":  "100%",
+			"url":   "https://via.placeholder.com/300x200",
+			"alt":   "Product 2",
+			"width": "100%",
 		},
 	}, col2ID)
-	
+
 	// Add text to second column
 	doc.AddBlock(BlockTypeText, map[string]interface{}{
 		"style": map[string]interface{}{
@@ -235,7 +235,7 @@ func ExampleComplexLayout() {
 			"text": "<strong>Enterprise Plan</strong><br/>$99/month",
 		},
 	}, col2ID)
-	
+
 	// Render
 	renderer := NewRenderer(doc)
 	html, err := renderer.RenderToHTML()
@@ -243,7 +243,7 @@ func ExampleComplexLayout() {
 		fmt.Printf("Error rendering: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Complex layout rendered (%d bytes)\n", len(html))
 }
 
@@ -251,7 +251,7 @@ func ExampleComplexLayout() {
 func ExampleValidation() {
 	// Create a document
 	doc := NewDocument()
-	
+
 	// Add some blocks
 	doc.AddBlock(BlockTypeText, map[string]interface{}{
 		"style": map[string]interface{}{},
@@ -259,18 +259,18 @@ func ExampleValidation() {
 			"text": "Hello World",
 		},
 	}, doc.Root)
-	
+
 	// Validate
 	if err := doc.Validate(); err != nil {
 		fmt.Printf("Validation error: %v\n", err)
 		return
 	}
-	
+
 	fmt.Println("Document is valid!")
-	
+
 	// Try to add invalid block reference
 	doc.Blocks["root"].Data["childrenIds"] = []interface{}{"non-existent-block"}
-	
+
 	if err := doc.Validate(); err != nil {
 		fmt.Printf("Expected validation error: %v\n", err)
 	}
@@ -287,23 +287,23 @@ func ExampleSerialization() {
 			"level": "h2",
 		},
 	}, doc.Root)
-	
+
 	// Convert to JSON
 	jsonStr, err := doc.ToJSON()
 	if err != nil {
 		fmt.Printf("Error serializing: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Serialized document: %d bytes\n", len(jsonStr))
-	
+
 	// Load from JSON
 	loadedDoc, err := FromJSON(jsonStr)
 	if err != nil {
 		fmt.Printf("Error deserializing: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Loaded document with %d blocks\n", len(loadedDoc.Blocks))
 }
 
@@ -311,20 +311,19 @@ func ExampleSerialization() {
 func RunAllExamples() {
 	fmt.Println("=== Example: Create Template ===")
 	ExampleCreateTemplate()
-	
+
 	fmt.Println("\n=== Example: Use Sample Template ===")
 	ExampleUseSampleTemplate()
-	
+
 	fmt.Println("\n=== Example: Modify Template ===")
 	ExampleModifyTemplate()
-	
+
 	fmt.Println("\n=== Example: Complex Layout ===")
 	ExampleComplexLayout()
-	
+
 	fmt.Println("\n=== Example: Validation ===")
 	ExampleValidation()
-	
+
 	fmt.Println("\n=== Example: Serialization ===")
 	ExampleSerialization()
 }
-

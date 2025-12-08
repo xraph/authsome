@@ -62,7 +62,7 @@ func TestAuthURLResponse_JSON(t *testing.T) {
 
 func TestCallbackDataResponse_JSON(t *testing.T) {
 	userID := xid.New()
-	
+
 	resp := CallbackDataResponse{
 		User: &schema.User{
 			ID:    userID,
@@ -101,14 +101,14 @@ func TestProvidersResponse_JSON(t *testing.T) {
 func TestHandler_ListProviders(t *testing.T) {
 	// Setup
 	config := Config{
-		BaseURL:         "http://localhost:3000",
-		AutoCreateUser:  true,
+		BaseURL:        "http://localhost:3000",
+		AutoCreateUser: true,
 	}
-	
+
 	mockSocialRepo := &MockSocialAccountRepository{}
 	mockStateStore := NewMockStateStore()
 	mockAudit := &audit.Service{}
-	
+
 	// Note: For this test, we'll create service without user service
 	// since we're only testing provider listing which doesn't need it
 	service := &Service{
@@ -118,9 +118,9 @@ func TestHandler_ListProviders(t *testing.T) {
 		stateStore: mockStateStore,
 		audit:      mockAudit,
 	}
-	
+
 	_ = NewHandler(service, nil)
-	
+
 	providers := service.ListProviders()
 	assert.NotNil(t, providers)
 	assert.IsType(t, []string{}, providers)
@@ -141,4 +141,3 @@ func TestRateLimiter_Allow(t *testing.T) {
 	assert.Equal(t, 5, limit.Requests)
 	assert.Equal(t, 1*time.Minute, limit.Window)
 }
-

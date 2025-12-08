@@ -130,4 +130,3 @@ func runExample() {
 
 	log.Println("Server is ready. Authentication middleware configured.")
 }
-

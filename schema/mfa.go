@@ -175,15 +175,15 @@ type MFABypass struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_bypasses,alias:mfb"`
 
-	ID        xid.ID    `bun:"id,pk,type:varchar(20)"`
-	AppID     xid.ID    `bun:"app_id,notnull,type:varchar(20)"` // App context
-	UserID    xid.ID    `bun:"user_id,notnull,type:varchar(20)"`
-	GrantedBy xid.ID    `bun:"granted_by,notnull,type:varchar(20)"` // Admin who granted bypass
-	Reason    string    `bun:"reason,notnull"`
-	ExpiresAt time.Time `bun:"expires_at,notnull"`
+	ID        xid.ID     `bun:"id,pk,type:varchar(20)"`
+	AppID     xid.ID     `bun:"app_id,notnull,type:varchar(20)"` // App context
+	UserID    xid.ID     `bun:"user_id,notnull,type:varchar(20)"`
+	GrantedBy xid.ID     `bun:"granted_by,notnull,type:varchar(20)"` // Admin who granted bypass
+	Reason    string     `bun:"reason,notnull"`
+	ExpiresAt time.Time  `bun:"expires_at,notnull"`
 	RevokedAt *time.Time `bun:"revoked_at"`
 	RevokedBy *xid.ID    `bun:"revoked_by,type:varchar(20)"`
-	Metadata  JSONMap   `bun:"metadata,type:jsonb"`
+	Metadata  JSONMap    `bun:"metadata,type:jsonb"`
 
 	// Relations
 	App *App `bun:"rel:belongs-to,join:app_id=id"`

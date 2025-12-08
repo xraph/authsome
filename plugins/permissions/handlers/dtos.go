@@ -99,12 +99,12 @@ type ResourceAttributeInput = ResourceAttributeRequest
 
 // ResourceResponse represents a single resource definition response
 type ResourceResponse struct {
-	ID          string                     `json:"id"`
-	NamespaceID string                     `json:"namespaceId"`
-	Type        string                     `json:"type"`
-	Description string                     `json:"description"`
-	Attributes  []core.ResourceAttribute   `json:"attributes"`
-	CreatedAt   time.Time                  `json:"createdAt"`
+	ID          string                   `json:"id"`
+	NamespaceID string                   `json:"namespaceId"`
+	Type        string                   `json:"type"`
+	Description string                   `json:"description"`
+	Attributes  []core.ResourceAttribute `json:"attributes"`
+	CreatedAt   time.Time                `json:"createdAt"`
 }
 
 // ResourcesListResponse represents a list of resource definitions
@@ -198,13 +198,13 @@ type EvaluateRequest struct {
 
 // EvaluateResponse represents the result of a permission evaluation
 type EvaluateResponse struct {
-	Allowed            bool          `json:"allowed"`
-	MatchedPolicies    []string      `json:"matchedPolicies,omitempty"`
-	EvaluatedPolicies  int           `json:"evaluatedPolicies"`
-	EvaluationTimeMs   float64       `json:"evaluationTimeMs"`
-	CacheHit           bool          `json:"cacheHit"`
-	Error              string        `json:"error,omitempty"`
-	Reason             string        `json:"reason,omitempty"`
+	Allowed           bool     `json:"allowed"`
+	MatchedPolicies   []string `json:"matchedPolicies,omitempty"`
+	EvaluatedPolicies int      `json:"evaluatedPolicies"`
+	EvaluationTimeMs  float64  `json:"evaluationTimeMs"`
+	CacheHit          bool     `json:"cacheHit"`
+	Error             string   `json:"error,omitempty"`
+	Reason            string   `json:"reason,omitempty"`
 }
 
 // BatchEvaluateRequest represents a batch evaluation request
@@ -226,11 +226,11 @@ type BatchEvaluationResult struct {
 
 // BatchEvaluateResponse represents the result of a batch evaluation
 type BatchEvaluateResponse struct {
-	Results           []*BatchEvaluationResult `json:"results"`
-	TotalEvaluations  int                      `json:"totalEvaluations"`
-	TotalTimeMs       float64                  `json:"totalTimeMs"`
-	SuccessCount      int                      `json:"successCount"`
-	FailureCount      int                      `json:"failureCount"`
+	Results          []*BatchEvaluationResult `json:"results"`
+	TotalEvaluations int                      `json:"totalEvaluations"`
+	TotalTimeMs      float64                  `json:"totalTimeMs"`
+	SuccessCount     int                      `json:"successCount"`
+	FailureCount     int                      `json:"failureCount"`
 }
 
 // =============================================================================
@@ -255,10 +255,10 @@ type ValidatePolicyResponse struct {
 
 // TestPolicyRequest represents a request to test a policy with sample data
 type TestPolicyRequest struct {
-	Expression   string         `json:"expression" validate:"required"`
-	ResourceType string         `json:"resourceType" validate:"required"`
-	Actions      []string       `json:"actions" validate:"required,min=1"`
-	TestCases    []TestCase     `json:"testCases" validate:"required,min=1"`
+	Expression   string     `json:"expression" validate:"required"`
+	ResourceType string     `json:"resourceType" validate:"required"`
+	Actions      []string   `json:"actions" validate:"required,min=1"`
+	TestCases    []TestCase `json:"testCases" validate:"required,min=1"`
 }
 
 // TestCase represents a single test case for policy testing
@@ -289,12 +289,12 @@ type PolicyTestResult = TestCaseResult
 
 // TestPolicyResponse represents the result of policy testing
 type TestPolicyResponse struct {
-	Passed   bool             `json:"passed"`
-	Results  []TestCaseResult `json:"results"`
-	Total    int              `json:"total"`
-	PassCnt  int              `json:"passedCount"`
-	FailCnt  int              `json:"failedCount"`
-	Error    string           `json:"error,omitempty"`
+	Passed  bool             `json:"passed"`
+	Results []TestCaseResult `json:"results"`
+	Total   int              `json:"total"`
+	PassCnt int              `json:"passedCount"`
+	FailCnt int              `json:"failedCount"`
+	Error   string           `json:"error,omitempty"`
 }
 
 // =============================================================================
@@ -303,13 +303,13 @@ type TestPolicyResponse struct {
 
 // TemplateResponse represents a single policy template
 type TemplateResponse struct {
-	ID          string                       `json:"id"`
-	Name        string                       `json:"name"`
-	Description string                       `json:"description"`
-	Category    string                       `json:"category"`
-	Expression  string                       `json:"expression"`
-	Parameters  []core.TemplateParameter     `json:"parameters"`
-	Examples    []string                     `json:"examples"`
+	ID          string                   `json:"id"`
+	Name        string                   `json:"name"`
+	Description string                   `json:"description"`
+	Category    string                   `json:"category"`
+	Expression  string                   `json:"expression"`
+	Parameters  []core.TemplateParameter `json:"parameters"`
+	Examples    []string                 `json:"examples"`
 }
 
 // TemplatesListResponse represents a list of policy templates
@@ -337,10 +337,10 @@ type InstantiateTemplateRequest struct {
 
 // MigrateRBACRequest represents a request to migrate from RBAC to permissions
 type MigrateRBACRequest struct {
-	NamespaceID        string `json:"namespaceId" validate:"required"`
-	ValidateEquivalence bool  `json:"validateEquivalence"`
-	KeepRBACPolicies   bool   `json:"keepRbacPolicies"`
-	DryRun             bool   `json:"dryRun"`
+	NamespaceID         string `json:"namespaceId" validate:"required"`
+	ValidateEquivalence bool   `json:"validateEquivalence"`
+	KeepRBACPolicies    bool   `json:"keepRbacPolicies"`
+	DryRun              bool   `json:"dryRun"`
 }
 
 // MigrationResponse represents the result of starting a migration
@@ -398,15 +398,15 @@ type AuditLogResponse struct {
 
 // AnalyticsSummary represents summary analytics data
 type AnalyticsSummary struct {
-	TotalPolicies       int               `json:"totalPolicies"`
-	ActivePolicies      int               `json:"activePolicies"`
-	TotalEvaluations    int64             `json:"totalEvaluations"`
-	AllowedCount        int64             `json:"allowedCount"`
-	DeniedCount         int64             `json:"deniedCount"`
-	AvgLatencyMs        float64           `json:"avgLatencyMs"`
-	CacheHitRate        float64           `json:"cacheHitRate"`
-	TopPolicies         []PolicyStats     `json:"topPolicies,omitempty"`
-	TopResourceTypes    []ResourceTypeStats `json:"topResourceTypes,omitempty"`
+	TotalPolicies    int                 `json:"totalPolicies"`
+	ActivePolicies   int                 `json:"activePolicies"`
+	TotalEvaluations int64               `json:"totalEvaluations"`
+	AllowedCount     int64               `json:"allowedCount"`
+	DeniedCount      int64               `json:"deniedCount"`
+	AvgLatencyMs     float64             `json:"avgLatencyMs"`
+	CacheHitRate     float64             `json:"cacheHitRate"`
+	TopPolicies      []PolicyStats       `json:"topPolicies,omitempty"`
+	TopResourceTypes []ResourceTypeStats `json:"topResourceTypes,omitempty"`
 }
 
 // PolicyStats represents statistics for a single policy
@@ -537,4 +537,3 @@ func ToAuditLogEntry(e *core.AuditEvent) *AuditLogEntry {
 	}
 	return entry
 }
-

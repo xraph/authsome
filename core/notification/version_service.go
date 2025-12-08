@@ -174,4 +174,3 @@ type VersionComparison struct {
 	SubjectChanged bool                                `json:"subjectChanged"`
 	BodyChanged    bool                                `json:"bodyChanged"`
 }
-

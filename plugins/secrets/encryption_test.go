@@ -310,4 +310,3 @@ func BenchmarkDeriveKey(b *testing.B) {
 		svc.DeriveKey("app", "env")
 	}
 }
-

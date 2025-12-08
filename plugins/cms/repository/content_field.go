@@ -222,4 +222,3 @@ func (r *contentFieldRepository) ExistsWithName(ctx context.Context, contentType
 	}
 	return count > 0, nil
 }
-

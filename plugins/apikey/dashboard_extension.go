@@ -230,7 +230,7 @@ func (e *DashboardExtension) ServeAPIKeysListPage(c forge.Context) error {
 	}
 
 	content := e.renderAPIKeysListContent(c, currentApp, currentUser)
-	
+
 	// Use the settings layout with sidebar navigation
 	return handler.RenderSettingsPage(c, "api-keys", content)
 }
@@ -253,7 +253,7 @@ func (e *DashboardExtension) ServeAPIKeysConfigPage(c forge.Context) error {
 	}
 
 	content := e.renderConfigContent(c, currentApp)
-	
+
 	// Use the settings layout with sidebar navigation
 	return handler.RenderSettingsPage(c, "api-keys-config", content)
 }
@@ -276,7 +276,7 @@ func (e *DashboardExtension) ServeAPIKeysSecurityPage(c forge.Context) error {
 	}
 
 	content := e.renderSecurityContent(c, currentApp)
-	
+
 	// Use the settings layout with sidebar navigation
 	return handler.RenderSettingsPage(c, "api-keys-security", content)
 }

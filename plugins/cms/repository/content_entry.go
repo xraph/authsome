@@ -44,15 +44,15 @@ type ContentEntryRepository interface {
 
 // EntryListQuery defines query parameters for listing entries
 type EntryListQuery struct {
-	Status       string
-	Search       string
-	Filters      map[string]FilterCondition
-	SortBy       string
-	SortOrder    string
-	Page         int
-	PageSize     int
-	Select       []string
-	IncludeType  bool
+	Status      string
+	Search      string
+	Filters     map[string]FilterCondition
+	SortBy      string
+	SortOrder   string
+	Page        int
+	PageSize    int
+	Select      []string
+	IncludeType bool
 }
 
 // FilterCondition represents a filter condition
@@ -474,4 +474,3 @@ func (r *contentEntryRepository) CountByAppEnvAndStatus(ctx context.Context, app
 	}
 	return counts, nil
 }
-

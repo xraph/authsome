@@ -182,8 +182,8 @@ func userTableRow(u *user.User, basePath string, appIDStr string) g.Node {
 		),
 		Td(
 			Class("py-3 ps-3 text-end font-medium"),
-				A(
-					Href(basePath+"/dashboard/app/"+appIDStr+"/users/"+u.ID.String()),
+			A(
+				Href(basePath+"/dashboard/app/"+appIDStr+"/users/"+u.ID.String()),
 				Class("group inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 font-medium text-slate-800 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-800 dark:hover:text-violet-400 active:border-slate-200 transition-colors"),
 				Span(g.Text("View")),
 				lucide.ArrowRight(Class("inline-block size-4 text-slate-400 dark:text-gray-500 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-active:translate-x-0.5 transition-all")),

@@ -66,7 +66,7 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 	if authErr, ok := err.(*errs.AuthsomeError); ok {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
-	
+
 	// Check for account lockout error
 	if lockoutErr, ok := err.(*AccountLockoutError); ok {
 		return c.JSON(http.StatusForbidden, &AccountLockedResponse{
@@ -76,7 +76,7 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 			LockedMinutes: lockoutErr.LockedMinutes,
 		})
 	}
-	
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 

@@ -61,11 +61,11 @@ func (r *usageRepository) FindByIdempotencyKey(ctx context.Context, key string) 
 // List retrieves usage records with optional filters
 func (r *usageRepository) List(ctx context.Context, filter *UsageFilter) ([]*schema.SubscriptionUsageRecord, int, error) {
 	var records []*schema.SubscriptionUsageRecord
-	
+
 	query := r.db.NewSelect().
 		Model(&records).
 		Order("sur.timestamp DESC")
-	
+
 	if filter != nil {
 		if filter.SubscriptionID != nil {
 			query = query.Where("sur.subscription_id = ?", *filter.SubscriptionID)
@@ -79,7 +79,7 @@ func (r *usageRepository) List(ctx context.Context, filter *UsageFilter) ([]*sch
 		if filter.Reported != nil {
 			query = query.Where("sur.reported = ?", *filter.Reported)
 		}
-		
+
 		// Pagination
 		pageSize := filter.PageSize
 		if pageSize <= 0 {
@@ -92,12 +92,12 @@ func (r *usageRepository) List(ctx context.Context, filter *UsageFilter) ([]*sch
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
-	
+
 	count, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list usage records: %w", err)
 	}
-	
+
 	return records, count, nil
 }
 
@@ -105,7 +105,7 @@ func (r *usageRepository) List(ctx context.Context, filter *UsageFilter) ([]*sch
 func (r *usageRepository) GetSummary(ctx context.Context, subscriptionID xid.ID, metricKey string, periodStart, periodEnd interface{}) (*UsageSummary, error) {
 	var summary UsageSummary
 	summary.MetricKey = metricKey
-	
+
 	startTime, ok := periodStart.(time.Time)
 	if !ok {
 		return nil, fmt.Errorf("invalid period start type")
@@ -114,7 +114,7 @@ func (r *usageRepository) GetSummary(ctx context.Context, subscriptionID xid.ID,
 	if !ok {
 		return nil, fmt.Errorf("invalid period end type")
 	}
-	
+
 	// Sum up usage records
 	err := r.db.NewSelect().
 		Model((*schema.SubscriptionUsageRecord)(nil)).
@@ -128,28 +128,28 @@ func (r *usageRepository) GetSummary(ctx context.Context, subscriptionID xid.ID,
 	if err != nil {
 		return nil, fmt.Errorf("failed to get usage summary: %w", err)
 	}
-	
+
 	return &summary, nil
 }
 
 // GetUnreported retrieves usage records not yet reported to provider
 func (r *usageRepository) GetUnreported(ctx context.Context, limit int) ([]*schema.SubscriptionUsageRecord, error) {
 	var records []*schema.SubscriptionUsageRecord
-	
+
 	query := r.db.NewSelect().
 		Model(&records).
 		Where("sur.reported = ?", false).
 		Order("sur.timestamp ASC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	err := query.Scan(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unreported usage records: %w", err)
 	}
-	
+
 	return records, nil
 }
 
@@ -168,4 +168,3 @@ func (r *usageRepository) MarkReported(ctx context.Context, id xid.ID, providerR
 	}
 	return nil
 }
-

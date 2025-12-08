@@ -22,52 +22,52 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL str
 	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
 		baseURL = baseURL[:len(baseURL)-1]
 	}
-	
+
 	// Use configured issuer or fall back to baseURL
 	issuer := s.config.Issuer
 	if issuer == "" {
 		issuer = baseURL
 	}
-	
+
 	return &DiscoveryResponse{
-		Issuer:                                     issuer,
-		AuthorizationEndpoint:                      baseURL + "/oauth2/authorize",
-		TokenEndpoint:                              baseURL + "/oauth2/token",
-		UserInfoEndpoint:                           baseURL + "/oauth2/userinfo",
-		JwksURI:                                    baseURL + "/oauth2/jwks",
-		RegistrationEndpoint:                       baseURL + "/oauth2/register",
-		IntrospectionEndpoint:                      baseURL + "/oauth2/introspect",
-		RevocationEndpoint:                         baseURL + "/oauth2/revoke",
-		
+		Issuer:                issuer,
+		AuthorizationEndpoint: baseURL + "/oauth2/authorize",
+		TokenEndpoint:         baseURL + "/oauth2/token",
+		UserInfoEndpoint:      baseURL + "/oauth2/userinfo",
+		JwksURI:               baseURL + "/oauth2/jwks",
+		RegistrationEndpoint:  baseURL + "/oauth2/register",
+		IntrospectionEndpoint: baseURL + "/oauth2/introspect",
+		RevocationEndpoint:    baseURL + "/oauth2/revoke",
+
 		// Supported response types (only authorization code flow for now)
 		ResponseTypesSupported: []string{
 			"code", // Authorization code flow (primary)
 		},
-		
+
 		// Supported response modes
 		ResponseModesSupported: []string{
 			"query", // Standard for authorization code
 		},
-		
+
 		// Supported grant types (accurately reflects implementation)
 		GrantTypesSupported: []string{
-			"authorization_code",  // ✅ Implemented
-			"refresh_token",       // ✅ Implemented
-			"client_credentials",  // ✅ Implemented
+			"authorization_code", // ✅ Implemented
+			"refresh_token",      // ✅ Implemented
+			"client_credentials", // ✅ Implemented
 		},
-		
+
 		// Subject types
 		SubjectTypesSupported: []string{
 			"public",
 		},
-		
+
 		// ID Token signing algorithms
 		IDTokenSigningAlgValuesSupported: []string{
 			"RS256",
 			"RS384",
 			"RS512",
 		},
-		
+
 		// Supported scopes
 		ScopesSupported: []string{
 			"openid",
@@ -77,26 +77,26 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL str
 			"address",
 			"offline_access",
 		},
-		
+
 		// Token endpoint auth methods
 		TokenEndpointAuthMethodsSupported: []string{
 			"client_secret_basic",
 			"client_secret_post",
 			"none",
 		},
-		
+
 		// Introspection endpoint auth methods
 		IntrospectionEndpointAuthMethodsSupported: []string{
 			"client_secret_basic",
 			"client_secret_post",
 		},
-		
+
 		// Revocation endpoint auth methods
 		RevocationEndpointAuthMethodsSupported: []string{
 			"client_secret_basic",
 			"client_secret_post",
 		},
-		
+
 		// Supported claims
 		ClaimsSupported: []string{
 			"sub",
@@ -129,18 +129,18 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL str
 			"phone_number",
 			"phone_number_verified",
 		},
-		
+
 		// PKCE support
 		CodeChallengeMethodsSupported: []string{
 			"S256",
 			"plain",
 		},
-		
+
 		// Additional capabilities
-		RequestParameterSupported:         false,
-		RequestURIParameterSupported:      false,
-		RequireRequestURIRegistration:     false,
-		ClaimsParameterSupported:          false,
+		RequestParameterSupported:     false,
+		RequestURIParameterSupported:  false,
+		RequireRequestURIRegistration: false,
+		ClaimsParameterSupported:      false,
 	}
 }
 
@@ -181,4 +181,3 @@ func (s *DiscoveryService) SupportsScope(scope string) bool {
 	}
 	return false
 }
-

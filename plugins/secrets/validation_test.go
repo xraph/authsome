@@ -316,4 +316,3 @@ func BenchmarkParseYAML(b *testing.B) {
 		v.ParseValue(raw, core.SecretValueTypeYAML)
 	}
 }
-

@@ -77,11 +77,11 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 	}
 
 	sub := &schema.Subscription{
-		ID:             xid.New(),
-		OrganizationID: req.OrganizationID,
-		PlanID:         req.PlanID,
-		Status:         string(core.StatusIncomplete),
-		Quantity:       quantity,
+		ID:                 xid.New(),
+		OrganizationID:     req.OrganizationID,
+		PlanID:             req.PlanID,
+		Status:             string(core.StatusIncomplete),
+		Quantity:           quantity,
 		CurrentPeriodStart: now,
 	}
 
@@ -521,4 +521,3 @@ func (s *SubscriptionService) schemaToPlan(plan *schema.SubscriptionPlan) *core.
 		IsPublic:        plan.IsPublic,
 	}
 }
-

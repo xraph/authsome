@@ -125,7 +125,7 @@ func (s *Service) checkAccountLockout(ctx context.Context, userID xid.ID) error 
 		if minutesLeft < 0 {
 			minutesLeft = 0
 		}
-		
+
 		return &AccountLockoutError{
 			LockedUntil:   *lockedUntil,
 			LockedMinutes: minutesLeft,
@@ -288,7 +288,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	// Normalize and validate inputs
 	disp := strings.TrimSpace(username)
 	canonical := strings.ToLower(disp)
-	
+
 	if disp == "" || strings.TrimSpace(password) == "" {
 		// Audit attempt
 		if s.audit != nil {
@@ -333,7 +333,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	// Scoped to app to prevent collisions across apps
 	id := xid.New()
 	tempEmail := fmt.Sprintf("u-%s@%s.temp.local", id.String(), appID.String())
-	
+
 	// Create user via core user service to reuse password hashing and validations
 	u, err := s.users.Create(ctx, &user.CreateUserRequest{
 		Email:    tempEmail,
@@ -463,7 +463,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 		// Record failed attempt
 		if s.config.LockoutEnabled {
 			_ = s.recordFailedLoginAttempt(ctx, un, appID, ip, ua)
-			
+
 			// Check if we should lock the account
 			if err := s.handleAccountLockout(ctx, u.ID, un, appID); err != nil {
 				// Account was locked

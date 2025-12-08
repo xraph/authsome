@@ -395,4 +395,3 @@ func IsSessionActive(expiresAt time.Time) bool {
 func IsSessionExpiringSoon(expiresAt time.Time, within time.Duration) bool {
 	return time.Until(expiresAt) < within && time.Until(expiresAt) > 0
 }
-

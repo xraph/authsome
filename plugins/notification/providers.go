@@ -9,9 +9,9 @@ import (
 
 // Re-export provider config types
 type (
-	ResendConfig       = providers.ResendConfig
-	MailerSendConfig   = providers.MailerSendConfig
-	PostmarkConfig     = providers.PostmarkConfig
+	ResendConfig     = providers.ResendConfig
+	MailerSendConfig = providers.MailerSendConfig
+	PostmarkConfig   = providers.PostmarkConfig
 )
 
 // Re-export provider constructors
@@ -20,4 +20,3 @@ var (
 	NewMailerSendProvider = providers.NewMailerSendProvider
 	NewPostmarkProvider   = providers.NewPostmarkProvider
 )
-

@@ -444,4 +444,3 @@ func TestLogicalOperator(t *testing.T) {
 		})
 	}
 }
-

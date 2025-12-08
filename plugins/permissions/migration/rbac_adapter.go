@@ -247,4 +247,3 @@ type MigrationPolicyRepoAdapter struct {
 
 // Ensure RBACServiceAdapter implements RBACService interface
 var _ RBACService = (*RBACServiceAdapter)(nil)
-

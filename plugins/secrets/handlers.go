@@ -427,4 +427,3 @@ func splitTags(tags string) []string {
 	}
 	return result
 }
-

@@ -17,7 +17,7 @@ import (
 // at any point in the application lifecycle and will always be executed.
 type HookRegistry struct {
 	mu sync.RWMutex // Protects all hook slices for thread-safety
-	
+
 	// Debug mode for verbose logging
 	debug bool
 
@@ -106,11 +106,11 @@ type PermissionEvaluateRequest struct {
 
 // PermissionDecision is passed to after permission evaluate hook
 type PermissionDecision struct {
-	Allowed         bool
-	MatchedPolicies []string
+	Allowed          bool
+	MatchedPolicies  []string
 	EvaluationTimeMs float64
-	CacheHit        bool
-	Error           string
+	CacheHit         bool
+	Error            string
 }
 
 type BeforePermissionEvaluateHook func(ctx context.Context, req *PermissionEvaluateRequest) error
@@ -144,34 +144,34 @@ func (h *HookRegistry) DisableDebug() {
 func (h *HookRegistry) GetHookCounts() map[string]int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	return map[string]int{
-		"beforeUserCreate":          len(h.beforeUserCreate),
-		"afterUserCreate":           len(h.afterUserCreate),
-		"beforeUserUpdate":          len(h.beforeUserUpdate),
-		"afterUserUpdate":           len(h.afterUserUpdate),
-		"beforeUserDelete":          len(h.beforeUserDelete),
-		"afterUserDelete":           len(h.afterUserDelete),
-		"beforeSessionCreate":       len(h.beforeSessionCreate),
-		"afterSessionCreate":        len(h.afterSessionCreate),
-		"beforeSessionRevoke":       len(h.beforeSessionRevoke),
-		"afterSessionRevoke":        len(h.afterSessionRevoke),
-		"beforeSignUp":              len(h.beforeSignUp),
-		"afterSignUp":               len(h.afterSignUp),
-		"beforeSignIn":              len(h.beforeSignIn),
-		"afterSignIn":               len(h.afterSignIn),
-		"beforeSignOut":             len(h.beforeSignOut),
-		"afterSignOut":              len(h.afterSignOut),
-		"beforeOrganizationCreate":  len(h.beforeOrganizationCreate),
-		"afterOrganizationCreate":   len(h.afterOrganizationCreate),
-		"beforeMemberAdd":           len(h.beforeMemberAdd),
-		"afterMemberAdd":            len(h.afterMemberAdd),
-		"beforeAppCreate":           len(h.beforeAppCreate),
-		"afterAppCreate":            len(h.afterAppCreate),
-		"beforePermissionEvaluate":  len(h.beforePermissionEvaluate),
-		"afterPermissionEvaluate":   len(h.afterPermissionEvaluate),
-		"onPolicyChange":            len(h.onPolicyChange),
-		"onCacheInvalidate":         len(h.onCacheInvalidate),
+		"beforeUserCreate":         len(h.beforeUserCreate),
+		"afterUserCreate":          len(h.afterUserCreate),
+		"beforeUserUpdate":         len(h.beforeUserUpdate),
+		"afterUserUpdate":          len(h.afterUserUpdate),
+		"beforeUserDelete":         len(h.beforeUserDelete),
+		"afterUserDelete":          len(h.afterUserDelete),
+		"beforeSessionCreate":      len(h.beforeSessionCreate),
+		"afterSessionCreate":       len(h.afterSessionCreate),
+		"beforeSessionRevoke":      len(h.beforeSessionRevoke),
+		"afterSessionRevoke":       len(h.afterSessionRevoke),
+		"beforeSignUp":             len(h.beforeSignUp),
+		"afterSignUp":              len(h.afterSignUp),
+		"beforeSignIn":             len(h.beforeSignIn),
+		"afterSignIn":              len(h.afterSignIn),
+		"beforeSignOut":            len(h.beforeSignOut),
+		"afterSignOut":             len(h.afterSignOut),
+		"beforeOrganizationCreate": len(h.beforeOrganizationCreate),
+		"afterOrganizationCreate":  len(h.afterOrganizationCreate),
+		"beforeMemberAdd":          len(h.beforeMemberAdd),
+		"afterMemberAdd":           len(h.afterMemberAdd),
+		"beforeAppCreate":          len(h.beforeAppCreate),
+		"afterAppCreate":           len(h.afterAppCreate),
+		"beforePermissionEvaluate": len(h.beforePermissionEvaluate),
+		"afterPermissionEvaluate":  len(h.afterPermissionEvaluate),
+		"onPolicyChange":           len(h.onPolicyChange),
+		"onCacheInvalidate":        len(h.onCacheInvalidate),
 	}
 }
 
@@ -387,11 +387,11 @@ func (h *HookRegistry) ExecuteBeforeUserCreate(ctx context.Context, req *user.Cr
 	copy(hooks, h.beforeUserCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeUserCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, req); err != nil {
 			if debug {
@@ -410,11 +410,11 @@ func (h *HookRegistry) ExecuteAfterUserCreate(ctx context.Context, user *user.Us
 	copy(hooks, h.afterUserCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterUserCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, user); err != nil {
 			if debug {
@@ -433,11 +433,11 @@ func (h *HookRegistry) ExecuteBeforeUserUpdate(ctx context.Context, userID xid.I
 	copy(hooks, h.beforeUserUpdate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeUserUpdate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, userID, req); err != nil {
 			if debug {
@@ -456,11 +456,11 @@ func (h *HookRegistry) ExecuteAfterUserUpdate(ctx context.Context, user *user.Us
 	copy(hooks, h.afterUserUpdate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterUserUpdate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, user); err != nil {
 			if debug {
@@ -479,11 +479,11 @@ func (h *HookRegistry) ExecuteBeforeUserDelete(ctx context.Context, userID xid.I
 	copy(hooks, h.beforeUserDelete)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeUserDelete hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, userID); err != nil {
 			if debug {
@@ -502,11 +502,11 @@ func (h *HookRegistry) ExecuteAfterUserDelete(ctx context.Context, userID xid.ID
 	copy(hooks, h.afterUserDelete)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterUserDelete hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, userID); err != nil {
 			if debug {
@@ -525,11 +525,11 @@ func (h *HookRegistry) ExecuteBeforeSessionCreate(ctx context.Context, req *sess
 	copy(hooks, h.beforeSessionCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeSessionCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, req); err != nil {
 			if debug {
@@ -548,11 +548,11 @@ func (h *HookRegistry) ExecuteAfterSessionCreate(ctx context.Context, session *s
 	copy(hooks, h.afterSessionCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterSessionCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, session); err != nil {
 			if debug {
@@ -571,11 +571,11 @@ func (h *HookRegistry) ExecuteBeforeSessionRevoke(ctx context.Context, token str
 	copy(hooks, h.beforeSessionRevoke)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeSessionRevoke hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, token); err != nil {
 			if debug {
@@ -594,11 +594,11 @@ func (h *HookRegistry) ExecuteAfterSessionRevoke(ctx context.Context, sessionID 
 	copy(hooks, h.afterSessionRevoke)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterSessionRevoke hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, sessionID); err != nil {
 			if debug {
@@ -617,11 +617,11 @@ func (h *HookRegistry) ExecuteBeforeSignUp(ctx context.Context, req *auth.SignUp
 	copy(hooks, h.beforeSignUp)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeSignUp hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, req); err != nil {
 			if debug {
@@ -640,11 +640,11 @@ func (h *HookRegistry) ExecuteAfterSignUp(ctx context.Context, response *respons
 	copy(hooks, h.afterSignUp)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterSignUp hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, response); err != nil {
 			if debug {
@@ -663,11 +663,11 @@ func (h *HookRegistry) ExecuteBeforeSignIn(ctx context.Context, req *auth.SignIn
 	copy(hooks, h.beforeSignIn)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeSignIn hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, req); err != nil {
 			if debug {
@@ -686,11 +686,11 @@ func (h *HookRegistry) ExecuteAfterSignIn(ctx context.Context, response *respons
 	copy(hooks, h.afterSignIn)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterSignIn hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, response); err != nil {
 			if debug {
@@ -699,7 +699,7 @@ func (h *HookRegistry) ExecuteAfterSignIn(ctx context.Context, response *respons
 			return err
 		}
 	}
-	
+
 	if debug {
 		log.Printf("[HookRegistry] All %d AfterSignIn hooks executed successfully", len(hooks))
 	}
@@ -713,11 +713,11 @@ func (h *HookRegistry) ExecuteBeforeSignOut(ctx context.Context, token string) e
 	copy(hooks, h.beforeSignOut)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeSignOut hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, token); err != nil {
 			if debug {
@@ -736,11 +736,11 @@ func (h *HookRegistry) ExecuteAfterSignOut(ctx context.Context, token string) er
 	copy(hooks, h.afterSignOut)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterSignOut hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, token); err != nil {
 			if debug {
@@ -759,11 +759,11 @@ func (h *HookRegistry) ExecuteBeforeOrganizationCreate(ctx context.Context, req 
 	copy(hooks, h.beforeOrganizationCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeOrganizationCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, req); err != nil {
 			if debug {
@@ -782,11 +782,11 @@ func (h *HookRegistry) ExecuteAfterOrganizationCreate(ctx context.Context, org i
 	copy(hooks, h.afterOrganizationCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterOrganizationCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, org); err != nil {
 			if debug {
@@ -805,11 +805,11 @@ func (h *HookRegistry) ExecuteBeforeMemberAdd(ctx context.Context, orgID string,
 	copy(hooks, h.beforeMemberAdd)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeMemberAdd hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, orgID, userID); err != nil {
 			if debug {
@@ -828,11 +828,11 @@ func (h *HookRegistry) ExecuteAfterMemberAdd(ctx context.Context, member interfa
 	copy(hooks, h.afterMemberAdd)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterMemberAdd hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, member); err != nil {
 			if debug {
@@ -851,11 +851,11 @@ func (h *HookRegistry) ExecuteBeforeAppCreate(ctx context.Context, req interface
 	copy(hooks, h.beforeAppCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d BeforeAppCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, req); err != nil {
 			if debug {
@@ -874,11 +874,11 @@ func (h *HookRegistry) ExecuteAfterAppCreate(ctx context.Context, app interface{
 	copy(hooks, h.afterAppCreate)
 	debug := h.debug
 	h.mu.RUnlock()
-	
+
 	if debug {
 		log.Printf("[HookRegistry] Executing %d AfterAppCreate hooks", len(hooks))
 	}
-	
+
 	for i, hook := range hooks {
 		if err := hook(ctx, app); err != nil {
 			if debug {

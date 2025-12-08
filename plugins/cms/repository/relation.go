@@ -315,4 +315,3 @@ func (r *bunRelationRepository) FindInverseRelation(ctx context.Context, targetT
 	}
 	return relation, nil
 }
-

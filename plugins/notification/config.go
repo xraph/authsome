@@ -48,8 +48,8 @@ type RateLimit struct {
 
 // ProvidersConfig holds provider configurations
 type ProvidersConfig struct {
-	Email EmailProviderConfig  `json:"email" yaml:"email"`
-	SMS   *SMSProviderConfig   `json:"sms,omitempty" yaml:"sms,omitempty"` // Optional SMS provider
+	Email EmailProviderConfig `json:"email" yaml:"email"`
+	SMS   *SMSProviderConfig  `json:"sms,omitempty" yaml:"sms,omitempty"` // Optional SMS provider
 }
 
 // EmailProviderConfig holds email provider configuration

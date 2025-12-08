@@ -1508,4 +1508,3 @@ func (e *DashboardExtension) getDefaultValue(featureType core.FeatureType) strin
 		return ""
 	}
 }
-

@@ -24,7 +24,7 @@ func GeneralSettingsPage(data GeneralSettingsPageData) g.Node {
 
 		components.SettingsPageHeader("General Settings", "Configure basic dashboard settings and preferences"),
 
-		components.SettingsSection("Dashboard Configuration", "", 
+		components.SettingsSection("Dashboard Configuration", "",
 			FormEl(
 				Method("POST"),
 				Action(fmt.Sprintf("%s/dashboard/app/%s/settings/general", data.BasePath, data.AppID)),
@@ -106,7 +106,7 @@ func GeneralSettingsPage(data GeneralSettingsPageData) g.Node {
 		),
 
 		// Security Section
-		components.SettingsSection("Security Settings", "Configure security and authentication policies", 
+		components.SettingsSection("Security Settings", "Configure security and authentication policies",
 			Div(
 				Class("space-y-4"),
 				Div(
@@ -158,4 +158,3 @@ func GeneralSettingsPage(data GeneralSettingsPageData) g.Node {
 		),
 	)
 }
-

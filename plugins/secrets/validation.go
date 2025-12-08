@@ -402,4 +402,3 @@ func FormatValue(value interface{}, valueType core.SecretValueType) string {
 		return fmt.Sprintf("%v", value)
 	}
 }
-

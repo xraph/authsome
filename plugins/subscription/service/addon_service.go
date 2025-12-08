@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/core"
+	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/providers"
 	"github.com/xraph/authsome/plugins/subscription/repository"
 	"github.com/xraph/authsome/plugins/subscription/schema"
@@ -238,7 +238,7 @@ func (s *AddOnService) Delete(ctx context.Context, id xid.ID) error {
 	if err := s.repo.DeleteFeatures(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete features: %w", err)
 	}
-	
+
 	if err := s.repo.DeleteTiers(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete tiers: %w", err)
 	}
@@ -385,4 +385,3 @@ func (s *AddOnService) schemaToCoreAddOn(addon *schema.SubscriptionAddOn) *core.
 
 	return s.schemaToCore(addon, features, tiers)
 }
-

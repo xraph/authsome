@@ -16,13 +16,13 @@ import (
 
 // EnforcementService handles subscription limit enforcement
 type EnforcementService struct {
-	subRepo         repository.SubscriptionRepository
-	planRepo        repository.PlanRepository
-	usageRepo       repository.UsageRepository
-	featureRepo     repository.FeatureRepository
+	subRepo          repository.SubscriptionRepository
+	planRepo         repository.PlanRepository
+	usageRepo        repository.UsageRepository
+	featureRepo      repository.FeatureRepository
 	featureUsageRepo repository.FeatureUsageRepository
-	orgService      *organization.Service
-	config          core.Config
+	orgService       *organization.Service
+	config           core.Config
 }
 
 // NewEnforcementService creates a new enforcement service

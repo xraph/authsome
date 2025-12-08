@@ -11,7 +11,7 @@ import (
 type Policy struct {
 	ID                 xid.ID    `json:"id" bun:"id,pk"`
 	AppID              xid.ID    `json:"appId" bun:"app_id,notnull"`                              // Platform app (required)
-	EnvironmentID      xid.ID    `json:"environmentId" bun:"environment_id,notnull"`             // Environment (required)
+	EnvironmentID      xid.ID    `json:"environmentId" bun:"environment_id,notnull"`              // Environment (required)
 	UserOrganizationID *xid.ID   `json:"userOrganizationId,omitempty" bun:"user_organization_id"` // User-created org (optional)
 	NamespaceID        xid.ID    `json:"namespaceId" bun:"namespace_id,notnull"`
 	Name               string    `json:"name" bun:"name,notnull"`
@@ -32,7 +32,7 @@ type Policy struct {
 type Namespace struct {
 	ID                 xid.ID                `json:"id" bun:"id,pk"`
 	AppID              xid.ID                `json:"appId" bun:"app_id,notnull"`                              // Platform app (required)
-	EnvironmentID      xid.ID                `json:"environmentId" bun:"environment_id,notnull"`             // Environment (required)
+	EnvironmentID      xid.ID                `json:"environmentId" bun:"environment_id,notnull"`              // Environment (required)
 	UserOrganizationID *xid.ID               `json:"userOrganizationId,omitempty" bun:"user_organization_id"` // User-created org (optional)
 	Name               string                `json:"name" bun:"name"`
 	Description        string                `json:"description" bun:"description"`
@@ -113,7 +113,7 @@ type MigrationStatus struct {
 type AuditEvent struct {
 	ID                 xid.ID                 `json:"id" bun:"id,pk"`
 	AppID              xid.ID                 `json:"appId" bun:"app_id,notnull"`                              // Platform app (required)
-	EnvironmentID      xid.ID                 `json:"environmentId" bun:"environment_id,notnull"`             // Environment (required)
+	EnvironmentID      xid.ID                 `json:"environmentId" bun:"environment_id,notnull"`              // Environment (required)
 	UserOrganizationID *xid.ID                `json:"userOrganizationId,omitempty" bun:"user_organization_id"` // User-created org (optional)
 	ActorID            xid.ID                 `json:"actorId" bun:"actor_id,notnull"`
 	Action             string                 `json:"action" bun:"action,notnull"`

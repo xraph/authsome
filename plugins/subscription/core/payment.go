@@ -8,26 +8,26 @@ import (
 
 // PaymentMethod represents a stored payment method
 type PaymentMethod struct {
-	ID                  xid.ID            `json:"id"`
-	OrganizationID      xid.ID            `json:"organizationId"`
-	Type                PaymentMethodType `json:"type"`              // card, bank_account, etc.
-	IsDefault           bool              `json:"isDefault"`         // Is this the default payment method
-	ProviderMethodID    string            `json:"providerMethodId"`  // Stripe PaymentMethod ID
-	ProviderCustomerID  string            `json:"providerCustomerId"` // Stripe Customer ID
-	
+	ID                 xid.ID            `json:"id"`
+	OrganizationID     xid.ID            `json:"organizationId"`
+	Type               PaymentMethodType `json:"type"`               // card, bank_account, etc.
+	IsDefault          bool              `json:"isDefault"`          // Is this the default payment method
+	ProviderMethodID   string            `json:"providerMethodId"`   // Stripe PaymentMethod ID
+	ProviderCustomerID string            `json:"providerCustomerId"` // Stripe Customer ID
+
 	// Card-specific fields (when Type == PaymentMethodCard)
-	CardBrand           string `json:"cardBrand"`           // visa, mastercard, etc.
-	CardLast4           string `json:"cardLast4"`           // Last 4 digits
-	CardExpMonth        int    `json:"cardExpMonth"`        // Expiration month
-	CardExpYear         int    `json:"cardExpYear"`         // Expiration year
-	CardFunding         string `json:"cardFunding"`         // credit, debit, prepaid
-	
+	CardBrand    string `json:"cardBrand"`    // visa, mastercard, etc.
+	CardLast4    string `json:"cardLast4"`    // Last 4 digits
+	CardExpMonth int    `json:"cardExpMonth"` // Expiration month
+	CardExpYear  int    `json:"cardExpYear"`  // Expiration year
+	CardFunding  string `json:"cardFunding"`  // credit, debit, prepaid
+
 	// Bank account specific fields (when Type == PaymentMethodBankAccount)
-	BankName            string `json:"bankName"`
-	BankLast4           string `json:"bankLast4"`
-	BankRoutingNumber   string `json:"bankRoutingNumber"` // Masked
-	BankAccountType     string `json:"bankAccountType"`   // checking, savings
-	
+	BankName          string `json:"bankName"`
+	BankLast4         string `json:"bankLast4"`
+	BankRoutingNumber string `json:"bankRoutingNumber"` // Masked
+	BankAccountType   string `json:"bankAccountType"`   // checking, savings
+
 	// Billing details
 	BillingName         string `json:"billingName"`
 	BillingEmail        string `json:"billingEmail"`
@@ -38,7 +38,7 @@ type PaymentMethod struct {
 	BillingState        string `json:"billingState"`
 	BillingPostalCode   string `json:"billingPostalCode"`
 	BillingCountry      string `json:"billingCountry"`
-	
+
 	Metadata  map[string]any `json:"metadata"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
@@ -113,20 +113,20 @@ func (pm *PaymentMethod) WillExpireSoon(days int) bool {
 
 // SetupIntentResult represents the result of creating a setup intent
 type SetupIntentResult struct {
-	ClientSecret     string `json:"clientSecret"`     // For client-side confirmation
-	SetupIntentID    string `json:"setupIntentId"`    // Stripe SetupIntent ID
-	PublishableKey   string `json:"publishableKey"`   // Stripe publishable key
+	ClientSecret   string `json:"clientSecret"`   // For client-side confirmation
+	SetupIntentID  string `json:"setupIntentId"`  // Stripe SetupIntent ID
+	PublishableKey string `json:"publishableKey"` // Stripe publishable key
 }
 
 // AddPaymentMethodRequest represents a request to add a payment method
 type AddPaymentMethodRequest struct {
-	OrganizationID   xid.ID            `json:"organizationId" validate:"required"`
-	Type             PaymentMethodType `json:"type" validate:"required"`
-	SetAsDefault     bool              `json:"setAsDefault"`
-	BillingName      string            `json:"billingName"`
-	BillingEmail     string            `json:"billingEmail" validate:"omitempty,email"`
-	BillingPhone     string            `json:"billingPhone"`
-	BillingAddress   *BillingAddress   `json:"billingAddress"`
+	OrganizationID xid.ID            `json:"organizationId" validate:"required"`
+	Type           PaymentMethodType `json:"type" validate:"required"`
+	SetAsDefault   bool              `json:"setAsDefault"`
+	BillingName    string            `json:"billingName"`
+	BillingEmail   string            `json:"billingEmail" validate:"omitempty,email"`
+	BillingPhone   string            `json:"billingPhone"`
+	BillingAddress *BillingAddress   `json:"billingAddress"`
 }
 
 // BillingAddress represents a billing address
@@ -141,21 +141,21 @@ type BillingAddress struct {
 
 // Customer represents the billing customer for an organization
 type Customer struct {
-	ID                 xid.ID         `json:"id"`
-	OrganizationID     xid.ID         `json:"organizationId"`
-	ProviderCustomerID string         `json:"providerCustomerId"` // Stripe Customer ID
-	Email              string         `json:"email"`
-	Name               string         `json:"name"`
-	Phone              string         `json:"phone"`
-	TaxID              string         `json:"taxId"`              // VAT number, etc.
-	TaxExempt          bool           `json:"taxExempt"`
-	Currency           string         `json:"currency"`           // Preferred currency
-	Balance            int64          `json:"balance"`            // Account balance in cents
-	DefaultPaymentID   *xid.ID        `json:"defaultPaymentId"`   // Default payment method
+	ID                 xid.ID          `json:"id"`
+	OrganizationID     xid.ID          `json:"organizationId"`
+	ProviderCustomerID string          `json:"providerCustomerId"` // Stripe Customer ID
+	Email              string          `json:"email"`
+	Name               string          `json:"name"`
+	Phone              string          `json:"phone"`
+	TaxID              string          `json:"taxId"` // VAT number, etc.
+	TaxExempt          bool            `json:"taxExempt"`
+	Currency           string          `json:"currency"`         // Preferred currency
+	Balance            int64           `json:"balance"`          // Account balance in cents
+	DefaultPaymentID   *xid.ID         `json:"defaultPaymentId"` // Default payment method
 	BillingAddress     *BillingAddress `json:"billingAddress"`
-	Metadata           map[string]any `json:"metadata"`
-	CreatedAt          time.Time      `json:"createdAt"`
-	UpdatedAt          time.Time      `json:"updatedAt"`
+	Metadata           map[string]any  `json:"metadata"`
+	CreatedAt          time.Time       `json:"createdAt"`
+	UpdatedAt          time.Time       `json:"updatedAt"`
 }
 
 // NewCustomer creates a new Customer with default values
@@ -196,4 +196,3 @@ type UpdateCustomerRequest struct {
 	BillingAddress *BillingAddress `json:"billingAddress,omitempty"`
 	Metadata       map[string]any  `json:"metadata,omitempty"`
 }
-

@@ -97,4 +97,3 @@ type EnforcementServiceInterface interface {
 	EnforceSubscriptionRequired(ctx context.Context, req interface{}) error
 	EnforceSeatLimit(ctx context.Context, orgID string, userID xid.ID) error
 }
-

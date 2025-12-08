@@ -230,4 +230,3 @@ func (p *Plugin) CheckPermission(c forge.Context, resourceType, action, resource
 
 	return decision.Allowed, nil
 }
-

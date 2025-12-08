@@ -20,11 +20,11 @@ const (
 type NotificationTestStatus string
 
 const (
-	NotificationTestStatusPending    NotificationTestStatus = "pending"    // Test queued
-	NotificationTestStatusRunning    NotificationTestStatus = "running"    // Test in progress
-	NotificationTestStatusCompleted  NotificationTestStatus = "completed"  // Test completed successfully
-	NotificationTestStatusFailed     NotificationTestStatus = "failed"     // Test failed
-	NotificationTestStatusPartial    NotificationTestStatus = "partial"    // Some tests succeeded, some failed
+	NotificationTestStatusPending   NotificationTestStatus = "pending"   // Test queued
+	NotificationTestStatusRunning   NotificationTestStatus = "running"   // Test in progress
+	NotificationTestStatusCompleted NotificationTestStatus = "completed" // Test completed successfully
+	NotificationTestStatusFailed    NotificationTestStatus = "failed"    // Test failed
+	NotificationTestStatusPartial   NotificationTestStatus = "partial"   // Some tests succeeded, some failed
 )
 
 // NotificationTest represents a test execution for notification templates
@@ -35,8 +35,8 @@ type NotificationTest struct {
 	TemplateID     xid.ID                 `bun:"template_id,notnull,type:varchar(20)" json:"templateId"`
 	AppID          xid.ID                 `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
 	OrganizationID *xid.ID                `bun:"organization_id,type:varchar(20)" json:"organizationId,omitempty"`
-	TestType       string                 `bun:"test_type,notnull" json:"testType"` // preview, send, bulk
-	Recipients     []string               `bun:"recipients,array" json:"recipients"` // Test recipient(s)
+	TestType       string                 `bun:"test_type,notnull" json:"testType"`               // preview, send, bulk
+	Recipients     []string               `bun:"recipients,array" json:"recipients"`              // Test recipient(s)
 	Variables      map[string]interface{} `bun:"variables,type:jsonb" json:"variables,omitempty"` // Test variables
 	Results        map[string]interface{} `bun:"results,type:jsonb" json:"results,omitempty"`     // Test results (success/failure for each recipient)
 	Status         string                 `bun:"status,notnull,default:'pending'" json:"status"`  // pending, running, completed, failed, partial
@@ -54,4 +54,3 @@ type NotificationTest struct {
 	Organization *Organization         `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 	User         *User                 `bun:"rel:belongs-to,join:created_by=id" json:"user,omitempty"`
 }
-

@@ -449,7 +449,7 @@ func (e *DashboardExtension) ServeProviderEditPage(c forge.Context) error {
 							Type("password"),
 							Name("client_secret"),
 							ID("client_secret"),
-							Placeholder("••••••••" + config.MaskClientSecret()),
+							Placeholder("••••••••"+config.MaskClientSecret()),
 							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
 						),
 						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"), g.Text("Leave empty to keep the current secret")),
@@ -726,4 +726,3 @@ func (e *DashboardExtension) getProviderIcon(providerName string) g.Node {
 		return Div(Class(iconClass+" bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-400"), lucide.Globe(Class("size-full")))
 	}
 }
-

@@ -29,10 +29,10 @@ func NewStateStore() *StateStore {
 	store := &StateStore{
 		states: make(map[string]*OIDCState),
 	}
-	
+
 	// Start background cleanup goroutine
 	go store.cleanup()
-	
+
 	return store
 }
 
@@ -40,12 +40,12 @@ func NewStateStore() *StateStore {
 func (s *StateStore) Store(ctx context.Context, state *OIDCState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Set expiration if not already set (default 10 minutes)
 	if state.ExpiresAt.IsZero() {
 		state.ExpiresAt = time.Now().Add(10 * time.Minute)
 	}
-	
+
 	s.states[state.State] = state
 	return nil
 }
@@ -54,17 +54,17 @@ func (s *StateStore) Store(ctx context.Context, state *OIDCState) error {
 func (s *StateStore) Get(ctx context.Context, state string) (*OIDCState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	oidcState, ok := s.states[state]
 	if !ok {
 		return nil, nil // Not found
 	}
-	
+
 	// Check if expired
 	if time.Now().After(oidcState.ExpiresAt) {
 		return nil, nil // Expired
 	}
-	
+
 	return oidcState, nil
 }
 
@@ -72,7 +72,7 @@ func (s *StateStore) Get(ctx context.Context, state string) (*OIDCState, error) 
 func (s *StateStore) Delete(ctx context.Context, state string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	delete(s.states, state)
 	return nil
 }
@@ -81,7 +81,7 @@ func (s *StateStore) Delete(ctx context.Context, state string) error {
 func (s *StateStore) cleanup() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		s.mu.Lock()
 		now := time.Now()
@@ -126,4 +126,3 @@ type RedisStateStore struct {
 // 	// Delete from Redis
 // 	return nil
 // }
-

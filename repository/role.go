@@ -94,9 +94,9 @@ func (r *RoleRepository) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]
 		Where("organization_id IS NULL").
 		Where("is_template = ?", true).
 		Order("name ASC")
-	
+
 	fmt.Printf("[DEBUG REPO] GetRoleTemplates SQL: %s, appID: %s\n", query.String(), appID.String())
-	
+
 	err := query.Scan(ctx)
 	if err != nil {
 		fmt.Printf("[DEBUG REPO] GetRoleTemplates error: %v\n", err)

@@ -340,4 +340,3 @@ func (s *Searcher) SuggestSearch(ctx context.Context, contentTypeID xid.ID, pref
 
 	return suggestions, nil
 }
-

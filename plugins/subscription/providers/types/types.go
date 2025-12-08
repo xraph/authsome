@@ -173,4 +173,3 @@ const (
 	EventPaymentMethodAttached    = "payment_method.attached"
 	EventPaymentMethodDetached    = "payment_method.detached"
 )
-

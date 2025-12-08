@@ -242,7 +242,7 @@ func TestMemoryStateStore_Expiration(t *testing.T) {
 	ctx := context.Background()
 
 	appID := xid.New()
-	
+
 	// Set state with very short TTL
 	state := &OAuthState{
 		Provider:  "google",
@@ -308,4 +308,3 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "localhost:6379", config.StateStorage.RedisAddr)
 	assert.Equal(t, 15*time.Minute, config.StateStorage.StateTTL)
 }
-

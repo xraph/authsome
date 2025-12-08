@@ -93,10 +93,10 @@ func (s *Service) ResetTemplate(ctx context.Context, templateID xid.ID) error {
 
 	// Update the template with default values
 	updateReq := &UpdateTemplateRequest{
-		Name:        &defaultMeta.Name,
-		Subject:     &defaultMeta.DefaultSubject,
-		Body:        &body,
-		Variables:   defaultMeta.Variables,
+		Name:      &defaultMeta.Name,
+		Subject:   &defaultMeta.DefaultSubject,
+		Body:      &body,
+		Variables: defaultMeta.Variables,
 		Metadata: map[string]interface{}{
 			"description": defaultMeta.Description,
 		},
@@ -214,4 +214,3 @@ func IsTemplateNotFoundError(err error) bool {
 	// Check if error is our template not found error
 	return err.Error() == ErrTemplateNotFound.Error() || err == ErrTemplateNotFound
 }
-

@@ -19,23 +19,23 @@ type AuthorizationCode struct {
 	SessionID      *xid.ID `bun:"session_id,type:varchar(20)" json:"sessionID,omitempty"`           // Link to user session
 
 	// OAuth2/OIDC fields
-	Code                string     `bun:"code,unique,notnull" json:"code"`                            // The authorization code
-	ClientID            string     `bun:"client_id,notnull" json:"clientID"`                          // OAuth client ID
-	UserID              xid.ID     `bun:"user_id,notnull,type:varchar(20)" json:"userID"`             // User who authorized
-	RedirectURI         string     `bun:"redirect_uri,notnull" json:"redirectURI"`                    // Redirect URI used in auth request
-	Scope               string     `bun:"scope,notnull" json:"scope"`                                 // Requested scopes
-	State               string     `bun:"state" json:"state,omitempty"`                               // State parameter from auth request
-	Nonce               string     `bun:"nonce" json:"nonce,omitempty"`                               // Nonce for OIDC
-	CodeChallenge       string     `bun:"code_challenge" json:"codeChallenge,omitempty"`              // PKCE code challenge
-	CodeChallengeMethod string     `bun:"code_challenge_method" json:"codeChallengeMethod,omitempty"` // PKCE challenge method (S256, plain)
-	
+	Code                string `bun:"code,unique,notnull" json:"code"`                            // The authorization code
+	ClientID            string `bun:"client_id,notnull" json:"clientID"`                          // OAuth client ID
+	UserID              xid.ID `bun:"user_id,notnull,type:varchar(20)" json:"userID"`             // User who authorized
+	RedirectURI         string `bun:"redirect_uri,notnull" json:"redirectURI"`                    // Redirect URI used in auth request
+	Scope               string `bun:"scope,notnull" json:"scope"`                                 // Requested scopes
+	State               string `bun:"state" json:"state,omitempty"`                               // State parameter from auth request
+	Nonce               string `bun:"nonce" json:"nonce,omitempty"`                               // Nonce for OIDC
+	CodeChallenge       string `bun:"code_challenge" json:"codeChallenge,omitempty"`              // PKCE code challenge
+	CodeChallengeMethod string `bun:"code_challenge_method" json:"codeChallengeMethod,omitempty"` // PKCE challenge method (S256, plain)
+
 	// Consent tracking
 	ConsentGranted bool   `bun:"consent_granted,default:false" json:"consentGranted"`
 	ConsentScopes  string `bun:"consent_scopes" json:"consentScopes,omitempty"` // Scopes user consented to
-	
+
 	// Authentication context
 	AuthTime time.Time `bun:"auth_time,notnull" json:"authTime"` // When user authenticated (for max_age checks)
-	
+
 	// Lifecycle
 	ExpiresAt time.Time  `bun:"expires_at,notnull" json:"expiresAt"` // Code expiration (typically 10 minutes)
 	Used      bool       `bun:"used,notnull,default:false" json:"used"`

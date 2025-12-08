@@ -25,10 +25,10 @@ type SecretsConfigSource struct {
 	logger   forge.Logger
 
 	// Cache
-	cache     map[string]interface{}
-	cacheMu   sync.RWMutex
-	loaded    bool
-	lastLoad  time.Time
+	cache    map[string]interface{}
+	cacheMu  sync.RWMutex
+	loaded   bool
+	lastLoad time.Time
 
 	// Watch
 	watching  bool
@@ -408,4 +408,3 @@ func flattenMap(m map[string]interface{}, prefix string, result map[string]inter
 		}
 	}
 }
-

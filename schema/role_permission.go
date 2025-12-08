@@ -21,4 +21,3 @@ type RolePermission struct {
 	Role       *Role       `bun:"rel:belongs-to,join:role_id=id"`
 	Permission *Permission `bun:"rel:belongs-to,join:permission_id=id"`
 }
-

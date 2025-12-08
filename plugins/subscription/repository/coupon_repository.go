@@ -506,4 +506,3 @@ func promotionCodeToSchema(c *core.PromotionCode) *schema.SubscriptionPromotionC
 		UpdatedAt:       c.UpdatedAt,
 	}
 }
-

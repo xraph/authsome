@@ -247,4 +247,3 @@ func (p *Provider) CreateWebhook(ctx context.Context, url string, eventTypes []s
 func (p *Provider) DeleteWebhook(ctx context.Context, webhookID string) error {
 	return ErrNotImplemented
 }
-

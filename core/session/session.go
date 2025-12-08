@@ -60,9 +60,9 @@ type CreateSessionRequest struct {
 
 // RefreshResponse represents the response from refreshing a session
 type RefreshResponse struct {
-	Session      *Session  `json:"session"`       // Updated session with new access token
-	AccessToken  string    `json:"accessToken"`   // New short-lived access token
-	RefreshToken string    `json:"refreshToken"`  // Refresh token (may be rotated)
-	ExpiresAt    time.Time `json:"expiresAt"`     // Access token expiry
+	Session          *Session  `json:"session"`          // Updated session with new access token
+	AccessToken      string    `json:"accessToken"`      // New short-lived access token
+	RefreshToken     string    `json:"refreshToken"`     // Refresh token (may be rotated)
+	ExpiresAt        time.Time `json:"expiresAt"`        // Access token expiry
 	RefreshExpiresAt time.Time `json:"refreshExpiresAt"` // Refresh token expiry
 }

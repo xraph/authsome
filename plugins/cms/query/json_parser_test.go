@@ -790,4 +790,3 @@ func BenchmarkJSONParser_Parse_Complex(b *testing.B) {
 		_, _ = parser.Parse(input)
 	}
 }
-

@@ -17,4 +17,3 @@ type HookExecutor interface {
 	ExecuteBeforeSignOut(ctx context.Context, token string) error
 	ExecuteAfterSignOut(ctx context.Context, token string) error
 }
-

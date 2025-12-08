@@ -86,13 +86,13 @@ func (r *addOnRepository) FindBySlug(ctx context.Context, appID xid.ID, slug str
 // List retrieves add-ons with optional filters
 func (r *addOnRepository) List(ctx context.Context, filter *AddOnFilter) ([]*schema.SubscriptionAddOn, int, error) {
 	var addons []*schema.SubscriptionAddOn
-	
+
 	query := r.db.NewSelect().
 		Model(&addons).
 		Relation("Features").
 		Relation("Tiers").
 		Order("display_order ASC", "created_at DESC")
-	
+
 	if filter != nil {
 		if filter.AppID != nil {
 			query = query.Where("sao.app_id = ?", *filter.AppID)
@@ -103,7 +103,7 @@ func (r *addOnRepository) List(ctx context.Context, filter *AddOnFilter) ([]*sch
 		if filter.IsPublic != nil {
 			query = query.Where("sao.is_public = ?", *filter.IsPublic)
 		}
-		
+
 		// Pagination
 		pageSize := filter.PageSize
 		if pageSize <= 0 {
@@ -116,12 +116,12 @@ func (r *addOnRepository) List(ctx context.Context, filter *AddOnFilter) ([]*sch
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
-	
+
 	count, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list add-ons: %w", err)
 	}
-	
+
 	return addons, count, nil
 }
 
@@ -166,4 +166,3 @@ func (r *addOnRepository) DeleteTiers(ctx context.Context, addOnID xid.ID) error
 	}
 	return nil
 }
-

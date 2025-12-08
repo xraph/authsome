@@ -192,4 +192,3 @@ func (p *Plugin) GetRevisionService() *service.RevisionService {
 func (p *Plugin) GetComponentSchemaService() *service.ComponentSchemaService {
 	return p.componentSchemaSvc
 }
-

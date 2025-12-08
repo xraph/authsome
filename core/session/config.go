@@ -43,7 +43,7 @@ func (c *CookieConfig) Merge(override *CookieConfig) *CookieConfig {
 	// Apply overrides for each field if the override has a non-zero value
 	// Note: For booleans and strings, we need to distinguish between explicit false/empty and unset
 	// For simplicity, we override if the field is set in the JSON (non-zero)
-	
+
 	// Enabled: Always respect override if provided
 	merged.Enabled = override.Enabled
 
@@ -108,4 +108,3 @@ func UnmarshalCookieConfigFromJSON(data []byte) (*CookieConfig, error) {
 	}
 	return &config, nil
 }
-

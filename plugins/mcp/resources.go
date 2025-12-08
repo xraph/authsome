@@ -88,10 +88,10 @@ func (r *ConfigResource) Read(ctx context.Context, uri string, plugin *Plugin) (
 
 	config := map[string]interface{}{
 		"authsome": map[string]interface{}{
-			"base_path":        authConfig.BasePath,
-			"rbac_enforce":     authConfig.RBACEnforce,
-			"database_schema":  authConfig.DatabaseSchema,
-			"trusted_origins":  authConfig.TrustedOrigins,
+			"base_path":       authConfig.BasePath,
+			"rbac_enforce":    authConfig.RBACEnforce,
+			"database_schema": authConfig.DatabaseSchema,
+			"trusted_origins": authConfig.TrustedOrigins,
 		},
 		"mcp_plugin": plugin.config,
 		// Add more config sections as needed

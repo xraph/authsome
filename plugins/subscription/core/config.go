@@ -94,4 +94,3 @@ func (c *Config) GetWebhookSecret() string {
 		return ""
 	}
 }
-

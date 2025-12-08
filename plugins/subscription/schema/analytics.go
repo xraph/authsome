@@ -13,7 +13,7 @@ type SubscriptionBillingMetric struct {
 
 	ID        xid.ID    `bun:"id,pk,type:char(20)"`
 	AppID     xid.ID    `bun:"app_id,notnull,type:char(20)"`
-	Type      string    `bun:"type,notnull"` // mrr, arr, churn_rate, etc.
+	Type      string    `bun:"type,notnull"`   // mrr, arr, churn_rate, etc.
 	Period    string    `bun:"period,notnull"` // daily, weekly, monthly, yearly
 	Value     float64   `bun:"value,notnull"`
 	Currency  string    `bun:"currency,notnull"`
@@ -51,16 +51,15 @@ type SubscriptionMovement struct {
 type SubscriptionCohort struct {
 	bun.BaseModel `bun:"table:subscription_cohorts,alias:sco"`
 
-	ID             xid.ID    `bun:"id,pk,type:char(20)"`
-	AppID          xid.ID    `bun:"app_id,notnull,type:char(20)"`
-	CohortMonth    time.Time `bun:"cohort_month,notnull"`
-	TotalCustomers int       `bun:"total_customers,notnull"`
-	MonthNumber    int       `bun:"month_number,notnull"` // 0 = signup month, 1 = first month after, etc.
-	ActiveCustomers int      `bun:"active_customers,notnull"`
-	RetentionRate  float64   `bun:"retention_rate,notnull"`
-	Revenue        int64     `bun:"revenue,notnull"`
-	Currency       string    `bun:"currency,notnull"`
-	CreatedAt      time.Time `bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt      time.Time `bun:"updated_at,notnull,default:current_timestamp"`
+	ID              xid.ID    `bun:"id,pk,type:char(20)"`
+	AppID           xid.ID    `bun:"app_id,notnull,type:char(20)"`
+	CohortMonth     time.Time `bun:"cohort_month,notnull"`
+	TotalCustomers  int       `bun:"total_customers,notnull"`
+	MonthNumber     int       `bun:"month_number,notnull"` // 0 = signup month, 1 = first month after, etc.
+	ActiveCustomers int       `bun:"active_customers,notnull"`
+	RetentionRate   float64   `bun:"retention_rate,notnull"`
+	Revenue         int64     `bun:"revenue,notnull"`
+	Currency        string    `bun:"currency,notnull"`
+	CreatedAt       time.Time `bun:"created_at,notnull,default:current_timestamp"`
+	UpdatedAt       time.Time `bun:"updated_at,notnull,default:current_timestamp"`
 }
-

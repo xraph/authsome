@@ -15,4 +15,3 @@ const (
 	PermStatsRead       = "admin:stats:read"
 	PermAuditRead       = "admin:audit:read"
 )
-

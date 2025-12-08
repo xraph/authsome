@@ -29,4 +29,3 @@ type NotificationProvider struct {
 	App          *App          `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`
 	Organization *Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 }
-

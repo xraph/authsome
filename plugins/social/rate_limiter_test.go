@@ -49,4 +49,3 @@ func TestRateLimiter_DefaultLimits(t *testing.T) {
 	assert.Equal(t, 5, limiter.limits["oauth_unlink"].Requests)
 	assert.Equal(t, time.Minute, limiter.limits["oauth_unlink"].Window)
 }
-

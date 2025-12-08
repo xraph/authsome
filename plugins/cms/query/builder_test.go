@@ -290,4 +290,3 @@ func BenchmarkToString(b *testing.B) {
 		}
 	}
 }
-

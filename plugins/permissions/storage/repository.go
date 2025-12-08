@@ -75,7 +75,7 @@ func (r *bunRepository) GetPolicy(ctx context.Context, id xid.ID) (*core.Policy,
 
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
-	return nil, nil
+			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
@@ -289,8 +289,8 @@ func (r *bunRepository) GetNamespace(ctx context.Context, id xid.ID) (*core.Name
 
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
-	return nil, nil
-}
+			return nil, nil
+		}
 		return nil, fmt.Errorf("failed to get namespace: %w", err)
 	}
 
@@ -319,7 +319,7 @@ func (r *bunRepository) GetNamespaceByScope(ctx context.Context, appID, envID xi
 
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
-	return nil, nil
+			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get namespace by scope: %w", err)
 	}

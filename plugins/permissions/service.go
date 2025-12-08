@@ -31,10 +31,10 @@ type Service struct {
 	migrationService *migration.RBACMigrationService
 
 	// Compiled policies cache (in-memory for fast evaluation)
-	compiledPolicies     map[string]*engine.CompiledPolicy
-	compiledPoliciesMu   sync.RWMutex
-	policyIndex          map[string][]*engine.CompiledPolicy // Indexed by resource type
-	policyIndexMu        sync.RWMutex
+	compiledPolicies   map[string]*engine.CompiledPolicy
+	compiledPoliciesMu sync.RWMutex
+	policyIndex        map[string][]*engine.CompiledPolicy // Indexed by resource type
+	policyIndexMu      sync.RWMutex
 }
 
 // SetMigrationService sets the migration service
@@ -865,7 +865,7 @@ func (s *Service) MigrateFromRBAC(ctx context.Context, appID, envID xid.ID, orgI
 
 	// Convert migration result to MigrationStatus
 	completedAt := time.Now()
-	
+
 	// Convert migration errors to string slice
 	var errorStrings []string
 	for _, e := range result.Errors {

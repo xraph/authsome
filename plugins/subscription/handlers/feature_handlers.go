@@ -529,4 +529,3 @@ func handleError(c forge.Context, err error) error {
 
 	return c.JSON(500, errorResponse{Error: "internal_error", Message: err.Error()})
 }
-

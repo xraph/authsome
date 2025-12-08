@@ -25,10 +25,10 @@ func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
 	return &RateLimiter{
 		redis: redisClient,
 		limits: map[string]RateLimit{
-			"oauth_signin":   {Requests: 10, Window: time.Minute},     // 10 signin attempts per minute
-			"oauth_callback": {Requests: 20, Window: time.Minute},     // 20 callbacks per minute
-			"oauth_link":     {Requests: 5, Window: time.Minute},      // 5 link attempts per minute
-			"oauth_unlink":   {Requests: 5, Window: time.Minute},      // 5 unlink attempts per minute
+			"oauth_signin":   {Requests: 10, Window: time.Minute}, // 10 signin attempts per minute
+			"oauth_callback": {Requests: 20, Window: time.Minute}, // 20 callbacks per minute
+			"oauth_link":     {Requests: 5, Window: time.Minute},  // 5 link attempts per minute
+			"oauth_unlink":   {Requests: 5, Window: time.Minute},  // 5 unlink attempts per minute
 		},
 	}
 }
@@ -52,7 +52,7 @@ func (r *RateLimiter) Allow(ctx context.Context, action, key string) error {
 	pipe := r.redis.Pipeline()
 	incr := pipe.Incr(ctx, redisKey)
 	pipe.Expire(ctx, redisKey, limit.Window)
-	
+
 	if _, err := pipe.Exec(ctx); err != nil {
 		// If Redis fails, allow the request (fail open)
 		return nil
@@ -73,4 +73,3 @@ func (r *RateLimiter) SetLimit(action string, requests int, window time.Duration
 		Window:   window,
 	}
 }
-

@@ -4,11 +4,11 @@ package passkey
 
 // BeginRegisterRequest initiates passkey registration
 type BeginRegisterRequest struct {
-	UserID              string `json:"userId" validate:"required,xid"`
-	Name                string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	AuthenticatorType   string `json:"authenticatorType,omitempty" validate:"omitempty,oneof=platform cross-platform"`
-	RequireResidentKey  bool   `json:"requireResidentKey"`
-	UserVerification    string `json:"userVerification,omitempty" validate:"omitempty,oneof=required preferred discouraged"`
+	UserID             string `json:"userId" validate:"required,xid"`
+	Name               string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	AuthenticatorType  string `json:"authenticatorType,omitempty" validate:"omitempty,oneof=platform cross-platform"`
+	RequireResidentKey bool   `json:"requireResidentKey"`
+	UserVerification   string `json:"userVerification,omitempty" validate:"omitempty,oneof=required preferred discouraged"`
 }
 
 // FinishRegisterRequest completes passkey registration with credential attestation
@@ -50,4 +50,3 @@ type DeletePasskeyRequest struct {
 type GetPasskeyRequest struct {
 	ID string `path:"id" validate:"required,xid"`
 }
-

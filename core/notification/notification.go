@@ -125,19 +125,19 @@ func FromSchemaTemplates(templates []*schema.NotificationTemplate) []*Template {
 // Notification represents a notification instance DTO
 // This is separate from schema.Notification to maintain proper separation of concerns
 type Notification struct {
-	ID         xid.ID                 `json:"id"`
-	AppID      xid.ID                 `json:"appId"`
-	TemplateID *xid.ID                `json:"templateId,omitempty"`
-	Type       NotificationType       `json:"type"`
-	Recipient  string                 `json:"recipient"` // Email address or phone number
-	Subject    string                 `json:"subject,omitempty"`
-	Body       string                 `json:"body"`
-	Status     NotificationStatus     `json:"status"`
-	Error      string                 `json:"error,omitempty"`
-	ProviderID string                 `json:"providerId,omitempty"` // External provider message ID
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	SentAt     *time.Time             `json:"sentAt,omitempty"`
-	DeliveredAt *time.Time            `json:"deliveredAt,omitempty"`
+	ID          xid.ID                 `json:"id"`
+	AppID       xid.ID                 `json:"appId"`
+	TemplateID  *xid.ID                `json:"templateId,omitempty"`
+	Type        NotificationType       `json:"type"`
+	Recipient   string                 `json:"recipient"` // Email address or phone number
+	Subject     string                 `json:"subject,omitempty"`
+	Body        string                 `json:"body"`
+	Status      NotificationStatus     `json:"status"`
+	Error       string                 `json:"error,omitempty"`
+	ProviderID  string                 `json:"providerId,omitempty"` // External provider message ID
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	SentAt      *time.Time             `json:"sentAt,omitempty"`
+	DeliveredAt *time.Time             `json:"deliveredAt,omitempty"`
 	// Audit fields
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -258,12 +258,12 @@ type TemplateAnalyticsReport struct {
 	TotalBounced    int64     `json:"totalBounced"`
 	TotalComplained int64     `json:"totalComplained"`
 	TotalFailed     int64     `json:"totalFailed"`
-	DeliveryRate    float64   `json:"deliveryRate"`    // Percentage of sent that were delivered
-	OpenRate        float64   `json:"openRate"`        // Percentage of delivered that were opened
-	ClickRate       float64   `json:"clickRate"`       // Percentage of opened that were clicked
-	ConversionRate  float64   `json:"conversionRate"`  // Percentage of clicked that converted
-	BounceRate      float64   `json:"bounceRate"`      // Percentage of sent that bounced
-	ComplaintRate   float64   `json:"complaintRate"`   // Percentage of delivered that complained
+	DeliveryRate    float64   `json:"deliveryRate"`   // Percentage of sent that were delivered
+	OpenRate        float64   `json:"openRate"`       // Percentage of delivered that were opened
+	ClickRate       float64   `json:"clickRate"`      // Percentage of opened that were clicked
+	ConversionRate  float64   `json:"conversionRate"` // Percentage of clicked that converted
+	BounceRate      float64   `json:"bounceRate"`     // Percentage of sent that bounced
+	ComplaintRate   float64   `json:"complaintRate"`  // Percentage of delivered that complained
 	StartDate       time.Time `json:"startDate"`
 	EndDate         time.Time `json:"endDate"`
 }

@@ -141,4 +141,3 @@ type RedisChallengeStore struct {
 //     }
 //     return s.redis.Set(ctx, key, data, s.timeout).Err()
 // }
-

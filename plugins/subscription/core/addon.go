@@ -175,4 +175,3 @@ type AttachAddOnRequest struct {
 	AddOnID        xid.ID `json:"addOnId" validate:"required"`
 	Quantity       int    `json:"quantity" validate:"min=1"`
 }
-

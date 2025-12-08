@@ -177,10 +177,10 @@ func (cs *ComponentSchema) ValidateFields() error {
 
 // Component schema specific errors
 var (
-	ErrFieldTitleRequired  = &ComponentSchemaError{Message: "field title is required"}
-	ErrFieldNameRequired   = &ComponentSchemaError{Message: "field name is required"}
-	ErrFieldTypeRequired   = &ComponentSchemaError{Message: "field type is required"}
-	ErrDuplicateFieldName  = &ComponentSchemaError{Message: "duplicate field name"}
+	ErrFieldTitleRequired = &ComponentSchemaError{Message: "field title is required"}
+	ErrFieldNameRequired  = &ComponentSchemaError{Message: "field name is required"}
+	ErrFieldTypeRequired  = &ComponentSchemaError{Message: "field type is required"}
+	ErrDuplicateFieldName = &ComponentSchemaError{Message: "duplicate field name"}
 )
 
 // ComponentSchemaError represents a component schema validation error
@@ -191,4 +191,3 @@ type ComponentSchemaError struct {
 func (e *ComponentSchemaError) Error() string {
 	return e.Message
 }
-

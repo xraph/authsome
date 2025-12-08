@@ -31,21 +31,21 @@ func ctxBody(c forge.Context) ([]byte, error) {
 // Request/Response DTOs
 
 type createPlanRequest struct {
-	Name            string              `json:"name" validate:"required,min=1,max=100"`
-	Slug            string              `json:"slug" validate:"required,min=1,max=50"`
-	Description     string              `json:"description"`
-	BillingPattern  string              `json:"billingPattern" validate:"required"`
-	BillingInterval string              `json:"billingInterval" validate:"required"`
-	BasePrice       int64               `json:"basePrice"`
-	Currency        string              `json:"currency"`
-	TrialDays       int                 `json:"trialDays"`
-	Features        []core.PlanFeature  `json:"features"`
-	PriceTiers      []core.PriceTier    `json:"priceTiers"`
-	TierMode        string              `json:"tierMode"`
-	Metadata        map[string]any      `json:"metadata"`
-	IsActive        bool                `json:"isActive"`
-	IsPublic        bool                `json:"isPublic"`
-	DisplayOrder    int                 `json:"displayOrder"`
+	Name            string             `json:"name" validate:"required,min=1,max=100"`
+	Slug            string             `json:"slug" validate:"required,min=1,max=50"`
+	Description     string             `json:"description"`
+	BillingPattern  string             `json:"billingPattern" validate:"required"`
+	BillingInterval string             `json:"billingInterval" validate:"required"`
+	BasePrice       int64              `json:"basePrice"`
+	Currency        string             `json:"currency"`
+	TrialDays       int                `json:"trialDays"`
+	Features        []core.PlanFeature `json:"features"`
+	PriceTiers      []core.PriceTier   `json:"priceTiers"`
+	TierMode        string             `json:"tierMode"`
+	Metadata        map[string]any     `json:"metadata"`
+	IsActive        bool               `json:"isActive"`
+	IsPublic        bool               `json:"isPublic"`
+	DisplayOrder    int                `json:"displayOrder"`
 }
 
 type updatePlanRequest struct {
@@ -863,4 +863,3 @@ type CheckoutRequest struct {
 	TrialDays       int
 	Metadata        map[string]interface{}
 }
-

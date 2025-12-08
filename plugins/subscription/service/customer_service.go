@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/core"
+	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/providers"
 	"github.com/xraph/authsome/plugins/subscription/repository"
 	"github.com/xraph/authsome/plugins/subscription/schema"
@@ -196,4 +196,3 @@ func (s *CustomerService) schemaToCoreCustomer(customer *schema.SubscriptionCust
 
 	return c
 }
-

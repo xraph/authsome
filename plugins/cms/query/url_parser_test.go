@@ -527,4 +527,3 @@ func BenchmarkURLParser_Parse_Complex(b *testing.B) {
 		_, _ = parser.Parse(values)
 	}
 }
-

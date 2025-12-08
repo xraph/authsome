@@ -157,17 +157,17 @@ func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContent
 
 	// Create content type
 	contentType := &schema.ContentType{
-	ID:            xid.New(),
-	AppID:         appID,
-	EnvironmentID: envID,
-	Title:         strings.TrimSpace(req.Title),
-	Name:          slug,
-	Description:   strings.TrimSpace(req.Description),
-	Icon:          req.Icon,
-	Settings:      settings,
-	CreatedBy:     userID,
-	UpdatedBy:     userID,
-}
+		ID:            xid.New(),
+		AppID:         appID,
+		EnvironmentID: envID,
+		Title:         strings.TrimSpace(req.Title),
+		Name:          slug,
+		Description:   strings.TrimSpace(req.Description),
+		Icon:          req.Icon,
+		Settings:      settings,
+		CreatedBy:     userID,
+		UpdatedBy:     userID,
+	}
 
 	if err := s.repo.Create(ctx, contentType); err != nil {
 		return nil, err
@@ -228,7 +228,7 @@ func (s *ContentTypeService) List(ctx context.Context, query *core.ListContentTy
 
 		dtos[i] = &core.ContentTypeSummaryDTO{
 			ID:          ct.ID.String(),
-			Title: ct.Title,
+			Title:       ct.Title,
 			Name:        ct.Name,
 			Description: ct.Description,
 			Icon:        ct.Icon,
@@ -356,14 +356,14 @@ func (s *ContentTypeService) toDTO(ct *schema.ContentType) *core.ContentTypeDTO 
 	}
 
 	dto := &core.ContentTypeDTO{
-	ID:            ct.ID.String(),
-	AppID:         ct.AppID.String(),
-	EnvironmentID: ct.EnvironmentID.String(),
-	Title:         ct.Title,
-	Name:          ct.Name,
-	Description:   ct.Description,
-	Icon:          ct.Icon,
-	Settings: core.ContentTypeSettingsDTO{
+		ID:            ct.ID.String(),
+		AppID:         ct.AppID.String(),
+		EnvironmentID: ct.EnvironmentID.String(),
+		Title:         ct.Title,
+		Name:          ct.Name,
+		Description:   ct.Description,
+		Icon:          ct.Icon,
+		Settings: core.ContentTypeSettingsDTO{
 			TitleField:         ct.Settings.TitleField,
 			DescriptionField:   ct.Settings.DescriptionField,
 			EnableRevisions:    ct.Settings.EnableRevisions,
@@ -405,7 +405,7 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 	dto := &core.ContentFieldDTO{
 		ID:            field.ID.String(),
 		ContentTypeID: field.ContentTypeID.String(),
-		Title: field.Title,
+		Title:         field.Title,
 		Name:          field.Name,
 		Description:   field.Description,
 		Type:          field.Type,

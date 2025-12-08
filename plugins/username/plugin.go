@@ -111,10 +111,10 @@ func DefaultConfig() Config {
 
 		// Rate limiting
 		RateLimit: RateLimitConfig{
-			Enabled:   true,
-			UseRedis:  false,
-			RedisAddr: "localhost:6379",
-			RedisDB:   0,
+			Enabled:       true,
+			UseRedis:      false,
+			RedisAddr:     "localhost:6379",
+			RedisDB:       0,
 			SignUpPerIP:   RateLimitRule{Window: 1 * time.Hour, Max: 10},
 			SignInPerIP:   RateLimitRule{Window: 15 * time.Minute, Max: 20},
 			SignInPerUser: RateLimitRule{Window: 5 * time.Minute, Max: 5},
@@ -291,7 +291,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	sessionSvc := session.NewService(authInst.Repository().Session(), session.Config{}, nil, authInst.GetHookRegistry())
 	authSvc := auth.NewService(userSvc, sessionSvc, auth.Config{}, authInst.GetHookRegistry())
 	auditSvc := audit.NewService(authInst.Repository().Audit())
-	
+
 	// Create username service with all dependencies
 	p.service = NewService(userSvc, authSvc, auditSvc, p.usernameRepo, p.config)
 
@@ -357,7 +357,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		Enabled: p.config.RateLimit.Enabled,
 		Rules:   rules,
 	})
-	
+
 	h := NewHandler(p.service, rls, p.authInst.Repository().TwoFA())
 
 	router.POST("/username/signup", h.SignUp,
@@ -388,7 +388,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 	return nil
 }
-
 
 // RegisterHooks placeholder
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

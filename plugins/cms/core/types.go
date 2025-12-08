@@ -166,20 +166,20 @@ type ReorderRelationsRequest struct {
 
 // ContentTypeDTO is the API response for a content type
 type ContentTypeDTO struct {
-	ID            string                  `json:"id"`
-	AppID         string                  `json:"appId"`
-	EnvironmentID string                  `json:"environmentId"`
-	Title         string                  `json:"title"`
-	Name          string                  `json:"name"`
-	Description   string                  `json:"description,omitempty"`
-	Icon          string                  `json:"icon,omitempty"`
-	Settings      ContentTypeSettingsDTO  `json:"settings"`
-	Fields        []*ContentFieldDTO      `json:"fields,omitempty"`
-	EntryCount    int                     `json:"entryCount,omitempty"`
-	CreatedBy     string                  `json:"createdBy,omitempty"`
-	UpdatedBy     string                  `json:"updatedBy,omitempty"`
-	CreatedAt     time.Time               `json:"createdAt"`
-	UpdatedAt     time.Time               `json:"updatedAt"`
+	ID            string                 `json:"id"`
+	AppID         string                 `json:"appId"`
+	EnvironmentID string                 `json:"environmentId"`
+	Title         string                 `json:"title"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description,omitempty"`
+	Icon          string                 `json:"icon,omitempty"`
+	Settings      ContentTypeSettingsDTO `json:"settings"`
+	Fields        []*ContentFieldDTO     `json:"fields,omitempty"`
+	EntryCount    int                    `json:"entryCount,omitempty"`
+	CreatedBy     string                 `json:"createdBy,omitempty"`
+	UpdatedBy     string                 `json:"updatedBy,omitempty"`
+	CreatedAt     time.Time              `json:"createdAt"`
+	UpdatedAt     time.Time              `json:"updatedAt"`
 }
 
 // ContentTypeSettingsDTO represents content type settings
@@ -187,17 +187,17 @@ type ContentTypeSettingsDTO struct {
 	// Display settings
 	TitleField       string `json:"titleField,omitempty"`
 	DescriptionField string `json:"descriptionField,omitempty"`
-	
+
 	// Features
-	EnableRevisions   bool `json:"enableRevisions"`
-	EnableDrafts      bool `json:"enableDrafts"`
-	EnableSoftDelete  bool `json:"enableSoftDelete"`
-	EnableSearch      bool `json:"enableSearch"`
-	EnableScheduling  bool `json:"enableScheduling"`
-	
+	EnableRevisions  bool `json:"enableRevisions"`
+	EnableDrafts     bool `json:"enableDrafts"`
+	EnableSoftDelete bool `json:"enableSoftDelete"`
+	EnableSearch     bool `json:"enableSearch"`
+	EnableScheduling bool `json:"enableScheduling"`
+
 	// Permissions
 	DefaultPermissions []string `json:"defaultPermissions,omitempty"`
-	
+
 	// Limits
 	MaxEntries int `json:"maxEntries,omitempty"`
 }
@@ -221,19 +221,19 @@ type ContentTypeSummaryDTO struct {
 
 // ComponentSchemaDTO is the API response for a component schema
 type ComponentSchemaDTO struct {
-	ID            string               `json:"id"`
-	AppID         string               `json:"appId"`
-	EnvironmentID string               `json:"environmentId"`
-	Title         string               `json:"title"`
-	Name          string               `json:"name"`
-	Description   string               `json:"description,omitempty"`
-	Icon          string               `json:"icon,omitempty"`
-	Fields        []NestedFieldDefDTO  `json:"fields"`
-	UsageCount    int                  `json:"usageCount,omitempty"`
-	CreatedBy     string               `json:"createdBy,omitempty"`
-	UpdatedBy     string               `json:"updatedBy,omitempty"`
-	CreatedAt     time.Time            `json:"createdAt"`
-	UpdatedAt     time.Time            `json:"updatedAt"`
+	ID            string              `json:"id"`
+	AppID         string              `json:"appId"`
+	EnvironmentID string              `json:"environmentId"`
+	Title         string              `json:"title"`
+	Name          string              `json:"name"`
+	Description   string              `json:"description,omitempty"`
+	Icon          string              `json:"icon,omitempty"`
+	Fields        []NestedFieldDefDTO `json:"fields"`
+	UsageCount    int                 `json:"usageCount,omitempty"`
+	CreatedBy     string              `json:"createdBy,omitempty"`
+	UpdatedBy     string              `json:"updatedBy,omitempty"`
+	CreatedAt     time.Time           `json:"createdAt"`
+	UpdatedAt     time.Time           `json:"updatedAt"`
 }
 
 // ComponentSchemaSummaryDTO is a lightweight component schema for lists
@@ -251,12 +251,12 @@ type ComponentSchemaSummaryDTO struct {
 
 // NestedFieldDefDTO represents a field definition within a nested object or component schema
 type NestedFieldDefDTO struct {
-	Title       string            `json:"title"`
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Required    bool              `json:"required,omitempty"`
-	Description string            `json:"description,omitempty"`
-	Options     *FieldOptionsDTO  `json:"options,omitempty"`
+	Title       string           `json:"title"`
+	Name        string           `json:"name"`
+	Type        string           `json:"type"`
+	Required    bool             `json:"required,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Options     *FieldOptionsDTO `json:"options,omitempty"`
 }
 
 // CreateComponentSchemaRequest is the request to create a component schema
@@ -316,41 +316,41 @@ type FieldOptionsDTO struct {
 	MinLength int    `json:"minLength,omitempty"`
 	MaxLength int    `json:"maxLength,omitempty"`
 	Pattern   string `json:"pattern,omitempty"`
-	
+
 	// Number fields
 	Min     *float64 `json:"min,omitempty"`
 	Max     *float64 `json:"max,omitempty"`
 	Step    *float64 `json:"step,omitempty"`
 	Integer bool     `json:"integer,omitempty"`
-	
+
 	// Select fields
 	Choices []ChoiceDTO `json:"choices,omitempty"`
-	
+
 	// Relation fields
-	RelatedType    string         `json:"relatedType,omitempty"`
-	RelationType   string         `json:"relationType,omitempty"`
-	OnDelete       string         `json:"onDelete,omitempty"`
-	InverseField   string         `json:"inverseField,omitempty"`
-	
+	RelatedType  string `json:"relatedType,omitempty"`
+	RelationType string `json:"relationType,omitempty"`
+	OnDelete     string `json:"onDelete,omitempty"`
+	InverseField string `json:"inverseField,omitempty"`
+
 	// Rich text fields
-	AllowHTML bool     `json:"allowHtml,omitempty"`
-	MaxWords  int      `json:"maxWords,omitempty"`
-	
+	AllowHTML bool `json:"allowHtml,omitempty"`
+	MaxWords  int  `json:"maxWords,omitempty"`
+
 	// Media fields
 	AllowedMimeTypes []string `json:"allowedMimeTypes,omitempty"`
 	MaxFileSize      int64    `json:"maxFileSize,omitempty"`
-	
+
 	// Slug fields
 	SourceField string `json:"sourceField,omitempty"`
-	
+
 	// JSON fields
 	Schema string `json:"schema,omitempty"`
-	
+
 	// Date fields
 	MinDate    *time.Time `json:"minDate,omitempty"`
 	MaxDate    *time.Time `json:"maxDate,omitempty"`
 	DateFormat string     `json:"dateFormat,omitempty"`
-	
+
 	// Object/Array fields (nested structures)
 	NestedFields    []NestedFieldDefDTO `json:"nestedFields,omitempty"`    // Inline sub-field definitions
 	ComponentRef    string              `json:"componentRef,omitempty"`    // Reference to ComponentSchema slug
@@ -360,9 +360,9 @@ type FieldOptionsDTO struct {
 	DefaultExpanded bool                `json:"defaultExpanded,omitempty"` // UI: expanded by default
 
 	// OneOf fields (discriminated union)
-	DiscriminatorField         string                        `json:"discriminatorField,omitempty"`         // Field name to watch for schema selection
+	DiscriminatorField         string                          `json:"discriminatorField,omitempty"`         // Field name to watch for schema selection
 	Schemas                    map[string]OneOfSchemaOptionDTO `json:"schemas,omitempty"`                    // Value -> schema mapping
-	ClearOnDiscriminatorChange bool                          `json:"clearOnDiscriminatorChange,omitempty"` // Clear data when discriminator changes
+	ClearOnDiscriminatorChange bool                            `json:"clearOnDiscriminatorChange,omitempty"` // Clear data when discriminator changes
 
 	// Conditional visibility
 	ShowWhen        *FieldConditionDTO `json:"showWhen,omitempty"`        // Show field when condition is met
@@ -414,7 +414,7 @@ type ContentEntryDTO struct {
 	CreatedAt     time.Time              `json:"createdAt"`
 	UpdatedAt     time.Time              `json:"updatedAt"`
 	// Relations maps field names to related entry IDs
-	Relations     map[string][]string    `json:"relations,omitempty"`
+	Relations map[string][]string `json:"relations,omitempty"`
 }
 
 // ContentEntrySummaryDTO is a lightweight entry for lists
@@ -468,34 +468,34 @@ type UpdateContentTypeRequest struct {
 
 // CreateFieldRequest is the request to create a content field
 type CreateFieldRequest struct {
-	Title        string          `json:"title" validate:"required,min=1,max=100"`
-	Name         string          `json:"name" validate:"required"`
-	Description  string          `json:"description,omitempty"`
-	Type         string          `json:"type" validate:"required"`
-	Required     bool            `json:"required"`
-	Unique       bool            `json:"unique"`
-	Indexed      bool            `json:"indexed"`
-	Localized    bool            `json:"localized"`
-	DefaultValue any             `json:"defaultValue,omitempty"`
+	Title        string           `json:"title" validate:"required,min=1,max=100"`
+	Name         string           `json:"name" validate:"required"`
+	Description  string           `json:"description,omitempty"`
+	Type         string           `json:"type" validate:"required"`
+	Required     bool             `json:"required"`
+	Unique       bool             `json:"unique"`
+	Indexed      bool             `json:"indexed"`
+	Localized    bool             `json:"localized"`
+	DefaultValue any              `json:"defaultValue,omitempty"`
 	Options      *FieldOptionsDTO `json:"options,omitempty"`
-	Order        int             `json:"order"`
-	Hidden       bool            `json:"hidden"`
-	ReadOnly     bool            `json:"readOnly"`
+	Order        int              `json:"order"`
+	Hidden       bool             `json:"hidden"`
+	ReadOnly     bool             `json:"readOnly"`
 }
 
 // UpdateFieldRequest is the request to update a content field
 type UpdateFieldRequest struct {
-	Title        string          `json:"title,omitempty"`
-	Description  string          `json:"description,omitempty"`
-	Required     *bool           `json:"required,omitempty"`
-	Unique       *bool           `json:"unique,omitempty"`
-	Indexed      *bool           `json:"indexed,omitempty"`
-	Localized    *bool           `json:"localized,omitempty"`
-	DefaultValue any             `json:"defaultValue,omitempty"`
+	Title        string           `json:"title,omitempty"`
+	Description  string           `json:"description,omitempty"`
+	Required     *bool            `json:"required,omitempty"`
+	Unique       *bool            `json:"unique,omitempty"`
+	Indexed      *bool            `json:"indexed,omitempty"`
+	Localized    *bool            `json:"localized,omitempty"`
+	DefaultValue any              `json:"defaultValue,omitempty"`
 	Options      *FieldOptionsDTO `json:"options,omitempty"`
-	Order        *int            `json:"order,omitempty"`
-	Hidden       *bool           `json:"hidden,omitempty"`
-	ReadOnly     *bool           `json:"readOnly,omitempty"`
+	Order        *int             `json:"order,omitempty"`
+	Hidden       *bool            `json:"hidden,omitempty"`
+	ReadOnly     *bool            `json:"readOnly,omitempty"`
 }
 
 // ReorderFieldsRequest is the request to reorder fields
@@ -613,24 +613,24 @@ type ListRevisionsResponse struct {
 
 // CMSStatsDTO contains overall CMS statistics
 type CMSStatsDTO struct {
-	TotalContentTypes int                   `json:"totalContentTypes"`
-	TotalEntries      int                   `json:"totalEntries"`
-	TotalRevisions    int                   `json:"totalRevisions"`
-	EntriesByStatus   map[string]int        `json:"entriesByStatus"`
-	EntriesByType     map[string]int        `json:"entriesByType"`
-	RecentlyUpdated   int                   `json:"recentlyUpdated"`
-	ScheduledEntries  int                   `json:"scheduledEntries"`
+	TotalContentTypes int            `json:"totalContentTypes"`
+	TotalEntries      int            `json:"totalEntries"`
+	TotalRevisions    int            `json:"totalRevisions"`
+	EntriesByStatus   map[string]int `json:"entriesByStatus"`
+	EntriesByType     map[string]int `json:"entriesByType"`
+	RecentlyUpdated   int            `json:"recentlyUpdated"`
+	ScheduledEntries  int            `json:"scheduledEntries"`
 }
 
 // ContentTypeStatsDTO contains statistics for a specific content type
 type ContentTypeStatsDTO struct {
-	ContentTypeID   string         `json:"contentTypeId"`
-	TotalEntries    int            `json:"totalEntries"`
-	DraftEntries    int            `json:"draftEntries"`
-	PublishedEntries int           `json:"publishedEntries"`
-	ArchivedEntries int            `json:"archivedEntries"`
-	EntriesByStatus map[string]int `json:"entriesByStatus"`
-	LastEntryAt     *time.Time     `json:"lastEntryAt,omitempty"`
+	ContentTypeID    string         `json:"contentTypeId"`
+	TotalEntries     int            `json:"totalEntries"`
+	DraftEntries     int            `json:"draftEntries"`
+	PublishedEntries int            `json:"publishedEntries"`
+	ArchivedEntries  int            `json:"archivedEntries"`
+	EntriesByStatus  map[string]int `json:"entriesByStatus"`
+	LastEntryAt      *time.Time     `json:"lastEntryAt,omitempty"`
 }
 
 // =============================================================================
@@ -683,4 +683,3 @@ type PaginatedResponse[T any] struct {
 	PageSize   int `json:"pageSize"`
 	TotalPages int `json:"totalPages"`
 }
-

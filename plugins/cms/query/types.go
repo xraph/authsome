@@ -23,10 +23,10 @@ type Query struct {
 	Populate []PopulateOption `json:"populate,omitempty"`
 
 	// Pagination options
-	Page       int `json:"page,omitempty"`
-	PageSize   int `json:"pageSize,omitempty"`
-	Offset     int `json:"offset,omitempty"`
-	Limit      int `json:"limit,omitempty"`
+	Page     int `json:"page,omitempty"`
+	PageSize int `json:"pageSize,omitempty"`
+	Offset   int `json:"offset,omitempty"`
+	Limit    int `json:"limit,omitempty"`
 
 	// Search for full-text search
 	Search string `json:"search,omitempty"`
@@ -152,21 +152,21 @@ const (
 	OpLessThanEqual    FilterOperator = "lte"
 
 	// String operators
-	OpLike     FilterOperator = "like"      // Case-sensitive pattern match
-	OpILike    FilterOperator = "ilike"     // Case-insensitive pattern match
-	OpContains FilterOperator = "contains"  // String contains
+	OpLike       FilterOperator = "like"     // Case-sensitive pattern match
+	OpILike      FilterOperator = "ilike"    // Case-insensitive pattern match
+	OpContains   FilterOperator = "contains" // String contains
 	OpStartsWith FilterOperator = "startsWith"
 	OpEndsWith   FilterOperator = "endsWith"
 
 	// Array operators
-	OpIn     FilterOperator = "in"      // Value is in array
-	OpNotIn  FilterOperator = "nin"     // Value is not in array
-	OpAll    FilterOperator = "all"     // Array contains all values
-	OpAny    FilterOperator = "any"     // Array contains any value
+	OpIn    FilterOperator = "in"  // Value is in array
+	OpNotIn FilterOperator = "nin" // Value is not in array
+	OpAll   FilterOperator = "all" // Array contains all values
+	OpAny   FilterOperator = "any" // Array contains any value
 
 	// Null operators
-	OpNull    FilterOperator = "null"   // Field is null (value: true) or not null (value: false)
-	OpExists  FilterOperator = "exists" // Field exists (for JSON fields)
+	OpNull   FilterOperator = "null"   // Field is null (value: true) or not null (value: false)
+	OpExists FilterOperator = "exists" // Field exists (for JSON fields)
 
 	// JSON operators
 	OpJsonContains FilterOperator = "jsonContains" // JSON contains
@@ -391,4 +391,3 @@ func isValidSortField(field string, fields map[string]*core.ContentFieldDTO) boo
 	_, exists := fields[field]
 	return exists
 }
-

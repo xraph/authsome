@@ -275,14 +275,14 @@ type UserAdapter struct {
 	CreatedAt     string
 }
 
-func (u *UserAdapter) GetID() xid.ID            { return u.ID }
-func (u *UserAdapter) GetAppID() xid.ID         { return u.AppID }
-func (u *UserAdapter) GetEmail() string         { return u.Email }
-func (u *UserAdapter) GetName() string          { return u.Name }
-func (u *UserAdapter) GetEmailVerified() bool   { return u.EmailVerified }
-func (u *UserAdapter) GetUsername() string      { return u.Username }
-func (u *UserAdapter) GetImage() string         { return u.Image }
-func (u *UserAdapter) GetCreatedAt() string     { return u.CreatedAt }
+func (u *UserAdapter) GetID() xid.ID          { return u.ID }
+func (u *UserAdapter) GetAppID() xid.ID       { return u.AppID }
+func (u *UserAdapter) GetEmail() string       { return u.Email }
+func (u *UserAdapter) GetName() string        { return u.Name }
+func (u *UserAdapter) GetEmailVerified() bool { return u.EmailVerified }
+func (u *UserAdapter) GetUsername() string    { return u.Username }
+func (u *UserAdapter) GetImage() string       { return u.Image }
+func (u *UserAdapter) GetCreatedAt() string   { return u.CreatedAt }
 
 // MembershipAdapter adapts membership data to AuthsomeMembership interface
 type MembershipAdapter struct {
@@ -363,4 +363,3 @@ func (w *RBACServiceWrapper) GetUserPermissions(ctx context.Context, userID, org
 	}
 	return w.getUserPermissionsFunc(ctx, userID, orgID)
 }
-

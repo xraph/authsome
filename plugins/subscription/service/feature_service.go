@@ -484,4 +484,3 @@ func (s *FeatureService) schemaToCore(f *schema.Feature, inputTiers []core.Featu
 		UpdatedAt:    f.UpdatedAt,
 	}
 }
-

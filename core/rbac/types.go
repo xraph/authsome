@@ -20,9 +20,9 @@ type RoleTemplate struct {
 
 // RoleCustomization contains customization options when cloning a role template
 type RoleCustomization struct {
-	Name              *string   `json:"name,omitempty"`              // Override template name
-	Description       *string   `json:"description,omitempty"`       // Override template description
-	PermissionIDs     []xid.ID  `json:"permissionIDs,omitempty"`     // Specific permissions to clone (if empty, clone all)
+	Name               *string  `json:"name,omitempty"`               // Override template name
+	Description        *string  `json:"description,omitempty"`        // Override template description
+	PermissionIDs      []xid.ID `json:"permissionIDs,omitempty"`      // Specific permissions to clone (if empty, clone all)
 	ExcludePermissions []xid.ID `json:"excludePermissions,omitempty"` // Permissions to exclude from template
 }
 
@@ -70,16 +70,16 @@ const (
 	ActionEdit   PermissionAction = "edit"
 	ActionUpdate PermissionAction = "update"
 	ActionDelete PermissionAction = "delete"
-	
+
 	// Management actions
-	ActionManage   PermissionAction = "manage"   // Full control
-	ActionList     PermissionAction = "list"     // List/index
-	ActionRead     PermissionAction = "read"     // Read-only
-	ActionWrite    PermissionAction = "write"    // Write access
-	ActionExecute  PermissionAction = "execute"  // Execute/run
-	
+	ActionManage  PermissionAction = "manage"  // Full control
+	ActionList    PermissionAction = "list"    // List/index
+	ActionRead    PermissionAction = "read"    // Read-only
+	ActionWrite   PermissionAction = "write"   // Write access
+	ActionExecute PermissionAction = "execute" // Execute/run
+
 	// Special actions
-	ActionAll      PermissionAction = "*"        // Wildcard - all actions
+	ActionAll PermissionAction = "*" // Wildcard - all actions
 )
 
 // String returns the string representation of the action
@@ -102,9 +102,9 @@ const (
 	ResourceAuditLogs     PermissionResource = "audit_logs"
 	ResourceDashboard     PermissionResource = "dashboard"
 	ResourceProfile       PermissionResource = "profile"
-	
+
 	// Wildcard
-	ResourceAll           PermissionResource = "*"
+	ResourceAll PermissionResource = "*"
 )
 
 // String returns the string representation of the resource
@@ -125,4 +125,3 @@ func ParsePermissionName(name string) (action PermissionAction, resource Permiss
 	// Can be enhanced with more sophisticated parsing if needed
 	return "", ""
 }
-

@@ -14,21 +14,21 @@ const (
 	ErrCodeContentTypeExists      = "CMS_CONTENT_TYPE_EXISTS"
 	ErrCodeContentTypeHasEntries  = "CMS_CONTENT_TYPE_HAS_ENTRIES"
 	ErrCodeInvalidContentTypeSlug = "CMS_INVALID_CONTENT_TYPE_SLUG"
-	
+
 	// Content Field errors
 	ErrCodeFieldNotFound    = "CMS_FIELD_NOT_FOUND"
 	ErrCodeFieldExists      = "CMS_FIELD_EXISTS"
 	ErrCodeInvalidFieldSlug = "CMS_INVALID_FIELD_SLUG"
 	ErrCodeInvalidFieldType = "CMS_INVALID_FIELD_TYPE"
 	ErrCodeFieldRequired    = "CMS_FIELD_REQUIRED"
-	
+
 	// Component Schema errors
-	ErrCodeComponentSchemaNotFound   = "CMS_COMPONENT_SCHEMA_NOT_FOUND"
-	ErrCodeComponentSchemaExists     = "CMS_COMPONENT_SCHEMA_EXISTS"
-	ErrCodeComponentSchemaInUse      = "CMS_COMPONENT_SCHEMA_IN_USE"
+	ErrCodeComponentSchemaNotFound    = "CMS_COMPONENT_SCHEMA_NOT_FOUND"
+	ErrCodeComponentSchemaExists      = "CMS_COMPONENT_SCHEMA_EXISTS"
+	ErrCodeComponentSchemaInUse       = "CMS_COMPONENT_SCHEMA_IN_USE"
 	ErrCodeInvalidComponentSchemaSlug = "CMS_INVALID_COMPONENT_SCHEMA_SLUG"
-	ErrCodeCircularComponentRef      = "CMS_CIRCULAR_COMPONENT_REF"
-	
+	ErrCodeCircularComponentRef       = "CMS_CIRCULAR_COMPONENT_REF"
+
 	// Content Entry errors
 	ErrCodeEntryNotFound         = "CMS_ENTRY_NOT_FOUND"
 	ErrCodeEntryValidationFailed = "CMS_ENTRY_VALIDATION_FAILED"
@@ -36,26 +36,26 @@ const (
 	ErrCodeEntryNotPublished     = "CMS_ENTRY_NOT_PUBLISHED"
 	ErrCodeEntryLimitReached     = "CMS_ENTRY_LIMIT_REACHED"
 	ErrCodeUniqueConstraint      = "CMS_UNIQUE_CONSTRAINT_VIOLATION"
-	
+
 	// Revision errors
 	ErrCodeRevisionNotFound = "CMS_REVISION_NOT_FOUND"
 	ErrCodeRollbackFailed   = "CMS_ROLLBACK_FAILED"
-	
+
 	// Relation errors
-	ErrCodeRelationNotFound      = "CMS_RELATION_NOT_FOUND"
-	ErrCodeInvalidRelation       = "CMS_INVALID_RELATION"
-	ErrCodeCircularRelation      = "CMS_CIRCULAR_RELATION"
-	ErrCodeRelationConstraint    = "CMS_RELATION_CONSTRAINT_VIOLATION"
-	
+	ErrCodeRelationNotFound   = "CMS_RELATION_NOT_FOUND"
+	ErrCodeInvalidRelation    = "CMS_INVALID_RELATION"
+	ErrCodeCircularRelation   = "CMS_CIRCULAR_RELATION"
+	ErrCodeRelationConstraint = "CMS_RELATION_CONSTRAINT_VIOLATION"
+
 	// Query errors
 	ErrCodeInvalidQuery    = "CMS_INVALID_QUERY"
 	ErrCodeInvalidFilter   = "CMS_INVALID_FILTER"
 	ErrCodeInvalidSort     = "CMS_INVALID_SORT"
 	ErrCodeInvalidOperator = "CMS_INVALID_OPERATOR"
-	
+
 	// General errors
-	ErrCodeAccessDenied     = "CMS_ACCESS_DENIED"
-	ErrCodeInvalidRequest   = "CMS_INVALID_REQUEST"
+	ErrCodeAccessDenied      = "CMS_ACCESS_DENIED"
+	ErrCodeInvalidRequest    = "CMS_INVALID_REQUEST"
 	ErrCodeAppContextMissing = "CMS_APP_CONTEXT_MISSING"
 	ErrCodeEnvContextMissing = "CMS_ENV_CONTEXT_MISSING"
 )
@@ -377,4 +377,3 @@ func ErrInternalError(message string, cause error) error {
 func ErrDatabaseError(message string, cause error) error {
 	return errs.Wrap(cause, "CMS_DATABASE_ERROR", message, http.StatusInternalServerError)
 }
-

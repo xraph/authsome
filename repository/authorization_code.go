@@ -49,13 +49,13 @@ func (r *AuthorizationCodeRepository) FindByCodeWithContext(ctx context.Context,
 		Where("code = ?", code).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID)
-	
+
 	if orgID != nil && !orgID.IsNil() {
 		query = query.Where("organization_id = ?", orgID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	err := query.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil

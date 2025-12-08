@@ -8,29 +8,29 @@ import (
 
 // SupportedCurrency represents a currency supported by the system
 type SupportedCurrency struct {
-	ID           xid.ID    `json:"id"`
-	Code         string    `json:"code"`          // ISO 4217 code (USD, EUR, GBP, etc.)
-	Name         string    `json:"name"`          // Display name
-	Symbol       string    `json:"symbol"`        // Currency symbol ($, €, £)
-	DecimalPlaces int      `json:"decimalPlaces"` // Number of decimal places (2 for most, 0 for JPY)
-	IsDefault    bool      `json:"isDefault"`     // Is this the default currency
-	IsActive     bool      `json:"isActive"`      // Is this currency currently active
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID            xid.ID    `json:"id"`
+	Code          string    `json:"code"`          // ISO 4217 code (USD, EUR, GBP, etc.)
+	Name          string    `json:"name"`          // Display name
+	Symbol        string    `json:"symbol"`        // Currency symbol ($, €, £)
+	DecimalPlaces int       `json:"decimalPlaces"` // Number of decimal places (2 for most, 0 for JPY)
+	IsDefault     bool      `json:"isDefault"`     // Is this the default currency
+	IsActive      bool      `json:"isActive"`      // Is this currency currently active
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 // ExchangeRate represents a currency exchange rate
 type ExchangeRate struct {
-	ID           xid.ID    `json:"id"`
-	AppID        xid.ID    `json:"appId"`
-	FromCurrency string    `json:"fromCurrency"` // Source currency code
-	ToCurrency   string    `json:"toCurrency"`   // Target currency code
-	Rate         float64   `json:"rate"`         // Exchange rate (multiply by this to convert)
-	ValidFrom    time.Time `json:"validFrom"`    // When this rate becomes valid
-	ValidUntil   *time.Time `json:"validUntil"`  // When this rate expires (nil = current)
-	Source       string    `json:"source"`       // Source of the rate (manual, api, etc.)
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID           xid.ID     `json:"id"`
+	AppID        xid.ID     `json:"appId"`
+	FromCurrency string     `json:"fromCurrency"` // Source currency code
+	ToCurrency   string     `json:"toCurrency"`   // Target currency code
+	Rate         float64    `json:"rate"`         // Exchange rate (multiply by this to convert)
+	ValidFrom    time.Time  `json:"validFrom"`    // When this rate becomes valid
+	ValidUntil   *time.Time `json:"validUntil"`   // When this rate expires (nil = current)
+	Source       string     `json:"source"`       // Source of the rate (manual, api, etc.)
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
 }
 
 // CurrencyAmount represents an amount in a specific currency
@@ -71,12 +71,12 @@ type ConvertCurrencyRequest struct {
 
 // ConvertCurrencyResponse contains the conversion result
 type ConvertCurrencyResponse struct {
-	OriginalAmount   int64   `json:"originalAmount"`
-	OriginalCurrency string  `json:"originalCurrency"`
-	ConvertedAmount  int64   `json:"convertedAmount"`
-	ConvertedCurrency string `json:"convertedCurrency"`
-	ExchangeRate     float64 `json:"exchangeRate"`
-	ConvertedAt      time.Time `json:"convertedAt"`
+	OriginalAmount    int64     `json:"originalAmount"`
+	OriginalCurrency  string    `json:"originalCurrency"`
+	ConvertedAmount   int64     `json:"convertedAmount"`
+	ConvertedCurrency string    `json:"convertedCurrency"`
+	ExchangeRate      float64   `json:"exchangeRate"`
+	ConvertedAt       time.Time `json:"convertedAt"`
 }
 
 // Common currency codes
@@ -134,7 +134,7 @@ func formatDecimal(amount int64, decimals int) string {
 	}
 	whole := amount / divisor
 	frac := amount % divisor
-	
+
 	// Simple formatting without using fmt to avoid import
 	result := formatIntWithCommas(whole) + "."
 	fracStr := ""
@@ -173,4 +173,3 @@ func padLeft(s string, length int, pad rune) string {
 	}
 	return s
 }
-

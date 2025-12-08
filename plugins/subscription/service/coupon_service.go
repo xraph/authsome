@@ -394,4 +394,3 @@ func (s *CouponService) validateCouponUsage(ctx context.Context, coupon *core.Co
 
 	return errs
 }
-

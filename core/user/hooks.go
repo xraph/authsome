@@ -17,4 +17,3 @@ type HookExecutor interface {
 	ExecuteBeforeUserDelete(ctx context.Context, userID xid.ID) error
 	ExecuteAfterUserDelete(ctx context.Context, userID xid.ID) error
 }
-

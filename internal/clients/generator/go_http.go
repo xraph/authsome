@@ -88,4 +88,3 @@ func (g *GoGenerator) generateHTTPMiddleware() error {
 
 	return g.writeFile("middleware_http.go", sb.String())
 }
-

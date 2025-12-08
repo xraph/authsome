@@ -33,13 +33,13 @@ func (r *OAuthConsentRepository) FindByUserAndClient(ctx context.Context, userID
 		Where("client_id = ?", clientID).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID)
-	
+
 	if orgID != nil && !orgID.IsNil() {
 		query = query.Where("organization_id = ?", orgID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	err := query.Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -58,13 +58,13 @@ func (r *OAuthConsentRepository) ListByUser(ctx context.Context, userID xid.ID, 
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
 		Order("created_at DESC")
-	
+
 	if orgID != nil && !orgID.IsNil() {
 		query = query.Where("organization_id = ?", orgID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	err := query.Scan(ctx)
 	return consents, err
 }
@@ -105,19 +105,18 @@ func (r *OAuthConsentRepository) HasValidConsent(ctx context.Context, userID xid
 	if err != nil || consent == nil {
 		return false, err
 	}
-	
+
 	// Check if consent is expired
 	if !consent.IsValid() {
 		return false, nil
 	}
-	
+
 	// Check if all required scopes are granted
 	for _, required := range requiredScopes {
 		if !consent.HasScope(required) {
 			return false, nil
 		}
 	}
-	
+
 	return true, nil
 }
-

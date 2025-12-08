@@ -49,10 +49,10 @@ func NewMemoryStateStore() *MemoryStateStore {
 	s := &MemoryStateStore{
 		states: make(map[string]*stateEntry),
 	}
-	
+
 	// Start cleanup goroutine
 	go s.cleanup()
-	
+
 	return s
 }
 
@@ -60,12 +60,12 @@ func NewMemoryStateStore() *MemoryStateStore {
 func (s *MemoryStateStore) Set(ctx context.Context, key string, state *OAuthState, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	s.states[key] = &stateEntry{
 		state:     state,
 		expiresAt: time.Now().Add(ttl),
 	}
-	
+
 	return nil
 }
 
@@ -73,16 +73,16 @@ func (s *MemoryStateStore) Set(ctx context.Context, key string, state *OAuthStat
 func (s *MemoryStateStore) Get(ctx context.Context, key string) (*OAuthState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	entry, ok := s.states[key]
 	if !ok {
 		return nil, fmt.Errorf("state not found")
 	}
-	
+
 	if time.Now().After(entry.expiresAt) {
 		return nil, fmt.Errorf("state expired")
 	}
-	
+
 	return entry.state, nil
 }
 
@@ -90,7 +90,7 @@ func (s *MemoryStateStore) Get(ctx context.Context, key string) (*OAuthState, er
 func (s *MemoryStateStore) Delete(ctx context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	delete(s.states, key)
 	return nil
 }
@@ -99,7 +99,7 @@ func (s *MemoryStateStore) Delete(ctx context.Context, key string) error {
 func (s *MemoryStateStore) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		s.mu.Lock()
 		now := time.Now()
@@ -134,21 +134,21 @@ func (s *RedisStateStore) Set(ctx context.Context, key string, state *OAuthState
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
-	
+
 	// Prefix key to avoid collisions
 	redisKey := "oauth_state:" + key
-	
+
 	if err := s.client.Set(ctx, redisKey, data, ttl).Err(); err != nil {
 		return fmt.Errorf("failed to store state in Redis: %w", err)
 	}
-	
+
 	return nil
 }
 
 // Get retrieves a state from Redis
 func (s *RedisStateStore) Get(ctx context.Context, key string) (*OAuthState, error) {
 	redisKey := "oauth_state:" + key
-	
+
 	data, err := s.client.Get(ctx, redisKey).Bytes()
 	if err == redis.Nil {
 		return nil, fmt.Errorf("state not found")
@@ -156,23 +156,23 @@ func (s *RedisStateStore) Get(ctx context.Context, key string) (*OAuthState, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve state from Redis: %w", err)
 	}
-	
+
 	var state OAuthState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 	}
-	
+
 	return &state, nil
 }
 
 // Delete removes a state from Redis
 func (s *RedisStateStore) Delete(ctx context.Context, key string) error {
 	redisKey := "oauth_state:" + key
-	
+
 	if err := s.client.Del(ctx, redisKey).Err(); err != nil {
 		return fmt.Errorf("failed to delete state from Redis: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -181,4 +181,3 @@ var (
 	_ StateStore = (*MemoryStateStore)(nil)
 	_ StateStore = (*RedisStateStore)(nil)
 )
-

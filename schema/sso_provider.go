@@ -16,8 +16,8 @@ type SSOProvider struct {
 	UpdatedAt time.Time
 
 	// Multi-tenant scoping: App → Environment → Organization
-	AppID          xid.ID  `bun:",notnull"` // Platform tenant (required)
-	EnvironmentID  xid.ID  `bun:",notnull"` // Environment within app (required)
+	AppID          xid.ID  `bun:",notnull"`  // Platform tenant (required)
+	EnvironmentID  xid.ID  `bun:",notnull"`  // Environment within app (required)
 	OrganizationID *xid.ID `bun:",nullzero"` // End-user workspace (optional for app-level providers)
 
 	ProviderID string `bun:",notnull"` // e.g., "okta-saml" or "google-oidc"

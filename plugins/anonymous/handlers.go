@@ -10,8 +10,8 @@ import (
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
-	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/helpers"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 

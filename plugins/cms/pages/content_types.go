@@ -298,11 +298,11 @@ func CreateContentTypePage(
 					)
 				}()),
 
-			FormEl(
-				Method("POST"),
-				Action(appBase+"/cms/types/create"),
-				Class("space-y-6"),
-				g.Attr("x-data", `{
+				FormEl(
+					Method("POST"),
+					Action(appBase+"/cms/types/create"),
+					Class("space-y-6"),
+					g.Attr("x-data", `{
 					name: '',
 					slug: '',
 					slugManuallyEdited: false,
@@ -321,11 +321,11 @@ func CreateContentTypePage(
 					}
 				}`),
 
-				// Name
-				formFieldWithAlpine("name", "Name", "text", "", "e.g., Blog Posts, Products, Events", true, "", "name", "@input", "updateSlug()"),
+					// Name
+					formFieldWithAlpine("name", "Name", "text", "", "e.g., Blog Posts, Products, Events", true, "", "name", "@input", "updateSlug()"),
 
-				// Slug  
-				formFieldWithAlpine("slug", "Name", "text", "", "e.g., blog-posts, products, events", true, "URL-friendly identifier. Use lowercase letters, numbers, and hyphens.", "slug", "@input", "slugManuallyEdited = true"),
+					// Slug
+					formFieldWithAlpine("slug", "Name", "text", "", "e.g., blog-posts, products, events", true, "URL-friendly identifier. Use lowercase letters, numbers, and hyphens.", "slug", "@input", "slugManuallyEdited = true"),
 
 					// Description
 					Div(
@@ -425,4 +425,3 @@ func formFieldWithAlpine(name, label, inputType, value, placeholder string, requ
 		}()),
 	)
 }
-

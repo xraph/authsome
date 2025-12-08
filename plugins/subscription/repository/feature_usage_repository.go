@@ -330,4 +330,3 @@ func (r *featureUsageRepository) GetUsageNeedingReset(ctx context.Context, reset
 	}
 	return usages, nil
 }
-

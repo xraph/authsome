@@ -22,8 +22,6 @@ type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-
-
 type RulesResponse struct {
 	Rules interface{} `json:"rules"`
 	Count int         `json:"count"`
@@ -125,7 +123,7 @@ func (h *Handler) DeleteRule(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "rule deleted successfully",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "rule deleted successfully"})
 }
 
 // CheckLocation performs a geofence check
@@ -266,7 +264,7 @@ func (h *Handler) ApproveTravelAlert(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert approved",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert approved"})
 }
 
 // DenyTravelAlert denies a travel alert
@@ -283,7 +281,7 @@ func (h *Handler) DenyTravelAlert(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert denied",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert denied"})
 }
 
 // CreateTrustedLocation creates a trusted location
@@ -368,7 +366,7 @@ func (h *Handler) DeleteTrustedLocation(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "trusted location deleted",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "trusted location deleted"})
 }
 
 // ListViolations lists geofence violations
@@ -428,23 +426,23 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation resolved",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation resolved"})
 }
 
 // GetMetrics returns geofencing metrics
 func (h *Handler) GetMetrics(c forge.Context) error {
 	// TODO: Implement metrics aggregation
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "metrics endpoint - to be implemented",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "metrics endpoint - to be implemented"})
 }
 
 // GetLocationAnalytics returns location analytics
 func (h *Handler) GetLocationAnalytics(c forge.Context) error {
 	// TODO: Implement location analytics
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "location analytics endpoint - to be implemented",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "location analytics endpoint - to be implemented"})
 }
 
 // GetViolationAnalytics returns violation analytics
 func (h *Handler) GetViolationAnalytics(c forge.Context) error {
 	// TODO: Implement violation analytics
-	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation analytics endpoint - to be implemented",})
+	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation analytics endpoint - to be implemented"})
 }

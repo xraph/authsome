@@ -184,4 +184,3 @@ func TestValidationTags(t *testing.T) {
 		assert.IsType(t, false, req.Remember)
 	})
 }
-

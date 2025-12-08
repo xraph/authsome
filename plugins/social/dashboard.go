@@ -244,4 +244,3 @@ func (e *DashboardExtension) renderEmptyWidget(message string) g.Node {
 		),
 	)
 }
-

@@ -87,9 +87,9 @@ func handleListUsers(c forge.Context) error {
 	return c.JSON(200, map[string]interface{}{
 		"message": "List users",
 		"auth": map[string]interface{}{
-			"method":              string(authCtx.Method),
-			"apiKeyRoles":         authCtx.APIKeyRoles,
-			"apiKeyPermissions":   authCtx.APIKeyPermissions,
+			"method":               string(authCtx.Method),
+			"apiKeyRoles":          authCtx.APIKeyRoles,
+			"apiKeyPermissions":    authCtx.APIKeyPermissions,
 			"effectivePermissions": authCtx.EffectivePermissions,
 		},
 	})
@@ -106,9 +106,9 @@ func handleCreateUser(c forge.Context) error {
 	return c.JSON(201, map[string]interface{}{
 		"message": "User created",
 		"auth": map[string]interface{}{
-			"method":              string(authCtx.Method),
-			"hasScope":            authCtx.HasScope("users:create"),
-			"hasRBACPermission":   authCtx.HasRBACPermission("create", "users"),
+			"method":            string(authCtx.Method),
+			"hasScope":          authCtx.HasScope("users:create"),
+			"hasRBACPermission": authCtx.HasRBACPermission("create", "users"),
 		},
 	})
 }
@@ -119,9 +119,9 @@ func handleDashboard(c forge.Context) error {
 	return c.JSON(200, map[string]interface{}{
 		"message": "Dashboard data",
 		"auth": map[string]interface{}{
-			"authenticated":       authCtx.IsAuthenticated,
+			"authenticated":        authCtx.IsAuthenticated,
 			"effectivePermissions": authCtx.EffectivePermissions,
-			"delegating":          authCtx.IsDelegatingCreatorPermissions(),
+			"delegating":           authCtx.IsDelegatingCreatorPermissions(),
 		},
 	})
 }
@@ -132,8 +132,8 @@ func handleDeleteUser(c forge.Context) error {
 	// Runtime permission check with detailed response
 	if !authCtx.CanAccess("delete", "users") {
 		return c.JSON(403, map[string]interface{}{
-			"error": "Access denied",
-			"reason": "Missing delete:users permission",
+			"error":           "Access denied",
+			"reason":          "Missing delete:users permission",
 			"yourPermissions": authCtx.EffectivePermissions,
 		})
 	}
@@ -144,7 +144,7 @@ func handleDeleteUser(c forge.Context) error {
 	if !authCtx.IsAdmin() {
 		if authCtx.User == nil || authCtx.User.ID.String() != userID {
 			return c.JSON(403, map[string]interface{}{
-				"error": "Access denied",
+				"error":  "Access denied",
 				"reason": "Can only delete your own user",
 			})
 		}
@@ -263,4 +263,3 @@ func DemonstrateScopeMapping() {
 	suggested := apikey.GenerateSuggestedRole(scopes)
 	fmt.Printf("\nSuggested role for these scopes: %s\n", suggested)
 }
-

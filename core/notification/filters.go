@@ -26,4 +26,3 @@ type ListNotificationsFilter struct {
 	Status    *NotificationStatus `json:"status,omitempty" query:"status"`
 	Recipient *string             `json:"recipient,omitempty" query:"recipient"`
 }
-

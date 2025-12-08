@@ -16,7 +16,7 @@ var EncryptionKey = []byte("authsome-notification-key-32b") // Must be 32 bytes 
 // EncryptConfig encrypts a provider configuration map
 func EncryptConfig(config map[string]interface{}) (map[string]interface{}, error) {
 	encrypted := make(map[string]interface{})
-	
+
 	for key, value := range config {
 		// Only encrypt sensitive fields
 		if isSensitiveField(key) {
@@ -33,14 +33,14 @@ func EncryptConfig(config map[string]interface{}) (map[string]interface{}, error
 			encrypted[key] = value
 		}
 	}
-	
+
 	return encrypted, nil
 }
 
 // DecryptConfig decrypts a provider configuration map
 func DecryptConfig(config map[string]interface{}) (map[string]interface{}, error) {
 	decrypted := make(map[string]interface{})
-	
+
 	for key, value := range config {
 		// Only decrypt sensitive fields
 		if isSensitiveField(key) {
@@ -57,7 +57,7 @@ func DecryptConfig(config map[string]interface{}) (map[string]interface{}, error
 			decrypted[key] = value
 		}
 	}
-	
+
 	return decrypted, nil
 }
 
@@ -82,7 +82,7 @@ func isSensitiveField(fieldName string) bool {
 		"client_secret": true,
 		"clientSecret":  true,
 	}
-	
+
 	return sensitiveFields[fieldName]
 }
 
@@ -91,28 +91,28 @@ func encryptString(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	
+
 	// Create cipher block
 	block, err := aes.NewCipher(EncryptionKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cipher: %w", err)
 	}
-	
+
 	// Create GCM
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
-	
+
 	// Generate nonce
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("failed to generate nonce: %w", err)
 	}
-	
+
 	// Encrypt
 	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
-	
+
 	// Encode to base64 for storage
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
@@ -122,39 +122,39 @@ func decryptString(ciphertext string) (string, error) {
 	if ciphertext == "" {
 		return "", nil
 	}
-	
+
 	// Decode from base64
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode base64: %w", err)
 	}
-	
+
 	// Create cipher block
 	block, err := aes.NewCipher(EncryptionKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cipher: %w", err)
 	}
-	
+
 	// Create GCM
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
-	
+
 	// Extract nonce
 	nonceSize := gcm.NonceSize()
 	if len(data) < nonceSize {
 		return "", fmt.Errorf("ciphertext too short")
 	}
-	
+
 	nonce, ciphertextBytes := data[:nonceSize], data[nonceSize:]
-	
+
 	// Decrypt
 	plaintext, err := gcm.Open(nil, nonce, ciphertextBytes, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to decrypt: %w", err)
 	}
-	
+
 	return string(plaintext), nil
 }
 
@@ -176,4 +176,3 @@ func GenerateEncryptionKey() ([]byte, error) {
 	}
 	return key, nil
 }
-

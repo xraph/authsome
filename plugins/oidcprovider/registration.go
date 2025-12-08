@@ -34,14 +34,14 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 	if err := s.ValidateRegistrationRequest(req); err != nil {
 		return nil, err
 	}
-	
+
 	// Generate client credentials
 	clientID := "client_" + xid.New().String()
 	clientSecret, err := s.generateClientSecret()
 	if err != nil {
 		return nil, errs.InternalError(err)
 	}
-	
+
 	// Set defaults for optional fields
 	if req.ApplicationType == "" {
 		req.ApplicationType = "web"
@@ -60,12 +60,12 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 	if len(req.ResponseTypes) == 0 {
 		req.ResponseTypes = []string{"code"}
 	}
-	
+
 	// Ensure PKCE for public clients
 	if req.TokenEndpointAuthMethod == "none" {
 		req.RequirePKCE = true
 	}
-	
+
 	// Create OAuth client record
 	client := &schema.OAuthClient{
 		ID:                      xid.New(),
@@ -91,12 +91,12 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 		TosURI:                  req.TosURI,
 		Contacts:                req.Contacts,
 	}
-	
+
 	// Store client in database
 	if err := s.clientRepo.Create(ctx, client); err != nil {
 		return nil, errs.DatabaseError("create client", err)
 	}
-	
+
 	// Build registration response
 	response := &ClientRegistrationResponse{
 		ClientID:                clientID,
@@ -116,12 +116,12 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 		Contacts:                req.Contacts,
 		Scope:                   req.Scope,
 	}
-	
+
 	// Don't return client secret for public clients
 	if req.TokenEndpointAuthMethod == "none" {
 		response.ClientSecret = ""
 	}
-	
+
 	return response, nil
 }
 
@@ -131,25 +131,25 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 	if req.ClientName == "" {
 		return errs.RequiredField("client_name")
 	}
-	
+
 	if len(req.RedirectURIs) == 0 {
 		return errs.RequiredField("redirect_uris")
 	}
-	
+
 	// Validate redirect URIs
 	for _, uri := range req.RedirectURIs {
 		if err := s.validateRedirectURI(uri, req.ApplicationType); err != nil {
 			return err
 		}
 	}
-	
+
 	// Validate post-logout redirect URIs
 	for _, uri := range req.PostLogoutRedirectURIs {
 		if _, err := url.Parse(uri); err != nil {
 			return errs.InvalidInput("post_logout_redirect_uris", "must be valid URLs")
 		}
 	}
-	
+
 	// Validate application type
 	if req.ApplicationType != "" {
 		validTypes := []string{"web", "native", "spa"}
@@ -157,14 +157,14 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 			return errs.InvalidInput("application_type", "must be one of: web, native, spa")
 		}
 	}
-	
+
 	// Validate token endpoint auth method
 	if req.TokenEndpointAuthMethod != "" {
 		validMethods := []string{"client_secret_basic", "client_secret_post", "none"}
 		if !contains(validMethods, req.TokenEndpointAuthMethod) {
 			return errs.InvalidInput("token_endpoint_auth_method", "must be one of: client_secret_basic, client_secret_post, none")
 		}
-		
+
 		// 'none' method only allowed for public clients
 		if req.TokenEndpointAuthMethod == "none" {
 			if req.ApplicationType == "web" {
@@ -172,7 +172,7 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 			}
 		}
 	}
-	
+
 	// Validate grant types
 	if len(req.GrantTypes) > 0 {
 		validGrantTypes := []string{"authorization_code", "refresh_token", "client_credentials", "implicit"}
@@ -181,13 +181,13 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 				return errs.InvalidInput("grant_types", "invalid grant type: "+gt)
 			}
 		}
-		
+
 		// Validate grant type compatibility
 		if contains(req.GrantTypes, "implicit") && contains(req.GrantTypes, "authorization_code") {
 			return errs.InvalidInput("grant_types", "cannot mix implicit and authorization_code grant types")
 		}
 	}
-	
+
 	// Validate response types
 	if len(req.ResponseTypes) > 0 {
 		validResponseTypes := []string{"code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"}
@@ -196,7 +196,7 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 				return errs.InvalidInput("response_types", "invalid response type: "+rt)
 			}
 		}
-		
+
 		// Ensure response types are compatible with grant types
 		if contains(req.ResponseTypes, "token") || contains(req.ResponseTypes, "id_token") {
 			if !contains(req.GrantTypes, "implicit") {
@@ -204,7 +204,7 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 			}
 		}
 	}
-	
+
 	// Validate URLs
 	if req.LogoURI != "" {
 		if _, err := url.Parse(req.LogoURI); err != nil {
@@ -221,7 +221,7 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 			return errs.InvalidInput("tos_uri", "must be a valid URL")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -231,12 +231,12 @@ func (s *RegistrationService) validateRedirectURI(uri, applicationType string) e
 	if err != nil {
 		return errs.InvalidInput("redirect_uris", "must be valid URLs")
 	}
-	
+
 	// Must be absolute URL
 	if !parsedURL.IsAbs() {
 		return errs.InvalidInput("redirect_uris", "must be absolute URLs")
 	}
-	
+
 	// Application type specific validation
 	switch applicationType {
 	case "web":
@@ -251,7 +251,7 @@ func (s *RegistrationService) validateRedirectURI(uri, applicationType string) e
 		if parsedURL.Fragment != "" {
 			return errs.InvalidInput("redirect_uris", "fragments not allowed in redirect URIs")
 		}
-		
+
 	case "native":
 		// Native apps can use custom schemes or localhost
 		if parsedURL.Scheme == "http" || parsedURL.Scheme == "https" {
@@ -261,7 +261,7 @@ func (s *RegistrationService) validateRedirectURI(uri, applicationType string) e
 				return errs.InvalidInput("redirect_uris", "native apps can only use localhost for HTTP(S) URIs")
 			}
 		}
-		
+
 	case "spa":
 		// SPAs must use HTTPS (except localhost)
 		if parsedURL.Scheme != "https" {
@@ -271,7 +271,7 @@ func (s *RegistrationService) validateRedirectURI(uri, applicationType string) e
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -301,4 +301,3 @@ func contains(slice []string, value string) bool {
 	}
 	return false
 }
-

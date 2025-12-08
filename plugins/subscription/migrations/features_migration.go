@@ -368,8 +368,8 @@ func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid
 // ExportFeatures exports features and links to JSON format
 func (m *FeaturesMigration) ExportFeatures(ctx context.Context, appID xid.ID) ([]byte, error) {
 	type exportData struct {
-		Features []schema.Feature          `json:"features"`
-		Links    []schema.PlanFeatureLink  `json:"links"`
+		Features []schema.Feature         `json:"features"`
+		Links    []schema.PlanFeatureLink `json:"links"`
 	}
 
 	var data exportData
@@ -407,4 +407,3 @@ func determineResetPeriod(featureType string) string {
 		return "none"
 	}
 }
-

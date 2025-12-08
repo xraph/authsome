@@ -114,7 +114,7 @@ func (r *paymentMethodRepository) SetDefault(ctx context.Context, orgID, payment
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Clear existing default
 	_, err = tx.NewUpdate().
 		Model((*schema.SubscriptionPaymentMethod)(nil)).
@@ -125,7 +125,7 @@ func (r *paymentMethodRepository) SetDefault(ctx context.Context, orgID, payment
 	if err != nil {
 		return fmt.Errorf("failed to clear existing default: %w", err)
 	}
-	
+
 	// Set new default
 	_, err = tx.NewUpdate().
 		Model((*schema.SubscriptionPaymentMethod)(nil)).
@@ -135,7 +135,7 @@ func (r *paymentMethodRepository) SetDefault(ctx context.Context, orgID, payment
 	if err != nil {
 		return fmt.Errorf("failed to set new default: %w", err)
 	}
-	
+
 	return tx.Commit()
 }
 
@@ -151,4 +151,3 @@ func (r *paymentMethodRepository) ClearDefault(ctx context.Context, orgID xid.ID
 	}
 	return nil
 }
-

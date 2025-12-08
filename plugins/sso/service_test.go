@@ -158,37 +158,37 @@ func TestProvisionUser_ExistingUser_NoUpdate(t *testing.T) {
 	// Setup
 	mockUserSvc := new(MockUserService)
 	mockSessionSvc := new(MockSessionService)
-	
+
 	config := Config{
 		AutoProvision:    true,
 		UpdateAttributes: false,
 	}
-	
+
 	svc := &Service{
 		userSvc:    mockUserSvc,
 		sessionSvc: mockSessionSvc,
 		config:     config,
 	}
-	
+
 	// Existing user
 	existingUser := &user.User{
 		ID:    xid.New(),
 		Email: "test@example.com",
 		Name:  "Original Name",
 	}
-	
+
 	// Mock: user exists
 	mockUserSvc.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
-	
+
 	// Test
 	ctx := context.Background()
 	attributes := map[string][]string{
 		"name": {"New Name"},
 	}
 	provider := &schema.SSOProvider{}
-	
+
 	usr, err := svc.ProvisionUser(ctx, "test@example.com", attributes, provider)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, usr)
@@ -201,7 +201,7 @@ func TestProvisionUser_ExistingUser_WithUpdate(t *testing.T) {
 	// Setup
 	mockUserSvc := new(MockUserService)
 	mockSessionSvc := new(MockSessionService)
-	
+
 	config := Config{
 		AutoProvision:    true,
 		UpdateAttributes: true,
@@ -209,35 +209,35 @@ func TestProvisionUser_ExistingUser_WithUpdate(t *testing.T) {
 			"name": "name",
 		},
 	}
-	
+
 	svc := &Service{
 		userSvc:    mockUserSvc,
 		sessionSvc: mockSessionSvc,
 		config:     config,
 	}
-	
+
 	// Existing user
 	existingUser := &user.User{
 		ID:    xid.New(),
 		Email: "test@example.com",
 		Name:  "Original Name",
 	}
-	
+
 	// Mock: user exists
 	mockUserSvc.On("FindByAppAndEmail", mock.Anything, mock.Anything, "test@example.com").Return(existingUser, nil)
 	mockUserSvc.On("Update", mock.Anything, mock.MatchedBy(func(u *user.User) bool {
 		return u.Name == "New Name"
 	}), mock.Anything).Return(existingUser, nil)
-	
+
 	// Test
 	ctx := contexts.SetAppID(context.Background(), xid.New())
 	attributes := map[string][]string{
 		"name": {"New Name"},
 	}
 	provider := &schema.SSOProvider{}
-	
+
 	usr, err := svc.ProvisionUser(ctx, "test@example.com", attributes, provider)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, usr)
@@ -249,17 +249,17 @@ func TestProvisionUser_NewUser_JITEnabled(t *testing.T) {
 	// Setup
 	mockUserSvc := new(MockUserService)
 	mockSessionSvc := new(MockSessionService)
-	
+
 	config := Config{
 		AutoProvision: true,
 	}
-	
+
 	svc := &Service{
 		userSvc:    mockUserSvc,
 		sessionSvc: mockSessionSvc,
 		config:     config,
 	}
-	
+
 	// Mock: user not found, will be created
 	mockUserSvc.On("FindByAppAndEmail", mock.Anything, mock.Anything, "newuser@example.com").Return(nil, nil)
 	mockUserSvc.On("Create", mock.Anything, mock.MatchedBy(func(req *user.CreateUserRequest) bool {
@@ -269,7 +269,7 @@ func TestProvisionUser_NewUser_JITEnabled(t *testing.T) {
 		Email: "newuser@example.com",
 		AppID: xid.New(),
 	}, nil)
-	
+
 	// Test
 	ctx := contexts.SetAppID(context.Background(), xid.New())
 	ctx = contexts.SetEnvironmentID(ctx, xid.New())
@@ -277,9 +277,9 @@ func TestProvisionUser_NewUser_JITEnabled(t *testing.T) {
 		"name": {"New User"},
 	}
 	provider := &schema.SSOProvider{}
-	
+
 	usr, err := svc.ProvisionUser(ctx, "newuser@example.com", attributes, provider)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, usr)
@@ -291,27 +291,27 @@ func TestProvisionUser_NewUser_JITDisabled(t *testing.T) {
 	// Setup
 	mockUserSvc := new(MockUserService)
 	mockSessionSvc := new(MockSessionService)
-	
+
 	config := Config{
 		AutoProvision: false, // JIT disabled
 	}
-	
+
 	svc := &Service{
 		userSvc:    mockUserSvc,
 		sessionSvc: mockSessionSvc,
 		config:     config,
 	}
-	
+
 	// Mock: user not found
 	mockUserSvc.On("FindByAppAndEmail", mock.Anything, mock.Anything, "newuser@example.com").Return(nil, nil)
-	
+
 	// Test
 	ctx := contexts.SetAppID(context.Background(), xid.New())
 	attributes := map[string][]string{}
 	provider := &schema.SSOProvider{}
-	
+
 	usr, err := svc.ProvisionUser(ctx, "newuser@example.com", attributes, provider)
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, usr)
@@ -322,16 +322,16 @@ func TestCreateSSOSession(t *testing.T) {
 	// Setup
 	mockUserSvc := new(MockUserService)
 	mockSessionSvc := new(MockSessionService)
-	
+
 	svc := &Service{
 		userSvc:    mockUserSvc,
 		sessionSvc: mockSessionSvc,
 		config:     Config{},
 	}
-	
+
 	userID := xid.New()
 	sessionID := xid.New()
-	
+
 	// Mock: session creation
 	mockSessionSvc.On("Create", mock.Anything, mock.MatchedBy(func(req *session.CreateSessionRequest) bool {
 		return req.UserID == userID
@@ -340,15 +340,15 @@ func TestCreateSSOSession(t *testing.T) {
 		UserID: userID,
 		Token:  "test-token-123",
 	}, nil)
-	
+
 	// Test
 	ctx := contexts.SetAppID(context.Background(), xid.New())
 	provider := &schema.SSOProvider{
 		ProviderID: "test-provider",
 	}
-	
+
 	sess, token, err := svc.CreateSSOSession(ctx, userID, provider)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, sess)
@@ -361,21 +361,21 @@ func TestBuildCreateUserRequest(t *testing.T) {
 	svc := &Service{
 		config: Config{},
 	}
-	
+
 	appID := xid.New()
-	
+
 	ctx := contexts.SetAppID(context.Background(), appID)
-	
+
 	attributes := map[string][]string{
 		"name":       {"John Doe"},
 		"givenName":  {"John"},
 		"familyName": {"Doe"},
 	}
-	
+
 	provider := &schema.SSOProvider{}
-	
+
 	req := svc.buildCreateUserRequest(ctx, "john@example.com", attributes, provider)
-	
+
 	assert.NotNil(t, req)
 	assert.Equal(t, "john@example.com", req.Email)
 	assert.Equal(t, "John Doe", req.Name)
@@ -391,41 +391,41 @@ func TestApplyAttributeMapping(t *testing.T) {
 			},
 		},
 	}
-	
+
 	usr := &user.User{
 		Email: "test@example.com",
 		Name:  "Original",
 	}
-	
+
 	attributes := map[string][]string{
 		"displayName": {"New Name"},
 		"otherAttr":   {"value"},
 	}
-	
+
 	provider := &schema.SSOProvider{}
-	
+
 	svc.applyAttributeMapping(usr, attributes, provider)
-	
+
 	assert.Equal(t, "New Name", usr.Name)
 }
 
 func TestInitiateOIDCLogin(t *testing.T) {
 	svc := NewService(nil, Config{}, nil, nil)
-	
+
 	provider := &schema.SSOProvider{
 		Type:            "oidc",
 		OIDCIssuer:      "https://idp.example.com",
 		OIDCClientID:    "client-123",
 		OIDCRedirectURI: "https://app.example.com/callback",
 	}
-	
+
 	ctx := context.Background()
 	state := "random-state"
 	nonce := "random-nonce"
 	redirectURI := "https://app.example.com/callback"
-	
+
 	authURL, pkce, err := svc.InitiateOIDCLogin(ctx, provider, redirectURI, state, nonce)
-	
+
 	assert.NoError(t, err)
 	assert.NotEmpty(t, authURL)
 	assert.Contains(t, authURL, "https://idp.example.com")
@@ -441,7 +441,7 @@ func TestInitiateOIDCLogin(t *testing.T) {
 
 func TestStateStore(t *testing.T) {
 	store := NewStateStore()
-	
+
 	state := &OIDCState{
 		State:        "test-state",
 		Nonce:        "test-nonce",
@@ -450,24 +450,24 @@ func TestStateStore(t *testing.T) {
 		CreatedAt:    time.Now(),
 		ExpiresAt:    time.Now().Add(10 * time.Minute),
 	}
-	
+
 	ctx := context.Background()
-	
+
 	// Store state
 	err := store.Store(ctx, state)
 	assert.NoError(t, err)
-	
+
 	// Retrieve state
 	retrieved, err := store.Get(ctx, "test-state")
 	assert.NoError(t, err)
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, "test-nonce", retrieved.Nonce)
 	assert.Equal(t, "test-verifier", retrieved.CodeVerifier)
-	
+
 	// Delete state
 	err = store.Delete(ctx, "test-state")
 	assert.NoError(t, err)
-	
+
 	// Verify deletion
 	retrieved, err = store.Get(ctx, "test-state")
 	assert.NoError(t, err)
@@ -476,23 +476,22 @@ func TestStateStore(t *testing.T) {
 
 func TestStateStore_Expiration(t *testing.T) {
 	store := NewStateStore()
-	
+
 	state := &OIDCState{
-		State:      "expired-state",
-		Nonce:      "test-nonce",
-		CreatedAt:  time.Now().Add(-20 * time.Minute),
-		ExpiresAt:  time.Now().Add(-10 * time.Minute), // Already expired
+		State:     "expired-state",
+		Nonce:     "test-nonce",
+		CreatedAt: time.Now().Add(-20 * time.Minute),
+		ExpiresAt: time.Now().Add(-10 * time.Minute), // Already expired
 	}
-	
+
 	ctx := context.Background()
-	
+
 	// Store expired state
 	err := store.Store(ctx, state)
 	assert.NoError(t, err)
-	
+
 	// Try to retrieve expired state
 	retrieved, err := store.Get(ctx, "expired-state")
 	assert.NoError(t, err)
 	assert.Nil(t, retrieved) // Should not return expired state
 }
-

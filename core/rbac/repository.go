@@ -23,15 +23,15 @@ type RoleRepository interface {
 	FindByID(ctx context.Context, roleID xid.ID) (*schema.Role, error)
 	FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*schema.Role, error)
 	ListByOrg(ctx context.Context, orgID *string) ([]schema.Role, error)
-	
+
 	// Template operations
 	GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error)
 	GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error)
-	
+
 	// Organization-scoped roles
 	GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error)
 	GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*schema.Role, error)
-	
+
 	// Role cloning
 	CloneRole(ctx context.Context, templateID xid.ID, orgID xid.ID, customName *string) (*schema.Role, error)
 }
@@ -46,7 +46,7 @@ type PermissionRepository interface {
 	ListByApp(ctx context.Context, appID xid.ID) ([]*schema.Permission, error)
 	ListByOrg(ctx context.Context, orgID xid.ID) ([]*schema.Permission, error)
 	ListByCategory(ctx context.Context, category string, appID xid.ID) ([]*schema.Permission, error)
-	
+
 	// Custom permissions
 	CreateCustomPermission(ctx context.Context, name, description, category string, orgID xid.ID) (*schema.Permission, error)
 }

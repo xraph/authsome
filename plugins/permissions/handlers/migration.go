@@ -37,15 +37,15 @@ type MigrateAllRequest struct {
 
 // MigrateAllResponse is the response from migrating all RBAC policies
 type MigrateAllResponse struct {
-	TotalPolicies     int                        `json:"totalPolicies"`
-	MigratedPolicies  int                        `json:"migratedPolicies"`
-	SkippedPolicies   int                        `json:"skippedPolicies"`
-	FailedPolicies    int                        `json:"failedPolicies"`
-	Errors            []MigrationErrorResponse   `json:"errors,omitempty"`
-	ConvertedPolicies []PolicyPreviewResponse    `json:"convertedPolicies,omitempty"`
-	StartedAt         string                     `json:"startedAt"`
-	CompletedAt       string                     `json:"completedAt"`
-	DryRun            bool                       `json:"dryRun"`
+	TotalPolicies     int                      `json:"totalPolicies"`
+	MigratedPolicies  int                      `json:"migratedPolicies"`
+	SkippedPolicies   int                      `json:"skippedPolicies"`
+	FailedPolicies    int                      `json:"failedPolicies"`
+	Errors            []MigrationErrorResponse `json:"errors,omitempty"`
+	ConvertedPolicies []PolicyPreviewResponse  `json:"convertedPolicies,omitempty"`
+	StartedAt         string                   `json:"startedAt"`
+	CompletedAt       string                   `json:"completedAt"`
+	DryRun            bool                     `json:"dryRun"`
 }
 
 // MigrationErrorResponse represents a migration error in API response
@@ -296,4 +296,3 @@ func convertMigrationResult(result *migration.MigrationResult) *MigrateAllRespon
 
 	return response
 }
-

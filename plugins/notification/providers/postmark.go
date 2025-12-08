@@ -76,12 +76,12 @@ func (p *PostmarkProvider) Send(ctx context.Context, notif *notification.Notific
 		if messageStream, ok := notif.Metadata["message_stream"].(string); ok && messageStream != "" {
 			payload["MessageStream"] = messageStream
 		}
-		
+
 		// Add tags if available
 		if tag, ok := notif.Metadata["tag"].(string); ok && tag != "" {
 			payload["Tag"] = tag
 		}
-		
+
 		// Add metadata
 		if metadata, ok := notif.Metadata["postmark_metadata"].(map[string]string); ok && len(metadata) > 0 {
 			payload["Metadata"] = metadata
@@ -233,4 +233,3 @@ func (p *PostmarkProvider) MapWebhookEventToStatus(recordType string) notificati
 		return notification.NotificationStatusPending
 	}
 }
-

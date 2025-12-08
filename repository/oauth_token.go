@@ -139,13 +139,13 @@ func (r *OAuthTokenRepository) RevokeAllForUser(ctx context.Context, userID xid.
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
 		Where("revoked = ?", false)
-	
+
 	if orgID != nil && !orgID.IsNil() {
 		query = query.Where("organization_id = ?", orgID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	_, err := query.Exec(ctx)
 	return err
 }
@@ -186,13 +186,13 @@ func (r *OAuthTokenRepository) FindByUserInOrg(ctx context.Context, userID xid.I
 		Where("environment_id = ?", envID).
 		Where("revoked = ?", false).
 		Order("created_at DESC")
-	
+
 	if orgID != nil && !orgID.IsNil() {
 		query = query.Where("organization_id = ?", orgID)
 	} else {
 		query = query.Where("organization_id IS NULL")
 	}
-	
+
 	err := query.Scan(ctx)
 	return tokens, err
 }

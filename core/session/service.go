@@ -30,11 +30,11 @@ type Config struct {
 	// Sliding session renewal (Option 1)
 	EnableSlidingWindow bool          // Enable automatic session renewal
 	SlidingRenewalAfter time.Duration // Only renew if session age > this (default: 5 min)
-	
+
 	// Refresh token support (Option 3)
-	EnableRefreshTokens  bool          // Enable refresh token pattern
-	RefreshTokenTTL      time.Duration // Refresh token lifetime (default: 30 days)
-	AccessTokenTTL       time.Duration // Short-lived access token (default: 15 min)
+	EnableRefreshTokens bool          // Enable refresh token pattern
+	RefreshTokenTTL     time.Duration // Refresh token lifetime (default: 30 days)
+	AccessTokenTTL      time.Duration // Short-lived access token (default: 15 min)
 }
 
 // NewService creates a new session service
@@ -46,12 +46,12 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookEx
 	if cfg.RememberTTL == 0 {
 		cfg.RememberTTL = 7 * 24 * time.Hour
 	}
-	
+
 	// Sliding window defaults
 	if cfg.EnableSlidingWindow && cfg.SlidingRenewalAfter == 0 {
 		cfg.SlidingRenewalAfter = 5 * time.Minute // Only renew if session is >5 min old
 	}
-	
+
 	// Refresh token defaults
 	if cfg.EnableRefreshTokens {
 		if cfg.RefreshTokenTTL == 0 {
@@ -61,7 +61,7 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookEx
 			cfg.AccessTokenTTL = 15 * time.Minute // 15 minutes
 		}
 	}
-	
+
 	return &Service{
 		repo:         repo,
 		config:       cfg,
@@ -91,7 +91,7 @@ func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Sessi
 
 	id := xid.New()
 	now := time.Now().UTC()
-	
+
 	// Determine TTL based on refresh token config
 	var ttl time.Duration
 	if s.config.EnableRefreshTokens {
@@ -125,7 +125,7 @@ func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Sessi
 		if err != nil {
 			return nil, SessionCreationFailed(err)
 		}
-		
+
 		refreshExpiresAt := now.Add(s.config.RefreshTokenTTL)
 		sess.RefreshToken = &refreshToken
 		sess.RefreshTokenExpiresAt = &refreshExpiresAt
@@ -187,10 +187,10 @@ func (s *Service) TouchSession(ctx context.Context, sess *Session) (*Session, bo
 	}
 
 	now := time.Now().UTC()
-	
+
 	// Calculate time since last update
 	timeSinceUpdate := now.Sub(sess.UpdatedAt)
-	
+
 	// Only update if enough time has passed (throttling)
 	if timeSinceUpdate < s.config.SlidingRenewalAfter {
 		return sess, false, nil // Too soon to renew
@@ -202,9 +202,9 @@ func (s *Service) TouchSession(ctx context.Context, sess *Session) (*Session, bo
 		// Session was created with RememberTTL, maintain that
 		ttl = s.config.RememberTTL
 	}
-	
+
 	newExpiresAt := now.Add(ttl)
-	
+
 	// Update session in database
 	if err := s.repo.UpdateSessionExpiry(ctx, sess.ID, newExpiresAt); err != nil {
 		return nil, false, err
@@ -213,7 +213,7 @@ func (s *Service) TouchSession(ctx context.Context, sess *Session) (*Session, bo
 	// Return updated session
 	sess.ExpiresAt = newExpiresAt
 	sess.UpdatedAt = now
-	
+
 	return sess, true, nil
 }
 
@@ -376,7 +376,7 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*Ref
 	// Optional: Rotate refresh token for enhanced security
 	var newRefreshToken string
 	var refreshTokenExpiresAt time.Time
-	
+
 	if s.config.RefreshTokenTTL > 0 {
 		// Keep the same refresh token but extend its expiry (safer option)
 		newRefreshToken = refreshToken

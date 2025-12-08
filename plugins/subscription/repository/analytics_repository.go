@@ -503,4 +503,3 @@ func movementToSchema(m *core.SubscriptionMovement) *schema.SubscriptionMovement
 		CreatedAt:      m.CreatedAt,
 	}
 }
-

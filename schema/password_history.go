@@ -16,4 +16,3 @@ type PasswordHistory struct {
 	PasswordHash string    `bun:"type:text,notnull" json:"password_hash"`
 	CreatedAt    time.Time `bun:"type:timestamptz,notnull,default:current_timestamp" json:"created_at"`
 }
-

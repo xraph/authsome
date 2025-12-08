@@ -218,4 +218,3 @@ func init() {
 
 // Migrations is the collection of all subscription plugin migrations
 var Migrations = migrate.NewMigrations()
-

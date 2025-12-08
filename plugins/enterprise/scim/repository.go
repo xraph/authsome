@@ -571,17 +571,17 @@ func (r *Repository) UpdateTeamProvisioningInfo(ctx context.Context, teamID xid.
 		Set("updated_at = ?", time.Now()).
 		Where("id = ?", teamID).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to update app team: %w", err)
 	}
-	
+
 	// Check if any rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	
+
 	// If no app team found, try organization teams
 	if rowsAffected == 0 {
 		result, err = r.db.NewUpdate().
@@ -591,21 +591,21 @@ func (r *Repository) UpdateTeamProvisioningInfo(ctx context.Context, teamID xid.
 			Set("updated_at = ?", time.Now()).
 			Where("id = ?", teamID).
 			Exec(ctx)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to update organization team: %w", err)
 		}
-		
+
 		rowsAffected, err = result.RowsAffected()
 		if err != nil {
 			return fmt.Errorf("failed to get rows affected: %w", err)
 		}
-		
+
 		if rowsAffected == 0 {
 			return fmt.Errorf("team not found: %s", teamID)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -619,17 +619,17 @@ func (r *Repository) UpdateTeamMemberProvisioningInfo(ctx context.Context, teamI
 		Set("updated_at = ?", time.Now()).
 		Where("team_id = ? AND member_id = ?", teamID, memberID).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to update app team member: %w", err)
 	}
-	
+
 	// Check if any rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	
+
 	// If no app team member found, try organization team members
 	if rowsAffected == 0 {
 		result, err = r.db.NewUpdate().
@@ -638,20 +638,20 @@ func (r *Repository) UpdateTeamMemberProvisioningInfo(ctx context.Context, teamI
 			Set("updated_at = ?", time.Now()).
 			Where("team_id = ? AND member_id = ?", teamID, memberID).
 			Exec(ctx)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to update organization team member: %w", err)
 		}
-		
+
 		rowsAffected, err = result.RowsAffected()
 		if err != nil {
 			return fmt.Errorf("failed to get rows affected: %w", err)
 		}
-		
+
 		if rowsAffected == 0 {
 			return fmt.Errorf("team member not found: team=%s, member=%s", teamID, memberID)
 		}
 	}
-	
+
 	return nil
 }

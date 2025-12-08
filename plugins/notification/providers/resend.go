@@ -178,4 +178,3 @@ func (p *ResendProvider) ValidateConfig() error {
 	}
 	return nil
 }
-

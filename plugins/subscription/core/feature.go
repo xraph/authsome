@@ -9,21 +9,21 @@ import (
 
 // Feature represents a standalone feature definition that can be linked to plans
 type Feature struct {
-	ID           xid.ID           `json:"id"`
-	AppID        xid.ID           `json:"appId"`
-	Key          string           `json:"key"`          // Unique per app
-	Name         string           `json:"name"`         // Display name
-	Description  string           `json:"description"`  // Feature description
-	Type         FeatureType      `json:"type"`         // boolean, limit, unlimited, metered, tiered
-	Unit         string           `json:"unit"`         // "seats", "GB", "API calls", etc.
-	ResetPeriod  ResetPeriod      `json:"resetPeriod"`  // When usage resets
-	IsPublic     bool             `json:"isPublic"`     // Show in pricing pages
-	DisplayOrder int              `json:"displayOrder"` // Order in UI
-	Icon         string           `json:"icon"`         // Icon identifier for UI
-	Metadata     map[string]any   `json:"metadata"`
-	Tiers        []FeatureTier    `json:"tiers,omitempty"` // For tiered features
-	CreatedAt    time.Time        `json:"createdAt"`
-	UpdatedAt    time.Time        `json:"updatedAt"`
+	ID           xid.ID         `json:"id"`
+	AppID        xid.ID         `json:"appId"`
+	Key          string         `json:"key"`          // Unique per app
+	Name         string         `json:"name"`         // Display name
+	Description  string         `json:"description"`  // Feature description
+	Type         FeatureType    `json:"type"`         // boolean, limit, unlimited, metered, tiered
+	Unit         string         `json:"unit"`         // "seats", "GB", "API calls", etc.
+	ResetPeriod  ResetPeriod    `json:"resetPeriod"`  // When usage resets
+	IsPublic     bool           `json:"isPublic"`     // Show in pricing pages
+	DisplayOrder int            `json:"displayOrder"` // Order in UI
+	Icon         string         `json:"icon"`         // Icon identifier for UI
+	Metadata     map[string]any `json:"metadata"`
+	Tiers        []FeatureTier  `json:"tiers,omitempty"` // For tiered features
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt"`
 }
 
 // FeatureTier represents a tier within a tiered feature type
@@ -101,7 +101,7 @@ type FeatureAccess struct {
 	Feature      *Feature `json:"feature"`
 	HasAccess    bool     `json:"hasAccess"`
 	IsBlocked    bool     `json:"isBlocked"`
-	Limit        int64    `json:"limit"`        // -1 for unlimited, 0 for no access
+	Limit        int64    `json:"limit"` // -1 for unlimited, 0 for no access
 	CurrentUsage int64    `json:"currentUsage"`
 	Remaining    int64    `json:"remaining"`    // -1 for unlimited
 	GrantedExtra int64    `json:"grantedExtra"` // Extra from grants
@@ -157,9 +157,9 @@ type UpdateFeatureRequest struct {
 // LinkFeatureRequest represents a request to link a feature to a plan
 type LinkFeatureRequest struct {
 	FeatureID        xid.ID         `json:"featureId" validate:"required"`
-	Value            string         `json:"value"`                           // The limit/value for this plan
-	IsBlocked        bool           `json:"isBlocked"`                       // Explicitly block this feature
-	IsHighlighted    bool           `json:"isHighlighted"`                   // Highlight in pricing UI
+	Value            string         `json:"value"`         // The limit/value for this plan
+	IsBlocked        bool           `json:"isBlocked"`     // Explicitly block this feature
+	IsHighlighted    bool           `json:"isHighlighted"` // Highlight in pricing UI
 	OverrideSettings map[string]any `json:"overrideSettings,omitempty"`
 }
 
@@ -230,4 +230,3 @@ type PublicPlanFeature struct {
 	IsBlocked     bool   `json:"isBlocked"`
 	DisplayOrder  int    `json:"displayOrder"`
 }
-

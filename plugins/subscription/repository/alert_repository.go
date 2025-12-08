@@ -494,4 +494,3 @@ func alertTemplateToSchema(t *core.AlertTemplate) *schema.SubscriptionAlertTempl
 		UpdatedAt:     t.UpdatedAt,
 	}
 }
-

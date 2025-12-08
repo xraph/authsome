@@ -26,18 +26,18 @@ func NewPublicHandlers(featureSvc *service.FeatureService, planSvc *service.Plan
 
 // PublicPlan represents a plan in public API format
 type PublicPlan struct {
-	ID              string                   `json:"id"`
-	Slug            string                   `json:"slug"`
-	Name            string                   `json:"name"`
-	Description     string                   `json:"description"`
-	BillingPattern  string                   `json:"billingPattern"`
-	BillingInterval string                   `json:"billingInterval"`
-	BasePrice       int64                    `json:"basePrice"`
-	Currency        string                   `json:"currency"`
-	TrialDays       int                      `json:"trialDays"`
-	DisplayOrder    int                      `json:"displayOrder"`
+	ID              string                    `json:"id"`
+	Slug            string                    `json:"slug"`
+	Name            string                    `json:"name"`
+	Description     string                    `json:"description"`
+	BillingPattern  string                    `json:"billingPattern"`
+	BillingInterval string                    `json:"billingInterval"`
+	BasePrice       int64                     `json:"basePrice"`
+	Currency        string                    `json:"currency"`
+	TrialDays       int                       `json:"trialDays"`
+	DisplayOrder    int                       `json:"displayOrder"`
 	Features        []*core.PublicPlanFeature `json:"features,omitempty"`
-	Metadata        map[string]any           `json:"metadata,omitempty"`
+	Metadata        map[string]any            `json:"metadata,omitempty"`
 }
 
 // HandleListPublicPlans handles listing public plans with features
@@ -287,4 +287,3 @@ func splitString(s, sep string) []string {
 	}
 	return result
 }
-

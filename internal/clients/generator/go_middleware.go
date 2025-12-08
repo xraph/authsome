@@ -104,4 +104,3 @@ func (g *GoGenerator) generateForgeMiddleware() error {
 
 	return g.writeFile("middleware_forge.go", sb.String())
 }
-

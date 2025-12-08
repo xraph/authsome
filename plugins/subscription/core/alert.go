@@ -10,12 +10,12 @@ import (
 type AlertType string
 
 const (
-	AlertTypeUsageThreshold    AlertType = "usage_threshold"     // When usage reaches X%
-	AlertTypeUsageLimit        AlertType = "usage_limit"         // When usage hits limit
-	AlertTypePaymentFailed     AlertType = "payment_failed"      // Payment failure
-	AlertTypeTrialEnding       AlertType = "trial_ending"        // Trial about to end
-	AlertTypeSubscriptionExpiring AlertType = "subscription_expiring" // Subscription expiring
-	AlertTypeInvoicePastDue    AlertType = "invoice_past_due"    // Invoice past due
+	AlertTypeUsageThreshold       AlertType = "usage_threshold"        // When usage reaches X%
+	AlertTypeUsageLimit           AlertType = "usage_limit"            // When usage hits limit
+	AlertTypePaymentFailed        AlertType = "payment_failed"         // Payment failure
+	AlertTypeTrialEnding          AlertType = "trial_ending"           // Trial about to end
+	AlertTypeSubscriptionExpiring AlertType = "subscription_expiring"  // Subscription expiring
+	AlertTypeInvoicePastDue       AlertType = "invoice_past_due"       // Invoice past due
 	AlertTypeSeatLimitApproaching AlertType = "seat_limit_approaching" // Seat limit approaching
 )
 
@@ -32,11 +32,11 @@ const (
 type AlertStatus string
 
 const (
-	AlertStatusPending     AlertStatus = "pending"      // Alert created, not yet sent
-	AlertStatusSent        AlertStatus = "sent"         // Alert sent
+	AlertStatusPending      AlertStatus = "pending"      // Alert created, not yet sent
+	AlertStatusSent         AlertStatus = "sent"         // Alert sent
 	AlertStatusAcknowledged AlertStatus = "acknowledged" // Alert acknowledged by user
-	AlertStatusResolved    AlertStatus = "resolved"     // Alert condition resolved
-	AlertStatusSnoozed     AlertStatus = "snoozed"      // Alert snoozed
+	AlertStatusResolved     AlertStatus = "resolved"     // Alert condition resolved
+	AlertStatusSnoozed      AlertStatus = "snoozed"      // Alert snoozed
 )
 
 // AlertChannel represents how an alert is delivered
@@ -52,97 +52,97 @@ const (
 
 // AlertConfig represents alert configuration for an organization
 type AlertConfig struct {
-	ID             xid.ID    `json:"id"`
-	AppID          xid.ID    `json:"appId"`
-	OrganizationID xid.ID    `json:"organizationId"`
-	
+	ID             xid.ID `json:"id"`
+	AppID          xid.ID `json:"appId"`
+	OrganizationID xid.ID `json:"organizationId"`
+
 	// Alert type settings
-	AlertType   AlertType   `json:"alertType"`
-	IsEnabled   bool        `json:"isEnabled"`
-	
+	AlertType AlertType `json:"alertType"`
+	IsEnabled bool      `json:"isEnabled"`
+
 	// Threshold settings (for usage alerts)
 	ThresholdPercent float64 `json:"thresholdPercent"` // Trigger at X% (e.g., 80, 90, 100)
 	MetricKey        string  `json:"metricKey"`        // Which metric to monitor
-	
+
 	// Timing settings
 	DaysBeforeEnd int `json:"daysBeforeEnd"` // For trial/subscription ending alerts
-	
+
 	// Delivery settings
-	Channels       []AlertChannel `json:"channels"`
-	Recipients     []string       `json:"recipients"`     // Email addresses
-	WebhookURL     string         `json:"webhookUrl"`     // For webhook channel
-	SlackChannel   string         `json:"slackChannel"`   // For Slack channel
-	
+	Channels     []AlertChannel `json:"channels"`
+	Recipients   []string       `json:"recipients"`   // Email addresses
+	WebhookURL   string         `json:"webhookUrl"`   // For webhook channel
+	SlackChannel string         `json:"slackChannel"` // For Slack channel
+
 	// Frequency settings
-	MinInterval    int  `json:"minInterval"`    // Minimum minutes between alerts
+	MinInterval     int `json:"minInterval"`     // Minimum minutes between alerts
 	MaxAlertsPerDay int `json:"maxAlertsPerDay"` // Max alerts per day (0 = unlimited)
-	
+
 	// Snooze settings
 	SnoozedUntil *time.Time `json:"snoozedUntil"`
-	
+
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Alert represents an individual alert instance
 type Alert struct {
-	ID             xid.ID        `json:"id"`
-	AppID          xid.ID        `json:"appId"`
-	OrganizationID xid.ID        `json:"organizationId"`
-	ConfigID       *xid.ID       `json:"configId"` // Reference to AlertConfig
-	
+	ID             xid.ID  `json:"id"`
+	AppID          xid.ID  `json:"appId"`
+	OrganizationID xid.ID  `json:"organizationId"`
+	ConfigID       *xid.ID `json:"configId"` // Reference to AlertConfig
+
 	// Alert details
-	Type        AlertType     `json:"type"`
-	Severity    AlertSeverity `json:"severity"`
-	Status      AlertStatus   `json:"status"`
-	Title       string        `json:"title"`
-	Message     string        `json:"message"`
-	
+	Type     AlertType     `json:"type"`
+	Severity AlertSeverity `json:"severity"`
+	Status   AlertStatus   `json:"status"`
+	Title    string        `json:"title"`
+	Message  string        `json:"message"`
+
 	// Context data
-	MetricKey     string  `json:"metricKey"`
-	CurrentValue  float64 `json:"currentValue"`
+	MetricKey      string  `json:"metricKey"`
+	CurrentValue   float64 `json:"currentValue"`
 	ThresholdValue float64 `json:"thresholdValue"`
-	LimitValue    float64 `json:"limitValue"`
-	
+	LimitValue     float64 `json:"limitValue"`
+
 	// Related entities
 	SubscriptionID *xid.ID `json:"subscriptionId"`
 	InvoiceID      *xid.ID `json:"invoiceId"`
-	
+
 	// Delivery tracking
-	Channels       []AlertChannel `json:"channels"`
-	SentAt         *time.Time     `json:"sentAt"`
+	Channels       []AlertChannel    `json:"channels"`
+	SentAt         *time.Time        `json:"sentAt"`
 	DeliveryStatus map[string]string `json:"deliveryStatus"` // Channel -> status
-	
+
 	// Acknowledgment
 	AcknowledgedAt *time.Time `json:"acknowledgedAt"`
 	AcknowledgedBy string     `json:"acknowledgedBy"`
-	
+
 	// Resolution
 	ResolvedAt *time.Time `json:"resolvedAt"`
 	Resolution string     `json:"resolution"`
-	
+
 	// Metadata
 	Metadata  map[string]interface{} `json:"metadata"`
-	CreatedAt time.Time             `json:"createdAt"`
-	UpdatedAt time.Time             `json:"updatedAt"`
+	CreatedAt time.Time              `json:"createdAt"`
+	UpdatedAt time.Time              `json:"updatedAt"`
 }
 
 // AlertTemplate represents an alert message template
 type AlertTemplate struct {
-	ID           xid.ID    `json:"id"`
-	AppID        xid.ID    `json:"appId"`
-	AlertType    AlertType `json:"alertType"`
-	Channel      AlertChannel `json:"channel"`
-	
+	ID        xid.ID       `json:"id"`
+	AppID     xid.ID       `json:"appId"`
+	AlertType AlertType    `json:"alertType"`
+	Channel   AlertChannel `json:"channel"`
+
 	// Template content
-	Subject      string `json:"subject"`      // For email
+	Subject       string `json:"subject"` // For email
 	TitleTemplate string `json:"titleTemplate"`
-	BodyTemplate string `json:"bodyTemplate"`
-	
+	BodyTemplate  string `json:"bodyTemplate"`
+
 	// Template variables available:
 	// {{.OrganizationName}}, {{.MetricKey}}, {{.CurrentValue}}, {{.ThresholdValue}}
 	// {{.LimitValue}}, {{.PercentUsed}}, {{.DaysRemaining}}, {{.InvoiceAmount}}
-	
+
 	IsDefault bool      `json:"isDefault"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -203,8 +203,8 @@ type AcknowledgeAlertRequest struct {
 
 // SnoozeAlertRequest is used to snooze an alert
 type SnoozeAlertRequest struct {
-	AlertID      xid.ID    `json:"alertId" validate:"required"`
-	SnoozeUntil  time.Time `json:"snoozeUntil" validate:"required"`
+	AlertID     xid.ID    `json:"alertId" validate:"required"`
+	SnoozeUntil time.Time `json:"snoozeUntil" validate:"required"`
 }
 
 // ResolveAlertRequest is used to resolve an alert
@@ -215,13 +215,13 @@ type ResolveAlertRequest struct {
 
 // AlertSummary provides a summary of alerts for an organization
 type AlertSummary struct {
-	TotalAlerts     int            `json:"totalAlerts"`
-	PendingAlerts   int            `json:"pendingAlerts"`
-	SentAlerts      int            `json:"sentAlerts"`
-	AcknowledgedAlerts int         `json:"acknowledgedAlerts"`
-	BySeverity      map[AlertSeverity]int `json:"bySeverity"`
-	ByType          map[AlertType]int     `json:"byType"`
-	RecentAlerts    []Alert        `json:"recentAlerts"`
+	TotalAlerts        int                   `json:"totalAlerts"`
+	PendingAlerts      int                   `json:"pendingAlerts"`
+	SentAlerts         int                   `json:"sentAlerts"`
+	AcknowledgedAlerts int                   `json:"acknowledgedAlerts"`
+	BySeverity         map[AlertSeverity]int `json:"bySeverity"`
+	ByType             map[AlertType]int     `json:"byType"`
+	RecentAlerts       []Alert               `json:"recentAlerts"`
 }
 
 // DefaultAlertConfigs returns default alert configurations for a new organization
@@ -250,22 +250,22 @@ func DefaultAlertConfigs(appID, orgID xid.ID) []AlertConfig {
 			MaxAlertsPerDay:  5,
 		},
 		{
-			AppID:          appID,
-			OrganizationID: orgID,
-			AlertType:      AlertTypeTrialEnding,
-			IsEnabled:      true,
-			DaysBeforeEnd:  3,
-			Channels:       []AlertChannel{AlertChannelEmail, AlertChannelInApp},
-			MinInterval:    1440, // 24 hours
+			AppID:           appID,
+			OrganizationID:  orgID,
+			AlertType:       AlertTypeTrialEnding,
+			IsEnabled:       true,
+			DaysBeforeEnd:   3,
+			Channels:        []AlertChannel{AlertChannelEmail, AlertChannelInApp},
+			MinInterval:     1440, // 24 hours
 			MaxAlertsPerDay: 1,
 		},
 		{
-			AppID:          appID,
-			OrganizationID: orgID,
-			AlertType:      AlertTypePaymentFailed,
-			IsEnabled:      true,
-			Channels:       []AlertChannel{AlertChannelEmail, AlertChannelInApp},
-			MinInterval:    60,
+			AppID:           appID,
+			OrganizationID:  orgID,
+			AlertType:       AlertTypePaymentFailed,
+			IsEnabled:       true,
+			Channels:        []AlertChannel{AlertChannelEmail, AlertChannelInApp},
+			MinInterval:     60,
 			MaxAlertsPerDay: 3,
 		},
 	}
@@ -303,4 +303,3 @@ func DefaultAlertTemplates(appID xid.ID) []AlertTemplate {
 		},
 	}
 }
-

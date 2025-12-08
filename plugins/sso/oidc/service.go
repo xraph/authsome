@@ -21,10 +21,10 @@ import (
 
 // Service handles OIDC operations
 type Service struct {
-	httpClient      *http.Client
-	jwksCache       map[string]*CachedJWKS
-	discoveryCache  map[string]*CachedDiscovery
-	cacheMutex      sync.RWMutex
+	httpClient     *http.Client
+	jwksCache      map[string]*CachedJWKS
+	discoveryCache map[string]*CachedDiscovery
+	cacheMutex     sync.RWMutex
 }
 
 // NewService creates a new OIDC service

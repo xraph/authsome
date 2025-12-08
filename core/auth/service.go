@@ -80,9 +80,9 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	if err != nil {
 		return nil, err
 	}
-	
+
 	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
-	
+
 	// Execute after sign up hooks
 	if s.hookExecutor != nil {
 		if err := s.hookExecutor.ExecuteAfterSignUp(ctx, response); err != nil {
@@ -90,7 +90,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 			// TODO: Add proper logging
 		}
 	}
-	
+
 	return response, nil
 }
 
@@ -126,9 +126,9 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	if err != nil {
 		return nil, err
 	}
-	
+
 	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
-	
+
 	// Execute after sign in hooks
 	if s.hookExecutor != nil {
 		if err := s.hookExecutor.ExecuteAfterSignIn(ctx, response); err != nil {
@@ -136,7 +136,7 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 			// TODO: Add proper logging
 		}
 	}
-	
+
 	return response, nil
 }
 
@@ -171,9 +171,9 @@ func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, rememb
 	if err != nil {
 		return nil, err
 	}
-	
+
 	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
-	
+
 	// Execute after sign in hooks
 	// Note: BeforeSignIn hooks are not executed here because credentials were already validated
 	// This method is used in flows where validation happens separately (e.g., 2FA, magic link)
@@ -183,7 +183,7 @@ func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, rememb
 			// TODO: Add proper logging
 		}
 	}
-	
+
 	return response, nil
 }
 
@@ -200,7 +200,7 @@ func (s *Service) SignOut(ctx context.Context, req *SignOutRequest) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Execute after sign out hooks
 	if s.hookExecutor != nil {
 		if err := s.hookExecutor.ExecuteAfterSignOut(ctx, req.Token); err != nil {
@@ -208,7 +208,7 @@ func (s *Service) SignOut(ctx context.Context, req *SignOutRequest) error {
 			// TODO: Add proper logging
 		}
 	}
-	
+
 	return nil
 }
 

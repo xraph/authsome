@@ -17,16 +17,16 @@ type SocialProviderConfig struct {
 	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updatedAt"`
 
 	// Multi-tenant scoping: App → Environment
-	AppID         xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appId"`         // Platform tenant (required)
+	AppID         xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appId"`                 // Platform tenant (required)
 	EnvironmentID xid.ID `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"` // Environment within app (required)
 
 	// Provider identification
 	ProviderName string `bun:"provider_name,notnull" json:"providerName"` // google, github, microsoft, apple, facebook, discord, twitter, linkedin, spotify, twitch, dropbox, gitlab, line, reddit, slack, bitbucket, notion
 
 	// OAuth credentials
-	ClientID     string `bun:"client_id,notnull" json:"clientId"`           // OAuth client ID
-	ClientSecret string `bun:"client_secret,notnull" json:"-"`              // OAuth client secret (encrypted, never exposed in JSON)
-	RedirectURL  string `bun:"redirect_url" json:"redirectUrl,omitempty"`   // Custom redirect URL (optional, defaults to system URL)
+	ClientID     string `bun:"client_id,notnull" json:"clientId"`         // OAuth client ID
+	ClientSecret string `bun:"client_secret,notnull" json:"-"`            // OAuth client secret (encrypted, never exposed in JSON)
+	RedirectURL  string `bun:"redirect_url" json:"redirectUrl,omitempty"` // Custom redirect URL (optional, defaults to system URL)
 
 	// OAuth scopes
 	Scopes []string `bun:"scopes,type:jsonb" json:"scopes"` // OAuth scopes to request
@@ -167,4 +167,3 @@ func (c *SocialProviderConfig) GetDisplayName() string {
 	}
 	return GetProviderDisplayName(c.ProviderName)
 }
-

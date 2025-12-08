@@ -30,6 +30,7 @@ type AppHandler struct {
 	policyRepo  *repo.PolicyRepository
 	enforceRBAC bool
 }
+
 func NewAppHandler(s *app.ServiceImpl, rlsvc *rl.Service, sess session.ServiceInterface, rbacsvc *rbac.Service, roles *repo.UserRoleRepository, roleRepo *repo.RoleRepository, policyRepo *repo.PolicyRepository, enforce bool) *AppHandler {
 	return &AppHandler{app: s, rl: rlsvc, sess: sess, rbac: rbacsvc, roles: roles, roleRepo: roleRepo, policyRepo: policyRepo, enforceRBAC: enforce}
 }

@@ -55,7 +55,7 @@ func TestCookieConfigMerge(t *testing.T) {
 	if merged.Path != "/" {
 		t.Errorf("Expected Path to be '/' from base, got '%s'", merged.Path)
 	}
-	
+
 	// Note: Enabled and HttpOnly will be false because override has zero values
 	// This is expected behavior - to keep base values, don't include them in override
 	// or use explicit true values in override
@@ -99,10 +99,10 @@ func TestCookieConfigMergeWithPointerFields(t *testing.T) {
 	maxAge7200 := 7200
 
 	base := CookieConfig{
-		Enabled:  true,
-		Name:     "base_session",
-		Secure:   &secureTrue,
-		MaxAge:   &maxAge3600,
+		Enabled: true,
+		Name:    "base_session",
+		Secure:  &secureTrue,
+		MaxAge:  &maxAge3600,
 	}
 
 	override := CookieConfig{
@@ -186,4 +186,3 @@ func TestCookieConfigMergeEnabled(t *testing.T) {
 		t.Error("Expected Enabled to be false from override")
 	}
 }
-

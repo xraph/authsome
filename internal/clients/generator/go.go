@@ -114,7 +114,7 @@ func (g *GoGenerator) generateTypes() error {
 	sb.WriteString("\t\"github.com/rs/xid\"\n")
 	sb.WriteString(")\n\n")
 	sb.WriteString("// Auto-generated types\n\n")
-	
+
 	// Placeholder type aliases for undefined types referenced in manifests
 	sb.WriteString("// Placeholder type aliases for undefined enum/custom types\n")
 	sb.WriteString("type (\n")
@@ -130,7 +130,7 @@ func (g *GoGenerator) generateTypes() error {
 	sb.WriteString("\tChallengeStatus      = string\n")
 	sb.WriteString("\tJSONBMap             = map[string]interface{}\n")
 	sb.WriteString(")\n\n")
-	
+
 	// Placeholder types as empty interfaces (to be used directly, not as package qualifiers)
 	sb.WriteString("type (\n")
 	sb.WriteString("\tschema               schemaPlaceholder\n")
@@ -140,7 +140,7 @@ func (g *GoGenerator) generateTypes() error {
 	sb.WriteString("\tapikey               apikeyPlaceholder\n")
 	sb.WriteString("\torganization         organizationPlaceholder\n")
 	sb.WriteString(")\n\n")
-	
+
 	// Placeholder structs for package-qualified types
 	sb.WriteString("// Placeholder structs for package-qualified types\n")
 	sb.WriteString("type schemaPlaceholder struct {\n")
@@ -150,37 +150,37 @@ func (g *GoGenerator) generateTypes() error {
 	sb.WriteString("\tUserVerificationStatus      interface{}\n")
 	sb.WriteString("\tUser                        interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	sb.WriteString("type providersPlaceholder struct {\n")
 	sb.WriteString("\tEmailProvider interface{}\n")
 	sb.WriteString("\tOAuthProvider interface{}\n")
 	sb.WriteString("\tSAMLProvider  interface{}\n")
 	sb.WriteString("\tSMSProvider   interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	sb.WriteString("type sessionPlaceholder struct {\n")
 	sb.WriteString("\tSession interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	sb.WriteString("type userPlaceholder struct {\n")
 	sb.WriteString("\tUser interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	sb.WriteString("type apikeyPlaceholder struct {\n")
 	sb.WriteString("\tAPIKey interface{}\n")
 	sb.WriteString("\tRole   interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	sb.WriteString("type organizationPlaceholder struct {\n")
 	sb.WriteString("\tTeam       interface{}\n")
 	sb.WriteString("\tInvitation interface{}\n")
 	sb.WriteString("\tMember     interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	sb.WriteString("type redisPlaceholder struct {\n")
 	sb.WriteString("\tClient interface{}\n")
 	sb.WriteString("}\n\n")
-	
+
 	// Make redis an alias to redisPlaceholder for backward compat
 	sb.WriteString("var redis = redisPlaceholder{}\n\n")
 
@@ -205,7 +205,7 @@ func (g *GoGenerator) generateTypes() error {
 	// Collect all types from all manifests
 	// Deduplicate by type name, preferring core definitions
 	typeMap := make(map[string]*manifest.TypeDef)
-	
+
 	// First pass: collect core types
 	for _, m := range g.manifests {
 		if m.PluginID == "core" {
@@ -216,7 +216,7 @@ func (g *GoGenerator) generateTypes() error {
 			break
 		}
 	}
-	
+
 	// Second pass: collect plugin types (only if not already defined)
 	for _, m := range g.manifests {
 		if m.PluginID != "core" {
@@ -228,7 +228,7 @@ func (g *GoGenerator) generateTypes() error {
 			}
 		}
 	}
-	
+
 	// Third pass: collect request/response types from routes (to avoid inline redeclaration)
 	for _, m := range g.manifests {
 		for _, route := range m.Routes {
@@ -261,7 +261,7 @@ func (g *GoGenerator) generateTypes() error {
 		if t.Name == "Plugin" {
 			continue // Plugin is defined as an interface in plugin.go
 		}
-		
+
 		if t.Description != "" {
 			sb.WriteString(fmt.Sprintf("// %s represents %s\n", t.Name, t.Description))
 		}
@@ -272,15 +272,15 @@ func (g *GoGenerator) generateTypes() error {
 			if name == "" || name == "-" {
 				continue
 			}
-			
+
 			field := manifest.ParseField(name, typeStr)
-			
+
 			// If type is empty, use interface{} instead of trying to infer
 			// (inference often leads to undefined type references)
 			if field.Type == "" {
 				field.Type = "interface{}"
 			}
-			
+
 			goType := g.mapTypeToGo(field.Type)
 
 			if field.Array {

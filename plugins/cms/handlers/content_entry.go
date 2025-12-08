@@ -593,4 +593,3 @@ func (h *ContentEntryHandler) GetEntryStats(c forge.Context) error {
 
 	return c.JSON(200, stats)
 }
-

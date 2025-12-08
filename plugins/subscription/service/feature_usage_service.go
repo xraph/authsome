@@ -656,4 +656,3 @@ func (s *FeatureUsageService) schemaFeatureToCore(f *schema.Feature) *core.Featu
 		UpdatedAt:    f.UpdatedAt,
 	}
 }
-

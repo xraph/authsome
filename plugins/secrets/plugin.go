@@ -501,4 +501,3 @@ func (p *Plugin) Config() *Config {
 func (p *Plugin) Logger() forge.Logger {
 	return p.logger
 }
-

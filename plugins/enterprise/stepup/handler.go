@@ -22,8 +22,6 @@ type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-
-
 type RequirementsResponse struct {
 	Requirements interface{} `json:"requirements"`
 	Count        int         `json:"count"`

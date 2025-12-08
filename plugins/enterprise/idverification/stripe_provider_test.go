@@ -27,11 +27,11 @@ func TestStripeIdentityProvider_Mock(t *testing.T) {
 
 	t.Run("CreateSession_Mock", func(t *testing.T) {
 		ctx := context.Background()
-		
+
 		userID := xid.New()
 		appID := xid.New()
 		orgID := xid.New()
-		
+
 		req := &ProviderSessionRequest{
 			AppID:          appID,
 			OrganizationID: orgID,
@@ -165,11 +165,11 @@ func TestStripeIdentityProvider_Real(t *testing.T) {
 
 	t.Run("CreateSession_Real", func(t *testing.T) {
 		ctx := context.Background()
-		
+
 		userID := xid.New()
 		appID := xid.New()
 		orgID := xid.New()
-		
+
 		req := &ProviderSessionRequest{
 			AppID:          appID,
 			OrganizationID: orgID,

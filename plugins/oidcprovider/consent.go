@@ -35,23 +35,23 @@ func (s *ConsentService) CheckConsent(ctx context.Context, userID xid.ID, client
 	if client == nil {
 		return false, errs.NotFound("client not found")
 	}
-	
+
 	// Trusted clients skip consent
 	if client.TrustedClient {
 		return true, nil
 	}
-	
+
 	// If client doesn't require consent, skip
 	if !client.RequireConsent {
 		return true, nil
 	}
-	
+
 	// Check if user has existing valid consent
 	hasConsent, err := s.consentRepo.HasValidConsent(ctx, userID, clientID, requestedScopes, appID, envID, orgID)
 	if err != nil {
 		return false, errs.DatabaseError("check consent", err)
 	}
-	
+
 	return hasConsent, nil
 }
 
@@ -62,7 +62,7 @@ func (s *ConsentService) GrantConsent(ctx context.Context, userID xid.ID, client
 	if err != nil {
 		return errs.DatabaseError("find existing consent", err)
 	}
-	
+
 	if existing != nil {
 		// Update existing consent
 		existing.Scopes = scopes
@@ -73,10 +73,10 @@ func (s *ConsentService) GrantConsent(ctx context.Context, userID xid.ID, client
 		} else {
 			existing.ExpiresAt = nil // Never expires
 		}
-		
+
 		return s.consentRepo.Update(ctx, existing)
 	}
-	
+
 	// Create new consent
 	consent := &schema.OAuthConsent{
 		ID:             xid.New(),
@@ -87,12 +87,12 @@ func (s *ConsentService) GrantConsent(ctx context.Context, userID xid.ID, client
 		ClientID:       clientID,
 		Scopes:         scopes,
 	}
-	
+
 	if expiresIn != nil {
 		expiresAt := time.Now().Add(*expiresIn)
 		consent.ExpiresAt = &expiresAt
 	}
-	
+
 	return s.consentRepo.Create(ctx, consent)
 }
 
@@ -133,7 +133,7 @@ func (s *ConsentService) GetScopeDescriptions(scopes []string) []ScopeInfo {
 		"address":        "Access your address information",
 		"offline_access": "Keep you signed in and access your data when you're not using the app",
 	}
-	
+
 	result := make([]ScopeInfo, 0, len(scopes))
 	for _, scope := range scopes {
 		description := descriptions[scope]
@@ -145,7 +145,7 @@ func (s *ConsentService) GetScopeDescriptions(scopes []string) []ScopeInfo {
 			Description: description,
 		})
 	}
-	
+
 	return result
 }
 
@@ -159,13 +159,12 @@ func (s *ConsentService) RequiresConsent(ctx context.Context, clientID string, s
 	if client == nil {
 		return false, errs.NotFound("client not found")
 	}
-	
+
 	// Trusted clients never require consent
 	if client.TrustedClient {
 		return false, nil
 	}
-	
+
 	// Check client's consent requirement setting
 	return client.RequireConsent, nil
 }
-

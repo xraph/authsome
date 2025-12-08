@@ -49,22 +49,22 @@ func ParseSecretValueType(s string) (SecretValueType, bool) {
 
 // SecretDTO is the API response for a secret (value excluded for security)
 type SecretDTO struct {
-	ID            string                 `json:"id"`
-	Path          string                 `json:"path"`
-	Key           string                 `json:"key"`
-	ValueType     string                 `json:"valueType"`
-	Description   string                 `json:"description,omitempty"`
-	Tags          []string               `json:"tags,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	Version       int                    `json:"version"`
-	IsActive      bool                   `json:"isActive"`
-	HasSchema     bool                   `json:"hasSchema"`
-	HasExpiry     bool                   `json:"hasExpiry"`
-	ExpiresAt     *time.Time             `json:"expiresAt,omitempty"`
-	CreatedBy     string                 `json:"createdBy,omitempty"`
-	UpdatedBy     string                 `json:"updatedBy,omitempty"`
-	CreatedAt     time.Time              `json:"createdAt"`
-	UpdatedAt     time.Time              `json:"updatedAt"`
+	ID          string                 `json:"id"`
+	Path        string                 `json:"path"`
+	Key         string                 `json:"key"`
+	ValueType   string                 `json:"valueType"`
+	Description string                 `json:"description,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Version     int                    `json:"version"`
+	IsActive    bool                   `json:"isActive"`
+	HasSchema   bool                   `json:"hasSchema"`
+	HasExpiry   bool                   `json:"hasExpiry"`
+	ExpiresAt   *time.Time             `json:"expiresAt,omitempty"`
+	CreatedBy   string                 `json:"createdBy,omitempty"`
+	UpdatedBy   string                 `json:"updatedBy,omitempty"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
 }
 
 // SecretWithValueDTO includes the decrypted value (for authorized access)
@@ -86,16 +86,16 @@ type SecretVersionDTO struct {
 
 // SecretAccessLogDTO represents an access log entry
 type SecretAccessLogDTO struct {
-	ID            string    `json:"id"`
-	SecretID      string    `json:"secretId"`
-	Path          string    `json:"path"`
-	Action        string    `json:"action"`
-	AccessedBy    string    `json:"accessedBy,omitempty"`
-	AccessMethod  string    `json:"accessMethod"`
-	IPAddress     string    `json:"ipAddress,omitempty"`
-	Success       bool      `json:"success"`
-	ErrorMessage  string    `json:"errorMessage,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID           string    `json:"id"`
+	SecretID     string    `json:"secretId"`
+	Path         string    `json:"path"`
+	Action       string    `json:"action"`
+	AccessedBy   string    `json:"accessedBy,omitempty"`
+	AccessMethod string    `json:"accessMethod"`
+	IPAddress    string    `json:"ipAddress,omitempty"`
+	Success      bool      `json:"success"`
+	ErrorMessage string    `json:"errorMessage,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 // =============================================================================
@@ -217,11 +217,10 @@ type SecretTreeNode struct {
 
 // StatsDTO contains statistics about secrets
 type StatsDTO struct {
-	TotalSecrets     int            `json:"totalSecrets"`
-	TotalVersions    int            `json:"totalVersions"`
-	SecretsByType    map[string]int `json:"secretsByType"`
-	ExpiringSecrets  int            `json:"expiringSecrets"`  // Secrets expiring in next 30 days
-	ExpiredSecrets   int            `json:"expiredSecrets"`
-	RecentlyUpdated  int            `json:"recentlyUpdated"`  // Updated in last 7 days
+	TotalSecrets    int            `json:"totalSecrets"`
+	TotalVersions   int            `json:"totalVersions"`
+	SecretsByType   map[string]int `json:"secretsByType"`
+	ExpiringSecrets int            `json:"expiringSecrets"` // Secrets expiring in next 30 days
+	ExpiredSecrets  int            `json:"expiredSecrets"`
+	RecentlyUpdated int            `json:"recentlyUpdated"` // Updated in last 7 days
 }
-

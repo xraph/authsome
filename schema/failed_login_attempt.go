@@ -18,4 +18,3 @@ type FailedLoginAttempt struct {
 	UserAgent string    `bun:"type:text" json:"user_agent"`
 	AttemptAt time.Time `bun:"type:timestamptz,notnull,default:current_timestamp" json:"attempt_at"`
 }
-

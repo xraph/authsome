@@ -209,15 +209,15 @@ func (t FieldType) SupportsSearch() bool {
 
 // FieldTypeInfo provides metadata about a field type
 type FieldTypeInfo struct {
-	Type          FieldType `json:"type"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	Category      string    `json:"category"`
-	Icon          string    `json:"icon"`
-	SupportsUnique bool     `json:"supportsUnique"`
-	SupportsIndex  bool     `json:"supportsIndex"`
-	SupportsSearch bool     `json:"supportsSearch"`
-	RequiresOptions bool    `json:"requiresOptions"`
+	Type            FieldType `json:"type"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Category        string    `json:"category"`
+	Icon            string    `json:"icon"`
+	SupportsUnique  bool      `json:"supportsUnique"`
+	SupportsIndex   bool      `json:"supportsIndex"`
+	SupportsSearch  bool      `json:"supportsSearch"`
+	RequiresOptions bool      `json:"requiresOptions"`
 }
 
 // GetAllFieldTypes returns information about all available field types
@@ -273,4 +273,3 @@ func GetFieldTypesByCategory() map[string][]FieldTypeInfo {
 	}
 	return result
 }
-

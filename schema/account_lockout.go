@@ -17,4 +17,3 @@ type AccountLockout struct {
 	Reason      string    `bun:"type:varchar(255)" json:"reason"`
 	CreatedAt   time.Time `bun:"type:timestamptz,notnull,default:current_timestamp" json:"created_at"`
 }
-

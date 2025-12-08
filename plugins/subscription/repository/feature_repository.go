@@ -253,4 +253,3 @@ func (r *featureRepository) GetFeaturePlans(ctx context.Context, featureID xid.I
 	}
 	return links, nil
 }
-

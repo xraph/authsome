@@ -589,4 +589,3 @@ func (a *Aggregator) GetTimeSeriesStats(ctx context.Context, contentTypeID xid.I
 
 	return data, nil
 }
-

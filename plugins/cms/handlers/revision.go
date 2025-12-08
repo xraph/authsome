@@ -165,4 +165,3 @@ func (h *RevisionHandler) CompareRevisions(c forge.Context) error {
 
 	return c.JSON(200, result)
 }
-

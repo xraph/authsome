@@ -265,4 +265,3 @@ func (PermissionEvaluationStats) TableName() string {
 // - idx_permission_eval_stats_user_org_id ON permission_evaluation_stats(user_organization_id) WHERE user_organization_id IS NOT NULL
 // - idx_permission_eval_stats_policy_id ON permission_evaluation_stats(policy_id)
 // - idx_permission_eval_stats_lookup ON permission_evaluation_stats(app_id, environment_id, user_organization_id, policy_id) UNIQUE
-

@@ -91,4 +91,3 @@ func parseIntDefault(s string, defaultVal int) int {
 func readBody(c forge.Context) ([]byte, error) {
 	return io.ReadAll(c.Request().Body)
 }
-

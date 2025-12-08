@@ -289,4 +289,3 @@ func (c *Config) Merge(other *Config) {
 	c.Dashboard.EnableExport = other.Dashboard.EnableExport
 	c.Dashboard.EnableImport = other.Dashboard.EnableImport
 }
-

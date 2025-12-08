@@ -40,16 +40,16 @@ type Role struct {
 // Permission represents an RBAC permission (simplified DTO)
 type Permission struct {
 	ID       xid.ID `json:"id"`
-	Action   string `json:"action"`   // e.g., "view", "edit", "delete", "*"
-	Resource string `json:"resource"` // e.g., "users", "posts", "*"
+	Action   string `json:"action"`           // e.g., "view", "edit", "delete", "*"
+	Resource string `json:"resource"`         // e.g., "users", "posts", "*"
 	Source   string `json:"source,omitempty"` // "key", "creator", "impersonation"
 }
 
 // EffectivePermissions represents all permissions that apply to an API key
 type EffectivePermissions struct {
-	Scopes               []string      `json:"scopes"`               // Legacy scope strings
-	Permissions          []*Permission `json:"permissions"`          // RBAC permissions
-	DelegatedFromCreator bool          `json:"delegatedFromCreator"` // If creator permissions are included
+	Scopes               []string      `json:"scopes"`                      // Legacy scope strings
+	Permissions          []*Permission `json:"permissions"`                 // RBAC permissions
+	DelegatedFromCreator bool          `json:"delegatedFromCreator"`        // If creator permissions are included
 	ImpersonatingUser    *xid.ID       `json:"impersonatingUser,omitempty"` // If impersonating a user
 }
 
@@ -101,4 +101,3 @@ func matchPermission(perm *Permission, action, resource string) bool {
 	}
 	return false
 }
-

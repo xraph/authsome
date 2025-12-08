@@ -282,4 +282,3 @@ func (r *componentSchemaRepository) CountUsages(ctx context.Context, appID, envI
 		Where("cf.options->>'componentRef' = ?", componentSlug).
 		Count(ctx)
 }
-

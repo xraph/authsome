@@ -55,4 +55,3 @@ func SetSessionCookieFromAuth(
 	// Set cookie with app-specific config
 	return session.SetCookie(c, token, expiresAt, appCookieConfig)
 }
-

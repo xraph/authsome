@@ -2677,96 +2677,96 @@ func renderTestSendModal(templateID xid.ID, basePath string, currentApp *app.App
 							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
 							g.Text("Recipient"),
 						),
-					Input(
-						Type("text"),
-						ID("testRecipient"),
-						g.Attr("x-model", "testRecipient"),
-						g.Attr("placeholder", "email@example.com or +1234567890"),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						Input(
+							Type("text"),
+							ID("testRecipient"),
+							g.Attr("x-model", "testRecipient"),
+							g.Attr("placeholder", "email@example.com or +1234567890"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Email address or phone number to send test to")),
 					),
-					P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
-						g.Text("Email address or phone number to send test to")),
-				),
 
-				// Test Variables
-				Div(
-					Label(
-						For("testVariablesEdit"),
-						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-						g.Text("Test Variables (JSON)"),
-					),
-					Textarea(
-						ID("testVariablesEdit"),
-						g.Attr("x-model", "testVariables"),
-						g.Attr("placeholder", "{\n  \"user_name\": \"John\",\n  \"app_name\": \"MyApp\"\n}"),
-						Rows("5"),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
-					),
-					P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
-						g.Text("Variables to replace in template (e.g., {{.user_name}})")),
-				),
-
-				// Test result display
-				Div(
-					g.Attr("x-show", "testResult"),
-					g.Attr("x-cloak", ""),
+					// Test Variables
 					Div(
-						g.Attr("x-show", "testResult?.success"),
-						Class("rounded-md bg-green-50 p-4 dark:bg-green-900/20"),
+						Label(
+							For("testVariablesEdit"),
+							Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+							g.Text("Test Variables (JSON)"),
+						),
+						Textarea(
+							ID("testVariablesEdit"),
+							g.Attr("x-model", "testVariables"),
+							g.Attr("placeholder", "{\n  \"user_name\": \"John\",\n  \"app_name\": \"MyApp\"\n}"),
+							Rows("5"),
+							Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white font-mono text-sm"),
+						),
+						P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
+							g.Text("Variables to replace in template (e.g., {{.user_name}})")),
+					),
+
+					// Test result display
+					Div(
+						g.Attr("x-show", "testResult"),
+						g.Attr("x-cloak", ""),
 						Div(
-							Class("flex"),
-							lucide.Check(Class("h-5 w-5 text-green-400")),
+							g.Attr("x-show", "testResult?.success"),
+							Class("rounded-md bg-green-50 p-4 dark:bg-green-900/20"),
 							Div(
-								Class("ml-3"),
-								P(Class("text-sm font-medium text-green-800 dark:text-green-200"),
-									g.Text("Test notification sent successfully!")),
+								Class("flex"),
+								lucide.Check(Class("h-5 w-5 text-green-400")),
+								Div(
+									Class("ml-3"),
+									P(Class("text-sm font-medium text-green-800 dark:text-green-200"),
+										g.Text("Test notification sent successfully!")),
+								),
 							),
 						),
-					),
-					Div(
-						g.Attr("x-show", "testResult?.error"),
-						Class("rounded-md bg-red-50 p-4 dark:bg-red-900/20"),
 						Div(
-							Class("flex"),
-							lucide.X(Class("h-5 w-5 text-red-400")),
+							g.Attr("x-show", "testResult?.error"),
+							Class("rounded-md bg-red-50 p-4 dark:bg-red-900/20"),
 							Div(
-								Class("ml-3"),
-								P(
-									Class("text-sm font-medium text-red-800 dark:text-red-200"),
-									g.Attr("x-text", "testResult?.error"),
+								Class("flex"),
+								lucide.X(Class("h-5 w-5 text-red-400")),
+								Div(
+									Class("ml-3"),
+									P(
+										Class("text-sm font-medium text-red-800 dark:text-red-200"),
+										g.Attr("x-text", "testResult?.error"),
+									),
 								),
 							),
 						),
 					),
-				),
 
-				Div(
-					Class("flex items-center justify-end gap-3 pt-4"),
-					Button(
-						Type("button"),
-						g.Attr("@click", "showTestSend = false; testResult = null"),
-						Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
-						g.Text("Close"),
-					),
-					Button(
-						Type("button"),
-						g.Attr("@click", "sendTestNotification()"),
-						g.Attr(":disabled", "testLoading || !testRecipient"),
-						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"),
-						g.Attr("x-show", "!testLoading"),
-						lucide.Send(Class("h-4 w-4")),
-						g.Text("Send Test"),
-					),
-					Button(
-						Type("button"),
-						Disabled(),
-						Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg opacity-50"),
-						g.Attr("x-show", "testLoading"),
-						lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
-						g.Text("Sending..."),
+					Div(
+						Class("flex items-center justify-end gap-3 pt-4"),
+						Button(
+							Type("button"),
+							g.Attr("@click", "showTestSend = false; testResult = null"),
+							Class("px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white"),
+							g.Text("Close"),
+						),
+						Button(
+							Type("button"),
+							g.Attr("@click", "sendTestNotification()"),
+							g.Attr(":disabled", "testLoading || !testRecipient"),
+							Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"),
+							g.Attr("x-show", "!testLoading"),
+							lucide.Send(Class("h-4 w-4")),
+							g.Text("Send Test"),
+						),
+						Button(
+							Type("button"),
+							Disabled(),
+							Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg opacity-50"),
+							g.Attr("x-show", "testLoading"),
+							lucide.RefreshCw(Class("h-4 w-4 animate-spin")),
+							g.Text("Sending..."),
+						),
 					),
 				),
-			),
 			),
 		),
 	)

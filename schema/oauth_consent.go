@@ -52,4 +52,3 @@ func (oc *OAuthConsent) HasScope(scope string) bool {
 	}
 	return false
 }
-

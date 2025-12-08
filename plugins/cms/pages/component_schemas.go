@@ -715,4 +715,3 @@ func ComponentSchemaSelector(components []*core.ComponentSchemaSummaryDTO, selec
 		g.Group(options),
 	)
 }
-

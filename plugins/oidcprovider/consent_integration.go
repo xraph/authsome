@@ -21,10 +21,10 @@ type ConsentManager struct {
 type EnterpriseConsentService interface {
 	// CreateConsent records user consent
 	CreateConsent(ctx context.Context, orgID, userID string, req interface{}) (interface{}, error)
-	
+
 	// GetConsent retrieves consent status
 	GetConsent(ctx context.Context, id string) (interface{}, error)
-	
+
 	// RevokeConsent revokes a consent
 	RevokeConsent(ctx context.Context, id string) error
 }
@@ -41,7 +41,7 @@ func NewConsentManager(consentSvc *ConsentService, enterpriseConsent EnterpriseC
 func (cm *ConsentManager) CheckConsent(ctx context.Context, userID xid.ID, clientID, scope string, appID, envID xid.ID, orgID *xid.ID) (bool, error) {
 	// Parse scopes
 	scopes := cm.consentSvc.ParseScopes(scope)
-	
+
 	// Check internal OIDC consent
 	hasConsent, err := cm.consentSvc.CheckConsent(ctx, userID, clientID, scopes, appID, envID, orgID)
 	if err != nil {
@@ -57,17 +57,17 @@ func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clie
 		// User denied consent - nothing to record
 		return nil
 	}
-	
+
 	// Parse scopes
 	scopes := cm.consentSvc.ParseScopes(scope)
-	
+
 	// Calculate expiration duration
 	var expiresIn *time.Duration
 	if expiresAt != nil {
 		duration := time.Until(*expiresAt)
 		expiresIn = &duration
 	}
-	
+
 	// Record in internal OIDC consent
 	err := cm.consentSvc.GrantConsent(ctx, userID, clientID, scopes, appID, envID, orgID, expiresIn)
 	if err != nil {
@@ -77,7 +77,7 @@ func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clie
 	// If enterprise consent plugin is available, record there too for audit trail
 	if cm.enterpriseConsent != nil {
 		orgID := "default" // TODO: Extract from context
-		
+
 		// Create consent request for enterprise plugin
 		// Note: This uses map[string]interface{} to avoid hard dependency
 		consentReq := map[string]interface{}{
@@ -385,4 +385,3 @@ func (cm *ConsentManager) ValidateConsentRequest(consentDecision string) error {
 	}
 	return nil
 }
-

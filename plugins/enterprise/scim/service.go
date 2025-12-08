@@ -1310,7 +1310,7 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID xid.ID, members 
 // doesn't expose these fields in update requests
 func (s *Service) updateTeamProvisioningInfo(ctx context.Context, teamID xid.ID, externalID string) error {
 	provisionedBy := "scim"
-	
+
 	// Use direct repository access to update provisioning fields
 	// We can't use the service layer since CreateTeamRequest doesn't include these fields
 	return s.repo.UpdateTeamProvisioningInfo(ctx, teamID, &provisionedBy, &externalID)

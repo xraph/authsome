@@ -15,10 +15,10 @@ type mockPlugin struct {
 	dependencies []string
 }
 
-func (m *mockPlugin) ID() string                                           { return m.id }
-func (m *mockPlugin) Init(auth core.Authsome) error                        { return nil }
-func (m *mockPlugin) RegisterRoutes(router forge.Router) error             { return nil }
-func (m *mockPlugin) RegisterHooks(hooks *hooks.HookRegistry) error        { return nil }
+func (m *mockPlugin) ID() string                                    { return m.id }
+func (m *mockPlugin) Init(auth core.Authsome) error                 { return nil }
+func (m *mockPlugin) RegisterRoutes(router forge.Router) error      { return nil }
+func (m *mockPlugin) RegisterHooks(hooks *hooks.HookRegistry) error { return nil }
 func (m *mockPlugin) RegisterServiceDecorators(reg *registry.ServiceRegistry) error {
 	return nil
 }
@@ -329,4 +329,3 @@ func TestListSorted_ComplexDAG(t *testing.T) {
 		t.Error("p5 must come after p4")
 	}
 }
-

@@ -12,11 +12,11 @@ import (
 
 // FieldValidator validates a field value against its type and options
 type FieldValidator struct {
-	FieldName    string
-	FieldType    FieldType
-	Required     bool
-	Unique       bool
-	Options      *FieldOptionsDTO
+	FieldName string
+	FieldType FieldType
+	Required  bool
+	Unique    bool
+	Options   *FieldOptionsDTO
 }
 
 // ValidationError represents a validation error for a field
@@ -28,8 +28,8 @@ type ValidationError struct {
 
 // ValidationResult holds the result of validation
 type ValidationResult struct {
-	Valid  bool               `json:"valid"`
-	Errors []ValidationError  `json:"errors,omitempty"`
+	Valid  bool              `json:"valid"`
+	Errors []ValidationError `json:"errors,omitempty"`
 }
 
 // NewFieldValidator creates a new field validator
@@ -833,4 +833,3 @@ func stripHTML(s string) string {
 	re := regexp.MustCompile(`<[^>]*>`)
 	return re.ReplaceAllString(s, "")
 }
-

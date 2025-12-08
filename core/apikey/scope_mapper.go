@@ -52,9 +52,9 @@ var ScopeToRBACMapping = map[string]RBACPermission{
 	"admin:orgs":  {Action: "*", Resource: "organizations"},
 
 	// Public/frontend-safe operations
-	"app:identify":  {Action: "identify", Resource: "app"},
-	"public:read":   {Action: "view", Resource: "public"},
-	"users:verify":  {Action: "verify", Resource: "users"},
+	"app:identify": {Action: "identify", Resource: "app"},
+	"public:read":  {Action: "view", Resource: "public"},
+	"users:verify": {Action: "verify", Resource: "users"},
 }
 
 // RBACPermission represents a parsed RBAC permission
@@ -216,4 +216,3 @@ func GenerateSuggestedRole(scopes []string) string {
 
 	return "custom_role"
 }
-

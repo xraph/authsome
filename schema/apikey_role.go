@@ -37,4 +37,3 @@ func (ar *APIKeyRole) BeforeAppendModel(ctx context.Context, query bun.Query) er
 	}
 	return nil
 }
-

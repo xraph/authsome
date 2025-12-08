@@ -347,15 +347,14 @@ const DefaultCurrency = "USD"
 
 // Feature keys for common plan features
 const (
-	FeatureKeyMaxMembers       = "max_members"
-	FeatureKeyMaxTeams         = "max_teams"
-	FeatureKeyMaxProjects      = "max_projects"
-	FeatureKeyMaxStorage       = "max_storage_gb"
-	FeatureKeyMaxAPICallsMonth = "max_api_calls_month"
-	FeatureKeyCustomDomain     = "custom_domain"
-	FeatureKeyPrioritySupport  = "priority_support"
-	FeatureKeySSO              = "sso"
-	FeatureKeyAuditLogs        = "audit_logs"
+	FeatureKeyMaxMembers        = "max_members"
+	FeatureKeyMaxTeams          = "max_teams"
+	FeatureKeyMaxProjects       = "max_projects"
+	FeatureKeyMaxStorage        = "max_storage_gb"
+	FeatureKeyMaxAPICallsMonth  = "max_api_calls_month"
+	FeatureKeyCustomDomain      = "custom_domain"
+	FeatureKeyPrioritySupport   = "priority_support"
+	FeatureKeySSO               = "sso"
+	FeatureKeyAuditLogs         = "audit_logs"
 	FeatureKeyAdvancedAnalytics = "advanced_analytics"
 )
-

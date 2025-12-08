@@ -39,7 +39,7 @@ func (r *OAuthClientRepository) FindByClientID(ctx context.Context, clientID str
 // Tries org-specific client first, then falls back to app-level
 func (r *OAuthClientRepository) FindByClientIDWithContext(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, clientID string) (*schema.OAuthClient, error) {
 	c := new(schema.OAuthClient)
-	
+
 	// If orgID provided, try org-specific client first
 	if orgID != nil && !orgID.IsNil() {
 		err := r.db.NewSelect().Model(c).
@@ -55,7 +55,7 @@ func (r *OAuthClientRepository) FindByClientIDWithContext(ctx context.Context, a
 			return nil, err
 		}
 	}
-	
+
 	// Fall back to app-level client (organization_id IS NULL)
 	err := r.db.NewSelect().Model(c).
 		Where("client_id = ?", clientID).
@@ -88,44 +88,44 @@ func (r *OAuthClientRepository) FindByID(ctx context.Context, id xid.ID) (*schem
 // ListByApp returns all clients for an app and environment
 func (r *OAuthClientRepository) ListByApp(ctx context.Context, appID, envID xid.ID, limit, offset int) ([]*schema.OAuthClient, int, error) {
 	var clients []*schema.OAuthClient
-	
+
 	query := r.db.NewSelect().Model(&clients).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	// Get total count
 	total, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	return clients, total, nil
 }
 
 // ListByOrg returns all org-specific clients
 func (r *OAuthClientRepository) ListByOrg(ctx context.Context, appID, envID, orgID xid.ID, limit, offset int) ([]*schema.OAuthClient, int, error) {
 	var clients []*schema.OAuthClient
-	
+
 	query := r.db.NewSelect().Model(&clients).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
 		Where("organization_id = ?", orgID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	total, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	return clients, total, nil
 }
 

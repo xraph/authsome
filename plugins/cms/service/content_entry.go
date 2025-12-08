@@ -498,7 +498,7 @@ func (s *ContentEntryService) toDTO(entry *schema.ContentEntry, contentType *sch
 	if contentType != nil {
 		dto.ContentType = &core.ContentTypeSummaryDTO{
 			ID:          contentType.ID.String(),
-			Title: contentType.Title,
+			Title:       contentType.Title,
 			Name:        contentType.Name,
 			Description: contentType.Description,
 			Icon:        contentType.Icon,

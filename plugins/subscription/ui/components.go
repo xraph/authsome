@@ -494,4 +494,3 @@ func currencySymbol(code string) string {
 	}
 	return code + " "
 }
-

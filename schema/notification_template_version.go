@@ -17,7 +17,7 @@ type NotificationTemplateVersion struct {
 	Subject    string                 `bun:"subject" json:"subject,omitempty"`
 	Body       string                 `bun:"body,notnull" json:"body"`
 	Variables  []string               `bun:"variables,array" json:"variables"`
-	Changes    string                 `bun:"changes" json:"changes,omitempty"`               // Description of what changed
+	Changes    string                 `bun:"changes" json:"changes,omitempty"`                       // Description of what changed
 	ChangedBy  *xid.ID                `bun:"changed_by,type:varchar(20)" json:"changedBy,omitempty"` // User who made the change
 	Metadata   map[string]interface{} `bun:"metadata,type:jsonb" json:"metadata,omitempty"`
 	CreatedAt  time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
@@ -27,4 +27,3 @@ type NotificationTemplateVersion struct {
 	Template *NotificationTemplate `bun:"rel:belongs-to,join:template_id=id" json:"template,omitempty"`
 	User     *User                 `bun:"rel:belongs-to,join:changed_by=id" json:"user,omitempty"`
 }
-

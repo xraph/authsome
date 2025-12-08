@@ -32,19 +32,19 @@ func (c *ClientAuthenticator) AuthenticateClient(ctx context.Context, r *http.Re
 			return c.authenticateBasic(ctx, auth)
 		}
 	}
-	
+
 	// Try POST body authentication (client_secret_post)
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, errs.BadRequest("failed to parse form data")
 	}
-	
+
 	clientID := r.FormValue("client_id")
 	clientSecret := r.FormValue("client_secret")
-	
+
 	if clientID == "" {
 		return nil, nil, errs.BadRequest("client_id is required")
 	}
-	
+
 	// If no client secret provided, check if client allows 'none' auth method
 	if clientSecret == "" {
 		client, err := c.clientRepo.FindByClientID(ctx, clientID)
@@ -54,7 +54,7 @@ func (c *ClientAuthenticator) AuthenticateClient(ctx context.Context, r *http.Re
 		if client == nil {
 			return nil, nil, errs.UnauthorizedWithMessage("invalid client credentials")
 		}
-		
+
 		// Only allow 'none' method for public clients (PKCE-enabled)
 		if client.TokenEndpointAuthMethod == "none" && client.RequirePKCE {
 			return &ClientAuthResult{
@@ -63,10 +63,10 @@ func (c *ClientAuthenticator) AuthenticateClient(ctx context.Context, r *http.Re
 				Method:        "none",
 			}, client, nil
 		}
-		
+
 		return nil, nil, errs.UnauthorizedWithMessage("client authentication required")
 	}
-	
+
 	// Authenticate with client_secret_post
 	return c.authenticatePost(ctx, clientID, clientSecret)
 }
@@ -78,14 +78,14 @@ func (c *ClientAuthenticator) authenticateBasic(ctx context.Context, authHeader 
 	if err != nil {
 		return nil, nil, errs.UnauthorizedWithMessage("invalid authorization header")
 	}
-	
+
 	parts := strings.SplitN(string(decoded), ":", 2)
 	if len(parts) != 2 {
 		return nil, nil, errs.UnauthorizedWithMessage("invalid authorization header format")
 	}
-	
+
 	clientID, clientSecret := parts[0], parts[1]
-	
+
 	// Verify client credentials
 	client, err := c.clientRepo.FindByClientID(ctx, clientID)
 	if err != nil {
@@ -94,17 +94,17 @@ func (c *ClientAuthenticator) authenticateBasic(ctx context.Context, authHeader 
 	if client == nil {
 		return nil, nil, errs.UnauthorizedWithMessage("invalid client credentials")
 	}
-	
+
 	// Verify client secret (use constant-time comparison in production)
 	if client.ClientSecret != clientSecret {
 		return nil, nil, errs.UnauthorizedWithMessage("invalid client credentials")
 	}
-	
+
 	// Check if client supports this auth method
 	if client.TokenEndpointAuthMethod != "client_secret_basic" && client.TokenEndpointAuthMethod != "" {
 		return nil, nil, errs.UnauthorizedWithMessage("client authentication method not supported")
 	}
-	
+
 	return &ClientAuthResult{
 		ClientID:      clientID,
 		Authenticated: true,
@@ -122,17 +122,17 @@ func (c *ClientAuthenticator) authenticatePost(ctx context.Context, clientID, cl
 	if client == nil {
 		return nil, nil, errs.UnauthorizedWithMessage("invalid client credentials")
 	}
-	
+
 	// Verify client secret (use constant-time comparison in production)
 	if client.ClientSecret != clientSecret {
 		return nil, nil, errs.UnauthorizedWithMessage("invalid client credentials")
 	}
-	
+
 	// Check if client supports this auth method
 	if client.TokenEndpointAuthMethod != "client_secret_post" && client.TokenEndpointAuthMethod != "" {
 		return nil, nil, errs.UnauthorizedWithMessage("client authentication method not supported")
 	}
-	
+
 	return &ClientAuthResult{
 		ClientID:      clientID,
 		Authenticated: true,
@@ -147,18 +147,18 @@ func (c *ClientAuthenticator) ValidateClientForEndpoint(client *schema.OAuthClie
 	case "token":
 		// All authenticated clients can access token endpoint
 		return nil
-		
+
 	case "introspect":
 		// Only confidential clients can introspect
 		if client.TokenEndpointAuthMethod == "none" {
 			return errs.PermissionDenied("introspect", "confidential clients only")
 		}
 		return nil
-		
+
 	case "revoke":
 		// All authenticated clients can revoke their own tokens
 		return nil
-		
+
 	default:
 		return nil
 	}
@@ -173,4 +173,3 @@ func (c *ClientAuthenticator) IsPublicClient(client *schema.OAuthClient) bool {
 func (c *ClientAuthenticator) IsConfidentialClient(client *schema.OAuthClient) bool {
 	return !c.IsPublicClient(client)
 }
-

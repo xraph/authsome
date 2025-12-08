@@ -12,13 +12,13 @@ import (
 type ContentRelation struct {
 	bun.BaseModel `bun:"table:cms_content_relations,alias:crel"`
 
-	ID              xid.ID    `bun:"id,pk,type:varchar(20)" json:"id"`
-	SourceEntryID   xid.ID    `bun:"source_entry_id,notnull,type:varchar(20)" json:"sourceEntryId"`
-	TargetEntryID   xid.ID    `bun:"target_entry_id,notnull,type:varchar(20)" json:"targetEntryId"`
-	FieldName       string    `bun:"field_name,notnull" json:"fieldName"`
-	Order           int       `bun:"\"order\",notnull,default:0" json:"order"`
-	Metadata        EntryData `bun:"metadata,type:jsonb,nullzero" json:"metadata,omitempty"`
-	CreatedAt       time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	ID            xid.ID    `bun:"id,pk,type:varchar(20)" json:"id"`
+	SourceEntryID xid.ID    `bun:"source_entry_id,notnull,type:varchar(20)" json:"sourceEntryId"`
+	TargetEntryID xid.ID    `bun:"target_entry_id,notnull,type:varchar(20)" json:"targetEntryId"`
+	FieldName     string    `bun:"field_name,notnull" json:"fieldName"`
+	Order         int       `bun:"\"order\",notnull,default:0" json:"order"`
+	Metadata      EntryData `bun:"metadata,type:jsonb,nullzero" json:"metadata,omitempty"`
+	CreatedAt     time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
 	SourceEntry *ContentEntry `bun:"rel:belongs-to,join:source_entry_id=id" json:"sourceEntry,omitempty"`
@@ -156,4 +156,3 @@ func NewContentTypeRelation(
 		CreatedAt:           time.Now(),
 	}
 }
-

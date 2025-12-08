@@ -68,4 +68,3 @@ func (g *GoGenerator) generateContextFile() error {
 
 	return g.writeFile("context.go", sb.String())
 }
-

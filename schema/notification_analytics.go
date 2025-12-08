@@ -30,7 +30,7 @@ type NotificationAnalytics struct {
 	TemplateID     *xid.ID                `bun:"template_id,type:varchar(20)" json:"templateId,omitempty"`
 	AppID          xid.ID                 `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
 	OrganizationID *xid.ID                `bun:"organization_id,type:varchar(20)" json:"organizationId,omitempty"`
-	Event          string                 `bun:"event,notnull" json:"event"` // sent, delivered, opened, clicked, converted, bounced, complained
+	Event          string                 `bun:"event,notnull" json:"event"`                       // sent, delivered, opened, clicked, converted, bounced, complained
 	EventData      map[string]interface{} `bun:"event_data,type:jsonb" json:"eventData,omitempty"` // Additional event-specific data (e.g., link clicked, conversion value)
 	UserAgent      string                 `bun:"user_agent" json:"userAgent,omitempty"`
 	IPAddress      string                 `bun:"ip_address" json:"ipAddress,omitempty"`
@@ -43,4 +43,3 @@ type NotificationAnalytics struct {
 	App          *App                  `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`
 	Organization *Organization         `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 }
-

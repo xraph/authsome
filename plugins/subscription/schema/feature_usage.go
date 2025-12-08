@@ -33,18 +33,18 @@ type OrganizationFeatureUsage struct {
 type FeatureUsageLog struct {
 	bun.BaseModel `bun:"table:subscription_feature_usage_logs,alias:sful"`
 
-	ID              xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID  xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	FeatureID       xid.ID                 `json:"featureId" bun:"feature_id,notnull,type:varchar(20)"`
-	Action          string                 `json:"action" bun:"action,notnull"`        // consume, grant, reset, adjust
-	Quantity        int64                  `json:"quantity" bun:"quantity,notnull"`
-	PreviousUsage   int64                  `json:"previousUsage" bun:"previous_usage,notnull,default:0"`
-	NewUsage        int64                  `json:"newUsage" bun:"new_usage,notnull,default:0"`
-	ActorID         *xid.ID                `json:"actorId" bun:"actor_id,type:varchar(20)"`
-	Reason          string                 `json:"reason" bun:"reason"`
-	IdempotencyKey  string                 `json:"idempotencyKey" bun:"idempotency_key"`
-	Metadata        map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt       time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID             xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
+	OrganizationID xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
+	FeatureID      xid.ID                 `json:"featureId" bun:"feature_id,notnull,type:varchar(20)"`
+	Action         string                 `json:"action" bun:"action,notnull"` // consume, grant, reset, adjust
+	Quantity       int64                  `json:"quantity" bun:"quantity,notnull"`
+	PreviousUsage  int64                  `json:"previousUsage" bun:"previous_usage,notnull,default:0"`
+	NewUsage       int64                  `json:"newUsage" bun:"new_usage,notnull,default:0"`
+	ActorID        *xid.ID                `json:"actorId" bun:"actor_id,type:varchar(20)"`
+	Reason         string                 `json:"reason" bun:"reason"`
+	IdempotencyKey string                 `json:"idempotencyKey" bun:"idempotency_key"`
+	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
 
 	// Relations
 	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
@@ -62,7 +62,7 @@ type FeatureGrant struct {
 	GrantType      string                 `json:"grantType" bun:"grant_type,notnull"` // addon, override, promotion, trial, manual
 	Value          int64                  `json:"value" bun:"value,notnull"`          // Additional quota
 	ExpiresAt      *time.Time             `json:"expiresAt" bun:"expires_at"`
-	SourceType     string                 `json:"sourceType" bun:"source_type"`       // addon, coupon, promotion, etc.
+	SourceType     string                 `json:"sourceType" bun:"source_type"`              // addon, coupon, promotion, etc.
 	SourceID       *xid.ID                `json:"sourceId" bun:"source_id,type:varchar(20)"` // AddOn ID, Promotion ID, etc.
 	Reason         string                 `json:"reason" bun:"reason"`
 	IsActive       bool                   `json:"isActive" bun:"is_active,notnull,default:true"`
@@ -102,4 +102,3 @@ const (
 	// FeatureGrantTypeManual is a manually added grant
 	FeatureGrantTypeManual FeatureGrantType = "manual"
 )
-

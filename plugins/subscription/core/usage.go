@@ -51,13 +51,13 @@ func (u UsageAction) IsValid() bool {
 
 // UsageSummary provides aggregated usage data for a metric
 type UsageSummary struct {
-	MetricKey      string    `json:"metricKey"`
-	TotalQuantity  int64     `json:"totalQuantity"`
-	PeriodStart    time.Time `json:"periodStart"`
-	PeriodEnd      time.Time `json:"periodEnd"`
-	RecordCount    int64     `json:"recordCount"`
-	FirstRecordAt  time.Time `json:"firstRecordAt"`
-	LastRecordAt   time.Time `json:"lastRecordAt"`
+	MetricKey     string    `json:"metricKey"`
+	TotalQuantity int64     `json:"totalQuantity"`
+	PeriodStart   time.Time `json:"periodStart"`
+	PeriodEnd     time.Time `json:"periodEnd"`
+	RecordCount   int64     `json:"recordCount"`
+	FirstRecordAt time.Time `json:"firstRecordAt"`
+	LastRecordAt  time.Time `json:"lastRecordAt"`
 }
 
 // UsageMetric defines a usage metric for metered billing
@@ -109,10 +109,10 @@ type RecordUsageRequest struct {
 
 // GetUsageSummaryRequest represents a request to get usage summary
 type GetUsageSummaryRequest struct {
-	SubscriptionID xid.ID     `json:"subscriptionId" validate:"required"`
-	MetricKey      string     `json:"metricKey" validate:"required"`
-	PeriodStart    time.Time  `json:"periodStart" validate:"required"`
-	PeriodEnd      time.Time  `json:"periodEnd" validate:"required"`
+	SubscriptionID xid.ID    `json:"subscriptionId" validate:"required"`
+	MetricKey      string    `json:"metricKey" validate:"required"`
+	PeriodStart    time.Time `json:"periodStart" validate:"required"`
+	PeriodEnd      time.Time `json:"periodEnd" validate:"required"`
 }
 
 // ListUsageRecordsFilter defines filters for listing usage records
@@ -129,12 +129,12 @@ type ListUsageRecordsFilter struct {
 
 // UsageLimit tracks current usage against limits
 type UsageLimit struct {
-	MetricKey     string `json:"metricKey"`
-	CurrentUsage  int64  `json:"currentUsage"`
-	Limit         int64  `json:"limit"`         // -1 for unlimited
-	RemainingUsage int64 `json:"remainingUsage"` // -1 for unlimited
-	IsExceeded    bool   `json:"isExceeded"`
-	PercentUsed   float64 `json:"percentUsed"`
+	MetricKey      string  `json:"metricKey"`
+	CurrentUsage   int64   `json:"currentUsage"`
+	Limit          int64   `json:"limit"`          // -1 for unlimited
+	RemainingUsage int64   `json:"remainingUsage"` // -1 for unlimited
+	IsExceeded     bool    `json:"isExceeded"`
+	PercentUsed    float64 `json:"percentUsed"`
 }
 
 // NewUsageLimit creates a UsageLimit with calculated values
@@ -163,4 +163,3 @@ func NewUsageLimit(metricKey string, current, limit int64) *UsageLimit {
 
 	return ul
 }
-

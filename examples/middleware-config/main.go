@@ -64,4 +64,3 @@ func main() {
 	log.Println("All authentication instances configured successfully")
 	log.Println("The middleware config is now customizable via functional options!")
 }
-

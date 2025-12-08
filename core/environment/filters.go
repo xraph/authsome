@@ -27,4 +27,3 @@ type ListPromotionsFilter struct {
 	Status      *string `json:"status,omitempty" query:"status"`
 	PromotedBy  *xid.ID `json:"promotedBy,omitempty" query:"promoted_by"`
 }
-

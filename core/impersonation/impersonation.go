@@ -222,16 +222,16 @@ type SessionInfo struct {
 
 // StartRequest represents a request to start impersonation
 type StartRequest struct {
-	AppID          xid.ID  `json:"appId" validate:"required"`
-	EnvironmentID  *xid.ID `json:"environmentId,omitempty"`
-	OrganizationID *xid.ID `json:"organizationId,omitempty"`
-	ImpersonatorID xid.ID  `json:"impersonatorId" validate:"required"`
-	TargetUserID   xid.ID  `json:"targetUserId" validate:"required"`
-	Reason         string  `json:"reason" validate:"required,min=10,max=500"`
-	TicketNumber   string  `json:"ticketNumber,omitempty" validate:"max=100"`
-	IPAddress      string  `json:"ipAddress,omitempty"`
-	UserAgent      string  `json:"userAgent,omitempty"`
-	DurationMinutes int    `json:"durationMinutes,omitempty"`
+	AppID           xid.ID  `json:"appId" validate:"required"`
+	EnvironmentID   *xid.ID `json:"environmentId,omitempty"`
+	OrganizationID  *xid.ID `json:"organizationId,omitempty"`
+	ImpersonatorID  xid.ID  `json:"impersonatorId" validate:"required"`
+	TargetUserID    xid.ID  `json:"targetUserId" validate:"required"`
+	Reason          string  `json:"reason" validate:"required,min=10,max=500"`
+	TicketNumber    string  `json:"ticketNumber,omitempty" validate:"max=100"`
+	IPAddress       string  `json:"ipAddress,omitempty"`
+	UserAgent       string  `json:"userAgent,omitempty"`
+	DurationMinutes int     `json:"durationMinutes,omitempty"`
 }
 
 // StartResponse represents the response after starting impersonation

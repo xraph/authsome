@@ -89,12 +89,12 @@ func (r *invoiceRepository) FindByProviderID(ctx context.Context, providerInvoic
 // List retrieves invoices with optional filters
 func (r *invoiceRepository) List(ctx context.Context, filter *InvoiceFilter) ([]*schema.SubscriptionInvoice, int, error) {
 	var invoices []*schema.SubscriptionInvoice
-	
+
 	query := r.db.NewSelect().
 		Model(&invoices).
 		Relation("Subscription").
 		Order("si.created_at DESC")
-	
+
 	if filter != nil {
 		if filter.OrganizationID != nil {
 			query = query.Where("si.organization_id = ?", *filter.OrganizationID)
@@ -105,7 +105,7 @@ func (r *invoiceRepository) List(ctx context.Context, filter *InvoiceFilter) ([]
 		if filter.Status != "" {
 			query = query.Where("si.status = ?", filter.Status)
 		}
-		
+
 		// Pagination
 		pageSize := filter.PageSize
 		if pageSize <= 0 {
@@ -118,12 +118,12 @@ func (r *invoiceRepository) List(ctx context.Context, filter *InvoiceFilter) ([]
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
-	
+
 	count, err := query.ScanAndCount(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list invoices: %w", err)
 	}
-	
+
 	return invoices, count, nil
 }
 
@@ -154,7 +154,7 @@ func (r *invoiceRepository) GetItems(ctx context.Context, invoiceID xid.ID) ([]*
 func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, appID xid.ID) (string, error) {
 	// Get current year
 	year := time.Now().Year()
-	
+
 	// Count existing invoices for this app/year
 	count, err := r.db.NewSelect().
 		Model((*schema.SubscriptionInvoice)(nil)).
@@ -166,9 +166,8 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, appID xid.
 	if err != nil {
 		return "", fmt.Errorf("failed to count invoices: %w", err)
 	}
-	
+
 	// Generate number in format: INV-YYYY-NNNN
 	number := fmt.Sprintf("INV-%d-%04d", year, count+1)
 	return number, nil
 }
-

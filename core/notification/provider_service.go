@@ -131,4 +131,3 @@ func (s *ProviderService) ResolveProvider(ctx context.Context, appID xid.ID, org
 
 	return provider, nil
 }
-

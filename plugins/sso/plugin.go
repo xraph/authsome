@@ -367,4 +367,3 @@ func (p *Plugin) Migrate() error {
 	p.logger.Info("SSO plugin migrations completed successfully")
 	return nil
 }
-
