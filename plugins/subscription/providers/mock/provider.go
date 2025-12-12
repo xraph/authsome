@@ -14,13 +14,15 @@ import (
 
 // Provider implements a mock payment provider for testing
 type Provider struct {
-	mu             sync.RWMutex
-	customers      map[string]*mockCustomer
-	subscriptions  map[string]*mockSubscription
-	products       map[string]*mockProduct
-	prices         map[string]*mockPrice
-	invoices       map[string]*mockInvoice
-	paymentMethods map[string]*mockPaymentMethod
+	mu                 sync.RWMutex
+	customers          map[string]*mockCustomer
+	subscriptions      map[string]*mockSubscription
+	subscriptionItems  map[string]*mockSubscriptionItem
+	products           map[string]*mockProduct
+	prices             map[string]*mockPrice
+	invoices           map[string]*mockInvoice
+	paymentMethods     map[string]*mockPaymentMethod
+	features           map[string]*mockFeature
 }
 
 type mockProduct struct {
@@ -60,14 +62,37 @@ type mockPrice struct {
 	Interval  string
 }
 
+type mockSubscriptionItem struct {
+	ID             string
+	SubscriptionID string
+	PriceID        string
+	Quantity       int
+	Metadata       map[string]interface{}
+}
+
+type mockFeature struct {
+	ID        string
+	Name      string
+	LookupKey string
+	Active    bool
+	Metadata  map[string]interface{}
+}
+
 type mockInvoice struct {
 	ID             string
 	CustomerID     string
 	SubscriptionID string
 	Status         string
+	Currency       string
 	AmountDue      int64
 	AmountPaid     int64
 	Total          int64
+	Subtotal       int64
+	Tax            int64
+	PeriodStart    int64
+	PeriodEnd      int64
+	PDFURL         string
+	HostedURL      string
 }
 
 type mockPaymentMethod struct {
@@ -83,12 +108,14 @@ type mockPaymentMethod struct {
 // NewMockProvider creates a new mock provider
 func NewMockProvider() *Provider {
 	return &Provider{
-		customers:      make(map[string]*mockCustomer),
-		subscriptions:  make(map[string]*mockSubscription),
-		products:       make(map[string]*mockProduct),
-		prices:         make(map[string]*mockPrice),
-		invoices:       make(map[string]*mockInvoice),
-		paymentMethods: make(map[string]*mockPaymentMethod),
+		customers:         make(map[string]*mockCustomer),
+		subscriptions:     make(map[string]*mockSubscription),
+		subscriptionItems: make(map[string]*mockSubscriptionItem),
+		products:          make(map[string]*mockProduct),
+		prices:            make(map[string]*mockPrice),
+		invoices:          make(map[string]*mockInvoice),
+		paymentMethods:    make(map[string]*mockPaymentMethod),
+		features:          make(map[string]*mockFeature),
 	}
 }
 
@@ -170,6 +197,38 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 }
 
 func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	productID := "prod_addon_mock_" + addon.ID.String()
+	priceID := "price_addon_mock_" + addon.ID.String()
+
+	// Store the product
+	p.products[productID] = &mockProduct{
+		ID:          productID,
+		Name:        addon.Name,
+		Description: addon.Description,
+		Active:      addon.IsActive,
+		Metadata: map[string]string{
+			"authsome":         "true",
+			"addon_id":         addon.ID.String(),
+			"app_id":           addon.AppID.String(),
+			"slug":             addon.Slug,
+			"billing_pattern":  string(addon.BillingPattern),
+			"billing_interval": string(addon.BillingInterval),
+		},
+	}
+
+	// Store the price
+	p.prices[priceID] = &mockPrice{
+		ID:        priceID,
+		ProductID: productID,
+		Amount:    addon.Price,
+		Currency:  addon.Currency,
+		Interval:  string(addon.BillingInterval),
+	}
+
+	addon.ProviderPriceID = priceID
 	return nil
 }
 
@@ -272,6 +331,47 @@ func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (
 	}, nil
 }
 
+// AddSubscriptionItem adds an item to a subscription
+func (p *Provider) AddSubscriptionItem(ctx context.Context, subscriptionID string, priceID string, quantity int) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.subscriptions[subscriptionID]; !ok {
+		return "", fmt.Errorf("subscription not found")
+	}
+
+	itemID := "si_mock_" + xid.New().String()
+	// In a real implementation, we'd track subscription items
+	// For mock, just return the ID
+	return itemID, nil
+}
+
+// RemoveSubscriptionItem removes an item from a subscription
+func (p *Provider) RemoveSubscriptionItem(ctx context.Context, subscriptionID string, itemID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.subscriptions[subscriptionID]; !ok {
+		return fmt.Errorf("subscription not found")
+	}
+
+	// In mock, just return success
+	return nil
+}
+
+// UpdateSubscriptionItem updates the quantity of a subscription item
+func (p *Provider) UpdateSubscriptionItem(ctx context.Context, subscriptionID string, itemID string, quantity int) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.subscriptions[subscriptionID]; !ok {
+		return fmt.Errorf("subscription not found")
+	}
+
+	// In mock, just return success
+	return nil
+}
+
 func (p *Provider) CreateCheckoutSession(ctx context.Context, req *types.CheckoutRequest) (*types.CheckoutSession, error) {
 	id := "cs_mock_" + xid.New().String()
 	return &types.CheckoutSession{
@@ -353,6 +453,150 @@ func (p *Provider) GetInvoicePDF(ctx context.Context, invoiceID string) (string,
 }
 
 func (p *Provider) VoidInvoice(ctx context.Context, invoiceID string) error {
+	return nil
+}
+
+// ListInvoices lists invoices for a customer
+func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit int) ([]*types.ProviderInvoice, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var result []*types.ProviderInvoice
+	count := 0
+	for _, inv := range p.invoices {
+		if inv.CustomerID == customerID {
+			result = append(result, &types.ProviderInvoice{
+				ID:             inv.ID,
+				CustomerID:     inv.CustomerID,
+				SubscriptionID: inv.SubscriptionID,
+				Status:         inv.Status,
+				Currency:       inv.Currency,
+				AmountDue:      inv.AmountDue,
+				AmountPaid:     inv.AmountPaid,
+				Total:          inv.Total,
+				Subtotal:       inv.Subtotal,
+				Tax:            inv.Tax,
+				PeriodStart:    inv.PeriodStart,
+				PeriodEnd:      inv.PeriodEnd,
+				PDFURL:         inv.PDFURL,
+				HostedURL:      inv.HostedURL,
+			})
+			count++
+			if limit > 0 && count >= limit {
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+// ListSubscriptionInvoices lists invoices for a subscription
+func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID string, limit int) ([]*types.ProviderInvoice, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var result []*types.ProviderInvoice
+	count := 0
+	for _, inv := range p.invoices {
+		if inv.SubscriptionID == subscriptionID {
+			result = append(result, &types.ProviderInvoice{
+				ID:             inv.ID,
+				CustomerID:     inv.CustomerID,
+				SubscriptionID: inv.SubscriptionID,
+				Status:         inv.Status,
+				Currency:       inv.Currency,
+				AmountDue:      inv.AmountDue,
+				AmountPaid:     inv.AmountPaid,
+				Total:          inv.Total,
+				Subtotal:       inv.Subtotal,
+				Tax:            inv.Tax,
+				PeriodStart:    inv.PeriodStart,
+				PeriodEnd:      inv.PeriodEnd,
+				PDFURL:         inv.PDFURL,
+				HostedURL:      inv.HostedURL,
+			})
+			count++
+			if limit > 0 && count >= limit {
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+// SyncFeature syncs a feature to the mock provider
+func (p *Provider) SyncFeature(ctx context.Context, feature *core.Feature) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	featureID := feature.ID.String()
+	if feature.Metadata != nil {
+		if providerID, ok := feature.Metadata["provider_feature_id"].(string); ok && providerID != "" {
+			featureID = providerID
+		}
+	}
+	
+	// Generate mock provider ID if creating new
+	if feature.ProviderFeatureID == "" {
+		featureID = "mock_feat_" + feature.ID.String()
+	} else {
+		featureID = feature.ProviderFeatureID
+	}
+
+	p.features[featureID] = &mockFeature{
+		ID:        featureID,
+		Name:      feature.Name,
+		LookupKey: feature.Key,
+		Active:    true,
+		Metadata:  feature.Metadata,
+	}
+
+	return featureID, nil
+}
+
+// ListProviderFeatures lists all features from the mock provider
+func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) ([]*types.ProviderFeature, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var result []*types.ProviderFeature
+	for _, f := range p.features {
+		result = append(result, &types.ProviderFeature{
+			ID:        f.ID,
+			Name:      f.Name,
+			LookupKey: f.LookupKey,
+			Active:    f.Active,
+			Metadata:  f.Metadata,
+		})
+	}
+	return result, nil
+}
+
+// GetProviderFeature gets a specific feature from the mock provider
+func (p *Provider) GetProviderFeature(ctx context.Context, featureID string) (*types.ProviderFeature, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	f, ok := p.features[featureID]
+	if !ok {
+		return nil, fmt.Errorf("feature not found")
+	}
+
+	return &types.ProviderFeature{
+		ID:        f.ID,
+		Name:      f.Name,
+		LookupKey: f.LookupKey,
+		Active:    f.Active,
+		Metadata:  f.Metadata,
+	}, nil
+}
+
+// DeleteProviderFeature deletes a feature from the mock provider
+func (p *Provider) DeleteProviderFeature(ctx context.Context, featureID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	delete(p.features, featureID)
 	return nil
 }
 

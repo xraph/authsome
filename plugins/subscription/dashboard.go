@@ -70,13 +70,13 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 // Routes returns the dashboard routes
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
-		// Billing Overview
+		// Subscription Overview
 		{
 			Method:      "GET",
 			Path:        "/billing",
 			Handler:     e.ServeBillingOverviewPage,
 			Name:        "subscription.billing.overview",
-			Summary:     "Billing Overview",
+			Summary:     "Subscription Overview",
 			Description: "View billing overview and summary",
 			RequireAuth: true,
 		},
@@ -432,6 +432,36 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			Name:         "subscription.features.delete",
 			Summary:      "Delete Feature",
 			Description:  "Permanently delete a feature",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/billing/features/:featureId/sync",
+			Handler:      e.HandleSyncFeature,
+			Name:         "subscription.features.sync",
+			Summary:      "Sync Feature to Provider",
+			Description:  "Manually sync a feature to the payment provider",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/billing/features/:featureId/sync-from-provider",
+			Handler:      e.HandleSyncFeatureFromProvider,
+			Name:         "subscription.features.sync-from-provider",
+			Summary:      "Sync Feature from Provider",
+			Description:  "Pull feature data from the payment provider",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/billing/features/sync-all-from-provider",
+			Handler:      e.HandleSyncAllFeaturesFromProvider,
+			Name:         "subscription.features.sync-all-from-provider",
+			Summary:      "Sync All Features from Provider",
+			Description:  "Fetch all features from the payment provider and sync locally",
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},

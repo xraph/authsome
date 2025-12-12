@@ -49,12 +49,11 @@ func init() {
 		// Otherwise, they were created with V2 fields already
 
 		// Add V2 context fields to identity_verifications table (for existing tables)
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verifications
-			ADD COLUMN IF NOT EXISTS app_id VARCHAR(20),
-			ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to add V2 fields to identity_verifications: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS app_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add app_id to identity_verifications: %w", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add environment_id to identity_verifications: %w", err)
 		}
 
 		// Update existing records to have a default app_id (only for upgraded databases)
@@ -115,21 +114,21 @@ func init() {
 		}
 
 		// Update ID column types for consistency with xid format (20 chars)
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verifications
-			ALTER COLUMN organization_id TYPE VARCHAR(20),
-			ALTER COLUMN user_id TYPE VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to update ID column types in identity_verifications: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verifications ALTER COLUMN organization_id TYPE VARCHAR(20)`); err != nil {
+			// Ignore error if column doesn't exist or already has correct type
+			fmt.Printf("Warning: could not update organization_id type: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verifications ALTER COLUMN user_id TYPE VARCHAR(20)`); err != nil {
+			// Ignore error if column doesn't exist or already has correct type
+			fmt.Printf("Warning: could not update user_id type: %v\n", err)
 		}
 
 		// Add V2 context fields to identity_verification_sessions table
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verification_sessions
-			ADD COLUMN IF NOT EXISTS app_id VARCHAR(20),
-			ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to add V2 fields to identity_verification_sessions: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_sessions ADD COLUMN IF NOT EXISTS app_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add app_id to identity_verification_sessions: %w", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_sessions ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add environment_id to identity_verification_sessions: %w", err)
 		}
 
 		// Update existing session records (only for upgraded databases)
@@ -184,21 +183,19 @@ func init() {
 		}
 
 		// Update ID column types
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verification_sessions
-			ALTER COLUMN organization_id TYPE VARCHAR(20),
-			ALTER COLUMN user_id TYPE VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to update ID column types in identity_verification_sessions: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_sessions ALTER COLUMN organization_id TYPE VARCHAR(20)`); err != nil {
+			fmt.Printf("Warning: could not update organization_id type: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_sessions ALTER COLUMN user_id TYPE VARCHAR(20)`); err != nil {
+			fmt.Printf("Warning: could not update user_id type: %v\n", err)
 		}
 
 		// Add V2 context fields to user_verification_status table
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE user_verification_status
-			ADD COLUMN IF NOT EXISTS app_id VARCHAR(20),
-			ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to add V2 fields to user_verification_status: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE user_verification_status ADD COLUMN IF NOT EXISTS app_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add app_id to user_verification_status: %w", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE user_verification_status ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add environment_id to user_verification_status: %w", err)
 		}
 
 		// Update existing status records (only for upgraded databases)
@@ -253,12 +250,11 @@ func init() {
 		}
 
 		// Update ID column types
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE user_verification_status
-			ALTER COLUMN organization_id TYPE VARCHAR(20),
-			ALTER COLUMN user_id TYPE VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to update ID column types in user_verification_status: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE user_verification_status ALTER COLUMN organization_id TYPE VARCHAR(20)`); err != nil {
+			fmt.Printf("Warning: could not update organization_id type: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE user_verification_status ALTER COLUMN user_id TYPE VARCHAR(20)`); err != nil {
+			fmt.Printf("Warning: could not update user_id type: %v\n", err)
 		}
 
 		// Update the unique constraint on user_verification_status to include app_id
@@ -279,13 +275,14 @@ func init() {
 		}
 
 		// Add V2 context fields to identity_verification_documents table
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verification_documents
-			ADD COLUMN IF NOT EXISTS app_id VARCHAR(20),
-			ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20),
-			ADD COLUMN IF NOT EXISTS organization_id VARCHAR(20)
-		`); err != nil {
-			return fmt.Errorf("failed to add V2 fields to identity_verification_documents: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_documents ADD COLUMN IF NOT EXISTS app_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add app_id to identity_verification_documents: %w", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_documents ADD COLUMN IF NOT EXISTS environment_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add environment_id to identity_verification_documents: %w", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_documents ADD COLUMN IF NOT EXISTS organization_id VARCHAR(20)`); err != nil {
+			return fmt.Errorf("failed to add organization_id to identity_verification_documents: %w", err)
 		}
 
 		// Update existing document records from parent verification (only for upgraded databases)
@@ -380,12 +377,11 @@ func init() {
 			return fmt.Errorf("failed to drop index: %w", err)
 		}
 
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verifications
-			DROP COLUMN IF EXISTS app_id,
-			DROP COLUMN IF EXISTS environment_id
-		`); err != nil {
-			return fmt.Errorf("failed to remove V2 fields from identity_verifications: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verifications DROP COLUMN IF EXISTS app_id`); err != nil {
+			fmt.Printf("Warning: could not drop app_id from identity_verifications: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verifications DROP COLUMN IF EXISTS environment_id`); err != nil {
+			fmt.Printf("Warning: could not drop environment_id from identity_verifications: %v\n", err)
 		}
 
 		// identity_verification_sessions
@@ -413,12 +409,11 @@ func init() {
 			return fmt.Errorf("failed to drop index: %w", err)
 		}
 
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verification_sessions
-			DROP COLUMN IF EXISTS app_id,
-			DROP COLUMN IF EXISTS environment_id
-		`); err != nil {
-			return fmt.Errorf("failed to remove V2 fields from identity_verification_sessions: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_sessions DROP COLUMN IF EXISTS app_id`); err != nil {
+			fmt.Printf("Warning: could not drop app_id from identity_verification_sessions: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_sessions DROP COLUMN IF EXISTS environment_id`); err != nil {
+			fmt.Printf("Warning: could not drop environment_id from identity_verification_sessions: %v\n", err)
 		}
 
 		// user_verification_status
@@ -454,12 +449,11 @@ func init() {
 			return fmt.Errorf("failed to drop index: %w", err)
 		}
 
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE user_verification_status
-			DROP COLUMN IF EXISTS app_id,
-			DROP COLUMN IF EXISTS environment_id
-		`); err != nil {
-			return fmt.Errorf("failed to remove V2 fields from user_verification_status: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE user_verification_status DROP COLUMN IF EXISTS app_id`); err != nil {
+			fmt.Printf("Warning: could not drop app_id from user_verification_status: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE user_verification_status DROP COLUMN IF EXISTS environment_id`); err != nil {
+			fmt.Printf("Warning: could not drop environment_id from user_verification_status: %v\n", err)
 		}
 
 		// identity_verification_documents
@@ -487,13 +481,14 @@ func init() {
 			return fmt.Errorf("failed to drop index: %w", err)
 		}
 
-		if _, err := db.ExecContext(ctx, `
-			ALTER TABLE identity_verification_documents
-			DROP COLUMN IF EXISTS app_id,
-			DROP COLUMN IF EXISTS environment_id,
-			DROP COLUMN IF EXISTS organization_id
-		`); err != nil {
-			return fmt.Errorf("failed to remove V2 fields from identity_verification_documents: %w", err)
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_documents DROP COLUMN IF EXISTS app_id`); err != nil {
+			fmt.Printf("Warning: could not drop app_id from identity_verification_documents: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_documents DROP COLUMN IF EXISTS environment_id`); err != nil {
+			fmt.Printf("Warning: could not drop environment_id from identity_verification_documents: %v\n", err)
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE identity_verification_documents DROP COLUMN IF EXISTS organization_id`); err != nil {
+			fmt.Printf("Warning: could not drop organization_id from identity_verification_documents: %v\n", err)
 		}
 
 		return nil

@@ -85,14 +85,14 @@ func (a *RBACServiceAdapter) GetAllPolicies(ctx context.Context) ([]*RBACPolicy,
 	return a.policies, nil
 }
 
-// GetRoles returns all roles for an app
-func (a *RBACServiceAdapter) GetRoles(ctx context.Context, appID xid.ID) ([]*schema.Role, error) {
+// GetRoles returns all roles for an app and environment
+func (a *RBACServiceAdapter) GetRoles(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error) {
 	if a.roleRepo == nil {
 		return nil, nil
 	}
 
 	// Get role templates (app-level roles)
-	templates, err := a.roleRepo.GetRoleTemplates(ctx, appID)
+	templates, err := a.roleRepo.GetRoleTemplates(ctx, appID, envID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,13 +113,13 @@ func (a *RBACServiceAdapter) GetRolePermissions(ctx context.Context, roleID xid.
 // ADDITIONAL HELPER METHODS
 // =============================================================================
 
-// GetOrgRoles returns all roles for an organization
-func (a *RBACServiceAdapter) GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error) {
+// GetOrgRoles returns all roles for an organization and environment
+func (a *RBACServiceAdapter) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error) {
 	if a.roleRepo == nil {
 		return nil, nil
 	}
 
-	return a.roleRepo.GetOrgRoles(ctx, orgID)
+	return a.roleRepo.GetOrgRoles(ctx, orgID, envID)
 }
 
 // GetAllAppPermissions returns all permissions for an app

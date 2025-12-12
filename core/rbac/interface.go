@@ -33,8 +33,8 @@ type ServiceInterface interface {
 
 	// ====== Role Template Management ======
 
-	// GetRoleTemplates gets all role templates for an app
-	GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error)
+	// GetRoleTemplates gets all role templates for an app and environment
+	GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error)
 
 	// GetRoleTemplate gets a single role template by ID
 	GetRoleTemplate(ctx context.Context, roleID xid.ID) (*schema.Role, error)
@@ -43,36 +43,36 @@ type ServiceInterface interface {
 	GetRoleTemplateWithPermissions(ctx context.Context, roleID xid.ID) (*RoleWithPermissions, error)
 
 	// CreateRoleTemplate creates a new role template for an app
-	CreateRoleTemplate(ctx context.Context, appID xid.ID, name, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error)
+	CreateRoleTemplate(ctx context.Context, appID, envID xid.ID, name, displayName, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error)
 
 	// UpdateRoleTemplate updates an existing role template
-	UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error)
+	UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, displayName, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error)
 
 	// DeleteRoleTemplate deletes a role template
 	DeleteRoleTemplate(ctx context.Context, roleID xid.ID) error
 
-	// GetOwnerRole gets the role marked as the owner role for an app
-	GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error)
+	// GetOwnerRole gets the role marked as the owner role for an app and environment
+	GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schema.Role, error)
 
 	// ====== Organization Role Management ======
 
 	// BootstrapOrgRoles clones selected role templates for a new organization
-	BootstrapOrgRoles(ctx context.Context, orgID xid.ID, templateIDs []xid.ID, customizations map[xid.ID]*RoleCustomization) error
+	BootstrapOrgRoles(ctx context.Context, orgID, appID, envID xid.ID, templateIDs []xid.ID, customizations map[xid.ID]*RoleCustomization) error
 
-	// GetOrgRoles gets all roles specific to an organization
-	GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error)
+	// GetOrgRoles gets all roles specific to an organization and environment
+	GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error)
 
 	// GetOrgRoleWithPermissions gets a role with its permissions loaded
 	GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*RoleWithPermissions, error)
 
 	// UpdateOrgRole updates an organization-specific role
-	UpdateOrgRole(ctx context.Context, roleID xid.ID, name, description string, permissionIDs []xid.ID) error
+	UpdateOrgRole(ctx context.Context, roleID xid.ID, name, displayName, description string, permissionIDs []xid.ID) error
 
 	// DeleteOrgRole deletes an organization-specific role
 	DeleteOrgRole(ctx context.Context, roleID xid.ID) error
 
 	// AssignOwnerRole assigns the owner role to a user in an organization
-	AssignOwnerRole(ctx context.Context, userID xid.ID, orgID xid.ID) error
+	AssignOwnerRole(ctx context.Context, userID xid.ID, orgID xid.ID, envID xid.ID) error
 
 	// ====== Permission Management ======
 

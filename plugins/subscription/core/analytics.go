@@ -299,3 +299,63 @@ func CalculateLTV(arpu int64, churnRate float64) int64 {
 	monthsUntilChurn := 100 / churnRate
 	return int64(float64(arpu) * monthsUntilChurn)
 }
+
+// OrgUsageStats represents usage statistics per organization
+type OrgUsageStats struct {
+	OrgID        xid.ID      `json:"orgId"`
+	OrgName      string      `json:"orgName"`
+	FeatureID    xid.ID      `json:"featureId"`
+	FeatureName  string      `json:"featureName"`
+	FeatureType  FeatureType `json:"featureType"`
+	Unit         string      `json:"unit"`
+	Usage        int64       `json:"usage"`
+	Limit        int64       `json:"limit"`
+	PercentUsed  float64     `json:"percentUsed"`
+}
+
+// UsageTrend represents usage trends over time
+type UsageTrend struct {
+	Date   time.Time `json:"date"`
+	Usage  int64     `json:"usage"`
+	Action string    `json:"action"`
+}
+
+// CurrentUsage represents current feature usage state
+type CurrentUsage struct {
+	OrganizationID   xid.ID `json:"organizationId"`
+	OrganizationName string `json:"organizationName"`
+	FeatureID        xid.ID `json:"featureId"`
+	FeatureName      string `json:"featureName"`
+	FeatureType      string `json:"featureType"`
+	Unit             string `json:"unit"`
+	CurrentUsage     int64  `json:"currentUsage"`
+	Limit            int64  `json:"limit"`
+	PercentUsed      float64 `json:"percentUsed"`
+}
+
+// OrgRevenue represents revenue per organization
+type OrgRevenue struct {
+	OrgID    xid.ID `json:"orgId"`
+	OrgName  string `json:"orgName"`
+	MRR      int64  `json:"mrr"`
+	ARR      int64  `json:"arr"`
+	PlanID   xid.ID `json:"planId"`
+	PlanName string `json:"planName"`
+	Status   string `json:"status"`
+}
+
+// GrowthPoint represents subscription growth at a point in time
+type GrowthPoint struct {
+	Date        time.Time `json:"date"`
+	NewSubs     int       `json:"newSubs"`
+	ChurnedSubs int       `json:"churnedSubs"`
+	ActiveSubs  int       `json:"activeSubs"`
+	NetGrowth   int       `json:"netGrowth"`
+}
+
+// UsageStats aggregates usage statistics
+type UsageStats struct {
+	TotalUsage  int64   `json:"totalUsage"`
+	TotalOrgs   int     `json:"totalOrgs"`
+	AverageUsage float64 `json:"averageUsage"`
+}

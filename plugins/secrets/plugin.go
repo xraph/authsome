@@ -347,6 +347,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// Register secrets admin role
 	err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "secrets_admin",
+		DisplayName: "Secrets Administrator",
 		Description: "Full access to manage secrets",
 		Permissions: []string{
 			"create on secrets",
@@ -364,6 +365,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// Register secrets viewer role
 	err = roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "secrets_viewer",
+		DisplayName: "Secrets Viewer",
 		Description: "Read-only access to secrets (metadata only)",
 		Permissions: []string{
 			"view on secrets",

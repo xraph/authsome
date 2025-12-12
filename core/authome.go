@@ -5,6 +5,7 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/middleware"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
@@ -21,6 +22,10 @@ type Authsome interface {
 
 	// RegisterPlugin registers a plugin
 	RegisterPlugin(plugin Plugin) error
+
+	// RegisterAuthStrategy registers an authentication strategy
+	// Strategies are tried in priority order during authentication
+	RegisterAuthStrategy(strategy middleware.AuthStrategy) error
 
 	// GetConfig returns the auth config
 	GetConfig() Config

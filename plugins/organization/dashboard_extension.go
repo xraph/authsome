@@ -270,6 +270,18 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: false,
 		},
+		// Organization Tab Content (extension tabs)
+		{
+			Method:       "GET",
+			Path:         "/organizations/:orgId/tabs/:tabId",
+			Handler:      e.ServeOrganizationTabContent,
+			Name:         "dashboard.organizations.tab",
+			Summary:      "Organization tab content",
+			Description:  "View organization extension tab content",
+			Tags:         []string{"Dashboard", "Organizations"},
+			RequireAuth:  true,
+			RequireAdmin: false,
+		},
 		// Organization Detail (generic :orgId route - must come AFTER all specific routes)
 		{
 			Method:       "GET",
@@ -761,6 +773,7 @@ func (e *DashboardExtension) renderOrganizationDetailContent(c forge.Context, or
 
 	// Get user's role in this organization
 	userRole := e.getUserRole(ctx, org.ID, currentUser.ID)
+	isAdmin := e.isUserAdmin(ctx, org.ID, currentUser.ID)
 
 	// Get member count
 	membersResp, _ := e.plugin.orgService.ListMembers(ctx, &coreorg.ListMembersFilter{
@@ -781,6 +794,81 @@ func (e *DashboardExtension) renderOrganizationDetailContent(c forge.Context, or
 	if teamsResp != nil && teamsResp.Pagination != nil {
 		teamCount = teamsResp.Pagination.Total
 	}
+
+	// Create extension context
+	extCtx := ui.OrgExtensionContext{
+		OrgID:    org.ID,
+		AppID:    currentApp.ID,
+		BasePath: basePath,
+		Request:  c.Request(),
+		GetOrg: func() (interface{}, error) {
+			return org, nil
+		},
+		IsAdmin: isAdmin,
+	}
+
+	// Get extension registry
+	registry := e.plugin.GetOrganizationUIRegistry()
+	var extensionWidgets []ui.OrganizationWidget
+	var extensionActions []ui.OrganizationAction
+	var extensionQuickLinks []ui.OrganizationQuickLink
+	var tabs []ui.OrganizationTab
+
+	if registry != nil {
+		extensionWidgets = registry.GetWidgets(extCtx)
+		extensionActions = registry.GetActions(extCtx)
+		extensionQuickLinks = registry.GetQuickLinks(extCtx)
+		tabs = registry.GetTabs(extCtx)
+	}
+
+	baseURL := fmt.Sprintf("%s/dashboard/app/%s/organizations/%s", basePath, currentApp.ID.String(), org.ID.String())
+
+	// Build default quick links
+	defaultQuickLinks := []ui.OrganizationQuickLink{
+		{
+			ID:          "members",
+			Title:       "Members",
+			Description: fmt.Sprintf("Manage %d members", memberCount),
+			Icon:        lucide.Users(Class("size-6")),
+			Order:       10,
+			URLBuilder: func(bp string, orgID, appID xid.ID) string {
+				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/members", bp, appID.String(), orgID.String())
+			},
+		},
+		{
+			ID:          "teams",
+			Title:       "Teams",
+			Description: fmt.Sprintf("Manage %d teams", teamCount),
+			Icon:        lucide.UsersRound(Class("size-6")),
+			Order:       20,
+			URLBuilder: func(bp string, orgID, appID xid.ID) string {
+				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/teams", bp, appID.String(), orgID.String())
+			},
+		},
+		{
+			ID:          "roles",
+			Title:       "Roles",
+			Description: "Manage roles & permissions",
+			Icon:        lucide.ShieldCheck(Class("size-6")),
+			Order:       30,
+			URLBuilder: func(bp string, orgID, appID xid.ID) string {
+				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/roles", bp, appID.String(), orgID.String())
+			},
+		},
+		{
+			ID:          "invitations",
+			Title:       "Invitations",
+			Description: "View pending invitations",
+			Icon:        lucide.Mail(Class("size-6")),
+			Order:       40,
+			URLBuilder: func(bp string, orgID, appID xid.ID) string {
+				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/invitations", bp, appID.String(), orgID.String())
+			},
+		},
+	}
+
+	// Merge quick links
+	allQuickLinks := MergeQuickLinks(defaultQuickLinks, extensionQuickLinks)
 
 	return Div(
 		Class("space-y-6"),
@@ -818,27 +906,35 @@ func (e *DashboardExtension) renderOrganizationDetailContent(c forge.Context, or
 						),
 					),
 				),
-				g.If(userRole == "owner",
-					Div(
-						Class("flex gap-2"),
-						Button(
-							Type("button"),
-							Class("rounded-lg border border-red-600 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"),
-							g.Attr("onclick", "if(confirm('Are you sure you want to delete this organization? This action cannot be undone.')) { document.getElementById('delete-form-"+org.ID.String()+"').submit(); }"),
-							g.Text("Delete Organization"),
-						),
-						Form(
-							ID("delete-form-"+org.ID.String()),
-							Method("POST"),
-							Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/delete"),
-							Style("display: none;"),
-						),
+				Div(
+					Class("flex gap-2"),
+					// Extension actions
+					g.If(len(extensionActions) > 0, ActionButtons(extensionActions)),
+					// Delete button (owner only)
+					g.If(userRole == "owner",
+						g.Group([]g.Node{
+							Button(
+								Type("button"),
+								Class("rounded-lg border border-red-600 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"),
+								g.Attr("onclick", "if(confirm('Are you sure you want to delete this organization? This action cannot be undone.')) { document.getElementById('delete-form-"+org.ID.String()+"').submit(); }"),
+								g.Text("Delete Organization"),
+							),
+							Form(
+								ID("delete-form-"+org.ID.String()),
+								Method("POST"),
+								Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/delete"),
+								Style("display: none;"),
+							),
+						}),
 					),
 				),
 			),
 		),
 
-		// Stats cards
+		// Tab navigation (if tabs exist)
+		g.If(len(tabs) > 0, TabNavigation(tabs, "", baseURL)),
+
+		// Stats cards (default + extensions)
 		Div(
 			Class("grid gap-6 md:grid-cols-3"),
 			e.statsCard("Members", fmt.Sprintf("%d", memberCount), lucide.Users(Class("size-5"))),
@@ -846,33 +942,130 @@ func (e *DashboardExtension) renderOrganizationDetailContent(c forge.Context, or
 			e.statsCard("Created", org.CreatedAt.Format("Jan 2, 2006"), lucide.Calendar(Class("size-5"))),
 		),
 
-		// Quick links
+		// Extension widgets
+		g.If(len(extensionWidgets) > 0, WidgetGrid(extensionWidgets, extCtx)),
+
+		// Quick links (merged)
+		QuickLinkGrid(allQuickLinks, basePath, org.ID.String(), currentApp.ID.String()),
+	)
+}
+
+// ServeOrganizationTabContent renders extension tab content
+func (e *DashboardExtension) ServeOrganizationTabContent(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	// Get organization from URL
+	org, err := e.getCurrentOrganization(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid organization")
+	}
+
+	// Get tab ID from URL
+	tabID := c.Param("tabId")
+	if tabID == "" {
+		return c.String(http.StatusBadRequest, "Tab ID required")
+	}
+
+	// Check if user is admin
+	isAdmin := e.isUserAdmin(c.Request().Context(), org.ID, currentUser.ID)
+
+	// Create extension context
+	extCtx := ui.OrgExtensionContext{
+		OrgID:    org.ID,
+		AppID:    currentApp.ID,
+		BasePath: basePath,
+		Request:  c.Request(),
+		GetOrg: func() (interface{}, error) {
+			return org, nil
+		},
+		IsAdmin: isAdmin,
+	}
+
+	// Get tab from registry
+	registry := e.plugin.GetOrganizationUIRegistry()
+	if registry == nil {
+		return c.String(http.StatusInternalServerError, "UI registry not available")
+	}
+
+	tab := registry.GetTabByPath(extCtx, tabID)
+	if tab == nil {
+		return c.String(http.StatusNotFound, "Tab not found")
+	}
+
+	pageData := components.PageData{
+		Title:      org.Name + " - " + tab.Label,
+		User:       currentUser,
+		ActivePage: "organizations",
+		BasePath:   handler.GetBasePath(),
+		CurrentApp: currentApp,
+	}
+
+	// Render tab content with navigation
+	content := e.renderTabContentWithNav(c, org, currentApp, currentUser, basePath, tabID, tab, extCtx)
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// renderTabContentWithNav renders tab content with tab navigation
+func (e *DashboardExtension) renderTabContentWithNav(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string, activeTab string, tab *ui.OrganizationTab, extCtx ui.OrgExtensionContext) g.Node {
+	// Get all tabs from registry
+	registry := e.plugin.GetOrganizationUIRegistry()
+	tabs := []ui.OrganizationTab{}
+	if registry != nil {
+		tabs = registry.GetTabs(extCtx)
+	}
+
+	baseURL := fmt.Sprintf("%s/dashboard/app/%s/organizations/%s", basePath, currentApp.ID.String(), org.ID.String())
+
+	return Div(
+		Class("space-y-6"),
+
+		// Back button
+		A(
+			Href(baseURL),
+			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
+			lucide.ArrowLeft(Class("size-4")),
+			g.Text("Back to Organization"),
+		),
+
+		// Organization header (minimal)
 		Div(
-			Class("grid gap-4 md:grid-cols-4"),
-			e.quickLinkCard(
-				"Members",
-				fmt.Sprintf("Manage %d members", memberCount),
-				basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members",
-				lucide.Users(Class("size-6")),
+			Class("flex items-center gap-3"),
+			g.If(org.Logo != "",
+				Img(
+					Src(org.Logo),
+					Alt(org.Name),
+					Class("size-10 rounded-lg object-cover"),
+				),
 			),
-			e.quickLinkCard(
-				"Teams",
-				fmt.Sprintf("Manage %d teams", teamCount),
-				basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams",
-				lucide.UsersRound(Class("size-6")),
+			Div(
+				H1(Class("text-xl font-bold text-slate-900 dark:text-white"), g.Text(org.Name)),
+				P(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text("@"+org.Slug)),
 			),
-			e.quickLinkCard(
-				"Roles",
-				"Manage roles & permissions",
-				basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/roles",
-				lucide.ShieldCheck(Class("size-6")),
-			),
-			e.quickLinkCard(
-				"Invitations",
-				"View pending invitations",
-				basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/invitations",
-				lucide.Mail(Class("size-6")),
-			),
+		),
+
+		// Tab navigation
+		TabNavigation(tabs, activeTab, baseURL),
+
+		// Tab content
+		Div(
+			Class("mt-6"),
+			tab.Renderer(extCtx),
 		),
 	)
 }
@@ -1118,7 +1311,7 @@ func (e *DashboardExtension) renderRolesPageContent(c forge.Context, org *coreor
 	// Fetch organization-specific roles from RBAC service
 	var roles []*schema.Role
 	if e.plugin.rbacService != nil {
-		roles, _ = e.plugin.rbacService.GetOrgRoles(ctx, org.ID)
+		roles, _ = e.plugin.rbacService.GetOrgRoles(ctx, org.ID, org.EnvironmentID)
 	}
 
 	return Div(
@@ -2002,8 +2195,34 @@ func (e *DashboardExtension) CreateRoleTemplate(c forge.Context) error {
 		}
 	}
 
+	// Get default environment for the app
+	var defaultEnvID xid.ID
+	err = e.plugin.db.NewSelect().
+		Table("environments").
+		Column("id").
+		Where("app_id = ?", currentApp.ID).
+		Where("is_default = ?", true).
+		Limit(1).
+		Scan(ctx, &defaultEnvID)
+
+	if err != nil {
+		// If no default environment, try to get the first one
+		err = e.plugin.db.NewSelect().
+			Table("environments").
+			Column("id").
+			Where("app_id = ?", currentApp.ID).
+			Order("created_at ASC").
+			Limit(1).
+			Scan(ctx, &defaultEnvID)
+
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to get environment: "+err.Error())
+		}
+	}
+
 	// Create role template via RBAC service
-	_, err = e.plugin.rbacService.CreateRoleTemplate(ctx, currentApp.ID, name, description, isOwnerRole, permIDs)
+	// Display name will be auto-generated from name if empty string is passed
+	_, err = e.plugin.rbacService.CreateRoleTemplate(ctx, currentApp.ID, defaultEnvID, name, "", description, isOwnerRole, permIDs)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to create role template: "+err.Error())
 	}
@@ -2068,7 +2287,8 @@ func (e *DashboardExtension) UpdateRoleTemplate(c forge.Context) error {
 	}
 
 	// Update role template via RBAC service
-	_, err = e.plugin.rbacService.UpdateRoleTemplate(ctx, roleID, name, description, isOwnerRole, permIDs)
+	// Display name will be auto-generated from name if empty string is passed
+	_, err = e.plugin.rbacService.UpdateRoleTemplate(ctx, roleID, name, "", description, isOwnerRole, permIDs)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to update role template: "+err.Error())
 	}
@@ -2236,6 +2456,12 @@ func (e *DashboardExtension) getUserRole(ctx context.Context, orgID, userID xid.
 		return ""
 	}
 	return member.Role
+}
+
+// isUserAdmin checks if the user has admin privileges in the organization
+func (e *DashboardExtension) isUserAdmin(ctx context.Context, orgID, userID xid.ID) bool {
+	role := e.getUserRole(ctx, orgID, userID)
+	return role == "owner" || role == "admin"
 }
 
 // canManageOrganization checks if a user can manage an organization using RBAC
@@ -3192,13 +3418,38 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 		fmt.Printf("[DEBUG] rbacService is nil!\n")
 		roleTemplates = []*schema.Role{}
 	} else {
-		var err error
-		roleTemplates, err = e.plugin.rbacService.GetRoleTemplates(ctx, currentApp.ID)
+		// Get default environment for the app
+		var defaultEnvID xid.ID
+		err := e.plugin.db.NewSelect().
+			Table("environments").
+			Column("id").
+			Where("app_id = ?", currentApp.ID).
+			Where("is_default = ?", true).
+			Limit(1).
+			Scan(ctx, &defaultEnvID)
+
 		if err != nil {
-			fmt.Printf("[DEBUG] GetRoleTemplates error for app %s: %v\n", currentApp.ID.String(), err)
+			// If no default environment, try to get the first one
+			err = e.plugin.db.NewSelect().
+				Table("environments").
+				Column("id").
+				Where("app_id = ?", currentApp.ID).
+				Order("created_at ASC").
+				Limit(1).
+				Scan(ctx, &defaultEnvID)
+		}
+
+		if err != nil {
+			fmt.Printf("[DEBUG] No environment found for app %s: %v\n", currentApp.ID.String(), err)
 			roleTemplates = []*schema.Role{}
 		} else {
-			fmt.Printf("[DEBUG] GetRoleTemplates for app %s returned %d templates\n", currentApp.ID.String(), len(roleTemplates))
+			roleTemplates, err = e.plugin.rbacService.GetRoleTemplates(ctx, currentApp.ID, defaultEnvID)
+			if err != nil {
+				fmt.Printf("[DEBUG] GetRoleTemplates error for app %s, env %s: %v\n", currentApp.ID.String(), defaultEnvID.String(), err)
+				roleTemplates = []*schema.Role{}
+			} else {
+				fmt.Printf("[DEBUG] GetRoleTemplates for app %s, env %s returned %d templates\n", currentApp.ID.String(), defaultEnvID.String(), len(roleTemplates))
+			}
 		}
 	}
 

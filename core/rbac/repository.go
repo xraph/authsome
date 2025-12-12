@@ -22,18 +22,22 @@ type RoleRepository interface {
 	Delete(ctx context.Context, roleID xid.ID) error
 	FindByID(ctx context.Context, roleID xid.ID) (*schema.Role, error)
 	FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*schema.Role, error)
+	FindByNameAppEnv(ctx context.Context, name string, appID, envID xid.ID) (*schema.Role, error)
 	ListByOrg(ctx context.Context, orgID *string) ([]schema.Role, error)
 
 	// Template operations
-	GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error)
-	GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error)
+	GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error)
+	GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schema.Role, error)
 
 	// Organization-scoped roles
-	GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error)
+	GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error)
 	GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*schema.Role, error)
 
 	// Role cloning
 	CloneRole(ctx context.Context, templateID xid.ID, orgID xid.ID, customName *string) (*schema.Role, error)
+
+	// Migration helpers
+	FindDuplicateRoles(ctx context.Context) ([]schema.Role, error)
 }
 
 // PermissionRepository handles permission operations for RBAC

@@ -484,6 +484,53 @@ func (h *FeatureHandlers) HandleRevokeGrant(c forge.Context) error {
 	return c.JSON(200, successResponse{Success: true, Message: "grant revoked"})
 }
 
+// HandleSyncFeature manually syncs a feature to the provider
+func (h *FeatureHandlers) HandleSyncFeature(c forge.Context) error {
+	featureID, err := xid.FromString(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, errorResponse{Error: "invalid_id", Message: "invalid feature ID"})
+	}
+
+	if err := h.featureSvc.SyncToProvider(c.Context(), featureID); err != nil {
+		return handleError(c, err)
+	}
+
+	return c.JSON(200, successResponse{Success: true, Message: "feature synced to provider"})
+}
+
+// HandleSyncFeatureFromProvider syncs a feature from the provider
+func (h *FeatureHandlers) HandleSyncFeatureFromProvider(c forge.Context) error {
+	providerFeatureID := c.Param("providerId")
+	if providerFeatureID == "" {
+		return c.JSON(400, errorResponse{Error: "invalid_id", Message: "provider feature ID required"})
+	}
+
+	feature, err := h.featureSvc.SyncFromProvider(c.Context(), providerFeatureID)
+	if err != nil {
+		return handleError(c, err)
+	}
+
+	return c.JSON(200, feature)
+}
+
+// HandleSyncAllFeaturesFromProvider syncs all features from the provider
+func (h *FeatureHandlers) HandleSyncAllFeaturesFromProvider(c forge.Context) error {
+	productID := c.Query("productId")
+	if productID == "" {
+		return c.JSON(400, errorResponse{Error: "invalid_request", Message: "productId query parameter required"})
+	}
+
+	features, err := h.featureSvc.SyncAllFromProvider(c.Context(), productID)
+	if err != nil {
+		return handleError(c, err)
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"features": features,
+		"count":    len(features),
+	})
+}
+
 // Helper functions
 
 func getAppID(c forge.Context) xid.ID {

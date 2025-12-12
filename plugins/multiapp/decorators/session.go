@@ -3,6 +3,7 @@ package decorators
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/xid"
@@ -15,17 +16,52 @@ import (
 // Ensure MultiTenantSessionService implements session.ServiceInterface
 var _ session.ServiceInterface = (*MultiTenantSessionService)(nil)
 
+// sessionCacheEntry holds cached session validation results
+type sessionCacheEntry struct {
+	session   *session.Session
+	valid     bool
+	timestamp time.Time
+}
+
 // MultiTenantSessionService decorates the core session service with multi-tenancy capabilities
 type MultiTenantSessionService struct {
 	sessionService session.ServiceInterface
 	appService     *coreapp.ServiceImpl
+	// In-memory cache to prevent redundant queries within the same request
+	// This cache has a very short TTL (1 second) and is primarily to handle
+	// multiple authentication strategies trying to validate the same session
+	cache    sync.Map // key: token → sessionCacheEntry
+	cacheTTL time.Duration
 }
 
 // NewMultiTenantSessionService creates a new multi-tenant session service
 func NewMultiTenantSessionService(sessionService session.ServiceInterface, appService *coreapp.ServiceImpl) *MultiTenantSessionService {
-	return &MultiTenantSessionService{
+	svc := &MultiTenantSessionService{
 		sessionService: sessionService,
 		appService:     appService,
+		cacheTTL:       time.Second, // Very short cache to handle concurrent auth attempts
+	}
+	
+	// Start background goroutine to clean up stale cache entries
+	go svc.cleanupCache()
+	
+	return svc
+}
+
+// cleanupCache periodically removes stale entries from the cache
+func (s *MultiTenantSessionService) cleanupCache() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		now := time.Now()
+		s.cache.Range(func(key, value interface{}) bool {
+			entry := value.(sessionCacheEntry)
+			if now.Sub(entry.timestamp) > s.cacheTTL {
+				s.cache.Delete(key)
+			}
+			return true
+		})
 	}
 }
 
@@ -84,13 +120,39 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 
 // FindByToken retrieves a session by token with app context
 func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token string) (*session.Session, error) {
+	// Check cache first to avoid redundant queries within the same request
+	if cached, ok := s.cache.Load(token); ok {
+		entry := cached.(sessionCacheEntry)
+		// Check if cache entry is still valid
+		if time.Since(entry.timestamp) < s.cacheTTL {
+			if !entry.valid {
+				return nil, fmt.Errorf("cached invalid session")
+			}
+			return entry.session, nil
+		}
+		// Cache expired, remove it
+		s.cache.Delete(token)
+	}
+
 	// Find session using core service first
 	sess, err := s.sessionService.FindByToken(ctx, token)
 	if err != nil {
+		// Cache the error result
+		s.cache.Store(token, sessionCacheEntry{
+			session:   nil,
+			valid:     false,
+			timestamp: time.Now(),
+		})
 		return nil, err
 	}
 
 	if sess == nil {
+		// Cache the not-found result
+		s.cache.Store(token, sessionCacheEntry{
+			session:   nil,
+			valid:     false,
+			timestamp: time.Now(),
+		})
 		return nil, nil
 	}
 
@@ -99,6 +161,13 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 
 	// If no app context or appID is nil, try to find one for the user
 	if !ok || appID.IsNil() {
+		// Use session's app/org context if available
+		if !sess.AppID.IsNil() {
+			// Session already has organization context - trust it
+			s.cacheSession(token, sess, true)
+			return sess, nil
+		}
+
 		// Check if there are any organizations
 		response, err := s.appService.ListApps(ctx, &coreapp.ListAppsFilter{
 			PaginationParams: pagination.PaginationParams{
@@ -109,6 +178,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 		if err != nil || len(response.Data) == 0 {
 			// No organizations exist yet - allow (first user scenario)
 			fmt.Printf("[MultiTenancy] Session lookup without org context (no orgs yet): %s\n", sess.UserID)
+			s.cacheSession(token, sess, true)
 			return sess, nil
 		}
 
@@ -120,28 +190,43 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 			// Allow sessions created in the last 10 seconds to give hooks time to complete
 			if time.Since(sess.CreatedAt) < 10*time.Second {
 				fmt.Printf("[MultiTenancy] Session lookup: newly created session (created %v ago), allowing while org hook completes: %s\n", time.Since(sess.CreatedAt), sess.UserID)
+				s.cacheSession(token, sess, true)
 				return sess, nil
 			}
 			// User has no organizations and session is not newly created
+			s.cacheSession(token, nil, false)
 			return nil, fmt.Errorf("session user has no organization memberships")
 		}
 
 		// User has organizations - allow the session
 		// (In a more sophisticated system, you might want to set org context here)
 		fmt.Printf("[MultiTenancy] Session lookup without org context, user has orgs: %s\n", sess.UserID)
+		s.cacheSession(token, sess, true)
 		return sess, nil
 	}
 
 	// Organization context is present - verify user belongs to it
 	member, err := s.appService.Member.FindMember(ctx, appID, sess.UserID)
 	if err != nil {
+		s.cacheSession(token, nil, false)
 		return nil, fmt.Errorf("user is not a member of this app: %w", err)
 	}
 	if member.Status != coreapp.MemberStatusActive {
+		s.cacheSession(token, nil, false)
 		return nil, fmt.Errorf("user membership is not active")
 	}
 
+	s.cacheSession(token, sess, true)
 	return sess, nil
+}
+
+// cacheSession stores a session validation result in the cache
+func (s *MultiTenantSessionService) cacheSession(token string, sess *session.Session, valid bool) {
+	s.cache.Store(token, sessionCacheEntry{
+		session:   sess,
+		valid:     valid,
+		timestamp: time.Now(),
+	})
 }
 
 // Revoke revokes a session with app context

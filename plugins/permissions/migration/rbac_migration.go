@@ -76,8 +76,8 @@ type RBACService interface {
 	// GetAllPolicies returns all RBAC policies
 	GetAllPolicies(ctx context.Context) ([]*RBACPolicy, error)
 
-	// GetRoles returns all roles
-	GetRoles(ctx context.Context, appID xid.ID) ([]*schema.Role, error)
+	// GetRoles returns all roles for an app and environment
+	GetRoles(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error)
 
 	// GetRolePermissions returns permissions for a role
 	GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*schema.Permission, error)
@@ -496,7 +496,7 @@ func (s *RBACMigrationService) MigrateRoles(ctx context.Context, appID, envID xi
 	}
 
 	// Fetch all roles
-	roles, err := s.rbacService.GetRoles(ctx, appID)
+	roles, err := s.rbacService.GetRoles(ctx, appID, envID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch roles: %w", err)
 	}

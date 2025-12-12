@@ -24,15 +24,15 @@ const (
 // SCIMUser represents a SCIM 2.0 User resource (RFC 7643 Section 4.1)
 type SCIMUser struct {
 	// Common attributes
-	Schemas    []string `json:"schemas"`
-	ID         string   `json:"id"`
-	ExternalID string   `json:"externalId,omitempty"`
-	Meta       *Meta    `json:"meta"`
+	Schemas    []string  `json:"schemas"`
+	ID         string    `json:"id"`
+	ExternalID string    `json:"externalId,omitempty"`
+	Meta       *SCIMMeta `json:"meta"`
 
 	// Core User Schema attributes
-	UserName          string `json:"userName"`
-	Name              *Name  `json:"name,omitempty"`
-	DisplayName       string `json:"displayName,omitempty"`
+	UserName          string    `json:"userName"`
+	Name              *SCIMName `json:"name,omitempty"`
+	DisplayName       string    `json:"displayName,omitempty"`
 	NickName          string `json:"nickName,omitempty"`
 	ProfileURL        string `json:"profileUrl,omitempty"`
 	Title             string `json:"title,omitempty"`
@@ -48,10 +48,10 @@ type SCIMUser struct {
 	PhoneNumbers     []PhoneNumber     `json:"phoneNumbers,omitempty"`
 	IMs              []IM              `json:"ims,omitempty"`
 	Photos           []Photo           `json:"photos,omitempty"`
-	Addresses        []Address         `json:"addresses,omitempty"`
+	Addresses        []SCIMAddress     `json:"addresses,omitempty"`
 	Groups           []GroupReference  `json:"groups,omitempty"`
 	Entitlements     []Entitlement     `json:"entitlements,omitempty"`
-	Roles            []Role            `json:"roles,omitempty"`
+	Roles            []SCIMRole        `json:"roles,omitempty"`
 	X509Certificates []X509Certificate `json:"x509Certificates,omitempty"`
 
 	// Enterprise extension
@@ -63,13 +63,13 @@ type SCIMGroup struct {
 	Schemas     []string          `json:"schemas"`
 	ID          string            `json:"id"`
 	ExternalID  string            `json:"externalId,omitempty"`
-	Meta        *Meta             `json:"meta"`
+	Meta        *SCIMMeta         `json:"meta"`
 	DisplayName string            `json:"displayName"`
 	Members     []MemberReference `json:"members,omitempty"`
 }
 
-// Meta contains resource metadata (RFC 7643 Section 3.1)
-type Meta struct {
+// SCIMMeta contains resource metadata (RFC 7643 Section 3.1)
+type SCIMMeta struct {
 	ResourceType string    `json:"resourceType"`
 	Created      time.Time `json:"created"`
 	LastModified time.Time `json:"lastModified"`
@@ -77,8 +77,8 @@ type Meta struct {
 	Version      string    `json:"version,omitempty"`
 }
 
-// Name represents a user's name (RFC 7643 Section 4.1.1)
-type Name struct {
+// SCIMName represents a user's name (RFC 7643 Section 4.1.1)
+type SCIMName struct {
 	Formatted       string `json:"formatted,omitempty"`
 	FamilyName      string `json:"familyName,omitempty"`
 	GivenName       string `json:"givenName,omitempty"`
@@ -119,8 +119,8 @@ type Photo struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// Address represents a physical mailing address (RFC 7643 Section 4.1.2)
-type Address struct {
+// SCIMAddress represents a physical mailing address (RFC 7643 Section 4.1.2)
+type SCIMAddress struct {
 	Formatted     string `json:"formatted,omitempty"`
 	StreetAddress string `json:"streetAddress,omitempty"`
 	Locality      string `json:"locality,omitempty"`
@@ -147,8 +147,8 @@ type Entitlement struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// Role represents a role (RFC 7643 Section 4.1.2)
-type Role struct {
+// SCIMRole represents a role (RFC 7643 Section 4.1.2)
+type SCIMRole struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
 	Type    string `json:"type,omitempty"`
@@ -261,7 +261,7 @@ type ServiceProviderConfig struct {
 	Sort                  *Supported             `json:"sort"`
 	Etag                  *Supported             `json:"etag"`
 	AuthenticationSchemes []AuthenticationScheme `json:"authenticationSchemes"`
-	Meta                  *Meta                  `json:"meta"`
+	Meta                  *SCIMMeta              `json:"meta"`
 }
 
 // Supported indicates feature support (RFC 7643 Section 5)
@@ -301,7 +301,7 @@ type ResourceType struct {
 	Description      string            `json:"description,omitempty"`
 	Schema           string            `json:"schema"`
 	SchemaExtensions []SchemaExtension `json:"schemaExtensions,omitempty"`
-	Meta             *Meta             `json:"meta"`
+	Meta             *SCIMMeta         `json:"meta"`
 }
 
 // SchemaExtension represents a schema extension (RFC 7643 Section 6)
@@ -316,7 +316,7 @@ type Schema struct {
 	Name        string      `json:"name,omitempty"`
 	Description string      `json:"description,omitempty"`
 	Attributes  []Attribute `json:"attributes"`
-	Meta        *Meta       `json:"meta,omitempty"`
+	Meta        *SCIMMeta   `json:"meta,omitempty"`
 }
 
 // Attribute represents a schema attribute (RFC 7643 Section 7)

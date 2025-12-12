@@ -52,8 +52,23 @@ func (e *DashboardExtension) ServeFeaturesListPage(c forge.Context) error {
 		typeCounts[string(f.Type)]++
 	}
 
+	// Check for success messages
+	successMsg := c.Query("success")
+
 	content := Div(
 		Class("space-y-6"),
+
+		// Success message
+		g.If(successMsg != "",
+			Div(
+				Class("rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20"),
+				Div(
+					Class("flex items-center gap-3"),
+					lucide.Check(Class("size-5 text-green-600 dark:text-green-400")),
+					P(Class("text-sm text-green-700 dark:text-green-400"), g.Text(successMsg)),
+				),
+			),
+		),
 
 		// Page header
 		Div(
@@ -66,6 +81,17 @@ func (e *DashboardExtension) ServeFeaturesListPage(c forge.Context) error {
 			),
 			Div(
 				Class("flex items-center gap-2"),
+				Form(
+					Method("POST"),
+					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/sync-all-from-provider?productId="+currentApp.ID.String()),
+					Class("inline"),
+					Button(
+						Type("submit"),
+						Class("inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:bg-slate-800 dark:text-blue-300"),
+						lucide.RefreshCw(Class("size-4")),
+						g.Text("Sync from Provider"),
+					),
+				),
 				A(
 					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/export"),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"),
@@ -145,8 +171,39 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 	// Get plans using this feature
 	planLinks, _ := e.plugin.featureSvc.GetPlanFeatures(ctx, featureID) // This returns plans linked TO the feature
 
+	// Check for error/success messages
+	errorMsg := c.Query("error")
+	successMsg := c.Query("success")
+
 	content := Div(
 		Class("space-y-6"),
+
+		// Error message
+		g.If(errorMsg != "",
+			Div(
+				Class("rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"),
+				Div(
+					Class("flex items-center gap-3"),
+					lucide.X(Class("size-5 text-red-600 dark:text-red-400")),
+					Div(
+						P(Class("font-medium text-red-800 dark:text-red-300"), g.Text("Error")),
+						P(Class("text-sm text-red-700 dark:text-red-400"), g.Text(errorMsg)),
+					),
+				),
+			),
+		),
+
+		// Success message
+		g.If(successMsg != "",
+			Div(
+				Class("rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20"),
+				Div(
+					Class("flex items-center gap-3"),
+					lucide.Check(Class("size-5 text-green-600 dark:text-green-400")),
+					P(Class("text-sm text-green-700 dark:text-green-400"), g.Text(successMsg)),
+				),
+			),
+		),
 
 		// Breadcrumb
 		Nav(
@@ -179,21 +236,83 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 			),
 			Div(
 				Class("flex items-center gap-2"),
+				// Sync button - show if not synced yet
+				g.If(feature.ProviderFeatureID == "",
+					Form(
+						Method("POST"),
+						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync"),
+						Class("inline"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"),
+							lucide.Cloud(Class("size-4")),
+							g.Text("Sync to Provider"),
+						),
+					),
+				),
+				// Re-sync button (when already synced) - pushes to provider
+				g.If(feature.ProviderFeatureID != "",
+					Form(
+						Method("POST"),
+						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync"),
+						Class("inline"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/20"),
+							lucide.CloudUpload(Class("size-4")),
+							g.Text("Re-sync to Provider"),
+						),
+					),
+				),
+				// Pull from provider button (when already synced) - pulls from provider
+				g.If(feature.ProviderFeatureID != "",
+					Form(
+						Method("POST"),
+						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync-from-provider"),
+						Class("inline"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/20"),
+							lucide.CloudDownload(Class("size-4")),
+							g.Text("Sync from Provider"),
+						),
+					),
+				),
 				A(
 					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/edit"),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"),
 					lucide.Pencil(Class("size-4")),
 					g.Text("Edit"),
 				),
-				Form(
-					Method("POST"),
-					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/delete"),
-					g.Attr("onsubmit", "return confirm('Are you sure you want to delete this feature? This action cannot be undone.')"),
-					Button(
-						Type("submit"),
-						Class("inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-slate-800 dark:text-red-400"),
-						lucide.Trash2(Class("size-4")),
-						g.Text("Delete"),
+				g.If(len(planLinks) > 0,
+					// Show disabled delete button with tooltip if feature is in use
+					Div(
+						Class("relative group"),
+						Button(
+							Type("button"),
+							Disabled(),
+							Class("inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-400 cursor-not-allowed dark:border-gray-700 dark:bg-gray-800"),
+							lucide.Trash2(Class("size-4")),
+							g.Text("Delete"),
+						),
+						Div(
+							Class("absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg"),
+							g.Text(fmt.Sprintf("Cannot delete: feature is linked to %d plan(s). Remove from plans first.", len(planLinks))),
+						),
+					),
+				),
+				g.If(len(planLinks) == 0,
+					// Show active delete button if feature is not in use
+					Form(
+						Method("POST"),
+						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/delete"),
+						g.Attr("onsubmit", "return confirm('Are you sure you want to delete this feature? This action cannot be undone.')"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-slate-800 dark:text-red-400"),
+							lucide.Trash2(Class("size-4")),
+							g.Text("Delete"),
+						),
 					),
 				),
 			),
@@ -895,10 +1014,13 @@ func (e *DashboardExtension) HandleDeleteFeature(c forge.Context) error {
 
 	err = e.plugin.featureSvc.Delete(ctx, featureID)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"?error="+err.Error())
+		// URL encode the error message
+		errorMsg := err.Error()
+		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"?error="+errorMsg)
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features")
+	// Success - redirect to features list with success message
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features?success=Feature+deleted+successfully")
 }
 
 // ServePlanFeaturesPage renders the plan features management page

@@ -1375,16 +1375,24 @@ func (a *roleRepoAdapter) ListByOrg(ctx context.Context, orgID *string) ([]mainS
 	return a.repo.ListByOrg(ctx, orgID)
 }
 
-func (a *roleRepoAdapter) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*mainSchema.Role, error) {
-	return a.repo.GetRoleTemplates(ctx, appID)
+func (a *roleRepoAdapter) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*mainSchema.Role, error) {
+	return a.repo.GetRoleTemplates(ctx, appID, envID)
 }
 
-func (a *roleRepoAdapter) GetOwnerRole(ctx context.Context, appID xid.ID) (*mainSchema.Role, error) {
-	return a.repo.GetOwnerRole(ctx, appID)
+func (a *roleRepoAdapter) GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*mainSchema.Role, error) {
+	return a.repo.GetOwnerRole(ctx, appID, envID)
 }
 
-func (a *roleRepoAdapter) GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*mainSchema.Role, error) {
-	return a.repo.GetOrgRoles(ctx, orgID)
+func (a *roleRepoAdapter) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*mainSchema.Role, error) {
+	return a.repo.GetOrgRoles(ctx, orgID, envID)
+}
+
+func (a *roleRepoAdapter) FindByNameAppEnv(ctx context.Context, name string, appID, envID xid.ID) (*mainSchema.Role, error) {
+	return a.repo.FindByNameAppEnv(ctx, name, appID, envID)
+}
+
+func (a *roleRepoAdapter) FindDuplicateRoles(ctx context.Context) ([]mainSchema.Role, error) {
+	return a.repo.FindDuplicateRoles(ctx)
 }
 
 func (a *roleRepoAdapter) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*mainSchema.Role, error) {

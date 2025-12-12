@@ -71,6 +71,12 @@ func (s *Service) DeleteOrganization(ctx context.Context, id, userID xid.ID) err
 	return s.Organization.DeleteOrganization(ctx, id, userID)
 }
 
+// ForceDeleteOrganization deletes an organization without permission checks
+// This should only be called by admin users or in administrative contexts
+func (s *Service) ForceDeleteOrganization(ctx context.Context, id xid.ID) error {
+	return s.Organization.ForceDeleteOrganization(ctx, id)
+}
+
 // =============================================================================
 // Member Operations Delegation
 // =============================================================================

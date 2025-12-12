@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/xid"
@@ -31,6 +32,9 @@ type Service struct {
 	roleRepo RoleRepository // RBAC integration
 	auditSvc *audit.Service
 	config   Config
+	envRepo  EnvironmentRepository  // Environment lookup for prefix generation
+	envCache map[xid.ID]string      // Cache: envID -> prefix string
+	envMutex sync.RWMutex           // Protects envCache
 }
 
 // NewService creates a new API key service
@@ -60,6 +64,7 @@ func NewService(repo Repository, auditSvc *audit.Service, cfg Config) *Service {
 		roleRepo: nil, // Set via SetRoleRepository
 		auditSvc: auditSvc,
 		config:   cfg,
+		envCache: make(map[xid.ID]string), // Initialize environment prefix cache
 	}
 }
 
@@ -67,6 +72,12 @@ func NewService(repo Repository, auditSvc *audit.Service, cfg Config) *Service {
 // This is set after service initialization to avoid circular dependencies
 func (s *Service) SetRoleRepository(roleRepo RoleRepository) {
 	s.roleRepo = roleRepo
+}
+
+// SetEnvironmentRepository sets the environment repository for prefix generation
+// This is set after service initialization to avoid circular dependencies
+func (s *Service) SetEnvironmentRepository(envRepo EnvironmentRepository) {
+	s.envRepo = envRepo
 }
 
 // CreateAPIKey creates a new API key
@@ -93,8 +104,11 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 		return nil, err
 	}
 
-	// Generate prefix for identification (includes key type)
-	prefix := s.generatePrefix(req.KeyType, req.EnvironmentID)
+	// Generate prefix for identification (includes key type and environment)
+	prefix, err := s.generatePrefix(req.KeyType, req.EnvironmentID)
+	if err != nil {
+		return nil, APIKeyCreationFailed(fmt.Errorf("failed to generate prefix: %w", err))
+	}
 
 	// Hash the key for storage
 	keyHash := s.hashKey(key)
@@ -476,24 +490,72 @@ func (s *Service) checkLimits(ctx context.Context, appID, userID xid.ID, orgID *
 	return nil
 }
 
-func (s *Service) generatePrefix(keyType KeyType, envID xid.ID) string {
-	// Generate a random suffix for uniqueness
+func (s *Service) generatePrefix(keyType KeyType, envID xid.ID) (string, error) {
+	// Generate random suffix for uniqueness
 	bytes := make([]byte, 6)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random suffix: %w", err)
+	}
 	suffix := base64.URLEncoding.EncodeToString(bytes)[:8]
 
-	// Determine environment name (could be enhanced with actual env lookup)
-	envName := "prod" // Default to prod
-	// You could add environment name lookup here based on envID
-	// For now, we'll use a simple default
+	// Get environment prefix (with caching)
+	envPrefix, err := s.getEnvironmentPrefix(context.Background(), envID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get environment prefix: %w", err)
+	}
 
-	// Create prefix based on key type
-	// Format: {type}_{env}_{random}
-	// Examples:
-	// - pk_test_a1b2c3d4
-	// - sk_prod_x9y8z7w6
-	// - rk_dev_m3n2o1p0
-	return fmt.Sprintf("%s_%s_%s", keyType, envName, suffix)
+	// Format: {keyType}_{envPrefix}_{random}
+	// Examples: pk_dev_a1b2c3d4, sk_prod_x9y8z7w6, rk_staging_m3n2o1
+	return fmt.Sprintf("%s_%s_%s", keyType, envPrefix, suffix), nil
+}
+
+// getEnvironmentPrefix gets the prefix string for an environment (with caching)
+func (s *Service) getEnvironmentPrefix(ctx context.Context, envID xid.ID) (string, error) {
+	// Check cache first (read lock)
+	s.envMutex.RLock()
+	if prefix, ok := s.envCache[envID]; ok {
+		s.envMutex.RUnlock()
+		return prefix, nil
+	}
+	s.envMutex.RUnlock()
+
+	// Cache miss - lookup environment
+	if s.envRepo == nil {
+		return "", fmt.Errorf("environment repository not configured")
+	}
+
+	env, err := s.envRepo.FindByID(ctx, envID)
+	if err != nil {
+		return "", fmt.Errorf("environment not found: %w", err)
+	}
+
+	// Map environment type to prefix
+	prefix := mapEnvironmentTypeToPrefix(env.Type)
+
+	// Cache result (write lock)
+	s.envMutex.Lock()
+	s.envCache[envID] = prefix
+	s.envMutex.Unlock()
+
+	return prefix, nil
+}
+
+// mapEnvironmentTypeToPrefix converts environment type to prefix string
+func mapEnvironmentTypeToPrefix(envType string) string {
+	switch envType {
+	case schema.EnvironmentTypeDevelopment:
+		return "dev"
+	case schema.EnvironmentTypeProduction:
+		return "prod"
+	case schema.EnvironmentTypeStaging:
+		return "staging"
+	case schema.EnvironmentTypePreview:
+		return "preview"
+	case schema.EnvironmentTypeTest:
+		return "test"
+	default:
+		return "unknown"
+	}
 }
 
 // validateKeyTypeAndScopes validates that the key type and scopes are compatible

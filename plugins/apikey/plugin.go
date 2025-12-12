@@ -149,6 +149,9 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Initialize repository
 	apikeyRepo := repository.NewAPIKeyRepository(db)
 
+	// Get environment repository for prefix generation
+	envRepo := repository.NewEnvironmentRepository(db)
+
 	// Initialize service with rate limiting support
 	serviceCfg := apikey.Config{
 		DefaultRateLimit: p.config.DefaultRateLimit,
@@ -159,6 +162,9 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		KeyLength:        p.config.KeyLength,
 	}
 	p.service = apikey.NewService(apikeyRepo, auditSvc, serviceCfg)
+
+	// Set environment repository for prefix generation
+	p.service.SetEnvironmentRepository(envRepo)
 
 	// Initialize middleware with rate limiting
 	p.middleware = NewMiddleware(p.service, userSvc, rateLimitSvc, p.config)

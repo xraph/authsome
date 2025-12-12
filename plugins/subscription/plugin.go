@@ -285,6 +285,8 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.subRepo,
 		p.planRepo,
 		p.customerRepo,
+		p.customerSvc,
+		p.addOnRepo,
 		p.provider,
 		p.eventRepo,
 		p.subHookRegistry,
@@ -300,7 +302,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.orgService,
 		p.config,
 	)
-	p.featureSvc = service.NewFeatureService(p.featureRepo, p.planRepo, p.eventRepo)
+	p.featureSvc = service.NewFeatureService(p.featureRepo, p.planRepo, p.eventRepo, p.provider)
 	p.featureUsageSvc = service.NewFeatureUsageService(
 		p.featureUsageRepo,
 		p.featureRepo,
@@ -448,6 +450,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("subscription.subscriptions.resume"),
 			forge.WithSummary("Resume subscription"),
 			forge.WithDescription("Resume a paused subscription"),
+			forge.WithTags("Subscription", "Subscriptions"),
+		)
+
+		subGroup.POST("/:id/sync", p.handleSyncSubscription,
+			forge.WithName("subscription.subscriptions.sync"),
+			forge.WithSummary("Sync subscription to provider"),
+			forge.WithDescription("Sync a subscription to the payment provider (Stripe/Paddle)"),
+			forge.WithTags("Subscription", "Subscriptions"),
+		)
+
+		subGroup.POST("/:id/sync-from-provider", p.handleSyncSubscriptionFromProvider,
+			forge.WithName("subscription.subscriptions.sync_from_provider"),
+			forge.WithSummary("Sync subscription from provider"),
+			forge.WithDescription("Pull latest subscription data from payment provider and update local record"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 	}
@@ -661,6 +677,7 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	// Register subscription admin role
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "subscription_admin",
+		DisplayName: "Subscription Administrator",
 		Description: "Can manage all subscription-related resources",
 		Permissions: []string{
 			"manage on subscription_plans",
@@ -854,6 +871,27 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 			forge.WithName("subscription.features.delete"),
 			forge.WithSummary("Delete feature"),
 			forge.WithDescription("Delete a feature"),
+			forge.WithTags("Subscription", "Features"),
+		)
+
+		featureGroup.POST("/:id/sync", p.handleSyncFeature,
+			forge.WithName("subscription.features.sync"),
+			forge.WithSummary("Sync feature to provider"),
+			forge.WithDescription("Manually sync a feature to the payment provider"),
+			forge.WithTags("Subscription", "Features"),
+		)
+
+		featureGroup.POST("/sync-from-provider/:providerId", p.handleSyncFeatureFromProvider,
+			forge.WithName("subscription.features.sync_from_provider"),
+			forge.WithSummary("Sync feature from provider"),
+			forge.WithDescription("Sync a feature from the payment provider"),
+			forge.WithTags("Subscription", "Features"),
+		)
+
+		featureGroup.POST("/sync-all-from-provider", p.handleSyncAllFeaturesFromProvider,
+			forge.WithName("subscription.features.sync_all_from_provider"),
+			forge.WithSummary("Sync all features from provider"),
+			forge.WithDescription("Sync all features from the payment provider for a product"),
 			forge.WithTags("Subscription", "Features"),
 		)
 	}
@@ -1054,6 +1092,18 @@ func (p *Plugin) handleListGrants(c forge.Context) error {
 
 func (p *Plugin) handleRevokeGrant(c forge.Context) error {
 	return p.featureHandlers.HandleRevokeGrant(c)
+}
+
+func (p *Plugin) handleSyncFeature(c forge.Context) error {
+	return p.featureHandlers.HandleSyncFeature(c)
+}
+
+func (p *Plugin) handleSyncFeatureFromProvider(c forge.Context) error {
+	return p.featureHandlers.HandleSyncFeatureFromProvider(c)
+}
+
+func (p *Plugin) handleSyncAllFeaturesFromProvider(c forge.Context) error {
+	return p.featureHandlers.HandleSyncAllFeaturesFromProvider(c)
 }
 
 // Public handler wrappers

@@ -134,14 +134,23 @@ func (s *Service) LoadPolicies(ctx context.Context, repo PolicyRepository) error
 
 // ====== Role Template Management ======
 
-// GetRoleTemplates gets all role templates for an app
-func (s *Service) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error) {
+// GetRoleTemplates gets all role templates for an app and environment
+func (s *Service) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error) {
 	if s.roleRepo == nil {
 		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: roleRepo is nil\n")
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: calling roleRepo.GetRoleTemplates for app %s\n", appID.String())
-	roles, err := s.roleRepo.GetRoleTemplates(ctx, appID)
+	
+	// Validate required parameters
+	if appID.IsNil() {
+		return nil, fmt.Errorf("app_id is required but was nil")
+	}
+	if envID.IsNil() {
+		return nil, fmt.Errorf("environment_id is required but was nil when getting role templates for app %s", appID.String())
+	}
+	
+	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: calling roleRepo.GetRoleTemplates for app %s, env %s\n", appID.String(), envID.String())
+	roles, err := s.roleRepo.GetRoleTemplates(ctx, appID, envID)
 	if err != nil {
 		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: error: %v\n", err)
 		return nil, err
@@ -198,19 +207,37 @@ func (s *Service) GetRoleTemplateWithPermissions(ctx context.Context, roleID xid
 }
 
 // CreateRoleTemplate creates a new role template for an app
-func (s *Service) CreateRoleTemplate(ctx context.Context, appID xid.ID, name, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error) {
+func (s *Service) CreateRoleTemplate(ctx context.Context, appID, envID xid.ID, name, displayName, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error) {
 	if s.roleRepo == nil {
 		return nil, fmt.Errorf("role repository not initialized")
 	}
 
+	// Validate required parameters
+	if appID.IsNil() {
+		return nil, fmt.Errorf("app_id is required but was nil")
+	}
+	if envID.IsNil() {
+		return nil, fmt.Errorf("environment_id is required but was nil for role %s", name)
+	}
+	if name == "" {
+		return nil, fmt.Errorf("role name is required")
+	}
+
+	// Default display name from name if not provided
+	if displayName == "" {
+		displayName = toTitleCase(name)
+	}
+
 	// Create the role template
 	role := &schema.Role{
-		ID:          xid.New(),
-		AppID:       &appID,
-		Name:        name,
-		Description: description,
-		IsTemplate:  true,
-		IsOwnerRole: isOwnerRole,
+		ID:            xid.New(),
+		AppID:         &appID,
+		EnvironmentID: &envID,
+		Name:          name,
+		DisplayName:   displayName,
+		Description:   description,
+		IsTemplate:    true,
+		IsOwnerRole:   isOwnerRole,
 	}
 
 	if err := s.roleRepo.Create(ctx, role); err != nil {
@@ -230,9 +257,17 @@ func (s *Service) CreateRoleTemplate(ctx context.Context, appID xid.ID, name, de
 }
 
 // UpdateRoleTemplate updates an existing role template
-func (s *Service) UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error) {
+func (s *Service) UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, displayName, description string, isOwnerRole bool, permissionIDs []xid.ID) (*schema.Role, error) {
 	if s.roleRepo == nil {
 		return nil, fmt.Errorf("role repository not initialized")
+	}
+
+	// Validate required parameters
+	if roleID.IsNil() {
+		return nil, fmt.Errorf("role_id is required but was nil")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("role name is required")
 	}
 
 	// Get the existing role
@@ -245,9 +280,19 @@ func (s *Service) UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, d
 	if !role.IsTemplate {
 		return nil, fmt.Errorf("role %s is not a template", roleID.String())
 	}
+	
+	// Verify it has an environment_id (should never be nil, but safety check)
+	if role.EnvironmentID == nil || role.EnvironmentID.IsNil() {
+		return nil, fmt.Errorf("role template %s has invalid environment_id", roleID.String())
+	}
 
 	// Update role fields
 	role.Name = name
+	if displayName != "" {
+		role.DisplayName = displayName
+	} else {
+		role.DisplayName = toTitleCase(name)
+	}
 	role.Description = description
 	role.IsOwnerRole = isOwnerRole
 
@@ -285,26 +330,45 @@ func (s *Service) DeleteRoleTemplate(ctx context.Context, roleID xid.ID) error {
 	return s.roleRepo.Delete(ctx, roleID)
 }
 
-// GetOwnerRole gets the role marked as the owner role for an app
-func (s *Service) GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error) {
+// GetOwnerRole gets the role marked as the owner role for an app and environment
+func (s *Service) GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schema.Role, error) {
 	if s.roleRepo == nil {
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	return s.roleRepo.GetOwnerRole(ctx, appID)
+	
+	// Validate required parameters
+	if appID.IsNil() {
+		return nil, fmt.Errorf("app_id is required but was nil")
+	}
+	if envID.IsNil() {
+		return nil, fmt.Errorf("environment_id is required but was nil when getting owner role for app %s", appID.String())
+	}
+	
+	return s.roleRepo.GetOwnerRole(ctx, appID, envID)
 }
 
 // ====== Organization Role Management ======
 
 // BootstrapOrgRoles clones selected role templates for a new organization
-func (s *Service) BootstrapOrgRoles(ctx context.Context, orgID xid.ID, templateIDs []xid.ID, customizations map[xid.ID]*RoleCustomization) error {
+func (s *Service) BootstrapOrgRoles(ctx context.Context, orgID, appID, envID xid.ID, templateIDs []xid.ID, customizations map[xid.ID]*RoleCustomization) error {
 	if s.roleRepo == nil {
 		return fmt.Errorf("role repository not initialized")
 	}
 
+	// Validate required parameters
+	if orgID.IsNil() {
+		return fmt.Errorf("organization_id is required but was nil")
+	}
+	if appID.IsNil() {
+		return fmt.Errorf("app_id is required but was nil")
+	}
+	if envID.IsNil() {
+		return fmt.Errorf("environment_id is required but was nil when bootstrapping roles for org %s", orgID.String())
+	}
+
 	// If no template IDs provided, get all templates and clone them
 	if len(templateIDs) == 0 {
-		// Get platform app ID from first template
-		templates, err := s.roleRepo.GetRoleTemplates(ctx, xid.ID{}) // TODO: pass correct appID
+		templates, err := s.roleRepo.GetRoleTemplates(ctx, appID, envID)
 		if err != nil {
 			return fmt.Errorf("failed to get role templates: %w", err)
 		}
@@ -331,12 +395,21 @@ func (s *Service) BootstrapOrgRoles(ctx context.Context, orgID xid.ID, templateI
 	return nil
 }
 
-// GetOrgRoles gets all roles specific to an organization
-func (s *Service) GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error) {
+// GetOrgRoles gets all roles specific to an organization and environment
+func (s *Service) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error) {
 	if s.roleRepo == nil {
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	return s.roleRepo.GetOrgRoles(ctx, orgID)
+	
+	// Validate required parameters
+	if orgID.IsNil() {
+		return nil, fmt.Errorf("organization_id is required but was nil")
+	}
+	if envID.IsNil() {
+		return nil, fmt.Errorf("environment_id is required but was nil when getting roles for org %s", orgID.String())
+	}
+	
+	return s.roleRepo.GetOrgRoles(ctx, orgID, envID)
 }
 
 // GetOrgRoleWithPermissions gets a role with its permissions loaded
@@ -363,7 +436,7 @@ func (s *Service) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) 
 }
 
 // UpdateOrgRole updates an organization-specific role
-func (s *Service) UpdateOrgRole(ctx context.Context, roleID xid.ID, name, description string, permissionIDs []xid.ID) error {
+func (s *Service) UpdateOrgRole(ctx context.Context, roleID xid.ID, name, displayName, description string, permissionIDs []xid.ID) error {
 	if s.roleRepo == nil {
 		return fmt.Errorf("role repository not initialized")
 	}
@@ -381,6 +454,11 @@ func (s *Service) UpdateOrgRole(ctx context.Context, roleID xid.ID, name, descri
 
 	// Update role fields
 	role.Name = name
+	if displayName != "" {
+		role.DisplayName = displayName
+	} else {
+		role.DisplayName = toTitleCase(name)
+	}
 	role.Description = description
 
 	err = s.roleRepo.Update(ctx, role)
@@ -420,13 +498,13 @@ func (s *Service) DeleteOrgRole(ctx context.Context, roleID xid.ID) error {
 }
 
 // AssignOwnerRole assigns the owner role to a user in an organization
-func (s *Service) AssignOwnerRole(ctx context.Context, userID xid.ID, orgID xid.ID) error {
+func (s *Service) AssignOwnerRole(ctx context.Context, userID xid.ID, orgID xid.ID, envID xid.ID) error {
 	if s.roleRepo == nil || s.userRoleRepo == nil {
 		return fmt.Errorf("repositories not initialized")
 	}
 
-	// Get all org roles
-	roles, err := s.roleRepo.GetOrgRoles(ctx, orgID)
+	// Get all org roles for this environment
+	roles, err := s.roleRepo.GetOrgRoles(ctx, orgID, envID)
 	if err != nil {
 		return fmt.Errorf("failed to get org roles: %w", err)
 	}
@@ -445,7 +523,7 @@ func (s *Service) AssignOwnerRole(ctx context.Context, userID xid.ID, orgID xid.
 	}
 
 	if ownerRole == nil {
-		return fmt.Errorf("owner role not found for organization %s", orgID.String())
+		return fmt.Errorf("owner role not found for organization %s environment %s", orgID.String(), envID.String())
 	}
 
 	// Assign the role to the user
@@ -543,4 +621,16 @@ func (s *Service) GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*sch
 		return nil, fmt.Errorf("role permission repository not initialized")
 	}
 	return s.rolePermissionRepo.GetRolePermissions(ctx, roleID)
+}
+
+// toTitleCase converts a snake_case string to Title Case
+// Example: "workspace_owner" -> "Workspace Owner"
+func toTitleCase(s string) string {
+	words := strings.Split(s, "_")
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
+		}
+	}
+	return strings.Join(words, " ")
 }

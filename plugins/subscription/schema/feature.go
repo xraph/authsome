@@ -14,18 +14,20 @@ type Feature struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_features,alias:sf"`
 
-	ID           xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID        xid.ID                 `json:"appId" bun:"app_id,notnull,type:varchar(20)"`
-	Key          string                 `json:"key" bun:"key,notnull"`                         // Unique per app
-	Name         string                 `json:"name" bun:"name,notnull"`                       // Display name
-	Description  string                 `json:"description" bun:"description"`                 // Feature description
-	Type         string                 `json:"type" bun:"type,notnull"`                       // boolean, limit, unlimited, metered, tiered
-	Unit         string                 `json:"unit" bun:"unit"`                               // "seats", "GB", "API calls", etc.
-	ResetPeriod  string                 `json:"resetPeriod" bun:"reset_period"`                // none, daily, weekly, monthly, yearly, billing_period
-	IsPublic     bool                   `json:"isPublic" bun:"is_public,notnull,default:true"` // Show in pricing pages
-	DisplayOrder int                    `json:"displayOrder" bun:"display_order,notnull,default:0"`
-	Icon         string                 `json:"icon" bun:"icon"` // Icon identifier for UI
-	Metadata     map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	ID                xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
+	AppID             xid.ID                 `json:"appId" bun:"app_id,notnull,type:varchar(20)"`
+	Key               string                 `json:"key" bun:"key,notnull"`                         // Unique per app
+	Name              string                 `json:"name" bun:"name,notnull"`                       // Display name
+	Description       string                 `json:"description" bun:"description"`                 // Feature description
+	Type              string                 `json:"type" bun:"type,notnull"`                       // boolean, limit, unlimited, metered, tiered
+	Unit              string                 `json:"unit" bun:"unit"`                               // "seats", "GB", "API calls", etc.
+	ResetPeriod       string                 `json:"resetPeriod" bun:"reset_period"`                // none, daily, weekly, monthly, yearly, billing_period
+	IsPublic          bool                   `json:"isPublic" bun:"is_public,notnull,default:true"` // Show in pricing pages
+	DisplayOrder      int                    `json:"displayOrder" bun:"display_order,notnull,default:0"`
+	Icon              string                 `json:"icon" bun:"icon"`                  // Icon identifier for UI
+	ProviderFeatureID string                 `json:"providerFeatureId" bun:"provider_feature_id"` // Provider sync ID
+	LastSyncedAt      *time.Time             `json:"lastSyncedAt" bun:"last_synced_at"`           // Last provider sync time
+	Metadata          map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
 
 	// Relations
 	App   *mainschema.App   `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`

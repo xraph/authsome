@@ -7,6 +7,7 @@ import (
 
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
@@ -123,9 +124,19 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return fmt.Errorf("bearer plugin requires session and user services")
 	}
 
+	// Register bearer authentication strategy
+	bearerStrategy := NewBearerStrategy(p.sessionSvc, p.userSvc, p.config, p.logger)
+	if err := authInst.RegisterAuthStrategy(bearerStrategy); err != nil {
+		p.logger.Warn("failed to register bearer strategy",
+			forge.F("error", err.Error()))
+		// Don't fail initialization if strategy registration fails
+		// The middleware handlers can still work independently
+	}
+
 	p.logger.Info("bearer plugin initialized",
 		forge.F("token_prefix", p.config.TokenPrefix),
-		forge.F("validate_issuer", p.config.ValidateIssuer))
+		forge.F("validate_issuer", p.config.ValidateIssuer),
+		forge.F("strategy_registered", true))
 
 	return nil
 }
@@ -135,8 +146,23 @@ func (p *Plugin) ID() string {
 	return "bearer"
 }
 
+// RegisterRoutes registers plugin routes (no-op for bearer - it's middleware-only)
+func (p *Plugin) RegisterRoutes(_ forge.Router) error {
+	return nil
+}
+
+// RegisterHooks registers plugin hooks (no-op for bearer)
+func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error {
+	return nil
+}
+
 // RegisterServiceDecorators registers service decorators (no-op for bearer)
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error {
+	return nil
+}
+
+// Migrate runs plugin migrations (no-op for bearer - no database tables)
+func (p *Plugin) Migrate() error {
 	return nil
 }
 

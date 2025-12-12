@@ -1941,6 +1941,18 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 
 	ctx = contexts.SetAppID(ctx, platformApp.ID)
 
+	// Get default environment for platform app and set in context
+	// This is required for role lookups which are now environment-scoped
+	if h.envService != nil {
+		defaultEnv, err := h.envService.GetDefaultEnvironment(ctx, platformApp.ID)
+		if err == nil && defaultEnv != nil {
+			ctx = contexts.SetEnvironmentID(ctx, defaultEnv.ID)
+			fmt.Printf("[Dashboard] Signup: Environment context set: %s\n", defaultEnv.ID.String())
+		} else {
+			fmt.Printf("[Dashboard] Signup warning: Failed to get default environment: %v\n", err)
+		}
+	}
+
 	// Create user in platform app context
 	fmt.Printf("[Dashboard] Signup: Creating user with email: %s in platform app: %s\n", email, platformApp.ID.String())
 	newUser, err := h.userSvc.Create(ctx, &user.CreateUserRequest{

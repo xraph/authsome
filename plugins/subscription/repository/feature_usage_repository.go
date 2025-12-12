@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
@@ -329,4 +330,239 @@ func (r *featureUsageRepository) GetUsageNeedingReset(ctx context.Context, reset
 		return nil, fmt.Errorf("failed to get usage needing reset: %w", err)
 	}
 	return usages, nil
+}
+
+// GetCurrentUsageSnapshot retrieves all current usage across all organizations for an app
+func (r *featureUsageRepository) GetCurrentUsageSnapshot(ctx context.Context, appID xid.ID) ([]*core.CurrentUsage, error) {
+	type result struct {
+		OrganizationID   xid.ID `bun:"organization_id"`
+		OrganizationName string `bun:"org_name"`
+		FeatureID        xid.ID `bun:"feature_id"`
+		FeatureName      string `bun:"feature_name"`
+		FeatureType      string `bun:"feature_type"`
+		Unit             string `bun:"unit"`
+		CurrentUsage     int64  `bun:"current_usage"`
+		PlanLimit        int64  `bun:"plan_limit"`
+	}
+
+	var results []result
+	err := r.db.NewSelect().
+		Model((*schema.OrganizationFeatureUsage)(nil)).
+		ColumnExpr("sofu.organization_id").
+		ColumnExpr("o.name AS org_name").
+		ColumnExpr("sofu.feature_id").
+		ColumnExpr("sf.name AS feature_name").
+		ColumnExpr("sf.type AS feature_type").
+		ColumnExpr("sf.unit").
+		ColumnExpr("sofu.current_usage").
+		ColumnExpr("COALESCE(spfl.limit_value, -1) AS plan_limit").
+		Join("JOIN subscription_features sf ON sf.id = sofu.feature_id").
+		Join("JOIN organizations o ON o.id = sofu.organization_id").
+		Join("LEFT JOIN subscriptions sub ON sub.organization_id = sofu.organization_id").
+		Join("LEFT JOIN subscription_plan_feature_links spfl ON spfl.plan_id = sub.plan_id AND spfl.feature_id = sofu.feature_id").
+		Where("sf.app_id = ?", appID).
+		Where("sofu.current_usage > 0 OR spfl.limit_value IS NOT NULL").
+		Scan(ctx, &results)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current usage snapshot: %w", err)
+	}
+
+	// Convert to core.CurrentUsage
+	usage := make([]*core.CurrentUsage, len(results))
+	for i, r := range results {
+		percentUsed := 0.0
+		if r.PlanLimit > 0 {
+			percentUsed = float64(r.CurrentUsage) / float64(r.PlanLimit) * 100
+		}
+
+		usage[i] = &core.CurrentUsage{
+			OrganizationID:   r.OrganizationID,
+			OrganizationName: r.OrganizationName,
+			FeatureID:        r.FeatureID,
+			FeatureName:      r.FeatureName,
+			FeatureType:      r.FeatureType,
+			Unit:             r.Unit,
+			CurrentUsage:     r.CurrentUsage,
+			Limit:            r.PlanLimit,
+			PercentUsed:      percentUsed,
+		}
+	}
+
+	return usage, nil
+}
+
+// GetUsageByOrg retrieves usage statistics by organization
+func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID, startDate, endDate time.Time) ([]*core.OrgUsageStats, error) {
+	type result struct {
+		OrgID        xid.ID `bun:"organization_id"`
+		OrgName      string `bun:"org_name"`
+		FeatureID    xid.ID `bun:"feature_id"`
+		FeatureName  string `bun:"feature_name"`
+		FeatureType  string `bun:"feature_type"`
+		Unit         string `bun:"unit"`
+		TotalUsage   int64  `bun:"total_usage"`
+		PlanLimit    int64  `bun:"plan_limit"`
+	}
+
+	var results []result
+	err := r.db.NewSelect().
+		Model((*schema.FeatureUsageLog)(nil)).
+		ColumnExpr("sful.organization_id").
+		ColumnExpr("o.name AS org_name").
+		ColumnExpr("sful.feature_id").
+		ColumnExpr("sf.name AS feature_name").
+		ColumnExpr("sf.type AS feature_type").
+		ColumnExpr("sf.unit").
+		ColumnExpr("SUM(CASE WHEN sful.action = 'consume' THEN sful.quantity ELSE 0 END) AS total_usage").
+		ColumnExpr("COALESCE(spfl.limit_value, -1) AS plan_limit").
+		Join("JOIN subscription_features sf ON sf.id = sful.feature_id").
+		Join("JOIN organizations o ON o.id = sful.organization_id").
+		Join("LEFT JOIN subscriptions sub ON sub.organization_id = sful.organization_id").
+		Join("LEFT JOIN subscription_plan_feature_links spfl ON spfl.plan_id = sub.plan_id AND spfl.feature_id = sful.feature_id").
+		Where("sf.app_id = ?", appID).
+		Where("sful.created_at >= ?", startDate).
+		Where("sful.created_at <= ?", endDate).
+		Group("sful.organization_id, o.name, sful.feature_id, sf.name, sf.type, sf.unit, spfl.limit_value").
+		Order("total_usage DESC").
+		Scan(ctx, &results)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage by org: %w", err)
+	}
+
+	// Convert to core.OrgUsageStats
+	stats := make([]*core.OrgUsageStats, len(results))
+	for i, r := range results {
+		percentUsed := 0.0
+		if r.PlanLimit > 0 {
+			percentUsed = float64(r.TotalUsage) / float64(r.PlanLimit) * 100
+		}
+
+		stats[i] = &core.OrgUsageStats{
+			OrgID:        r.OrgID,
+			OrgName:      r.OrgName,
+			FeatureID:    r.FeatureID,
+			FeatureName:  r.FeatureName,
+			FeatureType:  core.FeatureType(r.FeatureType),
+			Unit:         r.Unit,
+			Usage:        r.TotalUsage,
+			Limit:        r.PlanLimit,
+			PercentUsed:  percentUsed,
+		}
+	}
+
+	return stats, nil
+}
+
+// GetUsageTrends retrieves usage trends over time for a feature
+func (r *featureUsageRepository) GetUsageTrends(ctx context.Context, appID xid.ID, featureID *xid.ID, startDate, endDate time.Time) ([]*core.UsageTrend, error) {
+	type result struct {
+		Date   time.Time `bun:"date"`
+		Usage  int64     `bun:"usage"`
+		Action string    `bun:"action"`
+	}
+
+	var results []result
+	query := r.db.NewSelect().
+		Model((*schema.FeatureUsageLog)(nil)).
+		ColumnExpr("DATE(sful.created_at) AS date").
+		ColumnExpr("SUM(sful.quantity) AS usage").
+		ColumnExpr("sful.action").
+		Join("JOIN subscription_features sf ON sf.id = sful.feature_id").
+		Where("sf.app_id = ?", appID).
+		Where("sful.created_at >= ?", startDate).
+		Where("sful.created_at <= ?", endDate).
+		Group("DATE(sful.created_at), sful.action").
+		Order("date ASC")
+
+	if featureID != nil {
+		query = query.Where("sful.feature_id = ?", *featureID)
+	}
+
+	err := query.Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage trends: %w", err)
+	}
+
+	// Convert to core.UsageTrend
+	trends := make([]*core.UsageTrend, len(results))
+	for i, r := range results {
+		trends[i] = &core.UsageTrend{
+			Date:   r.Date,
+			Usage:  r.Usage,
+			Action: r.Action,
+		}
+	}
+
+	return trends, nil
+}
+
+// GetTopConsumers retrieves top consuming organizations
+func (r *featureUsageRepository) GetTopConsumers(ctx context.Context, appID xid.ID, featureID *xid.ID, startDate, endDate time.Time, limit int) ([]*core.OrgUsageStats, error) {
+	stats, err := r.GetUsageByOrg(ctx, appID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by feature if specified
+	if featureID != nil {
+		filtered := make([]*core.OrgUsageStats, 0)
+		for _, s := range stats {
+			if s.FeatureID == *featureID {
+				filtered = append(filtered, s)
+			}
+		}
+		stats = filtered
+	}
+
+	// Limit results
+	if limit > 0 && len(stats) > limit {
+		stats = stats[:limit]
+	}
+
+	return stats, nil
+}
+
+// GetUsageByFeatureType retrieves usage aggregated by feature type
+func (r *featureUsageRepository) GetUsageByFeatureType(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (map[core.FeatureType]*core.UsageStats, error) {
+	type result struct {
+		FeatureType  string `bun:"feature_type"`
+		TotalUsage   int64  `bun:"total_usage"`
+		TotalOrgs    int    `bun:"total_orgs"`
+	}
+
+	var results []result
+	err := r.db.NewSelect().
+		Model((*schema.FeatureUsageLog)(nil)).
+		ColumnExpr("sf.type AS feature_type").
+		ColumnExpr("SUM(CASE WHEN sful.action = 'consume' THEN sful.quantity ELSE 0 END) AS total_usage").
+		ColumnExpr("COUNT(DISTINCT sful.organization_id) AS total_orgs").
+		Join("JOIN subscription_features sf ON sf.id = sful.feature_id").
+		Where("sf.app_id = ?", appID).
+		Where("sful.created_at >= ?", startDate).
+		Where("sful.created_at <= ?", endDate).
+		Group("sf.type").
+		Scan(ctx, &results)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage by feature type: %w", err)
+	}
+
+	// Convert to map
+	statsMap := make(map[core.FeatureType]*core.UsageStats)
+	for _, r := range results {
+		avgUsage := 0.0
+		if r.TotalOrgs > 0 {
+			avgUsage = float64(r.TotalUsage) / float64(r.TotalOrgs)
+		}
+
+		statsMap[core.FeatureType(r.FeatureType)] = &core.UsageStats{
+			TotalUsage:   r.TotalUsage,
+			TotalOrgs:    r.TotalOrgs,
+			AverageUsage: avgUsage,
+		}
+	}
+
+	return statsMap, nil
 }

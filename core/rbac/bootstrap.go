@@ -15,6 +15,7 @@ import (
 // Plugins register these during Init() to contribute to the platform RBAC system
 type RoleDefinition struct {
 	Name         string   // Role name (e.g., "superadmin", "owner", "admin", "member")
+	DisplayName  string   // Human-readable name (e.g., "Super Administrator")
 	Description  string   // Human-readable description
 	Permissions  []string // Permission expressions: "action on resource" or "* on *"
 	IsPlatform   bool     // Platform-level role (superadmin) vs org-level (owner, admin, member)
@@ -138,6 +139,33 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 	fmt.Printf("[RoleBootstrap] Starting role bootstrap for platform app: %s\n", platformAppID.String())
 	fmt.Printf("[RoleBootstrap] Registered roles: %d\n", len(r.roles))
 
+	// Get the default environment for this app
+	var defaultEnvID xid.ID
+	err := db.NewSelect().
+		Table("environments").
+		Column("id").
+		Where("app_id = ?", platformAppID).
+		Where("is_default = ?", true).
+		Limit(1).
+		Scan(ctx, &defaultEnvID)
+
+	if err != nil {
+		// If no default environment found, get the first environment
+		err = db.NewSelect().
+			Table("environments").
+			Column("id").
+			Where("app_id = ?", platformAppID).
+			Order("created_at ASC").
+			Limit(1).
+			Scan(ctx, &defaultEnvID)
+
+		if err != nil {
+			return fmt.Errorf("no environment found for app %s: %w", platformAppID.String(), err)
+		}
+	}
+
+	fmt.Printf("[RoleBootstrap] Using environment: %s\n", defaultEnvID.String())
+
 	// Resolve role inheritance and build final permission sets
 	resolvedRoles, err := r.resolveInheritance()
 	if err != nil {
@@ -162,7 +190,7 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 
 	// Upsert roles in database
 	for _, roleDef := range resolvedRoles {
-		if err := r.upsertRole(ctx, db, platformAppID, roleDef); err != nil {
+		if err := r.upsertRole(ctx, db, platformAppID, defaultEnvID, roleDef); err != nil {
 			return fmt.Errorf("failed to upsert role %s: %w", roleDef.Name, err)
 		}
 	}
@@ -315,26 +343,41 @@ func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, appID x
 }
 
 // upsertRole creates or updates a role in the database
-func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID, def *RoleDefinition) error {
+func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID xid.ID, def *RoleDefinition) error {
+	// Validate environment ID
+	if envID.IsNil() {
+		return fmt.Errorf("environment_id is required but was nil for role %s", def.Name)
+	}
+
 	// Find existing role
 	var existingRole schema.Role
 	err := db.NewSelect().
 		Model(&existingRole).
 		Where("name = ?", def.Name).
-		Where("app_id IS NULL OR app_id = ?", appID).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Where("organization_id IS NULL").
 		Scan(ctx)
 
 	now := time.Now()
 
+	// Default display name from name if not provided
+	displayName := def.DisplayName
+	if displayName == "" {
+		displayName = toTitleCase(def.Name)
+	}
+
 	if err != nil {
 		// Role doesn't exist - create it
 		newRole := &schema.Role{
-			ID:          xid.New(),
-			AppID:       &appID,
-			Name:        def.Name,
-			Description: def.Description,
-			IsTemplate:  def.IsTemplate,
-			IsOwnerRole: def.IsOwnerRole,
+			ID:            xid.New(),
+			AppID:         &appID,
+			EnvironmentID: &envID,
+			Name:          def.Name,
+			DisplayName:   displayName,
+			Description:   def.Description,
+			IsTemplate:    def.IsTemplate,
+			IsOwnerRole:   def.IsOwnerRole,
 		}
 		newRole.CreatedAt = now
 		newRole.UpdatedAt = now
@@ -347,9 +390,10 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID,
 			return fmt.Errorf("failed to insert role: %w", err)
 		}
 
-		fmt.Printf("[RoleBootstrap]   Created role: %s (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, newRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
+		fmt.Printf("[RoleBootstrap]   Created role: %s (%s) (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, displayName, newRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
 	} else {
 		// Role exists - update it
+		existingRole.DisplayName = displayName
 		existingRole.Description = def.Description
 		existingRole.IsTemplate = def.IsTemplate
 		existingRole.IsOwnerRole = def.IsOwnerRole
@@ -359,7 +403,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID,
 
 		_, err = db.NewUpdate().
 			Model(&existingRole).
-			Column("description", "is_template", "is_owner_role", "updated_at", "updated_by", "version").
+			Column("display_name", "description", "is_template", "is_owner_role", "updated_at", "updated_by", "version").
 			Where("id = ?", existingRole.ID).
 			Exec(ctx)
 
@@ -367,7 +411,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID xid.ID,
 			return fmt.Errorf("failed to update role: %w", err)
 		}
 
-		fmt.Printf("[RoleBootstrap]   Updated role: %s (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, existingRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
+		fmt.Printf("[RoleBootstrap]   Updated role: %s (%s) (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, displayName, existingRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
 	}
 
 	return nil
@@ -412,6 +456,7 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// NOT a template - this is platform-only and cannot be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:        RoleSuperAdmin,
+		DisplayName: "Super Administrator",
 		Description: RoleDescSuperAdmin,
 		IsPlatform:  RoleIsPlatformSuperAdmin,
 		IsTemplate:  false, // Platform-only, not a template
@@ -428,6 +473,7 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// This IS a template that can be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:        RoleOwner,
+		DisplayName: "Owner",
 		Description: RoleDescOwner,
 		IsPlatform:  RoleIsPlatformOwner,
 		IsTemplate:  true, // Available as template for organizations
@@ -450,6 +496,7 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// This IS a template that can be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:         RoleAdmin,
+		DisplayName:  "Administrator",
 		Description:  RoleDescAdmin,
 		IsPlatform:   RoleIsPlatformAdmin,
 		IsTemplate:   true, // Available as template for organizations
@@ -472,6 +519,7 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// This IS a template that can be cloned to organizations
 	if err := registry.RegisterRole(&RoleDefinition{
 		Name:        RoleMember,
+		DisplayName: "Member",
 		Description: RoleDescMember,
 		IsPlatform:  RoleIsPlatformMember,
 		IsTemplate:  true, // Available as template for organizations

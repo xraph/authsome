@@ -17,12 +17,14 @@ import (
 // - API key authentication (pk/sk/rk keys)
 // - Session-based authentication (cookies + bearer tokens)
 // - Dual authentication (both API key and user session)
+// - Pluggable authentication strategies
 type AuthMiddleware struct {
-	apiKeySvc    *apikey.Service
-	sessionSvc   session.ServiceInterface
-	userSvc      user.ServiceInterface
-	config       AuthMiddlewareConfig
-	cookieConfig *session.CookieConfig // For updating session cookies on renewal
+	apiKeySvc        *apikey.Service
+	sessionSvc       session.ServiceInterface
+	userSvc          user.ServiceInterface
+	config           AuthMiddlewareConfig
+	cookieConfig     *session.CookieConfig // For updating session cookies on renewal
+	strategyRegistry *AuthStrategyRegistry  // Pluggable authentication strategies
 }
 
 // AuthMiddlewareConfig configures the authentication middleware behavior
@@ -54,6 +56,7 @@ func NewAuthMiddleware(
 	userSvc user.ServiceInterface,
 	config AuthMiddlewareConfig,
 	cookieConfig *session.CookieConfig,
+	strategyRegistry *AuthStrategyRegistry,
 ) *AuthMiddleware {
 	// Set defaults
 	if config.SessionCookieName == "" {
@@ -80,17 +83,45 @@ func NewAuthMiddleware(
 		cookieConfig = &defaultConfig
 	}
 
-	return &AuthMiddleware{
-		apiKeySvc:    apiKeySvc,
-		sessionSvc:   sessionSvc,
-		userSvc:      userSvc,
-		config:       config,
-		cookieConfig: cookieConfig,
+	// Initialize strategy registry if not provided
+	if strategyRegistry == nil {
+		strategyRegistry = NewAuthStrategyRegistry()
 	}
+
+	middleware := &AuthMiddleware{
+		apiKeySvc:        apiKeySvc,
+		sessionSvc:       sessionSvc,
+		userSvc:          userSvc,
+		config:           config,
+		cookieConfig:     cookieConfig,
+		strategyRegistry: strategyRegistry,
+	}
+
+	// Register built-in strategies
+	middleware.registerBuiltinStrategies()
+
+	return middleware
+}
+
+// registerBuiltinStrategies registers the default authentication strategies
+func (m *AuthMiddleware) registerBuiltinStrategies() {
+	// Register API key strategy (priority 10)
+	apiKeyStrategy := NewAPIKeyStrategy(m.apiKeySvc, m.config.AllowAPIKeyInQuery)
+	_ = m.strategyRegistry.Register(apiKeyStrategy)
+
+	// Register session cookie strategy (priority 30)
+	sessionStrategy := NewSessionStrategy(
+		m.sessionSvc,
+		m.userSvc,
+		m.config.SessionCookieName,
+		m.config.AllowSessionInQuery,
+	)
+	_ = m.strategyRegistry.Register(sessionStrategy)
 }
 
 // Authenticate is the main middleware function that populates auth context
 // This middleware is optional by default - it populates context but doesn't block
+// It tries authentication strategies in priority order
 func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		ctx := c.Request().Context()
@@ -103,51 +134,59 @@ func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 			UserAgent:       c.Request().Header.Get("User-Agent"),
 		}
 
-		// Try API key authentication first
-		apiKeyResult := m.tryAPIKeyAuth(c)
-		if apiKeyResult.Authenticated {
-			authCtx.APIKey = apiKeyResult.APIKey
-			authCtx.APIKeyScopes = apiKeyResult.APIKey.GetAllScopes()
-			authCtx.AppID = apiKeyResult.APIKey.AppID
-			authCtx.EnvironmentID = apiKeyResult.APIKey.EnvironmentID
-			authCtx.OrganizationID = apiKeyResult.APIKey.OrganizationID
-			authCtx.IsAPIKeyAuth = true
-			authCtx.Method = contexts.AuthMethodAPIKey
+		// Try pluggable authentication strategies first
+		strategyAuthCtx := m.tryStrategies(c)
+		if strategyAuthCtx != nil {
+			// Strategy succeeded - merge with base context
+			m.mergeAuthContext(authCtx, strategyAuthCtx)
+		} else {
+			// Fallback to legacy authentication methods for backward compatibility
+			// Try API key authentication first
+			apiKeyResult := m.tryAPIKeyAuth(c)
+			if apiKeyResult.Authenticated {
+				authCtx.APIKey = apiKeyResult.APIKey
+				authCtx.APIKeyScopes = apiKeyResult.APIKey.GetAllScopes()
+				authCtx.AppID = apiKeyResult.APIKey.AppID
+				authCtx.EnvironmentID = apiKeyResult.APIKey.EnvironmentID
+				authCtx.OrganizationID = apiKeyResult.APIKey.OrganizationID
+				authCtx.IsAPIKeyAuth = true
+				authCtx.Method = contexts.AuthMethodAPIKey
 
-			// Load RBAC roles and permissions
-			authCtx.APIKeyRoles = apiKeyResult.Roles
-			authCtx.APIKeyPermissions = apiKeyResult.Permissions
-			authCtx.CreatorPermissions = apiKeyResult.CreatorPermissions
-		}
-
-		// Try session authentication
-		sessionResult := m.trySessionAuth(c)
-		if sessionResult.Authenticated {
-			authCtx.Session = sessionResult.Session
-			authCtx.User = sessionResult.User
-			authCtx.IsUserAuth = true
-
-			// Load user RBAC roles and permissions
-			authCtx.UserRoles = sessionResult.Roles
-			authCtx.UserPermissions = sessionResult.Permissions
-
-			// Update cookie if session was renewed (sliding window)
-			if sessionResult.SessionRenewed && m.cookieConfig != nil && m.cookieConfig.Enabled {
-				// Update cookie with new expiry time
-				_ = session.SetCookie(c, sessionResult.Session.Token, sessionResult.Session.ExpiresAt, m.cookieConfig)
+				// Load RBAC roles and permissions
+				authCtx.APIKeyRoles = apiKeyResult.Roles
+				authCtx.APIKeyPermissions = apiKeyResult.Permissions
+				authCtx.CreatorPermissions = apiKeyResult.CreatorPermissions
 			}
 
-			// Update method
-			if authCtx.IsAPIKeyAuth {
-				authCtx.Method = contexts.AuthMethodBoth
-			} else {
-				authCtx.Method = contexts.AuthMethodSession
-				// Use session context if no API key
-				authCtx.AppID = sessionResult.Session.AppID
-				if sessionResult.Session.EnvironmentID != nil {
-					authCtx.EnvironmentID = *sessionResult.Session.EnvironmentID
+			// Try session authentication
+			sessionResult := m.trySessionAuth(c)
+			if sessionResult.Authenticated {
+				authCtx.Session = sessionResult.Session
+				authCtx.User = sessionResult.User
+				authCtx.IsUserAuth = true
+
+				// Load user RBAC roles and permissions
+				authCtx.UserRoles = sessionResult.Roles
+				authCtx.UserPermissions = sessionResult.Permissions
+
+				// Update cookie if session was renewed (sliding window)
+				if sessionResult.SessionRenewed && m.cookieConfig != nil && m.cookieConfig.Enabled {
+					// Update cookie with new expiry time
+					_ = session.SetCookie(c, sessionResult.Session.Token, sessionResult.Session.ExpiresAt, m.cookieConfig)
 				}
-				authCtx.OrganizationID = sessionResult.Session.OrganizationID
+
+				// Update method
+				if authCtx.IsAPIKeyAuth {
+					authCtx.Method = contexts.AuthMethodBoth
+				} else {
+					authCtx.Method = contexts.AuthMethodSession
+					// Use session context if no API key
+					authCtx.AppID = sessionResult.Session.AppID
+					if sessionResult.Session.EnvironmentID != nil {
+						authCtx.EnvironmentID = *sessionResult.Session.EnvironmentID
+					}
+					authCtx.OrganizationID = sessionResult.Session.OrganizationID
+				}
 			}
 		}
 
@@ -206,6 +245,73 @@ func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 		*c.Request() = *c.Request().WithContext(ctx)
 
 		return next(c)
+	}
+}
+
+// tryStrategies attempts authentication using registered strategies
+// Returns the first successful auth context, or nil if all fail
+func (m *AuthMiddleware) tryStrategies(c forge.Context) *contexts.AuthContext {
+	if m.strategyRegistry == nil {
+		return nil
+	}
+
+	ctx := c.Request().Context()
+	strategies := m.strategyRegistry.List()
+
+	for _, strategy := range strategies {
+		// Try to extract credentials
+		credentials, found := strategy.Extract(c)
+		if !found {
+			continue
+		}
+
+		// Try to authenticate
+		authCtx, err := strategy.Authenticate(ctx, credentials)
+		if err != nil {
+			// Strategy failed, try next one
+			continue
+		}
+
+		// Success! Populate common fields
+		if authCtx.IPAddress == "" {
+			authCtx.IPAddress = extractClientIP(c.Request().RemoteAddr)
+		}
+		if authCtx.UserAgent == "" {
+			authCtx.UserAgent = c.Request().Header.Get("User-Agent")
+		}
+
+		return authCtx
+	}
+
+	return nil
+}
+
+// mergeAuthContext merges strategy-based auth context into the base context
+func (m *AuthMiddleware) mergeAuthContext(base *contexts.AuthContext, strategy *contexts.AuthContext) {
+	base.Method = strategy.Method
+	base.IsAuthenticated = strategy.IsAuthenticated
+	base.IsAPIKeyAuth = strategy.IsAPIKeyAuth
+	base.IsUserAuth = strategy.IsUserAuth
+	base.AppID = strategy.AppID
+	base.EnvironmentID = strategy.EnvironmentID
+	base.OrganizationID = strategy.OrganizationID
+
+	if strategy.APIKey != nil {
+		base.APIKey = strategy.APIKey
+		base.APIKeyScopes = strategy.APIKeyScopes
+		base.APIKeyRoles = strategy.APIKeyRoles
+		base.APIKeyPermissions = strategy.APIKeyPermissions
+		base.CreatorPermissions = strategy.CreatorPermissions
+	}
+
+	if strategy.Session != nil {
+		base.Session = strategy.Session
+	}
+
+	if strategy.User != nil {
+		base.User = strategy.User
+		base.UserRoles = strategy.UserRoles
+		base.UserPermissions = strategy.UserPermissions
 	}
 }
 

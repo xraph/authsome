@@ -33,6 +33,11 @@ type OrganizationOperations interface {
 
 	// DeleteOrganization deletes an organization (owner only)
 	DeleteOrganization(ctx context.Context, id, userID xid.ID) error
+
+	// ForceDeleteOrganization deletes an organization without permission checks
+	// Use this for administrative operations or when permission checks would fail
+	// (e.g., organization has no members). This should be restricted to admin users.
+	ForceDeleteOrganization(ctx context.Context, id xid.ID) error
 }
 
 // MemberOperations defines member management operations

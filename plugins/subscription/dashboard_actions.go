@@ -912,6 +912,108 @@ func (e *DashboardExtension) HandleShowImportForm(c forge.Context) error {
 	return err
 }
 
+// HandleSyncFeature handles syncing a feature to the provider
+func (e *DashboardExtension) HandleSyncFeature(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	featureIDStr := c.Param("featureId")
+	featureID, err := xid.FromString(featureIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid feature ID")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Sync feature to provider
+	err = e.plugin.featureSvc.SyncToProvider(ctx, featureID)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to sync feature to provider: "+err.Error())
+	}
+
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr)
+}
+
+// HandleSyncFeatureFromProvider syncs a feature from the payment provider
+func (e *DashboardExtension) HandleSyncFeatureFromProvider(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	featureIDStr := c.Param("featureId")
+	featureID, err := xid.FromString(featureIDStr)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid feature ID")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Get the existing feature to find its provider feature ID
+	existingFeature, err := e.plugin.featureSvc.GetByID(ctx, featureID)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Feature not found")
+	}
+
+	if existingFeature.ProviderFeatureID == "" {
+		return c.String(http.StatusBadRequest, "Feature is not synced to provider - cannot sync from provider")
+	}
+
+	// Sync feature from provider
+	_, err = e.plugin.featureSvc.SyncFromProvider(ctx, existingFeature.ProviderFeatureID)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to sync feature from provider: "+err.Error())
+	}
+
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr)
+}
+
+// HandleSyncAllFeaturesFromProvider syncs all features from the payment provider
+func (e *DashboardExtension) HandleSyncAllFeaturesFromProvider(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Get product ID from query param
+	productID := c.Query("productId")
+	if productID == "" {
+		return c.String(http.StatusBadRequest, "productId parameter is required")
+	}
+
+	// Sync all features from provider for this product
+	syncedFeatures, err := e.plugin.featureSvc.SyncAllFromProvider(ctx, productID)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to sync features from provider: "+err.Error())
+	}
+
+	// Redirect to features list with success message (features count synced)
+	_ = syncedFeatures // Could show success message with count
+	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features")
+}
+
 // Suppress unused variable warnings
 var _ = func() {
 	var c forge.Context

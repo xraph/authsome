@@ -621,7 +621,7 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID xid.ID) (*SCIMGroup, e
 		ID:          teamID.String(),
 		ExternalID:  mapping.SCIMGroupID,
 		DisplayName: teamName,
-		Meta: &Meta{
+		Meta: &SCIMMeta{
 			ResourceType: "Group",
 			Created:      createdAt,
 			LastModified: updatedAt,
@@ -849,7 +849,7 @@ func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, s
 			Schemas:     []string{SchemaGroup},
 			ID:          teamID.String(),
 			DisplayName: teamName,
-			Meta: &Meta{
+			Meta: &SCIMMeta{
 				ResourceType: "Group",
 				Created:      createdAt,
 				LastModified: updatedAt,
@@ -1040,7 +1040,7 @@ func (s *Service) mapAuthSomeToSCIMUser(authUser *user.User, externalID string) 
 				Type:    "work",
 			},
 		},
-		Meta: &Meta{
+		Meta: &SCIMMeta{
 			ResourceType: "User",
 			Created:      authUser.CreatedAt,
 			LastModified: authUser.UpdatedAt,
@@ -1051,7 +1051,7 @@ func (s *Service) mapAuthSomeToSCIMUser(authUser *user.User, externalID string) 
 	// Parse name from display name if available
 	parts := strings.Fields(authUser.Name)
 	if len(parts) > 0 {
-		scimUser.Name = &Name{
+		scimUser.Name = &SCIMName{
 			Formatted: authUser.Name,
 		}
 		if len(parts) == 1 {

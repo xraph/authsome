@@ -591,6 +591,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// CMS Admin - full access
 	err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "cms_admin",
+		DisplayName: "CMS Administrator",
 		Description: "Full CMS administration access",
 		Permissions: []string{
 			"create on cms_content_types",
@@ -613,6 +614,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// CMS Editor - manage entries only
 	err = roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "cms_editor",
+		DisplayName: "CMS Editor",
 		Description: "Create and manage content entries",
 		Permissions: []string{
 			"read on cms_content_types",
@@ -630,6 +632,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// CMS Author - create and manage own entries
 	err = roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "cms_author",
+		DisplayName: "CMS Author",
 		Description: "Create and manage own content entries",
 		Permissions: []string{
 			"read on cms_content_types",
@@ -645,6 +648,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// CMS Viewer - read only
 	err = roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "cms_viewer",
+		DisplayName: "CMS Viewer",
 		Description: "View content entries",
 		Permissions: []string{
 			"read on cms_content_types",

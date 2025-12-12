@@ -3,12 +3,14 @@ package subscription
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/authsome/plugins/subscription/core"
+	"github.com/xraph/authsome/plugins/subscription/providers/types"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -267,8 +269,18 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 	// Get usage data
 	usageData, _ := e.plugin.usageSvc.GetCurrentPeriodUsage(ctx, subID)
 
-	// Get recent invoices
-	invoices, _, _ := e.plugin.invoiceSvc.List(ctx, nil, &subID, "", 1, 5)
+	// Get recent invoices - fetch directly from provider on-demand
+	var invoices []*core.Invoice
+	if sub.ProviderSubID != "" && e.plugin.provider != nil {
+		providerInvoices, err := e.plugin.provider.ListSubscriptionInvoices(ctx, sub.ProviderSubID, 5)
+		if err == nil {
+			invoices = convertProviderInvoicesToCore(providerInvoices)
+		}
+	}
+	// Fallback to local if provider fetch fails or no provider ID
+	if len(invoices) == 0 {
+		invoices, _, _ = e.plugin.invoiceSvc.List(ctx, nil, &subID, "", 1, 5)
+	}
 
 	planName := "-"
 	if sub.Plan != nil {
@@ -294,11 +306,48 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 					Class("flex items-center gap-3"),
 					H1(Class("text-3xl font-bold text-slate-900 dark:text-white"), g.Text("Subscription Details")),
 					e.subscriptionStatusBadge(sub),
+					e.subscriptionSyncStatusBadge(sub),
 				),
 				P(Class("mt-2 text-slate-600 dark:text-gray-400"), g.Text("Plan: "+planName)),
 			),
 			Div(
 				Class("flex gap-2"),
+				// Sync TO provider button - show if not synced yet
+				g.If(sub.ProviderSubID == "",
+					Form(
+						Method("POST"),
+						Action(basePath+"/subscription/subscriptions/"+sub.ID.String()+"/sync"),
+						Class("inline"),
+						g.Attr("hx-post", basePath+"/subscription/subscriptions/"+sub.ID.String()+"/sync"),
+						g.Attr("hx-target", "body"),
+						g.Attr("hx-swap", "none"),
+						g.Attr("hx-on::after-request", "location.reload()"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"),
+							lucide.CloudUpload(Class("size-4")),
+							g.Text("Sync to Provider"),
+						),
+					),
+				),
+				// Sync FROM provider button - show if already synced
+				g.If(sub.ProviderSubID != "",
+					Form(
+						Method("POST"),
+						Action(basePath+"/subscription/subscriptions/"+sub.ID.String()+"/sync-from-provider"),
+						Class("inline"),
+						g.Attr("hx-post", basePath+"/subscription/subscriptions/"+sub.ID.String()+"/sync-from-provider"),
+						g.Attr("hx-target", "body"),
+						g.Attr("hx-swap", "none"),
+						g.Attr("hx-on::after-request", "location.reload()"),
+						Button(
+							Type("submit"),
+							Class("inline-flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/20"),
+							lucide.CloudDownload(Class("size-4")),
+							g.Text("Pull from Provider"),
+						),
+					),
+				),
 				g.If(sub.Status == "active" || sub.Status == "trialing",
 					Form(
 						Method("POST"),
@@ -342,14 +391,61 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 				),
 				Div(
 					Class("px-6 py-4 space-y-4"),
-					detailRow("Subscription ID", sub.ID.String()),
-					detailRow("Organization ID", sub.OrganizationID.String()),
-					detailRow("Status", string(sub.Status)),
-					detailRow("Current Period Start", sub.CurrentPeriodStart.Format("Jan 2, 2006")),
-					detailRow("Current Period End", sub.CurrentPeriodEnd.Format("Jan 2, 2006")),
-					g.If(!sub.TrialEnd.IsZero(), detailRow("Trial Ends", sub.TrialEnd.Format("Jan 2, 2006"))),
-					g.If(!sub.CanceledAt.IsZero(), detailRow("Canceled At", sub.CanceledAt.Format("Jan 2, 2006"))),
-					detailRow("Provider Subscription ID", stringOrDash(sub.ProviderSubID)),
+					g.Group(func() []g.Node {
+						nodes := []g.Node{
+							detailRow("Subscription ID", sub.ID.String()),
+							detailRow("Organization ID", sub.OrganizationID.String()),
+							detailRow("Status", string(sub.Status)),
+							detailRow("Current Period Start", sub.CurrentPeriodStart.Format("Jan 2, 2006")),
+							detailRow("Current Period End", sub.CurrentPeriodEnd.Format("Jan 2, 2006")),
+						}
+						if sub.TrialEnd != nil && !sub.TrialEnd.IsZero() {
+							nodes = append(nodes, detailRow("Trial Ends", sub.TrialEnd.Format("Jan 2, 2006")))
+						}
+						if sub.CanceledAt != nil && !sub.CanceledAt.IsZero() {
+							nodes = append(nodes, detailRow("Canceled At", sub.CanceledAt.Format("Jan 2, 2006")))
+						}
+						return nodes
+					}()),
+					Div(
+						Class("flex items-center justify-between py-3 border-t border-slate-200 dark:border-gray-800"),
+						Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Provider Subscription ID")),
+						Div(
+							Class("flex items-center gap-2"),
+							Span(Class("text-sm text-slate-900 dark:text-white"), g.Text(stringOrDash(sub.ProviderSubID))),
+							g.If(sub.ProviderSubID != "",
+								Div(
+									Class("flex gap-1"),
+									// Sync FROM provider button
+									Form(
+										Method("POST"),
+										Action(basePath+"/subscription/subscriptions/"+sub.ID.String()+"/sync-from-provider"),
+										Class("inline"),
+										g.Attr("hx-post", basePath+"/subscription/subscriptions/"+sub.ID.String()+"/sync-from-provider"),
+										g.Attr("hx-target", "body"),
+										g.Attr("hx-swap", "none"),
+										g.Attr("hx-on::after-request", "location.reload()"),
+										Button(
+											Type("submit"),
+											Class("inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"),
+											g.Attr("title", "Pull latest data from payment provider"),
+											lucide.CloudDownload(Class("size-3")),
+											g.Text("Pull"),
+										),
+									),
+									// View in provider button
+									A(
+										Href("https://dashboard.stripe.com/subscriptions/"+sub.ProviderSubID),
+										Target("_blank"),
+										Class("inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800"),
+										g.Attr("title", "View in Stripe dashboard"),
+										lucide.ExternalLink(Class("size-3")),
+										g.Text("Stripe"),
+									),
+								),
+							),
+						),
+					),
 				),
 			),
 			// Usage (if applicable)
@@ -361,10 +457,10 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 				),
 				Div(
 					Class("px-6 py-4"),
-					g.If(usageData == nil || len(usageData) == 0,
+					g.If(len(usageData) == 0,
 						P(Class("text-slate-500 dark:text-gray-400"), g.Text("No usage data available")),
 					),
-					g.If(usageData != nil && len(usageData) > 0,
+					g.If(len(usageData) > 0,
 						e.renderUsageDataList(usageData),
 					),
 				),
@@ -693,6 +789,47 @@ func stringOrDash(s string) string {
 	return s
 }
 
+// convertProviderInvoicesToCore converts provider invoices to core invoice format for display
+func convertProviderInvoicesToCore(providerInvs []*types.ProviderInvoice) []*core.Invoice {
+	if providerInvs == nil {
+		return []*core.Invoice{}
+	}
+
+	result := make([]*core.Invoice, len(providerInvs))
+	for i, inv := range providerInvs {
+		// Parse ID as xid (or generate a new one for display purposes)
+		invoiceID := xid.New() // Use generated ID for display since provider IDs may not be xid format
+
+		// Convert status string to core status type
+		status := core.InvoiceStatusDraft
+		switch inv.Status {
+		case "open":
+			status = core.InvoiceStatusOpen
+		case "paid":
+			status = core.InvoiceStatusPaid
+		case "void":
+			status = core.InvoiceStatusVoid
+		case "uncollectible":
+			status = core.InvoiceStatusUncollectible
+		}
+
+		result[i] = &core.Invoice{
+			ID:             invoiceID,
+			Number:         inv.ID,      // Use provider ID as invoice number for display
+			SubscriptionID: xid.NilID(), // We don't have the local subscription ID
+			Status:         status,
+			Currency:       inv.Currency,
+			Total:          inv.Total,
+			Subtotal:       inv.Subtotal,
+			Tax:            inv.Tax,
+			AmountDue:      inv.AmountDue,
+			AmountPaid:     inv.AmountPaid,
+			CreatedAt:      time.Unix(inv.PeriodStart, 0),
+		}
+	}
+	return result
+}
+
 func boolToYesNo(b bool) string {
 	if b {
 		return "Yes"
@@ -767,6 +904,22 @@ func (e *DashboardExtension) renderUsageDataList(usageData map[string]int64) g.N
 		))
 	}
 	return Div(g.Group(items))
+}
+
+func (e *DashboardExtension) subscriptionSyncStatusBadge(sub *core.Subscription) g.Node {
+	if sub.ProviderSubID == "" {
+		return Span(
+			Class("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400"),
+			lucide.CloudOff(Class("size-3")),
+			g.Text("Not Synced"),
+		)
+	}
+
+	return Span(
+		Class("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"),
+		lucide.Cloud(Class("size-3")),
+		g.Text("Synced"),
+	)
 }
 
 func (e *DashboardExtension) renderInvoicesList(invoices []*core.Invoice, currentApp *app.App, basePath string) g.Node {

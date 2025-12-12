@@ -87,13 +87,13 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 
 	// Bootstrap roles from templates if RBAC service is available
 	if s.rbacSvc != nil {
-		err = s.rbacSvc.BootstrapOrgRoles(ctx, org.ID, req.RoleTemplateIDs, req.RoleCustomizations)
+		err = s.rbacSvc.BootstrapOrgRoles(ctx, org.ID, appID, environmentID, req.RoleTemplateIDs, req.RoleCustomizations)
 		if err != nil {
 			// Log error but don't fail org creation - roles can be added later
 			fmt.Printf("[OrgService] Warning: failed to bootstrap org roles for %s: %v\n", org.ID.String(), err)
 		} else {
 			// Auto-assign owner role to creator
-			err = s.rbacSvc.AssignOwnerRole(ctx, creatorUserID, org.ID)
+			err = s.rbacSvc.AssignOwnerRole(ctx, creatorUserID, org.ID, environmentID)
 			if err != nil {
 				// Log error but don't fail - owner can be assigned manually
 				fmt.Printf("[OrgService] Warning: failed to assign owner role to creator for %s: %v\n", org.ID.String(), err)
@@ -179,6 +179,23 @@ func (s *OrganizationService) DeleteOrganization(ctx context.Context, id, userID
 	// Note: Authorization check (IsOwner) should be performed by the caller
 	// This keeps the organization service focused on organization operations
 
+	return s.repo.Delete(ctx, id)
+}
+
+// ForceDeleteOrganization deletes an organization without any permission checks
+// This is intended for administrative operations, cleanup tasks, or scenarios where
+// permission checks would fail (e.g., organization has no members).
+//
+// WARNING: This bypasses all authorization checks. Ensure this is only called by
+// admin users or in controlled administrative contexts.
+func (s *OrganizationService) ForceDeleteOrganization(ctx context.Context, id xid.ID) error {
+	// Verify organization exists
+	_, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return OrganizationNotFound()
+	}
+
+	// Delete without permission checks
 	return s.repo.Delete(ctx, id)
 }
 

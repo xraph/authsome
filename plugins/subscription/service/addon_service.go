@@ -137,7 +137,22 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 		}
 	}
 
-	return s.schemaToCore(addon, req.Features, req.PriceTiers), nil
+	// Sync to provider
+	coreAddOn := s.schemaToCore(addon, req.Features, req.PriceTiers)
+	if s.provider != nil {
+		if err := s.provider.SyncAddOn(ctx, coreAddOn); err != nil {
+			// Log warning but don't fail - can sync later manually
+			// addon.ProviderPriceID will be empty until manual sync
+		} else {
+			// Update with provider price ID if sync succeeded
+			if coreAddOn.ProviderPriceID != "" {
+				addon.ProviderPriceID = coreAddOn.ProviderPriceID
+				s.repo.Update(ctx, addon)
+			}
+		}
+	}
+
+	return coreAddOn, nil
 }
 
 // Update updates an existing add-on

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/schema"
@@ -49,10 +50,23 @@ func (s *MemberService) getRoleIDByName(ctx context.Context, appID xid.ID, roleN
 	// Map member role names to RBAC role names
 	rbacRoleName := s.mapMemberRoleToRBAC(roleName)
 
-	// Query roles table
-	role, err := s.roleRepo.FindByNameAndApp(ctx, rbacRoleName, appID)
+	// Get environment ID from context
+	envID, ok := contexts.GetEnvironmentID(ctx)
+	if !ok || envID.IsNil() {
+		// If no environment in context, use the deprecated method as fallback
+		// This maintains backward compatibility but should be fixed at the call site
+		fmt.Printf("[MemberService] WARNING: Environment not in context for app %s, using deprecated FindByNameAndApp\n", appID.String())
+		role, err := s.roleRepo.FindByNameAndApp(ctx, rbacRoleName, appID)
+		if err != nil {
+			return xid.NilID(), fmt.Errorf("role %s not found for app %s: %w", rbacRoleName, appID, err)
+		}
+		return role.ID, nil
+	}
+
+	// Query roles table with environment
+	role, err := s.roleRepo.FindByNameAppEnv(ctx, rbacRoleName, appID, envID)
 	if err != nil {
-		return xid.NilID(), fmt.Errorf("role %s not found for app %s: %w", rbacRoleName, appID, err)
+		return xid.NilID(), fmt.Errorf("role %s not found for app %s env %s: %w", rbacRoleName, appID, envID, err)
 	}
 	return role.ID, nil
 }
@@ -99,10 +113,25 @@ func (s *MemberService) syncRoleToRBAC(ctx context.Context, userID, appID xid.ID
 // assignSuperAdminRole assigns the superadmin role to a user in addition to their member role
 // This gives them full system access as the platform owner
 func (s *MemberService) assignSuperAdminRole(ctx context.Context, userID, appID xid.ID) error {
-	// Get superadmin role ID
-	superAdminRole, err := s.roleRepo.FindByNameAndApp(ctx, rbac.RoleSuperAdmin, appID)
+	// Get environment ID from context
+	envID, ok := contexts.GetEnvironmentID(ctx)
+	if !ok || envID.IsNil() {
+		// Fallback to deprecated method with warning
+		fmt.Printf("[MemberService] WARNING: Environment not in context for superadmin assignment, using deprecated method\n")
+		superAdminRole, err := s.roleRepo.FindByNameAndApp(ctx, rbac.RoleSuperAdmin, appID)
+		if err != nil {
+			return fmt.Errorf("superadmin role not found: %w", err)
+		}
+		if err := s.userRoleRepo.Assign(ctx, userID, superAdminRole.ID, appID); err != nil {
+			return fmt.Errorf("failed to assign superadmin role: %w", err)
+		}
+		return nil
+	}
+
+	// Get superadmin role ID with environment
+	superAdminRole, err := s.roleRepo.FindByNameAppEnv(ctx, rbac.RoleSuperAdmin, appID, envID)
 	if err != nil {
-		return fmt.Errorf("superadmin role not found: %w", err)
+		return fmt.Errorf("superadmin role not found for app %s env %s: %w", appID, envID, err)
 	}
 
 	// Assign superadmin role (in addition to owner role from syncRoleToRBAC)

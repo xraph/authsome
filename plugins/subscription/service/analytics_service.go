@@ -2,191 +2,335 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/repository"
+	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// AnalyticsService handles billing analytics and metrics
+// AnalyticsService handles analytics and metrics calculations
 type AnalyticsService struct {
-	repo     repository.AnalyticsRepository
-	subRepo  repository.SubscriptionRepository
-	planRepo repository.PlanRepository
+	analyticsRepo repository.AnalyticsRepository
+	subRepo       repository.SubscriptionRepository
+	planRepo      repository.PlanRepository
 }
 
 // NewAnalyticsService creates a new analytics service
-func NewAnalyticsService(repo repository.AnalyticsRepository, subRepo repository.SubscriptionRepository, planRepo repository.PlanRepository) *AnalyticsService {
+func NewAnalyticsService(
+	analyticsRepo repository.AnalyticsRepository,
+	subRepo repository.SubscriptionRepository,
+	planRepo repository.PlanRepository,
+) *AnalyticsService {
 	return &AnalyticsService{
-		repo:     repo,
-		subRepo:  subRepo,
-		planRepo: planRepo,
+		analyticsRepo: analyticsRepo,
+		subRepo:       subRepo,
+		planRepo:      planRepo,
 	}
 }
 
-// GetDashboardMetrics returns dashboard metrics for an app
-func (s *AnalyticsService) GetDashboardMetrics(ctx context.Context, appID xid.ID, currency string) (*core.DashboardMetrics, error) {
-	if currency == "" {
-		currency = core.CurrencyUSD
+// GetDashboardMetrics calculates comprehensive dashboard metrics
+func (s *AnalyticsService) GetDashboardMetrics(ctx context.Context, appID xid.ID, startDate, endDate time.Time, currency string) (*core.DashboardMetrics, error) {
+	// Get all subscriptions for the app
+	subs, _, err := s.subRepo.List(ctx, &repository.SubscriptionFilter{
+		AppID: &appID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
-	// Stub values - would need proper calculation
+	var totalMRR int64
+	var activeCount int
+	var trialingCount int
+	var newMRR int64
+	var expansionMRR int64
+	var churnedMRR int64
+
+	// Track subscriptions at period start for churn calculation
+	var activeAtStart int
+	var churnedCount int
+
+	for _, sub := range subs {
+		// Skip non-matching currency
+		if sub.Plan != nil && sub.Plan.Currency != currency {
+			continue
+		}
+
+		// Calculate MRR for active subscriptions
+		if sub.Status == "active" {
+			activeCount++
+			mrr := s.calculateSubMRR(sub)
+			totalMRR += mrr
+
+			// Check if created in period (new MRR)
+			if sub.CreatedAt.After(startDate) && sub.CreatedAt.Before(endDate) {
+				newMRR += mrr
+			}
+		}
+
+		// Count trialing subscriptions
+		if sub.Status == "trialing" {
+			trialingCount++
+		}
+
+		// Track churn
+		if sub.Status == "canceled" || sub.Status == "cancelled" {
+			// If was active at start and canceled in period
+			if sub.CreatedAt.Before(startDate) {
+				activeAtStart++
+			}
+			if sub.CanceledAt != nil && sub.CanceledAt.After(startDate) && sub.CanceledAt.Before(endDate) {
+				churnedCount++
+				churnedMRR += s.calculateSubMRR(sub)
+			}
+		}
+	}
+
+	// Calculate ARR
+	totalARR := totalMRR * 12
+
+	// Calculate churn rate
+	var churnRate float64
+	if activeAtStart > 0 {
+		churnRate = float64(churnedCount) / float64(activeAtStart) * 100
+	}
+
+	// Calculate MRR growth (comparing to previous period)
+	prevStartDate := startDate.AddDate(0, 0, -int(endDate.Sub(startDate).Hours()/24))
+	prevMetrics, _ := s.GetDashboardMetrics(ctx, appID, prevStartDate, startDate, currency)
+	var mrrGrowth float64
+	if prevMetrics != nil && prevMetrics.TotalMRR > 0 {
+		mrrGrowth = float64(totalMRR-prevMetrics.TotalMRR) / float64(prevMetrics.TotalMRR) * 100
+	}
+
+	// Calculate subscription growth
+	var subGrowth float64
+	if prevMetrics != nil && prevMetrics.ActiveSubscriptions > 0 {
+		subGrowth = float64(activeCount-prevMetrics.ActiveSubscriptions) / float64(prevMetrics.ActiveSubscriptions) * 100
+	}
+
 	return &core.DashboardMetrics{
-		TotalMRR:              0,
-		TotalARR:              0,
-		ActiveSubscriptions:   0,
-		TrialingSubscriptions: 0,
-		MRRGrowth:             0,
+		TotalMRR:              totalMRR,
+		TotalARR:              totalARR,
+		ActiveSubscriptions:   activeCount,
+		TrialingSubscriptions: trialingCount,
+		MRRGrowth:             mrrGrowth,
+		SubscriptionGrowth:    subGrowth,
+		ChurnRate:             churnRate,
+		NewMRR:                newMRR,
+		ExpansionMRR:          expansionMRR,
+		ChurnedMRR:            churnedMRR,
 		Currency:              currency,
 		AsOf:                  time.Now(),
 	}, nil
 }
 
-// GetMRRBreakdown returns MRR breakdown for a date range
-func (s *AnalyticsService) GetMRRBreakdown(ctx context.Context, appID xid.ID, startDate, endDate time.Time, currency string) ([]*core.MRRBreakdown, error) {
-	return s.repo.GetMRRHistory(ctx, appID, startDate, endDate, currency)
-}
-
-// GetChurnAnalysis returns churn analysis for a period
-func (s *AnalyticsService) GetChurnAnalysis(ctx context.Context, appID xid.ID, period core.MetricPeriod, startDate, endDate time.Time, currency string) (*core.ChurnAnalysis, error) {
-	summary, err := s.repo.GetMovementSummary(ctx, appID, startDate, endDate, currency)
-	if err != nil {
-		return nil, err
+// GetMRRHistory returns MRR breakdown over time
+func (s *AnalyticsService) GetMRRHistory(ctx context.Context, appID xid.ID, startDate, endDate time.Time, currency string) ([]*core.MRRBreakdown, error) {
+	// Get stored MRR history from analytics repository
+	history, err := s.analyticsRepo.GetMRRHistory(ctx, appID, startDate, endDate, currency)
+	if err == nil && len(history) > 0 {
+		return history, nil
 	}
 
-	analysis := &core.ChurnAnalysis{
-		Period:            period,
-		StartDate:         startDate,
-		EndDate:           endDate,
-		CustomersAtStart:  0,
-		CustomersAtEnd:    0,
-		CustomersChurned:  summary.ChurnCount,
-		CustomerChurnRate: 0,
-		MRRAtStart:        0,
-		MRRAtEnd:          0,
-		MRRChurned:        summary.ChurnedMRR,
-		Currency:          currency,
-		ChurnByReason:     make(map[string]int),
-		ChurnByPlan:       make(map[string]int),
-	}
+	// If no stored history, calculate it
+	var breakdown []*core.MRRBreakdown
 
-	return analysis, nil
-}
-
-// GetCohortAnalysis returns cohort retention analysis
-func (s *AnalyticsService) GetCohortAnalysis(ctx context.Context, appID xid.ID, req *core.GetCohortAnalysisRequest) (*core.CohortAnalysisResponse, error) {
-	cohorts, err := s.repo.ListCohorts(ctx, appID, req.StartMonth, req.NumMonths)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert from slice of pointers to slice of values
-	cohortValues := make([]core.CohortAnalysis, len(cohorts))
-	for i, c := range cohorts {
-		cohortValues[i] = *c
-	}
-
-	return &core.CohortAnalysisResponse{
-		Cohorts:  cohortValues,
-		Currency: req.Currency,
-	}, nil
-}
-
-// GetRevenueByPlan returns revenue breakdown by plan
-func (s *AnalyticsService) GetRevenueByPlan(ctx context.Context, appID xid.ID, currency string) ([]*core.RevenueByPlan, error) {
-	filter := &repository.PlanFilter{
-		AppID: &appID,
-	}
-	plans, _, err := s.planRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]*core.RevenueByPlan, 0)
-
-	for _, plan := range plans {
-		result = append(result, &core.RevenueByPlan{
-			PlanID:            plan.ID,
-			PlanName:          plan.Name,
-			PlanSlug:          plan.Slug,
-			ActiveSubscribers: 0,
-			MRR:               0,
-			ARR:               0,
-			PercentOfTotal:    0,
-			Currency:          currency,
+	// Calculate for each day in the range
+	for d := startDate; d.Before(endDate); d = d.AddDate(0, 0, 1) {
+		nextDay := d.AddDate(0, 0, 1)
+		
+		// Get subscriptions active on this day
+		subs, _, err := s.subRepo.List(ctx, &repository.SubscriptionFilter{
+			AppID:  &appID,
+			Status: "active",
 		})
+		if err != nil {
+			continue
+		}
+
+		var totalMRR int64
+		var newMRR int64
+		var churnedMRR int64
+
+		for _, sub := range subs {
+			if sub.Plan != nil && sub.Plan.Currency != currency {
+				continue
+			}
+
+			mrr := s.calculateSubMRR(sub)
+
+			// Total MRR for active subs on this day
+			if sub.Status == "active" && sub.CreatedAt.Before(nextDay) {
+				if sub.CanceledAt == nil || sub.CanceledAt.After(d) {
+					totalMRR += mrr
+				}
+			}
+
+			// New MRR created on this day
+			if sub.CreatedAt.Year() == d.Year() && sub.CreatedAt.Month() == d.Month() && sub.CreatedAt.Day() == d.Day() {
+				newMRR += mrr
+			}
+
+			// Churned MRR on this day
+			if sub.CanceledAt != nil {
+				if sub.CanceledAt.Year() == d.Year() && sub.CanceledAt.Month() == d.Month() && sub.CanceledAt.Day() == d.Day() {
+					churnedMRR += mrr
+				}
+			}
+		}
+
+		breakdown = append(breakdown, &core.MRRBreakdown{
+			Date:         d,
+			Currency:     currency,
+			TotalMRR:     totalMRR,
+			NewMRR:       newMRR,
+			ChurnedMRR:   churnedMRR,
+			NetNewMRR:    newMRR - churnedMRR,
+		})
+	}
+
+	return breakdown, nil
+}
+
+// GetRevenueByOrg returns revenue breakdown by organization
+func (s *AnalyticsService) GetRevenueByOrg(ctx context.Context, appID xid.ID, startDate, endDate time.Time) ([]*core.OrgRevenue, error) {
+	// Get all active subscriptions for the app
+	subs, _, err := s.subRepo.List(ctx, &repository.SubscriptionFilter{
+		AppID: &appID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
+	}
+
+	orgRevenueMap := make(map[xid.ID]*core.OrgRevenue)
+
+	for _, sub := range subs {
+		// Only include active and trialing subscriptions
+		if sub.Status != "active" && sub.Status != "trialing" {
+			continue
+		}
+
+		mrr := s.calculateSubMRR(sub)
+		arr := mrr * 12
+
+		if existing, ok := orgRevenueMap[sub.OrganizationID]; ok {
+			existing.MRR += mrr
+			existing.ARR += arr
+		} else {
+			orgName := "Unknown"
+			if sub.Organization != nil {
+				orgName = sub.Organization.Name
+			}
+
+			planName := "Unknown"
+			planID := xid.NilID()
+			if sub.Plan != nil {
+				planName = sub.Plan.Name
+				planID = sub.Plan.ID
+			}
+
+			orgRevenueMap[sub.OrganizationID] = &core.OrgRevenue{
+				OrgID:    sub.OrganizationID,
+				OrgName:  orgName,
+				MRR:      mrr,
+				ARR:      arr,
+				PlanID:   planID,
+				PlanName: planName,
+				Status:   sub.Status,
+			}
+		}
+	}
+
+	// Convert map to slice
+	result := make([]*core.OrgRevenue, 0, len(orgRevenueMap))
+	for _, rev := range orgRevenueMap {
+		result = append(result, rev)
 	}
 
 	return result, nil
 }
 
-// GetTrialMetrics returns trial conversion metrics
-func (s *AnalyticsService) GetTrialMetrics(ctx context.Context, appID xid.ID, period core.MetricPeriod, startDate, endDate time.Time) (*core.TrialMetrics, error) {
-	return &core.TrialMetrics{
-		Period:          period,
-		TrialsStarted:   0,
-		TrialsConverted: 0,
-		TrialsExpired:   0,
-		TrialsActive:    0,
-		ConversionRate:  0,
-	}, nil
-}
-
-// RecordMovement records a subscription movement event
-func (s *AnalyticsService) RecordMovement(ctx context.Context, movement *core.SubscriptionMovement) error {
-	if movement.ID.IsNil() {
-		movement.ID = xid.New()
-	}
-	movement.CreatedAt = time.Now()
-	if movement.OccurredAt.IsZero() {
-		movement.OccurredAt = time.Now()
-	}
-
-	return s.repo.CreateMovement(ctx, movement)
-}
-
-// GetMetrics returns billing metrics for a date range
-func (s *AnalyticsService) GetMetrics(ctx context.Context, appID xid.ID, req *core.GetMetricsRequest) (*core.MetricsResponse, error) {
-	metrics, err := s.repo.ListMetrics(ctx, appID, req.MetricTypes, req.Period, req.StartDate, req.EndDate)
+// GetChurnRate calculates churn rate for the period
+func (s *AnalyticsService) GetChurnRate(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (float64, error) {
+	metrics, err := s.GetDashboardMetrics(ctx, appID, startDate, endDate, "USD")
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	// Convert from slice of pointers to slice of values
-	metricValues := make([]core.BillingMetric, len(metrics))
-	for i, m := range metrics {
-		metricValues[i] = *m
-	}
-
-	return &core.MetricsResponse{
-		Metrics:   metricValues,
-		StartDate: req.StartDate,
-		EndDate:   req.EndDate,
-		Currency:  req.Currency,
-	}, nil
+	return metrics.ChurnRate, nil
 }
 
-// CalculateAndStoreDailyMetrics calculates and stores daily metrics
-// This would typically be called by a scheduled job
-func (s *AnalyticsService) CalculateAndStoreDailyMetrics(ctx context.Context, appID xid.ID, date time.Time, currency string) error {
-	// Stub - would calculate actual metrics
-	mrrMetric := &core.BillingMetric{
-		ID:        xid.New(),
-		AppID:     appID,
-		Type:      core.MetricTypeMRR,
-		Period:    core.MetricPeriodDaily,
-		Value:     0,
-		Currency:  currency,
-		Date:      date.Truncate(24 * time.Hour),
-		CreatedAt: time.Now(),
+// GetSubscriptionGrowth returns subscription growth data points
+func (s *AnalyticsService) GetSubscriptionGrowth(ctx context.Context, appID xid.ID, startDate, endDate time.Time) ([]*core.GrowthPoint, error) {
+	var growthPoints []*core.GrowthPoint
+
+	// Calculate growth for each day
+	for d := startDate; d.Before(endDate); d = d.AddDate(0, 0, 1) {
+		nextDay := d.AddDate(0, 0, 1)
+
+		// Get subscriptions created on this day
+		newSubs, _, _ := s.subRepo.List(ctx, &repository.SubscriptionFilter{
+			AppID: &appID,
+		})
+
+		var newCount int
+		var churnedCount int
+		var activeCount int
+
+		for _, sub := range newSubs {
+			// New subscriptions
+			if sub.CreatedAt.Year() == d.Year() && sub.CreatedAt.Month() == d.Month() && sub.CreatedAt.Day() == d.Day() {
+				newCount++
+			}
+
+			// Churned subscriptions
+			if sub.CanceledAt != nil {
+				if sub.CanceledAt.Year() == d.Year() && sub.CanceledAt.Month() == d.Month() && sub.CanceledAt.Day() == d.Day() {
+					churnedCount++
+				}
+			}
+
+			// Active on this day
+			if sub.Status == "active" && sub.CreatedAt.Before(nextDay) {
+				if sub.CanceledAt == nil || sub.CanceledAt.After(d) {
+					activeCount++
+				}
+			}
+		}
+
+		growthPoints = append(growthPoints, &core.GrowthPoint{
+			Date:        d,
+			NewSubs:     newCount,
+			ChurnedSubs: churnedCount,
+			ActiveSubs:  activeCount,
+			NetGrowth:   newCount - churnedCount,
+		})
 	}
-	return s.repo.UpsertMetric(ctx, mrrMetric)
+
+	return growthPoints, nil
 }
 
-// UpdateCohortData updates cohort retention data
-// This would typically be called by a scheduled job
-func (s *AnalyticsService) UpdateCohortData(ctx context.Context, appID xid.ID, currency string) error {
-	// Stub implementation
-	return nil
+// calculateSubMRR calculates MRR for a single subscription
+func (s *AnalyticsService) calculateSubMRR(sub *schema.Subscription) int64 {
+	if sub.Plan == nil {
+		return 0
+	}
+
+	baseAmount := sub.Plan.BasePrice
+	quantity := sub.Quantity
+	if quantity == 0 {
+		quantity = 1
+	}
+
+	// Normalize to monthly
+	switch sub.Plan.BillingInterval {
+	case "yearly":
+		return (baseAmount * int64(quantity)) / 12
+	case "one_time":
+		return 0 // One-time charges don't contribute to MRR
+	default: // Monthly
+		return baseAmount * int64(quantity)
+	}
 }

@@ -34,6 +34,13 @@ func setupTestDB(t *testing.T) *bun.DB {
 		Exec(ctx)
 	require.NoError(t, err)
 
+	// Environments table
+	_, err = db.NewCreateTable().
+		Model((*schema.Environment)(nil)).
+		IfNotExists().
+		Exec(ctx)
+	require.NoError(t, err)
+
 	// Roles table
 	_, err = db.NewCreateTable().
 		Model((*schema.Role)(nil)).
@@ -211,6 +218,25 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	_, err := db.NewInsert().Model(platformApp).Exec(ctx)
 	require.NoError(t, err)
 
+	// Create default environment for the app
+	defaultEnv := &schema.Environment{
+		ID:        xid.New(),
+		AppID:     platformApp.ID,
+		Name:      "Default",
+		Slug:      "default",
+		Type:      "production",
+		Status:    "active",
+		IsDefault: true,
+	}
+	defaultEnv.CreatedAt = time.Now()
+	defaultEnv.UpdatedAt = time.Now()
+	defaultEnv.CreatedBy = platformApp.ID
+	defaultEnv.UpdatedBy = platformApp.ID
+	defaultEnv.Version = 1
+
+	_, err = db.NewInsert().Model(defaultEnv).Exec(ctx)
+	require.NoError(t, err)
+
 	// Create role registry with roles
 	registry := NewRoleRegistry()
 
@@ -294,6 +320,25 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 	platformApp.Version = 1
 
 	_, err := db.NewInsert().Model(platformApp).Exec(ctx)
+	require.NoError(t, err)
+
+	// Create default environment for the app
+	defaultEnv := &schema.Environment{
+		ID:        xid.New(),
+		AppID:     platformApp.ID,
+		Name:      "Default",
+		Slug:      "default",
+		Type:      "production",
+		Status:    "active",
+		IsDefault: true,
+	}
+	defaultEnv.CreatedAt = time.Now()
+	defaultEnv.UpdatedAt = time.Now()
+	defaultEnv.CreatedBy = platformApp.ID
+	defaultEnv.UpdatedBy = platformApp.ID
+	defaultEnv.Version = 1
+
+	_, err = db.NewInsert().Model(defaultEnv).Exec(ctx)
 	require.NoError(t, err)
 
 	// Create role registry

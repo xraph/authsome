@@ -57,28 +57,41 @@ func (m *MockRoleRepository) ListByOrg(ctx context.Context, orgID *string) ([]sc
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
-func (m *MockRoleRepository) GetRoleTemplates(ctx context.Context, appID xid.ID) ([]*schema.Role, error) {
-	args := m.Called(ctx, appID)
+func (m *MockRoleRepository) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error) {
+	args := m.Called(ctx, appID, envID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*schema.Role), args.Error(1)
 }
 
-func (m *MockRoleRepository) GetOwnerRole(ctx context.Context, appID xid.ID) (*schema.Role, error) {
-	args := m.Called(ctx, appID)
+func (m *MockRoleRepository) GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schema.Role, error) {
+	args := m.Called(ctx, appID, envID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
-func (m *MockRoleRepository) GetOrgRoles(ctx context.Context, orgID xid.ID) ([]*schema.Role, error) {
-	args := m.Called(ctx, orgID)
+func (m *MockRoleRepository) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error) {
+	args := m.Called(ctx, orgID, envID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) FindByNameAppEnv(ctx context.Context, name string, appID, envID xid.ID) (*schema.Role, error) {
+	args := m.Called(ctx, name, appID, envID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schema.Role), args.Error(1)
+}
+
+func (m *MockRoleRepository) FindDuplicateRoles(ctx context.Context) ([]schema.Role, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
 func (m *MockRoleRepository) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*schema.Role, error) {

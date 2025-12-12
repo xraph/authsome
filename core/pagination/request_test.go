@@ -36,7 +36,7 @@ func TestPaginationParams_Validate(t *testing.T) {
 		{
 			name: "limit too high",
 			params: PaginationParams{
-				Limit: 200,
+				Limit: 10001,
 			},
 			wantErr: true,
 		},
@@ -272,7 +272,7 @@ func TestCursorParams_Validate(t *testing.T) {
 		{
 			name: "limit too high",
 			params: CursorParams{
-				Limit: 200,
+				Limit: 10001,
 			},
 			wantErr: true,
 		},

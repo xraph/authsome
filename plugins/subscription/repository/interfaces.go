@@ -3,8 +3,10 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
@@ -399,6 +401,22 @@ type FeatureUsageRepository interface {
 
 	// ListAllOrgGrants retrieves all active grants for an organization
 	ListAllOrgGrants(ctx context.Context, orgID xid.ID) ([]*schema.FeatureGrant, error)
+
+	// Dashboard queries
+	// GetCurrentUsageSnapshot retrieves all current usage across all organizations for an app
+	GetCurrentUsageSnapshot(ctx context.Context, appID xid.ID) ([]*core.CurrentUsage, error)
+
+	// GetUsageByOrg retrieves usage statistics by organization
+	GetUsageByOrg(ctx context.Context, appID xid.ID, startDate, endDate time.Time) ([]*core.OrgUsageStats, error)
+
+	// GetUsageTrends retrieves usage trends over time for a feature
+	GetUsageTrends(ctx context.Context, appID xid.ID, featureID *xid.ID, startDate, endDate time.Time) ([]*core.UsageTrend, error)
+
+	// GetTopConsumers retrieves top consuming organizations
+	GetTopConsumers(ctx context.Context, appID xid.ID, featureID *xid.ID, startDate, endDate time.Time, limit int) ([]*core.OrgUsageStats, error)
+
+	// GetUsageByFeatureType retrieves usage aggregated by feature type
+	GetUsageByFeatureType(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (map[core.FeatureType]*core.UsageStats, error)
 
 	// GetTotalGrantedValue calculates total granted quota for an organization and feature
 	GetTotalGrantedValue(ctx context.Context, orgID, featureID xid.ID) (int64, error)

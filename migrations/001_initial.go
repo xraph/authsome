@@ -40,6 +40,11 @@ func init() {
 			"phone_verifications",
 			"email_otps",
 			"passkeys",
+			"twofa_otpcodes",
+			"trusted_devices",
+			"twofa_backup_codes",
+			"twofa_secrets",
+			"security_events",
 			"team_members",
 			"teams",
 			"organization_team_members",
@@ -109,6 +114,23 @@ func init() {
 			return err
 		}
 		if _, err := db.NewCreateTable().Model((*schema.OrganizationInvitation)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+
+		// Security & 2FA tables
+		if _, err := db.NewCreateTable().Model((*schema.SecurityEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.TwoFASecret)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.BackupCode)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.TrustedDevice)(nil)).IfNotExists().Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := db.NewCreateTable().Model((*schema.OTPCode)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
 
@@ -650,6 +672,11 @@ func init() {
 			"phone_verifications",
 			"email_otps",
 			"passkeys",
+			"twofa_otpcodes",
+			"trusted_devices",
+			"twofa_backup_codes",
+			"twofa_secrets",
+			"security_events",
 			"team_members",
 			"teams",
 			"organization_team_members",

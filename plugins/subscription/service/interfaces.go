@@ -38,6 +38,8 @@ type SubscriptionServiceInterface interface {
 	AttachAddOn(ctx context.Context, subID, addOnID xid.ID, quantity int) error
 	DetachAddOn(ctx context.Context, subID, addOnID xid.ID) error
 	SyncFromProvider(ctx context.Context, providerSubID string) (*core.Subscription, error)
+	SyncFromProviderByID(ctx context.Context, id xid.ID) (*core.Subscription, error)
+	SyncToProvider(ctx context.Context, id xid.ID) error
 }
 
 // AddOnServiceInterface defines the add-on service interface
@@ -96,4 +98,23 @@ type EnforcementServiceInterface interface {
 	GetAllLimits(ctx context.Context, orgID xid.ID) (map[string]*core.UsageLimit, error)
 	EnforceSubscriptionRequired(ctx context.Context, req interface{}) error
 	EnforceSeatLimit(ctx context.Context, orgID string, userID xid.ID) error
+}
+
+// FeatureServiceInterface defines the feature service interface
+type FeatureServiceInterface interface {
+	Create(ctx context.Context, appID xid.ID, req *core.CreateFeatureRequest) (*core.Feature, error)
+	Update(ctx context.Context, id xid.ID, req *core.UpdateFeatureRequest) (*core.Feature, error)
+	Delete(ctx context.Context, id xid.ID) error
+	GetByID(ctx context.Context, id xid.ID) (*core.Feature, error)
+	GetByKey(ctx context.Context, appID xid.ID, key string) (*core.Feature, error)
+	List(ctx context.Context, appID xid.ID, featureType string, publicOnly bool, page, pageSize int) ([]*core.Feature, int, error)
+	LinkToPlan(ctx context.Context, planID xid.ID, req *core.LinkFeatureRequest) (*core.PlanFeatureLink, error)
+	UpdatePlanLink(ctx context.Context, planID, featureID xid.ID, req *core.UpdateLinkRequest) (*core.PlanFeatureLink, error)
+	UnlinkFromPlan(ctx context.Context, planID, featureID xid.ID) error
+	GetPlanFeatures(ctx context.Context, planID xid.ID) ([]*core.PlanFeatureLink, error)
+	GetPublicFeatures(ctx context.Context, appID xid.ID) ([]*core.PublicFeature, error)
+	GetPublicPlanFeatures(ctx context.Context, planID xid.ID) ([]*core.PublicPlanFeature, error)
+	SyncToProvider(ctx context.Context, id xid.ID) error
+	SyncFromProvider(ctx context.Context, providerFeatureID string) (*core.Feature, error)
+	SyncAllFromProvider(ctx context.Context, productID string) ([]*core.Feature, error)
 }

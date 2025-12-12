@@ -124,6 +124,7 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 	// Register Admin Role - Platform-level administrative operations
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:         rbac.RoleAdmin,
+		DisplayName:  "Administrator",
 		Description:  rbac.RoleDescAdmin,
 		Priority:     rbac.RolePriorityAdmin,
 		IsPlatform:   rbac.RoleIsPlatformAdmin,
@@ -155,6 +156,7 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 	// Superadmin should already exist from core RBAC bootstrap
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:         rbac.RoleSuperAdmin,
+		DisplayName:  "Super Administrator",
 		Description:  rbac.RoleDescSuperAdmin,
 		Priority:     rbac.RolePrioritySuperAdmin,
 		IsPlatform:   rbac.RoleIsPlatformSuperAdmin,

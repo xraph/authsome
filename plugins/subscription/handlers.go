@@ -301,6 +301,33 @@ func (p *Plugin) handleCreateSubscription(c forge.Context) error {
 	return c.JSON(201, sub)
 }
 
+func (p *Plugin) handleSyncSubscription(c forge.Context) error {
+	id, err := xid.FromString(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, errorResponse{Error: "invalid_id", Message: "invalid subscription ID"})
+	}
+
+	if err := p.subscriptionSvc.SyncToProvider(c.Context(), id); err != nil {
+		return handleError(c, err)
+	}
+
+	return c.JSON(200, successResponse{Success: true, Message: "subscription synced to provider"})
+}
+
+func (p *Plugin) handleSyncSubscriptionFromProvider(c forge.Context) error {
+	id, err := xid.FromString(c.Param("id"))
+	if err != nil {
+		return c.JSON(400, errorResponse{Error: "invalid_id", Message: "invalid subscription ID"})
+	}
+
+	sub, err := p.subscriptionSvc.SyncFromProviderByID(c.Context(), id)
+	if err != nil {
+		return handleError(c, err)
+	}
+
+	return c.JSON(200, sub)
+}
+
 func (p *Plugin) handleListSubscriptions(c forge.Context) error {
 	page := ctxQueryInt(c, "page", 1)
 	pageSize := ctxQueryInt(c, "pageSize", 20)

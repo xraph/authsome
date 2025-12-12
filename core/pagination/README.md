@@ -108,7 +108,7 @@ Request parameters for offset-based pagination:
 
 | Field    | Type      | JSON Tag | Query Param | Default      | Validation      | Description                    |
 |----------|-----------|----------|-------------|--------------|-----------------|--------------------------------|
-| Limit    | int       | limit    | limit       | 10           | min=1, max=100  | Number of items per page       |
+| Limit    | int       | limit    | limit       | 10           | min=1, max=10000  | Number of items per page       |
 | Offset   | int       | offset   | offset      | 0            | min=0           | Number of items to skip        |
 | Page     | int       | page     | page        | 1            | min=1           | Current page number            |
 | SortBy   | string    | sortBy   | sort_by     | created_at   | -               | Field to sort by               |
@@ -122,7 +122,7 @@ Request parameters for cursor-based pagination:
 
 | Field    | Type      | JSON Tag | Query Param | Default      | Validation      | Description                    |
 |----------|-----------|----------|-------------|--------------|-----------------|--------------------------------|
-| Limit    | int       | limit    | limit       | 10           | min=1, max=100  | Number of items per page       |
+| Limit    | int       | limit    | limit       | 10           | min=1, max=10000  | Number of items per page       |
 | Cursor   | string    | cursor   | cursor      | ""           | -               | Base64-encoded cursor          |
 | SortBy   | string    | sortBy   | sort_by     | created_at   | -               | Field to sort by               |
 | Order    | SortOrder | order    | order       | desc         | oneof=asc,desc  | Sort order (asc/desc)          |
@@ -520,7 +520,7 @@ Constants can be adjusted in the package:
 ```go
 const (
     DefaultLimit = 10   // Default number of items per page
-    MaxLimit     = 100  // Maximum allowed items per page
+    MaxLimit     = 10000  // Maximum allowed items per page
     MinLimit     = 1    // Minimum allowed items per page
 )
 ```

@@ -71,7 +71,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 			Class("flex items-center justify-between"),
 			Div(
 				H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
-					g.Text("Billing Overview")),
+					g.Text("Subscription Overview")),
 				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
 					g.Text("Monitor your subscription business metrics")),
 			),
@@ -159,7 +159,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 	)
 
 	pageData := components.PageData{
-		Title:      "Billing Overview",
+		Title:      "Subscription Overview",
 		User:       currentUser,
 		ActivePage: "billing",
 		BasePath:   basePath,
@@ -495,40 +495,183 @@ func (e *DashboardExtension) ServeUsageDashboardPage(c forge.Context) error {
 	}
 
 	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Parse date range filter
+	dateRange := c.Query("range")
+	if dateRange == "" {
+		dateRange = "30d"
+	}
+	startDate, endDate := calculateDateRange(dateRange)
+
+	// Get real usage data
+	currentUsage, _ := e.plugin.featureUsageRepo.GetCurrentUsageSnapshot(ctx, currentApp.ID)
+	orgStats, _ := e.plugin.featureUsageRepo.GetUsageByOrg(ctx, currentApp.ID, startDate, endDate)
+	typeStats, _ := e.plugin.featureUsageRepo.GetUsageByFeatureType(ctx, currentApp.ID, startDate, endDate)
+	topConsumers, _ := e.plugin.featureUsageRepo.GetTopConsumers(ctx, currentApp.ID, nil, startDate, endDate, 10)
+
+	// Current path for filters
+	currentPath := basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/usage"
 
 	content := Div(
 		Class("space-y-6"),
 
 		// Page header
 		Div(
-			H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
-				g.Text("Usage Dashboard")),
-			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
-				g.Text("Monitor feature usage across all subscriptions")),
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Usage Dashboard")),
+				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
+					g.Text("Monitor feature usage across all subscriptions")),
+			),
+			// Date range filter
+			renderDateRangeFilter(currentPath, dateRange),
 		),
 
 		// Billing sub-navigation
 		e.renderBillingNav(currentApp, basePath, "usage"),
 
-		// Usage metrics placeholder
-		Div(
-			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+		// Current usage cards
+		g.If(len(currentUsage) > 0,
 			Div(
-				Class("text-center py-12"),
-				lucide.Activity(Class("mx-auto h-16 w-16 text-slate-300 dark:text-gray-600 mb-4")),
-				H3(Class("text-lg font-medium text-slate-900 dark:text-white mb-2"),
-					g.Text("Usage Tracking")),
-				P(Class("text-slate-500 dark:text-gray-400 max-w-md mx-auto"),
-					g.Text("Track API calls, storage usage, team members, and other metered features across your subscriptions.")),
+				H2(Class("text-xl font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Current Usage")),
+				Div(
+					Class("grid gap-6 md:grid-cols-2 lg:grid-cols-3"),
+					g.Group(g.Map(currentUsage, func(u *core.CurrentUsage) g.Node {
+						icon := lucide.Activity(Class("size-6 text-violet-600"))
+						// Pick icon based on feature type
+						switch u.FeatureType {
+						case "metered":
+							icon = lucide.Zap(Class("size-6 text-violet-600"))
+						case "limit":
+							icon = lucide.Users(Class("size-6 text-violet-600"))
+						default:
+							icon = lucide.Activity(Class("size-6 text-violet-600"))
+						}
+
+						used := fmt.Sprintf("%s %s", formatNumber(u.CurrentUsage), u.Unit)
+						limit := formatLimit(u.Limit)
+						if u.Limit > 0 {
+							limit = fmt.Sprintf("%s %s", formatNumber(u.Limit), u.Unit)
+						}
+
+						return e.renderUsageCard(u.FeatureName, used, limit, u.PercentUsed, icon)
+					})),
+				),
 			),
 		),
 
-		// Feature usage cards
-		Div(
-			Class("grid gap-6 md:grid-cols-2 lg:grid-cols-3"),
-			e.renderUsageCard("API Requests", "10,234", "50,000", 20.5, lucide.Zap(Class("size-6 text-violet-600"))),
-			e.renderUsageCard("Storage Used", "2.4 GB", "10 GB", 24.0, lucide.HardDrive(Class("size-6 text-violet-600"))),
-			e.renderUsageCard("Team Members", "12", "25", 48.0, lucide.Users(Class("size-6 text-violet-600"))),
+		// Empty state
+		g.If(len(currentUsage) == 0,
+			renderEmptyState(
+				lucide.Activity(Class("mx-auto h-16 w-16 text-slate-300 dark:text-gray-600")),
+				"No Usage Data",
+				"Start using features to see usage statistics appear here",
+			),
+		),
+
+		// Usage by organization table
+		g.If(len(orgStats) > 0,
+			Div(
+				Class("mt-6"),
+				H2(Class("text-xl font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Usage by Organization")),
+				Div(
+					Class("overflow-x-auto rounded-lg border border-slate-200 dark:border-gray-800"),
+					Table(
+						Class("w-full"),
+						THead(
+							Class("bg-slate-50 dark:bg-gray-800"),
+							Tr(
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Organization")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Feature")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Usage")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Limit")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("% Used")),
+							),
+						),
+						TBody(
+							Class("bg-white divide-y divide-slate-200 dark:bg-gray-900 dark:divide-gray-800"),
+							g.Group(g.Map(orgStats, func(stat *core.OrgUsageStats) g.Node {
+								return Tr(
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-white"),
+										g.Text(stat.OrgName)),
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-gray-400"),
+										g.Text(stat.FeatureName)),
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white"),
+										g.Text(fmt.Sprintf("%s %s", formatNumber(stat.Usage), stat.Unit))),
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-gray-400"),
+										g.Text(formatLimit(stat.Limit))),
+									Td(Class("px-6 py-4 whitespace-nowrap"),
+										renderProgressBar(stat.PercentUsed)),
+								)
+							})),
+						),
+					),
+				),
+			),
+		),
+
+		// Usage by feature type and top consumers
+		g.If(len(typeStats) > 0 || len(topConsumers) > 0,
+			Div(
+				Class("mt-6 grid gap-6 lg:grid-cols-2"),
+				// Feature type breakdown
+				g.If(len(typeStats) > 0,
+					Div(
+						Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+						H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+							g.Text("Usage by Feature Type")),
+						g.Group(func() []g.Node {
+							nodes := make([]g.Node, 0, len(typeStats))
+							for featureType, stats := range typeStats {
+								ft := featureType
+								st := stats
+								nodes = append(nodes, Div(
+									Class("flex items-center justify-between py-3 border-b border-slate-100 dark:border-gray-800 last:border-0"),
+									Div(
+										Span(Class("text-sm font-medium text-slate-900 dark:text-white capitalize"),
+											g.Text(string(ft))),
+										Span(Class("text-xs text-slate-500 dark:text-gray-400 ml-2"),
+											g.Text(fmt.Sprintf("(%d orgs)", st.TotalOrgs))),
+									),
+									Span(Class("text-sm font-semibold text-slate-900 dark:text-white"),
+										g.Text(formatNumber(st.TotalUsage))),
+								))
+							}
+							return nodes
+						}()),
+					),
+				),
+				// Top consumers
+				g.If(len(topConsumers) > 0,
+					Div(
+						Class("rounded-lg border border-slate-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"),
+						H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
+							g.Text("Top 10 Consumers")),
+						g.Group(g.Map(topConsumers, func(consumer *core.OrgUsageStats) g.Node {
+							return Div(
+								Class("flex items-center justify-between py-3 border-b border-slate-100 dark:border-gray-800 last:border-0"),
+								Div(
+									Div(Class("text-sm font-medium text-slate-900 dark:text-white"),
+										g.Text(consumer.OrgName)),
+									Div(Class("text-xs text-slate-500 dark:text-gray-400"),
+										g.Text(consumer.FeatureName)),
+								),
+								Span(Class("text-sm font-semibold text-slate-900 dark:text-white"),
+									g.Text(fmt.Sprintf("%s %s", formatNumber(consumer.Usage), consumer.Unit))),
+							)
+						})),
+					),
+				),
+			),
 		),
 	)
 
@@ -633,25 +776,42 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(c forge.Context) error 
 	basePath := handler.GetBasePath()
 	ctx := c.Request().Context()
 
-	// TODO: Add analyticsSvc to Plugin - for now use stub metrics
-	// metrics, _ := e.plugin.analyticsSvc.GetDashboardMetrics(ctx)
-	metrics := &core.DashboardMetrics{
-		TotalMRR:              0,
-		TotalARR:              0,
-		ActiveSubscriptions:   0,
-		TrialingSubscriptions: 0,
+	// Parse date range filter
+	dateRange := c.Query("range")
+	if dateRange == "" {
+		dateRange = "30d"
 	}
-	_ = ctx
+	startDate, endDate := calculateDateRange(dateRange)
+	currentPath := basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/analytics"
+
+	// Get real analytics data
+	metrics, _ := e.plugin.analyticsSvc.GetDashboardMetrics(ctx, currentApp.ID, startDate, endDate, "USD")
+	if metrics == nil {
+		metrics = &core.DashboardMetrics{
+			Currency: "USD",
+		}
+	}
+
+	// Get MRR history for chart
+	mrrHistory, _ := e.plugin.analyticsSvc.GetMRRHistory(ctx, currentApp.ID, startDate, endDate, "USD")
+
+	// Get per-org revenue breakdown
+	orgRevenue, _ := e.plugin.analyticsSvc.GetRevenueByOrg(ctx, currentApp.ID, startDate, endDate)
 
 	content := Div(
 		Class("space-y-6"),
 
 		// Page header
 		Div(
-			H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
-				g.Text("Billing Analytics")),
-			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
-				g.Text("Insights into your subscription business")),
+			Class("flex items-center justify-between"),
+			Div(
+				H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Billing Analytics")),
+				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
+					g.Text("Insights into your subscription business")),
+			),
+			// Date range filter
+			renderDateRangeFilter(currentPath, dateRange),
 		),
 
 		// Billing sub-navigation
@@ -660,38 +820,133 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(c forge.Context) error 
 		// Key metrics
 		Div(
 			Class("grid gap-6 md:grid-cols-2 lg:grid-cols-4"),
-			e.renderMetricCard("MRR", formatMoney(metrics.TotalMRR, "USD"), metrics.MRRGrowth, lucide.DollarSign(Class("size-6"))),
-			e.renderMetricCard("ARR", formatMoney(metrics.TotalARR, "USD"), 0, lucide.TrendingUp(Class("size-6"))),
-			e.renderMetricCard("Active Customers", fmt.Sprintf("%d", metrics.ActiveSubscriptions), metrics.SubscriptionGrowth, lucide.Users(Class("size-6"))),
-			e.renderMetricCard("Churn Rate", formatPercent(metrics.ChurnRate), -metrics.ChurnRate, lucide.UserMinus(Class("size-6"))),
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center justify-between"),
+					Div(
+						P(Class("text-sm font-medium text-slate-500 dark:text-gray-400"), g.Text("MRR")),
+						P(Class("text-2xl font-bold text-slate-900 dark:text-white mt-2"), g.Text(formatMoney(metrics.TotalMRR, "USD"))),
+						renderMetricChange(metrics.MRRGrowth),
+					),
+					lucide.DollarSign(Class("size-6 text-violet-600")),
+				),
+			),
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center justify-between"),
+					Div(
+						P(Class("text-sm font-medium text-slate-500 dark:text-gray-400"), g.Text("ARR")),
+						P(Class("text-2xl font-bold text-slate-900 dark:text-white mt-2"), g.Text(formatMoney(metrics.TotalARR, "USD"))),
+					),
+					lucide.TrendingUp(Class("size-6 text-violet-600")),
+				),
+			),
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center justify-between"),
+					Div(
+						P(Class("text-sm font-medium text-slate-500 dark:text-gray-400"), g.Text("Active Customers")),
+						P(Class("text-2xl font-bold text-slate-900 dark:text-white mt-2"), g.Text(fmt.Sprintf("%d", metrics.ActiveSubscriptions))),
+						renderMetricChange(metrics.SubscriptionGrowth),
+					),
+					lucide.Users(Class("size-6 text-violet-600")),
+				),
+			),
+			Div(
+				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+				Div(
+					Class("flex items-center justify-between"),
+					Div(
+						P(Class("text-sm font-medium text-slate-500 dark:text-gray-400"), g.Text("Churn Rate")),
+						P(Class("text-2xl font-bold text-slate-900 dark:text-white mt-2"), g.Text(fmt.Sprintf("%.1f%%", metrics.ChurnRate))),
+						g.If(metrics.ChurnRate > 0, renderMetricChange(-metrics.ChurnRate)),
+					),
+					lucide.UserMinus(Class("size-6 text-red-600")),
+				),
+			),
 		),
 
-		// Charts row
-		Div(
-			Class("grid gap-6 lg:grid-cols-2"),
-			// MRR Chart placeholder
+		// Charts row - MRR History
+		g.If(len(mrrHistory) > 0,
 			Div(
 				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"), g.Text("MRR Over Time")),
 				Div(
-					Class("h-64 flex items-center justify-center bg-slate-50 dark:bg-gray-800 rounded-lg"),
-					Div(
-						Class("text-center text-slate-400"),
-						lucide.Activity(Class("mx-auto h-12 w-12 mb-2")),
-						P(g.Text("Chart visualization")),
-					),
+					Class("space-y-2"),
+					g.Group(g.Map(mrrHistory, func(breakdown *core.MRRBreakdown) g.Node {
+						return Div(
+							Class("flex items-center justify-between py-2 border-b border-slate-100 dark:border-gray-800 last:border-0"),
+							Span(Class("text-sm text-slate-600 dark:text-gray-400"),
+								g.Text(breakdown.Date.Format("Jan 02"))),
+							Div(
+								Class("flex items-center gap-4"),
+								Span(Class("text-sm font-semibold text-slate-900 dark:text-white"),
+									g.Text(formatMoney(breakdown.TotalMRR, "USD"))),
+								g.If(breakdown.NetNewMRR != 0,
+									Span(
+										Class(fmt.Sprintf("text-xs %s",
+											func() string {
+												if breakdown.NetNewMRR > 0 {
+													return "text-green-600 dark:text-green-400"
+												}
+												return "text-red-600 dark:text-red-400"
+											}(),
+										)),
+										g.Text(formatMoney(breakdown.NetNewMRR, "USD")),
+									),
+								),
+							),
+						)
+					})),
 				),
 			),
-			// Subscription growth placeholder
+		),
+
+		// Revenue by organization table
+		g.If(len(orgRevenue) > 0,
 			Div(
-				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
-				H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"), g.Text("Subscription Growth")),
+				Class("mt-6"),
+				H2(Class("text-xl font-semibold text-slate-900 dark:text-white mb-4"),
+					g.Text("Revenue by Organization")),
 				Div(
-					Class("h-64 flex items-center justify-center bg-slate-50 dark:bg-gray-800 rounded-lg"),
-					Div(
-						Class("text-center text-slate-400"),
-						lucide.TrendingUp(Class("mx-auto h-12 w-12 mb-2")),
-						P(g.Text("Chart visualization")),
+					Class("overflow-x-auto rounded-lg border border-slate-200 dark:border-gray-800"),
+					Table(
+						Class("w-full"),
+						THead(
+							Class("bg-slate-50 dark:bg-gray-800"),
+							Tr(
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Organization")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("MRR")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("ARR")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Plan")),
+								Th(Class("px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
+									g.Text("Status")),
+							),
+						),
+						TBody(
+							Class("bg-white divide-y divide-slate-200 dark:bg-gray-900 dark:divide-gray-800"),
+							g.Group(g.Map(orgRevenue, func(rev *core.OrgRevenue) g.Node {
+								return Tr(
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-white"),
+										g.Text(rev.OrgName)),
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white"),
+										g.Text(formatMoney(rev.MRR, "USD"))),
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-gray-400"),
+										g.Text(formatMoney(rev.ARR, "USD"))),
+									Td(Class("px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-gray-400"),
+										g.Text(rev.PlanName)),
+									Td(Class("px-6 py-4 whitespace-nowrap"),
+										renderStatusBadge(rev.Status)),
+								)
+							})),
+						),
 					),
 				),
 			),
@@ -700,12 +955,21 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(c forge.Context) error 
 		// Trial conversion metrics
 		Div(
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
-			H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"), g.Text("Trial Metrics")),
+			H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"), g.Text("Subscription Health")),
 			Div(
 				Class("grid gap-6 md:grid-cols-3"),
-				e.statsCard("Trials Started", fmt.Sprintf("%d", metrics.TrialingSubscriptions), lucide.UserPlus(Class("size-5 text-violet-600"))),
-				e.statsCard("Trial Conversion Rate", formatPercent(metrics.TrialConversionRate), lucide.TrendingUp(Class("size-5 text-violet-600"))),
-				e.statsCard("Avg Trial Length", "14 days", lucide.Clock(Class("size-5 text-violet-600"))),
+				e.statsCard("Trialing", fmt.Sprintf("%d", metrics.TrialingSubscriptions), lucide.UserPlus(Class("size-5 text-blue-600"))),
+				e.statsCard("New MRR", formatMoney(metrics.NewMRR, "USD"), lucide.TrendingUp(Class("size-5 text-green-600"))),
+				e.statsCard("Churned MRR", formatMoney(metrics.ChurnedMRR, "USD"), lucide.TrendingDown(Class("size-5 text-red-600"))),
+			),
+		),
+
+		// Empty state
+		g.If(len(orgRevenue) == 0 && metrics.ActiveSubscriptions == 0,
+			renderEmptyState(
+				lucide.TrendingUp(Class("mx-auto h-16 w-16 text-slate-300 dark:text-gray-600")),
+				"No Analytics Data",
+				"Start creating subscriptions to see analytics appear here",
 			),
 		),
 	)

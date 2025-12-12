@@ -34,6 +34,11 @@ type PaymentProvider interface {
 	ResumeSubscription(ctx context.Context, subscriptionID string) error
 	GetSubscription(ctx context.Context, subscriptionID string) (*ProviderSubscription, error)
 
+	// Subscription items (for add-ons)
+	AddSubscriptionItem(ctx context.Context, subscriptionID string, priceID string, quantity int) (itemID string, err error)
+	RemoveSubscriptionItem(ctx context.Context, subscriptionID string, itemID string) error
+	UpdateSubscriptionItem(ctx context.Context, subscriptionID string, itemID string, quantity int) error
+
 	// Checkout
 	CreateCheckoutSession(ctx context.Context, req *CheckoutRequest) (*CheckoutSession, error)
 	CreatePortalSession(ctx context.Context, customerID, returnURL string) (url string, err error)
@@ -52,6 +57,14 @@ type PaymentProvider interface {
 	GetInvoice(ctx context.Context, invoiceID string) (*ProviderInvoice, error)
 	GetInvoicePDF(ctx context.Context, invoiceID string) (url string, err error)
 	VoidInvoice(ctx context.Context, invoiceID string) error
+	ListInvoices(ctx context.Context, customerID string, limit int) ([]*ProviderInvoice, error)
+	ListSubscriptionInvoices(ctx context.Context, subscriptionID string, limit int) ([]*ProviderInvoice, error)
+
+	// Feature management (Stripe Product Features)
+	SyncFeature(ctx context.Context, feature *core.Feature) (string, error) // Returns provider feature ID
+	ListProviderFeatures(ctx context.Context, productID string) ([]*ProviderFeature, error)
+	GetProviderFeature(ctx context.Context, featureID string) (*ProviderFeature, error)
+	DeleteProviderFeature(ctx context.Context, featureID string) error
 
 	// Webhooks
 	HandleWebhook(ctx context.Context, payload []byte, signature string) (*WebhookEvent, error)
@@ -110,10 +123,21 @@ type ProviderInvoice struct {
 	AmountDue      int64
 	AmountPaid     int64
 	Total          int64
+	Subtotal       int64
+	Tax            int64
 	PeriodStart    int64
 	PeriodEnd      int64
 	PDFURL         string
 	HostedURL      string
+}
+
+// ProviderFeature represents a feature from the payment provider
+type ProviderFeature struct {
+	ID        string
+	Name      string
+	LookupKey string // Maps to our Feature.Key
+	Active    bool
+	Metadata  map[string]interface{}
 }
 
 // CheckoutRequest represents a checkout session request

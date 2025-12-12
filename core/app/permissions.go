@@ -8,6 +8,7 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 	// Extend Owner Role with app-specific permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
 		Name:        rbac.RoleOwner,
+		DisplayName: "Owner",
 		Description: rbac.RoleDescOwner,
 		Priority:    rbac.RolePriorityOwner,
 		IsPlatform:  rbac.RoleIsPlatformOwner,
@@ -30,6 +31,7 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 	// Extend Admin Role with app-specific permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
 		Name:         rbac.RoleAdmin,
+		DisplayName:  "Administrator",
 		Description:  rbac.RoleDescAdmin,
 		Priority:     rbac.RolePriorityAdmin,
 		IsPlatform:   rbac.RoleIsPlatformAdmin,
@@ -67,6 +69,7 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 	// Extend Member Role with app-specific permissions
 	if err := registry.RegisterRole(&rbac.RoleDefinition{
 		Name:        rbac.RoleMember,
+		DisplayName: "Member",
 		Description: rbac.RoleDescMember,
 		Priority:    rbac.RolePriorityMember,
 		IsPlatform:  rbac.RoleIsPlatformMember,

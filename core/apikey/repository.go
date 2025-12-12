@@ -35,3 +35,13 @@ type Repository interface {
 	// Maintenance
 	CleanupExpiredAPIKeys(ctx context.Context) (int, error)
 }
+
+// =============================================================================
+// ENVIRONMENT REPOSITORY INTERFACE
+// =============================================================================
+
+// EnvironmentRepository provides environment lookup for prefix generation
+// This is a minimal interface to avoid tight coupling with the environment service
+type EnvironmentRepository interface {
+	FindByID(ctx context.Context, id xid.ID) (*schema.Environment, error)
+}

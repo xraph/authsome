@@ -81,7 +81,7 @@ Constants can be adjusted for your use case:
 
 	const (
 		DefaultLimit = 10   // Default items per page
-		MaxLimit     = 100  // Maximum items per page
+		MaxLimit     = 10000  // Maximum items per page
 		MinLimit     = 1    // Minimum items per page
 	)
 
@@ -172,7 +172,7 @@ to set defaults but are designed to be called once per request.
 Validation errors are returned as standard Go errors with descriptive messages:
 
   - "limit must be at least 1"
-  - "limit cannot exceed 100"
+  - "limit cannot exceed 10000"
   - "offset cannot be negative"
   - "page must be at least 1"
   - "order must be 'asc' or 'desc'"

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
+	"github.com/xraph/authsome/plugins/subscription/providers/types"
 	"github.com/xraph/authsome/plugins/subscription/repository"
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
@@ -18,6 +20,7 @@ type FeatureService struct {
 	featureRepo repository.FeatureRepository
 	planRepo    repository.PlanRepository
 	eventRepo   repository.EventRepository
+	provider    types.PaymentProvider
 }
 
 // NewFeatureService creates a new feature service
@@ -25,11 +28,13 @@ func NewFeatureService(
 	featureRepo repository.FeatureRepository,
 	planRepo repository.PlanRepository,
 	eventRepo repository.EventRepository,
+	provider types.PaymentProvider,
 ) *FeatureService {
 	return &FeatureService{
 		featureRepo: featureRepo,
 		planRepo:    planRepo,
 		eventRepo:   eventRepo,
+		provider:    provider,
 	}
 }
 
@@ -106,6 +111,22 @@ func (s *FeatureService) Create(ctx context.Context, appID xid.ID, req *core.Cre
 		}
 	}
 
+	// Auto-sync to provider (if configured)
+	if s.provider != nil {
+		coreFeature := s.schemaToCore(feature, req.Tiers)
+		providerFeatureID, err := s.provider.SyncFeature(ctx, coreFeature)
+		if err != nil {
+			// Log error but don't fail creation
+			// In production, you'd want proper logging here
+		} else {
+			// Update provider feature ID and last synced time
+			feature.ProviderFeatureID = providerFeatureID
+			syncTime := time.Now()
+			feature.LastSyncedAt = &syncTime
+			s.featureRepo.Update(ctx, feature)
+		}
+	}
+
 	return s.schemaToCore(feature, req.Tiers), nil
 }
 
@@ -179,6 +200,23 @@ func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.Update
 	feature, err = s.featureRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reload feature: %w", err)
+	}
+
+	// Auto-sync to provider (if configured)
+	if s.provider != nil {
+		coreFeature := s.schemaToCore(feature, nil)
+		providerFeatureID, err := s.provider.SyncFeature(ctx, coreFeature)
+		if err != nil {
+			// Log error but don't fail update
+		} else {
+			// Update provider feature ID and last synced time
+			if providerFeatureID != "" {
+				feature.ProviderFeatureID = providerFeatureID
+			}
+			syncTime := time.Now()
+			feature.LastSyncedAt = &syncTime
+			s.featureRepo.Update(ctx, feature)
+		}
 	}
 
 	return s.schemaToCore(feature, nil), nil
@@ -467,20 +505,228 @@ func (s *FeatureService) schemaToCore(f *schema.Feature, inputTiers []core.Featu
 	}
 
 	return &core.Feature{
-		ID:           f.ID,
-		AppID:        f.AppID,
-		Key:          f.Key,
-		Name:         f.Name,
-		Description:  f.Description,
-		Type:         core.FeatureType(f.Type),
-		Unit:         f.Unit,
-		ResetPeriod:  core.ResetPeriod(f.ResetPeriod),
-		IsPublic:     f.IsPublic,
-		DisplayOrder: f.DisplayOrder,
-		Icon:         f.Icon,
-		Metadata:     f.Metadata,
-		Tiers:        tiers,
-		CreatedAt:    f.CreatedAt,
-		UpdatedAt:    f.UpdatedAt,
+		ID:                f.ID,
+		AppID:             f.AppID,
+		Key:               f.Key,
+		Name:              f.Name,
+		Description:       f.Description,
+		Type:              core.FeatureType(f.Type),
+		Unit:              f.Unit,
+		ResetPeriod:       core.ResetPeriod(f.ResetPeriod),
+		IsPublic:          f.IsPublic,
+		DisplayOrder:      f.DisplayOrder,
+		Icon:              f.Icon,
+		ProviderFeatureID: f.ProviderFeatureID,
+		LastSyncedAt:      f.LastSyncedAt,
+		Metadata:          f.Metadata,
+		Tiers:             tiers,
+		CreatedAt:         f.CreatedAt,
+		UpdatedAt:         f.UpdatedAt,
 	}
+}
+
+// SyncToProvider manually syncs a feature to the payment provider
+func (s *FeatureService) SyncToProvider(ctx context.Context, id xid.ID) error {
+	if s.provider == nil {
+		return fmt.Errorf("payment provider not configured")
+	}
+
+	feature, err := s.featureRepo.FindByID(ctx, id)
+	if err != nil {
+		return suberrors.ErrFeatureNotFound
+	}
+
+	coreFeature := s.schemaToCore(feature, nil)
+	providerFeatureID, err := s.provider.SyncFeature(ctx, coreFeature)
+	if err != nil {
+		return fmt.Errorf("failed to sync feature to provider: %w", err)
+	}
+
+	// Update provider feature ID and last synced time
+	feature.ProviderFeatureID = providerFeatureID
+	syncTime := time.Now()
+	feature.LastSyncedAt = &syncTime
+	if err := s.featureRepo.Update(ctx, feature); err != nil {
+		return fmt.Errorf("failed to update feature sync info: %w", err)
+	}
+
+	return nil
+}
+
+// SyncFromProvider syncs a feature from the payment provider
+func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID string) (*core.Feature, error) {
+	if s.provider == nil {
+		return nil, fmt.Errorf("payment provider not configured")
+	}
+
+	providerFeature, err := s.provider.GetProviderFeature(ctx, providerFeatureID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get feature from provider: %w", err)
+	}
+
+	// Find local feature by lookup key
+	var feature *schema.Feature
+	features, _, err := s.featureRepo.List(ctx, &repository.FeatureFilter{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list features: %w", err)
+	}
+
+	for _, f := range features {
+		if f.Key == providerFeature.LookupKey || f.ProviderFeatureID == providerFeatureID {
+			feature = f
+			break
+		}
+	}
+
+	if feature == nil {
+		// Feature doesn't exist locally - create it from provider data
+		return s.createFeatureFromProvider(ctx, providerFeature)
+	}
+
+	// Update existing feature from provider
+	feature.Name = providerFeature.Name
+	feature.ProviderFeatureID = providerFeature.ID
+	
+	// Update metadata fields if present
+	if desc, ok := providerFeature.Metadata["description"].(string); ok {
+		feature.Description = desc
+	}
+	if featureType, ok := providerFeature.Metadata["feature_type"].(string); ok {
+		feature.Type = featureType
+	}
+	if unit, ok := providerFeature.Metadata["unit"].(string); ok {
+		feature.Unit = unit
+	}
+	
+	syncTime := time.Now()
+	feature.LastSyncedAt = &syncTime
+	feature.UpdatedAt = time.Now()
+
+	if err := s.featureRepo.Update(ctx, feature); err != nil {
+		return nil, fmt.Errorf("failed to update feature: %w", err)
+	}
+
+	return s.schemaToCore(feature, nil), nil
+}
+
+// createFeatureFromProvider creates a new local feature from provider data
+func (s *FeatureService) createFeatureFromProvider(ctx context.Context, providerFeature *types.ProviderFeature) (*core.Feature, error) {
+	// Extract app ID from metadata
+	appIDStr, ok := providerFeature.Metadata["authsome_app_id"].(string)
+	if !ok || appIDStr == "" {
+		return nil, fmt.Errorf("provider feature missing authsome_app_id metadata - cannot determine which app this feature belongs to")
+	}
+	
+	appID, err := xid.FromString(appIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid app ID in provider metadata: %w", err)
+	}
+
+	// Extract feature key from metadata or lookup key
+	featureKey, ok := providerFeature.Metadata["authsome_feature_key"].(string)
+	if !ok || featureKey == "" {
+		// Fallback to lookup key (strip app ID prefix if present)
+		featureKey = providerFeature.LookupKey
+		if strings.Contains(featureKey, "_") {
+			parts := strings.SplitN(featureKey, "_", 2)
+			if len(parts) == 2 {
+				featureKey = parts[1]
+			}
+		}
+	}
+
+	// Check if feature with this key already exists
+	existingFeature, err := s.featureRepo.FindByKey(ctx, appID, featureKey)
+	if err == nil && existingFeature != nil {
+		// Feature exists with this key - update it with provider data
+		existingFeature.Name = providerFeature.Name
+		existingFeature.ProviderFeatureID = providerFeature.ID
+		
+		if desc, ok := providerFeature.Metadata["description"].(string); ok {
+			existingFeature.Description = desc
+		}
+		if featureType, ok := providerFeature.Metadata["feature_type"].(string); ok {
+			existingFeature.Type = featureType
+		}
+		if unit, ok := providerFeature.Metadata["unit"].(string); ok {
+			existingFeature.Unit = unit
+		}
+		
+		syncTime := time.Now()
+		existingFeature.LastSyncedAt = &syncTime
+		existingFeature.UpdatedAt = time.Now()
+		
+		if err := s.featureRepo.Update(ctx, existingFeature); err != nil {
+			return nil, fmt.Errorf("failed to update existing feature: %w", err)
+		}
+		
+		return s.schemaToCore(existingFeature, nil), nil
+	}
+
+	// Extract feature type from metadata
+	featureTypeStr, ok := providerFeature.Metadata["feature_type"].(string)
+	if !ok || featureTypeStr == "" {
+		featureTypeStr = "boolean" // Default to boolean if not specified
+	}
+
+	// Extract other metadata
+	description := ""
+	if desc, ok := providerFeature.Metadata["description"].(string); ok {
+		description = desc
+	}
+
+	unit := ""
+	if u, ok := providerFeature.Metadata["unit"].(string); ok {
+		unit = u
+	}
+
+	// Create new feature schema
+	now := time.Now()
+	newFeature := &schema.Feature{
+		ID:                xid.New(),
+		AppID:             appID,
+		Key:               featureKey,
+		Name:              providerFeature.Name,
+		Description:       description,
+		Type:              featureTypeStr,
+		Unit:              unit,
+		ResetPeriod:       "none", // Default reset period
+		IsPublic:          true,   // Default to public
+		DisplayOrder:      0,
+		ProviderFeatureID: providerFeature.ID,
+		LastSyncedAt:      &now,
+		Metadata:          providerFeature.Metadata,
+	}
+	
+	// CreatedAt and UpdatedAt are set by AuditableModel
+
+	if err := s.featureRepo.Create(ctx, newFeature); err != nil {
+		return nil, fmt.Errorf("failed to create feature from provider: %w", err)
+	}
+
+	return s.schemaToCore(newFeature, nil), nil
+}
+
+// SyncAllFromProvider syncs all features from the provider for a product
+func (s *FeatureService) SyncAllFromProvider(ctx context.Context, productID string) ([]*core.Feature, error) {
+	if s.provider == nil {
+		return nil, fmt.Errorf("payment provider not configured")
+	}
+
+	providerFeatures, err := s.provider.ListProviderFeatures(ctx, productID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list features from provider: %w", err)
+	}
+
+	var result []*core.Feature
+	for _, pf := range providerFeatures {
+		feature, err := s.SyncFromProvider(ctx, pf.ID)
+		if err != nil {
+			// Log error but continue
+			continue
+		}
+		result = append(result, feature)
+	}
+
+	return result, nil
 }

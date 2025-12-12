@@ -10,12 +10,14 @@ import (
 	"github.com/stripe/stripe-go/v76/billingportal/session"
 	checkoutsession "github.com/stripe/stripe-go/v76/checkout/session"
 	"github.com/stripe/stripe-go/v76/customer"
+	"github.com/stripe/stripe-go/v76/entitlements/feature"
 	"github.com/stripe/stripe-go/v76/invoice"
 	"github.com/stripe/stripe-go/v76/paymentmethod"
 	"github.com/stripe/stripe-go/v76/price"
 	"github.com/stripe/stripe-go/v76/product"
 	"github.com/stripe/stripe-go/v76/setupintent"
 	"github.com/stripe/stripe-go/v76/subscription"
+	"github.com/stripe/stripe-go/v76/subscriptionitem"
 	"github.com/stripe/stripe-go/v76/usagerecord"
 	"github.com/stripe/stripe-go/v76/webhook"
 	"github.com/xraph/authsome/plugins/subscription/core"
@@ -174,7 +176,67 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 
 // SyncAddOn syncs an add-on to Stripe
 func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
-	// Similar to SyncPlan
+	// Build metadata for recovery and identification
+	metadata := map[string]string{
+		"authsome":         "true",
+		"addon_id":         addon.ID.String(),
+		"app_id":           addon.AppID.String(),
+		"slug":             addon.Slug,
+		"billing_pattern":  string(addon.BillingPattern),
+		"billing_interval": string(addon.BillingInterval),
+	}
+
+	// Create or update product
+	var productID string
+	if addon.ProviderPriceID != "" {
+		// Extract product ID from existing price
+		// For Stripe, we need to get the price to find the product
+		return nil // Already synced
+	}
+
+	// Create new product for add-on
+	params := &stripe.ProductParams{
+		Name:     stripe.String(addon.Name),
+		Active:   stripe.Bool(addon.IsActive),
+		Metadata: metadata,
+	}
+	if addon.Description != "" {
+		params.Description = stripe.String(addon.Description)
+	}
+
+	prod, err := product.New(params)
+	if err != nil {
+		return fmt.Errorf("failed to create Stripe product for add-on: %w", err)
+	}
+	productID = prod.ID
+
+	// Create price
+	priceParams := &stripe.PriceParams{
+		Product:    stripe.String(productID),
+		Currency:   stripe.String(addon.Currency),
+		UnitAmount: stripe.Int64(addon.Price),
+		Active:     stripe.Bool(addon.IsActive),
+	}
+
+	// Set recurring for subscriptions
+	if addon.BillingInterval != core.BillingIntervalOneTime {
+		interval := stripe.PriceRecurringIntervalMonth
+		if addon.BillingInterval == core.BillingIntervalYearly {
+			interval = stripe.PriceRecurringIntervalYear
+		}
+		priceParams.Recurring = &stripe.PriceRecurringParams{
+			Interval: stripe.String(string(interval)),
+		}
+	}
+
+	pr, err := price.New(priceParams)
+	if err != nil {
+		return fmt.Errorf("failed to create Stripe price for add-on: %w", err)
+	}
+
+	// Update add-on with provider IDs
+	addon.ProviderPriceID = pr.ID
+
 	return nil
 }
 
@@ -265,6 +327,38 @@ func (p *Provider) ResumeSubscription(ctx context.Context, subscriptionID string
 	params := &stripe.SubscriptionParams{}
 	params.AddExtra("pause_collection", "")
 	_, err := subscription.Update(subscriptionID, params)
+	return err
+}
+
+// AddSubscriptionItem adds an item (add-on) to an existing subscription
+func (p *Provider) AddSubscriptionItem(ctx context.Context, subscriptionID string, priceID string, quantity int) (string, error) {
+	params := &stripe.SubscriptionItemParams{
+		Subscription: stripe.String(subscriptionID),
+		Price:        stripe.String(priceID),
+		Quantity:     stripe.Int64(int64(quantity)),
+	}
+
+	item, err := subscriptionitem.New(params)
+	if err != nil {
+		return "", fmt.Errorf("failed to add subscription item: %w", err)
+	}
+
+	return item.ID, nil
+}
+
+// RemoveSubscriptionItem removes an item from a subscription
+func (p *Provider) RemoveSubscriptionItem(ctx context.Context, subscriptionID string, itemID string) error {
+	_, err := subscriptionitem.Del(itemID, nil)
+	return err
+}
+
+// UpdateSubscriptionItem updates the quantity of a subscription item
+func (p *Provider) UpdateSubscriptionItem(ctx context.Context, subscriptionID string, itemID string, quantity int) error {
+	params := &stripe.SubscriptionItemParams{
+		Quantity: stripe.Int64(int64(quantity)),
+	}
+
+	_, err := subscriptionitem.Update(itemID, params)
 	return err
 }
 
@@ -505,6 +599,203 @@ func (p *Provider) GetInvoicePDF(ctx context.Context, invoiceID string) (string,
 func (p *Provider) VoidInvoice(ctx context.Context, invoiceID string) error {
 	_, err := invoice.VoidInvoice(invoiceID, nil)
 	return err
+}
+
+// ListInvoices lists invoices for a customer from Stripe
+func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit int) ([]*types.ProviderInvoice, error) {
+	params := &stripe.InvoiceListParams{
+		Customer: stripe.String(customerID),
+	}
+	params.Limit = stripe.Int64(int64(limit))
+
+	var invoices []*types.ProviderInvoice
+	iter := invoice.List(params)
+	for iter.Next() {
+		inv := iter.Invoice()
+		invoices = append(invoices, &types.ProviderInvoice{
+			ID:             inv.ID,
+			CustomerID:     inv.Customer.ID,
+			SubscriptionID: inv.Subscription.ID,
+			Status:         string(inv.Status),
+			Currency:       string(inv.Currency),
+			AmountDue:      inv.AmountDue,
+			AmountPaid:     inv.AmountPaid,
+			Total:          inv.Total,
+			Subtotal:       inv.Subtotal,
+			Tax:            inv.Tax,
+			PeriodStart:    inv.PeriodStart,
+			PeriodEnd:      inv.PeriodEnd,
+			PDFURL:         inv.InvoicePDF,
+			HostedURL:      inv.HostedInvoiceURL,
+		})
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list invoices: %w", err)
+	}
+
+	return invoices, nil
+}
+
+// ListSubscriptionInvoices lists invoices for a subscription from Stripe
+func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID string, limit int) ([]*types.ProviderInvoice, error) {
+	params := &stripe.InvoiceListParams{
+		Subscription: stripe.String(subscriptionID),
+	}
+	params.Limit = stripe.Int64(int64(limit))
+
+	var invoices []*types.ProviderInvoice
+	iter := invoice.List(params)
+	for iter.Next() {
+		inv := iter.Invoice()
+		invoices = append(invoices, &types.ProviderInvoice{
+			ID:             inv.ID,
+			CustomerID:     inv.Customer.ID,
+			SubscriptionID: inv.Subscription.ID,
+			Status:         string(inv.Status),
+			Currency:       string(inv.Currency),
+			AmountDue:      inv.AmountDue,
+			AmountPaid:     inv.AmountPaid,
+			Total:          inv.Total,
+			Subtotal:       inv.Subtotal,
+			Tax:            inv.Tax,
+			PeriodStart:    inv.PeriodStart,
+			PeriodEnd:      inv.PeriodEnd,
+			PDFURL:         inv.InvoicePDF,
+			HostedURL:      inv.HostedInvoiceURL,
+		})
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list subscription invoices: %w", err)
+	}
+
+	return invoices, nil
+}
+
+// SyncFeature syncs a feature to Stripe as an Entitlement Feature
+func (p *Provider) SyncFeature(ctx context.Context, coreFeature *core.Feature) (string, error) {
+	// Check if feature already exists in Stripe (has ProviderFeatureID)
+	if coreFeature.ProviderFeatureID != "" {
+		// Update existing feature
+		params := &stripe.EntitlementsFeatureParams{}
+
+		// Update name if changed
+		if coreFeature.Name != "" {
+			params.Name = stripe.String(coreFeature.Name)
+		}
+
+		// Add metadata to track AuthSome feature mapping
+		params.AddMetadata("authsome_feature_id", coreFeature.ID.String())
+		params.AddMetadata("authsome_feature_key", coreFeature.Key)
+		params.AddMetadata("authsome_app_id", coreFeature.AppID.String())
+		params.AddMetadata("feature_type", string(coreFeature.Type))
+		params.AddMetadata("unit", coreFeature.Unit)
+
+		updatedFeature, err := feature.Update(coreFeature.ProviderFeatureID, params)
+		if err != nil {
+			return "", fmt.Errorf("failed to update Stripe feature: %w", err)
+		}
+
+		return updatedFeature.ID, nil
+	}
+
+	// Create new feature in Stripe
+	params := &stripe.EntitlementsFeatureParams{}
+	params.Name = stripe.String(coreFeature.Name)
+
+	// Stripe requires a lookup_key - use our feature key with app prefix for uniqueness
+	lookupKey := fmt.Sprintf("%s_%s", coreFeature.AppID.String(), coreFeature.Key)
+	params.LookupKey = stripe.String(lookupKey)
+
+	// Add metadata to track AuthSome feature mapping
+	params.AddMetadata("authsome_feature_id", coreFeature.ID.String())
+	params.AddMetadata("authsome_feature_key", coreFeature.Key)
+	params.AddMetadata("authsome_app_id", coreFeature.AppID.String())
+	params.AddMetadata("feature_type", string(coreFeature.Type))
+	params.AddMetadata("unit", coreFeature.Unit)
+	params.AddMetadata("description", coreFeature.Description)
+
+	stripeFeature, err := feature.New(params)
+	if err != nil {
+		return "", fmt.Errorf("failed to create Stripe feature: %w", err)
+	}
+
+	return stripeFeature.ID, nil
+}
+
+// ListProviderFeatures lists features from Stripe for a product
+func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) ([]*types.ProviderFeature, error) {
+	var features []*types.ProviderFeature
+
+	params := &stripe.EntitlementsFeatureListParams{}
+	params.Limit = stripe.Int64(100)
+
+	// Note: Metadata is included by default in Stripe's feature list response
+	// We don't need to expand it (and Stripe doesn't allow expanding it)
+
+	iter := feature.List(params)
+	for iter.Next() {
+		feat := iter.EntitlementsFeature()
+
+		// Filter by app ID from metadata if specified
+		if productID != "" {
+			if appID, exists := feat.Metadata["authsome_app_id"]; !exists || appID != productID {
+				continue
+			}
+		}
+
+		metadata := make(map[string]interface{})
+		for k, v := range feat.Metadata {
+			metadata[k] = v
+		}
+
+		providerFeature := &types.ProviderFeature{
+			ID:        feat.ID,
+			Name:      feat.Name,
+			LookupKey: feat.LookupKey,
+			Metadata:  metadata,
+		}
+
+		features = append(features, providerFeature)
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list Stripe features: %w", err)
+	}
+
+	return features, nil
+}
+
+// GetProviderFeature gets a specific feature from Stripe
+func (p *Provider) GetProviderFeature(ctx context.Context, featureID string) (*types.ProviderFeature, error) {
+	feat, err := feature.Get(featureID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Stripe feature: %w", err)
+	}
+
+	metadata := make(map[string]interface{})
+	for k, v := range feat.Metadata {
+		metadata[k] = v
+	}
+
+	providerFeature := &types.ProviderFeature{
+		ID:        feat.ID,
+		Name:      feat.Name,
+		LookupKey: feat.LookupKey,
+		Metadata:  metadata,
+	}
+
+	return providerFeature, nil
+}
+
+// DeleteProviderFeature deletes a feature from Stripe
+func (p *Provider) DeleteProviderFeature(ctx context.Context, featureID string) error {
+	// Note: Stripe Entitlements Features cannot be deleted once created
+	// They can only be archived/deactivated
+	// We'll return nil here since this is not an error condition
+	// The feature will remain in Stripe but won't be synced anymore
+	return nil
 }
 
 // ListProducts lists all products from Stripe, filtering for AuthSome-created products

@@ -9,21 +9,23 @@ import (
 
 // Feature represents a standalone feature definition that can be linked to plans
 type Feature struct {
-	ID           xid.ID         `json:"id"`
-	AppID        xid.ID         `json:"appId"`
-	Key          string         `json:"key"`          // Unique per app
-	Name         string         `json:"name"`         // Display name
-	Description  string         `json:"description"`  // Feature description
-	Type         FeatureType    `json:"type"`         // boolean, limit, unlimited, metered, tiered
-	Unit         string         `json:"unit"`         // "seats", "GB", "API calls", etc.
-	ResetPeriod  ResetPeriod    `json:"resetPeriod"`  // When usage resets
-	IsPublic     bool           `json:"isPublic"`     // Show in pricing pages
-	DisplayOrder int            `json:"displayOrder"` // Order in UI
-	Icon         string         `json:"icon"`         // Icon identifier for UI
-	Metadata     map[string]any `json:"metadata"`
-	Tiers        []FeatureTier  `json:"tiers,omitempty"` // For tiered features
-	CreatedAt    time.Time      `json:"createdAt"`
-	UpdatedAt    time.Time      `json:"updatedAt"`
+	ID                xid.ID         `json:"id"`
+	AppID             xid.ID         `json:"appId"`
+	Key               string         `json:"key"`          // Unique per app
+	Name              string         `json:"name"`         // Display name
+	Description       string         `json:"description"`  // Feature description
+	Type              FeatureType    `json:"type"`         // boolean, limit, unlimited, metered, tiered
+	Unit              string         `json:"unit"`         // "seats", "GB", "API calls", etc.
+	ResetPeriod       ResetPeriod    `json:"resetPeriod"`  // When usage resets
+	IsPublic          bool           `json:"isPublic"`     // Show in pricing pages
+	DisplayOrder      int            `json:"displayOrder"` // Order in UI
+	Icon              string         `json:"icon"`         // Icon identifier for UI
+	ProviderFeatureID string         `json:"providerFeatureId"` // Provider sync ID (e.g., Stripe product feature ID)
+	LastSyncedAt      *time.Time     `json:"lastSyncedAt"`      // Last provider sync time
+	Metadata          map[string]any `json:"metadata"`
+	Tiers             []FeatureTier  `json:"tiers,omitempty"` // For tiered features
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
 }
 
 // FeatureTier represents a tier within a tiered feature type

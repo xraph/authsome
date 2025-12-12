@@ -28,6 +28,9 @@ type Plugin struct {
 	// Dashboard
 	dashboardExtension *DashboardExtension
 
+	// UI Registry for organization page extensions
+	uiRegistry *OrganizationUIRegistry
+
 	// Database
 	db *bun.DB
 
@@ -219,6 +222,37 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 
 	// Initialize dashboard extension
 	p.dashboardExtension = NewDashboardExtension(p)
+
+	// Initialize organization UI registry
+	p.uiRegistry = NewOrganizationUIRegistry()
+
+	// Discover and register organization UI extensions from other plugins
+	// This happens after plugin initialization, so we need to defer actual registration
+	// until all plugins are loaded. We'll register extensions in a second pass.
+	if pluginRegistry := authInstance.GetPluginRegistry(); pluginRegistry != nil {
+		plugins := pluginRegistry.List()
+		p.logger.Info("scanning for organization UI extensions", forge.F("plugin_count", len(plugins)))
+		
+		for _, plugin := range plugins {
+			// Skip self
+			if plugin.ID() == p.ID() {
+				continue
+			}
+			
+			// Check if plugin implements OrganizationUIExtension
+			if orgUIExt, ok := plugin.(ui.OrganizationUIExtension); ok {
+				if err := p.uiRegistry.Register(orgUIExt); err != nil {
+					p.logger.Warn("failed to register organization UI extension",
+						forge.F("plugin", plugin.ID()),
+						forge.F("error", err.Error()))
+				} else {
+					p.logger.Info("registered organization UI extension",
+						forge.F("plugin", plugin.ID()),
+						forge.F("extension_id", orgUIExt.ExtensionID()))
+				}
+			}
+		}
+	}
 
 	// Register services in DI container if available
 	if container := forgeApp.Container(); container != nil {
@@ -493,6 +527,7 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	// Extend Owner role with full organization management permissions
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        rbac.RoleOwner,
+		DisplayName: "Owner",
 		Description: rbac.RoleDescOwner,
 		IsPlatform:  rbac.RoleIsPlatformOwner,
 		Priority:    rbac.RolePriorityOwner,
@@ -526,6 +561,7 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	// Extend Admin role with organization management permissions (except delete org)
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:         rbac.RoleAdmin,
+		DisplayName:  "Administrator",
 		Description:  rbac.RoleDescAdmin,
 		IsPlatform:   rbac.RoleIsPlatformAdmin,
 		InheritsFrom: rbac.RoleMember,
@@ -559,6 +595,7 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	// Extend Member role with basic organization access
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        rbac.RoleMember,
+		DisplayName: "Member",
 		Description: rbac.RoleDescMember,
 		IsPlatform:  rbac.RoleIsPlatformMember,
 		Priority:    rbac.RolePriorityMember,
@@ -577,6 +614,12 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 
 	fmt.Printf("[Organization] ✅ Organization roles registered\n")
 	return nil
+}
+
+// GetOrganizationUIRegistry returns the UI registry for accessing registered extensions
+// This is used by the dashboard extension to render extension widgets, tabs, and actions
+func (p *Plugin) GetOrganizationUIRegistry() *OrganizationUIRegistry {
+	return p.uiRegistry
 }
 
 // DTOs for organization routes - use shared responses from core

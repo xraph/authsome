@@ -19,6 +19,8 @@ type SubscriptionService struct {
 	repo         repository.SubscriptionRepository
 	planRepo     repository.PlanRepository
 	customerRepo repository.CustomerRepository
+	customerSvc  *CustomerService
+	addOnRepo    repository.AddOnRepository
 	provider     providers.PaymentProvider
 	eventRepo    repository.EventRepository
 	hookRegistry *subhooks.SubscriptionHookRegistry
@@ -30,6 +32,8 @@ func NewSubscriptionService(
 	repo repository.SubscriptionRepository,
 	planRepo repository.PlanRepository,
 	customerRepo repository.CustomerRepository,
+	customerSvc *CustomerService,
+	addOnRepo repository.AddOnRepository,
 	provider providers.PaymentProvider,
 	eventRepo repository.EventRepository,
 	hookRegistry *subhooks.SubscriptionHookRegistry,
@@ -39,6 +43,8 @@ func NewSubscriptionService(
 		repo:         repo,
 		planRepo:     planRepo,
 		customerRepo: customerRepo,
+		customerSvc:  customerSvc,
+		addOnRepo:    addOnRepo,
 		provider:     provider,
 		eventRepo:    eventRepo,
 		hookRegistry: hookRegistry,
@@ -117,14 +123,63 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 		sub.Status = string(core.StatusTrialing)
 	}
 
-	// Get customer for provider subscription
-	customer, err := s.customerRepo.FindByOrganizationID(ctx, req.OrganizationID)
-	if err == nil && customer != nil {
-		sub.ProviderCustomerID = customer.ProviderCustomerID
+	// Get or create customer for provider subscription (lazy creation)
+	customer, err := s.customerSvc.GetOrCreate(ctx, req.OrganizationID, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create customer: %w", err)
+	}
+
+	// Store customer ID
+	sub.ProviderCustomerID = customer.ProviderCustomerID
+
+	// Create subscription in payment provider (Stripe/Paddle/etc)
+	if s.provider != nil && plan.ProviderPriceID != "" {
+		// Calculate trial days for provider
+		providerTrialDays := 0
+		if req.StartTrial {
+			providerTrialDays = plan.TrialDays
+			if req.TrialDays > 0 {
+				providerTrialDays = req.TrialDays
+			}
+		}
+
+		// Prepare metadata for provider
+		providerMetadata := map[string]interface{}{
+			"authsome":        "true",
+			"subscription_id": sub.ID.String(),
+			"organization_id": req.OrganizationID.String(),
+			"plan_id":         req.PlanID.String(),
+		}
+		// Merge custom metadata
+		for k, v := range req.Metadata {
+			providerMetadata[k] = v
+		}
+
+		providerSubID, err := s.provider.CreateSubscription(
+			ctx,
+			customer.ProviderCustomerID,
+			plan.ProviderPriceID,
+			quantity,
+			providerTrialDays,
+			providerMetadata,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create subscription in provider: %w", err)
+		}
+
+		sub.ProviderSubID = providerSubID
+		// Update status based on trial
+		if providerTrialDays > 0 {
+			sub.Status = string(core.StatusTrialing)
+		} else {
+			sub.Status = string(core.StatusActive)
+		}
 	}
 
 	// Create in database
 	if err := s.repo.Create(ctx, sub); err != nil {
+		// If database creation fails, we should ideally cancel the provider subscription
+		// For now, log and return error
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 
@@ -425,6 +480,18 @@ func (s *SubscriptionService) UpdateQuantity(ctx context.Context, id xid.ID, qua
 
 // AttachAddOn attaches an add-on to a subscription
 func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xid.ID, quantity int) error {
+	// Get subscription
+	sub, err := s.repo.FindByID(ctx, subID)
+	if err != nil {
+		return suberrors.ErrSubscriptionNotFound
+	}
+
+	// Get add-on
+	addOn, err := s.addOnRepo.FindByID(ctx, addOnID)
+	if err != nil {
+		return fmt.Errorf("add-on not found")
+	}
+
 	// Check existing
 	items, _ := s.repo.GetAddOnItems(ctx, subID)
 	for _, item := range items {
@@ -433,20 +500,92 @@ func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xi
 		}
 	}
 
-	item := &schema.SubscriptionAddOnItem{
-		ID:             xid.New(),
-		SubscriptionID: subID,
-		AddOnID:        addOnID,
-		Quantity:       quantity,
-		CreatedAt:      time.Now(),
+	// Create in provider first (if subscription is synced)
+	var providerItemID string
+	if sub.ProviderSubID != "" && addOn.ProviderPriceID != "" && s.provider != nil {
+		providerItemID, err = s.provider.AddSubscriptionItem(
+			ctx,
+			sub.ProviderSubID,
+			addOn.ProviderPriceID,
+			quantity,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to add item to provider: %w", err)
+		}
 	}
 
-	return s.repo.CreateAddOnItem(ctx, item)
+	// Create local record
+	item := &schema.SubscriptionAddOnItem{
+		ID:                xid.New(),
+		SubscriptionID:    subID,
+		AddOnID:           addOnID,
+		Quantity:          quantity,
+		ProviderSubItemID: providerItemID,
+		CreatedAt:         time.Now(),
+	}
+
+	if err := s.repo.CreateAddOnItem(ctx, item); err != nil {
+		// Rollback provider change if local save fails
+		if providerItemID != "" && s.provider != nil {
+			s.provider.RemoveSubscriptionItem(ctx, sub.ProviderSubID, providerItemID)
+		}
+		return fmt.Errorf("failed to create add-on item: %w", err)
+	}
+
+	// Record event
+	s.recordEvent(ctx, subID, sub.OrganizationID, "addon.attached", map[string]interface{}{
+		"addOnId":  addOnID.String(),
+		"quantity": quantity,
+	})
+
+	return nil
 }
 
 // DetachAddOn detaches an add-on from a subscription
 func (s *SubscriptionService) DetachAddOn(ctx context.Context, subID, addOnID xid.ID) error {
-	return s.repo.DeleteAddOnItem(ctx, subID, addOnID)
+	// Get the subscription
+	sub, err := s.repo.FindByID(ctx, subID)
+	if err != nil {
+		return suberrors.ErrSubscriptionNotFound
+	}
+
+	// Get the add-on items
+	items, err := s.repo.GetAddOnItems(ctx, subID)
+	if err != nil {
+		return fmt.Errorf("failed to get add-on items: %w", err)
+	}
+
+	var item *schema.SubscriptionAddOnItem
+	for _, i := range items {
+		if i.AddOnID == addOnID {
+			item = i
+			break
+		}
+	}
+
+	if item == nil {
+		return fmt.Errorf("add-on not attached to subscription")
+	}
+
+	// Remove from provider if synced
+	if item.ProviderSubItemID != "" && sub.ProviderSubID != "" && s.provider != nil {
+		if err := s.provider.RemoveSubscriptionItem(ctx, sub.ProviderSubID, item.ProviderSubItemID); err != nil {
+			// Log but don't fail - we'll clean up local anyway
+			// In production, you might want to retry or queue this
+		}
+	}
+
+	// Remove local record
+	if err := s.repo.DeleteAddOnItem(ctx, subID, addOnID); err != nil {
+		return fmt.Errorf("failed to delete add-on item: %w", err)
+	}
+
+	// Record event
+	s.recordEvent(ctx, subID, sub.OrganizationID, "addon.detached", map[string]interface{}{
+		"addOnId": addOnID.String(),
+	})
+
+	return nil
 }
 
 // SyncFromProvider syncs subscription data from the provider
@@ -456,9 +595,157 @@ func (s *SubscriptionService) SyncFromProvider(ctx context.Context, providerSubI
 		return nil, suberrors.ErrSubscriptionNotFound
 	}
 
-	// TODO: Fetch from provider and update local data
+	// Fetch from provider
+	if s.provider == nil {
+		return nil, fmt.Errorf("provider not available")
+	}
+
+	providerSub, err := s.provider.GetSubscription(ctx, providerSubID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch subscription from provider: %w", err)
+	}
+
+	// Update local data with provider data
+	sub.Status = providerSub.Status
+	sub.Quantity = providerSub.Quantity
+	sub.CurrentPeriodStart = time.Unix(providerSub.CurrentPeriodStart, 0)
+	sub.CurrentPeriodEnd = time.Unix(providerSub.CurrentPeriodEnd, 0)
+
+	if providerSub.TrialStart != nil {
+		trialStart := time.Unix(*providerSub.TrialStart, 0)
+		sub.TrialStart = &trialStart
+	}
+	if providerSub.TrialEnd != nil {
+		trialEnd := time.Unix(*providerSub.TrialEnd, 0)
+		sub.TrialEnd = &trialEnd
+	}
+	if providerSub.CancelAt != nil {
+		cancelAt := time.Unix(*providerSub.CancelAt, 0)
+		sub.CancelAt = &cancelAt
+	}
+	if providerSub.CanceledAt != nil {
+		canceledAt := time.Unix(*providerSub.CanceledAt, 0)
+		sub.CanceledAt = &canceledAt
+	}
+	if providerSub.EndedAt != nil {
+		endedAt := time.Unix(*providerSub.EndedAt, 0)
+		sub.EndedAt = &endedAt
+	}
+
+	sub.UpdatedAt = time.Now()
+
+	// Update database
+	if err := s.repo.Update(ctx, sub); err != nil {
+		return nil, fmt.Errorf("failed to update subscription: %w", err)
+	}
+
+	// Record event
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, "subscription.synced_from_provider", map[string]interface{}{
+		"providerSubId": providerSubID,
+		"status":        providerSub.Status,
+	})
 
 	return s.schemaToCoreSub(sub), nil
+}
+
+// SyncFromProviderByID syncs subscription data from provider using local subscription ID
+func (s *SubscriptionService) SyncFromProviderByID(ctx context.Context, id xid.ID) (*core.Subscription, error) {
+	sub, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, suberrors.ErrSubscriptionNotFound
+	}
+
+	if sub.ProviderSubID == "" {
+		return nil, fmt.Errorf("subscription not synced to provider yet")
+	}
+
+	return s.SyncFromProvider(ctx, sub.ProviderSubID)
+}
+
+// SyncToProvider syncs a subscription to the payment provider
+func (s *SubscriptionService) SyncToProvider(ctx context.Context, id xid.ID) error {
+	// Get subscription
+	sub, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return suberrors.ErrSubscriptionNotFound
+	}
+
+	// Get or create customer
+	customer, err := s.customerSvc.GetOrCreate(ctx, sub.OrganizationID, "", "")
+	if err != nil {
+		return fmt.Errorf("failed to get or create customer: %w", err)
+	}
+
+	// Get plan
+	plan, err := s.planRepo.FindByID(ctx, sub.PlanID)
+	if err != nil {
+		return fmt.Errorf("plan not found")
+	}
+
+	// Check if plan is synced
+	if plan.ProviderPriceID == "" {
+		return fmt.Errorf("plan not synced to provider - sync plan first")
+	}
+
+	// If already synced, return
+	if sub.ProviderSubID != "" {
+		return nil // Already synced
+	}
+
+	// Calculate trial days for provider
+	providerTrialDays := 0
+	if sub.TrialEnd != nil && sub.TrialStart != nil {
+		trialDuration := sub.TrialEnd.Sub(*sub.TrialStart)
+		providerTrialDays = int(trialDuration.Hours() / 24)
+	}
+
+	// Prepare metadata
+	metadata := map[string]interface{}{
+		"authsome":        "true",
+		"subscription_id": sub.ID.String(),
+		"organization_id": sub.OrganizationID.String(),
+		"plan_id":         sub.PlanID.String(),
+	}
+	if sub.Metadata != nil {
+		for k, v := range sub.Metadata {
+			metadata[k] = v
+		}
+	}
+
+	// Create in provider
+	providerSubID, err := s.provider.CreateSubscription(
+		ctx,
+		customer.ProviderCustomerID,
+		plan.ProviderPriceID,
+		sub.Quantity,
+		providerTrialDays,
+		metadata,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create subscription in provider: %w", err)
+	}
+
+	// Update local record with provider ID
+	sub.ProviderSubID = providerSubID
+	sub.ProviderCustomerID = customer.ProviderCustomerID
+
+	// Update status based on trial
+	if providerTrialDays > 0 {
+		sub.Status = string(core.StatusTrialing)
+	} else {
+		sub.Status = string(core.StatusActive)
+	}
+
+	if err := s.repo.Update(ctx, sub); err != nil {
+		return fmt.Errorf("failed to update subscription: %w", err)
+	}
+
+	// Record event
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, "subscription.synced", map[string]interface{}{
+		"providerSubId": providerSubID,
+	})
+
+	return nil
 }
 
 // Helper methods

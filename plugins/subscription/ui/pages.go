@@ -75,7 +75,7 @@ func renderBreadcrumbs(items []Breadcrumb) g.Node {
 // BillingOverviewPage renders the billing overview dashboard
 func BillingOverviewPage(basePath string, metrics *core.DashboardMetrics, recentSubs []*core.Subscription) g.Node {
 	return PageLayout(
-		"Billing Overview",
+		"Subscription Overview",
 		nil,
 		nil,
 		// Stats Grid

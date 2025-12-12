@@ -8,7 +8,7 @@ import (
 // Constants for pagination limits
 const (
 	DefaultLimit = 10
-	MaxLimit     = 100
+	MaxLimit     = 10000
 	MinLimit     = 1
 )
 
@@ -33,7 +33,7 @@ type BaseRequestParams struct {
 // PaginationParams represents offset-based pagination request parameters
 type PaginationParams struct {
 	BaseRequestParams
-	Limit  int `json:"limit" query:"limit" default:"10" validate:"min=1,max=100" example:"10" optional:"true"`
+	Limit  int `json:"limit" query:"limit" default:"10" validate:"min=1,max=10000" example:"10" optional:"true"`
 	Offset int `json:"offset" query:"offset" default:"0" validate:"min=0" example:"0" optional:"true"`
 	Page   int `json:"page" query:"page" default:"1" validate:"min=1" example:"1" optional:"true"`
 }
@@ -41,7 +41,7 @@ type PaginationParams struct {
 // CursorParams represents cursor-based pagination parameters
 type CursorParams struct {
 	BaseRequestParams
-	Limit  int    `json:"limit" query:"limit" default:"10" validate:"min=1,max=100" example:"10" optional:"true"`
+	Limit  int    `json:"limit" query:"limit" default:"10" validate:"min=1,max=10000" example:"10" optional:"true"`
 	Cursor string `json:"cursor" query:"cursor" default:"" example:"eyJpZCI6IjEyMyIsInRzIjoxNjQwMDAwMDAwfQ==" optional:"true"`
 }
 

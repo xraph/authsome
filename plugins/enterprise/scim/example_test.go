@@ -124,7 +124,7 @@ func TestSCIMProvisioningFlow(t *testing.T) {
 	scimUser := &scim.SCIMUser{
 		Schemas:  []string{scim.SchemaCore},
 		UserName: "testuser@example.com",
-		Name: &scim.Name{
+		Name: &scim.SCIMName{
 			GivenName:  "Test",
 			FamilyName: "User",
 		},

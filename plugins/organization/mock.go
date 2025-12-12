@@ -156,6 +156,15 @@ func (m *MockService) DeleteOrganization(ctx context.Context, id, userID xid.ID)
 	return nil
 }
 
+// ForceDeleteOrganization mocks force deleting an organization without permission checks
+func (m *MockService) ForceDeleteOrganization(ctx context.Context, id xid.ID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.organizations, id)
+	return nil
+}
+
 // AddMember mocks adding a member
 func (m *MockService) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*organization.Member, error) {
 	if m.AddMemberError != nil {

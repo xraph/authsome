@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
 	"github.com/xraph/forge"
@@ -34,11 +35,133 @@ type Plugin struct {
 	orgService     interface{}           // Use interface{} to support both core and multitenancy org services
 	auditService   *audit.Service
 	webhookService *webhook.Service
+	
+	// Dashboard extension
+	dashboardExt *DashboardExtension
+	
+	// Organization UI extension
+	orgUIExt *OrganizationUIExtension
+}
+
+// PluginOption is a functional option for configuring the SCIM plugin
+type PluginOption func(*Plugin)
+
+// WithDefaultConfig sets the default configuration for the plugin
+func WithDefaultConfig(cfg *Config) PluginOption {
+	return func(p *Plugin) {
+		p.config = cfg
+	}
+}
+
+// WithAuthMethod sets the authentication method (bearer or oauth2)
+func WithAuthMethod(method string) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.AuthMethod = method
+	}
+}
+
+// WithRateLimit configures rate limiting
+func WithRateLimit(enabled bool, requestsPerMin, burstSize int) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.RateLimit.Enabled = enabled
+		p.config.RateLimit.RequestsPerMin = requestsPerMin
+		p.config.RateLimit.BurstSize = burstSize
+	}
+}
+
+// WithUserProvisioning configures user provisioning behavior
+func WithUserProvisioning(autoActivate, sendWelcomeEmail, preventDuplicates bool, defaultRole string) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.UserProvisioning.AutoActivate = autoActivate
+		p.config.UserProvisioning.SendWelcomeEmail = sendWelcomeEmail
+		p.config.UserProvisioning.PreventDuplicates = preventDuplicates
+		p.config.UserProvisioning.DefaultRole = defaultRole
+	}
+}
+
+// WithGroupSync configures group synchronization
+func WithGroupSync(enabled, syncToTeams, syncToRoles, createMissing bool) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.GroupSync.Enabled = enabled
+		p.config.GroupSync.SyncToTeams = syncToTeams
+		p.config.GroupSync.SyncToRoles = syncToRoles
+		p.config.GroupSync.CreateMissingGroups = createMissing
+	}
+}
+
+// WithJITProvisioning configures Just-In-Time provisioning
+func WithJITProvisioning(enabled, createOnFirstLogin, updateOnLogin bool) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.JITProvisioning.Enabled = enabled
+		p.config.JITProvisioning.CreateOnFirstLogin = createOnFirstLogin
+		p.config.JITProvisioning.UpdateOnLogin = updateOnLogin
+	}
+}
+
+// WithWebhooks configures provisioning event webhooks
+func WithWebhooks(enabled bool, urls []string, retryAttempts int) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.Webhooks.Enabled = enabled
+		p.config.Webhooks.WebhookURLs = urls
+		p.config.Webhooks.RetryAttempts = retryAttempts
+	}
+}
+
+// WithBulkOperations configures bulk operation limits
+func WithBulkOperations(enabled bool, maxOps, maxPayloadBytes int) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.BulkOperations.Enabled = enabled
+		p.config.BulkOperations.MaxOperations = maxOps
+		p.config.BulkOperations.MaxPayloadBytes = maxPayloadBytes
+	}
+}
+
+// WithSecurity configures security settings
+func WithSecurity(requireHTTPS, auditAll, maskSensitive bool, ipWhitelist []string) PluginOption {
+	return func(p *Plugin) {
+		if p.config == nil {
+			p.config = DefaultConfig()
+		}
+		p.config.Security.RequireHTTPS = requireHTTPS
+		p.config.Security.AuditAllOperations = auditAll
+		p.config.Security.MaskSensitiveData = maskSensitive
+		p.config.Security.IPWhitelist = ipWhitelist
+	}
 }
 
 // NewPlugin creates a new SCIM plugin instance
-func NewPlugin() *Plugin {
-	return &Plugin{}
+func NewPlugin(opts ...PluginOption) *Plugin {
+	p := &Plugin{
+		config: DefaultConfig(),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 // ID returns the unique plugin identifier
@@ -133,6 +256,12 @@ func (p *Plugin) Init(auth core.Authsome) error {
 
 	// Initialize handler
 	p.handler = NewHandler(p.service, p.config)
+
+	// Initialize dashboard extension
+	p.dashboardExt = NewDashboardExtension(p)
+
+	// Initialize organization UI extension
+	p.orgUIExt = NewOrganizationUIExtension(p)
 
 	fmt.Println("[SCIM] Plugin initialized successfully")
 	return nil
@@ -633,4 +762,56 @@ type SCIMLogInfo struct {
 // SCIMStatsResponse represents provisioning statistics response
 type SCIMStatsResponse struct {
 	SCIMMetrics map[string]interface{} `json:"scim_metrics"`
+}
+
+// DashboardExtension returns the dashboard extension for the SCIM plugin
+// This allows the plugin to extend the dashboard with SCIM-specific UI
+// This implements the PluginWithDashboardExtension interface
+func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	return p.dashboardExt
+}
+
+// Implement ui.OrganizationUIExtension interface by delegating to orgUIExt
+// This allows the SCIM plugin to extend organization pages with SCIM-specific UI
+
+func (p *Plugin) ExtensionID() string {
+	if p.orgUIExt == nil {
+		return ""
+	}
+	return p.orgUIExt.ExtensionID()
+}
+
+func (p *Plugin) OrganizationWidgets() []ui.OrganizationWidget {
+	if p.orgUIExt == nil {
+		return []ui.OrganizationWidget{}
+	}
+	return p.orgUIExt.OrganizationWidgets()
+}
+
+func (p *Plugin) OrganizationTabs() []ui.OrganizationTab {
+	if p.orgUIExt == nil {
+		return []ui.OrganizationTab{}
+	}
+	return p.orgUIExt.OrganizationTabs()
+}
+
+func (p *Plugin) OrganizationActions() []ui.OrganizationAction {
+	if p.orgUIExt == nil {
+		return []ui.OrganizationAction{}
+	}
+	return p.orgUIExt.OrganizationActions()
+}
+
+func (p *Plugin) OrganizationQuickLinks() []ui.OrganizationQuickLink {
+	if p.orgUIExt == nil {
+		return []ui.OrganizationQuickLink{}
+	}
+	return p.orgUIExt.OrganizationQuickLinks()
+}
+
+func (p *Plugin) OrganizationSettingsSections() []ui.OrganizationSettingsSection {
+	if p.orgUIExt == nil {
+		return []ui.OrganizationSettingsSection{}
+	}
+	return p.orgUIExt.OrganizationSettingsSections()
 }

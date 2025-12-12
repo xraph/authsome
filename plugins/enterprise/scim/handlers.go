@@ -75,7 +75,7 @@ func (h *Handler) GetServiceProviderConfig(c forge.Context) error {
 				Primary:     true,
 			},
 		},
-		Meta: &Meta{
+		Meta: &SCIMMeta{
 			ResourceType: "ServiceProviderConfig",
 			Location:     "/scim/v2/ServiceProviderConfig",
 		},
@@ -104,7 +104,7 @@ func (h *Handler) GetResourceTypes(c forge.Context) error {
 					Required: false,
 				},
 			},
-			Meta: &Meta{
+			Meta: &SCIMMeta{
 				ResourceType: "ResourceType",
 				Location:     "/scim/v2/ResourceTypes/User",
 			},
@@ -116,7 +116,7 @@ func (h *Handler) GetResourceTypes(c forge.Context) error {
 			Endpoint:    "/Groups",
 			Description: "Group",
 			Schema:      SchemaGroup,
-			Meta: &Meta{
+			Meta: &SCIMMeta{
 				ResourceType: "ResourceType",
 				Location:     "/scim/v2/ResourceTypes/Group",
 			},
@@ -153,7 +153,7 @@ func (h *Handler) GetResourceType(c forge.Context) error {
 					Required: false,
 				},
 			},
-			Meta: &Meta{
+			Meta: &SCIMMeta{
 				ResourceType: "ResourceType",
 				Location:     "/scim/v2/ResourceTypes/User",
 			},
@@ -166,7 +166,7 @@ func (h *Handler) GetResourceType(c forge.Context) error {
 			Endpoint:    "/Groups",
 			Description: "Group",
 			Schema:      SchemaGroup,
-			Meta: &Meta{
+			Meta: &SCIMMeta{
 				ResourceType: "ResourceType",
 				Location:     "/scim/v2/ResourceTypes/Group",
 			},

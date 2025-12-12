@@ -94,6 +94,7 @@ type Auth struct {
 	// Global authentication middleware
 	authMiddleware       *middleware.AuthMiddleware
 	authMiddlewareConfig middleware.AuthMiddlewareConfig
+	authStrategyRegistry *middleware.AuthStrategyRegistry
 
 	// Plugin registry
 	pluginRegistry plugins.PluginRegistry
@@ -117,6 +118,7 @@ func New(opts ...Option) *Auth {
 		pluginRegistry:           plugins.NewRegistry(),
 		serviceRegistry:          registry.NewServiceRegistry(),
 		hookRegistry:             hooks.NewHookRegistry(),
+		authStrategyRegistry:     middleware.NewAuthStrategyRegistry(),
 		globalRoutesOptions:      []forge.RouteOption{},
 		globalGroupRoutesOptions: []forge.GroupOption{},
 	}
@@ -287,7 +289,8 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.sessionService,
 		a.userService,
 		middlewareConfig,
-		&a.config.SessionCookie, // Pass cookie config for session renewal
+		&a.config.SessionCookie,   // Pass cookie config for session renewal
+		a.authStrategyRegistry,     // Pass strategy registry for pluggable auth
 	)
 
 	// App service (platform tenant management)
@@ -603,6 +606,21 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 // RegisterPlugin registers a plugin
 func (a *Auth) RegisterPlugin(plugin plugins.Plugin) error {
 	return a.pluginRegistry.Register(plugin)
+}
+
+// RegisterAuthStrategy registers an authentication strategy
+// This allows plugins to add custom authentication methods
+// Strategies are tried in priority order during authentication
+func (a *Auth) RegisterAuthStrategy(strategy middleware.AuthStrategy) error {
+	if a.authStrategyRegistry == nil {
+		a.authStrategyRegistry = middleware.NewAuthStrategyRegistry()
+	}
+	
+	a.logger.Info("registering authentication strategy",
+		forge.F("strategy_id", strategy.ID()),
+		forge.F("priority", strategy.Priority()))
+	
+	return a.authStrategyRegistry.Register(strategy)
 }
 
 // GetConfig returns the auth config
