@@ -41,10 +41,12 @@ type Config struct {
 
 // Service provides user-related operations
 type Service struct {
-	repo         Repository
-	config       Config
-	webhookSvc   *webhook.Service
-	hookExecutor HookExecutor
+	repo             Repository
+	config           Config
+	webhookSvc       *webhook.Service
+	hookExecutor     HookExecutor
+	hookRegistry     interface{} // Hook registry for lifecycle events
+	verificationRepo interface{} // Verification repository for password resets
 }
 
 // NewService creates a new user service
@@ -55,6 +57,44 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookEx
 		webhookSvc:   webhookSvc,
 		hookExecutor: hookExecutor,
 	}
+}
+
+// SetHookRegistry sets the hook registry for executing lifecycle hooks
+func (s *Service) SetHookRegistry(registry interface{}) {
+	s.hookRegistry = registry
+}
+
+// GetHookRegistry returns the hook registry
+func (s *Service) GetHookRegistry() interface{} {
+	return s.hookRegistry
+}
+
+// SetVerificationRepo sets the verification repository for password resets
+func (s *Service) SetVerificationRepo(repo interface{}) {
+	s.verificationRepo = repo
+}
+
+// GetVerificationRepo returns the verification repository
+func (s *Service) GetVerificationRepo() interface{} {
+	return s.verificationRepo
+}
+
+// UpdatePassword updates a user's password directly
+func (s *Service) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
+	schemaUser, err := s.repo.FindByID(ctx, userID)
+	if err != nil {
+		return UserNotFound(userID.String())
+	}
+
+	user := FromSchemaUser(schemaUser)
+	user.PasswordHash = hashedPassword
+	user.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Update(ctx, user.ToSchema()); err != nil {
+		return UserUpdateFailed(err)
+	}
+
+	return nil
 }
 
 // =============================================================================
@@ -196,6 +236,11 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 		}
 	}
 
+	// Track changes for lifecycle notifications
+	var oldEmail, oldUsername string
+	emailChanged := false
+	usernameChanged := false
+
 	if req.Name != nil {
 		u.Name = *req.Name
 	}
@@ -214,7 +259,9 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return nil, UserUpdateFailed(err)
 			}
+			oldEmail = u.Email
 			u.Email = newEmail
+			emailChanged = true
 		}
 	}
 
@@ -251,6 +298,10 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, UserUpdateFailed(err)
 		}
+		if canonical != u.Username {
+			oldUsername = u.Username
+			usernameChanged = true
+		}
 		u.Username = canonical
 		// Set display username if provided; else preserve original casing
 		if req.DisplayUsername != nil {
@@ -273,6 +324,21 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 	if s.hookExecutor != nil {
 		if err := s.hookExecutor.ExecuteAfterUserUpdate(ctx, u); err != nil {
 			// Log error but don't fail - user is already updated
+		}
+	}
+
+	// Execute lifecycle hooks for specific changes
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteOnEmailChanged(context.Context, xid.ID, string, string) error
+			ExecuteOnUsernameChanged(context.Context, xid.ID, string, string) error
+		}); ok {
+			if emailChanged {
+				_ = registry.ExecuteOnEmailChanged(ctx, u.ID, oldEmail, u.Email)
+			}
+			if usernameChanged {
+				_ = registry.ExecuteOnUsernameChanged(ctx, u.ID, oldUsername, u.Username)
+			}
 		}
 	}
 
@@ -316,6 +382,15 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	if s.hookExecutor != nil {
 		if err := s.hookExecutor.ExecuteAfterUserDelete(ctx, id); err != nil {
 			// Log error but don't fail - user is already deleted
+		}
+	}
+
+	// Execute account deleted lifecycle hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteOnAccountDeleted(context.Context, xid.ID) error
+		}); ok {
+			_ = registry.ExecuteOnAccountDeleted(ctx, id)
 		}
 	}
 

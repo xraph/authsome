@@ -116,6 +116,12 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	if ok := crypto.CheckPassword(req.Password, u.PasswordHash); !ok {
 		return nil, types.ErrInvalidCredentials
 	}
+
+	// Check email verification if required
+	if s.config.RequireEmailVerification && !u.EmailVerified {
+		return nil, types.ErrEmailNotVerified
+	}
+
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
 		AppID:     appID,
 		UserID:    u.ID,

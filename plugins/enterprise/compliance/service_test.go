@@ -14,7 +14,7 @@ func TestService_CreateProfile(t *testing.T) {
 	service := setupTestService(t)
 
 	req := &CreateProfileRequest{
-		AppID:             "org_123",
+		AppID:             "app_test_123",
 		Name:              "Test Profile",
 		Standards:         []ComplianceStandard{StandardSOC2},
 		MFARequired:       true,
@@ -29,20 +29,20 @@ func TestService_CreateProfile(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, profile)
 	assert.NotEmpty(t, profile.ID)
-	assert.Equal(t, "org_123", profile.AppID)
+	assert.Equal(t, "app_test_123", profile.AppID)
 	assert.Contains(t, profile.Standards, StandardSOC2)
 	assert.Equal(t, "active", profile.Status)
 	assert.True(t, profile.MFARequired)
 	assert.Equal(t, 12, profile.PasswordMinLength)
 }
 
-func TestService_CreateProfile_DuplicateOrganization(t *testing.T) {
+func TestService_CreateProfile_DuplicateApp(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	service := setupTestService(t)
 
 	req := &CreateProfileRequest{
-		AppID:             "org_123",
+		AppID:             "app_test_123",
 		Name:              "Test Profile",
 		Standards:         []ComplianceStandard{StandardSOC2},
 		MFARequired:       true,
@@ -53,7 +53,7 @@ func TestService_CreateProfile_DuplicateOrganization(t *testing.T) {
 	_, err := service.CreateProfile(ctx, req)
 	require.NoError(t, err)
 
-	// Act - try to create second profile for same org
+	// Act - try to create second profile for same app
 	_, err = service.CreateProfile(ctx, req)
 
 	// Assert
@@ -68,7 +68,7 @@ func TestService_GetProfile(t *testing.T) {
 
 	// Create a profile
 	created, err := service.CreateProfile(ctx, &CreateProfileRequest{
-		AppID:             "org_123",
+		AppID:             "app_test_123",
 		Name:              "Test Profile",
 		Standards:         []ComplianceStandard{StandardSOC2},
 		PasswordMinLength: 12,
@@ -104,7 +104,7 @@ func TestService_UpdateProfile(t *testing.T) {
 
 	// Create initial profile
 	profile, err := service.CreateProfile(ctx, &CreateProfileRequest{
-		AppID:             "org_123",
+		AppID:             "app_test_123",
 		Name:              "Test Profile",
 		Standards:         []ComplianceStandard{StandardSOC2},
 		PasswordMinLength: 12,
@@ -133,12 +133,12 @@ func TestService_CreateProfileFromTemplate(t *testing.T) {
 	service := setupTestService(t)
 
 	// Act
-	profile, err := service.CreateProfileFromTemplate(ctx, "org_456", StandardHIPAA)
+	profile, err := service.CreateProfileFromTemplate(ctx, "app_test_456", StandardHIPAA)
 
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, profile)
-	assert.Equal(t, "org_456", profile.AppID)
+	assert.Equal(t, "app_test_456", profile.AppID)
 	assert.Contains(t, profile.Standards, StandardHIPAA)
 	// HIPAA requires MFA
 	assert.True(t, profile.MFARequired)

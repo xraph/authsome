@@ -29,6 +29,38 @@ export class MultisessionPlugin implements ClientPlugin {
     return this.client.request<types.StatusResponse>('POST', path);
   }
 
+  async getCurrent(): Promise<types.SessionTokenResponse> {
+    const path = '/current';
+    return this.client.request<types.SessionTokenResponse>('GET', path);
+  }
+
+  async getByID(): Promise<types.SessionTokenResponse> {
+    const path = '/{id}';
+    return this.client.request<types.SessionTokenResponse>('GET', path);
+  }
+
+  async revokeAll(request: types.RevokeAll_body): Promise<void> {
+    const path = '/revoke-all';
+    return this.client.request<void>('POST', path, {
+      body: request,
+    });
+  }
+
+  async revokeOthers(): Promise<void> {
+    const path = '/revoke-others';
+    return this.client.request<void>('POST', path);
+  }
+
+  async refresh(): Promise<types.SessionTokenResponse> {
+    const path = '/refresh';
+    return this.client.request<types.SessionTokenResponse>('POST', path);
+  }
+
+  async getStats(): Promise<void> {
+    const path = '/stats';
+    return this.client.request<void>('GET', path);
+  }
+
 }
 
 export function multisessionClient(): MultisessionPlugin {

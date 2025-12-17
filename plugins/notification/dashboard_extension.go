@@ -84,6 +84,30 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Settings Page
+		{
+			Method:       "GET",
+			Path:         "/notifications/settings",
+			Handler:      e.ServeNotificationSettings,
+			Name:         "dashboard.notifications.settings",
+			Summary:      "Notification settings",
+			Description:  "Configure notification behavior and auto-send rules",
+			Tags:         []string{"Dashboard", "Notifications", "Settings"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Update Settings
+		{
+			Method:       "POST",
+			Path:         "/notifications/settings",
+			Handler:      e.HandleUpdateSettings,
+			Name:         "dashboard.notifications.settings.update",
+			Summary:      "Update notification settings",
+			Description:  "Update notification configuration",
+			Tags:         []string{"Dashboard", "Notifications", "Settings"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
 		// Templates List
 		{
 			Method:       "GET",
@@ -347,6 +371,111 @@ func (e *DashboardExtension) ServeNotificationsOverview(c forge.Context) error {
 	content := e.renderNotificationsOverview(currentApp, basePath)
 
 	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// ServeNotificationSettings renders the notification settings page
+func (e *DashboardExtension) ServeNotificationSettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+
+	// Check for success message
+	success := c.Request().URL.Query().Get("success") == "true"
+
+	pageData := components.PageData{
+		Title:      "Notification Settings",
+		User:       currentUser,
+		ActivePage: "notifications",
+		BasePath:   basePath,
+		CurrentApp: currentApp,
+	}
+
+	content := e.renderNotificationSettings(currentApp, basePath, success)
+
+	return handler.RenderWithLayout(c, pageData, content)
+}
+
+// HandleUpdateSettings handles the settings update POST request
+func (e *DashboardExtension) HandleUpdateSettings(c forge.Context) error {
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
+	}
+
+	// Parse form data
+	var updates struct {
+		AppName                   string `form:"app_name"`
+		AuthWelcome               bool   `form:"auth_welcome"`
+		OrgInvite                 bool   `form:"org_invite"`
+		OrgMemberAdded            bool   `form:"org_member_added"`
+		OrgMemberRemoved          bool   `form:"org_member_removed"`
+		OrgRoleChanged            bool   `form:"org_role_changed"`
+		OrgTransfer               bool   `form:"org_transfer"`
+		OrgDeleted                bool   `form:"org_deleted"`
+		OrgMemberLeft             bool   `form:"org_member_left"`
+		SessionNewDevice          bool   `form:"session_new_device"`
+		SessionNewLocation        bool   `form:"session_new_location"`
+		SessionSuspiciousLogin    bool   `form:"session_suspicious_login"`
+		SessionDeviceRemoved      bool   `form:"session_device_removed"`
+		SessionAllRevoked         bool   `form:"session_all_revoked"`
+		AccountEmailChangeRequest bool   `form:"account_email_change_request"`
+		AccountEmailChanged       bool   `form:"account_email_changed"`
+		AccountPasswordChanged    bool   `form:"account_password_changed"`
+		AccountUsernameChanged    bool   `form:"account_username_changed"`
+		AccountDeleted            bool   `form:"account_deleted"`
+		AccountSuspended          bool   `form:"account_suspended"`
+		AccountReactivated        bool   `form:"account_reactivated"`
+	}
+
+	if err := c.Bind(&updates); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid form data"})
+	}
+
+	// Update plugin config (in-memory for now - would need persistence layer)
+	e.plugin.config.AppName = updates.AppName
+	e.plugin.config.AutoSend.Auth.Welcome = updates.AuthWelcome
+	e.plugin.config.AutoSend.Organization.Invite = updates.OrgInvite
+	e.plugin.config.AutoSend.Organization.MemberAdded = updates.OrgMemberAdded
+	e.plugin.config.AutoSend.Organization.MemberRemoved = updates.OrgMemberRemoved
+	e.plugin.config.AutoSend.Organization.RoleChanged = updates.OrgRoleChanged
+	e.plugin.config.AutoSend.Organization.Transfer = updates.OrgTransfer
+	e.plugin.config.AutoSend.Organization.Deleted = updates.OrgDeleted
+	e.plugin.config.AutoSend.Organization.MemberLeft = updates.OrgMemberLeft
+	e.plugin.config.AutoSend.Session.NewDevice = updates.SessionNewDevice
+	e.plugin.config.AutoSend.Session.NewLocation = updates.SessionNewLocation
+	e.plugin.config.AutoSend.Session.SuspiciousLogin = updates.SessionSuspiciousLogin
+	e.plugin.config.AutoSend.Session.DeviceRemoved = updates.SessionDeviceRemoved
+	e.plugin.config.AutoSend.Session.AllRevoked = updates.SessionAllRevoked
+	e.plugin.config.AutoSend.Account.EmailChangeRequest = updates.AccountEmailChangeRequest
+	e.plugin.config.AutoSend.Account.EmailChanged = updates.AccountEmailChanged
+	e.plugin.config.AutoSend.Account.PasswordChanged = updates.AccountPasswordChanged
+	e.plugin.config.AutoSend.Account.UsernameChanged = updates.AccountUsernameChanged
+	e.plugin.config.AutoSend.Account.Deleted = updates.AccountDeleted
+	e.plugin.config.AutoSend.Account.Suspended = updates.AccountSuspended
+	e.plugin.config.AutoSend.Account.Reactivated = updates.AccountReactivated
+
+	// Redirect back to settings page
+	handler := e.registry.GetHandler()
+	redirectURL := handler.GetBasePath() + "/dashboard/app/" + currentApp.ID.String() + "/notifications/settings?success=true"
+	return c.Redirect(http.StatusFound, redirectURL)
 }
 
 // ServeTemplatesList renders the templates list page
@@ -624,29 +753,6 @@ func (e *DashboardExtension) TestSendTemplate(c forge.Context) error {
 		"notificationId": notif.ID,
 		"recipient":      req.Recipient,
 	})
-}
-
-// ServeNotificationSettings renders the notification settings page
-func (e *DashboardExtension) ServeNotificationSettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
-	}
-
-	content := e.renderNotificationSettingsContent(currentApp, handler.GetBasePath())
-
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "notification-settings", content)
 }
 
 // SaveNotificationSettings handles saving notification settings
@@ -945,6 +1051,12 @@ func (e *DashboardExtension) renderNotificationsOverview(currentApp *app.App, ba
 				P(Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
 					g.Text("Manage templates, providers, and view analytics")),
 			),
+			A(
+				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/notifications/settings"),
+				Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"),
+				lucide.Settings(Class("size-4")),
+				g.Text("Settings"),
+			),
 		),
 
 		// Quick actions
@@ -1044,6 +1156,9 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 	alpineInit := fmt.Sprintf(`{
 		showCreateModal: false,
 		showTestModal: false,
+		showResetConfirmModal: false,
+		resetLoading: false,
+		resetError: null,
 		testTemplateId: '',
 		testRecipient: '',
 		testVariables: '{\n  "user_name": "Test User",\n  "app_name": "My App"\n}',
@@ -1067,6 +1182,58 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 		openCreateModal() {
 			this.resetModal();
 			this.showCreateModal = true;
+		},
+		openResetConfirmModal() {
+			this.showResetConfirmModal = true;
+			this.resetError = null;
+		},
+		async resetAllTemplates() {
+			if (!confirm('Are you sure you want to reset ALL templates to their defaults? This will replace any customizations you have made.')) {
+				return;
+			}
+			this.resetLoading = true;
+			this.resetError = null;
+			try {
+				const res = await fetch('%s/templates/reset-all?app_id=%s', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'same-origin'
+				});
+				
+				// Check if response is ok
+				if (!res.ok) {
+					const text = await res.text();
+					let errorMsg = 'Failed to reset templates';
+					try {
+						const errorData = JSON.parse(text);
+						errorMsg = errorData.message || errorData.error || errorMsg;
+					} catch (e) {
+						// Response wasn't JSON, use text or default message
+						errorMsg = text.substring(0, 100) || errorMsg;
+					}
+					this.resetError = errorMsg;
+					setTimeout(() => this.resetError = null, 5000);
+					this.resetLoading = false;
+					return;
+				}
+				
+				// Try to parse JSON response
+				const contentType = res.headers.get('content-type');
+				if (contentType && contentType.includes('application/json')) {
+					const data = await res.json();
+					if (data.message || data.success) {
+						window.location.reload();
+					}
+				} else {
+					// Response is OK but not JSON, just reload
+					window.location.reload();
+				}
+			} catch (err) {
+				this.resetError = err.message || 'An error occurred';
+				setTimeout(() => this.resetError = null, 5000);
+			}
+			this.resetLoading = false;
+			this.showResetConfirmModal = false;
 		},
 		selectEditorType(type) {
 			this.editorType = type;
@@ -1150,11 +1317,11 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 			} else {
 				// Create manual template and go to edit page
 				try {
-					const res = await fetch('%s/auth/notification/templates', {
+					const res = await fetch('%s/templates?app_id=%s', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
+						credentials: 'same-origin',
 						body: JSON.stringify({
-							appId: '%s',
 							name: this.newTemplate.name,
 							templateKey: this.newTemplate.templateKey,
 							type: 'email',
@@ -1210,7 +1377,7 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 			this.testResult = null;
 			this.showTestModal = true;
 		}
-	}`, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID.String(), basePath, currentApp.ID, basePath, currentApp.ID)
+	}`, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID, basePath, currentApp.ID)
 
 	return Div(
 		Class("space-y-6"),
@@ -1227,6 +1394,17 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 			),
 			Div(
 				Class("flex items-center gap-3"),
+				// Reset All Templates button
+				Button(
+					Type("button"),
+					g.Attr("@click", "resetAllTemplates()"),
+					g.Attr(":disabled", "resetLoading"),
+					Class("inline-flex items-center gap-2 rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 shadow-sm"),
+					lucide.RefreshCcw(Class("h-4 w-4")),
+					Span(
+						g.Attr("x-text", "resetLoading ? 'Resetting...' : 'Reset All'"),
+					),
+				),
 				// New Template button - opens modal with editor type choice
 				Button(
 					Type("button"),
@@ -1234,6 +1412,19 @@ func (e *DashboardExtension) renderTemplatesList(currentApp *app.App, basePath s
 					Class("inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm"),
 					lucide.Plus(Class("h-4 w-4")),
 					g.Text("New Template"),
+				),
+			),
+		),
+
+		// Error alert for reset operation
+		g.If(true,
+			Div(
+				g.Attr("x-show", "resetError"),
+				g.Attr("x-cloak", ""),
+				Class("rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"),
+				P(
+					Class("text-sm font-medium text-red-800 dark:text-red-200"),
+					g.Attr("x-text", "resetError"),
 				),
 			),
 		),
@@ -1701,7 +1892,7 @@ func renderTestSendListModal() g.Node {
 								lucide.CircleAlert(Class("h-5 w-5 text-red-600 dark:text-red-400")),
 								P(Class("text-sm text-red-800 dark:text-red-200"),
 									Span(g.Text("Error: ")),
-									Span(g.Attr("x-text", "testResult.error")),
+									Span(g.Attr("x-text", "testResult?.error")),
 								),
 							),
 						),
@@ -1983,7 +2174,7 @@ func renderTemplateRow(template *notification.Template, basePath string, current
 					Type("button"),
 					Class("text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"),
 					Title("Delete template"),
-					g.Attr("@click", fmt.Sprintf("if(confirm('Delete template \"%s\"?')) window.location.href='%s/auth/notification/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates&_method=DELETE'", template.Name, basePath, template.ID, basePath, currentApp.ID)),
+					g.Attr("@click", fmt.Sprintf("if(confirm('Delete template \"%s\"?')) window.location.href='%s/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates&_method=DELETE'", template.Name, basePath, template.ID, basePath, currentApp.ID)),
 					lucide.Trash2(Class("h-4 w-4")),
 				),
 			),
@@ -2040,7 +2231,7 @@ func (e *DashboardExtension) renderCreateTemplate(currentApp *app.App, basePath 
 		// Main form
 		FormEl(
 			Method("POST"),
-			Action(fmt.Sprintf("%s/auth/notification/templates?redirect=%s/dashboard/app/%s/notifications/templates",
+			Action(fmt.Sprintf("%s/templates?redirect=%s/dashboard/app/%s/notifications/templates",
 				basePath, basePath, currentApp.ID)),
 			g.Attr("x-on:input.debounce.500ms", "extractVariables()"),
 			Class("space-y-6"),
@@ -2372,7 +2563,7 @@ func (e *DashboardExtension) renderEditTemplate(currentApp *app.App, basePath st
 		// Edit Form
 		FormEl(
 			Method("POST"),
-			Action(fmt.Sprintf("%s/auth/notification/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates",
+			Action(fmt.Sprintf("%s/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates",
 				basePath, templateID, basePath, currentApp.ID)),
 			g.Attr("x-on:input.debounce.500ms", "extractVariables()"),
 			Class("space-y-6"),
@@ -2626,7 +2817,7 @@ func renderDeleteConfirmModal(templateID xid.ID, templateName, basePath string, 
 					),
 					FormEl(
 						Method("POST"),
-						Action(fmt.Sprintf("%s/auth/notification/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates",
+						Action(fmt.Sprintf("%s/templates/%s?redirect=%s/dashboard/app/%s/notifications/templates",
 							basePath, templateID, basePath, currentApp.ID)),
 						Class("inline"),
 						Input(Type("hidden"), Name("_method"), Value("DELETE")),
@@ -2983,7 +3174,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 
 			FormEl(
 				Method("POST"),
-				Action(fmt.Sprintf("%s/auth/notification/providers?redirect=%s/dashboard/app/%s/notifications/providers",
+				Action(fmt.Sprintf("%s/providers?redirect=%s/dashboard/app/%s/notifications/providers",
 					basePath, basePath, currentApp.ID)),
 				Class("space-y-4"),
 
@@ -3144,7 +3335,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 							lucide.CircleAlert(Class("h-5 w-5 text-red-600 dark:text-red-400")),
 							P(Class("text-sm text-red-800 dark:text-red-200"),
 								Span(g.Text("Error: ")),
-								Span(g.Attr("x-text", "testResult.error")),
+								Span(g.Attr("x-text", "testResult?.error")),
 							),
 						),
 					),
@@ -3171,7 +3362,7 @@ func (e *DashboardExtension) renderProviderSettingsContent(currentApp *app.App, 
 
 			FormEl(
 				Method("POST"),
-				Action(fmt.Sprintf("%s/auth/notification/providers?redirect=%s/dashboard/app/%s/notifications/providers",
+				Action(fmt.Sprintf("%s/providers?redirect=%s/dashboard/app/%s/notifications/providers",
 					basePath, basePath, currentApp.ID)),
 				Class("space-y-4"),
 

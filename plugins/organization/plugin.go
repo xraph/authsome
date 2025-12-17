@@ -3,15 +3,20 @@ package organization
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/ui"
+	"github.com/xraph/authsome/core/user"
+	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	orgrepo "github.com/xraph/authsome/repository/organization"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
@@ -43,6 +48,12 @@ type Plugin struct {
 
 	// RBAC service
 	rbacService *rbac.Service
+
+	// Notification adapter
+	notifAdapter interface{}
+
+	// Auth instance (for accessing service registry and hooks)
+	authInst core.Authsome
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -137,6 +148,9 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		return fmt.Errorf("invalid auth instance type")
 	}
 
+	// Store auth instance for later use (hooks)
+	p.authInst = authInstance
+
 	p.db = authInstance.GetDB()
 	forgeApp := authInstance.GetForgeApp()
 	configManager := forgeApp.Config()
@@ -151,6 +165,18 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.logger.Warn("RBAC service not available, authorization checks may not work properly")
 	}
 	p.rbacService = rbacSvc
+
+	// Get notification adapter from service registry
+	if adapter, exists := serviceRegistry.Get("notification.adapter"); exists {
+		if typedAdapter, ok := adapter.(*notificationPlugin.Adapter); ok {
+			p.notifAdapter = typedAdapter
+			p.logger.Info("retrieved notification adapter from service registry")
+		} else {
+			p.logger.Warn("notification adapter type assertion failed")
+		}
+	} else {
+		p.logger.Info("notification adapter not available in service registry (graceful degradation)")
+	}
 
 	// Register schema models with Bun for relationships to work
 	// Register OrganizationTeamMember first as it's the join table for m2m relationships
@@ -215,9 +241,16 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		roleRepo,
 	)
 
+	// Set hook registry on organization service
+	hookRegistry := authInstance.GetHookRegistry()
+	if hookRegistry != nil {
+		p.orgService.SetHookRegistry(hookRegistry)
+	}
+
 	// Create handlers
 	p.orgHandler = &OrganizationHandler{
 		orgService: p.orgService,
+		plugin:     p, // Pass plugin reference for notifications
 	}
 
 	// Initialize dashboard extension
@@ -232,13 +265,13 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if pluginRegistry := authInstance.GetPluginRegistry(); pluginRegistry != nil {
 		plugins := pluginRegistry.List()
 		p.logger.Info("scanning for organization UI extensions", forge.F("plugin_count", len(plugins)))
-		
+
 		for _, plugin := range plugins {
 			// Skip self
 			if plugin.ID() == p.ID() {
 				continue
 			}
-			
+
 			// Check if plugin implements OrganizationUIExtension
 			if orgUIExt, ok := plugin.(ui.OrganizationUIExtension); ok {
 				if err := p.uiRegistry.Register(orgUIExt); err != nil {
@@ -448,9 +481,231 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 }
 
 // RegisterHooks registers the plugin's hooks
-func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
-	// Register organization-related hooks
-	// hooks.RegisterAfterUserDelete(p.handleUserDeleted)
+func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
+	if hookRegistry == nil || p.notifAdapter == nil {
+		return nil
+	}
+
+	adapter, ok := p.notifAdapter.(*notificationPlugin.Adapter)
+	if !ok {
+		p.logger.Warn("notification adapter type assertion failed in RegisterHooks")
+		return nil
+	}
+
+	// Create wrapper for invitation with notification
+	// We'll wrap the InviteMember call in the plugin to send notifications
+	p.logger.Info("organization plugin will handle invitation notifications via service wrapper")
+
+	// Hook: After member added - send notification
+	hookRegistry.RegisterAfterMemberAdd(func(ctx context.Context, memberInterface interface{}) error {
+		member, ok := memberInterface.(*organization.Member)
+		if !ok {
+			p.logger.Warn("invalid member type in AfterMemberAdd hook")
+			return nil
+		}
+
+		// Get app context
+		appID, ok := contexts.GetAppID(ctx)
+		if !ok || appID.IsNil() {
+			p.logger.Warn("app context not available in after member add hook")
+			return nil
+		}
+
+		// Get organization details
+		org, err := p.orgService.FindOrganizationByID(ctx, member.OrganizationID)
+		if err != nil {
+			p.logger.Error("failed to get organization in member add hook", forge.F("error", err.Error()))
+			return nil
+		}
+
+		// Get user details for the new member
+		userSvc := p.authInst.GetServiceRegistry().UserService()
+		if userSvc == nil {
+			p.logger.Warn("user service not available")
+			return nil
+		}
+		newMember, err := userSvc.FindByID(ctx, member.UserID)
+		if err != nil || newMember == nil {
+			p.logger.Error("failed to get user details in member add hook", forge.F("error", err.Error()))
+			return nil
+		}
+
+		// Send notification to the new member
+		userName := newMember.Name
+		if userName == "" {
+			userName = newMember.Email
+		}
+
+		err = adapter.SendOrgMemberAdded(ctx, appID, newMember.Email, userName, userName, org.Name, member.Role)
+		if err != nil {
+			p.logger.Error("failed to send member added notification",
+				forge.F("error", err.Error()),
+				forge.F("org_id", org.ID.String()))
+		}
+
+		return nil
+	})
+
+	// Hook: After member removed - send notification
+	hookRegistry.RegisterAfterMemberRemove(func(ctx context.Context, orgID xid.ID, userID xid.ID, memberName string) error {
+		// Get app context
+		appID, ok := contexts.GetAppID(ctx)
+		if !ok || appID.IsNil() {
+			p.logger.Warn("app context not available in after member remove hook")
+			return nil
+		}
+
+		// Get organization details
+		org, err := p.orgService.FindOrganizationByID(ctx, orgID)
+		if err != nil {
+			p.logger.Error("failed to get organization in member remove hook", forge.F("error", err.Error()))
+			return nil
+		}
+
+		// Get user details
+		userSvc := p.authInst.GetServiceRegistry().UserService()
+		if userSvc == nil {
+			p.logger.Warn("user service not available")
+			return nil
+		}
+		removedUser, err := userSvc.FindByID(ctx, userID)
+		if err != nil || removedUser == nil {
+			p.logger.Error("failed to get user details in member remove hook", forge.F("error", err.Error()))
+			return nil
+		}
+
+		// Send notification to the removed member
+		userName := removedUser.Name
+		if userName == "" {
+			userName = removedUser.Email
+		}
+
+		timestamp := time.Now().Format(time.RFC3339)
+		err = adapter.SendOrgMemberRemoved(ctx, appID, removedUser.Email, userName, memberName, org.Name, timestamp)
+		if err != nil {
+			p.logger.Error("failed to send member removed notification",
+				forge.F("error", err.Error()),
+				forge.F("org_id", org.ID.String()))
+		}
+
+		return nil
+	})
+
+	// Hook: After member role changed - send notification
+	hookRegistry.RegisterAfterMemberRoleChange(func(ctx context.Context, orgID xid.ID, userID xid.ID, oldRole string, newRole string) error {
+		// Get app context
+		appID, ok := contexts.GetAppID(ctx)
+		if !ok || appID.IsNil() {
+			p.logger.Warn("app context not available in after member role change hook")
+			return nil
+		}
+
+		// Get organization details
+		org, err := p.orgService.FindOrganizationByID(ctx, orgID)
+		if err != nil {
+			p.logger.Error("failed to get organization in role change hook", forge.F("error", err.Error()))
+			return nil
+		}
+
+		// Get user details
+		userSvc := p.authInst.GetServiceRegistry().UserService()
+		if userSvc == nil {
+			p.logger.Warn("user service not available")
+			return nil
+		}
+		member, err := userSvc.FindByID(ctx, userID)
+		if err != nil || member == nil {
+			p.logger.Error("failed to get user details in role change hook", forge.F("error", err.Error()))
+			return nil
+		}
+
+		// Send notification to the member
+		userName := member.Name
+		if userName == "" {
+			userName = member.Email
+		}
+
+		err = adapter.SendOrgRoleChanged(ctx, appID, member.Email, userName, org.Name, oldRole, newRole)
+		if err != nil {
+			p.logger.Error("failed to send role changed notification",
+				forge.F("error", err.Error()),
+				forge.F("org_id", org.ID.String()))
+		}
+
+		return nil
+	})
+
+	// Hook: After organization deleted - send notifications to all members
+	hookRegistry.RegisterAfterOrganizationDelete(func(ctx context.Context, orgID xid.ID, orgName string) error {
+		// Get app context
+		appID, ok := contexts.GetAppID(ctx)
+		if !ok || appID.IsNil() {
+			p.logger.Warn("app context not available in after org delete hook")
+			return nil
+		}
+
+		// Get all members (before deletion, they should be in context or passed)
+		// For now, we'll log a warning that this needs member list passed in context
+		p.logger.Warn("organization deleted notification needs member list - implement in service layer")
+
+		// TODO: The service layer should pass member list in context before deleting org
+		// For now, just return nil
+		return nil
+	})
+
+	p.logger.Info("registered organization notification hooks")
+	return nil
+}
+
+// SendInvitationNotification sends an org.invite notification when an invitation is created
+// This should be called by handlers after creating an invitation
+func (p *Plugin) SendInvitationNotification(ctx context.Context, invitation *organization.Invitation, inviter *user.User, org *organization.Organization) error {
+	if p.notifAdapter == nil {
+		return nil
+	}
+
+	adapter, ok := p.notifAdapter.(*notificationPlugin.Adapter)
+	if !ok {
+		return nil
+	}
+
+	// Get app context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		p.logger.Warn("app context not available for invitation notification")
+		return nil
+	}
+
+	// Build invite URL (this should be configurable)
+	inviteURL := fmt.Sprintf("/invite/%s", invitation.Token)
+
+	// Calculate expiry duration
+	expiresIn := fmt.Sprintf("%d hours", p.config.InvitationExpiryHours)
+
+	inviterName := inviter.Name
+	if inviterName == "" {
+		inviterName = inviter.Email
+	}
+
+	// Send invitation email
+	err := adapter.SendOrgInvite(
+		ctx,
+		appID,
+		invitation.Email,
+		invitation.Email, // userName for recipient (they may not be a user yet)
+		inviterName,
+		org.Name,
+		invitation.Role,
+		inviteURL,
+		expiresIn,
+	)
+
+	if err != nil {
+		p.logger.Error("failed to send invitation notification",
+			forge.F("error", err.Error()),
+			forge.F("org_id", org.ID.String()))
+		return err
+	}
 
 	return nil
 }

@@ -46,8 +46,12 @@ type HookRegistry struct {
 	// Organization hooks (for multi-tenancy plugin)
 	beforeOrganizationCreate []BeforeOrganizationCreateHook
 	afterOrganizationCreate  []AfterOrganizationCreateHook
+	afterOrganizationUpdate  []AfterOrganizationUpdateHook
+	afterOrganizationDelete  []AfterOrganizationDeleteHook
 	beforeMemberAdd          []BeforeMemberAddHook
 	afterMemberAdd           []AfterMemberAddHook
+	afterMemberRemove        []AfterMemberRemoveHook
+	afterMemberRoleChange    []AfterMemberRoleChangeHook
 
 	// App hooks (for multi-app support)
 	beforeAppCreate []BeforeAppCreateHook
@@ -58,6 +62,22 @@ type HookRegistry struct {
 	afterPermissionEvaluate  []AfterPermissionEvaluateHook
 	onPolicyChange           []OnPolicyChangeHook
 	onCacheInvalidate        []OnCacheInvalidateHook
+
+	// Device/Session security hooks
+	onNewDeviceDetected       []OnNewDeviceDetectedHook
+	onNewLocationDetected     []OnNewLocationDetectedHook
+	onSuspiciousLoginDetected []OnSuspiciousLoginDetectedHook
+	onDeviceRemoved           []OnDeviceRemovedHook
+	onAllSessionsRevoked      []OnAllSessionsRevokedHook
+
+	// Account lifecycle hooks
+	onEmailChangeRequest []OnEmailChangeRequestHook
+	onEmailChanged       []OnEmailChangedHook
+	onPasswordChanged    []OnPasswordChangedHook
+	onUsernameChanged    []OnUsernameChangedHook
+	onAccountDeleted     []OnAccountDeletedHook
+	onAccountSuspended   []OnAccountSuspendedHook
+	onAccountReactivated []OnAccountReactivatedHook
 }
 
 // Hook function types
@@ -87,8 +107,12 @@ type AfterSignOutHook func(ctx context.Context, token string) error
 // Organization hooks (for multi-tenancy plugin)
 type BeforeOrganizationCreateHook func(ctx context.Context, req interface{}) error
 type AfterOrganizationCreateHook func(ctx context.Context, org interface{}) error
+type AfterOrganizationUpdateHook func(ctx context.Context, org interface{}) error
+type AfterOrganizationDeleteHook func(ctx context.Context, orgID xid.ID, orgName string) error
 type BeforeMemberAddHook func(ctx context.Context, orgID string, userID xid.ID) error
 type AfterMemberAddHook func(ctx context.Context, member interface{}) error
+type AfterMemberRemoveHook func(ctx context.Context, orgID xid.ID, userID xid.ID, memberName string) error
+type AfterMemberRoleChangeHook func(ctx context.Context, orgID xid.ID, userID xid.ID, oldRole string, newRole string) error
 
 // App hooks (for multi-app support)
 type BeforeAppCreateHook func(ctx context.Context, req interface{}) error
@@ -118,6 +142,22 @@ type AfterPermissionEvaluateHook func(ctx context.Context, req *PermissionEvalua
 type OnPolicyChangeHook func(ctx context.Context, policyID xid.ID, action string) error
 type OnCacheInvalidateHook func(ctx context.Context, scope string, id xid.ID) error
 
+// Device/Session security hooks
+type OnNewDeviceDetectedHook func(ctx context.Context, userID xid.ID, deviceName, location, ipAddress string) error
+type OnNewLocationDetectedHook func(ctx context.Context, userID xid.ID, location, ipAddress string) error
+type OnSuspiciousLoginDetectedHook func(ctx context.Context, userID xid.ID, reason, location, ipAddress string) error
+type OnDeviceRemovedHook func(ctx context.Context, userID xid.ID, deviceName string) error
+type OnAllSessionsRevokedHook func(ctx context.Context, userID xid.ID) error
+
+// Account lifecycle hooks
+type OnEmailChangeRequestHook func(ctx context.Context, userID xid.ID, oldEmail, newEmail, confirmationUrl string) error
+type OnEmailChangedHook func(ctx context.Context, userID xid.ID, oldEmail, newEmail string) error
+type OnPasswordChangedHook func(ctx context.Context, userID xid.ID) error
+type OnUsernameChangedHook func(ctx context.Context, userID xid.ID, oldUsername, newUsername string) error
+type OnAccountDeletedHook func(ctx context.Context, userID xid.ID) error
+type OnAccountSuspendedHook func(ctx context.Context, userID xid.ID, reason string) error
+type OnAccountReactivatedHook func(ctx context.Context, userID xid.ID) error
+
 // NewHookRegistry creates a new hook registry
 func NewHookRegistry() *HookRegistry {
 	return &HookRegistry{
@@ -146,32 +186,48 @@ func (h *HookRegistry) GetHookCounts() map[string]int {
 	defer h.mu.RUnlock()
 
 	return map[string]int{
-		"beforeUserCreate":         len(h.beforeUserCreate),
-		"afterUserCreate":          len(h.afterUserCreate),
-		"beforeUserUpdate":         len(h.beforeUserUpdate),
-		"afterUserUpdate":          len(h.afterUserUpdate),
-		"beforeUserDelete":         len(h.beforeUserDelete),
-		"afterUserDelete":          len(h.afterUserDelete),
-		"beforeSessionCreate":      len(h.beforeSessionCreate),
-		"afterSessionCreate":       len(h.afterSessionCreate),
-		"beforeSessionRevoke":      len(h.beforeSessionRevoke),
-		"afterSessionRevoke":       len(h.afterSessionRevoke),
-		"beforeSignUp":             len(h.beforeSignUp),
-		"afterSignUp":              len(h.afterSignUp),
-		"beforeSignIn":             len(h.beforeSignIn),
-		"afterSignIn":              len(h.afterSignIn),
-		"beforeSignOut":            len(h.beforeSignOut),
-		"afterSignOut":             len(h.afterSignOut),
-		"beforeOrganizationCreate": len(h.beforeOrganizationCreate),
-		"afterOrganizationCreate":  len(h.afterOrganizationCreate),
-		"beforeMemberAdd":          len(h.beforeMemberAdd),
-		"afterMemberAdd":           len(h.afterMemberAdd),
-		"beforeAppCreate":          len(h.beforeAppCreate),
-		"afterAppCreate":           len(h.afterAppCreate),
-		"beforePermissionEvaluate": len(h.beforePermissionEvaluate),
-		"afterPermissionEvaluate":  len(h.afterPermissionEvaluate),
-		"onPolicyChange":           len(h.onPolicyChange),
-		"onCacheInvalidate":        len(h.onCacheInvalidate),
+		"beforeUserCreate":          len(h.beforeUserCreate),
+		"afterUserCreate":           len(h.afterUserCreate),
+		"beforeUserUpdate":          len(h.beforeUserUpdate),
+		"afterUserUpdate":           len(h.afterUserUpdate),
+		"beforeUserDelete":          len(h.beforeUserDelete),
+		"afterUserDelete":           len(h.afterUserDelete),
+		"beforeSessionCreate":       len(h.beforeSessionCreate),
+		"afterSessionCreate":        len(h.afterSessionCreate),
+		"beforeSessionRevoke":       len(h.beforeSessionRevoke),
+		"afterSessionRevoke":        len(h.afterSessionRevoke),
+		"beforeSignUp":              len(h.beforeSignUp),
+		"afterSignUp":               len(h.afterSignUp),
+		"beforeSignIn":              len(h.beforeSignIn),
+		"afterSignIn":               len(h.afterSignIn),
+		"beforeSignOut":             len(h.beforeSignOut),
+		"afterSignOut":              len(h.afterSignOut),
+		"beforeOrganizationCreate":  len(h.beforeOrganizationCreate),
+		"afterOrganizationCreate":   len(h.afterOrganizationCreate),
+		"afterOrganizationUpdate":   len(h.afterOrganizationUpdate),
+		"afterOrganizationDelete":   len(h.afterOrganizationDelete),
+		"beforeMemberAdd":           len(h.beforeMemberAdd),
+		"afterMemberAdd":            len(h.afterMemberAdd),
+		"afterMemberRemove":         len(h.afterMemberRemove),
+		"afterMemberRoleChange":     len(h.afterMemberRoleChange),
+		"beforeAppCreate":           len(h.beforeAppCreate),
+		"afterAppCreate":            len(h.afterAppCreate),
+		"beforePermissionEvaluate":  len(h.beforePermissionEvaluate),
+		"afterPermissionEvaluate":   len(h.afterPermissionEvaluate),
+		"onPolicyChange":            len(h.onPolicyChange),
+		"onCacheInvalidate":         len(h.onCacheInvalidate),
+		"onNewDeviceDetected":       len(h.onNewDeviceDetected),
+		"onNewLocationDetected":     len(h.onNewLocationDetected),
+		"onSuspiciousLoginDetected": len(h.onSuspiciousLoginDetected),
+		"onDeviceRemoved":           len(h.onDeviceRemoved),
+		"onAllSessionsRevoked":      len(h.onAllSessionsRevoked),
+		"onEmailChangeRequest":      len(h.onEmailChangeRequest),
+		"onEmailChanged":            len(h.onEmailChanged),
+		"onPasswordChanged":         len(h.onPasswordChanged),
+		"onUsernameChanged":         len(h.onUsernameChanged),
+		"onAccountDeleted":          len(h.onAccountDeleted),
+		"onAccountSuspended":        len(h.onAccountSuspended),
+		"onAccountReactivated":      len(h.onAccountReactivated),
 	}
 }
 
@@ -356,6 +412,42 @@ func (h *HookRegistry) RegisterAfterMemberAdd(hook AfterMemberAddHook) {
 	h.afterMemberAdd = append(h.afterMemberAdd, hook)
 	if h.debug {
 		log.Printf("[HookRegistry] Registered AfterMemberAdd hook (total: %d)", len(h.afterMemberAdd))
+	}
+}
+
+func (h *HookRegistry) RegisterAfterOrganizationUpdate(hook AfterOrganizationUpdateHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.afterOrganizationUpdate = append(h.afterOrganizationUpdate, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered AfterOrganizationUpdate hook (total: %d)", len(h.afterOrganizationUpdate))
+	}
+}
+
+func (h *HookRegistry) RegisterAfterOrganizationDelete(hook AfterOrganizationDeleteHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.afterOrganizationDelete = append(h.afterOrganizationDelete, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered AfterOrganizationDelete hook (total: %d)", len(h.afterOrganizationDelete))
+	}
+}
+
+func (h *HookRegistry) RegisterAfterMemberRemove(hook AfterMemberRemoveHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.afterMemberRemove = append(h.afterMemberRemove, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered AfterMemberRemove hook (total: %d)", len(h.afterMemberRemove))
+	}
+}
+
+func (h *HookRegistry) RegisterAfterMemberRoleChange(hook AfterMemberRoleChangeHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.afterMemberRoleChange = append(h.afterMemberRoleChange, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered AfterMemberRoleChange hook (total: %d)", len(h.afterMemberRoleChange))
 	}
 }
 
@@ -844,6 +936,98 @@ func (h *HookRegistry) ExecuteAfterMemberAdd(ctx context.Context, member interfa
 	return nil
 }
 
+// ExecuteAfterOrganizationUpdate executes all after organization update hooks
+func (h *HookRegistry) ExecuteAfterOrganizationUpdate(ctx context.Context, org interface{}) error {
+	h.mu.RLock()
+	hooks := make([]AfterOrganizationUpdateHook, len(h.afterOrganizationUpdate))
+	copy(hooks, h.afterOrganizationUpdate)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d AfterOrganizationUpdate hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, org); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] AfterOrganizationUpdate hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteAfterOrganizationDelete executes all after organization delete hooks
+func (h *HookRegistry) ExecuteAfterOrganizationDelete(ctx context.Context, orgID xid.ID, orgName string) error {
+	h.mu.RLock()
+	hooks := make([]AfterOrganizationDeleteHook, len(h.afterOrganizationDelete))
+	copy(hooks, h.afterOrganizationDelete)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d AfterOrganizationDelete hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, orgID, orgName); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] AfterOrganizationDelete hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteAfterMemberRemove executes all after member remove hooks
+func (h *HookRegistry) ExecuteAfterMemberRemove(ctx context.Context, orgID xid.ID, userID xid.ID, memberName string) error {
+	h.mu.RLock()
+	hooks := make([]AfterMemberRemoveHook, len(h.afterMemberRemove))
+	copy(hooks, h.afterMemberRemove)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d AfterMemberRemove hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, orgID, userID, memberName); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] AfterMemberRemove hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// ExecuteAfterMemberRoleChange executes all after member role change hooks
+func (h *HookRegistry) ExecuteAfterMemberRoleChange(ctx context.Context, orgID xid.ID, userID xid.ID, oldRole string, newRole string) error {
+	h.mu.RLock()
+	hooks := make([]AfterMemberRoleChangeHook, len(h.afterMemberRoleChange))
+	copy(hooks, h.afterMemberRoleChange)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d AfterMemberRoleChange hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, orgID, userID, oldRole, newRole); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] AfterMemberRoleChange hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 // ExecuteBeforeAppCreate executes all before app create hooks
 func (h *HookRegistry) ExecuteBeforeAppCreate(ctx context.Context, req interface{}) error {
 	h.mu.RLock()
@@ -934,6 +1118,116 @@ func (h *HookRegistry) RegisterOnCacheInvalidate(hook OnCacheInvalidateHook) {
 	}
 }
 
+// Device/Session security hook registration methods
+func (h *HookRegistry) RegisterOnNewDeviceDetected(hook OnNewDeviceDetectedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onNewDeviceDetected = append(h.onNewDeviceDetected, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnNewDeviceDetected hook (total: %d)", len(h.onNewDeviceDetected))
+	}
+}
+
+func (h *HookRegistry) RegisterOnNewLocationDetected(hook OnNewLocationDetectedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onNewLocationDetected = append(h.onNewLocationDetected, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnNewLocationDetected hook (total: %d)", len(h.onNewLocationDetected))
+	}
+}
+
+func (h *HookRegistry) RegisterOnSuspiciousLoginDetected(hook OnSuspiciousLoginDetectedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onSuspiciousLoginDetected = append(h.onSuspiciousLoginDetected, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnSuspiciousLoginDetected hook (total: %d)", len(h.onSuspiciousLoginDetected))
+	}
+}
+
+func (h *HookRegistry) RegisterOnDeviceRemoved(hook OnDeviceRemovedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onDeviceRemoved = append(h.onDeviceRemoved, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnDeviceRemoved hook (total: %d)", len(h.onDeviceRemoved))
+	}
+}
+
+func (h *HookRegistry) RegisterOnAllSessionsRevoked(hook OnAllSessionsRevokedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onAllSessionsRevoked = append(h.onAllSessionsRevoked, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnAllSessionsRevoked hook (total: %d)", len(h.onAllSessionsRevoked))
+	}
+}
+
+// Account lifecycle hook registration methods
+func (h *HookRegistry) RegisterOnEmailChangeRequest(hook OnEmailChangeRequestHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onEmailChangeRequest = append(h.onEmailChangeRequest, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnEmailChangeRequest hook (total: %d)", len(h.onEmailChangeRequest))
+	}
+}
+
+func (h *HookRegistry) RegisterOnEmailChanged(hook OnEmailChangedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onEmailChanged = append(h.onEmailChanged, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnEmailChanged hook (total: %d)", len(h.onEmailChanged))
+	}
+}
+
+func (h *HookRegistry) RegisterOnPasswordChanged(hook OnPasswordChangedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onPasswordChanged = append(h.onPasswordChanged, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnPasswordChanged hook (total: %d)", len(h.onPasswordChanged))
+	}
+}
+
+func (h *HookRegistry) RegisterOnUsernameChanged(hook OnUsernameChangedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onUsernameChanged = append(h.onUsernameChanged, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnUsernameChanged hook (total: %d)", len(h.onUsernameChanged))
+	}
+}
+
+func (h *HookRegistry) RegisterOnAccountDeleted(hook OnAccountDeletedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onAccountDeleted = append(h.onAccountDeleted, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnAccountDeleted hook (total: %d)", len(h.onAccountDeleted))
+	}
+}
+
+func (h *HookRegistry) RegisterOnAccountSuspended(hook OnAccountSuspendedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onAccountSuspended = append(h.onAccountSuspended, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnAccountSuspended hook (total: %d)", len(h.onAccountSuspended))
+	}
+}
+
+func (h *HookRegistry) RegisterOnAccountReactivated(hook OnAccountReactivatedHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onAccountReactivated = append(h.onAccountReactivated, hook)
+	if h.debug {
+		log.Printf("[HookRegistry] Registered OnAccountReactivated hook (total: %d)", len(h.onAccountReactivated))
+	}
+}
+
 // ExecuteBeforePermissionEvaluate executes all before permission evaluate hooks
 func (h *HookRegistry) ExecuteBeforePermissionEvaluate(ctx context.Context, req *PermissionEvaluateRequest) error {
 	h.mu.RLock()
@@ -1019,6 +1313,272 @@ func (h *HookRegistry) ExecuteOnCacheInvalidate(ctx context.Context, scope strin
 		if err := hook(ctx, scope, id); err != nil {
 			if debug {
 				log.Printf("[HookRegistry] OnCacheInvalidate hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// Device/Session security hook execution methods
+func (h *HookRegistry) ExecuteOnNewDeviceDetected(ctx context.Context, userID xid.ID, deviceName, location, ipAddress string) error {
+	h.mu.RLock()
+	hooks := make([]OnNewDeviceDetectedHook, len(h.onNewDeviceDetected))
+	copy(hooks, h.onNewDeviceDetected)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnNewDeviceDetected hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, deviceName, location, ipAddress); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnNewDeviceDetected hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnNewLocationDetected(ctx context.Context, userID xid.ID, location, ipAddress string) error {
+	h.mu.RLock()
+	hooks := make([]OnNewLocationDetectedHook, len(h.onNewLocationDetected))
+	copy(hooks, h.onNewLocationDetected)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnNewLocationDetected hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, location, ipAddress); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnNewLocationDetected hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnSuspiciousLoginDetected(ctx context.Context, userID xid.ID, reason, location, ipAddress string) error {
+	h.mu.RLock()
+	hooks := make([]OnSuspiciousLoginDetectedHook, len(h.onSuspiciousLoginDetected))
+	copy(hooks, h.onSuspiciousLoginDetected)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnSuspiciousLoginDetected hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, reason, location, ipAddress); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnSuspiciousLoginDetected hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnDeviceRemoved(ctx context.Context, userID xid.ID, deviceName string) error {
+	h.mu.RLock()
+	hooks := make([]OnDeviceRemovedHook, len(h.onDeviceRemoved))
+	copy(hooks, h.onDeviceRemoved)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnDeviceRemoved hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, deviceName); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnDeviceRemoved hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnAllSessionsRevoked(ctx context.Context, userID xid.ID) error {
+	h.mu.RLock()
+	hooks := make([]OnAllSessionsRevokedHook, len(h.onAllSessionsRevoked))
+	copy(hooks, h.onAllSessionsRevoked)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnAllSessionsRevoked hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnAllSessionsRevoked hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// Account lifecycle hook execution methods
+func (h *HookRegistry) ExecuteOnEmailChangeRequest(ctx context.Context, userID xid.ID, oldEmail, newEmail, confirmationUrl string) error {
+	h.mu.RLock()
+	hooks := make([]OnEmailChangeRequestHook, len(h.onEmailChangeRequest))
+	copy(hooks, h.onEmailChangeRequest)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnEmailChangeRequest hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, oldEmail, newEmail, confirmationUrl); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnEmailChangeRequest hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnEmailChanged(ctx context.Context, userID xid.ID, oldEmail, newEmail string) error {
+	h.mu.RLock()
+	hooks := make([]OnEmailChangedHook, len(h.onEmailChanged))
+	copy(hooks, h.onEmailChanged)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnEmailChanged hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, oldEmail, newEmail); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnEmailChanged hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnPasswordChanged(ctx context.Context, userID xid.ID) error {
+	h.mu.RLock()
+	hooks := make([]OnPasswordChangedHook, len(h.onPasswordChanged))
+	copy(hooks, h.onPasswordChanged)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnPasswordChanged hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnPasswordChanged hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnUsernameChanged(ctx context.Context, userID xid.ID, oldUsername, newUsername string) error {
+	h.mu.RLock()
+	hooks := make([]OnUsernameChangedHook, len(h.onUsernameChanged))
+	copy(hooks, h.onUsernameChanged)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnUsernameChanged hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, oldUsername, newUsername); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnUsernameChanged hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnAccountDeleted(ctx context.Context, userID xid.ID) error {
+	h.mu.RLock()
+	hooks := make([]OnAccountDeletedHook, len(h.onAccountDeleted))
+	copy(hooks, h.onAccountDeleted)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnAccountDeleted hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnAccountDeleted hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnAccountSuspended(ctx context.Context, userID xid.ID, reason string) error {
+	h.mu.RLock()
+	hooks := make([]OnAccountSuspendedHook, len(h.onAccountSuspended))
+	copy(hooks, h.onAccountSuspended)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnAccountSuspended hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID, reason); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnAccountSuspended hook #%d failed: %v", i, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HookRegistry) ExecuteOnAccountReactivated(ctx context.Context, userID xid.ID) error {
+	h.mu.RLock()
+	hooks := make([]OnAccountReactivatedHook, len(h.onAccountReactivated))
+	copy(hooks, h.onAccountReactivated)
+	debug := h.debug
+	h.mu.RUnlock()
+
+	if debug {
+		log.Printf("[HookRegistry] Executing %d OnAccountReactivated hooks", len(hooks))
+	}
+
+	for i, hook := range hooks {
+		if err := hook(ctx, userID); err != nil {
+			if debug {
+				log.Printf("[HookRegistry] OnAccountReactivated hook #%d failed: %v", i, err)
 			}
 			return err
 		}

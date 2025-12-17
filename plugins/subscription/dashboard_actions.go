@@ -558,6 +558,39 @@ func (e *DashboardExtension) HandleCreateAddOn(c forge.Context) error {
 	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons")
 }
 
+// HandleSyncInvoices handles syncing invoices from Stripe
+func (e *DashboardExtension) HandleSyncInvoices(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentUser := e.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	basePath := handler.GetBasePath()
+	ctx := c.Request().Context()
+
+	// Call the sync function from handlers.go
+	syncedCount, err := e.plugin.SyncInvoicesFromStripe(ctx, nil)
+	if err != nil {
+		// Redirect back with error message
+		return c.Redirect(http.StatusFound,
+			basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices?error=sync_failed")
+	}
+
+	// Redirect back with success message
+	return c.Redirect(http.StatusFound,
+		basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices?success=synced&count="+fmt.Sprintf("%d", syncedCount))
+}
+
 // HandleMarkInvoicePaid handles marking an invoice as paid
 func (e *DashboardExtension) HandleMarkInvoicePaid(c forge.Context) error {
 	handler := e.registry.GetHandler()

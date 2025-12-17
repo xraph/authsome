@@ -12,7 +12,7 @@ export class WebhookPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async create(request: { url: string; events: string[]; secret?: string }): Promise<{ webhook: types.Webhook }> {
+  async create(request: { events: string[]; secret?: string; url: string }): Promise<{ webhook: types.Webhook }> {
     const path = '/webhooks';
     return this.client.request<{ webhook: types.Webhook }>('POST', path, {
       body: request,
@@ -27,7 +27,7 @@ export class WebhookPlugin implements ClientPlugin {
     });
   }
 
-  async update(request: { id: string; url?: string; events?: string[]; enabled?: boolean }): Promise<{ webhook: types.Webhook }> {
+  async update(request: { events?: string[]; enabled?: boolean; id: string; url?: string }): Promise<{ webhook: types.Webhook }> {
     const path = '/webhooks/update';
     return this.client.request<{ webhook: types.Webhook }>('POST', path, {
       body: request,

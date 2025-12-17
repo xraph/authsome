@@ -156,7 +156,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*AuthResponse
 }
 ```
 
-### Sign-In with Account Lockout Protection
+### Sign-In with Email Verification and Account Lockout Protection
 ```go
 func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*AuthResponse, error) {
     // Find user
@@ -175,6 +175,11 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*AuthResponse
         // Increment failed attempts
         s.users.IncrementFailedAttempts(ctx, user.ID)
         return nil, errs.InvalidCredentials()
+    }
+    
+    // Check email verification if required
+    if s.config.RequireEmailVerification && !user.EmailVerified {
+        return nil, types.ErrEmailNotVerified
     }
     
     // Reset failed attempts on successful login

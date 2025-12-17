@@ -28,8 +28,8 @@ func (m *MockRepository) GetRule(ctx context.Context, id xid.ID) (*GeofenceRule,
 	return args.Get(0).(*GeofenceRule), args.Error(1)
 }
 
-func (m *MockRepository) GetRulesByOrganization(ctx context.Context, orgID xid.ID) ([]*GeofenceRule, error) {
-	args := m.Called(ctx, orgID)
+func (m *MockRepository) GetRulesByApp(ctx context.Context, appID xid.ID) ([]*GeofenceRule, error) {
+	args := m.Called(ctx, appID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -83,6 +83,22 @@ func (m *MockRepository) GetUserLocationHistory(ctx context.Context, userID xid.
 	return args.Get(0).([]*LocationEvent), args.Error(1)
 }
 
+func (m *MockRepository) GetLastLocation(ctx context.Context, userID xid.ID, appID xid.ID) (*GeoData, error) {
+	args := m.Called(ctx, userID, appID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*GeoData), args.Error(1)
+}
+
+func (m *MockRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID) (*LocationEvent, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*LocationEvent), args.Error(1)
+}
+
 func (m *MockRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID) (*LocationEvent, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
@@ -117,7 +133,7 @@ func (m *MockRepository) GetUserTravelAlerts(ctx context.Context, userID xid.ID,
 	return args.Get(0).([]*TravelAlert), args.Error(1)
 }
 
-func (m *MockRepository) GetPendingTravelAlerts(ctx context.Context, orgID xid.ID) ([]*TravelAlert, error) {
+func (m *MockRepository) GetPendingTravelAlerts(ctx context.Context, appID xid.ID) ([]*TravelAlert, error) {
 	args := m.Called(ctx, orgID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -200,7 +216,7 @@ func (m *MockRepository) GetUserViolations(ctx context.Context, userID xid.ID, l
 	return args.Get(0).([]*GeofenceViolation), args.Error(1)
 }
 
-func (m *MockRepository) GetOrganizationViolations(ctx context.Context, orgID xid.ID, limit int) ([]*GeofenceViolation, error) {
+func (m *MockRepository) GetAppViolations(ctx context.Context, appID xid.ID, limit int) ([]*GeofenceViolation, error) {
 	args := m.Called(ctx, orgID, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

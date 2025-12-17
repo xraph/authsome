@@ -19,6 +19,10 @@ impl AdminPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateUserRequest {
+        #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
+        pub metadata: Option<>,
+        #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
+        pub name: Option<String>,
         #[serde(rename = "password", skip_serializing_if = "Option::is_none")]
         pub password: Option<String>,
         #[serde(rename = "role", skip_serializing_if = "Option::is_none")]
@@ -29,10 +33,6 @@ impl AdminPlugin {{
         pub email: String,
         #[serde(rename = "email_verified")]
         pub email_verified: bool,
-        #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
-        pub metadata: Option<>,
-        #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
-        pub name: Option<String>,
     }
 
     /// CreateUser handles POST /admin/users

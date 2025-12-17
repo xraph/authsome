@@ -37,9 +37,9 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 			return next(c)
 		}
 
-		orgID, ok := c.Get("organization_id").(xid.ID)
-		if !ok || orgID.IsNil() {
-			// No organization context, skip
+		appID, ok := c.Get("app_id").(xid.ID)
+		if !ok || appID.IsNil() {
+			// No app context, skip
 			return next(c)
 		}
 
@@ -63,12 +63,12 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 
 		// Perform geofence check
 		req := &LocationCheckRequest{
-			UserID:         userID,
-			OrganizationID: orgID,
-			SessionID:      sessionID,
-			IPAddress:      ip,
-			UserAgent:      c.Request().Header.Get("User-Agent"),
-			EventType:      "request",
+			UserID:    userID,
+			AppID:     appID,
+			SessionID: sessionID,
+			IPAddress: ip,
+			UserAgent: c.Request().Header.Get("User-Agent"),
+			EventType: "request",
 		}
 
 		result, err := m.service.CheckLocation(c.Context(), req)

@@ -199,6 +199,30 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Update Display Settings
+		{
+			Method:       "POST",
+			Path:         "/cms/types/:typeName/settings/display",
+			Handler:      e.HandleUpdateDisplaySettings,
+			Name:         "cms.dashboard.settings.display",
+			Summary:      "Update Display Settings",
+			Description:  "Update content type display settings (title, description, preview fields)",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Update Feature Settings
+		{
+			Method:       "POST",
+			Path:         "/cms/types/:typeName/settings/features",
+			Handler:      e.HandleUpdateFeatureSettings,
+			Name:         "cms.dashboard.settings.features",
+			Summary:      "Update Feature Settings",
+			Description:  "Update content type feature settings (revisions, drafts, etc.)",
+			Tags:         []string{"Dashboard", "CMS"},
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
 		// Content Entries list
 		{
 			Method:       "GET",
@@ -1085,6 +1109,126 @@ func (e *DashboardExtension) HandleDeleteField(c forge.Context) error {
 	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
 }
 
+// HandleUpdateDisplaySettings handles updating content type display settings
+func (e *DashboardExtension) HandleUpdateDisplaySettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	typeName := c.Param("typeName")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+	}
+
+	contentTypeID, _ := xid.FromString(contentType.ID)
+
+	// Parse form values
+	titleField := c.FormValue("titleField")
+	descriptionField := c.FormValue("descriptionField")
+	previewField := c.FormValue("previewField")
+
+	// Get current settings
+	currentSettings := contentType.Settings
+
+	// Update display fields
+	req := &core.UpdateContentTypeRequest{
+		Settings: &core.ContentTypeSettingsDTO{
+			TitleField:         titleField,
+			DescriptionField:   descriptionField,
+			PreviewField:       previewField,
+			EnableRevisions:    currentSettings.EnableRevisions,
+			EnableDrafts:       currentSettings.EnableDrafts,
+			EnableSoftDelete:   currentSettings.EnableSoftDelete,
+			EnableSearch:       currentSettings.EnableSearch,
+			EnableScheduling:   currentSettings.EnableScheduling,
+			DefaultPermissions: currentSettings.DefaultPermissions,
+			MaxEntries:         currentSettings.MaxEntries,
+		},
+	}
+
+	// Update content type
+	_, err = e.plugin.contentTypeSvc.Update(ctx, contentTypeID, req)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()))
+	}
+
+	// Redirect back to content type detail
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?success=Display+settings+saved")
+}
+
+// HandleUpdateFeatureSettings handles updating content type feature settings
+func (e *DashboardExtension) HandleUpdateFeatureSettings(c forge.Context) error {
+	handler := e.registry.GetHandler()
+	if handler == nil {
+		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
+	}
+
+	currentApp, err := e.extractAppFromURL(c)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid app context")
+	}
+
+	ctx := e.injectContext(c)
+	basePath := handler.GetBasePath()
+	typeName := c.Param("typeName")
+	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+	}
+
+	contentTypeID, _ := xid.FromString(contentType.ID)
+
+	// Parse form values (checkboxes are only sent if checked)
+	enableRevisions := c.FormValue("enableRevisions") == "on"
+	enableDrafts := c.FormValue("enableDrafts") == "on"
+	enableSoftDelete := c.FormValue("enableSoftDelete") == "on"
+	enableSearch := c.FormValue("enableSearch") == "on"
+	enableScheduling := c.FormValue("enableScheduling") == "on"
+
+	// Get current settings
+	currentSettings := contentType.Settings
+
+	// Update feature settings
+	req := &core.UpdateContentTypeRequest{
+		Settings: &core.ContentTypeSettingsDTO{
+			TitleField:         currentSettings.TitleField,
+			DescriptionField:   currentSettings.DescriptionField,
+			PreviewField:       currentSettings.PreviewField,
+			EnableRevisions:    enableRevisions,
+			EnableDrafts:       enableDrafts,
+			EnableSoftDelete:   enableSoftDelete,
+			EnableSearch:       enableSearch,
+			EnableScheduling:   enableScheduling,
+			DefaultPermissions: currentSettings.DefaultPermissions,
+			MaxEntries:         currentSettings.MaxEntries,
+		},
+	}
+
+	// Update content type
+	_, err = e.plugin.contentTypeSvc.Update(ctx, contentTypeID, req)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()))
+	}
+
+	// Redirect back to content type detail
+	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?success=Feature+settings+saved")
+}
+
 // HandleDeleteContentType handles deleting a content type
 func (e *DashboardExtension) HandleDeleteContentType(c forge.Context) error {
 	handler := e.registry.GetHandler()
@@ -1278,6 +1422,21 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 				} else {
 					// If parsing fails, store as-is (validation will catch it)
 					data[field.Name] = value
+				}
+			} else if field.Type == "number" || field.Type == "integer" || field.Type == "float" {
+				// Parse number fields to preserve numeric types
+				if field.Type == "integer" {
+					if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+						data[field.Name] = intVal
+					} else {
+						data[field.Name] = value
+					}
+				} else {
+					if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+						data[field.Name] = floatVal
+					} else {
+						data[field.Name] = value
+					}
 				}
 			} else {
 				data[field.Name] = value
@@ -1489,6 +1648,21 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 				} else {
 					// If parsing fails, store as-is (validation will catch it)
 					data[field.Name] = value
+				}
+			} else if field.Type == "number" || field.Type == "integer" || field.Type == "float" {
+				// Parse number fields to preserve numeric types
+				if field.Type == "integer" {
+					if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+						data[field.Name] = intVal
+					} else {
+						data[field.Name] = value
+					}
+				} else {
+					if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+						data[field.Name] = floatVal
+					} else {
+						data[field.Name] = value
+					}
 				}
 			} else {
 				data[field.Name] = value

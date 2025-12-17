@@ -20,6 +20,7 @@ type Service struct {
 	detectionProvider   DetectionProvider
 	auditService        *audit.Service
 	notificationService *notification.Service
+	authInst            interface{} // Auth instance for service registry access
 	geoCache            map[string]*CachedGeo
 	detectionCache      map[string]*CachedDetection
 }
@@ -44,6 +45,7 @@ func NewService(
 	detectionProvider DetectionProvider,
 	auditService *audit.Service,
 	notificationService *notification.Service,
+	authInst interface{},
 ) *Service {
 	svc := &Service{
 		config:              config,
@@ -52,6 +54,7 @@ func NewService(
 		detectionProvider:   detectionProvider,
 		auditService:        auditService,
 		notificationService: notificationService,
+		authInst:            authInst,
 		geoCache:            make(map[string]*CachedGeo),
 		detectionCache:      make(map[string]*CachedDetection),
 	}
@@ -99,7 +102,7 @@ func (s *Service) CheckLocation(ctx context.Context, req *LocationCheckRequest) 
 			return result, nil
 		}
 		// Log error but allow if not in strict mode
-		_ = s.auditLog(ctx, "geolocation_error", req.UserID, req.OrganizationID, map[string]interface{}{
+		_ = s.auditLog(ctx, "geolocation_error", req.UserID, req.AppID, map[string]interface{}{
 			"error": err.Error(),
 			"ip":    req.IPAddress,
 		})
@@ -109,14 +112,14 @@ func (s *Service) CheckLocation(ctx context.Context, req *LocationCheckRequest) 
 	detection, err := s.GetDetection(ctx, req.IPAddress)
 	if err != nil {
 		// Detection failure is not critical, log and continue
-		_ = s.auditLog(ctx, "detection_error", req.UserID, req.OrganizationID, map[string]interface{}{
+		_ = s.auditLog(ctx, "detection_error", req.UserID, req.AppID, map[string]interface{}{
 			"error": err.Error(),
 			"ip":    req.IPAddress,
 		})
 	}
 
 	// Get applicable rules
-	rules, err := s.repo.ListEnabledRules(ctx, req.OrganizationID, &req.UserID)
+	rules, err := s.repo.ListEnabledRules(ctx, req.AppID, &req.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rules: %w", err)
 	}
@@ -151,7 +154,7 @@ func (s *Service) CheckLocation(ctx context.Context, req *LocationCheckRequest) 
 	event := s.createLocationEvent(req, geoData, detection, result)
 	if err := s.repo.CreateLocationEvent(ctx, event); err != nil {
 		// Log error but don't fail the check
-		_ = s.auditLog(ctx, "location_event_error", req.UserID, req.OrganizationID, map[string]interface{}{
+		_ = s.auditLog(ctx, "location_event_error", req.UserID, req.AppID, map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
@@ -291,16 +294,16 @@ func (s *Service) createViolation(
 	violationType string,
 ) *GeofenceViolation {
 	violation := &GeofenceViolation{
-		UserID:         req.UserID,
-		OrganizationID: req.OrganizationID,
-		RuleID:         rule.ID,
-		ViolationType:  violationType,
-		Severity:       s.determineSeverity(violationType),
-		Action:         rule.Action,
-		IPAddress:      req.IPAddress,
-		Blocked:        rule.Action == "deny",
-		UserNotified:   rule.NotifyUser,
-		AdminNotified:  rule.NotifyAdmin,
+		UserID:        req.UserID,
+		AppID:         req.AppID,
+		RuleID:        rule.ID,
+		ViolationType: violationType,
+		Severity:      s.determineSeverity(violationType),
+		Action:        rule.Action,
+		IPAddress:     req.IPAddress,
+		Blocked:       rule.Action == "deny",
+		UserNotified:  rule.NotifyUser,
+		AdminNotified: rule.NotifyAdmin,
 	}
 
 	if geoData != nil {
@@ -336,12 +339,12 @@ func (s *Service) createLocationEvent(
 	result *LocationCheckResult,
 ) *LocationEvent {
 	event := &LocationEvent{
-		UserID:         req.UserID,
-		OrganizationID: req.OrganizationID,
-		SessionID:      req.SessionID,
-		IPAddress:      req.IPAddress,
-		UserAgent:      req.UserAgent,
-		EventType:      req.EventType,
+		UserID:    req.UserID,
+		AppID:     req.AppID,
+		SessionID: req.SessionID,
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+		EventType: req.EventType,
 	}
 
 	if result.Allowed {
@@ -434,7 +437,7 @@ func (s *Service) checkTravelAnomaly(ctx context.Context, userID xid.ID, current
 	// Create alert
 	alert := &TravelAlert{
 		UserID:           userID,
-		OrganizationID:   current.OrganizationID,
+		AppID:            current.AppID,
 		AlertType:        alertType,
 		Severity:         severity,
 		FromCountry:      lastEvent.Country,
@@ -480,7 +483,7 @@ func (s *Service) sendTravelNotifications(ctx context.Context, alert *TravelAler
 
 	if s.config.Travel.NotifyUser {
 		// TODO: Send user notification
-		_ = s.auditLog(ctx, "travel_alert_user_notification", alert.UserID, alert.OrganizationID, map[string]interface{}{
+		_ = s.auditLog(ctx, "travel_alert_user_notification", alert.UserID, alert.AppID, map[string]interface{}{
 			"alert_id": alert.ID,
 			"message":  message,
 		})
@@ -488,7 +491,7 @@ func (s *Service) sendTravelNotifications(ctx context.Context, alert *TravelAler
 
 	if s.config.Travel.NotifyAdmin {
 		// TODO: Send admin notification
-		_ = s.auditLog(ctx, "travel_alert_admin_notification", alert.UserID, alert.OrganizationID, map[string]interface{}{
+		_ = s.auditLog(ctx, "travel_alert_admin_notification", alert.UserID, alert.AppID, map[string]interface{}{
 			"alert_id": alert.ID,
 			"message":  message,
 		})
@@ -617,13 +620,13 @@ func contains(slice []string, item string) bool {
 
 // LocationCheckRequest represents a geofence check request
 type LocationCheckRequest struct {
-	UserID         xid.ID
-	OrganizationID xid.ID
-	SessionID      *xid.ID
-	IPAddress      string
-	UserAgent      string
-	EventType      string // "login", "request", "manual_check"
-	GPS            *GPSData
+	UserID    xid.ID
+	AppID     xid.ID
+	SessionID *xid.ID
+	IPAddress string
+	UserAgent string
+	EventType string // "login", "request", "manual_check"
+	GPS       *GPSData
 }
 
 // GPSData represents GPS coordinates from a device
@@ -644,4 +647,140 @@ type LocationCheckResult struct {
 	Violations    []string
 	TravelAlert   bool
 	TravelAlertID *xid.ID
+}
+
+// CheckSessionSecurity performs location and security checks for a session
+func (s *Service) CheckSessionSecurity(ctx context.Context, userID xid.ID, appID xid.ID, ipAddress string) error {
+	if !s.config.Notifications.Enabled {
+		return nil
+	}
+
+	// Get current location using existing GetGeolocation method
+	currentLoc, err := s.GetGeolocation(ctx, ipAddress)
+	if err != nil {
+		// Don't fail auth on geolocation errors
+		fmt.Printf("[Geofence] Failed to get location for %s: %v\n", ipAddress, err)
+		return nil
+	}
+
+	// Store location event
+	locationEvent := &LocationEvent{
+		ID:           xid.New(),
+		UserID:       userID,
+		AppID:        appID,
+		IPAddress:    ipAddress,
+		Country:      currentLoc.Country,
+		CountryCode:  currentLoc.CountryCode,
+		Region:       "", // Optional
+		City:         currentLoc.City,
+		Latitude:     currentLoc.Latitude,
+		Longitude:    currentLoc.Longitude,
+		AccuracyKm:   currentLoc.AccuracyKm,
+		IsVPN:        false, // Will be set by detection
+		IsProxy:      false,
+		IsTor:        false,
+		IsDatacenter: false,
+		EventType:    "login",
+		EventResult:  "allowed",
+		Timestamp:    time.Now().UTC(),
+	}
+
+	_ = s.repo.CreateLocationEvent(ctx, locationEvent)
+
+	// Check for new location
+	if s.config.Notifications.NewLocationEnabled {
+		lastLoc, err := s.repo.GetLastLocation(ctx, userID, appID)
+		if err == nil && lastLoc != nil {
+			distance := s.calculateDistanceBetweenLocations(lastLoc, currentLoc)
+			if distance >= s.config.Notifications.NewLocationThresholdKm {
+				fmt.Printf("[Geofence] New location detected for user %s: %.0f km\n", userID, distance)
+				_ = s.notifyNewLocation(ctx, userID, appID, currentLoc, lastLoc, distance)
+			}
+		}
+	}
+
+	// Check for suspicious patterns
+	if s.config.Notifications.SuspiciousLoginEnabled {
+		if suspicious, reason := s.isSuspicious(ctx, userID, currentLoc, locationEvent); suspicious {
+			fmt.Printf("[Geofence] Suspicious login detected for user %s: %s\n", userID, reason)
+			_ = s.notifySuspiciousLogin(ctx, userID, appID, reason, currentLoc)
+		}
+	}
+
+	return nil
+}
+
+// isSuspicious checks for suspicious login patterns
+func (s *Service) isSuspicious(ctx context.Context, userID xid.ID, currentLoc *GeoData, currentEvent *LocationEvent) (bool, string) {
+	// Check impossible travel
+	if s.config.Notifications.ImpossibleTravelEnabled {
+		lastEvent, err := s.repo.GetLastLocationEvent(ctx, userID)
+		if err == nil && lastEvent != nil {
+			timeDiff := time.Since(lastEvent.Timestamp)
+			if timeDiff.Hours() > 0 && lastEvent.Latitude != nil && lastEvent.Longitude != nil && currentLoc.Latitude != nil && currentLoc.Longitude != nil {
+				distance := haversineDistance(*lastEvent.Latitude, *lastEvent.Longitude, *currentLoc.Latitude, *currentLoc.Longitude)
+
+				// Calculate required speed (km/h)
+				hours := timeDiff.Hours()
+				speedKmh := distance / hours
+				maxSpeed := 900.0 // Commercial aircraft speed
+
+				if speedKmh > maxSpeed {
+					return true, fmt.Sprintf("Impossible travel: %.0f km in %.1f hours (%.0f km/h, max: %.0f km/h)",
+						distance, hours, speedKmh, maxSpeed)
+				}
+			}
+		}
+	}
+
+	// Check VPN/Proxy/Tor using existing GetDetection method
+	if s.detectionProvider != nil {
+		detection, err := s.GetDetection(ctx, currentLoc.IPAddress)
+		if err == nil && detection != nil {
+			// VPN Detection
+			if s.config.Notifications.VpnDetectionEnabled && detection.IsVPN {
+				vpnInfo := "VPN detected"
+				if detection.VPNProvider != "" {
+					vpnInfo = fmt.Sprintf("VPN detected: %s", detection.VPNProvider)
+				}
+				return true, vpnInfo
+			}
+
+			// Proxy Detection
+			if s.config.Notifications.ProxyDetectionEnabled && detection.IsProxy {
+				return true, "Proxy server detected"
+			}
+
+			// Tor Detection
+			if s.config.Notifications.TorDetectionEnabled && detection.IsTor {
+				return true, "Tor exit node detected"
+			}
+
+			// Fraud Score
+			if detection.FraudScore != nil && *detection.FraudScore >= s.config.Notifications.SuspiciousLoginScoreThreshold {
+				return true, fmt.Sprintf("High fraud score: %.1f/100", *detection.FraudScore)
+			}
+
+			// Update location event with detection results
+			if currentEvent != nil {
+				currentEvent.IsVPN = detection.IsVPN
+				currentEvent.IsProxy = detection.IsProxy
+				currentEvent.IsTor = detection.IsTor
+				currentEvent.IsDatacenter = detection.IsDatacenter
+				currentEvent.VPNProvider = detection.VPNProvider
+				currentEvent.FraudScore = detection.FraudScore
+			}
+		}
+	}
+
+	return false, ""
+}
+
+// calculateDistanceBetweenLocations calculates distance between two GeoData locations
+// Uses the haversineDistance function from repository.go
+func (s *Service) calculateDistanceBetweenLocations(loc1, loc2 *GeoData) float64 {
+	if loc1.Latitude == nil || loc1.Longitude == nil || loc2.Latitude == nil || loc2.Longitude == nil {
+		return 0
+	}
+	return haversineDistance(*loc1.Latitude, *loc1.Longitude, *loc2.Latitude, *loc2.Longitude)
 }

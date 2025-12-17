@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/registry"
@@ -30,6 +32,8 @@ type Plugin struct {
 	forgeConfig        forge.ConfigManager
 	defaultsAdded      bool
 	dashboardExtension *DashboardExtension
+	authInst           core.Authsome
+	notifAdapter       *Adapter
 }
 
 // PluginOption is a functional option for configuring the notification plugin
@@ -120,6 +124,8 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
 		return fmt.Errorf("notification plugin requires auth instance")
 	}
+
+	p.authInst = authInst
 
 	db := authInst.GetDB()
 	if db == nil {
@@ -352,7 +358,9 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	}
 
 	// Register after user create hook to send welcome email
-	if p.config.AutoSendWelcome {
+	// Support both legacy AutoSendWelcome and new AutoSend.Auth.Welcome config
+	sendWelcome := p.config.AutoSendWelcome || p.config.AutoSend.Auth.Welcome
+	if sendWelcome {
 		hookRegistry.RegisterAfterUserCreate(func(ctx context.Context, createdUser *user.User) error {
 			// Send welcome email to new user
 			if p.service != nil && p.templateSvc != nil && createdUser != nil && createdUser.Email != "" {
@@ -388,14 +396,380 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		})
 	}
 
+	// Register device/session security hooks
+	if p.config.AutoSend.Session.NewDevice {
+		hookRegistry.RegisterOnNewDeviceDetected(func(ctx context.Context, userID xid.ID, deviceName, location, ipAddress string) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in new device detected hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in new device hook: %v\n", err)
+				return nil
+			}
+
+			// Send new device notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendNewDeviceLogin(ctx, appID, user.Email, userName, deviceName, location, timestamp, ipAddress)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send new device notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Session.DeviceRemoved {
+		hookRegistry.RegisterOnDeviceRemoved(func(ctx context.Context, userID xid.ID, deviceName string) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in device removed hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in device removed hook: %v\n", err)
+				return nil
+			}
+
+			// Send device removed notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendDeviceRemoved(ctx, appID, user.Email, userName, deviceName, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send device removed notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	fmt.Println("[Notification] Registered device/session security notification hooks")
+
+	// Register account lifecycle hooks
+	if p.config.AutoSend.Account.EmailChangeRequest {
+		hookRegistry.RegisterOnEmailChangeRequest(func(ctx context.Context, userID xid.ID, oldEmail, newEmail, confirmationUrl string) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in email change request hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in email change request hook: %v\n", err)
+				return nil
+			}
+
+			// Send email change request notification to OLD email
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendEmailChangeRequest(ctx, appID, oldEmail, userName, newEmail, confirmationUrl, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send email change request notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Account.EmailChanged {
+		hookRegistry.RegisterOnEmailChanged(func(ctx context.Context, userID xid.ID, oldEmail, newEmail string) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in email changed hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in email changed hook: %v\n", err)
+				return nil
+			}
+
+			// Send email changed notification to NEW email
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendEmailChanged(ctx, appID, user.Email, userName, oldEmail, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send email changed notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Account.UsernameChanged {
+		hookRegistry.RegisterOnUsernameChanged(func(ctx context.Context, userID xid.ID, oldUsername, newUsername string) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in username changed hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in username changed hook: %v\n", err)
+				return nil
+			}
+
+			// Send username changed notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendUsernameChanged(ctx, appID, user.Email, userName, oldUsername, newUsername, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send username changed notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Account.Deleted {
+		hookRegistry.RegisterOnAccountDeleted(func(ctx context.Context, userID xid.ID) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in account deleted hook")
+				return nil
+			}
+
+			// Get user details before deletion (may already be deleted, so this might not work)
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				// User already deleted, can't send notification
+				return nil
+			}
+
+			// Send account deleted notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendAccountDeleted(ctx, appID, user.Email, userName, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send account deleted notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Account.Suspended {
+		hookRegistry.RegisterOnAccountSuspended(func(ctx context.Context, userID xid.ID, reason string) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in account suspended hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in account suspended hook: %v\n", err)
+				return nil
+			}
+
+			// Send account suspended notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendAccountSuspended(ctx, appID, user.Email, userName, reason, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send account suspended notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Account.Reactivated {
+		hookRegistry.RegisterOnAccountReactivated(func(ctx context.Context, userID xid.ID) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in account reactivated hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in account reactivated hook: %v\n", err)
+				return nil
+			}
+
+			// Send account reactivated notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendAccountReactivated(ctx, appID, user.Email, userName, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send account reactivated notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	if p.config.AutoSend.Account.PasswordChanged {
+		hookRegistry.RegisterOnPasswordChanged(func(ctx context.Context, userID xid.ID) error {
+			// Get app context
+			appID, ok := contexts.GetAppID(ctx)
+			if !ok || appID.IsNil() {
+				fmt.Println("[Notification] App context not available in password changed hook")
+				return nil
+			}
+
+			// Get user details
+			userSvc := p.authInst.GetServiceRegistry().UserService()
+			if userSvc == nil {
+				fmt.Println("[Notification] User service not available")
+				return nil
+			}
+			user, err := userSvc.FindByID(ctx, userID)
+			if err != nil || user == nil {
+				fmt.Printf("[Notification] Failed to get user details in password changed hook: %v\n", err)
+				return nil
+			}
+
+			// Send password changed notification
+			userName := user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+
+			timestamp := time.Now().Format(time.RFC3339)
+			adapter := NewAdapter(p.templateSvc)
+			err = adapter.SendPasswordChanged(ctx, appID, user.Email, userName, timestamp)
+			if err != nil {
+				fmt.Printf("[Notification] Failed to send password changed notification: %v\n", err)
+			}
+
+			return nil
+		})
+	}
+
+	fmt.Println("[Notification] Registered account lifecycle notification hooks")
+
 	return nil
 }
 
-// RegisterServiceDecorators registers the notification service
-// TODO: Implement when service registry is available
+// RegisterServiceDecorators registers the notification service and adapter
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
-	// Service registry integration will be implemented when the service registry
-	// infrastructure is added to AuthSome core
+	if services == nil {
+		return nil
+	}
+
+	// Initialize adapter with app service for dynamic app name lookup
+	if p.notifAdapter == nil && p.templateSvc != nil {
+		p.notifAdapter = NewAdapter(p.templateSvc).
+			WithAppService(p.authInst.GetServiceRegistry().AppService()).
+			WithAppName(p.config.AppName)
+	}
+
+	// Register notification adapter for other plugins to use
+	if p.notifAdapter != nil {
+		if err := services.Register("notification.adapter", p.notifAdapter); err != nil {
+			fmt.Printf("[Notification] Warning: failed to register notification adapter in service registry: %v\n", err)
+			// Don't fail - adapter will still work for this plugin's own use
+		} else {
+			fmt.Println("[Notification] Registered notification adapter in service registry")
+		}
+	}
+
 	return nil
 }
 

@@ -19,7 +19,7 @@ const (
 // ComplianceProfile defines compliance requirements for an app
 type ComplianceProfile struct {
 	ID        string               `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	AppID     string               `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	AppID     string               `json:"appId" bun:"app_id,notnull"`
 	Name      string               `json:"name" bun:"name,notnull"`
 	Standards []ComplianceStandard `json:"standards" bun:"standards,array"`
 	Status    string               `json:"status" bun:"status,notnull"` // active, suspended, audit
@@ -67,9 +67,9 @@ type ComplianceProfile struct {
 type ComplianceCheck struct {
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID         string                 `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
-	CheckType     string                 `json:"checkType" bun:"check_type,notnull"`  // mfa_coverage, password_policy, etc.
-	Status        string                 `json:"status" bun:"status,notnull"`         // passed, failed, warning
+	AppID         string                 `json:"appId" bun:"app_id,notnull"`
+	CheckType     string                 `json:"checkType" bun:"check_type,notnull"` // mfa_coverage, password_policy, etc.
+	Status        string                 `json:"status" bun:"status,notnull"`        // passed, failed, warning
 	Result        map[string]interface{} `json:"result" bun:"result,type:jsonb"`
 	Evidence      []string               `json:"evidence" bun:"evidence,array"`
 	LastCheckedAt time.Time              `json:"lastCheckedAt" bun:"last_checked_at,notnull"`
@@ -81,7 +81,7 @@ type ComplianceCheck struct {
 type ComplianceViolation struct {
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID         string                 `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	AppID         string                 `json:"appId" bun:"app_id,notnull"`
 	UserID        string                 `json:"userId" bun:"user_id"`
 	ViolationType string                 `json:"violationType" bun:"violation_type,notnull"` // mfa_not_enabled, weak_password, etc.
 	Severity      string                 `json:"severity" bun:"severity,notnull"`            // low, medium, high, critical
@@ -97,7 +97,7 @@ type ComplianceViolation struct {
 type ComplianceReport struct {
 	ID          string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID   string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID       string                 `json:"appId" bun:"organization_id,notnull"`  // Maps to organization_id column in DB
+	AppID       string                 `json:"appId" bun:"app_id,notnull"`
 	ReportType  string                 `json:"reportType" bun:"report_type,notnull"` // soc2, hipaa, audit_export
 	Standard    ComplianceStandard     `json:"standard" bun:"standard"`
 	Period      string                 `json:"period" bun:"period,notnull"` // 2025-Q1, 2025-11
@@ -115,7 +115,7 @@ type ComplianceReport struct {
 type ComplianceEvidence struct {
 	ID           string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID    string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID        string                 `json:"appId" bun:"organization_id,notnull"`      // Maps to organization_id column in DB
+	AppID        string                 `json:"appId" bun:"app_id,notnull"`
 	EvidenceType string                 `json:"evidenceType" bun:"evidence_type,notnull"` // audit_log, policy_doc, etc.
 	Standard     ComplianceStandard     `json:"standard" bun:"standard"`
 	ControlID    string                 `json:"controlId" bun:"control_id"` // e.g., SOC2-CC6.1
@@ -132,7 +132,7 @@ type ComplianceEvidence struct {
 type CompliancePolicy struct {
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID         string                 `json:"appId" bun:"organization_id,notnull"`  // Maps to organization_id column in DB
+	AppID         string                 `json:"appId" bun:"app_id,notnull"`
 	PolicyType    string                 `json:"policyType" bun:"policy_type,notnull"` // password, access, data_retention
 	Standard      ComplianceStandard     `json:"standard" bun:"standard"`
 	Title         string                 `json:"title" bun:"title,notnull"`
@@ -152,7 +152,7 @@ type CompliancePolicy struct {
 type ComplianceTraining struct {
 	ID           string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID    string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID        string                 `json:"appId" bun:"organization_id,notnull"` // Maps to organization_id column in DB
+	AppID        string                 `json:"appId" bun:"app_id,notnull"`
 	UserID       string                 `json:"userId" bun:"user_id,notnull"`
 	TrainingType string                 `json:"trainingType" bun:"training_type,notnull"` // security_awareness, hipaa_basics
 	Standard     ComplianceStandard     `json:"standard" bun:"standard"`

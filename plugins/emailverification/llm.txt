@@ -1,0 +1,171 @@
+# Email Verification Plugin
+
+## Overview
+
+The email verification plugin provides complete email verification workflow for AuthSome applications. It integrates with the core auth system to send verification emails after signup and validates email addresses before allowing sign-in.
+
+## Key Features
+
+- Automatic verification email sending via after-signup hook
+- Secure token generation and validation
+- Rate limiting (3 requests per hour per user)
+- Token expiry (24 hours default)
+- Auto-login after successful verification
+- Resend functionality
+- Integration with notification system
+
+## Architecture
+
+### Flow
+```
+1. User signs up → User created (EmailVerified=false)
+2. After signup hook triggers → Verification email sent
+3. User clicks link → GET /verify?token=xyz
+4. Token validated → User marked verified → Optional session created
+5. User signs in → Auth service checks EmailVerified → Success
+```
+
+### Components
+
+**Repository Layer** (`repository.go`)
+- Database operations for verification tokens
+- Uses `schema.Verification` table with `Type = "email"`
+
+**Service Layer** (`service.go`)
+- Business logic for verification workflow
+- Token generation, validation, and consumption
+- Integration with notification adapter
+
+**Handler Layer** (`handlers.go`)
+- HTTP endpoint handlers
+- Request validation and error handling
+
+**Plugin Registration** (`plugin.go`)
+- Configuration management
+- Hook registration
+- Route registration
+
+## API Endpoints
+
+### GET /email-verification/verify?token=xyz
+Verifies email address using token from verification link.
+
+**Response:**
+```json
+{
+  "success": true,
+  "user": {...},
+  "session": {...},  // If auto-login enabled
+  "token": "..."     // Session token
+}
+```
+
+### POST /email-verification/resend
+Requests a new verification email.
+
+**Request:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+### POST /email-verification/send
+Manually sends verification email (admin use).
+
+### GET /email-verification/status (authenticated)
+Returns current user's verification status.
+
+## Configuration
+
+```go
+type Config struct {
+    TokenLength          int    // Default: 32
+    ExpiryHours          int    // Default: 24
+    MaxResendPerHour     int    // Default: 3
+    AutoSendOnSignup     bool   // Default: true
+    AutoLoginAfterVerify bool   // Default: true
+    VerificationURL      string // Frontend URL template
+    DevExposeToken       bool   // Default: false (dev only)
+}
+```
+
+## Integration
+
+### With Auth Service
+The core auth service checks email verification during sign-in:
+```go
+// In core/auth/service.go SignIn method
+if s.config.RequireEmailVerification && !u.EmailVerified {
+    return nil, types.ErrEmailNotVerified
+}
+```
+
+### With Notification System
+Uses `SendVerificationEmail` method from notification adapter:
+```go
+err := adapter.SendVerificationEmail(ctx, appID, email, userName, 
+    verificationURL, token, expiryMinutes)
+```
+
+### With Hooks
+Registers after-signup hook when `AutoSendOnSignup` is enabled:
+```go
+hookRegistry.RegisterAfterSignUp(func(ctx, resp) error {
+    if !resp.User.EmailVerified {
+        return service.SendVerification(ctx, appID, userID, email)
+    }
+    return nil
+})
+```
+
+## Error Handling
+
+Custom errors defined:
+- `ErrTokenNotFound` (404)
+- `ErrTokenExpired` (410)
+- `ErrTokenAlreadyUsed` (410)
+- `ErrAlreadyVerified` (400)
+- `ErrRateLimitExceeded` (429)
+- `ErrUserNotFound` (404)
+
+## Security
+
+1. **Secure Tokens**: Generated using crypto/rand
+2. **Rate Limiting**: Prevents abuse
+3. **Token Expiry**: Time-limited validity
+4. **One-Time Use**: Tokens marked as used
+5. **Ownership Check**: Only operates on user's own email
+
+## Usage Example
+
+```go
+// Initialize plugin
+emailVerif := emailverification.NewPlugin(
+    emailverification.WithAutoSendOnSignup(true),
+    emailverification.WithExpiryHours(24),
+)
+
+auth.RegisterPlugin(emailVerif)
+
+// User flow:
+// 1. POST /signup → Verification email sent automatically
+// 2. User clicks link → GET /verify?token=xyz → User verified
+// 3. POST /signin → Success (user is verified)
+```
+
+## Testing
+
+Enable dev mode to see tokens without email delivery:
+```go
+emailverification.WithDevExposeToken(true)
+```
+
+Response includes `devToken` field for testing.
+
+## Database
+
+Uses existing `verifications` table:
+- `type = "email"` for email verification tokens
+- No additional migrations required
+- Supports cleanup via `CleanupExpiredTokens()`

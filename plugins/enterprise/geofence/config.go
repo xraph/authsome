@@ -35,6 +35,9 @@ type Config struct {
 
 	// Security & Audit
 	Security SecurityConfig `json:"security" yaml:"security"`
+
+	// Session Security Notifications
+	Notifications NotificationConfig `json:"notifications" yaml:"notifications"`
 }
 
 // RestrictionConfig configures geographic restrictions
@@ -392,7 +395,38 @@ func DefaultConfig() *Config {
 			NotifyOnViolation:  true,
 			NotifyOnAnomaly:    true,
 		},
+		Notifications: NotificationConfig{
+			Enabled:                       true,
+			NewLocationEnabled:            true,
+			NewLocationThresholdKm:        100.0, // 100km triggers new location alert
+			SuspiciousLoginEnabled:        true,
+			SuspiciousLoginScoreThreshold: 75.0, // IPQS fraud score threshold
+			ImpossibleTravelEnabled:       true,
+			VpnDetectionEnabled:           true,
+			ProxyDetectionEnabled:         true,
+			TorDetectionEnabled:           true,
+		},
 	}
+}
+
+// NotificationConfig configures session security notifications
+type NotificationConfig struct {
+	// General
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// New Location Notifications
+	NewLocationEnabled     bool    `json:"newLocationEnabled" yaml:"newLocationEnabled"`
+	NewLocationThresholdKm float64 `json:"newLocationThresholdKm" yaml:"newLocationThresholdKm"` // Trigger at N km distance
+
+	// Suspicious Login Notifications
+	SuspiciousLoginEnabled        bool    `json:"suspiciousLoginEnabled" yaml:"suspiciousLoginEnabled"`
+	SuspiciousLoginScoreThreshold float64 `json:"suspiciousLoginScoreThreshold" yaml:"suspiciousLoginScoreThreshold"` // IPQS fraud score threshold
+
+	// Detection Types
+	ImpossibleTravelEnabled bool `json:"impossibleTravelEnabled" yaml:"impossibleTravelEnabled"`
+	VpnDetectionEnabled     bool `json:"vpnDetectionEnabled" yaml:"vpnDetectionEnabled"`
+	ProxyDetectionEnabled   bool `json:"proxyDetectionEnabled" yaml:"proxyDetectionEnabled"`
+	TorDetectionEnabled     bool `json:"torDetectionEnabled" yaml:"torDetectionEnabled"`
 }
 
 // Validate validates the configuration

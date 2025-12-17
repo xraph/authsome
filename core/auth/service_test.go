@@ -345,6 +345,7 @@ func TestService_SignIn(t *testing.T) {
 	tests := []struct {
 		name    string
 		req     *SignInRequest
+		config  Config
 		setup   func(*MockUserService, *MockSessionService)
 		wantErr bool
 		errMsg  string
@@ -359,12 +360,14 @@ func TestService_SignIn(t *testing.T) {
 				IPAddress:  "192.168.1.1",
 				UserAgent:  "Mozilla/5.0",
 			},
+			config: Config{RequireEmailVerification: false},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
 				existingUser := &user.User{
-					ID:           userID,
-					Email:        "test@example.com",
-					Name:         "Test User",
-					PasswordHash: passwordHash,
+					ID:            userID,
+					Email:         "test@example.com",
+					Name:          "Test User",
+					PasswordHash:  passwordHash,
+					EmailVerified: true,
 				}
 				mu.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
 
@@ -393,6 +396,7 @@ func TestService_SignIn(t *testing.T) {
 				IPAddress:  "192.168.1.1",
 				UserAgent:  "Mozilla/5.0",
 			},
+			config: Config{RequireEmailVerification: false},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
 				existingUser := &user.User{
 					ID:           userID,
@@ -423,6 +427,7 @@ func TestService_SignIn(t *testing.T) {
 				Email:    "nonexistent@example.com",
 				Password: password,
 			},
+			config: Config{RequireEmailVerification: false},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
 				mu.On("FindByEmail", mock.Anything, "nonexistent@example.com").Return(nil, errors.New("not found"))
 			},
@@ -435,6 +440,7 @@ func TestService_SignIn(t *testing.T) {
 				Email:    "test@example.com",
 				Password: "WrongPassword123!",
 			},
+			config: Config{RequireEmailVerification: false},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
 				existingUser := &user.User{
 					ID:           userID,
@@ -454,6 +460,7 @@ func TestService_SignIn(t *testing.T) {
 				IPAddress: "192.168.1.1",
 				UserAgent: "Mozilla/5.0",
 			},
+			config: Config{RequireEmailVerification: false},
 			setup: func(mu *MockUserService, ms *MockSessionService) {
 				existingUser := &user.User{
 					ID:           userID,
@@ -466,6 +473,99 @@ func TestService_SignIn(t *testing.T) {
 			wantErr: true,
 			errMsg:  "session error",
 		},
+		{
+			name: "signin with unverified email when verification required",
+			req: &SignInRequest{
+				Email:     "test@example.com",
+				Password:  password,
+				IPAddress: "192.168.1.1",
+				UserAgent: "Mozilla/5.0",
+			},
+			config: Config{RequireEmailVerification: true},
+			setup: func(mu *MockUserService, ms *MockSessionService) {
+				existingUser := &user.User{
+					ID:            userID,
+					Email:         "test@example.com",
+					PasswordHash:  passwordHash,
+					EmailVerified: false,
+				}
+				mu.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
+			},
+			wantErr: true,
+			errMsg:  "email not verified",
+		},
+		{
+			name: "signin with verified email when verification required",
+			req: &SignInRequest{
+				Email:      "test@example.com",
+				Password:   password,
+				RememberMe: false,
+				IPAddress:  "192.168.1.1",
+				UserAgent:  "Mozilla/5.0",
+			},
+			config: Config{RequireEmailVerification: true},
+			setup: func(mu *MockUserService, ms *MockSessionService) {
+				existingUser := &user.User{
+					ID:            userID,
+					Email:         "test@example.com",
+					Name:          "Test User",
+					PasswordHash:  passwordHash,
+					EmailVerified: true,
+				}
+				mu.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
+
+				createdSession := &session.Session{
+					ID:        xid.New(),
+					Token:     "test-token-12345",
+					UserID:    userID,
+					ExpiresAt: time.Now().Add(24 * time.Hour),
+				}
+				ms.On("Create", mock.Anything, mock.AnythingOfType("*session.CreateSessionRequest")).Return(createdSession, nil)
+			},
+			wantErr: false,
+			check: func(t *testing.T, resp *responses.AuthResponse) {
+				assert.NotNil(t, resp.User)
+				assert.NotNil(t, resp.Session)
+				assert.NotEmpty(t, resp.Token)
+				assert.Equal(t, "test@example.com", resp.User.Email)
+			},
+		},
+		{
+			name: "signin with unverified email when verification not required",
+			req: &SignInRequest{
+				Email:      "test@example.com",
+				Password:   password,
+				RememberMe: false,
+				IPAddress:  "192.168.1.1",
+				UserAgent:  "Mozilla/5.0",
+			},
+			config: Config{RequireEmailVerification: false},
+			setup: func(mu *MockUserService, ms *MockSessionService) {
+				existingUser := &user.User{
+					ID:            userID,
+					Email:         "test@example.com",
+					Name:          "Test User",
+					PasswordHash:  passwordHash,
+					EmailVerified: false,
+				}
+				mu.On("FindByEmail", mock.Anything, "test@example.com").Return(existingUser, nil)
+
+				createdSession := &session.Session{
+					ID:        xid.New(),
+					Token:     "test-token-12345",
+					UserID:    userID,
+					ExpiresAt: time.Now().Add(24 * time.Hour),
+				}
+				ms.On("Create", mock.Anything, mock.AnythingOfType("*session.CreateSessionRequest")).Return(createdSession, nil)
+			},
+			wantErr: false,
+			check: func(t *testing.T, resp *responses.AuthResponse) {
+				assert.NotNil(t, resp.User)
+				assert.NotNil(t, resp.Session)
+				assert.NotEmpty(t, resp.Token)
+				assert.Equal(t, "test@example.com", resp.User.Email)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -473,7 +573,7 @@ func TestService_SignIn(t *testing.T) {
 			mockUserSvc := new(MockUserService)
 			mockSessionSvc := new(MockSessionService)
 			tt.setup(mockUserSvc, mockSessionSvc)
-			svc := newTestService(mockUserSvc, mockSessionSvc)
+			svc := newTestService(mockUserSvc, mockSessionSvc, tt.config)
 
 			// Create context with AppID
 			ctx := context.Background()

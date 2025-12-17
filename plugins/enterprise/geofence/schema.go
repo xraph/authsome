@@ -11,13 +11,13 @@ import (
 type GeofenceRule struct {
 	bun.BaseModel `bun:"table:geofence_rules,alias:gr"`
 
-	ID             xid.ID  `bun:"id,pk,type:varchar(20)" json:"id"`
-	OrganizationID xid.ID  `bun:"organization_id,type:varchar(20),notnull" json:"organizationId"`
-	UserID         *xid.ID `bun:"user_id,type:varchar(20)" json:"userId,omitempty"` // Null = org-wide
-	Name           string  `bun:"name,notnull" json:"name"`
-	Description    string  `bun:"description" json:"description"`
-	Enabled        bool    `bun:"enabled,notnull" json:"enabled"`
-	Priority       int     `bun:"priority,notnull" json:"priority"` // Higher = evaluated first
+	ID          xid.ID  `bun:"id,pk,type:varchar(20)" json:"id"`
+	AppID       xid.ID  `bun:"app_id,type:varchar(20),notnull" json:"appId"`
+	UserID      *xid.ID `bun:"user_id,type:varchar(20)" json:"userId,omitempty"` // Null = app-wide
+	Name        string  `bun:"name,notnull" json:"name"`
+	Description string  `bun:"description" json:"description"`
+	Enabled     bool    `bun:"enabled,notnull" json:"enabled"`
+	Priority    int     `bun:"priority,notnull" json:"priority"` // Higher = evaluated first
 
 	// Rule Type
 	RuleType string `bun:"rule_type,notnull" json:"ruleType"` // country, region, city, geofence, distance
@@ -75,10 +75,10 @@ type TimeRestrictionRule struct {
 type LocationEvent struct {
 	bun.BaseModel `bun:"table:location_events,alias:le"`
 
-	ID             xid.ID  `bun:"id,pk,type:varchar(20)" json:"id"`
-	UserID         xid.ID  `bun:"user_id,type:varchar(20),notnull" json:"userId"`
-	OrganizationID xid.ID  `bun:"organization_id,type:varchar(20),notnull" json:"organizationId"`
-	SessionID      *xid.ID `bun:"session_id,type:varchar(20)" json:"sessionId,omitempty"`
+	ID        xid.ID  `bun:"id,pk,type:varchar(20)" json:"id"`
+	UserID    xid.ID  `bun:"user_id,type:varchar(20),notnull" json:"userId"`
+	AppID     xid.ID  `bun:"app_id,type:varchar(20),notnull" json:"appId"`
+	SessionID *xid.ID `bun:"session_id,type:varchar(20)" json:"sessionId,omitempty"`
 
 	// Location Data
 	IPAddress   string   `bun:"ip_address,notnull" json:"ipAddress"`
@@ -130,9 +130,9 @@ type LocationEvent struct {
 type TravelAlert struct {
 	bun.BaseModel `bun:"table:travel_alerts,alias:ta"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
-	UserID         xid.ID `bun:"user_id,type:varchar(20),notnull" json:"userId"`
-	OrganizationID xid.ID `bun:"organization_id,type:varchar(20),notnull" json:"organizationId"`
+	ID     xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
+	UserID xid.ID `bun:"user_id,type:varchar(20),notnull" json:"userId"`
+	AppID  xid.ID `bun:"app_id,type:varchar(20),notnull" json:"appId"`
 
 	// Alert Type
 	AlertType string `bun:"alert_type,notnull" json:"alertType"` // impossible_travel, new_location, anomaly
@@ -181,9 +181,9 @@ type TravelAlert struct {
 type TrustedLocation struct {
 	bun.BaseModel `bun:"table:trusted_locations,alias:tl"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
-	UserID         xid.ID `bun:"user_id,type:varchar(20),notnull" json:"userId"`
-	OrganizationID xid.ID `bun:"organization_id,type:varchar(20),notnull" json:"organizationId"`
+	ID     xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
+	UserID xid.ID `bun:"user_id,type:varchar(20),notnull" json:"userId"`
+	AppID  xid.ID `bun:"app_id,type:varchar(20),notnull" json:"appId"`
 
 	// Location
 	Name        string  `bun:"name,notnull" json:"name"` // e.g., "Home", "Office"
@@ -215,10 +215,10 @@ type TrustedLocation struct {
 type GeofenceViolation struct {
 	bun.BaseModel `bun:"table:geofence_violations,alias:gv"`
 
-	ID             xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
-	UserID         xid.ID `bun:"user_id,type:varchar(20),notnull" json:"userId"`
-	OrganizationID xid.ID `bun:"organization_id,type:varchar(20),notnull" json:"organizationId"`
-	RuleID         xid.ID `bun:"rule_id,type:varchar(20),notnull" json:"ruleId"`
+	ID     xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
+	UserID xid.ID `bun:"user_id,type:varchar(20),notnull" json:"userId"`
+	AppID  xid.ID `bun:"app_id,type:varchar(20),notnull" json:"appId"`
+	RuleID xid.ID `bun:"rule_id,type:varchar(20),notnull" json:"ruleId"`
 
 	// Violation Details
 	ViolationType string `bun:"violation_type,notnull" json:"violationType"` // blocked_country, vpn_detected, etc.

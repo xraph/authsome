@@ -19,56 +19,56 @@ impl CompliancePlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateProfileRequest {
-        #[serde(rename = "complianceContact")]
-        pub compliance_contact: String,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "passwordMinLength")]
-        pub password_min_length: i32,
-        #[serde(rename = "passwordRequireNumber")]
-        pub password_require_number: bool,
-        #[serde(rename = "passwordRequireUpper")]
-        pub password_require_upper: bool,
-        #[serde(rename = "retentionDays")]
-        pub retention_days: i32,
-        #[serde(rename = "sessionIdleTimeout")]
-        pub session_idle_timeout: i32,
-        #[serde(rename = "sessionIpBinding")]
-        pub session_ip_binding: bool,
-        #[serde(rename = "auditLogExport")]
-        pub audit_log_export: bool,
-        #[serde(rename = "regularAccessReview")]
-        pub regular_access_review: bool,
-        #[serde(rename = "standards")]
-        pub standards: []ComplianceStandard,
-        #[serde(rename = "dpoContact")]
-        pub dpo_contact: String,
-        #[serde(rename = "encryptionAtRest")]
-        pub encryption_at_rest: bool,
-        #[serde(rename = "mfaRequired")]
-        pub mfa_required: bool,
-        #[serde(rename = "passwordExpiryDays")]
-        pub password_expiry_days: i32,
-        #[serde(rename = "rbacRequired")]
-        pub rbac_required: bool,
-        #[serde(rename = "sessionMaxAge")]
-        pub session_max_age: i32,
-        #[serde(rename = "appId")]
-        pub app_id: String,
         #[serde(rename = "dataResidency")]
         pub data_residency: String,
-        #[serde(rename = "detailedAuditTrail")]
-        pub detailed_audit_trail: bool,
-        #[serde(rename = "encryptionInTransit")]
-        pub encryption_in_transit: bool,
-        #[serde(rename = "leastPrivilege")]
-        pub least_privilege: bool,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "mfaRequired")]
+        pub mfa_required: bool,
         #[serde(rename = "name")]
         pub name: String,
         #[serde(rename = "passwordRequireLower")]
         pub password_require_lower: bool,
+        #[serde(rename = "passwordRequireNumber")]
+        pub password_require_number: bool,
         #[serde(rename = "passwordRequireSymbol")]
         pub password_require_symbol: bool,
+        #[serde(rename = "sessionMaxAge")]
+        pub session_max_age: i32,
+        #[serde(rename = "complianceContact")]
+        pub compliance_contact: String,
+        #[serde(rename = "detailedAuditTrail")]
+        pub detailed_audit_trail: bool,
+        #[serde(rename = "dpoContact")]
+        pub dpo_contact: String,
+        #[serde(rename = "passwordRequireUpper")]
+        pub password_require_upper: bool,
+        #[serde(rename = "sessionIpBinding")]
+        pub session_ip_binding: bool,
+        #[serde(rename = "appId")]
+        pub app_id: String,
+        #[serde(rename = "auditLogExport")]
+        pub audit_log_export: bool,
+        #[serde(rename = "encryptionInTransit")]
+        pub encryption_in_transit: bool,
+        #[serde(rename = "leastPrivilege")]
+        pub least_privilege: bool,
+        #[serde(rename = "rbacRequired")]
+        pub rbac_required: bool,
+        #[serde(rename = "retentionDays")]
+        pub retention_days: i32,
+        #[serde(rename = "sessionIdleTimeout")]
+        pub session_idle_timeout: i32,
+        #[serde(rename = "encryptionAtRest")]
+        pub encryption_at_rest: bool,
+        #[serde(rename = "passwordExpiryDays")]
+        pub password_expiry_days: i32,
+        #[serde(rename = "passwordMinLength")]
+        pub password_min_length: i32,
+        #[serde(rename = "regularAccessReview")]
+        pub regular_access_review: bool,
+        #[serde(rename = "standards")]
+        pub standards: []ComplianceStandard,
     }
 
     /// CreateProfile creates a new compliance profile
@@ -117,14 +117,14 @@ GET /auth/compliance/apps/:appId/profile
 
     #[derive(Debug, Serialize)]
     pub struct UpdateProfileRequest {
-        #[serde(rename = "status")]
-        pub status: *string,
         #[serde(rename = "mfaRequired")]
         pub mfa_required: *bool,
         #[serde(rename = "name")]
         pub name: *string,
         #[serde(rename = "retentionDays")]
         pub retention_days: *int,
+        #[serde(rename = "status")]
+        pub status: *string,
     }
 
     /// UpdateProfile updates a compliance profile
@@ -227,14 +227,14 @@ PUT /auth/compliance/violations/:id/resolve
 
     #[derive(Debug, Serialize)]
     pub struct GenerateReportRequest {
-        #[serde(rename = "format")]
-        pub format: String,
-        #[serde(rename = "period")]
-        pub period: String,
         #[serde(rename = "reportType")]
         pub report_type: String,
         #[serde(rename = "standard")]
         pub standard: ComplianceStandard,
+        #[serde(rename = "format")]
+        pub format: String,
+        #[serde(rename = "period")]
+        pub period: String,
     }
 
     /// GenerateReport generates a compliance report
@@ -276,8 +276,6 @@ GET /auth/compliance/reports/:id/download
 
     #[derive(Debug, Serialize)]
     pub struct CreateEvidenceRequest {
-        #[serde(rename = "standard")]
-        pub standard: ComplianceStandard,
         #[serde(rename = "title")]
         pub title: String,
         #[serde(rename = "controlId")]
@@ -288,6 +286,8 @@ GET /auth/compliance/reports/:id/download
         pub evidence_type: String,
         #[serde(rename = "fileUrl")]
         pub file_url: String,
+        #[serde(rename = "standard")]
+        pub standard: ComplianceStandard,
     }
 
     /// CreateEvidence creates compliance evidence
@@ -371,14 +371,14 @@ GET /auth/compliance/policies/:id
 
     #[derive(Debug, Serialize)]
     pub struct UpdatePolicyRequest {
-        #[serde(rename = "title")]
-        pub title: *string,
-        #[serde(rename = "version")]
-        pub version: *string,
         #[serde(rename = "content")]
         pub content: *string,
         #[serde(rename = "status")]
         pub status: *string,
+        #[serde(rename = "title")]
+        pub title: *string,
+        #[serde(rename = "version")]
+        pub version: *string,
     }
 
     /// UpdatePolicy updates a compliance policy
@@ -402,12 +402,12 @@ DELETE /auth/compliance/policies/:id
 
     #[derive(Debug, Serialize)]
     pub struct CreateTrainingRequest {
-        #[serde(rename = "standard")]
-        pub standard: ComplianceStandard,
         #[serde(rename = "trainingType")]
         pub training_type: String,
         #[serde(rename = "userId")]
         pub user_id: String,
+        #[serde(rename = "standard")]
+        pub standard: ComplianceStandard,
     }
 
     /// CreateTraining creates a training record

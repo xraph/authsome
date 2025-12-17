@@ -69,10 +69,10 @@ impl TwofaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct GenerateBackupCodesRequest {
-        #[serde(rename = "count")]
-        pub count: i32,
         #[serde(rename = "user_id")]
         pub user_id: String,
+        #[serde(rename = "count")]
+        pub count: i32,
     }
 
     #[derive(Debug, Deserialize)]

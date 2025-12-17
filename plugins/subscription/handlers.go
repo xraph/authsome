@@ -1,12 +1,17 @@
 package subscription
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
+	"github.com/xraph/authsome/plugins/subscription/repository"
+	"github.com/xraph/authsome/plugins/subscription/schema"
 	"github.com/xraph/forge"
 )
 
@@ -630,6 +635,143 @@ func (p *Plugin) handleGetInvoice(c forge.Context) error {
 	return c.JSON(200, invoice)
 }
 
+func (p *Plugin) handleSyncInvoices(c forge.Context) error {
+	ctx := c.Context()
+
+	// Get optional subscription ID filter
+	var subID *xid.ID
+	if subIDStr := c.Query("subscriptionId"); subIDStr != "" {
+		id, err := xid.FromString(subIDStr)
+		if err != nil {
+			return c.JSON(400, errorResponse{Error: "invalid_id", Message: "invalid subscription ID"})
+		}
+		subID = &id
+	}
+
+	// Sync invoices
+	syncedCount, err := p.SyncInvoicesFromStripe(ctx, subID)
+	if err != nil {
+		return c.JSON(500, errorResponse{Error: "sync_failed", Message: err.Error()})
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"synced":  syncedCount,
+		"message": fmt.Sprintf("Successfully synced %d invoices from Stripe", syncedCount),
+	})
+}
+
+// SyncInvoicesFromStripe syncs invoices from Stripe to the local database (exported for dashboard use)
+func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int, error) {
+	var subscriptions []*schema.Subscription
+	var err error
+
+	if subID != nil {
+		// Sync for specific subscription
+		sub, err := p.subRepo.FindByID(ctx, *subID)
+		if err != nil {
+			return 0, fmt.Errorf("subscription not found: %w", err)
+		}
+		subscriptions = []*schema.Subscription{sub}
+	} else {
+		// Sync for all active subscriptions
+		filter := &repository.SubscriptionFilter{
+			Status:   "active",
+			Page:     1,
+			PageSize: 1000,
+		}
+		subscriptions, _, err = p.subRepo.List(ctx, filter)
+		if err != nil {
+			return 0, fmt.Errorf("failed to list subscriptions: %w", err)
+		}
+	}
+
+	syncedCount := 0
+	for _, sub := range subscriptions {
+		if sub.ProviderSubID == "" {
+			continue
+		}
+
+		// Get invoices from Stripe for this subscription
+		providerInvoices, err := p.provider.ListSubscriptionInvoices(ctx, sub.ProviderSubID, 100)
+		if err != nil {
+			p.logger.Error("failed to list invoices from provider",
+				forge.F("subscriptionId", sub.ID.String()),
+				forge.F("error", err.Error()))
+			continue
+		}
+
+		for _, providerInv := range providerInvoices {
+			// Check if invoice already exists
+			existing, err := p.invoiceRepo.FindByProviderID(ctx, providerInv.ID)
+			if err == nil && existing != nil {
+				// Invoice exists, update it
+				existing.Status = mapStripeStatusToInvoiceStatus(providerInv.Status)
+				existing.Subtotal = providerInv.Subtotal
+				existing.Tax = providerInv.Tax
+				existing.Total = providerInv.Total
+				existing.AmountPaid = providerInv.AmountPaid
+				existing.AmountDue = providerInv.AmountDue
+				existing.ProviderPDFURL = providerInv.PDFURL
+				existing.HostedInvoiceURL = providerInv.HostedURL
+				existing.UpdatedAt = time.Now()
+
+				if err := p.invoiceRepo.Update(ctx, existing); err != nil {
+					p.logger.Error("failed to update invoice",
+						forge.F("invoiceId", existing.ID.String()),
+						forge.F("error", err.Error()))
+					continue
+				}
+				syncedCount++
+				continue
+			}
+
+			// Create new invoice
+			number, err := p.invoiceRepo.GetNextInvoiceNumber(ctx, sub.Plan.AppID)
+			if err != nil {
+				p.logger.Error("failed to generate invoice number", forge.F("error", err.Error()))
+				continue
+			}
+
+			now := time.Now()
+			invoice := &schema.SubscriptionInvoice{
+				ID:                xid.New(),
+				SubscriptionID:    sub.ID,
+				OrganizationID:    sub.OrganizationID,
+				Number:            number,
+				Status:            mapStripeStatusToInvoiceStatus(providerInv.Status),
+				Currency:          providerInv.Currency,
+				Subtotal:          providerInv.Subtotal,
+				Tax:               providerInv.Tax,
+				Total:             providerInv.Total,
+				AmountPaid:        providerInv.AmountPaid,
+				AmountDue:         providerInv.AmountDue,
+				PeriodStart:       time.Unix(providerInv.PeriodStart, 0),
+				PeriodEnd:         time.Unix(providerInv.PeriodEnd, 0),
+				DueDate:           time.Unix(providerInv.PeriodStart, 0).AddDate(0, 0, 14),
+				ProviderInvoiceID: providerInv.ID,
+				ProviderPDFURL:    providerInv.PDFURL,
+				HostedInvoiceURL:  providerInv.HostedURL,
+				Metadata:          make(map[string]interface{}),
+			}
+
+			if providerInv.Status == "paid" {
+				invoice.PaidAt = &now
+			}
+
+			if err := p.invoiceRepo.Create(ctx, invoice); err != nil {
+				p.logger.Error("failed to create invoice",
+					forge.F("providerInvoiceId", providerInv.ID),
+					forge.F("error", err.Error()))
+				continue
+			}
+
+			syncedCount++
+		}
+	}
+
+	return syncedCount, nil
+}
+
 // Usage Handlers
 
 func (p *Plugin) handleRecordUsage(c forge.Context) error {
@@ -793,19 +935,292 @@ func (p *Plugin) handleStripeWebhook(c forge.Context) error {
 	switch event.Type {
 	case "checkout.session.completed":
 		// Handle successful checkout
+		// TODO: Implement checkout completion
 	case "customer.subscription.created":
 		// Sync subscription
+		// TODO: Implement subscription sync
 	case "customer.subscription.updated":
 		// Update subscription status
+		// TODO: Implement subscription update
 	case "customer.subscription.deleted":
 		// Handle cancellation
+		// TODO: Implement subscription cancellation
+	case "invoice.created", "invoice.finalized":
+		if err := p.handleInvoiceCreatedOrFinalized(c.Context(), event); err != nil {
+			p.logger.Error("failed to handle invoice created/finalized", forge.F("error", err.Error()))
+		}
 	case "invoice.paid":
-		// Mark invoice paid
+		if err := p.handleInvoicePaid(c.Context(), event); err != nil {
+			p.logger.Error("failed to handle invoice paid", forge.F("error", err.Error()))
+		}
 	case "invoice.payment_failed":
-		// Handle failed payment
+		if err := p.handleInvoicePaymentFailed(c.Context(), event); err != nil {
+			p.logger.Error("failed to handle invoice payment failed", forge.F("error", err.Error()))
+		}
+	case "invoice.updated":
+		if err := p.handleInvoiceUpdated(c.Context(), event); err != nil {
+			p.logger.Error("failed to handle invoice updated", forge.F("error", err.Error()))
+		}
 	}
 
 	return c.JSON(200, map[string]string{"received": "true"})
+}
+
+// Webhook event handlers
+
+func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *types.WebhookEvent) error {
+	// Extract invoice data from webhook
+	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid invoice data in webhook")
+	}
+
+	providerInvoiceID, _ := invoiceData["id"].(string)
+	if providerInvoiceID == "" {
+		return fmt.Errorf("missing invoice ID in webhook")
+	}
+
+	// Check if invoice already exists
+	existingInvoice, err := p.invoiceRepo.FindByProviderID(ctx, providerInvoiceID)
+	if err == nil && existingInvoice != nil {
+		// Invoice already exists, update it instead
+		return p.syncInvoiceFromProvider(ctx, providerInvoiceID)
+	}
+
+	// Get subscription ID from webhook
+	providerSubID, _ := invoiceData["subscription"].(string)
+	if providerSubID == "" {
+		p.logger.Warn("invoice has no subscription", forge.F("invoiceId", providerInvoiceID))
+		return nil // Not all invoices are subscription-based
+	}
+
+	// Find our subscription by provider ID
+	sub, err := p.subRepo.FindByProviderID(ctx, providerSubID)
+	if err != nil {
+		return fmt.Errorf("subscription not found for provider ID %s: %w", providerSubID, err)
+	}
+
+	// Generate invoice number
+	number, err := p.invoiceRepo.GetNextInvoiceNumber(ctx, sub.Plan.AppID)
+	if err != nil {
+		return fmt.Errorf("failed to generate invoice number: %w", err)
+	}
+
+	// Parse invoice status
+	status, _ := invoiceData["status"].(string)
+	invoiceStatus := mapStripeStatusToInvoiceStatus(status)
+
+	// Parse amounts (Stripe sends in cents)
+	total := int64(0)
+	if t, ok := invoiceData["total"].(float64); ok {
+		total = int64(t)
+	}
+	subtotal := int64(0)
+	if s, ok := invoiceData["subtotal"].(float64); ok {
+		subtotal = int64(s)
+	}
+	tax := int64(0)
+	if tx, ok := invoiceData["tax"].(float64); ok {
+		tax = int64(tx)
+	}
+	amountDue := int64(0)
+	if a, ok := invoiceData["amount_due"].(float64); ok {
+		amountDue = int64(a)
+	}
+	amountPaid := int64(0)
+	if a, ok := invoiceData["amount_paid"].(float64); ok {
+		amountPaid = int64(a)
+	}
+
+	// Parse timestamps
+	periodStart := time.Unix(int64(invoiceData["period_start"].(float64)), 0)
+	periodEnd := time.Unix(int64(invoiceData["period_end"].(float64)), 0)
+	dueDate := time.Now().AddDate(0, 0, 14) // Default 14 days
+	if dd, ok := invoiceData["due_date"].(float64); ok && dd > 0 {
+		dueDate = time.Unix(int64(dd), 0)
+	}
+
+	// Parse URLs
+	hostedURL, _ := invoiceData["hosted_invoice_url"].(string)
+	pdfURL, _ := invoiceData["invoice_pdf"].(string)
+	currency, _ := invoiceData["currency"].(string)
+
+	invoice := &schema.SubscriptionInvoice{
+		ID:                xid.New(),
+		SubscriptionID:    sub.ID,
+		OrganizationID:    sub.OrganizationID,
+		Number:            number,
+		Status:            string(invoiceStatus),
+		Currency:          currency,
+		Subtotal:          subtotal,
+		Tax:               tax,
+		Total:             total,
+		AmountPaid:        amountPaid,
+		AmountDue:         amountDue,
+		PeriodStart:       periodStart,
+		PeriodEnd:         periodEnd,
+		DueDate:           dueDate,
+		ProviderInvoiceID: providerInvoiceID,
+		ProviderPDFURL:    pdfURL,
+		HostedInvoiceURL:  hostedURL,
+		Metadata:          make(map[string]interface{}),
+	}
+
+	// Create invoice in database
+	if err := p.invoiceRepo.Create(ctx, invoice); err != nil {
+		return fmt.Errorf("failed to create invoice: %w", err)
+	}
+
+	p.logger.Info("invoice created from webhook",
+		forge.F("invoiceId", invoice.ID.String()),
+		forge.F("providerInvoiceId", providerInvoiceID),
+		forge.F("subscriptionId", sub.ID.String()))
+
+	return nil
+}
+
+func (p *Plugin) handleInvoicePaid(ctx context.Context, event *types.WebhookEvent) error {
+	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid invoice data in webhook")
+	}
+
+	providerInvoiceID, _ := invoiceData["id"].(string)
+	if providerInvoiceID == "" {
+		return fmt.Errorf("missing invoice ID in webhook")
+	}
+
+	// Find invoice by provider ID
+	invoice, err := p.invoiceRepo.FindByProviderID(ctx, providerInvoiceID)
+	if err != nil {
+		// Invoice doesn't exist, create it first
+		if err := p.handleInvoiceCreatedOrFinalized(ctx, event); err != nil {
+			return err
+		}
+		// Try to find it again
+		invoice, err = p.invoiceRepo.FindByProviderID(ctx, providerInvoiceID)
+		if err != nil {
+			return fmt.Errorf("invoice not found after creation: %w", err)
+		}
+	}
+
+	// Update invoice status to paid
+	now := time.Now()
+	invoice.Status = string(core.InvoiceStatusPaid)
+	invoice.PaidAt = &now
+	invoice.AmountPaid = invoice.Total
+	invoice.AmountDue = 0
+	invoice.UpdatedAt = now
+
+	if err := p.invoiceRepo.Update(ctx, invoice); err != nil {
+		return fmt.Errorf("failed to update invoice: %w", err)
+	}
+
+	p.logger.Info("invoice marked as paid",
+		forge.F("invoiceId", invoice.ID.String()),
+		forge.F("providerInvoiceId", providerInvoiceID))
+
+	return nil
+}
+
+func (p *Plugin) handleInvoicePaymentFailed(ctx context.Context, event *types.WebhookEvent) error {
+	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid invoice data in webhook")
+	}
+
+	providerInvoiceID, _ := invoiceData["id"].(string)
+	if providerInvoiceID == "" {
+		return fmt.Errorf("missing invoice ID in webhook")
+	}
+
+	// Find invoice by provider ID
+	invoice, err := p.invoiceRepo.FindByProviderID(ctx, providerInvoiceID)
+	if err != nil {
+		p.logger.Warn("invoice not found for payment failed event",
+			forge.F("providerInvoiceId", providerInvoiceID))
+		return nil
+	}
+
+	// Update invoice status
+	invoice.Status = string(core.InvoiceStatusOpen) // Keep it open for retry
+	invoice.UpdatedAt = time.Now()
+
+	if err := p.invoiceRepo.Update(ctx, invoice); err != nil {
+		return fmt.Errorf("failed to update invoice: %w", err)
+	}
+
+	p.logger.Warn("invoice payment failed",
+		forge.F("invoiceId", invoice.ID.String()),
+		forge.F("providerInvoiceId", providerInvoiceID))
+
+	// TODO: Send notification to organization about payment failure
+	// TODO: Create alert for payment failure
+
+	return nil
+}
+
+func (p *Plugin) handleInvoiceUpdated(ctx context.Context, event *types.WebhookEvent) error {
+	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid invoice data in webhook")
+	}
+
+	providerInvoiceID, _ := invoiceData["id"].(string)
+	if providerInvoiceID == "" {
+		return fmt.Errorf("missing invoice ID in webhook")
+	}
+
+	// Sync invoice from provider to get latest data
+	return p.syncInvoiceFromProvider(ctx, providerInvoiceID)
+}
+
+func (p *Plugin) syncInvoiceFromProvider(ctx context.Context, providerInvoiceID string) error {
+	// Get invoice from provider
+	providerInv, err := p.provider.GetInvoice(ctx, providerInvoiceID)
+	if err != nil {
+		return fmt.Errorf("failed to get invoice from provider: %w", err)
+	}
+
+	// Find local invoice
+	invoice, err := p.invoiceRepo.FindByProviderID(ctx, providerInvoiceID)
+	if err != nil {
+		return fmt.Errorf("invoice not found: %w", err)
+	}
+
+	// Update invoice with provider data
+	invoice.Status = mapStripeStatusToInvoiceStatus(providerInv.Status)
+	invoice.Subtotal = providerInv.Subtotal
+	invoice.Tax = providerInv.Tax
+	invoice.Total = providerInv.Total
+	invoice.AmountPaid = providerInv.AmountPaid
+	invoice.AmountDue = providerInv.AmountDue
+	invoice.ProviderPDFURL = providerInv.PDFURL
+	invoice.HostedInvoiceURL = providerInv.HostedURL
+	invoice.UpdatedAt = time.Now()
+
+	if err := p.invoiceRepo.Update(ctx, invoice); err != nil {
+		return fmt.Errorf("failed to update invoice: %w", err)
+	}
+
+	return nil
+}
+
+func mapStripeStatusToInvoiceStatus(stripeStatus string) string {
+	switch stripeStatus {
+	case "draft":
+		return string(core.InvoiceStatusDraft)
+	case "open":
+		return string(core.InvoiceStatusOpen)
+	case "paid":
+		return string(core.InvoiceStatusPaid)
+	case "void":
+		return string(core.InvoiceStatusVoid)
+	case "uncollectible":
+		return string(core.InvoiceStatusUncollectible)
+	default:
+		return string(core.InvoiceStatusDraft)
+	}
 }
 
 // Feature/Limit Handlers

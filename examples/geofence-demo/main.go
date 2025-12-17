@@ -58,7 +58,7 @@ func main() {
 	// Country blocking rule
 	rule1 := &geofence.GeofenceRule{
 		ID:               xid.New(),
-		OrganizationID:   xid.New(),
+		AppID:            xid.New(),
 		Name:             "Block Sanctioned Countries",
 		Description:      "Prevent access from high-risk locations",
 		Enabled:          true,
@@ -74,19 +74,19 @@ func main() {
 
 	// VPN detection rule
 	rule2 := &geofence.GeofenceRule{
-		ID:             xid.New(),
-		OrganizationID: xid.New(),
-		Name:           "Block VPNs",
-		Description:    "Prevent anonymous connections",
-		Enabled:        true,
-		Priority:       90,
-		RuleType:       "detection",
-		BlockVPN:       true,
-		BlockProxy:     true,
-		Action:         "deny",
-		NotifyAdmin:    true,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:          xid.New(),
+		AppID:       xid.New(),
+		Name:        "Block VPNs",
+		Description: "Prevent anonymous connections",
+		Enabled:     true,
+		Priority:    90,
+		RuleType:    "detection",
+		BlockVPN:    true,
+		BlockProxy:  true,
+		Action:      "deny",
+		NotifyAdmin: true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 	fmt.Printf("✓ Created rule: %s (Priority: %d)\n", rule2.Name, rule2.Priority)
 
@@ -95,21 +95,21 @@ func main() {
 	centerLon := -122.4194
 	radiusKm := 10.0
 	rule3 := &geofence.GeofenceRule{
-		ID:             xid.New(),
-		OrganizationID: xid.New(),
-		Name:           "Office Geofence",
-		Description:    "Access only within 10km of office",
-		Enabled:        true,
-		Priority:       85,
-		RuleType:       "geofence",
-		GeofenceType:   "circle",
-		CenterLat:      &centerLat,
-		CenterLon:      &centerLon,
-		RadiusKm:       &radiusKm,
-		Action:         "deny",
-		RequireMFA:     true,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:           xid.New(),
+		AppID:        xid.New(),
+		Name:         "Office Geofence",
+		Description:  "Access only within 10km of office",
+		Enabled:      true,
+		Priority:     85,
+		RuleType:     "geofence",
+		GeofenceType: "circle",
+		CenterLat:    &centerLat,
+		CenterLon:    &centerLon,
+		RadiusKm:     &radiusKm,
+		Action:       "deny",
+		RequireMFA:   true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 	fmt.Printf("✓ Created rule: %s (Radius: %.0f km)\n\n", rule3.Name, *rule3.RadiusKm)
 
@@ -135,19 +135,19 @@ func main() {
 	lat := 37.7749
 	lon := -122.4194
 	event := &geofence.LocationEvent{
-		ID:             xid.New(),
-		UserID:         xid.New(),
-		OrganizationID: xid.New(),
-		IPAddress:      "8.8.8.8",
-		Country:        "United States",
-		CountryCode:    "US",
-		Region:         "California",
-		City:           "San Francisco",
-		Latitude:       &lat,
-		Longitude:      &lon,
-		EventType:      "login",
-		EventResult:    "allowed",
-		Timestamp:      time.Now(),
+		ID:          xid.New(),
+		UserID:      xid.New(),
+		AppID:       xid.New(),
+		IPAddress:   "8.8.8.8",
+		Country:     "United States",
+		CountryCode: "US",
+		Region:      "California",
+		City:        "San Francisco",
+		Latitude:    &lat,
+		Longitude:   &lon,
+		EventType:   "login",
+		EventResult: "allowed",
+		Timestamp:   time.Now(),
 	}
 	fmt.Printf("✓ Location Event: %s from %s, %s (%s)\n", event.EventType, event.City, event.Country, event.IPAddress)
 	fmt.Printf("  Coordinates: %.4f, %.4f\n", *event.Latitude, *event.Longitude)
@@ -163,7 +163,7 @@ func main() {
 	alert := &geofence.TravelAlert{
 		ID:               xid.New(),
 		UserID:           xid.New(),
-		OrganizationID:   xid.New(),
+		AppID:            xid.New(),
 		AlertType:        "impossible_travel",
 		Severity:         "critical",
 		FromCountry:      "United States",
@@ -190,23 +190,23 @@ func main() {
 	// Test trusted location
 	fmt.Println("=== Trusted Location ===")
 	trusted := &geofence.TrustedLocation{
-		ID:             xid.New(),
-		UserID:         xid.New(),
-		OrganizationID: xid.New(),
-		Name:           "Home",
-		Description:    "Primary residence",
-		Country:        "United States",
-		CountryCode:    "US",
-		City:           "San Francisco",
-		Latitude:       37.7749,
-		Longitude:      -122.4194,
-		RadiusKm:       2.0,
-		AutoApprove:    true,
-		SkipMFA:        false,
-		UsageCount:     15,
-		FirstUsedAt:    time.Now().Add(-30 * 24 * time.Hour),
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:          xid.New(),
+		UserID:      xid.New(),
+		AppID:       xid.New(),
+		Name:        "Home",
+		Description: "Primary residence",
+		Country:     "United States",
+		CountryCode: "US",
+		City:        "San Francisco",
+		Latitude:    37.7749,
+		Longitude:   -122.4194,
+		RadiusKm:    2.0,
+		AutoApprove: true,
+		SkipMFA:     false,
+		UsageCount:  15,
+		FirstUsedAt: time.Now().Add(-30 * 24 * time.Hour),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	fmt.Printf("✓ Trusted Location: %s\n", trusted.Name)

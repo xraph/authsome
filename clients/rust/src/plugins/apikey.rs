@@ -17,8 +17,26 @@ impl ApikeyPlugin {{
         Self { client: None }
     }
 
+    /// CreateAPIKey handles API key creation
+    pub async fn create_a_p_i_key(
+        &self,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
+    /// RotateAPIKey handles API key rotation
+    pub async fn rotate_a_p_i_key(
+        &self,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
     #[derive(Debug, Serialize)]
     pub struct CreateAPIKeyRequest {
+        #[serde(rename = "name")]
+        pub name: String,
         #[serde(rename = "permissions", skip_serializing_if = "Option::is_none")]
         pub permissions: Option<>,
         #[serde(rename = "rate_limit", skip_serializing_if = "Option::is_none")]
@@ -31,16 +49,14 @@ impl ApikeyPlugin {{
         pub description: Option<String>,
         #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
         pub metadata: Option<>,
-        #[serde(rename = "name")]
-        pub name: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct CreateAPIKeyResponse {
-        #[serde(rename = "api_key")]
-        pub api_key: *apikey.APIKey,
         #[serde(rename = "message")]
         pub message: String,
+        #[serde(rename = "api_key")]
+        pub api_key: *apikey.APIKey,
     }
 
     /// CreateAPIKey handles POST /api-keys

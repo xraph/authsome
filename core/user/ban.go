@@ -60,7 +60,8 @@ type UnbanRequest struct {
 
 // BanService handles user banning operations
 type BanService struct {
-	banRepo BanRepository
+	banRepo      BanRepository
+	hookRegistry interface{} // Hook registry for lifecycle events
 }
 
 // NewBanService creates a new ban service
@@ -68,6 +69,11 @@ func NewBanService(banRepo BanRepository) *BanService {
 	return &BanService{
 		banRepo: banRepo,
 	}
+}
+
+// SetHookRegistry sets the hook registry for executing lifecycle hooks
+func (s *BanService) SetHookRegistry(registry interface{}) {
+	s.hookRegistry = registry
 }
 
 // BanUser bans a user with the given reason and optional expiration
@@ -111,6 +117,15 @@ func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error)
 		return nil, err
 	}
 
+	// Execute account suspended lifecycle hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteOnAccountSuspended(context.Context, xid.ID, string) error
+		}); ok {
+			_ = registry.ExecuteOnAccountSuspended(ctx, req.UserID, req.Reason)
+		}
+	}
+
 	return s.schemaToBan(ban), nil
 }
 
@@ -140,7 +155,20 @@ func (s *BanService) UnbanUser(ctx context.Context, req *UnbanRequest) error {
 	ban.UpdatedAt = now
 	ban.UpdatedBy = req.UnbannedBy
 
-	return s.banRepo.UpdateBan(ctx, ban)
+	if err := s.banRepo.UpdateBan(ctx, ban); err != nil {
+		return err
+	}
+
+	// Execute account reactivated lifecycle hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteOnAccountReactivated(context.Context, xid.ID) error
+		}); ok {
+			_ = registry.ExecuteOnAccountReactivated(ctx, req.UserID)
+		}
+	}
+
+	return nil
 }
 
 // CheckBan checks if a user is currently banned

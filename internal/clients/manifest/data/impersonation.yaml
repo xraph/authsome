@@ -36,25 +36,15 @@ routes:
       method: POST
       path: /verify
 types:
+    - name: Plugin
+      fields:
+        "": ""
     - name: ImpersonationStartResponse
       fields:
         impersonator_id: string!
         session_id: string!
         started_at: string!
         target_user_id: string!
-    - name: ImpersonationEndResponse
-      fields:
-        ended_at: string!
-        status: string!
-    - name: mockImpersonationRepository
-      fields:
-        "": ""
-    - name: mockUserService
-      fields:
-        "": ""
-    - name: Plugin
-      fields:
-        "": '*ImpersonationMiddleware'
     - name: Config
       fields:
         audit_all_actions: bool!
@@ -73,22 +63,14 @@ types:
         webhook_on_end: bool!
         webhook_on_start: bool!
         webhook_urls: '[]string!'
-    - name: ImpersonationMiddleware
-      fields:
-        "": Config
     - name: ImpersonationErrorResponse
       fields:
         error: string!
     - name: ImpersonationSession
       fields: {}
-    - name: ImpersonationVerifyResponse
+    - name: mockImpersonationRepository
       fields:
-        impersonator_id: string!
-        is_impersonating: bool!
-        target_user_id: string!
-    - name: Handler
-      fields:
-        "": Config
+        "": ""
     - name: StartImpersonation_reqBody
       fields:
         duration_minutes: int
@@ -99,6 +81,9 @@ types:
       fields:
         impersonation_id: string!
         reason: string
+    - name: mockUserService
+      fields:
+        "": ""
     - name: ImpersonationContext
       fields:
         impersonation_id: '*xid.ID!'
@@ -106,6 +91,21 @@ types:
         indicator_message: string!
         is_impersonating: bool!
         target_user_id: '*xid.ID!'
+    - name: ImpersonationEndResponse
+      fields:
+        ended_at: string!
+        status: string!
+    - name: ImpersonationVerifyResponse
+      fields:
+        impersonator_id: string!
+        is_impersonating: bool!
+        target_user_id: string!
     - name: mockSessionService
       fields:
         "": ""
+    - name: Handler
+      fields:
+        "": Config
+    - name: ImpersonationMiddleware
+      fields:
+        "": Config

@@ -77,77 +77,27 @@ routes:
         user: '*user.User!'
       response_type: SSOAuthResponse
 types:
-    - name: Plugin
-      fields:
-        "": forge.Logger
-    - name: Config
-      fields:
-        allowOIDC: bool!
-        allowSAML: bool!
-        attributeMapping: '!'
-        autoProvision: bool!
-        defaultRole: string!
-        oidcRedirectURL: string!
-        requireEncryption: bool!
-        samlACS: string!
-        samlMetadataURL: string!
-        updateAttributes: bool!
-    - name: MockSessionService
-      fields: {}
-    - name: OIDCState
-      fields:
-        "": string
     - name: SSOAuthResponse
       fields:
         session: '*session.Session!'
         token: string!
         user: '*user.User!'
-    - name: ProviderRegisteredResponse
+    - name: OIDCLoginResponse
       fields:
-        providerId: string!
-        status: string!
-        type: string!
-    - name: MetadataResponse
-      fields:
-        metadata: string!
-    - name: RedisStateStore
-      fields:
-        client: '*redis.Client'
-    - name: OIDCLoginRequest
-      fields:
+        authUrl: string!
         nonce: string!
-        redirectUri: string!
-        scope: string!
+        providerId: string!
         state: string!
-    - name: DiscoverProviderRequest
-      fields:
-        email: string!
-    - name: ProviderDiscoveredResponse
-      fields:
-        found: bool!
-        providerId: string!
-        type: string!
-    - name: ProviderListResponse
-      fields:
-        providers: '[]ProviderInfo!'
-        total: int!
-    - name: ProviderInfo
-      fields:
-        createdAt: string!
-        domain: string!
-        providerId: string!
-        type: string!
-    - name: Service
-      fields:
-        "": '*samsvc.Service'
-    - name: SAMLLoginRequest
-      fields:
-        relayState: string!
     - name: SAMLLoginResponse
       fields:
         providerId: string!
         redirectUrl: string!
         requestId: string!
+    - name: ProviderDiscoveredResponse
+      fields:
+        found: bool!
+        providerId: string!
+        type: string!
     - name: ProviderDetailResponse
       fields:
         attributeMapping: '!'
@@ -162,7 +112,12 @@ types:
         samlIssuer: string!
         type: string!
         updatedAt: string!
+    - name: DiscoverProviderRequest
+      fields:
+        email: string!
     - name: MockUserService
+      fields: {}
+    - name: MockSessionService
       fields: {}
     - name: StateStore
       fields:
@@ -180,12 +135,56 @@ types:
         samlEntryPoint: string!
         samlIssuer: string!
         type: string!
-    - name: OIDCLoginResponse
+    - name: SAMLLoginRequest
       fields:
-        authUrl: string!
-        nonce: string!
-        providerId: string!
-        state: string!
+        relayState: string!
     - name: Handler
       fields:
         "": forge.Logger
+    - name: OIDCState
+      fields:
+        "": string
+    - name: MetadataResponse
+      fields:
+        metadata: string!
+    - name: ProviderInfo
+      fields:
+        createdAt: string!
+        domain: string!
+        providerId: string!
+        type: string!
+    - name: Service
+      fields:
+        "": '*StateStore'
+    - name: RedisStateStore
+      fields: {}
+    - name: OIDCLoginRequest
+      fields:
+        nonce: string!
+        redirectUri: string!
+        scope: string!
+        state: string!
+    - name: ProviderRegisteredResponse
+      fields:
+        providerId: string!
+        status: string!
+        type: string!
+    - name: ProviderListResponse
+      fields:
+        providers: '[]ProviderInfo!'
+        total: int!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: Config
+      fields:
+        allowOIDC: bool!
+        allowSAML: bool!
+        attributeMapping: '!'
+        autoProvision: bool!
+        defaultRole: string!
+        oidcRedirectURL: string!
+        requireEncryption: bool!
+        samlACS: string!
+        samlMetadataURL: string!
+        updateAttributes: bool!

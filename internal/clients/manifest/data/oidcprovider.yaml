@@ -99,171 +99,6 @@ routes:
       path: /revoke
       response_type: responses.StatusResponse
 types:
-    - name: Config
-      fields:
-        issuer: string!
-        keys: '!'
-        tokens: '!'
-    - name: Plugin
-      fields:
-        "": Config
-    - name: JWKSResponse
-      fields:
-        keys: '[]JWK!'
-    - name: ClientDetailsResponse
-      fields:
-        allowedScopes: '[]string!'
-        applicationType: string!
-        clientID: string!
-        contacts: '[]string!'
-        createdAt: string!
-        grantTypes: '[]string!'
-        isOrgLevel: bool!
-        logoURI: string!
-        name: string!
-        organizationID: string!
-        policyURI: string!
-        postLogoutRedirectURIs: '[]string!'
-        redirectURIs: '[]string!'
-        requireConsent: bool!
-        requirePKCE: bool!
-        responseTypes: '[]string!'
-        tokenEndpointAuthMethod: string!
-        tosURI: string!
-        trustedClient: bool!
-        updatedAt: string!
-    - name: AdminHandler
-      fields:
-        "": '*RegistrationService'
-    - name: DiscoveryService
-      fields:
-        "": Config
-    - name: IntrospectionService
-      fields:
-        "": UserService
-    - name: AccessTokenClaims
-      fields:
-        client_id: string!
-        scope: string!
-        token_type: string!
-    - name: Service
-      fields:
-        "": '*JWTService'
-    - name: userServiceAdapter
-      fields:
-        "": '*user.Service'
-    - name: TokenResponse
-      fields:
-        access_token: string!
-        expires_in: int!
-        id_token: string!
-        refresh_token: string!
-        scope: string!
-        token_type: string!
-    - name: ConsentDecision
-      fields:
-        "": '[]string'
-    - name: KeyPair
-      fields:
-        "": string
-    - name: KeyStore
-      fields:
-        "": time.Duration
-    - name: ConsentRequest
-      fields:
-        action: string!
-        client_id: string!
-        code_challenge: string!
-        code_challenge_method: string!
-        redirect_uri: string!
-        response_type: string!
-        scope: string!
-        state: string!
-    - name: TokenIntrospectionResponse
-      fields:
-        active: bool!
-        aud: '[]string!'
-        client_id: string!
-        exp: int64!
-        iat: int64!
-        iss: string!
-        jti: string!
-        nbf: int64!
-        scope: string!
-        sub: string!
-        token_type: string!
-        username: string!
-    - name: ScopeInfo
-      fields:
-        "": string
-    - name: ConsentService
-      fields:
-        "": '*repo.OAuthClientRepository'
-    - name: ConsentManager
-      fields:
-        "": EnterpriseConsentService
-    - name: Handler
-      fields:
-        "": '*ClientAuthenticator'
-    - name: JWK
-      fields:
-        alg: string!
-        e: string!
-        kid: string!
-        kty: string!
-        "n": string!
-        use: string!
-    - name: RegistrationService
-      fields:
-        "": Config
-    - name: AuthorizeRequest
-      fields:
-        acr_values: string!
-        client_id: string!
-        code_challenge: string!
-        code_challenge_method: string!
-        id_token_hint: string!
-        login_hint: string!
-        max_age: '*int!'
-        nonce: string!
-        prompt: string!
-        redirect_uri: string!
-        response_type: string!
-        scope: string!
-        state: string!
-        ui_locales: string!
-    - name: TokenRequest
-      fields:
-        audience: string!
-        client_id: string!
-        client_secret: string!
-        code: string!
-        code_verifier: string!
-        grant_type: string!
-        redirect_uri: string!
-        refresh_token: string!
-        scope: string!
-    - name: UserInfoResponse
-      fields:
-        birthdate: string!
-        email: string!
-        email_verified: bool!
-        family_name: string!
-        gender: string!
-        given_name: string!
-        locale: string!
-        middle_name: string!
-        name: string!
-        nickname: string!
-        phone_number: string!
-        phone_number_verified: bool!
-        picture: string!
-        preferred_username: string!
-        profile: string!
-        sub: string!
-        updated_at: int64!
-        website: string!
-        zoneinfo: string!
     - name: IDTokenClaims
       fields:
         auth_time: int64!
@@ -275,30 +110,20 @@ types:
         nonce: string!
         preferred_username: string!
         session_state: string!
-    - name: ClientRegistrationResponse
+    - name: AdminHandler
       fields:
-        application_type: string!
-        client_id: string!
-        client_id_issued_at: int64!
-        client_name: string!
-        client_secret: string!
-        client_secret_expires_at: int64!
-        contacts: '[]string!'
-        grant_types: '[]string!'
-        logo_uri: string!
-        policy_uri: string!
-        post_logout_redirect_uris: '[]string!'
-        redirect_uris: '[]string!'
-        response_types: '[]string!'
-        scope: string!
-        token_endpoint_auth_method: string!
-        tos_uri: string!
-    - name: TokenRevocationRequest
+        "": '*RegistrationService'
+    - name: JWKS
       fields:
-        client_id: string!
-        client_secret: string!
-        token: string!
-        token_type_hint: string!
+        keys: '[]JWK!'
+    - name: JWTService
+      fields:
+        "": string
+    - name: Config
+      fields:
+        issuer: string!
+        keys: '!'
+        tokens: '!'
     - name: DiscoveryResponse
       fields:
         authorization_endpoint: string!
@@ -324,13 +149,38 @@ types:
         token_endpoint: string!
         token_endpoint_auth_methods_supported: '[]string!'
         userinfo_endpoint: string!
-    - name: ClientsListResponse
+    - name: ClientSummary
       fields:
-        clients: '[]ClientSummary!'
-        page: int!
-        pageSize: int!
-        total: int!
-        totalPages: int!
+        applicationType: string!
+        clientID: string!
+        createdAt: string!
+        isOrgLevel: bool!
+        name: string!
+    - name: ConsentManager
+      fields:
+        "": EnterpriseConsentService
+    - name: JWKSService
+      fields:
+        "": '*KeyStore'
+    - name: Service
+      fields:
+        "": '*JWTService'
+    - name: AuthorizeRequest
+      fields:
+        acr_values: string!
+        client_id: string!
+        code_challenge: string!
+        code_challenge_method: string!
+        id_token_hint: string!
+        login_hint: string!
+        max_age: '*int!'
+        nonce: string!
+        prompt: string!
+        redirect_uri: string!
+        response_type: string!
+        scope: string!
+        state: string!
+        ui_locales: string!
     - name: ClientUpdateRequest
       fields:
         allowed_scopes: '[]string!'
@@ -347,28 +197,190 @@ types:
         token_endpoint_auth_method: string!
         tos_uri: string!
         trusted_client: '*bool!'
-    - name: ClientAuthenticator
+    - name: TokenRequest
       fields:
-        "": '*repo.OAuthClientRepository'
+        audience: string!
+        client_id: string!
+        client_secret: string!
+        code: string!
+        code_verifier: string!
+        grant_type: string!
+        redirect_uri: string!
+        refresh_token: string!
+        scope: string!
+    - name: TokenResponse
+      fields:
+        access_token: string!
+        expires_in: int!
+        id_token: string!
+        refresh_token: string!
+        scope: string!
+        token_type: string!
+    - name: IntrospectionService
+      fields:
+        "": '*repo.OAuthTokenRepository'
+    - name: KeyPair
+      fields:
+        "": string
+    - name: AccessTokenClaims
+      fields:
+        client_id: string!
+        scope: string!
+        token_type: string!
     - name: RevokeTokenService
       fields:
         "": '*repo.OAuthTokenRepository'
-    - name: ClientSummary
+    - name: ConsentDecision
       fields:
+        "": '[]string'
+    - name: ClientAuthResult
+      fields:
+        "": string
+    - name: ClientAuthenticator
+      fields:
+        "": '*repo.OAuthClientRepository'
+    - name: JWK
+      fields:
+        alg: string!
+        e: string!
+        kid: string!
+        kty: string!
+        "n": string!
+        use: string!
+    - name: Plugin
+      fields:
+        "": '*bun.DB'
+    - name: UserInfoResponse
+      fields:
+        birthdate: string!
+        email: string!
+        email_verified: bool!
+        family_name: string!
+        gender: string!
+        given_name: string!
+        locale: string!
+        middle_name: string!
+        name: string!
+        nickname: string!
+        phone_number: string!
+        phone_number_verified: bool!
+        picture: string!
+        preferred_username: string!
+        profile: string!
+        sub: string!
+        updated_at: int64!
+        website: string!
+        zoneinfo: string!
+    - name: TokenIntrospectionRequest
+      fields:
+        client_id: string!
+        client_secret: string!
+        token: string!
+        token_type_hint: string!
+    - name: TokenIntrospectionResponse
+      fields:
+        active: bool!
+        aud: '[]string!'
+        client_id: string!
+        exp: int64!
+        iat: int64!
+        iss: string!
+        jti: string!
+        nbf: int64!
+        scope: string!
+        sub: string!
+        token_type: string!
+        username: string!
+    - name: ClientDetailsResponse
+      fields:
+        allowedScopes: '[]string!'
         applicationType: string!
         clientID: string!
+        contacts: '[]string!'
         createdAt: string!
+        grantTypes: '[]string!'
         isOrgLevel: bool!
+        logoURI: string!
         name: string!
+        organizationID: string!
+        policyURI: string!
+        postLogoutRedirectURIs: '[]string!'
+        redirectURIs: '[]string!'
+        requireConsent: bool!
+        requirePKCE: bool!
+        responseTypes: '[]string!'
+        tokenEndpointAuthMethod: string!
+        tosURI: string!
+        trustedClient: bool!
+        updatedAt: string!
     - name: OAuthErrorResponse
       fields:
         error: string!
         error_description: string!
         error_uri: string!
         state: string!
-    - name: JWKSService
+    - name: userServiceAdapter
       fields:
-        "": '*KeyStore'
+        "": '*user.Service'
+    - name: ConsentRequest
+      fields:
+        action: string!
+        client_id: string!
+        code_challenge: string!
+        code_challenge_method: string!
+        redirect_uri: string!
+        response_type: string!
+        scope: string!
+        state: string!
+    - name: ClientRegistrationResponse
+      fields:
+        application_type: string!
+        client_id: string!
+        client_id_issued_at: int64!
+        client_name: string!
+        client_secret: string!
+        client_secret_expires_at: int64!
+        contacts: '[]string!'
+        grant_types: '[]string!'
+        logo_uri: string!
+        policy_uri: string!
+        post_logout_redirect_uris: '[]string!'
+        redirect_uris: '[]string!'
+        response_types: '[]string!'
+        scope: string!
+        token_endpoint_auth_method: string!
+        tos_uri: string!
+    - name: ScopeInfo
+      fields:
+        "": string
+    - name: ConsentService
+      fields:
+        "": '*repo.OAuthClientRepository'
+    - name: Handler
+      fields:
+        "": '*DiscoveryService'
+    - name: KeyStore
+      fields:
+        "": sync.RWMutex
+    - name: RegistrationService
+      fields:
+        "": Config
+    - name: TokenRevocationRequest
+      fields:
+        client_id: string!
+        client_secret: string!
+        token: string!
+        token_type_hint: string!
+    - name: ClientsListResponse
+      fields:
+        clients: '[]ClientSummary!'
+        page: int!
+        pageSize: int!
+        total: int!
+        totalPages: int!
+    - name: DiscoveryService
+      fields:
+        "": Config
     - name: ClientRegistrationRequest
       fields:
         application_type: string!
@@ -386,18 +398,6 @@ types:
         token_endpoint_auth_method: string!
         tos_uri: string!
         trusted_client: bool!
-    - name: ClientAuthResult
-      fields:
-        "": string
-    - name: TokenIntrospectionRequest
-      fields:
-        client_id: string!
-        client_secret: string!
-        token: string!
-        token_type_hint: string!
-    - name: JWKS
+    - name: JWKSResponse
       fields:
         keys: '[]JWK!'
-    - name: JWTService
-      fields:
-        "": string

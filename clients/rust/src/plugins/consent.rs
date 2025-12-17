@@ -92,12 +92,8 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateConsentPolicyRequest {
-        #[serde(rename = "consentType")]
-        pub consent_type: String,
         #[serde(rename = "description")]
         pub description: String,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
         #[serde(rename = "name")]
         pub name: String,
         #[serde(rename = "renewable")]
@@ -108,8 +104,12 @@ impl ConsentPlugin {{
         pub validity_period: *int,
         #[serde(rename = "content")]
         pub content: String,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
         #[serde(rename = "version")]
         pub version: String,
+        #[serde(rename = "consentType")]
+        pub consent_type: String,
     }
 
     /// CreateConsentPolicy handles POST /consent/policies
@@ -131,10 +131,6 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RecordCookieConsentRequest {
-        #[serde(rename = "essential")]
-        pub essential: bool,
-        #[serde(rename = "functional")]
-        pub functional: bool,
         #[serde(rename = "marketing")]
         pub marketing: bool,
         #[serde(rename = "personalization")]
@@ -147,6 +143,10 @@ impl ConsentPlugin {{
         pub analytics: bool,
         #[serde(rename = "bannerVersion")]
         pub banner_version: String,
+        #[serde(rename = "essential")]
+        pub essential: bool,
+        #[serde(rename = "functional")]
+        pub functional: bool,
     }
 
     /// RecordCookieConsent handles POST /consent/cookies
@@ -242,40 +242,40 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdatePrivacySettingsRequest {
-        #[serde(rename = "allowDataPortability")]
-        pub allow_data_portability: *bool,
-        #[serde(rename = "autoDeleteAfterDays")]
-        pub auto_delete_after_days: *int,
-        #[serde(rename = "cookieConsentEnabled")]
-        pub cookie_consent_enabled: *bool,
-        #[serde(rename = "exportFormat")]
-        pub export_format: []string,
-        #[serde(rename = "gdprMode")]
-        pub gdpr_mode: *bool,
-        #[serde(rename = "requireExplicitConsent")]
-        pub require_explicit_consent: *bool,
-        #[serde(rename = "dataExportExpiryHours")]
-        pub data_export_expiry_hours: *int,
-        #[serde(rename = "dpoEmail")]
-        pub dpo_email: String,
-        #[serde(rename = "requireAdminApprovalForDeletion")]
-        pub require_admin_approval_for_deletion: *bool,
         #[serde(rename = "anonymousConsentEnabled")]
         pub anonymous_consent_enabled: *bool,
-        #[serde(rename = "consentRequired")]
-        pub consent_required: *bool,
-        #[serde(rename = "contactPhone")]
-        pub contact_phone: String,
-        #[serde(rename = "cookieConsentStyle")]
-        pub cookie_consent_style: String,
-        #[serde(rename = "deletionGracePeriodDays")]
-        pub deletion_grace_period_days: *int,
+        #[serde(rename = "autoDeleteAfterDays")]
+        pub auto_delete_after_days: *int,
+        #[serde(rename = "dataRetentionDays")]
+        pub data_retention_days: *int,
+        #[serde(rename = "dpoEmail")]
+        pub dpo_email: String,
         #[serde(rename = "ccpaMode")]
         pub ccpa_mode: *bool,
         #[serde(rename = "contactEmail")]
         pub contact_email: String,
-        #[serde(rename = "dataRetentionDays")]
-        pub data_retention_days: *int,
+        #[serde(rename = "contactPhone")]
+        pub contact_phone: String,
+        #[serde(rename = "cookieConsentEnabled")]
+        pub cookie_consent_enabled: *bool,
+        #[serde(rename = "cookieConsentStyle")]
+        pub cookie_consent_style: String,
+        #[serde(rename = "dataExportExpiryHours")]
+        pub data_export_expiry_hours: *int,
+        #[serde(rename = "gdprMode")]
+        pub gdpr_mode: *bool,
+        #[serde(rename = "consentRequired")]
+        pub consent_required: *bool,
+        #[serde(rename = "deletionGracePeriodDays")]
+        pub deletion_grace_period_days: *int,
+        #[serde(rename = "requireExplicitConsent")]
+        pub require_explicit_consent: *bool,
+        #[serde(rename = "allowDataPortability")]
+        pub allow_data_portability: *bool,
+        #[serde(rename = "exportFormat")]
+        pub export_format: []string,
+        #[serde(rename = "requireAdminApprovalForDeletion")]
+        pub require_admin_approval_for_deletion: *bool,
     }
 
     /// UpdatePrivacySettings handles PATCH /consent/privacy-settings (Admin only)

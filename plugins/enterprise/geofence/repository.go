@@ -14,24 +14,25 @@ type Repository interface {
 	// Rules
 	CreateRule(ctx context.Context, rule *GeofenceRule) error
 	GetRule(ctx context.Context, id xid.ID) (*GeofenceRule, error)
-	GetRulesByOrganization(ctx context.Context, orgID xid.ID) ([]*GeofenceRule, error)
+	GetRulesByApp(ctx context.Context, appID xid.ID) ([]*GeofenceRule, error)
 	GetRulesByUser(ctx context.Context, userID xid.ID) ([]*GeofenceRule, error)
 	UpdateRule(ctx context.Context, rule *GeofenceRule) error
 	DeleteRule(ctx context.Context, id xid.ID) error
-	ListEnabledRules(ctx context.Context, orgID xid.ID, userID *xid.ID) ([]*GeofenceRule, error)
+	ListEnabledRules(ctx context.Context, appID xid.ID, userID *xid.ID) ([]*GeofenceRule, error)
 
 	// Location Events
 	CreateLocationEvent(ctx context.Context, event *LocationEvent) error
 	GetLocationEvent(ctx context.Context, id xid.ID) (*LocationEvent, error)
 	GetUserLocationHistory(ctx context.Context, userID xid.ID, limit int) ([]*LocationEvent, error)
 	GetLastLocationEvent(ctx context.Context, userID xid.ID) (*LocationEvent, error)
+	GetLastLocation(ctx context.Context, userID xid.ID, appID xid.ID) (*GeoData, error)
 	DeleteOldLocationEvents(ctx context.Context, before time.Time) (int64, error)
 
 	// Travel Alerts
 	CreateTravelAlert(ctx context.Context, alert *TravelAlert) error
 	GetTravelAlert(ctx context.Context, id xid.ID) (*TravelAlert, error)
 	GetUserTravelAlerts(ctx context.Context, userID xid.ID, status string) ([]*TravelAlert, error)
-	GetPendingTravelAlerts(ctx context.Context, orgID xid.ID) ([]*TravelAlert, error)
+	GetPendingTravelAlerts(ctx context.Context, appID xid.ID) ([]*TravelAlert, error)
 	UpdateTravelAlert(ctx context.Context, alert *TravelAlert) error
 	ApproveTravel(ctx context.Context, alertID xid.ID, approvedBy xid.ID) error
 	DenyTravel(ctx context.Context, alertID xid.ID, deniedBy xid.ID) error
@@ -48,8 +49,8 @@ type Repository interface {
 	CreateViolation(ctx context.Context, violation *GeofenceViolation) error
 	GetViolation(ctx context.Context, id xid.ID) (*GeofenceViolation, error)
 	GetUserViolations(ctx context.Context, userID xid.ID, limit int) ([]*GeofenceViolation, error)
-	GetOrganizationViolations(ctx context.Context, orgID xid.ID, limit int) ([]*GeofenceViolation, error)
-	GetUnresolvedViolations(ctx context.Context, orgID xid.ID) ([]*GeofenceViolation, error)
+	GetAppViolations(ctx context.Context, appID xid.ID, limit int) ([]*GeofenceViolation, error)
+	GetUnresolvedViolations(ctx context.Context, appID xid.ID) ([]*GeofenceViolation, error)
 	ResolveViolation(ctx context.Context, id xid.ID, resolvedBy xid.ID, resolution string) error
 
 	// Geo Cache
@@ -88,11 +89,11 @@ func (r *BunRepository) GetRule(ctx context.Context, id xid.ID) (*GeofenceRule, 
 	return rule, nil
 }
 
-func (r *BunRepository) GetRulesByOrganization(ctx context.Context, orgID xid.ID) ([]*GeofenceRule, error) {
+func (r *BunRepository) GetRulesByApp(ctx context.Context, appID xid.ID) ([]*GeofenceRule, error) {
 	var rules []*GeofenceRule
 	err := r.db.NewSelect().
 		Model(&rules).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Order("priority DESC").
 		Scan(ctx)
 	return rules, err
@@ -119,11 +120,11 @@ func (r *BunRepository) DeleteRule(ctx context.Context, id xid.ID) error {
 	return err
 }
 
-func (r *BunRepository) ListEnabledRules(ctx context.Context, orgID xid.ID, userID *xid.ID) ([]*GeofenceRule, error) {
+func (r *BunRepository) ListEnabledRules(ctx context.Context, appID xid.ID, userID *xid.ID) ([]*GeofenceRule, error) {
 	var rules []*GeofenceRule
 	query := r.db.NewSelect().
 		Model(&rules).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Where("enabled = ?", true)
 
 	if userID != nil {
@@ -228,11 +229,11 @@ func (r *BunRepository) GetUserTravelAlerts(ctx context.Context, userID xid.ID, 
 	return alerts, err
 }
 
-func (r *BunRepository) GetPendingTravelAlerts(ctx context.Context, orgID xid.ID) ([]*TravelAlert, error) {
+func (r *BunRepository) GetPendingTravelAlerts(ctx context.Context, appID xid.ID) ([]*TravelAlert, error) {
 	var alerts []*TravelAlert
 	err := r.db.NewSelect().
 		Model(&alerts).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Where("status = ?", "pending").
 		Where("requires_approval = ?", true).
 		Order("created_at DESC").
@@ -376,22 +377,22 @@ func (r *BunRepository) GetUserViolations(ctx context.Context, userID xid.ID, li
 	return violations, err
 }
 
-func (r *BunRepository) GetOrganizationViolations(ctx context.Context, orgID xid.ID, limit int) ([]*GeofenceViolation, error) {
+func (r *BunRepository) GetAppViolations(ctx context.Context, appID xid.ID, limit int) ([]*GeofenceViolation, error) {
 	var violations []*GeofenceViolation
 	err := r.db.NewSelect().
 		Model(&violations).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Order("created_at DESC").
 		Limit(limit).
 		Scan(ctx)
 	return violations, err
 }
 
-func (r *BunRepository) GetUnresolvedViolations(ctx context.Context, orgID xid.ID) ([]*GeofenceViolation, error) {
+func (r *BunRepository) GetUnresolvedViolations(ctx context.Context, appID xid.ID) ([]*GeofenceViolation, error) {
 	var violations []*GeofenceViolation
 	err := r.db.NewSelect().
 		Model(&violations).
-		Where("organization_id = ?", orgID).
+		Where("app_id = ?", appID).
 		Where("resolved = ?", false).
 		Order("created_at DESC").
 		Scan(ctx)
@@ -477,6 +478,24 @@ func (r *BunRepository) DeleteExpiredCache(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+// GetLastLocation retrieves the most recent location for a user as GeoData
+func (r *BunRepository) GetLastLocation(ctx context.Context, userID xid.ID, appID xid.ID) (*GeoData, error) {
+	event, err := r.GetLastLocationEvent(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GeoData{
+		IPAddress:   event.IPAddress,
+		Country:     event.Country,
+		CountryCode: event.CountryCode,
+		City:        event.City,
+		Latitude:    event.Latitude,
+		Longitude:   event.Longitude,
+		AccuracyKm:  event.AccuracyKm,
+	}, nil
 }
 
 // haversineDistance calculates distance between two coordinates in kilometers

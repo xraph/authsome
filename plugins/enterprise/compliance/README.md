@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Compliance plugin provides enterprise-grade compliance management, automated policy enforcement, audit trails, and reporting capabilities for AuthSome. It enables organizations to meet regulatory requirements and maintain compliance with various industry standards.
+The Compliance plugin provides enterprise-grade compliance management, automated policy enforcement, audit trails, and reporting capabilities for AuthSome. It enables apps (platform-level tenants) to meet regulatory requirements and maintain compliance with various industry standards.
 
 ## Features
 
@@ -19,10 +19,20 @@ The Compliance plugin provides enterprise-grade compliance management, automated
 
 ### 📋 Compliance Profiles
 
-- **Per-Organization Configuration** - Each organization gets its own compliance profile
+- **Per-App Configuration** - Each app (tenant) gets its own compliance profile
 - **Template-Based Setup** - Quick start with predefined templates
-- **Custom Policies** - Define organization-specific requirements
+- **Custom Policies** - Define app-specific requirements
 - **Multi-Standard Support** - Comply with multiple standards simultaneously
+
+## App vs Organization Scoping
+
+**Important:** Compliance profiles are scoped to **Apps** (platform-level tenants), not user-created Organizations.
+
+- **App** = Your platform tenant (like customer-a, customer-b) - top-level multi-tenant boundary
+- **Organization** = User-created workspaces within an app (optional feature, like Clerk's organizations)
+- **Compliance Scope** = App-level (each app/customer has its own compliance requirements)
+
+This means if you have multiple customers on your platform, each customer (app) has their own compliance profile. Organizations within an app share that app's compliance profile.
 
 ### ✅ Automated Compliance Checks
 
@@ -121,14 +131,14 @@ curl http://localhost:8080/auth/compliance/templates
 # Using SOC 2 template
 POST /auth/compliance/profiles/from-template
 {
-  "organizationId": "org_123",
+  "appId": "app_abc123",
   "standard": "SOC2"
 }
 
 # Response
 {
   "id": "prof_abc",
-  "organizationId": "org_123",
+  "appId": "app_abc123",
   "name": "SOC 2 Type II",
   "standards": ["SOC2"],
   "mfaRequired": true,
@@ -142,12 +152,12 @@ POST /auth/compliance/profiles/from-template
 ### Check Compliance Status
 
 ```bash
-GET /auth/compliance/organizations/org_123/status
+GET /auth/compliance/apps/app_abc123/status
 
 # Response
 {
   "profileId": "prof_abc",
-  "organizationId": "org_123",
+  "appId": "app_abc123",
   "overallStatus": "compliant",
   "score": 95,
   "checksPassed": 19,
@@ -160,7 +170,7 @@ GET /auth/compliance/organizations/org_123/status
 ### Generate Compliance Report
 
 ```bash
-POST /auth/compliance/organizations/org_123/reports
+POST /auth/compliance/apps/app_abc123/reports
 {
   "reportType": "soc2",
   "standard": "SOC2",
@@ -172,7 +182,7 @@ POST /auth/compliance/organizations/org_123/reports
 {
   "id": "rep_xyz",
   "status": "generating",
-  "organizationId": "org_123"
+  "appId": "app_abc123"
 }
 ```
 
@@ -185,15 +195,15 @@ POST /auth/compliance/organizations/org_123/reports
 | `/profiles` | POST | Create compliance profile |
 | `/profiles/from-template` | POST | Create from template |
 | `/profiles/:id` | GET | Get profile |
-| `/organizations/:orgId/profile` | GET | Get org profile |
+| `/apps/:appId/profile` | GET | Get app profile |
 | `/profiles/:id` | PUT | Update profile |
 
 ### Compliance Status
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/organizations/:orgId/status` | GET | Get compliance status |
-| `/organizations/:orgId/dashboard` | GET | Get dashboard data |
+| `/apps/:appId/status` | GET | Get compliance status |
+| `/apps/:appId/dashboard` | GET | Get dashboard data |
 
 ### Checks & Violations
 
@@ -201,22 +211,22 @@ POST /auth/compliance/organizations/org_123/reports
 |----------|--------|-------------|
 | `/profiles/:profileId/checks` | POST | Run compliance check |
 | `/profiles/:profileId/checks` | GET | List checks |
-| `/organizations/:orgId/violations` | GET | List violations |
+| `/apps/:appId/violations` | GET | List violations |
 | `/violations/:id/resolve` | PUT | Resolve violation |
 
 ### Reports
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/organizations/:orgId/reports` | POST | Generate report |
-| `/organizations/:orgId/reports` | GET | List reports |
+| `/apps/:appId/reports` | POST | Generate report |
+| `/apps/:appId/reports` | GET | List reports |
 | `/reports/:id/download` | GET | Download report |
 
 ### Training
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/organizations/:orgId/training` | POST | Create training record |
+| `/apps/:appId/training` | POST | Create training record |
 | `/users/:userId/training` | GET | Get user training status |
 | `/training/:id/complete` | PUT | Mark training complete |
 
@@ -275,15 +285,15 @@ Required Policies:
 ### Password Policy Enforcement
 
 ```go
-// Hook automatically enforces password policy
+// Hook automatically enforces password policy based on app's compliance profile
 // user.password_changed hook
 
 func (p *Plugin) onPasswordChanged(ctx context.Context, data HookData) error {
-    orgID := data.GetString("organization_id")
+    appID := data.GetString("app_id")
     password := data.GetString("new_password")
     
     // Enforces: min length, uppercase, lowercase, number, symbol
-    if err := p.policyEngine.EnforcePasswordPolicy(ctx, orgID, password); err != nil {
+    if err := p.policyEngine.EnforcePasswordPolicy(ctx, appID, password); err != nil {
         return err // Blocks password change
     }
     
@@ -294,16 +304,16 @@ func (p *Plugin) onPasswordChanged(ctx context.Context, data HookData) error {
 ### MFA Enforcement
 
 ```go
-// Hook automatically enforces MFA requirement
+// Hook automatically enforces MFA requirement based on app's compliance profile
 // user.login hook
 
 func (p *Plugin) onUserLogin(ctx context.Context, data HookData) error {
-    orgID := data.GetString("organization_id")
+    appID := data.GetString("app_id")
     userID := data.GetString("user_id")
     mfaEnabled := data.GetBool("mfa_enabled")
     
-    // If org requires MFA but user doesn't have it
-    if err := p.policyEngine.EnforceMFA(ctx, orgID, userID, mfaEnabled); err != nil {
+    // If app requires MFA but user doesn't have it
+    if err := p.policyEngine.EnforceMFA(ctx, appID, userID, mfaEnabled); err != nil {
         return err // Blocks login
     }
     
@@ -314,11 +324,11 @@ func (p *Plugin) onUserLogin(ctx context.Context, data HookData) error {
 ### Session Policy Enforcement
 
 ```go
-// Hook validates session on each request
+// Hook validates session on each request based on app's compliance profile
 // session.validated hook
 
 func (p *Plugin) onSessionValidated(ctx context.Context, data HookData) error {
-    orgID := data.GetString("organization_id")
+    appID := data.GetString("app_id")
     
     session := &Session{
         ID:             data.GetString("session_id"),
@@ -329,7 +339,7 @@ func (p *Plugin) onSessionValidated(ctx context.Context, data HookData) error {
     }
     
     // Enforces: max age, idle timeout, IP binding
-    if err := p.policyEngine.EnforceSessionPolicy(ctx, orgID, session); err != nil {
+    if err := p.policyEngine.EnforceSessionPolicy(ctx, appID, session); err != nil {
         return err // Expires session
     }
     
@@ -384,28 +394,28 @@ notifications:
 
 ### 1. Initial Setup
 
-1. Create organization in AuthSome
-2. Plugin creates default compliance profile (if configured)
+1. Create app in AuthSome (or use existing app/tenant)
+2. Create compliance profile for the app via API
 3. Automated checks run immediately
 4. Review compliance status
 
 ### 2. Ongoing Compliance
 
-1. Automated checks run every 24 hours
-2. Policy enforcement on all auth actions
+1. Automated checks run every 24 hours per app
+2. Policy enforcement on all auth actions within the app
 3. Violations logged automatically
 4. Compliance contact notified
 
 ### 3. Audit Preparation
 
-1. Run full compliance check
+1. Run full compliance check for the app
 2. Generate audit report for period
 3. Collect evidence (audit logs, policies)
 4. Export for auditors
 
 ### 4. Remediation
 
-1. Review open violations
+1. Review open violations for the app
 2. Resolve issues (enable MFA, update policies)
 3. Mark violations as resolved
 4. Re-run checks to verify
@@ -422,27 +432,27 @@ notifications:
 
 ### 2. Enable from Day One
 
-- Create compliance profile when organization is created
+- Create compliance profile when app/tenant is onboarded
 - Enforce policies from the start (easier than retrofitting)
 - Run initial checks immediately
 
 ### 3. Monitor Regularly
 
-- Review compliance dashboard weekly
+- Review compliance dashboard weekly per app
 - Address violations within 48 hours
 - Run manual checks before audits
 
 ### 4. Train Users
 
-- Require compliance training for all users
+- Require compliance training for all users in the app
 - Set expiration (annual renewal)
 - Track completion in dashboard
 
 ### 5. Document Everything
 
-- Store policies as documents
+- Store policies as documents per app
 - Collect evidence continuously
-- Generate reports quarterly
+- Generate reports quarterly per app
 
 ## Troubleshooting
 
@@ -479,7 +489,7 @@ notifications:
 ### Database Indexes
 
 All tables have optimized indexes for:
-- Organization lookups
+- App lookups (app_id)
 - Status filtering
 - Date-based queries
 - User-specific queries
@@ -508,7 +518,7 @@ All tables have optimized indexes for:
 
 ### Access Control
 
-- Only org owners/admins can manage compliance
+- Only app admins can manage compliance profiles
 - Compliance contacts get read-only access
 - Auditors get time-limited export access
 

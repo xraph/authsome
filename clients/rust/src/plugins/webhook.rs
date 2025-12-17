@@ -19,12 +19,12 @@ impl WebhookPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateRequest {
+        #[serde(rename = "events")]
+        pub events: Vec<String>,
         #[serde(rename = "secret", skip_serializing_if = "Option::is_none")]
         pub secret: Option<String>,
         #[serde(rename = "url")]
         pub url: String,
-        #[serde(rename = "events")]
-        pub events: Vec<String>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -58,14 +58,14 @@ impl WebhookPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdateRequest {
-        #[serde(rename = "enabled", skip_serializing_if = "Option::is_none")]
-        pub enabled: Option<bool>,
         #[serde(rename = "id")]
         pub id: String,
         #[serde(rename = "url", skip_serializing_if = "Option::is_none")]
         pub url: Option<String>,
         #[serde(rename = "events", skip_serializing_if = "Option::is_none")]
         pub events: Option<Vec<String>>,
+        #[serde(rename = "enabled", skip_serializing_if = "Option::is_none")]
+        pub enabled: Option<bool>,
     }
 
     #[derive(Debug, Deserialize)]

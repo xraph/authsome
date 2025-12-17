@@ -19,9 +19,9 @@ export class NotificationPlugin implements ClientPlugin {
     });
   }
 
-  async createTemplate(): Promise<void> {
+  async createTemplate(): Promise<types.error> {
     const path = '/createtemplate';
-    return this.client.request<void>('POST', path);
+    return this.client.request<types.error>('POST', path);
   }
 
   async getTemplate(): Promise<void> {

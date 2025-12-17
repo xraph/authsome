@@ -197,6 +197,62 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
 	)
+	grp.GET("/current", h.GetCurrent,
+		forge.WithName("multisession.current"),
+		forge.WithSummary("Get current session"),
+		forge.WithDescription("Returns detailed information about the currently active session"),
+		forge.WithResponseSchema(200, "Current session retrieved", SessionDetailResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(404, "Session not found", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
+	grp.GET("/{id}", h.GetByID,
+		forge.WithName("multisession.get"),
+		forge.WithSummary("Get session by ID"),
+		forge.WithDescription("Returns details about a specific session by ID with ownership verification"),
+		forge.WithResponseSchema(200, "Session retrieved", SessionDetailResponse{}),
+		forge.WithResponseSchema(400, "Invalid session ID", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(404, "Session not found", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
+	grp.POST("/revoke-all", h.RevokeAll,
+		forge.WithName("multisession.revokeall"),
+		forge.WithSummary("Revoke all sessions"),
+		forge.WithDescription("Revokes all sessions for the current user. Optionally include current session with includeCurrentSession flag."),
+		forge.WithResponseSchema(200, "Sessions revoked", RevokeAllResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(500, "Failed to revoke sessions", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+		forge.WithValidation(true),
+	)
+	grp.POST("/revoke-others", h.RevokeOthers,
+		forge.WithName("multisession.revokeothers"),
+		forge.WithSummary("Revoke all other sessions"),
+		forge.WithDescription("Revokes all sessions except the current one. Useful after password change or suspicious activity."),
+		forge.WithResponseSchema(200, "Other sessions revoked", RevokeAllResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(500, "Failed to revoke sessions", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
+	grp.POST("/refresh", h.Refresh,
+		forge.WithName("multisession.refresh"),
+		forge.WithSummary("Refresh current session"),
+		forge.WithDescription("Extends the expiry time of the current session"),
+		forge.WithResponseSchema(200, "Session refreshed", SessionDetailResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(500, "Failed to refresh session", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
+	grp.GET("/stats", h.GetStats,
+		forge.WithName("multisession.stats"),
+		forge.WithSummary("Get session statistics"),
+		forge.WithDescription("Returns aggregated statistics about user sessions including active count, device count, and location count"),
+		forge.WithResponseSchema(200, "Statistics retrieved", SessionStatsResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
+		forge.WithResponseSchema(500, "Failed to retrieve statistics", MultiSessionErrorResponse{}),
+		forge.WithTags("MultiSession", "Sessions"),
+	)
 	return nil
 }
 
@@ -216,6 +272,25 @@ type MultiSessionSetActiveResponse struct {
 
 type MultiSessionDeleteResponse struct {
 	Status string `json:"status" example:"deleted"`
+}
+
+type SessionDetailResponse struct {
+	Session interface{} `json:"session"`
+	Device  interface{} `json:"device,omitempty"`
+}
+
+type RevokeAllResponse struct {
+	RevokedCount int    `json:"revokedCount" example:"5"`
+	Status       string `json:"status" example:"revoked"`
+}
+
+type SessionStatsResponse struct {
+	TotalSessions  int     `json:"totalSessions" example:"8"`
+	ActiveSessions int     `json:"activeSessions" example:"6"`
+	DeviceCount    int     `json:"deviceCount" example:"3"`
+	LocationCount  int     `json:"locationCount" example:"2"`
+	OldestSession  *string `json:"oldestSession,omitempty" example:"2024-01-15T10:30:00Z"`
+	NewestSession  *string `json:"newestSession,omitempty" example:"2024-12-13T15:45:00Z"`
 }
 
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }

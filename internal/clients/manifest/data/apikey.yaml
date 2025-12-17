@@ -2,6 +2,14 @@ plugin_id: apikey
 version: 1.0.0
 routes:
     - name: CreateAPIKey
+      description: CreateAPIKey handles API key creation
+      method: POST
+      path: /createapikey
+    - name: RotateAPIKey
+      description: RotateAPIKey handles API key rotation
+      method: POST
+      path: /:id/rotate
+    - name: CreateAPIKey
       description: CreateAPIKey handles POST /api-keys
       method: POST
       path: /createapikey
@@ -50,18 +58,20 @@ routes:
       path: /verify
       request_type: apikey.VerifyAPIKeyRequest
 types:
-    - name: IPWhitelistConfig
+    - name: RateLimitConfig
       fields:
         enabled: bool!
-        strict_mode: bool!
-    - name: CreateAPIKeyResponse
+        window: time.Duration!
+    - name: AutoCleanupConfig
       fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
-    - name: RotateAPIKeyResponse
+        enabled: bool!
+        interval: time.Duration!
+    - name: Handler
       fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
+        "": '*apikey.Service'
+    - name: AssignRole_reqBody
+      fields:
+        roleID: string!
     - name: RolesResponse
       fields:
         roles: '[]*apikey.Role!'
@@ -74,32 +84,19 @@ types:
         permissions: ""
         rate_limit: int
         scopes: '[]string!'
-    - name: AssignRole_reqBody
+    - name: DashboardExtension
       fields:
-        roleID: string!
-    - name: WebhookConfig
+        "": '*dashboard.ExtensionRegistry'
+    - name: CreateAPIKeyResponse
       fields:
-        enabled: bool!
-        expiry_warning_days: int!
-        notify_on_created: bool!
-        notify_on_deleted: bool!
-        notify_on_expiring: bool!
-        notify_on_rate_limit: bool!
-        notify_on_rotated: bool!
-        webhook_urls: '[]string!'
-    - name: AutoCleanupConfig
-      fields:
-        enabled: bool!
-        interval: time.Duration!
-    - name: Handler
-      fields:
-        "": Config
+        api_key: '*apikey.APIKey!'
+        message: string!
     - name: Middleware
       fields:
-        "": '*ratelimit.Service'
-    - name: Plugin
+        "": Config
+    - name: ScopeDefinition
       fields:
-        "": '*Handler'
+        "": string
     - name: Config
       fields:
         allow_query_param: bool!
@@ -113,7 +110,27 @@ types:
         max_rate_limit: int!
         rate_limiting: RateLimitConfig!
         webhooks: WebhookConfig!
-    - name: RateLimitConfig
+    - name: IPWhitelistConfig
       fields:
         enabled: bool!
-        window: time.Duration!
+        strict_mode: bool!
+    - name: WebhookConfig
+      fields:
+        enabled: bool!
+        expiry_warning_days: int!
+        notify_on_created: bool!
+        notify_on_deleted: bool!
+        notify_on_expiring: bool!
+        notify_on_rate_limit: bool!
+        notify_on_rotated: bool!
+        webhook_urls: '[]string!'
+    - name: KeyStats
+      fields:
+        "": string
+    - name: RotateAPIKeyResponse
+      fields:
+        api_key: '*apikey.APIKey!'
+        message: string!
+    - name: Plugin
+      fields:
+        "": '*time.Ticker'

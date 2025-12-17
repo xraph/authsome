@@ -125,10 +125,12 @@ func FromSchemaTeamMembers(members []*schema.TeamMember) []*TeamMember {
 
 // CreateTeamRequest represents a create team request
 type CreateTeamRequest struct {
-	AppID       xid.ID                 `json:"appId"`
-	Name        string                 `json:"name"`
-	Description *string                `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	AppID         xid.ID                 `json:"appId"`
+	Name          string                 `json:"name"`
+	Description   *string                `json:"description,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	ProvisionedBy string                 `json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    string                 `json:"externalID,omitempty"`    // External system ID
 }
 
 // UpdateTeamRequest represents an update team request

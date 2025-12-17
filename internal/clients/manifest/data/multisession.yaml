@@ -24,48 +24,115 @@ routes:
       method: POST
       path: /delete/{id}
       response_type: StatusResponse
+    - name: GetCurrent
+      description: GetCurrent returns details about the currently active session
+      method: GET
+      path: /current
+      response:
+        session: '!'
+        token: string!
+      response_type: SessionTokenResponse
+    - name: GetByID
+      description: GetByID returns details about a specific session by ID
+      method: GET
+      path: /{id}
+      response:
+        session: '!'
+        token: string!
+      response_type: SessionTokenResponse
+    - name: RevokeAll
+      description: RevokeAll revokes all sessions for the current user
+      method: POST
+      path: /revoke-all
+      request:
+        includeCurrentSession: bool!
+      request_type: RevokeAll_body
+    - name: RevokeOthers
+      description: RevokeOthers revokes all sessions except the current one
+      method: POST
+      path: /revoke-others
+    - name: Refresh
+      description: Refresh extends the current session's expiry time
+      method: POST
+      path: /refresh
+      response:
+        session: '!'
+        token: string!
+      response_type: SessionTokenResponse
+    - name: GetStats
+      description: GetStats returns aggregated session statistics for the current user
+      method: GET
+      path: /stats
 types:
-    - name: DashboardExtension
-      fields:
-        "": '*dashboard.ExtensionRegistry'
     - name: SetActive_body
       fields:
         id: string!
-    - name: mockSessionService
-      fields:
-        "": '*bun.DB'
-    - name: Plugin
-      fields:
-        "": '*DashboardExtension'
-    - name: MultiSessionDeleteResponse
-      fields:
-        status: string!
-    - name: Service
-      fields:
-        "": dev.Repository
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: SessionsResponse
-      fields:
-        sessions: '!'
-    - name: SessionTokenResponse
-      fields:
-        session: '!'
-        token: string!
-    - name: Config
-      fields:
-        allowCrossPlatform: bool!
-        enableDeviceTracking: bool!
-        maxSessionsPerUser: int!
-        sessionExpiryHours: int!
     - name: MultiSessionErrorResponse
       fields:
         error: string!
     - name: MultiSessionListResponse
       fields:
         sessions: '[]!'
+    - name: SessionStats
+      fields:
+        "": '*session.Session'
+    - name: RevokeAll_body
+      fields:
+        includeCurrentSession: bool!
+    - name: Config
+      fields:
+        allowCrossPlatform: bool!
+        enableDeviceTracking: bool!
+        maxSessionsPerUser: int!
+        sessionExpiryHours: int!
     - name: MultiSessionSetActiveResponse
       fields:
         session: '!'
         token: string!
+    - name: SessionDetailResponse
+      fields:
+        device: '!'
+        session: '!'
+    - name: Service
+      fields:
+        "": session.Repository
+    - name: SessionTokenResponse
+      fields:
+        session: '!'
+        token: string!
+    - name: DeviceInfo
+      fields:
+        "": bool
+    - name: MultiSessionDeleteResponse
+      fields:
+        status: string!
+    - name: DashboardExtension
+      fields:
+        "": '*dashboard.ExtensionRegistry'
+    - name: sessionStats
+      fields:
+        "": int
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: mockSessionService
+      fields:
+        "": '*bun.DB'
+    - name: Plugin
+      fields:
+        "": forge.Logger
+    - name: RevokeAllResponse
+      fields:
+        revokedCount: int!
+        status: string!
+    - name: SessionStatsResponse
+      fields:
+        activeSessions: int!
+        deviceCount: int!
+        locationCount: int!
+        newestSession: '*string!'
+        oldestSession: '*string!'
+        totalSessions: int!
+    - name: SessionsResponse
+      fields:
+        sessions: '!'

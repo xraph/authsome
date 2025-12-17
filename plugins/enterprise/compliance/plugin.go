@@ -141,7 +141,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.POST("/profiles", p.handler.CreateProfile,
 			forge.WithName("compliance.profiles.create"),
 			forge.WithSummary("Create compliance profile"),
-			forge.WithDescription("Create a new compliance profile for an organization"),
+			forge.WithDescription("Create a new compliance profile for an app"),
 			forge.WithRequestSchema(CreateProfileRequest{}),
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
@@ -164,11 +164,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Compliance"),
 		)
 		complianceGroup.GET("/apps/:appId/profile", p.handler.GetAppProfile,
-			forge.WithName("compliance.profiles.org"),
-			forge.WithSummary("Get organization profile"),
-			forge.WithDescription("Get the compliance profile for a specific organization"),
+			forge.WithName("compliance.profiles.app"),
+			forge.WithSummary("Get app profile"),
+			forge.WithDescription("Get the compliance profile for a specific app"),
 			forge.WithResponseSchema(200, "Profile retrieved", ComplianceProfileResponse{}),
-			forge.WithTags("Compliance", "Organizations"),
+			forge.WithTags("Compliance", "Apps"),
 		)
 		complianceGroup.PUT("/profiles/:id", p.handler.UpdateProfile,
 			forge.WithName("compliance.profiles.update"),
@@ -191,16 +191,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/apps/:appId/status", p.handler.GetComplianceStatus,
 			forge.WithName("compliance.status"),
 			forge.WithSummary("Get compliance status"),
-			forge.WithDescription("Get overall compliance status for an organization"),
+			forge.WithDescription("Get overall compliance status for an app"),
 			forge.WithResponseSchema(200, "Status retrieved", ComplianceStatusDetailsResponse{}),
-			forge.WithTags("Compliance", "Organizations"),
+			forge.WithTags("Compliance", "Apps"),
 		)
 		complianceGroup.GET("/apps/:appId/dashboard", p.handler.GetDashboard,
 			forge.WithName("compliance.dashboard"),
 			forge.WithSummary("Get compliance dashboard"),
-			forge.WithDescription("Get compliance dashboard metrics and overview"),
+			forge.WithDescription("Get compliance dashboard metrics and overview for an app"),
 			forge.WithResponseSchema(200, "Dashboard retrieved", ComplianceDashboardResponse{}),
-			forge.WithTags("Compliance", "Organizations"),
+			forge.WithTags("Compliance", "Apps"),
 		)
 
 		// Checks
@@ -232,7 +232,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/apps/:appId/violations", p.handler.ListViolations,
 			forge.WithName("compliance.violations.list"),
 			forge.WithSummary("List compliance violations"),
-			forge.WithDescription("List all compliance violations for an organization"),
+			forge.WithDescription("List all compliance violations for an app"),
 			forge.WithResponseSchema(200, "Violations retrieved", ComplianceViolationsResponse{}),
 			forge.WithTags("Compliance", "Violations"),
 		)
@@ -257,7 +257,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.POST("/apps/:appId/reports", p.handler.GenerateReport,
 			forge.WithName("compliance.reports.generate"),
 			forge.WithSummary("Generate compliance report"),
-			forge.WithDescription("Generate a compliance report for an organization"),
+			forge.WithDescription("Generate a compliance report for an app"),
 			forge.WithRequestSchema(GenerateReportRequest{}),
 			forge.WithResponseSchema(200, "Report generated", ComplianceReportResponse{}),
 			forge.WithTags("Compliance", "Reports"),
@@ -266,7 +266,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/apps/:appId/reports", p.handler.ListReports,
 			forge.WithName("compliance.reports.list"),
 			forge.WithSummary("List compliance reports"),
-			forge.WithDescription("List all compliance reports for an organization"),
+			forge.WithDescription("List all compliance reports for an app"),
 			forge.WithResponseSchema(200, "Reports retrieved", ComplianceReportsResponse{}),
 			forge.WithTags("Compliance", "Reports"),
 		)
@@ -289,7 +289,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.POST("/apps/:appId/evidence", p.handler.CreateEvidence,
 			forge.WithName("compliance.evidence.create"),
 			forge.WithSummary("Create evidence record"),
-			forge.WithDescription("Create a new compliance evidence record"),
+			forge.WithDescription("Create a new compliance evidence record for an app"),
 			forge.WithRequestSchema(CreateEvidenceRequest{}),
 			forge.WithResponseSchema(200, "Evidence created", ComplianceEvidenceResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
@@ -298,7 +298,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/apps/:appId/evidence", p.handler.ListEvidence,
 			forge.WithName("compliance.evidence.list"),
 			forge.WithSummary("List evidence records"),
-			forge.WithDescription("List all compliance evidence records for an organization"),
+			forge.WithDescription("List all compliance evidence records for an app"),
 			forge.WithResponseSchema(200, "Evidence retrieved", ComplianceEvidencesResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
 		)
@@ -321,7 +321,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.POST("/apps/:appId/policies", p.handler.CreatePolicy,
 			forge.WithName("compliance.policies.create"),
 			forge.WithSummary("Create compliance policy"),
-			forge.WithDescription("Create a new compliance policy document"),
+			forge.WithDescription("Create a new compliance policy document for an app"),
 			forge.WithRequestSchema(CreatePolicyRequest{}),
 			forge.WithResponseSchema(200, "Policy created", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
@@ -330,7 +330,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/apps/:appId/policies", p.handler.ListPolicies,
 			forge.WithName("compliance.policies.list"),
 			forge.WithSummary("List compliance policies"),
-			forge.WithDescription("List all compliance policies for an organization"),
+			forge.WithDescription("List all compliance policies for an app"),
 			forge.WithResponseSchema(200, "Policies retrieved", CompliancePoliciesResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 		)
@@ -362,7 +362,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.POST("/apps/:appId/training", p.handler.CreateTraining,
 			forge.WithName("compliance.training.create"),
 			forge.WithSummary("Create training module"),
-			forge.WithDescription("Create a compliance training module"),
+			forge.WithDescription("Create a compliance training module for an app"),
 			forge.WithRequestSchema(CreateTrainingRequest{}),
 			forge.WithResponseSchema(200, "Training created", ComplianceTrainingResponse{}),
 			forge.WithTags("Compliance", "Training"),
@@ -371,7 +371,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		complianceGroup.GET("/apps/:appId/training", p.handler.ListTraining,
 			forge.WithName("compliance.training.list"),
 			forge.WithSummary("List training modules"),
-			forge.WithDescription("List all compliance training modules"),
+			forge.WithDescription("List all compliance training modules for an app"),
 			forge.WithResponseSchema(200, "Training retrieved", ComplianceTrainingsResponse{}),
 			forge.WithTags("Compliance", "Training"),
 		)
@@ -425,9 +425,9 @@ func (p *Plugin) registerHooks(hookRegistry *hooks.HookRegistry) error {
 	// Register session hooks
 	hookRegistry.RegisterAfterSessionCreate(p.onSessionCreated)
 
-	// Organization hooks (when multi-tenancy plugin is available)
-	hookRegistry.RegisterAfterOrganizationCreate(p.onOrganizationCreated)
-	hookRegistry.RegisterAfterMemberAdd(p.onMemberAdded)
+	// Note: Compliance is scoped to Apps, not Organizations
+	// App-level compliance profiles are created manually via the API
+	// Organization hooks are not needed as organizations are user-created entities within apps
 
 	return nil
 }
@@ -439,9 +439,8 @@ func (p *Plugin) onUserCreated(ctx context.Context, u *user.User) error {
 		return nil
 	}
 
-	// Check if MFA is required for this user's organization
-	// TODO: This will work properly when multi-tenancy plugin is available
-	// For now, we'll check against a default organization
+	// Check if MFA is required for this user's app
+	// TODO: Retrieve user's app ID and check compliance profile
 
 	// Check for required training
 	// Create training records if compliance profile exists
@@ -489,34 +488,8 @@ func (p *Plugin) onSessionCreated(ctx context.Context, sess *session.Session) er
 		return nil
 	}
 
-	// Enforce session policies (timeout, IP validation, etc.)
+	// Enforce session policies (timeout, IP validation, etc.) based on app's compliance profile
 	// Log session creation for audit trail
-
-	return nil
-}
-
-func (p *Plugin) onOrganizationCreated(ctx context.Context, org interface{}) error {
-	if p.service == nil {
-		return nil
-	}
-
-	// Extract organization ID from interface
-	// Create default compliance profile if configured
-	if p.config.DefaultStandard != "" {
-		// TODO: Create default profile when multi-tenancy is available
-	}
-
-	return nil
-}
-
-func (p *Plugin) onMemberAdded(ctx context.Context, member interface{}) error {
-	if p.service == nil {
-		return nil
-	}
-
-	// When a user is added to an organization
-	// Check if they need compliance training
-	// Create required training records
 
 	return nil
 }

@@ -124,6 +124,82 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler, aut
 		forge.WithTags("Authentication", "User"),
 		forge.WithValidation(true),
 	)
+
+	// Password reset - Request reset link
+	authGroup.POST("/password/reset/request", h.RequestPasswordReset,
+		forge.WithName("auth.password.reset.request"),
+		forge.WithSummary("Request password reset"),
+		forge.WithDescription("Request a password reset link to be sent to the user's email"),
+		forge.WithRequestSchema(PasswordResetRequestDTO{}),
+		forge.WithResponseSchema(200, "Reset link sent (if email exists)", PasswordResetRequestResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Password"),
+		forge.WithValidation(true),
+	)
+
+	// Password reset - Confirm with token
+	authGroup.POST("/password/reset/confirm", h.ResetPassword,
+		forge.WithName("auth.password.reset.confirm"),
+		forge.WithSummary("Reset password"),
+		forge.WithDescription("Reset password using a valid reset token"),
+		forge.WithRequestSchema(PasswordResetConfirmDTO{}),
+		forge.WithResponseSchema(200, "Password reset successful", PasswordResetResponse{}),
+		forge.WithResponseSchema(400, "Invalid or expired token", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Password"),
+		forge.WithValidation(true),
+	)
+
+	// Password reset - Validate token
+	authGroup.GET("/password/reset/validate", h.ValidateResetToken,
+		forge.WithName("auth.password.reset.validate"),
+		forge.WithSummary("Validate reset token"),
+		forge.WithDescription("Check if a password reset token is valid"),
+		forge.WithResponseSchema(200, "Token validation result", TokenValidationResponse{}),
+		forge.WithResponseSchema(400, "Missing token parameter", ErrorResponse{}),
+		forge.WithTags("Authentication", "Password"),
+	)
+
+	// Change password (requires authentication)
+	authGroup.POST("/password/change", h.ChangePassword,
+		forge.WithName("auth.password.change"),
+		forge.WithSummary("Change password"),
+		forge.WithDescription("Change the authenticated user's password"),
+		forge.WithRequestSchema(ChangePasswordDTO{}),
+		forge.WithResponseSchema(200, "Password changed successfully", PasswordChangeResponse{}),
+		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Incorrect current password or not authenticated", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Password"),
+		forge.WithValidation(true),
+	)
+
+	// Email change - Request
+	authGroup.POST("/email/change/request", h.RequestEmailChange,
+		forge.WithName("auth.email.change.request"),
+		forge.WithSummary("Request email change"),
+		forge.WithDescription("Request to change email address with confirmation"),
+		forge.WithRequestSchema(EmailChangeRequestDTO{}),
+		forge.WithResponseSchema(200, "Confirmation sent", EmailChangeRequestResponse{}),
+		forge.WithResponseSchema(400, "Invalid request or email taken", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
+		forge.WithTags("Authentication", "Email"),
+		forge.WithValidation(true),
+	)
+
+	// Email change - Confirm
+	authGroup.POST("/email/change/confirm", h.ConfirmEmailChange,
+		forge.WithName("auth.email.change.confirm"),
+		forge.WithSummary("Confirm email change"),
+		forge.WithDescription("Confirm email change using a valid token"),
+		forge.WithRequestSchema(EmailChangeConfirmDTO{}),
+		forge.WithResponseSchema(200, "Email changed successfully", EmailChangeResponse{}),
+		forge.WithResponseSchema(400, "Invalid or expired token", ErrorResponse{}),
+		forge.WithTags("Authentication", "Email"),
+		forge.WithValidation(true),
+	)
 }
 
 // DTOs for auth routes
@@ -175,6 +251,63 @@ type UpdateUserRequest struct {
 	Image           *string `json:"image,omitempty" example:"https://example.com/avatar.jpg"`
 	Username        *string `json:"username,omitempty" example:"johndoe"`
 	DisplayUsername *string `json:"display_username,omitempty" example:"John D."`
+}
+
+// PasswordResetRequestDTO represents a password reset request
+type PasswordResetRequestDTO struct {
+	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+}
+
+// PasswordResetRequestResponse represents the response to a password reset request
+type PasswordResetRequestResponse struct {
+	Message string `json:"message" example:"If the email exists, a password reset link has been sent"`
+}
+
+// PasswordResetConfirmDTO represents a password reset confirmation
+type PasswordResetConfirmDTO struct {
+	Token       string `json:"token" validate:"required" example:"reset_token_here"`
+	NewPassword string `json:"newPassword" validate:"required,min=8" example:"NewSecurePass123!"`
+}
+
+// PasswordResetResponse represents the response to a password reset confirmation
+type PasswordResetResponse struct {
+	Message string `json:"message" example:"Password has been reset successfully"`
+}
+
+// TokenValidationResponse represents a token validation response
+type TokenValidationResponse struct {
+	Valid bool `json:"valid" example:"true"`
+}
+
+// ChangePasswordDTO represents a password change request
+type ChangePasswordDTO struct {
+	OldPassword string `json:"oldPassword" validate:"required" example:"CurrentPass123!"`
+	NewPassword string `json:"newPassword" validate:"required,min=8" example:"NewSecurePass123!"`
+}
+
+// PasswordChangeResponse represents the response to a password change
+type PasswordChangeResponse struct {
+	Message string `json:"message" example:"Password changed successfully"`
+}
+
+// EmailChangeRequestDTO represents an email change request
+type EmailChangeRequestDTO struct {
+	NewEmail string `json:"newEmail" validate:"required,email" example:"newemail@example.com"`
+}
+
+// EmailChangeRequestResponse represents the response to an email change request
+type EmailChangeRequestResponse struct {
+	Message string `json:"message" example:"Email change confirmation sent to your current email address"`
+}
+
+// EmailChangeConfirmDTO represents an email change confirmation
+type EmailChangeConfirmDTO struct {
+	Token string `json:"token" validate:"required" example:"change_token_here"`
+}
+
+// EmailChangeResponse represents the response to an email change confirmation
+type EmailChangeResponse struct {
+	Message string `json:"message" example:"Email address has been changed successfully"`
 }
 
 // RegisterAudit registers audit routes under a base path

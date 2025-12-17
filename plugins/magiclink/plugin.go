@@ -144,9 +144,20 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Register Bun models
 	p.db.RegisterModel((*schema.MagicLink)(nil))
 
-	// TODO: Get notification adapter from service registry when available
-	// For now, plugins will work without notification adapter (graceful degradation)
-	// The notification plugin should be registered first and will set up its services
+	// Get notification adapter from service registry
+	serviceRegistry := authInst.GetServiceRegistry()
+	if serviceRegistry != nil {
+		if adapter, exists := serviceRegistry.Get("notification.adapter"); exists {
+			if typedAdapter, ok := adapter.(*notificationPlugin.Adapter); ok {
+				p.notifAdapter = typedAdapter
+				p.logger.Info("retrieved notification adapter from service registry")
+			} else {
+				p.logger.Warn("notification adapter type assertion failed")
+			}
+		} else {
+			p.logger.Info("notification adapter not available in service registry (graceful degradation)")
+		}
+	}
 
 	mr := repo.NewMagicLinkRepository(p.db)
 	userSvc := user.NewService(repo.NewUserRepository(p.db), user.Config{}, nil, authInst.GetHookRegistry())

@@ -1,0 +1,78 @@
+plugin_id: emailverification
+version: 1.0.0
+routes:
+    - name: Send
+      description: |-
+        Send handles manual verification email sending
+        POST /email-verification/send
+      method: POST
+      path: /email-verification/send
+      request:
+        email: string!
+      request_type: SendRequest
+    - name: Verify
+      description: |-
+        Verify handles email verification via token
+        GET /email-verification/verify?token=xyz
+      method: GET
+      path: /email-verification/verify
+    - name: Resend
+      description: |-
+        Resend handles resending verification email
+        POST /email-verification/resend
+      method: POST
+      path: /email-verification/resend
+      request:
+        email: string!
+      response:
+        status: string!
+      request_type: ResendRequest
+      response_type: ResendResponse
+types:
+    - name: Handler
+      fields:
+        "": core.Authsome
+    - name: Plugin
+      fields:
+        "": core.Authsome
+    - name: Config
+      fields:
+        autoLoginAfterVerify: bool!
+        autoSendOnSignup: bool!
+        devExposeToken: bool!
+        expiryHours: int!
+        maxResendPerHour: int!
+        tokenLength: int!
+        verificationURL: string!
+    - name: Service
+      fields:
+        "": '*VerificationRepository'
+    - name: SendResponse
+      fields:
+        devToken: string!
+        status: string!
+    - name: VerifyRequest
+      fields:
+        token: string!
+    - name: VerifyResponse
+      fields:
+        session: '*session.Session!'
+        success: bool!
+        token: string!
+        user: '*user.User!'
+    - name: ResendRequest
+      fields:
+        email: string!
+    - name: VerificationRepository
+      fields:
+        "": '*bun.DB'
+    - name: SendRequest
+      fields:
+        email: string!
+    - name: ResendResponse
+      fields:
+        status: string!
+    - name: StatusResponse
+      fields:
+        emailVerified: bool!
+        emailVerifiedAt: '*time.Time!'

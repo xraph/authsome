@@ -10,12 +10,18 @@ import (
 
 // Service manages user devices
 type Service struct {
-	repo Repository
+	repo         Repository
+	hookRegistry interface{} // Hook registry for lifecycle events
 }
 
 // NewService creates a new device service
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// SetHookRegistry sets the hook registry for executing lifecycle hooks
+func (s *Service) SetHookRegistry(registry interface{}) {
+	s.hookRegistry = registry
 }
 
 // TrackDevice creates or updates a device record
@@ -62,7 +68,25 @@ func (s *Service) TrackDevice(ctx context.Context, appID, userID xid.ID, fingerp
 		return nil, DeviceCreationFailed(err)
 	}
 
-	return FromSchemaDevice(deviceSchema), nil
+	device := FromSchemaDevice(deviceSchema)
+
+	// Execute new device detected hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteOnNewDeviceDetected(context.Context, xid.ID, string, string, string) error
+		}); ok {
+			// Extract device name from user agent (simplified)
+			deviceName := userAgent
+			if len(deviceName) > 50 {
+				deviceName = deviceName[:50] + "..."
+			}
+			// Location would come from IP geolocation service (not implemented)
+			location := "Unknown location"
+			_ = registry.ExecuteOnNewDeviceDetected(ctx, userID, deviceName, location, ip)
+		}
+	}
+
+	return device, nil
 }
 
 // ListDevices returns devices for a user with pagination
@@ -122,8 +146,29 @@ func (s *Service) RevokeDevice(ctx context.Context, userID xid.ID, fingerprint s
 
 // RevokeDeviceByID deletes a device record by ID
 func (s *Service) RevokeDeviceByID(ctx context.Context, id xid.ID) error {
+	// Get device details before deletion for hook
+	deviceSchema, err := s.repo.FindDeviceByID(ctx, id)
+	if err != nil {
+		return DeviceNotFound()
+	}
+
+	userID := deviceSchema.UserID
+	deviceName := deviceSchema.UserAgent
+	if len(deviceName) > 50 {
+		deviceName = deviceName[:50] + "..."
+	}
+
 	if err := s.repo.DeleteDevice(ctx, id); err != nil {
 		return DeviceDeletionFailed(err)
+	}
+
+	// Execute device removed hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteOnDeviceRemoved(context.Context, xid.ID, string) error
+		}); ok {
+			_ = registry.ExecuteOnDeviceRemoved(ctx, userID, deviceName)
+		}
 	}
 
 	return nil

@@ -31,6 +31,7 @@ func GetAllTemplateInfo() []TemplateInfo {
 }
 
 func init() {
+	// Existing sample templates
 	SampleTemplates["welcome"] = createWelcomeTemplate()
 	SampleTemplates["otp"] = createOTPTemplate()
 	SampleTemplates["reset_password"] = createResetPasswordTemplate()
@@ -39,6 +40,47 @@ func init() {
 	SampleTemplates["order_confirmation"] = createOrderConfirmationTemplate()
 	SampleTemplates["newsletter"] = createNewsletterTemplate()
 	SampleTemplates["account_alert"] = createAccountAlertTemplate()
+
+	// Organization templates
+	SampleTemplates["org_invite"] = createOrgInviteTemplate()
+	SampleTemplates["org_member_added"] = createOrgMemberAddedTemplate()
+	SampleTemplates["org_member_removed"] = createOrgMemberRemovedTemplate()
+	SampleTemplates["org_role_changed"] = createOrgRoleChangedTemplate()
+	SampleTemplates["org_transfer"] = createOrgTransferTemplate()
+	SampleTemplates["org_deleted"] = createOrgDeletedTemplate()
+	SampleTemplates["org_member_left"] = createOrgMemberLeftTemplate()
+
+	// Account management templates
+	SampleTemplates["email_change_request"] = createEmailChangeRequestTemplate()
+	SampleTemplates["email_changed"] = createEmailChangedTemplate()
+	SampleTemplates["password_changed"] = createPasswordChangedTemplate()
+	SampleTemplates["username_changed"] = createUsernameChangedTemplate()
+	SampleTemplates["account_deleted"] = createAccountDeletedTemplate()
+	SampleTemplates["account_suspended"] = createAccountSuspendedTemplate()
+	SampleTemplates["account_reactivated"] = createAccountReactivatedTemplate()
+	SampleTemplates["data_export_ready"] = createDataExportReadyTemplate()
+
+	// Session/device templates
+	SampleTemplates["new_device_login"] = createNewDeviceLoginTemplate()
+	SampleTemplates["new_location_login"] = createNewLocationLoginTemplate()
+	SampleTemplates["suspicious_login"] = createSuspiciousLoginTemplate()
+	SampleTemplates["device_removed"] = createDeviceRemovedTemplate()
+	SampleTemplates["all_sessions_revoked"] = createAllSessionsRevokedTemplate()
+
+	// Reminder templates
+	SampleTemplates["verification_reminder"] = createVerificationReminderTemplate()
+	SampleTemplates["inactive_account"] = createInactiveAccountTemplate()
+	SampleTemplates["trial_expiring"] = createTrialExpiringTemplate()
+	SampleTemplates["subscription_expiring"] = createSubscriptionExpiringTemplate()
+	SampleTemplates["password_expiring"] = createPasswordExpiringTemplate()
+
+	// Admin/moderation templates
+	SampleTemplates["account_locked"] = createAccountLockedTemplate()
+	SampleTemplates["account_unlocked"] = createAccountUnlockedTemplate()
+	SampleTemplates["terms_update"] = createTermsUpdateTemplate()
+	SampleTemplates["privacy_update"] = createPrivacyUpdateTemplate()
+	SampleTemplates["maintenance_scheduled"] = createMaintenanceScheduledTemplate()
+	SampleTemplates["security_breach"] = createSecurityBreachTemplate()
 }
 
 // createWelcomeTemplate creates a beautiful welcome email template

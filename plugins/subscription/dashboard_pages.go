@@ -419,6 +419,11 @@ func (e *DashboardExtension) ServeInvoicesListPage(c forge.Context) error {
 	pageSize := queryIntDefault(c, "pageSize", 20)
 	statusFilter := c.Query("status")
 
+	// Check for success/error messages
+	successMsg := c.Query("success")
+	errorMsg := c.Query("error")
+	syncCount := c.Query("count")
+
 	invoices, total, _ := e.plugin.invoiceSvc.List(ctx, nil, nil, statusFilter, page, pageSize)
 	totalPages := int((int64(total) + int64(pageSize) - 1) / int64(pageSize))
 
@@ -436,12 +441,39 @@ func (e *DashboardExtension) ServeInvoicesListPage(c forge.Context) error {
 	content := Div(
 		Class("space-y-6"),
 
-		// Page header
+		// Success/Error alerts
+		g.If(successMsg == "synced",
+			Div(
+				Class("rounded-lg bg-green-50 p-4 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300"),
+				g.Textf("✅ Successfully synced %s invoices from Stripe!", syncCount),
+			),
+		),
+		g.If(errorMsg == "sync_failed",
+			Div(
+				Class("rounded-lg bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300"),
+				g.Text("❌ Failed to sync invoices from Stripe. Please try again."),
+			),
+		),
+
+		// Page header with sync button
 		Div(
-			H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
-				g.Text("Invoices")),
-			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
-				g.Text("View and manage billing invoices")),
+			Class("flex items-start justify-between"),
+			Div(
+				H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
+					g.Text("Invoices")),
+				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
+					g.Text("View and manage billing invoices")),
+			),
+			Form(
+				Method("POST"),
+				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices/sync"),
+				Button(
+					Type("submit"),
+					Class("inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"),
+					lucide.RefreshCw(Class("size-4")),
+					g.Text("Sync from Stripe"),
+				),
+			),
 		),
 
 		// Billing sub-navigation

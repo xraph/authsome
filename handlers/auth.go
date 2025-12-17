@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -23,6 +25,7 @@ import (
 	coreuser "github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
+	"github.com/xraph/authsome/types"
 	"github.com/xraph/forge"
 )
 
@@ -578,4 +581,343 @@ func (h *AuthHandler) RevokeDevice(c forge.Context) error {
 		_ = h.aud.Log(c.Request().Context(), &uid, "device_revoked", "user:"+uid.String(), ip, c.Request().UserAgent(), "fingerprint="+body.Fingerprint)
 	}
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "device_revoked"})
+}
+
+// RequestPasswordReset handles password reset requests
+func (h *AuthHandler) RequestPasswordReset(c forge.Context) error {
+	var req struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	// Get app context
+	appID, ok := contexts.GetAppID(c.Request().Context())
+	if !ok || appID.IsNil() {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_CONTEXT", "App context required", http.StatusBadRequest))
+	}
+
+	// Rate limiting
+	if h.rl != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		key := "password_reset:" + ip
+		allowed, err := h.rl.CheckLimit(c.Request().Context(), key, rl.Rule{Max: 3, Window: time.Hour})
+		if err != nil || !allowed {
+			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many password reset requests", http.StatusTooManyRequests))
+		}
+	}
+
+	// Request password reset
+	token, err := h.auth.RequestPasswordReset(c.Request().Context(), req.Email)
+	if err != nil {
+		// Log error but still return success to prevent email enumeration
+		log.Printf("Password reset error: %v", err)
+	}
+
+	// Get base URL from app (default to empty, can be configured per app)
+	baseURL := ""
+	if h.appService != nil {
+		if app, err := h.appService.FindAppByID(c.Request().Context(), appID); err == nil && app != nil {
+			// Try to get baseURL from metadata if configured
+			if app.Metadata != nil {
+				if url, ok := app.Metadata["baseURL"].(string); ok && url != "" {
+					baseURL = url
+				}
+			}
+		}
+	}
+
+	// If we have a token, send notification
+	if token != "" && h.auth != nil {
+		// Get notification adapter from service registry if available
+		if authService, ok := h.auth.(interface {
+			GetServiceRegistry() interface {
+				Get(string) (interface{}, error)
+			}
+		}); ok {
+			if registry := authService.GetServiceRegistry(); registry != nil {
+				if adapterIntf, err := registry.Get("notification.adapter"); err == nil && adapterIntf != nil {
+					if adapter, ok := adapterIntf.(interface {
+						SendPasswordReset(ctx context.Context, appID xid.ID, email, userName, resetURL, resetCode string, expiryMinutes int) error
+					}); ok {
+						// Construct reset URL
+						resetURL := baseURL + "/auth/reset-password?token=" + token
+
+						// Try to get user name
+						userName := req.Email
+						if userService, ok := h.auth.(interface {
+							GetUserService() interface {
+								FindByEmail(context.Context, string) (interface {
+									GetName() string
+									GetEmail() string
+								}, error)
+							}
+						}); ok {
+							if svc := userService.GetUserService(); svc != nil {
+								if user, err := svc.FindByEmail(c.Request().Context(), req.Email); err == nil && user != nil {
+									if name := user.GetName(); name != "" {
+										userName = name
+									}
+								}
+							}
+						}
+
+						// Send password reset email
+						_ = adapter.SendPasswordReset(
+							c.Request().Context(),
+							appID,
+							req.Email,
+							userName,
+							resetURL,
+							token,
+							60, // 60 minutes expiry
+						)
+					}
+				}
+			}
+		}
+	}
+
+	// Audit log
+	if h.aud != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		_ = h.aud.Log(c.Request().Context(), nil, "password_reset_requested", "email:"+req.Email, ip, c.Request().UserAgent(), "")
+	}
+
+	// Always return success to prevent email enumeration
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "If the email exists, a password reset link has been sent",
+	})
+}
+
+// ResetPassword handles password reset confirmation
+func (h *AuthHandler) ResetPassword(c forge.Context) error {
+	var req struct {
+		Token       string `json:"token" validate:"required"`
+		NewPassword string `json:"newPassword" validate:"required,min=8"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	// Reset password
+	err := h.auth.ResetPassword(c.Request().Context(), req.Token, req.NewPassword)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidResetToken) {
+			return c.JSON(http.StatusBadRequest, errs.New("INVALID_TOKEN", "Invalid or expired reset token", http.StatusBadRequest))
+		}
+		if errors.Is(err, auth.ErrResetTokenExpired) {
+			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_EXPIRED", "Reset token has expired", http.StatusBadRequest))
+		}
+		if errors.Is(err, auth.ErrResetTokenAlreadyUsed) {
+			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_USED", "Reset token has already been used", http.StatusBadRequest))
+		}
+		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "RESET_FAILED", "Failed to reset password", http.StatusInternalServerError))
+	}
+
+	// Audit log
+	if h.aud != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		_ = h.aud.Log(c.Request().Context(), nil, "password_reset_completed", "token", ip, c.Request().UserAgent(), "")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Password has been reset successfully",
+	})
+}
+
+// ValidateResetToken validates a password reset token
+func (h *AuthHandler) ValidateResetToken(c forge.Context) error {
+	token := c.Request().URL.Query().Get("token")
+	if token == "" {
+		return c.JSON(http.StatusBadRequest, errs.New("MISSING_TOKEN", "Token parameter required", http.StatusBadRequest))
+	}
+
+	valid, err := h.auth.ValidateResetToken(c.Request().Context(), token)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "VALIDATION_FAILED", "Failed to validate token", http.StatusInternalServerError))
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"valid": valid,
+	})
+}
+
+// ChangePassword handles password change requests
+func (h *AuthHandler) ChangePassword(c forge.Context) error {
+	res, err := h.getAuthenticatedUser(c)
+	if err != nil || res == nil || res.User == nil {
+		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "Authentication required", http.StatusUnauthorized))
+	}
+
+	var req struct {
+		OldPassword string `json:"oldPassword" validate:"required"`
+		NewPassword string `json:"newPassword" validate:"required,min=8"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	// Change password
+	err = h.auth.ChangePassword(c.Request().Context(), res.User.ID, req.OldPassword, req.NewPassword)
+	if err != nil {
+		if errors.Is(err, types.ErrInvalidCredentials) {
+			return c.JSON(http.StatusUnauthorized, errs.New("INVALID_OLD_PASSWORD", "Current password is incorrect", http.StatusUnauthorized))
+		}
+		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "PASSWORD_CHANGE_FAILED", "Failed to change password", http.StatusInternalServerError))
+	}
+
+	// Audit log
+	if h.aud != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		uid := res.User.ID
+		_ = h.aud.Log(c.Request().Context(), &uid, "password_changed", "user:"+uid.String(), ip, c.Request().UserAgent(), "")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Password changed successfully",
+	})
+}
+
+// RequestEmailChange handles email change requests
+func (h *AuthHandler) RequestEmailChange(c forge.Context) error {
+	res, err := h.getAuthenticatedUser(c)
+	if err != nil || res == nil || res.User == nil {
+		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "Authentication required", http.StatusUnauthorized))
+	}
+
+	var req struct {
+		NewEmail string `json:"newEmail" validate:"required,email"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	// Request email change
+	changeToken, err := h.auth.RequestEmailChange(c.Request().Context(), res.User.ID, req.NewEmail)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "EMAIL_CHANGE_FAILED", "Failed to request email change", http.StatusBadRequest))
+	}
+
+	// Get base URL from app
+	appID, _ := contexts.GetAppID(c.Request().Context())
+	baseURL := ""
+	if h.appService != nil && !appID.IsNil() {
+		if app, err := h.appService.FindAppByID(c.Request().Context(), appID); err == nil && app != nil {
+			// Try to get baseURL from metadata if configured
+			if app.Metadata != nil {
+				if url, ok := app.Metadata["baseURL"].(string); ok && url != "" {
+					baseURL = url
+				}
+			}
+		}
+	}
+
+	// Send notification with confirmation URL
+	if changeToken != "" && h.auth != nil {
+		// Get notification adapter from service registry if available
+		if authService, ok := h.auth.(interface {
+			GetServiceRegistry() interface {
+				Get(string) (interface{}, error)
+			}
+		}); ok {
+			if registry := authService.GetServiceRegistry(); registry != nil {
+				if adapterIntf, err := registry.Get("notification.adapter"); err == nil && adapterIntf != nil {
+					if adapter, ok := adapterIntf.(interface {
+						SendEmailChangeRequest(ctx context.Context, appID xid.ID, recipientEmail, userName, newEmail, confirmationUrl, timestamp string) error
+					}); ok {
+						// Construct confirmation URL
+						confirmationURL := baseURL + "/auth/email/change/confirm?token=" + changeToken
+
+						userName := res.User.Name
+						if userName == "" {
+							userName = res.User.Email
+						}
+
+						timestamp := time.Now().Format(time.RFC3339)
+
+						// Send to OLD email for security
+						_ = adapter.SendEmailChangeRequest(
+							c.Request().Context(),
+							appID,
+							res.User.Email,
+							userName,
+							req.NewEmail,
+							confirmationURL,
+							timestamp,
+						)
+					}
+				}
+			}
+		}
+	}
+
+	// Audit log
+	if h.aud != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		uid := res.User.ID
+		_ = h.aud.Log(c.Request().Context(), &uid, "email_change_requested", "user:"+uid.String(), ip, c.Request().UserAgent(), "new_email="+req.NewEmail)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Email change confirmation sent to your current email address",
+	})
+}
+
+// ConfirmEmailChange handles email change confirmation
+func (h *AuthHandler) ConfirmEmailChange(c forge.Context) error {
+	var req struct {
+		Token string `json:"token" validate:"required"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	}
+
+	// Confirm email change
+	err := h.auth.ConfirmEmailChange(c.Request().Context(), req.Token)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidChangeToken) {
+			return c.JSON(http.StatusBadRequest, errs.New("INVALID_TOKEN", "Invalid or expired email change token", http.StatusBadRequest))
+		}
+		if errors.Is(err, auth.ErrChangeTokenExpired) {
+			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_EXPIRED", "Email change token has expired", http.StatusBadRequest))
+		}
+		if errors.Is(err, auth.ErrChangeTokenAlreadyUsed) {
+			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_USED", "Email change token has already been used", http.StatusBadRequest))
+		}
+		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "EMAIL_CHANGE_FAILED", "Failed to change email", http.StatusInternalServerError))
+	}
+
+	// Audit log
+	if h.aud != nil {
+		ip := clientIPFromRequest(c.Request(), h.sec)
+		_ = h.aud.Log(c.Request().Context(), nil, "email_change_confirmed", "token", ip, c.Request().UserAgent(), "")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Email address has been changed successfully",
+	})
+}
+
+// getAuthenticatedUser retrieves the authenticated user from the session cookie
+func (h *AuthHandler) getAuthenticatedUser(c forge.Context) (*responses.AuthResponse, error) {
+	// Get session token from cookie
+	cookie, err := c.Request().Cookie(h.sessionCookieName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get session from auth service
+	authResp, err := h.auth.GetSession(c.Request().Context(), cookie.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	return authResp, nil
 }

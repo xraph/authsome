@@ -16,6 +16,7 @@ type ContentTypeSettings struct {
 	// Display settings
 	TitleField       string `json:"titleField,omitempty"`
 	DescriptionField string `json:"descriptionField,omitempty"`
+	PreviewField     string `json:"previewField,omitempty"`
 
 	// Features
 	EnableRevisions  bool `json:"enableRevisions"`
@@ -145,6 +146,11 @@ func (ct *ContentType) GetDescriptionField() string {
 		}
 	}
 	return ""
+}
+
+// GetPreviewField returns the field name to use as preview
+func (ct *ContentType) GetPreviewField() string {
+	return ct.Settings.PreviewField
 }
 
 // HasRevisions returns true if revisions are enabled

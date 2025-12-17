@@ -130,14 +130,18 @@ func FromSchemaTeamMembers(teamMembers []*schema.OrganizationTeamMember) []*Team
 
 // CreateTeamRequest represents a request to create a team
 type CreateTeamRequest struct {
-	Name        string                 `json:"name" validate:"required,min=1,max=100"`
-	Description *string                `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Name          string                 `json:"name" validate:"required,min=1,max=100"`
+	Description   *string                `json:"description,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	ProvisionedBy string                 `json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    string                 `json:"externalID,omitempty"`    // External system ID
 }
 
 // UpdateTeamRequest represents a request to update a team
 type UpdateTeamRequest struct {
-	Name        *string                `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Description *string                `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Name          *string                `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Description   *string                `json:"description,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	ProvisionedBy *string                `json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    *string                `json:"externalID,omitempty"`    // External system ID
 }

@@ -278,6 +278,16 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		{
 			Method:       "POST",
+			Path:         "/billing/invoices/sync",
+			Handler:      e.HandleSyncInvoices,
+			Name:         "subscription.invoices.sync",
+			Summary:      "Sync Invoices",
+			Description:  "Sync invoices from Stripe",
+			RequireAuth:  true,
+			RequireAdmin: false,
+		},
+		{
+			Method:       "POST",
 			Path:         "/billing/invoices/:id/mark-paid",
 			Handler:      e.HandleMarkInvoicePaid,
 			Name:         "subscription.invoices.mark-paid",

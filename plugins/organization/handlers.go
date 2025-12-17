@@ -16,6 +16,7 @@ import (
 // OrganizationHandler handles organization-related HTTP requests
 type OrganizationHandler struct {
 	orgService *organization.Service
+	plugin     *Plugin // Reference to plugin for notification sending
 }
 
 // Response types
@@ -359,6 +360,23 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 	invitation, err := h.orgService.InviteMember(ctx, orgID, &req, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
+	}
+
+	// Send invitation notification if plugin reference is available
+	if h.plugin != nil && h.plugin.notifAdapter != nil {
+		// Get organization details
+		org, err := h.orgService.FindOrganizationByID(ctx, orgID)
+		if err == nil {
+			// Get inviter user details
+			userSvc := h.plugin.authInst.GetServiceRegistry().UserService()
+			if userSvc != nil {
+				inviter, err := userSvc.FindByID(ctx, userID)
+				if err == nil {
+					// Send invitation notification (errors are logged, not returned)
+					_ = h.plugin.SendInvitationNotification(ctx, invitation, inviter, org)
+				}
+			}
+		}
 	}
 
 	return c.JSON(201, invitation)

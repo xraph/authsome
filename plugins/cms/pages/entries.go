@@ -131,12 +131,25 @@ func entriesTable(appBase string, contentType *core.ContentTypeDTO, entries []*c
 
 // entryRow renders a single entry row
 func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO) g.Node {
-	// Get title field value if specified
+	// Get title field value - defaults to entry ID
+	// Priority: configured titleField > common field names (title, label) > entry ID
 	title := entry.ID
+
+	// First, try the configured titleField if set
 	if contentType.Settings.TitleField != "" {
 		if val, ok := entry.Data[contentType.Settings.TitleField]; ok {
 			if s, ok := val.(string); ok && s != "" {
 				title = s
+			}
+		}
+	} else {
+		// If no titleField configured, try common field names
+		for _, fieldName := range []string{"title", "Title", "label", "Label"} {
+			if val, ok := entry.Data[fieldName]; ok {
+				if s, ok := val.(string); ok && s != "" {
+					title = s
+					break
+				}
 			}
 		}
 	}
@@ -154,13 +167,36 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 		}
 	}
 
+	// Get preview field value if specified
+	preview := ""
+	if contentType.Settings.PreviewField != "" {
+		if val, ok := entry.Data[contentType.Settings.PreviewField]; ok {
+			// Handle different types for preview field
+			switch v := val.(type) {
+			case string:
+				preview = v
+			case float64, int, int64:
+				preview = fmt.Sprintf("%v", v)
+			}
+			if len(preview) > 50 {
+				preview = preview[:50] + "..."
+			}
+		}
+	}
+
 	return TableRow(
 		// Entry info
 		TableCell(Div(
 			Div(Class("font-medium"), g.Text(title)),
+			g.If(preview != "", func() g.Node {
+				return Div(
+					Class("text-xs text-slate-400 dark:text-gray-600 font-mono truncate max-w-md mt-1"),
+					g.Text(preview),
+				)
+			}()),
 			g.If(description != "", func() g.Node {
 				return Div(
-					Class("text-xs text-slate-500 dark:text-gray-500 truncate max-w-md"),
+					Class("text-xs text-slate-500 dark:text-gray-500 truncate max-w-md mt-1"),
 					g.Text(description),
 				)
 			}()),
@@ -210,12 +246,25 @@ func EntryDetailPage(
 	typeBase := appBase + "/cms/types/" + contentType.Name
 	entryBase := typeBase + "/entries/" + entry.ID
 
-	// Get title
+	// Get title - defaults to entry ID
+	// Priority: configured titleField > common field names (title, label) > entry ID
 	title := entry.ID
+
+	// First, try the configured titleField if set
 	if contentType.Settings.TitleField != "" {
 		if val, ok := entry.Data[contentType.Settings.TitleField]; ok {
 			if s, ok := val.(string); ok && s != "" {
 				title = s
+			}
+		}
+	} else {
+		// If no titleField configured, try common field names
+		for _, fieldName := range []string{"title", "Title", "label", "Label"} {
+			if val, ok := entry.Data[fieldName]; ok {
+				if s, ok := val.(string); ok && s != "" {
+					title = s
+					break
+				}
 			}
 		}
 	}
@@ -312,6 +361,12 @@ func entryDataCard(contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO
 
 // entryFieldRow renders a single field value row
 func entryFieldRow(field *core.ContentFieldDTO, value any) g.Node {
+	// Use Title if available, fallback to Name for display label
+	label := field.Name
+	if field.Title != "" {
+		label = field.Title
+	}
+
 	return Div(
 		Class("py-3 border-b border-slate-100 dark:border-gray-800 last:border-b-0"),
 		Div(
@@ -322,7 +377,7 @@ func entryFieldRow(field *core.ContentFieldDTO, value any) g.Node {
 				Div(
 					Class("flex items-center gap-2"),
 					fieldTypeIcon(field.Type),
-					Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text(field.Name)),
+					Span(Class("text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text(label)),
 				),
 				Code(
 					Class("text-xs text-slate-500 dark:text-gray-500"),
@@ -362,13 +417,19 @@ func renderFieldValue(fieldType string, value any) g.Node {
 				g.Raw(s),
 			)
 		}
-	case "json":
-		if m, ok := value.(map[string]any); ok {
+	case "json", "object":
+		// Try to marshal as JSON for proper display
+		if jsonBytes, err := json.MarshalIndent(value, "", "  "); err == nil {
 			return Pre(
 				Class("text-xs bg-slate-100 dark:bg-gray-800 p-2 rounded overflow-x-auto"),
-				Code(g.Text(fmt.Sprintf("%v", m))),
+				Code(g.Text(string(jsonBytes))),
 			)
 		}
+		// Fallback to simple string representation
+		return Span(
+			Class("text-sm text-slate-900 dark:text-white"),
+			g.Text(fmt.Sprintf("%v", value)),
+		)
 	case "media", "image":
 		if s, ok := value.(string); ok {
 			return Img(
@@ -623,12 +684,18 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 	hasConditional := field.Options.ShowWhen != nil || field.Options.HideWhen != nil
 	conditionalAttrs := buildConditionalVisibilityAttrs(field)
 
+	// Use Title if available, fallback to Name
+	label := field.Name
+	if field.Title != "" {
+		label = field.Title
+	}
+
 	// The actual field content
 	fieldContent := Div(
 		Label(
 			For(fieldName),
 			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-			g.Text(field.Name),
+			g.Text(label),
 			g.If(field.Required, func() g.Node {
 				return Span(Class("text-red-500 ml-1"), g.Text("*"))
 			}()),
@@ -1473,10 +1540,16 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 	// Note: This function creates a template that will be used with x-for
 	// The actual field name and value binding happens through Alpine.js
 
+	// Use Title if available, fallback to Name
+	label := field.Name
+	if field.Title != "" {
+		label = field.Title
+	}
+
 	return Div(
 		Label(
 			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-			g.Text(field.Name),
+			g.Text(label),
 			g.If(field.Required, func() g.Node {
 				return Span(Class("text-red-500 ml-1"), g.Text("*"))
 			}()),
@@ -1595,11 +1668,17 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string) g.Node {
 	xModel := fmt.Sprintf("data['%s']", fieldName)
 
+	// Use Title if available, fallback to Name
+	label := field.Name
+	if field.Title != "" {
+		label = field.Title
+	}
+
 	return Div(
 		Class("space-y-1"),
 		Label(
 			Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-			g.Text(field.Name),
+			g.Text(label),
 			g.If(field.Required, func() g.Node {
 				return Span(Class("text-red-500 ml-1"), g.Text("*"))
 			}()),
@@ -1740,11 +1819,17 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 		valueStr = fmt.Sprintf("%v", value)
 	}
 
+	// Use Title if available, fallback to Name
+	label := field.Name
+	if field.Title != "" {
+		label = field.Title
+	}
+
 	return Div(
 		Label(
 			For(fieldName),
 			Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1"),
-			g.Text(field.Name),
+			g.Text(label),
 			g.If(field.Required, func() g.Node {
 				return Span(Class("text-red-500 ml-1"), g.Text("*"))
 			}()),

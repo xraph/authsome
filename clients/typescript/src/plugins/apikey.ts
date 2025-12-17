@@ -12,11 +12,14 @@ export class ApikeyPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createAPIKey(request: types.CreateAPIKey_reqBody): Promise<types.CreateAPIKeyResponse> {
+  async createAPIKey(): Promise<void> {
     const path = '/createapikey';
-    return this.client.request<types.CreateAPIKeyResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<void>('POST', path);
+  }
+
+  async rotateAPIKey(): Promise<void> {
+    const path = '/:id/rotate';
+    return this.client.request<void>('POST', path);
   }
 
   async listAPIKeys(): Promise<void> {
@@ -37,11 +40,6 @@ export class ApikeyPlugin implements ClientPlugin {
   async deleteAPIKey(): Promise<types.MessageResponse> {
     const path = '/:id';
     return this.client.request<types.MessageResponse>('DELETE', path);
-  }
-
-  async rotateAPIKey(): Promise<types.RotateAPIKeyResponse> {
-    const path = '/:id/rotate';
-    return this.client.request<types.RotateAPIKeyResponse>('POST', path);
   }
 
   async verifyAPIKey(): Promise<void> {

@@ -19,14 +19,14 @@ impl ImpersonationPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct StartImpersonationRequest {
-        #[serde(rename = "reason")]
-        pub reason: String,
-        #[serde(rename = "target_user_id")]
-        pub target_user_id: String,
         #[serde(rename = "ticket_number", skip_serializing_if = "Option::is_none")]
         pub ticket_number: Option<String>,
         #[serde(rename = "duration_minutes", skip_serializing_if = "Option::is_none")]
         pub duration_minutes: Option<i32>,
+        #[serde(rename = "reason")]
+        pub reason: String,
+        #[serde(rename = "target_user_id")]
+        pub target_user_id: String,
     }
 
     /// StartImpersonation handles POST /impersonation/start

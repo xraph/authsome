@@ -105,15 +105,16 @@ routes:
       method: DELETE
       path: /:teamId
 types:
-    - name: MockService
-      fields:
-        "": ""
-    - name: Plugin
-      fields:
-        "": forge.Logger
     - name: DashboardExtension
       fields:
         "": string
+    - name: InvitationResponse
+      fields:
+        invitation: '*organization.Invitation!'
+        message: string!
+    - name: MockService
+      fields:
+        "": error
     - name: AddCustomPermission_req
       fields:
         category: string!
@@ -126,11 +127,16 @@ types:
       fields:
         members: '[]*organization.Member!'
         total: int!
-    - name: InvitationResponse
-      fields:
-        invitation: '*organization.Invitation!'
-        message: string!
     - name: TeamsResponse
       fields:
         teams: '[]*organization.Team!'
         total: int!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: OrganizationUIRegistry
+      fields:
+        "": sync.RWMutex
+    - name: MockOrganizationUIExtension
+      fields:
+        "": '[]ui.OrganizationQuickLink'

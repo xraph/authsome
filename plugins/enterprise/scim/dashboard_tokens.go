@@ -8,6 +8,7 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -54,7 +55,8 @@ func (e *DashboardExtension) renderTokensListContent(c forge.Context, currentApp
 
 	// Fetch tokens from service
 	app := currentApp.(*app.App)
-	tokens, err := e.plugin.service.ListTokens(ctx, &app.ID, currentEnv.(*xid.ID), orgID)
+	env := currentEnv.(*environment.Environment)
+	tokens, err := e.plugin.service.ListTokens(ctx, &app.ID, &env.ID, orgID)
 	if err != nil {
 		return alertBox("error", "Error", "Failed to load SCIM tokens: "+err.Error())
 	}
@@ -67,7 +69,7 @@ func (e *DashboardExtension) renderTokensListContent(c forge.Context, currentApp
 
 	return Div(
 		Class("space-y-6"),
-		
+
 		// Header
 		Div(
 			Class("flex items-center justify-between"),
@@ -102,14 +104,14 @@ func (e *DashboardExtension) renderTokensListContent(c forge.Context, currentApp
 		),
 
 		g.If(len(tokens) > 0,
-		Div(
-			Class("grid gap-4"),
-			g.Group(e.renderTokenCards(tokens, basePath, &app.ID)),
+			Div(
+				Class("grid gap-4"),
+				g.Group(e.renderTokenCards(tokens, basePath, &app.ID)),
+			),
 		),
-	),
 
-	// Create Token Modal (hidden by default)
-	e.renderCreateTokenModal(basePath, &app.ID),
+		// Create Token Modal (hidden by default)
+		e.renderCreateTokenModal(basePath, &app.ID),
 	)
 }
 
@@ -136,34 +138,34 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 		g.Attr("aria-labelledby", "modal-title"),
 		g.Attr("role", "dialog"),
 		g.Attr("aria-modal", "true"),
-		
+
 		Div(
 			Class("flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0"),
-			
+
 			// Background overlay
 			Div(
 				Class("fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"),
 				g.Attr("aria-hidden", "true"),
 				g.Attr("onclick", "hideCreateTokenModal()"),
 			),
-			
+
 			// Modal panel
 			Div(
 				Class("inline-block align-bottom bg-white dark:bg-gray-900 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"),
-				
+
 				Form(
 					ID("create-token-form"),
 					g.Attr("onsubmit", "return handleCreateToken(event)"),
-					
+
 					Div(
 						Class("space-y-4"),
-						
+
 						H3(
 							ID("modal-title"),
 							Class("text-lg font-medium leading-6 text-slate-900 dark:text-white"),
 							g.Text("Create SCIM Token"),
 						),
-						
+
 						// Name field
 						Div(
 							Label(
@@ -180,7 +182,7 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 								g.Attr("placeholder", "Production Okta"),
 							),
 						),
-						
+
 						// Description field
 						Div(
 							Label(
@@ -196,7 +198,7 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 								g.Attr("placeholder", "SCIM token for production Okta integration"),
 							),
 						),
-						
+
 						// Scopes field
 						Div(
 							Label(
@@ -217,7 +219,7 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 							P(Class("mt-1 text-xs text-slate-500 dark:text-gray-400"),
 								g.Text("Select one or more scopes (Ctrl/Cmd + Click)")),
 						),
-						
+
 						// Expiry field
 						Div(
 							Label(
@@ -237,7 +239,7 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 							),
 						),
 					),
-					
+
 					// Actions
 					Div(
 						Class("mt-5 sm:mt-6 flex gap-3"),
@@ -256,7 +258,7 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 				),
 			),
 		),
-		
+
 		// Token display modal (shown after creation)
 		e.renderTokenDisplayModal(),
 	)
@@ -270,21 +272,21 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 		g.Attr("aria-labelledby", "token-modal-title"),
 		g.Attr("role", "dialog"),
 		g.Attr("aria-modal", "true"),
-		
+
 		Div(
 			Class("flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0"),
-			
+
 			Div(
 				Class("fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"),
 				g.Attr("aria-hidden", "true"),
 			),
-			
+
 			Div(
 				Class("inline-block align-bottom bg-white dark:bg-gray-900 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"),
-				
+
 				Div(
 					Class("space-y-4"),
-					
+
 					Div(
 						Class("flex items-center gap-3"),
 						Div(
@@ -297,7 +299,7 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 							g.Text("Token Created Successfully"),
 						),
 					),
-					
+
 					Div(
 						Class("rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4"),
 						Div(
@@ -307,7 +309,7 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 								g.Text("Save this token securely. It will not be shown again!")),
 						),
 					),
-					
+
 					Div(
 						Label(
 							Class("block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2"),
@@ -315,13 +317,13 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 						),
 						Div(
 							Class("flex gap-2"),
-						Input(
-							Type("text"),
-							ID("new-token-value"),
-							g.Attr("readonly", ""),
-							Class("flex-1 block w-full rounded-md border-slate-300 bg-slate-50 font-mono text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-							Value(""),
-						),
+							Input(
+								Type("text"),
+								ID("new-token-value"),
+								g.Attr("readonly", ""),
+								Class("flex-1 block w-full rounded-md border-slate-300 bg-slate-50 font-mono text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+								Value(""),
+							),
 							Button(
 								Type("button"),
 								Class("inline-flex items-center gap-2 rounded-md bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700"),
@@ -331,7 +333,7 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 							),
 						),
 					),
-					
+
 					Div(
 						Class("rounded-lg bg-slate-50 dark:bg-gray-800 p-4"),
 						H4(Class("text-sm font-medium text-slate-900 dark:text-white mb-2"),
@@ -346,7 +348,7 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 						),
 					),
 				),
-				
+
 				Div(
 					Class("mt-5 sm:mt-6"),
 					Button(
@@ -555,4 +557,3 @@ func (e *DashboardExtension) HandleTestConnection(c forge.Context) error {
 
 	return c.JSON(http.StatusOK, result)
 }
-

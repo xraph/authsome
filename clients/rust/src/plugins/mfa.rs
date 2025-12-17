@@ -19,14 +19,14 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct EnrollFactorRequest {
-        #[serde(rename = "name")]
-        pub name: String,
         #[serde(rename = "priority")]
         pub priority: FactorPriority,
         #[serde(rename = "type")]
         pub type: FactorType,
         #[serde(rename = "metadata")]
         pub metadata: ,
+        #[serde(rename = "name")]
+        pub name: String,
     }
 
     /// EnrollFactor handles POST /mfa/factors/enroll
@@ -95,14 +95,14 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct InitiateChallengeRequest {
+        #[serde(rename = "userId")]
+        pub user_id: xid.ID,
         #[serde(rename = "context")]
         pub context: String,
         #[serde(rename = "factorTypes")]
         pub factor_types: []FactorType,
         #[serde(rename = "metadata")]
         pub metadata: ,
-        #[serde(rename = "userId")]
-        pub user_id: xid.ID,
     }
 
     /// InitiateChallenge handles POST /mfa/challenge
@@ -116,6 +116,10 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyChallengeRequest {
+        #[serde(rename = "rememberDevice")]
+        pub remember_device: bool,
+        #[serde(rename = "challengeId")]
+        pub challenge_id: xid.ID,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "data")]
@@ -124,10 +128,6 @@ impl MfaPlugin {{
         pub device_info: *DeviceInfo,
         #[serde(rename = "factorId")]
         pub factor_id: xid.ID,
-        #[serde(rename = "rememberDevice")]
-        pub remember_device: bool,
-        #[serde(rename = "challengeId")]
-        pub challenge_id: xid.ID,
     }
 
     /// VerifyChallenge handles POST /mfa/verify
@@ -168,10 +168,10 @@ impl MfaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct ListTrustedDevicesResponse {
-        #[serde(rename = "count")]
-        pub count: i32,
         #[serde(rename = "devices")]
         pub devices: ,
+        #[serde(rename = "count")]
+        pub count: i32,
     }
 
     /// ListTrustedDevices handles GET /mfa/devices
@@ -200,12 +200,12 @@ impl MfaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetPolicyResponse {
-        #[serde(rename = "required_factor_count")]
-        pub required_factor_count: i32,
         #[serde(rename = "allowed_factor_types")]
         pub allowed_factor_types: []string,
         #[serde(rename = "enabled")]
         pub enabled: bool,
+        #[serde(rename = "required_factor_count")]
+        pub required_factor_count: i32,
     }
 
     /// GetPolicy handles GET /mfa/policy

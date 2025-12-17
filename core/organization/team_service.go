@@ -30,10 +30,13 @@ func NewTeamService(repo TeamRepository, memberRepo MemberRepository, cfg Config
 
 // CreateTeam creates a new team in an organization
 func (s *TeamService) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateTeamRequest, creatorUserID xid.ID) (*Team, error) {
-	// Verify creator is member
-	member, err := s.memberRepo.FindByUserAndOrg(ctx, creatorUserID, orgID)
-	if err != nil || member == nil {
-		return nil, fmt.Errorf("only organization members can create teams")
+	// Allow system operations (zero user ID) for SCIM and automated provisioning
+	// For regular user operations, verify creator is a member
+	if !creatorUserID.IsNil() {
+		member, err := s.memberRepo.FindByUserAndOrg(ctx, creatorUserID, orgID)
+		if err != nil || member == nil {
+			return nil, fmt.Errorf("only organization members can create teams")
+		}
 	}
 
 	// Check team limit
@@ -58,6 +61,8 @@ func (s *TeamService) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateT
 		Name:           req.Name,
 		Description:    description,
 		Metadata:       req.Metadata,
+		ProvisionedBy:  &req.ProvisionedBy,
+		ExternalID:     &req.ExternalID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -104,13 +109,16 @@ func (s *TeamService) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeam
 		return nil, TeamNotFound()
 	}
 
-	// Verify updater is admin
-	member, err := s.memberRepo.FindByUserAndOrg(ctx, updaterUserID, team.OrganizationID)
-	if err != nil || member == nil {
-		return nil, NotAdmin()
-	}
-	if member.Role != RoleOwner && member.Role != RoleAdmin {
-		return nil, NotAdmin()
+	// Allow system operations (zero user ID) for SCIM and automated provisioning
+	// For regular user operations, verify updater is admin
+	if !updaterUserID.IsNil() {
+		member, err := s.memberRepo.FindByUserAndOrg(ctx, updaterUserID, team.OrganizationID)
+		if err != nil || member == nil {
+			return nil, NotAdmin()
+		}
+		if member.Role != RoleOwner && member.Role != RoleAdmin {
+			return nil, NotAdmin()
+		}
 	}
 
 	// Update fields
@@ -122,6 +130,12 @@ func (s *TeamService) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeam
 	}
 	if req.Metadata != nil {
 		team.Metadata = req.Metadata
+	}
+	if req.ProvisionedBy != nil {
+		team.ProvisionedBy = req.ProvisionedBy
+	}
+	if req.ExternalID != nil {
+		team.ExternalID = req.ExternalID
 	}
 	team.UpdatedAt = time.Now().UTC()
 
@@ -139,13 +153,16 @@ func (s *TeamService) DeleteTeam(ctx context.Context, id, deleterUserID xid.ID) 
 		return TeamNotFound()
 	}
 
-	// Verify deleter is admin
-	member, err := s.memberRepo.FindByUserAndOrg(ctx, deleterUserID, team.OrganizationID)
-	if err != nil || member == nil {
-		return NotAdmin()
-	}
-	if member.Role != RoleOwner && member.Role != RoleAdmin {
-		return NotAdmin()
+	// Allow system operations (zero user ID) for SCIM and automated provisioning
+	// For regular user operations, verify deleter is admin
+	if !deleterUserID.IsNil() {
+		member, err := s.memberRepo.FindByUserAndOrg(ctx, deleterUserID, team.OrganizationID)
+		if err != nil || member == nil {
+			return NotAdmin()
+		}
+		if member.Role != RoleOwner && member.Role != RoleAdmin {
+			return NotAdmin()
+		}
 	}
 
 	return s.repo.Delete(ctx, id)
@@ -158,13 +175,16 @@ func (s *TeamService) AddTeamMember(ctx context.Context, teamID, memberID, adder
 		return TeamNotFound()
 	}
 
-	// Verify adder is admin
-	member, err := s.memberRepo.FindByUserAndOrg(ctx, adderUserID, team.OrganizationID)
-	if err != nil || member == nil {
-		return NotAdmin()
-	}
-	if member.Role != RoleOwner && member.Role != RoleAdmin {
-		return NotAdmin()
+	// Allow system operations (zero user ID) for SCIM and automated provisioning
+	// For regular user operations, verify adder is admin
+	if !adderUserID.IsNil() {
+		member, err := s.memberRepo.FindByUserAndOrg(ctx, adderUserID, team.OrganizationID)
+		if err != nil || member == nil {
+			return NotAdmin()
+		}
+		if member.Role != RoleOwner && member.Role != RoleAdmin {
+			return NotAdmin()
+		}
 	}
 
 	now := time.Now().UTC()
@@ -186,13 +206,16 @@ func (s *TeamService) RemoveTeamMember(ctx context.Context, teamID, memberID, re
 		return TeamNotFound()
 	}
 
-	// Verify remover is admin
-	member, err := s.memberRepo.FindByUserAndOrg(ctx, removerUserID, team.OrganizationID)
-	if err != nil || member == nil {
-		return NotAdmin()
-	}
-	if member.Role != RoleOwner && member.Role != RoleAdmin {
-		return NotAdmin()
+	// Allow system operations (zero user ID) for SCIM and automated provisioning
+	// For regular user operations, verify remover is admin
+	if !removerUserID.IsNil() {
+		member, err := s.memberRepo.FindByUserAndOrg(ctx, removerUserID, team.OrganizationID)
+		if err != nil || member == nil {
+			return NotAdmin()
+		}
+		if member.Role != RoleOwner && member.Role != RoleAdmin {
+			return NotAdmin()
+		}
 	}
 
 	return s.repo.RemoveMember(ctx, teamID, memberID)

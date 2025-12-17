@@ -19,6 +19,8 @@ impl IdverificationPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateVerificationSessionRequest {
+        #[serde(rename = "successUrl")]
+        pub success_url: String,
         #[serde(rename = "cancelUrl")]
         pub cancel_url: String,
         #[serde(rename = "config")]
@@ -29,14 +31,12 @@ impl IdverificationPlugin {{
         pub provider: String,
         #[serde(rename = "requiredChecks")]
         pub required_checks: []string,
-        #[serde(rename = "successUrl")]
-        pub success_url: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct CreateVerificationSessionResponse {
         #[serde(rename = "session")]
-        pub session: *schema.IdentityVerificationSession,
+        pub session: *base.IdentityVerificationSession,
     }
 
     /// CreateVerificationSession creates a new verification session
@@ -52,7 +52,7 @@ POST /verification/sessions
     #[derive(Debug, Deserialize)]
     pub struct GetVerificationSessionResponse {
         #[serde(rename = "session")]
-        pub session: *schema.IdentityVerificationSession,
+        pub session: *base.IdentityVerificationSession,
     }
 
     /// GetVerificationSession retrieves a verification session
@@ -67,7 +67,7 @@ GET /verification/sessions/:id
     #[derive(Debug, Deserialize)]
     pub struct GetVerificationResponse {
         #[serde(rename = "verification")]
-        pub verification: *schema.IdentityVerification,
+        pub verification: *base.IdentityVerification,
     }
 
     /// GetVerification retrieves a verification by ID
@@ -81,14 +81,14 @@ GET /verification/:id
 
     #[derive(Debug, Deserialize)]
     pub struct GetUserVerificationsResponse {
+        #[serde(rename = "total")]
+        pub total: i32,
+        #[serde(rename = "verifications")]
+        pub verifications: []*base.IdentityVerification,
         #[serde(rename = "limit")]
         pub limit: i32,
         #[serde(rename = "offset")]
         pub offset: i32,
-        #[serde(rename = "total")]
-        pub total: i32,
-        #[serde(rename = "verifications")]
-        pub verifications: []*schema.IdentityVerification,
     }
 
     /// GetUserVerifications retrieves all verifications for the current user
@@ -103,7 +103,7 @@ GET /verification/me
     #[derive(Debug, Deserialize)]
     pub struct GetUserVerificationStatusResponse {
         #[serde(rename = "status")]
-        pub status: *schema.UserVerificationStatus,
+        pub status: *base.UserVerificationStatus,
     }
 
     /// GetUserVerificationStatus retrieves the verification status for the current user
@@ -168,7 +168,7 @@ POST /verification/admin/users/:userId/unblock
     #[derive(Debug, Deserialize)]
     pub struct AdminGetUserVerificationStatusResponse {
         #[serde(rename = "status")]
-        pub status: *schema.UserVerificationStatus,
+        pub status: *base.UserVerificationStatus,
     }
 
     /// AdminGetUserVerificationStatus retrieves verification status for any user (admin only)
@@ -182,14 +182,14 @@ GET /verification/admin/users/:userId/status
 
     #[derive(Debug, Deserialize)]
     pub struct AdminGetUserVerificationsResponse {
+        #[serde(rename = "limit")]
+        pub limit: i32,
         #[serde(rename = "offset")]
         pub offset: i32,
         #[serde(rename = "total")]
         pub total: i32,
         #[serde(rename = "verifications")]
-        pub verifications: []*schema.IdentityVerification,
-        #[serde(rename = "limit")]
-        pub limit: i32,
+        pub verifications: []*base.IdentityVerification,
     }
 
     /// AdminGetUserVerifications retrieves all verifications for any user (admin only)

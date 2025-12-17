@@ -525,6 +525,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get a specific invoice by ID"),
 			forge.WithTags("Subscription", "Invoices"),
 		)
+
+		invoiceGroup.POST("/sync", p.handleSyncInvoices,
+			forge.WithName("subscription.invoices.sync"),
+			forge.WithSummary("Sync invoices from Stripe"),
+			forge.WithDescription("Backfill and sync invoices from Stripe to local database"),
+			forge.WithTags("Subscription", "Invoices"),
+		)
 	}
 
 	// Usage routes

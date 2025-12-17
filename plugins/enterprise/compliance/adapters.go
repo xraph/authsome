@@ -36,7 +36,7 @@ func (a *AuditServiceAdapter) LogEvent(ctx context.Context, event *AuditEvent) e
 	}
 
 	// Log to core audit service
-	// Note: core audit.Service doesn't have org scoping yet, so we include it in metadata
+	// Note: core audit.Service doesn't have app scoping yet, so we include it in metadata
 	return a.svc.Log(
 		ctx,
 		nil, // userID - not available in AuditEvent
@@ -56,7 +56,7 @@ func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, appID string) (*
 
 	// Query oldest audit event
 	// AuthSome's audit service doesn't have app filtering yet
-	// TODO: Update when multi-tenancy is fully integrated
+	// TODO: Update when app scoping is fully integrated
 	filter := &audit.ListEventsFilter{
 		PaginationParams: pagination.PaginationParams{Limit: 1, Offset: 0},
 	}
@@ -91,7 +91,7 @@ func (a *UserServiceAdapter) ListByApp(ctx context.Context, appID string) ([]*Us
 		return nil, fmt.Errorf("user service not available")
 	}
 
-	// TODO: Update when multi-tenancy plugin provides app-scoped user listing
+	// TODO: Update when multiapp plugin provides app-scoped user listing
 	// For now, return empty list
 	return []*User{}, nil
 }
@@ -121,9 +121,9 @@ func (a *UserServiceAdapter) GetMFAStatus(ctx context.Context, userID string) (b
 	return false, nil
 }
 
-// AppServiceAdapter adapts the app service (from multi-tenancy plugin)
+// AppServiceAdapter adapts the app service (from multiapp plugin)
 type AppServiceAdapter struct {
-	svc interface{} // Will be app.Service when multi-tenancy plugin is loaded
+	svc interface{} // Will be app.Service when multiapp plugin is loaded
 }
 
 // NewAppServiceAdapter creates a new app service adapter
@@ -134,7 +134,7 @@ func NewAppServiceAdapter(svc interface{}) *AppServiceAdapter {
 // Get retrieves an app by ID
 func (a *AppServiceAdapter) Get(ctx context.Context, id string) (*App, error) {
 	if a.svc == nil {
-		// Multi-tenancy plugin not loaded - return default app
+		// Multiapp plugin not loaded - return default app
 		return &App{
 			ID:   "platform",
 			Name: "Platform",
@@ -142,7 +142,7 @@ func (a *AppServiceAdapter) Get(ctx context.Context, id string) (*App, error) {
 	}
 
 	// TODO: Cast to actual app service and call Get
-	// This requires the multi-tenancy plugin to be implemented
+	// This requires the multiapp plugin to be implemented
 	return &App{
 		ID:   id,
 		Name: "App",

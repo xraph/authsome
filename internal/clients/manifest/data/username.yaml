@@ -19,19 +19,24 @@ routes:
         user: '*user.User!'
       response_type: SignInResponse
 types:
-    - name: SignInRequest
+    - name: SignUpResponse
       fields:
-        password: string!
-        remember: bool!
-        username: string!
+        message: string!
+        status: string!
     - name: SignInResponse
       fields:
         session: '*session.Session!'
         token: string!
         user: '*user.User!'
+    - name: AccountLockedResponse
+      fields:
+        code: string!
+        locked_minutes: int!
+        locked_until: time.Time!
+        message: string!
     - name: Plugin
       fields:
-        "": '*repo.UsernameRepository'
+        "": '*Service'
     - name: Config
       fields:
         allowUsernameLogin: bool!
@@ -51,6 +56,25 @@ types:
         requireNumber: bool!
         requireSpecialChar: bool!
         requireUppercase: bool!
+    - name: RateLimitRule
+      fields:
+        max: int!
+        window: time.Duration!
+    - name: Service
+      fields:
+        "": Config
+    - name: Handler
+      fields:
+        "": '*repo.TwoFARepository'
+    - name: SignUpRequest
+      fields:
+        password: string!
+        username: string!
+    - name: TwoFARequiredResponse
+      fields:
+        device_id: string!
+        require_twofa: bool!
+        user: '*user.User!'
     - name: RateLimitConfig
       fields:
         enabled: bool!
@@ -61,35 +85,11 @@ types:
         signinPerUser: RateLimitRule!
         signupPerIp: RateLimitRule!
         useRedis: bool!
-    - name: RateLimitRule
-      fields:
-        max: int!
-        window: time.Duration!
-    - name: Service
-      fields:
-        "": Config
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: SignUpResponse
-      fields:
-        message: string!
-        status: string!
-    - name: TwoFARequiredResponse
-      fields:
-        device_id: string!
-        require_twofa: bool!
-        user: '*user.User!'
-    - name: AccountLockedResponse
-      fields:
-        code: string!
-        locked_minutes: int!
-        locked_until: time.Time!
-        message: string!
     - name: AccountLockoutError
       fields:
         "": int
-    - name: SignUpRequest
+    - name: SignInRequest
       fields:
         password: string!
+        remember: bool!
         username: string!

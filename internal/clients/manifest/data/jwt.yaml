@@ -25,9 +25,6 @@ routes:
       path: /verify
       request_type: jwt.VerifyTokenRequest
 types:
-    - name: Handler
-      fields:
-        "": '*jwt.Service'
     - name: Plugin
       fields:
         "": Config
@@ -38,3 +35,6 @@ types:
         issuer: string!
         refreshExpirySeconds: int!
         signingAlgorithm: string!
+    - name: Handler
+      fields:
+        "": '*jwt.Service'

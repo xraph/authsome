@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/forge"
 )
 
@@ -111,6 +113,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		p.detectionProvider,
 		auditSvc,
 		notificationSvc,
+		auth, // Pass auth instance for service registry access
 	)
 
 	// Initialize handler
@@ -422,9 +425,54 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		return nil
 	}
 
-	// Register authentication hooks for automatic geofence checking
-	// hookRegistry.RegisterBeforeSignIn(p.onBeforeSignIn)
-	// hookRegistry.RegisterAfterSignIn(p.onAfterSignIn)
+	// Register session security notification hooks
+	if p.config.Notifications.Enabled {
+		hookRegistry.RegisterAfterSignIn(func(ctx context.Context, response *responses.AuthResponse) error {
+			if response == nil || response.User == nil {
+				return nil
+			}
+
+			userID := response.User.ID
+
+			// Extract app ID from context
+			appID, ok := ctx.Value("app_id").(xid.ID)
+			if !ok || appID.IsNil() {
+				// Try alternative context key
+				if appIDPtr, ok := ctx.Value("appID").(*xid.ID); ok && appIDPtr != nil {
+					appID = *appIDPtr
+				} else {
+					return nil
+				}
+			}
+
+			// Extract IP address from context
+			ipAddress, ok := ctx.Value("ip_address").(string)
+			if !ok || ipAddress == "" {
+				// Try alternative extraction
+				if req, ok := ctx.Value("forge.request").(interface{ RemoteAddr() string }); ok {
+					ipAddress = req.RemoteAddr()
+				}
+				if ipAddress == "" {
+					return nil
+				}
+			}
+
+			// Perform security checks asynchronously (don't block authentication)
+			go func() {
+				bgCtx := context.Background()
+				// Copy important context values
+				bgCtx = context.WithValue(bgCtx, "app_id", appID)
+
+				if err := p.service.CheckSessionSecurity(bgCtx, userID, appID, ipAddress); err != nil {
+					fmt.Printf("[Geofence] Session security check failed: %v\n", err)
+				}
+			}()
+
+			return nil
+		})
+
+		fmt.Println("[Geofence] Registered session security notification hooks")
+	}
 
 	return nil
 }

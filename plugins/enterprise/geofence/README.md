@@ -166,7 +166,7 @@ auth:
 
 ```go
 rule := &geofence.GeofenceRule{
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "Block Sanctioned Countries",
     Description: "Prevent access from sanctioned countries",
     Enabled: true,
@@ -184,7 +184,7 @@ err := service.repo.CreateRule(ctx, rule)
 
 ```go
 rule := &geofence.GeofenceRule{
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "US Only",
     Description: "Allow access only from United States",
     Enabled: true,
@@ -204,7 +204,7 @@ centerLon := -122.4194
 radiusKm := 10.0
 
 rule := &geofence.GeofenceRule{
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "Office Geofence",
     Description: "Access only within 10km of San Francisco office",
     Enabled: true,
@@ -230,7 +230,7 @@ coordinates := [][2]float64{
 }
 
 rule := &geofence.GeofenceRule{
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "Campus Boundary",
     Description: "Access only within campus boundaries",
     Enabled: true,
@@ -246,7 +246,7 @@ rule := &geofence.GeofenceRule{
 
 ```go
 rule := &geofence.GeofenceRule{
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "Block Anonymous Connections",
     Description: "Prevent VPN, proxy, and Tor access",
     Enabled: true,
@@ -273,7 +273,7 @@ timeRestrictions := []geofence.TimeRestrictionRule{
 }
 
 rule := &geofence.GeofenceRule{
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "Business Hours Only",
     Description: "Access only during business hours",
     Enabled: true,
@@ -319,7 +319,7 @@ router.Group("/sensitive").Use(noVPN)
 // Perform ad-hoc location check
 req := &geofence.LocationCheckRequest{
     UserID: userID,
-    OrganizationID: orgID,
+    AppID: orgID,
     IPAddress: "8.8.8.8",
     EventType: "login",
 }
@@ -349,7 +349,7 @@ if result.TravelAlert {
 // Add a trusted location
 trustedLoc := &geofence.TrustedLocation{
     UserID: userID,
-    OrganizationID: orgID,
+    AppID: orgID,
     Name: "Home",
     Country: "United States",
     CountryCode: "US",
@@ -368,7 +368,7 @@ err := service.repo.CreateTrustedLocation(ctx, trustedLoc)
 
 ```go
 // Get pending travel alerts for organization
-alerts, err := service.repo.GetPendingTravelAlerts(ctx, orgID)
+alerts, err := service.repo.GetPendingTravelAlerts(ctx, appID)
 
 for _, alert := range alerts {
     if alert.Severity == "critical" {
@@ -533,17 +533,134 @@ rule := &geofence.GeofenceRule{
 }
 ```
 
+## Session Security Notifications
+
+The geofence plugin integrates with the notification system to automatically alert users about security-relevant session events.
+
+### New Location Login Notifications
+
+Automatically notify users when they log in from a significantly different location:
+
+```yaml
+auth:
+  geofence:
+    notifications:
+      enabled: true
+      newLocationEnabled: true
+      newLocationThresholdKm: 100  # Trigger at 100km distance from last location
+```
+
+**How it works:**
+1. User signs in from a new location
+2. Geofence plugin detects location change > threshold
+3. Email sent to user with location details
+4. Location stored for future comparisons
+
+**Example notification:**
+> "We noticed a new sign-in to your account from San Francisco, CA (500 km from previous location: Los Angeles, CA) at 2025-12-14 10:30 AM. IP: 8.8.8.8"
+
+### Suspicious Login Detection
+
+Automatically detect and notify users about suspicious login patterns:
+
+```yaml
+auth:
+  geofence:
+    notifications:
+      enabled: true
+      suspiciousLoginEnabled: true
+      suspiciousLoginScoreThreshold: 75.0  # IPQS fraud score threshold
+      impossibleTravelEnabled: true
+      vpnDetectionEnabled: true
+      proxyDetectionEnabled: true
+      torDetectionEnabled: true
+```
+
+**Detection triggers:**
+- **Impossible Travel**: e.g., 5000km in 1 hour (faster than aircraft)
+- **VPN Usage**: VPN connection detected (configurable providers)
+- **Proxy Detection**: HTTP/SOCKS proxy detected
+- **Tor Exit Node**: Connection from Tor network
+- **High Fraud Score**: IPQS score above threshold (default: 75/100)
+
+**Example notifications:**
+> "Suspicious login detected: Impossible travel - 8500 km in 2.5 hours (3400 km/h, max: 900 km/h). Please verify this was you."
+
+> "Suspicious login detected: VPN detected - NordVPN. If this wasn't you, secure your account immediately."
+
+### Configuration Reference
+
+```yaml
+auth:
+  geofence:
+    # Enable notification integration
+    notifications:
+      enabled: true
+      
+      # New location alerts
+      newLocationEnabled: true
+      newLocationThresholdKm: 100  # Distance threshold in km
+      
+      # Suspicious login alerts
+      suspiciousLoginEnabled: true
+      suspiciousLoginScoreThreshold: 75.0  # 0-100 fraud score
+      
+      # Detection types for suspicious login
+      impossibleTravelEnabled: true
+      vpnDetectionEnabled: true
+      proxyDetectionEnabled: true
+      torDetectionEnabled: true
+    
+    # Geolocation provider (required for location tracking)
+    geolocation:
+      provider: maxmind
+      maxmindLicenseKey: "your-license-key"
+      maxmindDatabasePath: "/path/to/GeoLite2-City.mmdb"
+    
+    # Detection provider (required for suspicious login)
+    detection:
+      detectVpn: true
+      detectProxy: true
+      detectTor: true
+      provider: ipqs
+      ipqsKey: "your-ipqs-key"
+      ipqsStrictness: 1
+```
+
+### Disabling Notifications
+
+To disable session security notifications while keeping geofencing active:
+
+```yaml
+auth:
+  geofence:
+    enabled: true  # Geofencing still active
+    notifications:
+      enabled: false  # Disable notifications
+```
+
+Or disable specific notification types:
+
+```yaml
+auth:
+  geofence:
+    notifications:
+      enabled: true
+      newLocationEnabled: false  # Disable new location alerts
+      suspiciousLoginEnabled: true  # Keep suspicious login alerts
+```
+
 ## Multi-Tenancy Support
 
 The geofencing plugin fully supports AuthSome's multi-tenancy:
 
 ```go
-// Organization-wide rules
-rule.OrganizationID = orgID
-rule.UserID = nil  // Applies to all users in org
+// App-wide rules
+rule.AppID = appID
+rule.UserID = nil  // Applies to all users in app
 
 // User-specific rules
-rule.OrganizationID = orgID
+rule.AppID = appID
 rule.UserID = &specificUserID  // Only for this user
 ```
 

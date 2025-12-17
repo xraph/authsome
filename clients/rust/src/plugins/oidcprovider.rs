@@ -19,36 +19,36 @@ impl OidcproviderPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RegisterClientRequest {
-        #[serde(rename = "client_name")]
-        pub client_name: String,
-        #[serde(rename = "policy_uri")]
-        pub policy_uri: String,
-        #[serde(rename = "redirect_uris")]
-        pub redirect_uris: []string,
         #[serde(rename = "require_pkce")]
         pub require_pkce: bool,
-        #[serde(rename = "scope")]
-        pub scope: String,
-        #[serde(rename = "logo_uri")]
-        pub logo_uri: String,
-        #[serde(rename = "post_logout_redirect_uris")]
-        pub post_logout_redirect_uris: []string,
+        #[serde(rename = "response_types")]
+        pub response_types: []string,
+        #[serde(rename = "application_type")]
+        pub application_type: String,
+        #[serde(rename = "client_name")]
+        pub client_name: String,
         #[serde(rename = "grant_types")]
         pub grant_types: []string,
+        #[serde(rename = "policy_uri")]
+        pub policy_uri: String,
         #[serde(rename = "require_consent")]
         pub require_consent: bool,
+        #[serde(rename = "trusted_client")]
+        pub trusted_client: bool,
+        #[serde(rename = "logo_uri")]
+        pub logo_uri: String,
+        #[serde(rename = "redirect_uris")]
+        pub redirect_uris: []string,
         #[serde(rename = "token_endpoint_auth_method")]
         pub token_endpoint_auth_method: String,
         #[serde(rename = "tos_uri")]
         pub tos_uri: String,
         #[serde(rename = "contacts")]
         pub contacts: []string,
-        #[serde(rename = "response_types")]
-        pub response_types: []string,
-        #[serde(rename = "trusted_client")]
-        pub trusted_client: bool,
-        #[serde(rename = "application_type")]
-        pub application_type: String,
+        #[serde(rename = "scope")]
+        pub scope: String,
+        #[serde(rename = "post_logout_redirect_uris")]
+        pub post_logout_redirect_uris: []string,
     }
 
     /// RegisterClient handles dynamic client registration (admin only)
@@ -78,34 +78,34 @@ impl OidcproviderPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdateClientRequest {
-        #[serde(rename = "token_endpoint_auth_method")]
-        pub token_endpoint_auth_method: String,
+        #[serde(rename = "require_pkce")]
+        pub require_pkce: *bool,
         #[serde(rename = "tos_uri")]
         pub tos_uri: String,
         #[serde(rename = "trusted_client")]
         pub trusted_client: *bool,
         #[serde(rename = "allowed_scopes")]
         pub allowed_scopes: []string,
-        #[serde(rename = "contacts")]
-        pub contacts: []string,
         #[serde(rename = "grant_types")]
         pub grant_types: []string,
-        #[serde(rename = "name")]
-        pub name: String,
         #[serde(rename = "policy_uri")]
         pub policy_uri: String,
+        #[serde(rename = "post_logout_redirect_uris")]
+        pub post_logout_redirect_uris: []string,
         #[serde(rename = "redirect_uris")]
         pub redirect_uris: []string,
         #[serde(rename = "require_consent")]
         pub require_consent: *bool,
-        #[serde(rename = "require_pkce")]
-        pub require_pkce: *bool,
-        #[serde(rename = "logo_uri")]
-        pub logo_uri: String,
-        #[serde(rename = "post_logout_redirect_uris")]
-        pub post_logout_redirect_uris: []string,
         #[serde(rename = "response_types")]
         pub response_types: []string,
+        #[serde(rename = "token_endpoint_auth_method")]
+        pub token_endpoint_auth_method: String,
+        #[serde(rename = "contacts")]
+        pub contacts: []string,
+        #[serde(rename = "logo_uri")]
+        pub logo_uri: String,
+        #[serde(rename = "name")]
+        pub name: String,
     }
 
     /// UpdateClient updates an existing OAuth client
@@ -159,24 +159,24 @@ impl OidcproviderPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct TokenRequest {
+        #[serde(rename = "code")]
+        pub code: String,
+        #[serde(rename = "code_verifier")]
+        pub code_verifier: String,
+        #[serde(rename = "grant_type")]
+        pub grant_type: String,
+        #[serde(rename = "redirect_uri")]
+        pub redirect_uri: String,
+        #[serde(rename = "refresh_token")]
+        pub refresh_token: String,
+        #[serde(rename = "scope")]
+        pub scope: String,
         #[serde(rename = "audience")]
         pub audience: String,
         #[serde(rename = "client_id")]
         pub client_id: String,
         #[serde(rename = "client_secret")]
         pub client_secret: String,
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "code_verifier")]
-        pub code_verifier: String,
-        #[serde(rename = "redirect_uri")]
-        pub redirect_uri: String,
-        #[serde(rename = "scope")]
-        pub scope: String,
-        #[serde(rename = "grant_type")]
-        pub grant_type: String,
-        #[serde(rename = "refresh_token")]
-        pub refresh_token: String,
     }
 
     /// Token handles the token endpoint

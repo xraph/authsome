@@ -19,6 +19,17 @@ type ServiceInterface interface {
 	GetSession(ctx context.Context, token string) (*responses.AuthResponse, error)
 	UpdateUser(ctx context.Context, id xid.ID, req *user.UpdateUserRequest) (*user.User, error)
 	RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error)
+
+	// Password management
+	RequestPasswordReset(ctx context.Context, email string) (string, error)
+	ResetPassword(ctx context.Context, token, newPassword string) error
+	ValidateResetToken(ctx context.Context, token string) (bool, error)
+	ChangePassword(ctx context.Context, userID xid.ID, oldPassword, newPassword string) error
+
+	// Email change
+	RequestEmailChange(ctx context.Context, userID xid.ID, newEmail string) (string, error)
+	ConfirmEmailChange(ctx context.Context, token string) error
+	ValidateEmailChangeToken(ctx context.Context, token string) (bool, error)
 }
 
 // Ensure Service implements ServiceInterface

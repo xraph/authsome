@@ -1,0 +1,216 @@
+plugin_id: cms
+version: 1.0.0
+routes:
+    - name: ListEntries
+      description: |-
+        ListEntries lists entries for a content type
+        GET /cms/:type
+      method: GET
+      path: /listentries
+    - name: CreateEntry
+      description: |-
+        CreateEntry creates a new content entry
+        POST /cms/:type
+      method: POST
+      path: /createentry
+      request_type: core.CreateEntryRequest
+    - name: GetEntry
+      description: |-
+        GetEntry retrieves a content entry by ID
+        GET /cms/:type/:id
+      method: GET
+      path: /getentry
+    - name: UpdateEntry
+      description: |-
+        UpdateEntry updates a content entry
+        PUT /cms/:type/:id
+      method: PUT
+      path: /updateentry
+      request_type: core.UpdateEntryRequest
+    - name: DeleteEntry
+      description: |-
+        DeleteEntry deletes a content entry
+        DELETE /cms/:type/:id
+      method: DELETE
+      path: /deleteentry
+    - name: PublishEntry
+      description: |-
+        PublishEntry publishes a content entry
+        POST /cms/:type/:id/publish
+      method: POST
+      path: /publish
+      request_type: core.PublishEntryRequest
+    - name: UnpublishEntry
+      description: |-
+        UnpublishEntry unpublishes a content entry
+        POST /cms/:type/:id/unpublish
+      method: POST
+      path: /unpublish
+    - name: ArchiveEntry
+      description: |-
+        ArchiveEntry archives a content entry
+        POST /cms/:type/:id/archive
+      method: POST
+      path: /archive
+    - name: QueryEntries
+      description: |-
+        QueryEntries performs an advanced query on entries
+        POST /cms/:type/query
+      method: POST
+      path: /query
+    - name: BulkPublish
+      description: |-
+        BulkPublish publishes multiple entries
+        POST /cms/:type/bulk/publish
+      method: POST
+      path: /publish
+      request:
+        ids: '[]string!'
+      request_type: BulkRequest
+    - name: BulkUnpublish
+      description: |-
+        BulkUnpublish unpublishes multiple entries
+        POST /cms/:type/bulk/unpublish
+      method: POST
+      path: /unpublish
+      request:
+        ids: '[]string!'
+      request_type: BulkRequest
+    - name: BulkDelete
+      description: |-
+        BulkDelete deletes multiple entries
+        POST /cms/:type/bulk/delete
+      method: POST
+      path: /delete
+      request:
+        ids: '[]string!'
+      request_type: BulkRequest
+    - name: GetEntryStats
+      description: |-
+        GetEntryStats returns statistics for entries
+        GET /cms/:type/stats
+      method: GET
+      path: /stats
+    - name: ListContentTypes
+      description: |-
+        ListContentTypes lists all content types
+        GET /cms/types
+      method: GET
+      path: /listcontenttypes
+    - name: CreateContentType
+      description: |-
+        CreateContentType creates a new content type
+        POST /cms/types
+      method: POST
+      path: /createcontenttype
+      request_type: core.CreateContentTypeRequest
+    - name: GetContentType
+      description: |-
+        GetContentType retrieves a content type by slug
+        GET /cms/types/:slug
+      method: GET
+      path: /:slug
+    - name: UpdateContentType
+      description: |-
+        UpdateContentType updates a content type
+        PUT /cms/types/:slug
+      method: PUT
+      path: /:slug
+      request_type: core.UpdateContentTypeRequest
+    - name: DeleteContentType
+      description: |-
+        DeleteContentType deletes a content type
+        DELETE /cms/types/:slug
+      method: DELETE
+      path: /:slug
+    - name: ListFields
+      description: |-
+        ListFields lists all fields for a content type
+        GET /cms/types/:slug/fields
+      method: GET
+      path: /listfields
+    - name: AddField
+      description: |-
+        AddField adds a new field to a content type
+        POST /cms/types/:slug/fields
+      method: POST
+      path: /addfield
+      request_type: core.CreateFieldRequest
+    - name: GetField
+      description: |-
+        GetField retrieves a field by slug
+        GET /cms/types/:slug/fields/:fieldSlug
+      method: GET
+      path: /:fieldSlug
+    - name: UpdateField
+      description: |-
+        UpdateField updates a field
+        PUT /cms/types/:slug/fields/:fieldSlug
+      method: PUT
+      path: /:fieldSlug
+      request_type: core.UpdateFieldRequest
+    - name: DeleteField
+      description: |-
+        DeleteField deletes a field
+        DELETE /cms/types/:slug/fields/:fieldSlug
+      method: DELETE
+      path: /:fieldSlug
+    - name: ReorderFields
+      description: |-
+        ReorderFields reorders fields in a content type
+        POST /cms/types/:slug/fields/reorder
+      method: POST
+      path: /reorder
+      request_type: core.ReorderFieldsRequest
+    - name: GetFieldTypes
+      description: |-
+        GetFieldTypes returns all available field types
+        GET /cms/field-types
+      method: GET
+      path: /field-types
+    - name: ListRevisions
+      description: |-
+        ListRevisions lists revisions for an entry
+        GET /cms/:type/:id/revisions
+      method: GET
+      path: /listrevisions
+    - name: GetRevision
+      description: |-
+        GetRevision retrieves a specific revision
+        GET /cms/:type/:id/revisions/:version
+      method: GET
+      path: /:version
+    - name: RestoreRevision
+      description: |-
+        RestoreRevision restores an entry to a specific revision
+        POST /cms/:type/:id/revisions/:version/restore
+      method: POST
+      path: /:version/restore
+    - name: CompareRevisions
+      description: |-
+        CompareRevisions compares two revisions
+        GET /cms/:type/:id/revisions/compare?from=:v1&to=:v2
+      method: GET
+      path: /compare
+types:
+    - name: ContentEntryHandler
+      fields:
+        "": '*service.ContentTypeService'
+    - name: BulkRequest
+      fields:
+        ids: '[]string!'
+    - name: ContentTypeHandler
+      fields:
+        "": '*service.ContentFieldService'
+    - name: ErrorResponse
+      fields:
+        code: string!
+        details: '!'
+        error: string!
+    - name: SuccessResponse
+      fields:
+        data: '!'
+        message: string!
+    - name: RevisionHandler
+      fields:
+        "": '*service.ContentTypeService'

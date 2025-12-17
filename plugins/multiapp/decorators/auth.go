@@ -223,3 +223,68 @@ func (s *MultiTenantAuthService) RefreshSession(ctx context.Context, refreshToke
 
 	return response, nil
 }
+
+// RequestPasswordReset initiates a password reset flow
+func (s *MultiTenantAuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	return s.authService.RequestPasswordReset(ctx, email)
+}
+
+// ResetPassword completes the password reset flow
+func (s *MultiTenantAuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	return s.authService.ResetPassword(ctx, token, newPassword)
+}
+
+// ValidateResetToken checks if a reset token is valid
+func (s *MultiTenantAuthService) ValidateResetToken(ctx context.Context, token string) (bool, error) {
+	return s.authService.ValidateResetToken(ctx, token)
+}
+
+// ChangePassword changes a user's password after verifying the old password
+func (s *MultiTenantAuthService) ChangePassword(ctx context.Context, userID xid.ID, oldPassword, newPassword string) error {
+	// Get organization from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return errs.NotFound("app ID not found in context")
+	}
+
+	// Verify user is a member of the organization
+	member, err := s.appService.Member.FindMember(ctx, appID, userID)
+	if err != nil {
+		return errs.InternalServerError("failed to check organization membership", err)
+	}
+	if member.Status != app.MemberStatusActive {
+		return fmt.Errorf("user membership is not active")
+	}
+
+	return s.authService.ChangePassword(ctx, userID, oldPassword, newPassword)
+}
+
+// RequestEmailChange initiates an email change flow
+func (s *MultiTenantAuthService) RequestEmailChange(ctx context.Context, userID xid.ID, newEmail string) (string, error) {
+	// Get organization from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok {
+		return "", errs.NotFound("app ID not found in context")
+	}
+
+	// Verify user is a member of the organization
+	member, err := s.appService.Member.FindMember(ctx, appID, userID)
+	if err != nil {
+		return "", errs.InternalServerError("failed to check organization membership", err)
+	}
+	if member.Status != app.MemberStatusActive {
+		return "", fmt.Errorf("user membership is not active")
+	}
+
+	return s.authService.RequestEmailChange(ctx, userID, newEmail)
+}
+
+// ConfirmEmailChange completes the email change flow
+func (s *MultiTenantAuthService) ConfirmEmailChange(ctx context.Context, token string) error {
+	return s.authService.ConfirmEmailChange(ctx, token)
+}
+
+// ValidateEmailChangeToken checks if an email change token is valid
+func (s *MultiTenantAuthService) ValidateEmailChangeToken(ctx context.Context, token string) (bool, error) {
+	return s.authService.ValidateEmailChangeToken(ctx, token)
+}

@@ -3,31 +3,35 @@
 import { ClientPlugin } from './plugin';
 import { createErrorFromResponse } from './errors';
 import * as types from './types';
-import { MagiclinkPlugin } from './plugins/magiclink';
+import { CmsPlugin } from './plugins/cms';
+import { JwtPlugin } from './plugins/jwt';
+import { WebhookPlugin } from './plugins/webhook';
+import { AnonymousPlugin } from './plugins/anonymous';
+import { EmailverificationPlugin } from './plugins/emailverification';
 import { NotificationPlugin } from './plugins/notification';
-import { PasskeyPlugin } from './plugins/passkey';
-import { UsernamePlugin } from './plugins/username';
+import { OidcproviderPlugin } from './plugins/oidcprovider';
+import { SsoPlugin } from './plugins/sso';
+import { IdverificationPlugin } from './plugins/idverification';
+import { SecretsPlugin } from './plugins/secrets';
+import { ConsentPlugin } from './plugins/consent';
+import { ImpersonationPlugin } from './plugins/impersonation';
+import { MultiappPlugin } from './plugins/multiapp';
+import { SocialPlugin } from './plugins/social';
 import { ApikeyPlugin } from './plugins/apikey';
 import { BackupauthPlugin } from './plugins/backupauth';
-import { ConsentPlugin } from './plugins/consent';
-import { IdverificationPlugin } from './plugins/idverification';
-import { MultiappPlugin } from './plugins/multiapp';
-import { OidcproviderPlugin } from './plugins/oidcprovider';
-import { PhonePlugin } from './plugins/phone';
+import { MagiclinkPlugin } from './plugins/magiclink';
+import { UsernamePlugin } from './plugins/username';
 import { AdminPlugin } from './plugins/admin';
+import { CompliancePlugin } from './plugins/compliance';
+import { StepupPlugin } from './plugins/stepup';
+import { MultisessionPlugin } from './plugins/multisession';
+import { OrganizationPlugin } from './plugins/organization';
+import { PasskeyPlugin } from './plugins/passkey';
+import { PermissionsPlugin } from './plugins/permissions';
+import { PhonePlugin } from './plugins/phone';
 import { EmailotpPlugin } from './plugins/emailotp';
 import { MfaPlugin } from './plugins/mfa';
-import { OrganizationPlugin } from './plugins/organization';
-import { SocialPlugin } from './plugins/social';
-import { SsoPlugin } from './plugins/sso';
-import { AnonymousPlugin } from './plugins/anonymous';
-import { StepupPlugin } from './plugins/stepup';
-import { JwtPlugin } from './plugins/jwt';
-import { MultisessionPlugin } from './plugins/multisession';
 import { TwofaPlugin } from './plugins/twofa';
-import { WebhookPlugin } from './plugins/webhook';
-import { CompliancePlugin } from './plugins/compliance';
-import { ImpersonationPlugin } from './plugins/impersonation';
 
 /**
  * AuthSome client configuration
@@ -144,31 +148,35 @@ export class AuthsomeClient {
   }
 
   public readonly $plugins = {
-    magiclink: (): MagiclinkPlugin | undefined => this.getPlugin<MagiclinkPlugin>('magiclink'),
+    cms: (): CmsPlugin | undefined => this.getPlugin<CmsPlugin>('cms'),
+    jwt: (): JwtPlugin | undefined => this.getPlugin<JwtPlugin>('jwt'),
+    webhook: (): WebhookPlugin | undefined => this.getPlugin<WebhookPlugin>('webhook'),
+    anonymous: (): AnonymousPlugin | undefined => this.getPlugin<AnonymousPlugin>('anonymous'),
+    emailverification: (): EmailverificationPlugin | undefined => this.getPlugin<EmailverificationPlugin>('emailverification'),
     notification: (): NotificationPlugin | undefined => this.getPlugin<NotificationPlugin>('notification'),
-    passkey: (): PasskeyPlugin | undefined => this.getPlugin<PasskeyPlugin>('passkey'),
-    username: (): UsernamePlugin | undefined => this.getPlugin<UsernamePlugin>('username'),
+    oidcprovider: (): OidcproviderPlugin | undefined => this.getPlugin<OidcproviderPlugin>('oidcprovider'),
+    sso: (): SsoPlugin | undefined => this.getPlugin<SsoPlugin>('sso'),
+    idverification: (): IdverificationPlugin | undefined => this.getPlugin<IdverificationPlugin>('idverification'),
+    secrets: (): SecretsPlugin | undefined => this.getPlugin<SecretsPlugin>('secrets'),
+    consent: (): ConsentPlugin | undefined => this.getPlugin<ConsentPlugin>('consent'),
+    impersonation: (): ImpersonationPlugin | undefined => this.getPlugin<ImpersonationPlugin>('impersonation'),
+    multiapp: (): MultiappPlugin | undefined => this.getPlugin<MultiappPlugin>('multiapp'),
+    social: (): SocialPlugin | undefined => this.getPlugin<SocialPlugin>('social'),
     apikey: (): ApikeyPlugin | undefined => this.getPlugin<ApikeyPlugin>('apikey'),
     backupauth: (): BackupauthPlugin | undefined => this.getPlugin<BackupauthPlugin>('backupauth'),
-    consent: (): ConsentPlugin | undefined => this.getPlugin<ConsentPlugin>('consent'),
-    idverification: (): IdverificationPlugin | undefined => this.getPlugin<IdverificationPlugin>('idverification'),
-    multiapp: (): MultiappPlugin | undefined => this.getPlugin<MultiappPlugin>('multiapp'),
-    oidcprovider: (): OidcproviderPlugin | undefined => this.getPlugin<OidcproviderPlugin>('oidcprovider'),
-    phone: (): PhonePlugin | undefined => this.getPlugin<PhonePlugin>('phone'),
+    magiclink: (): MagiclinkPlugin | undefined => this.getPlugin<MagiclinkPlugin>('magiclink'),
+    username: (): UsernamePlugin | undefined => this.getPlugin<UsernamePlugin>('username'),
     admin: (): AdminPlugin | undefined => this.getPlugin<AdminPlugin>('admin'),
+    compliance: (): CompliancePlugin | undefined => this.getPlugin<CompliancePlugin>('compliance'),
+    stepup: (): StepupPlugin | undefined => this.getPlugin<StepupPlugin>('stepup'),
+    multisession: (): MultisessionPlugin | undefined => this.getPlugin<MultisessionPlugin>('multisession'),
+    organization: (): OrganizationPlugin | undefined => this.getPlugin<OrganizationPlugin>('organization'),
+    passkey: (): PasskeyPlugin | undefined => this.getPlugin<PasskeyPlugin>('passkey'),
+    permissions: (): PermissionsPlugin | undefined => this.getPlugin<PermissionsPlugin>('permissions'),
+    phone: (): PhonePlugin | undefined => this.getPlugin<PhonePlugin>('phone'),
     emailotp: (): EmailotpPlugin | undefined => this.getPlugin<EmailotpPlugin>('emailotp'),
     mfa: (): MfaPlugin | undefined => this.getPlugin<MfaPlugin>('mfa'),
-    organization: (): OrganizationPlugin | undefined => this.getPlugin<OrganizationPlugin>('organization'),
-    social: (): SocialPlugin | undefined => this.getPlugin<SocialPlugin>('social'),
-    sso: (): SsoPlugin | undefined => this.getPlugin<SsoPlugin>('sso'),
-    anonymous: (): AnonymousPlugin | undefined => this.getPlugin<AnonymousPlugin>('anonymous'),
-    stepup: (): StepupPlugin | undefined => this.getPlugin<StepupPlugin>('stepup'),
-    jwt: (): JwtPlugin | undefined => this.getPlugin<JwtPlugin>('jwt'),
-    multisession: (): MultisessionPlugin | undefined => this.getPlugin<MultisessionPlugin>('multisession'),
     twofa: (): TwofaPlugin | undefined => this.getPlugin<TwofaPlugin>('twofa'),
-    webhook: (): WebhookPlugin | undefined => this.getPlugin<WebhookPlugin>('webhook'),
-    compliance: (): CompliancePlugin | undefined => this.getPlugin<CompliancePlugin>('compliance'),
-    impersonation: (): ImpersonationPlugin | undefined => this.getPlugin<ImpersonationPlugin>('impersonation'),
   };
 
   public async request<T>(
@@ -216,14 +224,14 @@ export class AuthsomeClient {
     return response.json();
   }
 
-  async signUp(request: { email: string; password: string; name?: string }): Promise<{ user: types.User; session: types.Session }> {
+  async signUp(request: { name?: string; email: string; password: string }): Promise<{ user: types.User; session: types.Session }> {
     const path = '/signup';
     return this.request<{ user: types.User; session: types.Session }>('POST', path, {
       body: request,
     });
   }
 
-  async signIn(request: { email: string; password: string }): Promise<{ user: types.User; session: types.Session; requiresTwoFactor: boolean }> {
+  async signIn(request: { email: string; password: string }): Promise<{ requiresTwoFactor: boolean; user: types.User; session: types.Session }> {
     const path = '/signin';
     return this.request<{ user: types.User; session: types.Session; requiresTwoFactor: boolean }>('POST', path, {
       body: request,
@@ -237,14 +245,14 @@ export class AuthsomeClient {
     });
   }
 
-  async getSession(): Promise<{ user: types.User; session: types.Session }> {
+  async getSession(): Promise<{ session: types.Session; user: types.User }> {
     const path = '/session';
     return this.request<{ user: types.User; session: types.Session }>('GET', path, {
       auth: true,
     });
   }
 
-  async updateUser(request: { email?: string; name?: string }): Promise<{ user: types.User }> {
+  async updateUser(request: { name?: string; email?: string }): Promise<{ user: types.User }> {
     const path = '/user/update';
     return this.request<{ user: types.User }>('POST', path, {
       body: request,

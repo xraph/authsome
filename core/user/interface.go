@@ -32,6 +32,9 @@ type ServiceInterface interface {
 	// Update updates a user
 	Update(ctx context.Context, u *User, req *UpdateUserRequest) (*User, error)
 
+	// UpdatePassword updates a user's password directly
+	UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error
+
 	// Delete deletes a user by ID
 	Delete(ctx context.Context, id xid.ID) error
 
@@ -40,6 +43,18 @@ type ServiceInterface interface {
 
 	// CountUsers counts users with filtering
 	CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error)
+
+	// SetHookRegistry sets the hook registry for lifecycle events
+	SetHookRegistry(registry interface{})
+
+	// GetHookRegistry returns the hook registry
+	GetHookRegistry() interface{}
+
+	// SetVerificationRepo sets the verification repository for password resets
+	SetVerificationRepo(repo interface{})
+
+	// GetVerificationRepo returns the verification repository
+	GetVerificationRepo() interface{}
 }
 
 // Ensure Service implements ServiceInterface

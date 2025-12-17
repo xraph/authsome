@@ -187,6 +187,7 @@ type ContentTypeSettingsDTO struct {
 	// Display settings
 	TitleField       string `json:"titleField,omitempty"`
 	DescriptionField string `json:"descriptionField,omitempty"`
+	PreviewField     string `json:"previewField,omitempty"`
 
 	// Features
 	EnableRevisions  bool `json:"enableRevisions"`

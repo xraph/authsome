@@ -163,12 +163,15 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Get notification adapter from service registry
 	svcRegistry := authInstance.GetServiceRegistry()
 	if svcRegistry != nil {
-		notifSvc, _ := svcRegistry.Get("notification")
-		if notifSvc != nil {
-			if adapter, ok := notifSvc.(*notificationPlugin.Adapter); ok {
-				p.notifAdapter = adapter
-				fmt.Println("[MFA] Notification adapter loaded for MFA plugin")
+		if adapter, exists := svcRegistry.Get("notification.adapter"); exists {
+			if typedAdapter, ok := adapter.(*notificationPlugin.Adapter); ok {
+				p.notifAdapter = typedAdapter
+				p.logger.Info("retrieved notification adapter from service registry")
+			} else {
+				p.logger.Warn("notification adapter type assertion failed")
 			}
+		} else {
+			p.logger.Info("notification adapter not available in service registry (graceful degradation)")
 		}
 	}
 

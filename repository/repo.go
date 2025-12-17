@@ -49,6 +49,7 @@ type Repository interface {
 
 	// Identity & Verification
 	IdentityVerification() *IdentityVerificationRepository
+	Verification() *verificationRepository
 
 	// App & Environment
 	App() *AppRepository
@@ -108,6 +109,7 @@ type Repo struct {
 
 	// Identity & Verification
 	identityVerification *IdentityVerificationRepository
+	verification         *verificationRepository
 
 	// App & Environment
 	app         *AppRepository
@@ -168,6 +170,7 @@ func NewRepo(db *bun.DB) Repository {
 
 		// Identity & Verification
 		identityVerification: NewIdentityVerificationRepository(db),
+		verification:         NewVerificationRepository(db),
 
 		// App & Environment
 		app:         NewAppRepository(db),
@@ -296,6 +299,10 @@ func (r *Repo) MagicLink() *MagicLinkRepository {
 // Identity & Verification
 func (r *Repo) IdentityVerification() *IdentityVerificationRepository {
 	return r.identityVerification
+}
+
+func (r *Repo) Verification() *verificationRepository {
+	return r.verification
 }
 
 // App & Environment

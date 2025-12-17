@@ -361,226 +361,6 @@ routes:
       method: GET
       path: /health
 types:
-    - name: SecurityQuestionInfo
-      fields:
-        id: xid.ID!
-        isCustom: bool!
-        questionId: int!
-        questionText: string!
-    - name: CompleteVideoSessionRequest
-      fields:
-        livenessPassed: bool!
-        livenessScore: float64!
-        notes: string!
-        verificationResult: string!
-        videoSessionId: xid.ID!
-    - name: SMSVerificationConfig
-      fields:
-        codeExpiry: time.Duration!
-        codeLength: int!
-        cooldownPeriod: time.Duration!
-        enabled: bool!
-        maxAttempts: int!
-        maxSmsPerDay: int!
-        messageTemplate: string!
-        provider: string!
-    - name: Plugin
-      fields:
-        "": '*bun.DB'
-    - name: NoOpSMSProvider
-      fields: {}
-    - name: BunRepository
-      fields:
-        "": '*bun.DB'
-    - name: VideoVerificationSession
-      fields:
-        "": string
-    - name: StartRecoveryResponse
-      fields:
-        availableMethods: '[]RecoveryMethod!'
-        completedSteps: int!
-        expiresAt: time.Time!
-        requiredSteps: int!
-        requiresReview: bool!
-        riskScore: float64!
-        sessionId: xid.ID!
-        status: RecoveryStatus!
-    - name: VerifyRecoveryCodeResponse
-      fields:
-        message: string!
-        remainingCodes: int!
-        valid: bool!
-    - name: GetDocumentVerificationRequest
-      fields:
-        documentId: xid.ID!
-    - name: RiskAssessmentConfig
-      fields:
-        blockHighRisk: bool!
-        enabled: bool!
-        highRiskThreshold: float64!
-        historyWeight: float64!
-        lowRiskThreshold: float64!
-        mediumRiskThreshold: float64!
-        newDeviceWeight: float64!
-        newIpWeight: float64!
-        newLocationWeight: float64!
-        requireReviewAbove: float64!
-        velocityWeight: float64!
-    - name: BackupAuthStatsResponse
-      fields:
-        stats: '!'
-    - name: DocumentVerificationResult
-      fields:
-        "": string
-    - name: ListRecoverySessionsRequest
-      fields:
-        organizationId: string!
-        page: int!
-        pageSize: int!
-        requiresReview: bool!
-        status: RecoveryStatus!
-    - name: CompleteRecoveryRequest
-      fields:
-        sessionId: xid.ID!
-    - name: BackupAuthDocumentResponse
-      fields:
-        id: string!
-    - name: BackupAuthConfigResponse
-      fields:
-        config: '!'
-    - name: VideoSessionInfo
-      fields:
-        "": bool
-    - name: NoOpDocumentProvider
-      fields: {}
-    - name: TrustedContact
-      fields:
-        "": '*time.Time'
-    - name: RecoverySession
-      fields:
-        "": int
-    - name: GetSecurityQuestionsResponse
-      fields:
-        questions: '[]SecurityQuestionInfo!'
-    - name: VerifyRecoveryCodeRequest
-      fields:
-        code: string!
-        sessionId: xid.ID!
-    - name: SecurityQuestionsConfig
-      fields:
-        allowCustomQuestions: bool!
-        caseSensitive: bool!
-        enabled: bool!
-        forbidCommonAnswers: bool!
-        lockoutDuration: time.Duration!
-        maxAnswerLength: int!
-        maxAttempts: int!
-        minimumQuestions: int!
-        predefinedQuestions: '[]string!'
-        requireMinLength: int!
-        requiredToRecover: int!
-    - name: VideoVerificationConfig
-      fields:
-        enabled: bool!
-        livenessThreshold: float64!
-        minScheduleAdvance: time.Duration!
-        provider: string!
-        recordSessions: bool!
-        recordingRetention: time.Duration!
-        requireAdminReview: bool!
-        requireLivenessCheck: bool!
-        requireScheduling: bool!
-        sessionDuration: time.Duration!
-    - name: RecoveryAttemptLog
-      fields:
-        "": ""
-    - name: VerifySecurityAnswersResponse
-      fields:
-        attemptsLeft: int!
-        correctAnswers: int!
-        message: string!
-        requiredAnswers: int!
-        valid: bool!
-    - name: RemoveTrustedContactRequest
-      fields:
-        contactId: xid.ID!
-    - name: SendVerificationCodeRequest
-      fields:
-        method: RecoveryMethod!
-        sessionId: xid.ID!
-        target: string!
-    - name: VerifyCodeResponse
-      fields:
-        attemptsLeft: int!
-        message: string!
-        valid: bool!
-    - name: NoOpNotificationProvider
-      fields: {}
-    - name: SecurityQuestion
-      fields:
-        "": string
-    - name: SetupSecurityQuestionRequest
-      fields:
-        answer: string!
-        customText: string!
-        questionId: int!
-    - name: GetSecurityQuestionsRequest
-      fields:
-        sessionId: xid.ID!
-    - name: ScheduleVideoSessionResponse
-      fields:
-        instructions: string!
-        joinUrl: string!
-        message: string!
-        scheduledAt: time.Time!
-        videoSessionId: xid.ID!
-    - name: StartVideoSessionRequest
-      fields:
-        videoSessionId: xid.ID!
-    - name: UploadDocumentResponse
-      fields:
-        documentId: xid.ID!
-        message: string!
-        processingTime: string!
-        status: string!
-        uploadedAt: time.Time!
-    - name: GetDocumentVerificationResponse
-      fields:
-        confidenceScore: float64!
-        documentId: xid.ID!
-        message: string!
-        rejectionReason: string!
-        status: string!
-        verifiedAt: '*time.Time!'
-    - name: AuditConfig
-      fields:
-        archiveInterval: time.Duration!
-        archiveOldLogs: bool!
-        enabled: bool!
-        immutableLogs: bool!
-        logAllAttempts: bool!
-        logDeviceInfo: bool!
-        logFailed: bool!
-        logIpAddress: bool!
-        logSuccessful: bool!
-        logUserAgent: bool!
-        retentionDays: int!
-    - name: BackupAuthCodesResponse
-      fields:
-        codes: '[]string!'
-    - name: ContinueRecoveryRequest
-      fields:
-        method: RecoveryMethod!
-        sessionId: xid.ID!
-    - name: AddTrustedContactResponse
-      fields:
-        addedAt: time.Time!
-        contactId: xid.ID!
-        email: string!
-        message: string!
-        name: string!
-        phone: string!
-        verified: bool!
     - name: RecoverySessionInfo
       fields:
         completedAt: '*time.Time!'
@@ -595,80 +375,16 @@ types:
         totalSteps: int!
         userEmail: string!
         userId: xid.ID!
-    - name: HealthCheckResponse
+    - name: RecoveryCodesConfig
       fields:
-        enabledMethods: '[]RecoveryMethod!'
-        healthy: bool!
-        message: string!
-        providersStatus: '!'
-        version: string!
-    - name: RecoveryCodeUsage
-      fields:
-        "": string
-    - name: SetupSecurityQuestionsResponse
-      fields:
-        count: int!
-        message: string!
-        setupAt: time.Time!
-    - name: SendVerificationCodeResponse
-      fields:
-        expiresAt: time.Time!
-        maskedTarget: string!
-        message: string!
-        sent: bool!
-    - name: VerifyCodeRequest
-      fields:
-        code: string!
-        sessionId: xid.ID!
-    - name: ReviewDocumentRequest
-      fields:
-        approved: bool!
-        documentId: xid.ID!
-        notes: string!
-        rejectionReason: string!
-    - name: GetRecoveryStatsRequest
-      fields:
-        endDate: time.Time!
-        organizationId: string!
-        startDate: time.Time!
-    - name: BackupAuthContactsResponse
-      fields:
-        contacts: '[]!'
-    - name: RateLimitingConfig
-      fields:
+        allowDownload: bool!
+        allowPrint: bool!
+        autoRegenerate: bool!
+        codeCount: int!
+        codeLength: int!
         enabled: bool!
-        exponentialBackoff: bool!
-        ipCooldownPeriod: time.Duration!
-        lockoutAfterAttempts: int!
-        lockoutDuration: time.Duration!
-        maxAttemptsPerDay: int!
-        maxAttemptsPerHour: int!
-        maxAttemptsPerIp: int!
-    - name: NotificationsConfig
-      fields:
-        channels: '[]string!'
-        enabled: bool!
-        notifyAdminOnHighRisk: bool!
-        notifyAdminOnReviewNeeded: bool!
-        notifyOnRecoveryComplete: bool!
-        notifyOnRecoveryFailed: bool!
-        notifyOnRecoveryStart: bool!
-        securityOfficerEmail: string!
-    - name: Config
-      fields:
-        audit: AuditConfig!
-        documentVerification: DocumentVerificationConfig!
-        emailVerification: EmailVerificationConfig!
-        enabled: bool!
-        multiStepRecovery: MultiStepRecoveryConfig!
-        notifications: NotificationsConfig!
-        rateLimiting: RateLimitingConfig!
-        recoveryCodes: RecoveryCodesConfig!
-        riskAssessment: RiskAssessmentConfig!
-        securityQuestions: SecurityQuestionsConfig!
-        smsVerification: SMSVerificationConfig!
-        trustedContacts: TrustedContactsConfig!
-        videoVerification: VideoVerificationConfig!
+        format: string!
+        regenerateCount: int!
     - name: EmailVerificationConfig
       fields:
         codeExpiry: time.Duration!
@@ -679,29 +395,115 @@ types:
         fromName: string!
         maxAttempts: int!
         requireEmailProof: bool!
-    - name: ListTrustedContactsResponse
+    - name: BackupAuthRecoveryResponse
       fields:
-        contacts: '[]TrustedContactInfo!'
-        count: int!
-    - name: ListRecoverySessionsResponse
+        session_id: string!
+    - name: CompleteRecoveryRequest
       fields:
-        page: int!
-        pageSize: int!
-        sessions: '[]RecoverySessionInfo!'
-        totalCount: int!
-    - name: RejectRecoveryRequest
-      fields:
-        notes: string!
-        reason: string!
         sessionId: xid.ID!
+    - name: CompleteRecoveryResponse
+      fields:
+        completedAt: time.Time!
+        message: string!
+        sessionId: xid.ID!
+        status: RecoveryStatus!
+        token: string!
+    - name: SetupSecurityQuestionsRequest
+      fields:
+        questions: '[]SetupSecurityQuestionRequest!'
+    - name: GetRecoveryStatsResponse
+      fields:
+        adminReviewsRequired: int!
+        averageRiskScore: float64!
+        failedRecoveries: int!
+        highRiskAttempts: int!
+        methodStats: '!'
+        pendingRecoveries: int!
+        successRate: float64!
+        successfulRecoveries: int!
+        totalAttempts: int!
+    - name: BackupAuthStatusResponse
+      fields:
+        status: string!
+    - name: TrustedContact
+      fields:
+        "": '*time.Time'
+    - name: VerifyRecoveryCodeResponse
+      fields:
+        message: string!
+        remainingCodes: int!
+        valid: bool!
+    - name: GetSecurityQuestionsRequest
+      fields:
+        sessionId: xid.ID!
+    - name: RemoveTrustedContactRequest
+      fields:
+        contactId: xid.ID!
+    - name: CompleteVideoSessionResponse
+      fields:
+        completedAt: time.Time!
+        message: string!
+        result: string!
+        videoSessionId: xid.ID!
+    - name: AuditConfig
+      fields:
+        archiveInterval: time.Duration!
+        archiveOldLogs: bool!
+        enabled: bool!
+        immutableLogs: bool!
+        logAllAttempts: bool!
+        logDeviceInfo: bool!
+        logFailed: bool!
+        logIpAddress: bool!
+        logSuccessful: bool!
+        logUserAgent: bool!
+        retentionDays: int!
+    - name: SendVerificationCodeResponse
+      fields:
+        expiresAt: time.Time!
+        maskedTarget: string!
+        message: string!
+        sent: bool!
+    - name: GetDocumentVerificationResponse
+      fields:
+        confidenceScore: float64!
+        documentId: xid.ID!
+        message: string!
+        rejectionReason: string!
+        status: string!
+        verifiedAt: '*time.Time!'
+    - name: RejectRecoveryResponse
+      fields:
+        message: string!
+        reason: string!
+        rejected: bool!
+        rejectedAt: time.Time!
+        sessionId: xid.ID!
+    - name: GetRecoveryConfigResponse
+      fields:
+        enabledMethods: '[]RecoveryMethod!'
+        minimumStepsRequired: int!
+        requireAdminReview: bool!
+        requireMultipleSteps: bool!
+        riskScoreThreshold: float64!
+    - name: SuccessResponse
+      fields:
+        message: string!
+        success: bool!
+    - name: BackupAuthStatsResponse
+      fields:
+        stats: '!'
     - name: CancelRecoveryRequest
       fields:
         reason: string!
         sessionId: xid.ID!
-    - name: GenerateRecoveryCodesRequest
+    - name: CompleteVideoSessionRequest
       fields:
-        count: int!
-        format: string!
+        livenessPassed: bool!
+        livenessScore: float64!
+        notes: string!
+        verificationResult: string!
+        videoSessionId: xid.ID!
     - name: TrustedContactsConfig
       fields:
         allowEmailContacts: bool!
@@ -719,23 +521,75 @@ types:
         id: string!
     - name: RecoveryConfiguration
       fields:
-        "": ""
-    - name: Service
+        "": float64
+    - name: StartVideoSessionResponse
       fields:
-        "": Repository
-    - name: AddTrustedContactRequest
+        expiresAt: time.Time!
+        message: string!
+        sessionUrl: string!
+        startedAt: time.Time!
+        videoSessionId: xid.ID!
+    - name: ListRecoverySessionsRequest
       fields:
+        organizationId: string!
+        page: int!
+        pageSize: int!
+        requiresReview: bool!
+        status: RecoveryStatus!
+    - name: UpdateRecoveryConfigRequest
+      fields:
+        enabledMethods: '[]RecoveryMethod!'
+        minimumStepsRequired: int!
+        requireAdminReview: bool!
+        requireMultipleSteps: bool!
+        riskScoreThreshold: float64!
+    - name: VerifySecurityAnswersRequest
+      fields:
+        answers: '!'
+        sessionId: xid.ID!
+    - name: ListTrustedContactsResponse
+      fields:
+        contacts: '[]TrustedContactInfo!'
+        count: int!
+    - name: TrustedContactInfo
+      fields:
+        active: bool!
         email: string!
+        id: xid.ID!
         name: string!
         phone: string!
         relationship: string!
-    - name: RejectRecoveryResponse
+        verified: bool!
+        verifiedAt: '*time.Time!'
+    - name: ApproveRecoveryRequest
       fields:
-        message: string!
-        reason: string!
-        rejected: bool!
-        rejectedAt: time.Time!
+        notes: string!
         sessionId: xid.ID!
+    - name: GetRecoveryStatsRequest
+      fields:
+        endDate: time.Time!
+        organizationId: string!
+        startDate: time.Time!
+    - name: HealthCheckResponse
+      fields:
+        enabledMethods: '[]RecoveryMethod!'
+        healthy: bool!
+        message: string!
+        providersStatus: '!'
+        version: string!
+    - name: SecurityQuestionsConfig
+      fields:
+        allowCustomQuestions: bool!
+        caseSensitive: bool!
+        enabled: bool!
+        forbidCommonAnswers: bool!
+        lockoutDuration: time.Duration!
+        maxAnswerLength: int!
+        maxAttempts: int!
+        minimumQuestions: int!
+        predefinedQuestions: '[]string!'
+        requireMinLength: int!
+        requiredToRecover: int!
     - name: DocumentVerificationConfig
       fields:
         acceptedDocuments: '[]string!'
@@ -750,60 +604,48 @@ types:
         retentionPeriod: time.Duration!
         storagePath: string!
         storageProvider: string!
-    - name: BackupAuthQuestionsResponse
-      fields:
-        questions: '[]string!'
-    - name: BackupAuthSessionsResponse
-      fields:
-        sessions: '[]!'
-    - name: SetupSecurityQuestionsRequest
-      fields:
-        questions: '[]SetupSecurityQuestionRequest!'
-    - name: VerifyTrustedContactRequest
-      fields:
-        token: string!
-    - name: UploadDocumentRequest
-      fields:
-        backImage: string!
-        documentType: string!
-        frontImage: string!
-        selfie: string!
-        sessionId: xid.ID!
-    - name: ErrorResponse
-      fields:
-        code: string!
-        details: '!'
-        error: string!
-        message: string!
-    - name: DocumentVerificationRequest
-      fields:
-        "": '[]byte'
-    - name: VerifySecurityAnswersRequest
-      fields:
-        answers: '!'
-        sessionId: xid.ID!
-    - name: RequestTrustedContactVerificationRequest
-      fields:
-        contactId: xid.ID!
-        sessionId: xid.ID!
-    - name: ScheduleVideoSessionRequest
-      fields:
-        scheduledAt: time.Time!
-        sessionId: xid.ID!
-        timeZone: string!
-    - name: StartVideoSessionResponse
-      fields:
-        expiresAt: time.Time!
-        message: string!
-        sessionUrl: string!
-        startedAt: time.Time!
-        videoSessionId: xid.ID!
-    - name: BackupAuthVideoResponse
-      fields:
-        session_id: string!
     - name: Handler
       fields:
         "": '*Service'
+    - name: DefaultProviderRegistry
+      fields:
+        "": DocumentProvider
+    - name: VideoVerificationSession
+      fields:
+        "": '*time.Time'
+    - name: StartRecoveryResponse
+      fields:
+        availableMethods: '[]RecoveryMethod!'
+        completedSteps: int!
+        expiresAt: time.Time!
+        requiredSteps: int!
+        requiresReview: bool!
+        riskScore: float64!
+        sessionId: xid.ID!
+        status: RecoveryStatus!
+    - name: SetupSecurityQuestionsResponse
+      fields:
+        count: int!
+        message: string!
+        setupAt: time.Time!
+    - name: StartVideoSessionRequest
+      fields:
+        videoSessionId: xid.ID!
+    - name: Config
+      fields:
+        audit: AuditConfig!
+        documentVerification: DocumentVerificationConfig!
+        emailVerification: EmailVerificationConfig!
+        enabled: bool!
+        multiStepRecovery: MultiStepRecoveryConfig!
+        notifications: NotificationsConfig!
+        rateLimiting: RateLimitingConfig!
+        recoveryCodes: RecoveryCodesConfig!
+        riskAssessment: RiskAssessmentConfig!
+        securityQuestions: SecurityQuestionsConfig!
+        smsVerification: SMSVerificationConfig!
+        trustedContacts: TrustedContactsConfig!
+        videoVerification: VideoVerificationConfig!
     - name: MultiStepRecoveryConfig
       fields:
         allowStepSkip: bool!
@@ -815,93 +657,169 @@ types:
         minimumSteps: int!
         requireAdminApproval: bool!
         sessionExpiry: time.Duration!
-    - name: NoOpEmailProvider
-      fields: {}
-    - name: DocumentVerification
+    - name: RateLimitingConfig
       fields:
-        "": float64
+        enabled: bool!
+        exponentialBackoff: bool!
+        ipCooldownPeriod: time.Duration!
+        lockoutAfterAttempts: int!
+        lockoutDuration: time.Duration!
+        maxAttemptsPerDay: int!
+        maxAttemptsPerHour: int!
+        maxAttemptsPerIp: int!
+    - name: BackupAuthSessionsResponse
+      fields:
+        sessions: '[]!'
+    - name: ScheduleVideoSessionResponse
+      fields:
+        instructions: string!
+        joinUrl: string!
+        message: string!
+        scheduledAt: time.Time!
+        videoSessionId: xid.ID!
+    - name: ListRecoverySessionsResponse
+      fields:
+        page: int!
+        pageSize: int!
+        sessions: '[]RecoverySessionInfo!'
+        totalCount: int!
     - name: ApproveRecoveryResponse
       fields:
         approved: bool!
         approvedAt: time.Time!
         message: string!
         sessionId: xid.ID!
-    - name: GetRecoveryStatsResponse
+    - name: RejectRecoveryRequest
       fields:
-        adminReviewsRequired: int!
-        averageRiskScore: float64!
-        failedRecoveries: int!
-        highRiskAttempts: int!
-        methodStats: '!'
-        pendingRecoveries: int!
-        successRate: float64!
-        successfulRecoveries: int!
-        totalAttempts: int!
-    - name: SuccessResponse
-      fields:
-        message: string!
-        success: bool!
-    - name: TrustedContactInfo
-      fields:
-        active: bool!
-        email: string!
-        id: xid.ID!
-        name: string!
-        phone: string!
-        relationship: string!
-        verified: bool!
-        verifiedAt: '*time.Time!'
-    - name: RecoveryCodesConfig
-      fields:
-        allowDownload: bool!
-        allowPrint: bool!
-        autoRegenerate: bool!
-        codeCount: int!
-        codeLength: int!
-        enabled: bool!
-        format: string!
-        regenerateCount: int!
-    - name: CompleteRecoveryResponse
-      fields:
-        completedAt: time.Time!
-        message: string!
+        notes: string!
+        reason: string!
         sessionId: xid.ID!
-        status: RecoveryStatus!
-        token: string!
-    - name: GenerateRecoveryCodesResponse
+    - name: BackupAuthVideoResponse
       fields:
-        codes: '[]string!'
-        count: int!
-        generatedAt: time.Time!
-        warning: string!
+        session_id: string!
+    - name: NoOpSMSProvider
+      fields: {}
+    - name: DocumentVerification
+      fields:
+        "": xid.ID
+    - name: SecurityQuestionInfo
+      fields:
+        id: xid.ID!
+        isCustom: bool!
+        questionId: int!
+        questionText: string!
+    - name: RequestTrustedContactVerificationRequest
+      fields:
+        contactId: xid.ID!
+        sessionId: xid.ID!
+    - name: VerifyCodeResponse
+      fields:
+        attemptsLeft: int!
+        message: string!
+        valid: bool!
+    - name: ErrorResponse
+      fields:
+        code: string!
+        details: '!'
+        error: string!
+        message: string!
+    - name: Service
+      fields:
+        "": ProviderRegistry
+    - name: VerifySecurityAnswersResponse
+      fields:
+        attemptsLeft: int!
+        correctAnswers: int!
+        message: string!
+        requiredAnswers: int!
+        valid: bool!
     - name: VerifyTrustedContactResponse
       fields:
         contactId: xid.ID!
         message: string!
         verified: bool!
         verifiedAt: time.Time!
-    - name: CompleteVideoSessionResponse
+    - name: NotificationsConfig
       fields:
-        completedAt: time.Time!
-        message: string!
-        result: string!
-        videoSessionId: xid.ID!
-    - name: ApproveRecoveryRequest
-      fields:
-        notes: string!
-        sessionId: xid.ID!
-    - name: UpdateRecoveryConfigRequest
-      fields:
-        enabledMethods: '[]RecoveryMethod!'
-        minimumStepsRequired: int!
-        requireAdminReview: bool!
-        requireMultipleSteps: bool!
-        riskScoreThreshold: float64!
-    - name: BackupAuthStatusResponse
-      fields:
-        status: string!
-    - name: NoOpVideoProvider
+        channels: '[]string!'
+        enabled: bool!
+        notifyAdminOnHighRisk: bool!
+        notifyAdminOnReviewNeeded: bool!
+        notifyOnRecoveryComplete: bool!
+        notifyOnRecoveryFailed: bool!
+        notifyOnRecoveryStart: bool!
+        securityOfficerEmail: string!
+    - name: NoOpNotificationProvider
       fields: {}
+    - name: BunRepository
+      fields:
+        "": '*bun.DB'
+    - name: SecurityQuestion
+      fields:
+        "": string
+    - name: StartRecoveryRequest
+      fields:
+        deviceId: string!
+        email: string!
+        preferredMethod: RecoveryMethod!
+        userId: string!
+    - name: AddTrustedContactRequest
+      fields:
+        email: string!
+        name: string!
+        phone: string!
+        relationship: string!
+    - name: AddTrustedContactResponse
+      fields:
+        addedAt: time.Time!
+        contactId: xid.ID!
+        email: string!
+        message: string!
+        name: string!
+        phone: string!
+        verified: bool!
+    - name: VerifyCodeRequest
+      fields:
+        code: string!
+        sessionId: xid.ID!
+    - name: NoOpEmailProvider
+      fields: {}
+    - name: RecoveryCodeUsage
+      fields:
+        "": xid.ID
+    - name: VerifyRecoveryCodeRequest
+      fields:
+        code: string!
+        sessionId: xid.ID!
+    - name: SetupSecurityQuestionRequest
+      fields:
+        answer: string!
+        customText: string!
+        questionId: int!
+    - name: GetDocumentVerificationRequest
+      fields:
+        documentId: xid.ID!
+    - name: ReviewDocumentRequest
+      fields:
+        approved: bool!
+        documentId: xid.ID!
+        notes: string!
+        rejectionReason: string!
+    - name: Plugin
+      fields:
+        "": '*Handler'
+    - name: BackupAuthQuestionsResponse
+      fields:
+        questions: '[]string!'
+    - name: BackupAuthConfigResponse
+      fields:
+        config: '!'
+    - name: VideoSessionInfo
+      fields:
+        "": float64
+    - name: DocumentVerificationResult
+      fields:
+        "": string
     - name: ContinueRecoveryResponse
       fields:
         currentStep: int!
@@ -911,6 +829,51 @@ types:
         method: RecoveryMethod!
         sessionId: xid.ID!
         totalSteps: int!
+    - name: GenerateRecoveryCodesRequest
+      fields:
+        count: int!
+        format: string!
+    - name: GetSecurityQuestionsResponse
+      fields:
+        questions: '[]SecurityQuestionInfo!'
+    - name: SMSVerificationConfig
+      fields:
+        codeExpiry: time.Duration!
+        codeLength: int!
+        cooldownPeriod: time.Duration!
+        enabled: bool!
+        maxAttempts: int!
+        maxSmsPerDay: int!
+        messageTemplate: string!
+        provider: string!
+    - name: RiskAssessmentConfig
+      fields:
+        blockHighRisk: bool!
+        enabled: bool!
+        highRiskThreshold: float64!
+        historyWeight: float64!
+        lowRiskThreshold: float64!
+        mediumRiskThreshold: float64!
+        newDeviceWeight: float64!
+        newIpWeight: float64!
+        newLocationWeight: float64!
+        requireReviewAbove: float64!
+        velocityWeight: float64!
+    - name: BackupAuthContactsResponse
+      fields:
+        contacts: '[]!'
+    - name: NoOpDocumentProvider
+      fields: {}
+    - name: RecoveryAttemptLog
+      fields:
+        "": string
+    - name: ContinueRecoveryRequest
+      fields:
+        method: RecoveryMethod!
+        sessionId: xid.ID!
+    - name: VerifyTrustedContactRequest
+      fields:
+        token: string!
     - name: RequestTrustedContactVerificationResponse
       fields:
         contactId: xid.ID!
@@ -918,25 +881,62 @@ types:
         expiresAt: time.Time!
         message: string!
         notifiedAt: time.Time!
-    - name: GetRecoveryConfigResponse
+    - name: BackupAuthCodesResponse
       fields:
-        enabledMethods: '[]RecoveryMethod!'
-        minimumStepsRequired: int!
+        codes: '[]string!'
+    - name: GenerateRecoveryCodesResponse
+      fields:
+        codes: '[]string!'
+        count: int!
+        generatedAt: time.Time!
+        warning: string!
+    - name: SendVerificationCodeRequest
+      fields:
+        method: RecoveryMethod!
+        sessionId: xid.ID!
+        target: string!
+    - name: UploadDocumentRequest
+      fields:
+        backImage: string!
+        documentType: string!
+        frontImage: string!
+        selfie: string!
+        sessionId: xid.ID!
+    - name: UploadDocumentResponse
+      fields:
+        documentId: xid.ID!
+        message: string!
+        processingTime: string!
+        status: string!
+        uploadedAt: time.Time!
+    - name: VideoVerificationConfig
+      fields:
+        enabled: bool!
+        livenessThreshold: float64!
+        minScheduleAdvance: time.Duration!
+        provider: string!
+        recordSessions: bool!
+        recordingRetention: time.Duration!
         requireAdminReview: bool!
-        requireMultipleSteps: bool!
-        riskScoreThreshold: float64!
-    - name: BackupAuthRecoveryResponse
+        requireLivenessCheck: bool!
+        requireScheduling: bool!
+        sessionDuration: time.Duration!
+    - name: BackupAuthDocumentResponse
       fields:
-        session_id: string!
+        id: string!
     - name: VideoSessionResult
       fields:
         "": string
-    - name: DefaultProviderRegistry
+    - name: DocumentVerificationRequest
       fields:
-        "": SMSProvider
-    - name: StartRecoveryRequest
+        "": '[]byte'
+    - name: NoOpVideoProvider
+      fields: {}
+    - name: RecoverySession
       fields:
-        deviceId: string!
-        email: string!
-        preferredMethod: RecoveryMethod!
-        userId: string!
+        "": '*time.Time'
+    - name: ScheduleVideoSessionRequest
+      fields:
+        scheduledAt: time.Time!
+        sessionId: xid.ID!
+        timeZone: string!

@@ -122,12 +122,12 @@ impl AuthsomeClient {
     /// Response for sign_in
     #[derive(Debug, Deserialize)]
     pub struct SignInResponse {
-        #[serde(rename = "requiresTwoFactor")]
-        pub requires_two_factor: bool,
         #[serde(rename = "user")]
         pub user: User,
         #[serde(rename = "session")]
         pub session: Session,
+        #[serde(rename = "requiresTwoFactor")]
+        pub requires_two_factor: bool,
     }
 
     /// Sign in with email and password

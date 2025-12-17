@@ -339,3 +339,42 @@ func (s *MultiTenantUserService) getAppFromContext(ctx context.Context) xid.ID {
 	}
 	return appID
 }
+
+// UpdatePassword updates a user's password directly
+func (s *MultiTenantUserService) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
+	// Get app context
+	appID := s.getAppFromContext(ctx)
+	if !appID.IsNil() {
+		// Check if user is member of the organization
+		member, err := s.appService.Member.FindMember(ctx, appID, userID)
+		if err != nil {
+			return user.UserNotFound(userID.String())
+		}
+		if member.Status != coreapp.MemberStatusActive {
+			return user.UserNotFound(userID.String())
+		}
+	}
+
+	// Update password using original service
+	return s.userService.UpdatePassword(ctx, userID, hashedPassword)
+}
+
+// SetHookRegistry sets the hook registry for lifecycle events
+func (s *MultiTenantUserService) SetHookRegistry(registry interface{}) {
+	s.userService.SetHookRegistry(registry)
+}
+
+// GetHookRegistry returns the hook registry
+func (s *MultiTenantUserService) GetHookRegistry() interface{} {
+	return s.userService.GetHookRegistry()
+}
+
+// SetVerificationRepo sets the verification repository for password resets
+func (s *MultiTenantUserService) SetVerificationRepo(repo interface{}) {
+	s.userService.SetVerificationRepo(repo)
+}
+
+// GetVerificationRepo returns the verification repository
+func (s *MultiTenantUserService) GetVerificationRepo() interface{} {
+	return s.userService.GetVerificationRepo()
+}

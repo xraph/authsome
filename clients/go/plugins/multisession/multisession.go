@@ -58,3 +58,57 @@ func (p *Plugin) Delete(ctx context.Context) error {
 	return err
 }
 
+// GetCurrent GetCurrent returns details about the currently active session
+func (p *Plugin) GetCurrent(ctx context.Context) (*authsome.GetCurrentResponse, error) {
+	path := "/current"
+	var result authsome.GetCurrentResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetByID GetByID returns details about a specific session by ID
+func (p *Plugin) GetByID(ctx context.Context) (*authsome.GetByIDResponse, error) {
+	path := "/{id}"
+	var result authsome.GetByIDResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RevokeAll RevokeAll revokes all sessions for the current user
+func (p *Plugin) RevokeAll(ctx context.Context, req *authsome.RevokeAllRequest) error {
+	path := "/revoke-all"
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
+	return err
+}
+
+// RevokeOthers RevokeOthers revokes all sessions except the current one
+func (p *Plugin) RevokeOthers(ctx context.Context) error {
+	path := "/revoke-others"
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+	return err
+}
+
+// Refresh Refresh extends the current session's expiry time
+func (p *Plugin) Refresh(ctx context.Context) (*authsome.RefreshResponse, error) {
+	path := "/refresh"
+	var result authsome.RefreshResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetStats GetStats returns aggregated session statistics for the current user
+func (p *Plugin) GetStats(ctx context.Context) error {
+	path := "/stats"
+	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+	return err
+}
+

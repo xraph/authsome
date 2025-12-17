@@ -22,7 +22,15 @@ type Config struct {
 	AllowTemplateReset bool `json:"allow_template_reset" yaml:"allow_template_reset"`
 
 	// AutoSendWelcome automatically sends welcome email on user signup
+	// DEPRECATED: Use AutoSend.Auth.Welcome instead
 	AutoSendWelcome bool `json:"auto_send_welcome" yaml:"auto_send_welcome"`
+
+	// AutoSend configuration for automatic notification sending
+	AutoSend AutoSendConfig `json:"auto_send" yaml:"auto_send"`
+
+	// AppName is the default application name used in notifications
+	// If empty, will use the App name from the database
+	AppName string `json:"app_name" yaml:"app_name"`
 
 	// RetryAttempts is the number of retry attempts for failed notifications
 	RetryAttempts int `json:"retry_attempts" yaml:"retry_attempts"`
@@ -38,6 +46,55 @@ type Config struct {
 
 	// Providers configuration for email and SMS
 	Providers ProvidersConfig `json:"providers" yaml:"providers"`
+}
+
+// AutoSendConfig controls automatic notification sending for lifecycle events
+type AutoSendConfig struct {
+	Auth         AuthAutoSendConfig         `json:"auth" yaml:"auth"`
+	Organization OrganizationAutoSendConfig `json:"organization" yaml:"organization"`
+	Session      SessionAutoSendConfig      `json:"session" yaml:"session"`
+	Account      AccountAutoSendConfig      `json:"account" yaml:"account"`
+}
+
+// AuthAutoSendConfig controls authentication-related notifications
+type AuthAutoSendConfig struct {
+	Welcome           bool `json:"welcome" yaml:"welcome"`
+	VerificationEmail bool `json:"verification_email" yaml:"verification_email"`
+	MagicLink         bool `json:"magic_link" yaml:"magic_link"`
+	EmailOTP          bool `json:"email_otp" yaml:"email_otp"`
+	MFACode           bool `json:"mfa_code" yaml:"mfa_code"`
+	PasswordReset     bool `json:"password_reset" yaml:"password_reset"`
+}
+
+// OrganizationAutoSendConfig controls organization-related notifications
+type OrganizationAutoSendConfig struct {
+	Invite        bool `json:"invite" yaml:"invite"`
+	MemberAdded   bool `json:"member_added" yaml:"member_added"`
+	MemberRemoved bool `json:"member_removed" yaml:"member_removed"`
+	RoleChanged   bool `json:"role_changed" yaml:"role_changed"`
+	Transfer      bool `json:"transfer" yaml:"transfer"`
+	Deleted       bool `json:"deleted" yaml:"deleted"`
+	MemberLeft    bool `json:"member_left" yaml:"member_left"`
+}
+
+// SessionAutoSendConfig controls session/device security notifications
+type SessionAutoSendConfig struct {
+	NewDevice       bool `json:"new_device" yaml:"new_device"`
+	NewLocation     bool `json:"new_location" yaml:"new_location"`
+	SuspiciousLogin bool `json:"suspicious_login" yaml:"suspicious_login"`
+	DeviceRemoved   bool `json:"device_removed" yaml:"device_removed"`
+	AllRevoked      bool `json:"all_revoked" yaml:"all_revoked"`
+}
+
+// AccountAutoSendConfig controls account lifecycle notifications
+type AccountAutoSendConfig struct {
+	EmailChangeRequest bool `json:"email_change_request" yaml:"email_change_request"`
+	EmailChanged       bool `json:"email_changed" yaml:"email_changed"`
+	PasswordChanged    bool `json:"password_changed" yaml:"password_changed"`
+	UsernameChanged    bool `json:"username_changed" yaml:"username_changed"`
+	Deleted            bool `json:"deleted" yaml:"deleted"`
+	Suspended          bool `json:"suspended" yaml:"suspended"`
+	Reactivated        bool `json:"reactivated" yaml:"reactivated"`
 }
 
 // RateLimit defines rate limiting configuration
@@ -76,10 +133,46 @@ func DefaultConfig() Config {
 		AllowAppOverrides:     false,
 		AutoPopulateTemplates: true,
 		AllowTemplateReset:    true,
-		AutoSendWelcome:       true,
-		RetryAttempts:         3,
-		RetryDelay:            5 * time.Minute,
-		CleanupAfter:          30 * 24 * time.Hour, // 30 days
+		AutoSendWelcome:       true, // DEPRECATED: use AutoSend.Auth.Welcome
+		AutoSend: AutoSendConfig{
+			Auth: AuthAutoSendConfig{
+				Welcome:           true,  // Send welcome email on signup
+				VerificationEmail: false, // Let emailverification plugin control this
+				MagicLink:         false, // Let magiclink plugin control this
+				EmailOTP:          false, // Let emailotp plugin control this
+				MFACode:           false, // Let mfa plugin control this
+				PasswordReset:     false, // Let password reset handler control this
+			},
+			Organization: OrganizationAutoSendConfig{
+				Invite:        true, // Send invitation emails
+				MemberAdded:   true, // Notify on member addition
+				MemberRemoved: true, // Notify on member removal
+				RoleChanged:   true, // Notify on role changes
+				Transfer:      true, // Notify on ownership transfer
+				Deleted:       true, // Notify on organization deletion
+				MemberLeft:    true, // Notify when member leaves
+			},
+			Session: SessionAutoSendConfig{
+				NewDevice:       true, // Notify on new device login
+				NewLocation:     true, // Notify on new location login
+				SuspiciousLogin: true, // Notify on suspicious activity
+				DeviceRemoved:   true, // Notify when device removed
+				AllRevoked:      true, // Notify on mass signout
+			},
+			Account: AccountAutoSendConfig{
+				EmailChangeRequest: true, // Send confirmation for email change
+				EmailChanged:       true, // Notify on email change completion
+				PasswordChanged:    true, // Notify on password change
+				UsernameChanged:    true, // Notify on username change
+				Deleted:            true, // Notify on account deletion
+				Suspended:          true, // Notify on account suspension
+				Reactivated:        true, // Notify on account reactivation
+			},
+		},
+		AppName:       "", // Empty means use app name from database
+		RetryAttempts: 3,
+		RetryDelay:    5 * time.Minute,
+		CleanupAfter:  30 * 24 * time.Hour, // 30 days
 		RateLimits: map[string]RateLimit{
 			"email": {
 				MaxRequests: 100,

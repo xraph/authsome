@@ -34,12 +34,12 @@ impl EmailotpPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyRequest {
+        #[serde(rename = "email")]
+        pub email: String,
         #[serde(rename = "otp")]
         pub otp: String,
         #[serde(rename = "remember")]
         pub remember: bool,
-        #[serde(rename = "email")]
-        pub email: String,
     }
 
     /// Verify checks the OTP and creates a session on success

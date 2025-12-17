@@ -15,6 +15,7 @@ type Service struct {
 	Member       *MemberService
 	Team         *TeamService
 	Invitation   *InvitationService
+	hookRegistry interface{} // Hook registry for lifecycle events (interface{} to avoid import cycle)
 }
 
 // NewService creates a new service with all focused services
@@ -33,6 +34,11 @@ func NewService(
 		Team:         NewTeamService(teamRepo, memberRepo, cfg, rbacSvc),
 		Invitation:   NewInvitationService(invitationRepo, memberRepo, orgRepo, cfg, rbacSvc, roleRepo),
 	}
+}
+
+// SetHookRegistry sets the hook registry for executing lifecycle hooks
+func (s *Service) SetHookRegistry(registry interface{}) {
+	s.hookRegistry = registry
 }
 
 // =============================================================================
@@ -68,7 +74,30 @@ func (s *Service) DeleteOrganization(ctx context.Context, id, userID xid.ID) err
 	if err := s.Member.RequireOwner(ctx, id, userID); err != nil {
 		return err
 	}
-	return s.Organization.DeleteOrganization(ctx, id, userID)
+
+	// Get organization details before deletion
+	org, err := s.Organization.FindOrganizationByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	orgName := org.Name
+
+	// Delete organization
+	err = s.Organization.DeleteOrganization(ctx, id, userID)
+	if err != nil {
+		return err
+	}
+
+	// Execute after organization delete hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteAfterOrganizationDelete(context.Context, xid.ID, string) error
+		}); ok {
+			_ = registry.ExecuteAfterOrganizationDelete(ctx, id, orgName)
+		}
+	}
+
+	return nil
 }
 
 // ForceDeleteOrganization deletes an organization without permission checks
@@ -82,7 +111,21 @@ func (s *Service) ForceDeleteOrganization(ctx context.Context, id xid.ID) error 
 // =============================================================================
 
 func (s *Service) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*Member, error) {
-	return s.Member.AddMember(ctx, orgID, userID, role)
+	member, err := s.Member.AddMember(ctx, orgID, userID, role)
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute after member add hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteAfterMemberAdd(context.Context, interface{}) error
+		}); ok {
+			_ = registry.ExecuteAfterMemberAdd(ctx, member)
+		}
+	}
+
+	return member, nil
 }
 
 func (s *Service) FindMemberByID(ctx context.Context, id xid.ID) (*Member, error) {
@@ -102,11 +145,64 @@ func (s *Service) UpdateMember(ctx context.Context, id xid.ID, req *UpdateMember
 }
 
 func (s *Service) UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, newRole string, updaterUserID xid.ID) (*Member, error) {
-	return s.Member.UpdateMemberRole(ctx, orgID, memberID, newRole, updaterUserID)
+	// Get member details before updating to get old role
+	member, err := s.Member.FindMemberByID(ctx, memberID)
+	if err != nil {
+		return nil, err
+	}
+	oldRole := member.Role
+
+	// Update role
+	member, err = s.Member.UpdateMemberRole(ctx, orgID, memberID, newRole, updaterUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute after member role change hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteAfterMemberRoleChange(context.Context, xid.ID, xid.ID, string, string) error
+		}); ok {
+			_ = registry.ExecuteAfterMemberRoleChange(ctx, orgID, member.UserID, oldRole, newRole)
+		}
+	}
+
+	return member, nil
 }
 
 func (s *Service) RemoveMember(ctx context.Context, id, removerUserID xid.ID) error {
-	return s.Member.RemoveMember(ctx, id, removerUserID)
+	// Get member details before removing
+	member, err := s.Member.FindMemberByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	orgID := member.OrganizationID
+	userID := member.UserID
+	memberName := ""
+	if member.User != nil {
+		memberName = member.User.Name
+		if memberName == "" {
+			memberName = member.User.Email
+		}
+	}
+
+	// Remove member
+	err = s.Member.RemoveMember(ctx, id, removerUserID)
+	if err != nil {
+		return err
+	}
+
+	// Execute after member remove hook
+	if s.hookRegistry != nil {
+		if registry, ok := s.hookRegistry.(interface {
+			ExecuteAfterMemberRemove(context.Context, xid.ID, xid.ID, string) error
+		}); ok {
+			_ = registry.ExecuteAfterMemberRemove(ctx, orgID, userID, memberName)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) GetUserMemberships(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Member], error) {

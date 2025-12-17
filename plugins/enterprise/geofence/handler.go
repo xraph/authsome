@@ -42,9 +42,9 @@ func (h *Handler) CreateRule(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
-	// Get organization ID from context (set by auth middleware)
-	orgID := c.Get("organization_id").(xid.ID)
-	req.OrganizationID = orgID
+	// Get app ID from context (set by auth middleware)
+	appID := c.Get("app_id").(xid.ID)
+	req.AppID = appID
 
 	// Get user ID from context (creator)
 	userID := c.Get("user_id").(xid.ID)
@@ -61,7 +61,7 @@ func (h *Handler) CreateRule(c forge.Context) error {
 func (h *Handler) ListRules(c forge.Context) error {
 	orgID := c.Get("organization_id").(xid.ID)
 
-	rules, err := h.service.repo.GetRulesByOrganization(c.Context(), orgID)
+	rules, err := h.service.repo.GetRulesByApp(c.Context(), orgID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
@@ -139,8 +139,6 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
-	orgID := c.Get("organization_id").(xid.ID)
-
 	var userID xid.ID
 	if req.UserID != "" {
 		id, err := xid.FromString(req.UserID)
@@ -152,12 +150,18 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 		userID = c.Get("user_id").(xid.ID)
 	}
 
+	// Get app ID from context
+	appID, ok := c.Get("app_id").(xid.ID)
+	if !ok {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("app context required"))
+	}
+
 	checkReq := &LocationCheckRequest{
-		UserID:         userID,
-		OrganizationID: orgID,
-		IPAddress:      req.IPAddress,
-		EventType:      req.EventType,
-		GPS:            req.GPS,
+		UserID:    userID,
+		AppID:     appID,
+		IPAddress: req.IPAddress,
+		EventType: req.EventType,
+		GPS:       req.GPS,
 	}
 
 	result, err := h.service.CheckLocation(c.Context(), checkReq)
@@ -291,10 +295,10 @@ func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
 	}
 
-	orgID := c.Get("organization_id").(xid.ID)
+	appID := c.Get("app_id").(xid.ID)
 	userID := c.Get("user_id").(xid.ID)
 
-	req.OrganizationID = orgID
+	req.AppID = appID
 	req.UserID = userID
 
 	if err := h.service.repo.CreateTrustedLocation(c.Context(), &req); err != nil {

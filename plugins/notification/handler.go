@@ -68,10 +68,22 @@ func NewHandler(service *notification.Service, templateSvc *TemplateService, con
 
 // CreateTemplate creates a new notification template
 func (h *Handler) CreateTemplate(c forge.Context) error {
-	// Extract app ID from context
-	appID, err := contexts.RequireAppID(c.Context())
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	// Try to extract app ID from query parameter first (for dashboard requests)
+	appIDStr := c.Query("app_id")
+	var appID xid.ID
+	var err error
+
+	if appIDStr != "" {
+		appID, err = xid.FromString(appIDStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, &MessageResponse{Message: "invalid app_id parameter"})
+		}
+	} else {
+		// Fall back to context (for API requests)
+		appID, err = contexts.RequireAppID(c.Context())
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+		}
 	}
 
 	var req notification.CreateTemplateRequest
@@ -90,7 +102,7 @@ func (h *Handler) CreateTemplate(c forge.Context) error {
 		}
 	}
 
-	// Set app ID from context
+	// Set app ID from query parameter or context
 	req.AppID = appID
 
 	template, err := h.service.CreateTemplate(c.Context(), &req)
@@ -274,17 +286,29 @@ func (h *Handler) ResetTemplate(c forge.Context) error {
 
 // ResetAllTemplates resets all templates for an app to defaults
 func (h *Handler) ResetAllTemplates(c forge.Context) error {
-	// Extract app ID from context
-	appID, err := contexts.RequireAppID(c.Context())
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+	// Try to extract app ID from query parameter first (for dashboard requests)
+	appIDStr := c.Query("app_id")
+	var appID xid.ID
+	var err error
+
+	if appIDStr != "" {
+		appID, err = xid.FromString(appIDStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, &MessageResponse{Message: "invalid app_id parameter"})
+		}
+	} else {
+		// Fall back to context (for API requests)
+		appID, err = contexts.RequireAppID(c.Context())
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errs.Unauthorized())
+		}
 	}
 
 	if err := h.service.ResetAllTemplates(c.Context(), appID); err != nil {
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
-		return c.JSON(http.StatusInternalServerError, err)
+		return c.JSON(http.StatusInternalServerError, &MessageResponse{Message: err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "all templates reset to defaults successfully"})

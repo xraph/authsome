@@ -289,8 +289,8 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.sessionService,
 		a.userService,
 		middlewareConfig,
-		&a.config.SessionCookie,   // Pass cookie config for session renewal
-		a.authStrategyRegistry,     // Pass strategy registry for pluggable auth
+		&a.config.SessionCookie, // Pass cookie config for session renewal
+		a.authStrategyRegistry,  // Pass strategy registry for pluggable auth
 	)
 
 	// App service (platform tenant management)
@@ -355,6 +355,15 @@ func (a *Auth) Initialize(ctx context.Context) error {
 	a.serviceRegistry.SetRateLimitService(a.rateLimitService)
 	a.serviceRegistry.SetOrganizationService(a.orgService)
 	a.serviceRegistry.SetEnvironmentService(a.environmentService)
+
+	// Set hook registry on device service for security notifications
+	a.deviceService.SetHookRegistry(a.hookRegistry)
+
+	// Set hook registry on user service for account lifecycle notifications
+	a.userService.SetHookRegistry(a.hookRegistry)
+
+	// Set verification repository on user service for password resets
+	a.userService.SetVerificationRepo(a.repo.Verification())
 
 	// Register services into Forge DI container
 	if err := a.registerServicesIntoContainer(db); err != nil {
@@ -615,11 +624,11 @@ func (a *Auth) RegisterAuthStrategy(strategy middleware.AuthStrategy) error {
 	if a.authStrategyRegistry == nil {
 		a.authStrategyRegistry = middleware.NewAuthStrategyRegistry()
 	}
-	
+
 	a.logger.Info("registering authentication strategy",
 		forge.F("strategy_id", strategy.ID()),
 		forge.F("priority", strategy.Priority()))
-	
+
 	return a.authStrategyRegistry.Register(strategy)
 }
 

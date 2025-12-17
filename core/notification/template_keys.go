@@ -1,5 +1,12 @@
 package notification
 
+import (
+	"regexp"
+	"strings"
+
+	"github.com/xraph/authsome/plugins/notification/builder"
+)
+
 // =============================================================================
 // TEMPLATE KEY CONSTANTS
 // =============================================================================
@@ -15,6 +22,47 @@ const (
 	TemplateKeyEmailOTP      = "auth.email_otp"
 	TemplateKeyPhoneOTP      = "auth.phone_otp"
 	TemplateKeySecurityAlert = "auth.security_alert"
+
+	// Organization templates
+	TemplateKeyOrgInvite        = "org.invite"
+	TemplateKeyOrgMemberAdded   = "org.member_added"
+	TemplateKeyOrgMemberRemoved = "org.member_removed"
+	TemplateKeyOrgRoleChanged   = "org.role_changed"
+	TemplateKeyOrgTransfer      = "org.transfer"
+	TemplateKeyOrgDeleted       = "org.deleted"
+	TemplateKeyOrgMemberLeft    = "org.member_left"
+
+	// Account management templates
+	TemplateKeyEmailChangeRequest = "account.email_change_request"
+	TemplateKeyEmailChanged       = "account.email_changed"
+	TemplateKeyPasswordChanged    = "account.password_changed"
+	TemplateKeyUsernameChanged    = "account.username_changed"
+	TemplateKeyAccountDeleted     = "account.deleted"
+	TemplateKeyAccountSuspended   = "account.suspended"
+	TemplateKeyAccountReactivated = "account.reactivated"
+	TemplateKeyDataExportReady    = "account.data_export_ready"
+
+	// Session/device templates
+	TemplateKeyNewDeviceLogin     = "session.new_device"
+	TemplateKeyNewLocationLogin   = "session.new_location"
+	TemplateKeySuspiciousLogin    = "session.suspicious_login"
+	TemplateKeyDeviceRemoved      = "session.device_removed"
+	TemplateKeyAllSessionsRevoked = "session.all_revoked"
+
+	// Reminder templates
+	TemplateKeyVerificationReminder = "reminder.verification"
+	TemplateKeyInactiveAccount      = "reminder.inactive"
+	TemplateKeyTrialExpiring        = "reminder.trial_expiring"
+	TemplateKeySubscriptionExpiring = "reminder.subscription_expiring"
+	TemplateKeyPasswordExpiring     = "reminder.password_expiring"
+
+	// Admin/moderation templates
+	TemplateKeyAccountLocked        = "admin.account_locked"
+	TemplateKeyAccountUnlocked      = "admin.account_unlocked"
+	TemplateKeyTermsUpdate          = "admin.terms_update"
+	TemplateKeyPrivacyUpdate        = "admin.privacy_update"
+	TemplateKeyMaintenanceScheduled = "admin.maintenance"
+	TemplateKeySecurityBreach       = "admin.security_breach"
 )
 
 // =============================================================================
@@ -31,6 +79,68 @@ type TemplateMetadata struct {
 	DefaultSubject  string           `json:"defaultSubject"`
 	DefaultBody     string           `json:"defaultBody"`
 	DefaultBodyHTML string           `json:"defaultBodyHTML,omitempty"`
+}
+
+// createTemplateMetadataFromBuilder generates TemplateMetadata from a builder template
+func createTemplateMetadataFromBuilder(
+	key, name, description, builderKey string,
+	variables []string,
+	subject string,
+) TemplateMetadata {
+	// Get builder template
+	doc, err := builder.GetSampleTemplate(builderKey)
+	if err != nil {
+		// Fallback to empty template if builder fails
+		return TemplateMetadata{
+			Key:            key,
+			Name:           name,
+			Description:    description,
+			Type:           NotificationTypeEmail,
+			Variables:      variables,
+			DefaultSubject: subject,
+			DefaultBody:    "Template rendering failed",
+		}
+	}
+
+	// Render to HTML
+	renderer := builder.NewRenderer(doc)
+	html, err := renderer.RenderToHTML()
+	if err != nil {
+		html = "Template rendering failed"
+	}
+
+	// Generate plain text fallback by stripping HTML tags
+	textBody := stripHTMLTags(html)
+
+	return TemplateMetadata{
+		Key:             key,
+		Name:            name,
+		Description:     description,
+		Type:            NotificationTypeEmail,
+		Variables:       variables,
+		DefaultSubject:  subject,
+		DefaultBody:     textBody,
+		DefaultBodyHTML: html,
+	}
+}
+
+// stripHTMLTags removes HTML tags for plain text fallback
+func stripHTMLTags(html string) string {
+	// Remove HTML tags
+	re := regexp.MustCompile(`<[^>]*>`)
+	text := re.ReplaceAllString(html, "")
+
+	// Clean up whitespace
+	text = strings.TrimSpace(text)
+	lines := strings.Split(text, "\n")
+	var cleaned []string
+	for _, line := range lines {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			cleaned = append(cleaned, trimmed)
+		}
+	}
+
+	return strings.Join(cleaned, "\n")
 }
 
 // GetDefaultTemplateMetadata returns metadata for all default templates
@@ -367,6 +477,259 @@ The {{.appName}} Security Team`,
 </body>
 </html>`,
 		},
+		// Organization templates
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgInvite,
+			"Organization Invitation",
+			"Invitation to join an organization or team",
+			"org_invite",
+			[]string{"userName", "inviterName", "orgName", "role", "inviteURL", "appName", "expiresIn"},
+			"{{.inviterName}} invited you to join {{.orgName}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgMemberAdded,
+			"Member Added to Organization",
+			"Notification when a new member is added to an organization",
+			"org_member_added",
+			[]string{"userName", "memberName", "orgName", "role", "appName"},
+			"{{.memberName}} joined {{.orgName}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgMemberRemoved,
+			"Member Removed from Organization",
+			"Notification when a member is removed from an organization",
+			"org_member_removed",
+			[]string{"userName", "memberName", "orgName", "timestamp", "appName"},
+			"{{.memberName}} removed from {{.orgName}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgRoleChanged,
+			"Role Changed in Organization",
+			"Notification when a member's role is changed",
+			"org_role_changed",
+			[]string{"userName", "orgName", "oldRole", "newRole", "appName"},
+			"Your role in {{.orgName}} has been updated",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgTransfer,
+			"Organization Ownership Transferred",
+			"Notification when organization ownership is transferred",
+			"org_transfer",
+			[]string{"userName", "orgName", "transferredTo", "timestamp", "appName"},
+			"{{.orgName}} ownership transferred",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgDeleted,
+			"Organization Deleted",
+			"Notification when an organization is deleted",
+			"org_deleted",
+			[]string{"userName", "orgName", "appName"},
+			"{{.orgName}} has been deleted",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyOrgMemberLeft,
+			"Member Left Organization",
+			"Notification when a member leaves an organization",
+			"org_member_left",
+			[]string{"userName", "memberName", "orgName", "timestamp", "appName"},
+			"{{.memberName}} left {{.orgName}}",
+		),
+		// Account management templates
+		createTemplateMetadataFromBuilder(
+			TemplateKeyEmailChangeRequest,
+			"Email Change Request",
+			"Confirmation request for email address change",
+			"email_change_request",
+			[]string{"userName", "oldEmail", "newEmail", "confirmURL", "appName"},
+			"Confirm your email change for {{.appName}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyEmailChanged,
+			"Email Address Changed",
+			"Confirmation that email address has been changed",
+			"email_changed",
+			[]string{"userName", "oldEmail", "newEmail", "changeTime", "appName"},
+			"Your email address has been changed",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyPasswordChanged,
+			"Password Changed",
+			"Confirmation that password has been changed",
+			"password_changed",
+			[]string{"userName", "changeTime", "appName"},
+			"Your password has been changed",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyUsernameChanged,
+			"Username Changed",
+			"Confirmation that username has been changed",
+			"username_changed",
+			[]string{"userName", "newUsername", "appName"},
+			"Your username has been updated",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyAccountDeleted,
+			"Account Deleted",
+			"Confirmation that account has been deleted",
+			"account_deleted",
+			[]string{"userName", "appName"},
+			"Your account has been deleted",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyAccountSuspended,
+			"Account Suspended",
+			"Notification that account has been suspended",
+			"account_suspended",
+			[]string{"userName", "reason", "suspendedUntil", "appName"},
+			"Your account has been suspended",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyAccountReactivated,
+			"Account Reactivated",
+			"Notification that account has been reactivated",
+			"account_reactivated",
+			[]string{"userName", "loginURL", "appName"},
+			"Welcome back! Your account is active",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyDataExportReady,
+			"Data Export Ready",
+			"Notification that requested data export is ready for download",
+			"data_export_ready",
+			[]string{"userName", "downloadURL", "appName"},
+			"Your data export is ready",
+		),
+		// Session/device templates
+		createTemplateMetadataFromBuilder(
+			TemplateKeyNewDeviceLogin,
+			"New Device Sign-In",
+			"Notification of sign-in from a new device",
+			"new_device_login",
+			[]string{"userName", "deviceName", "browserName", "osName", "location", "timestamp", "confirmURL", "secureAccountURL", "appName"},
+			"New device sign-in detected",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyNewLocationLogin,
+			"New Location Sign-In",
+			"Notification of sign-in from a new location",
+			"new_location_login",
+			[]string{"userName", "location", "ipAddress", "timestamp", "secureAccountURL", "appName"},
+			"Sign-in from new location",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeySuspiciousLogin,
+			"Suspicious Login Detected",
+			"Alert for suspicious login attempt",
+			"suspicious_login",
+			[]string{"userName", "location", "ipAddress", "deviceName", "timestamp", "secureAccountURL", "appName"},
+			"Suspicious login attempt on your account",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyDeviceRemoved,
+			"Device Removed",
+			"Notification when a device is removed from account",
+			"device_removed",
+			[]string{"userName", "deviceName", "deviceType", "timestamp", "secureAccountURL", "appName"},
+			"Device removed from your account",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyAllSessionsRevoked,
+			"All Sessions Signed Out",
+			"Notification when all sessions are revoked for security",
+			"all_sessions_revoked",
+			[]string{"userName", "loginURL", "appName"},
+			"All sessions have been signed out",
+		),
+		// Reminder templates
+		createTemplateMetadataFromBuilder(
+			TemplateKeyVerificationReminder,
+			"Email Verification Reminder",
+			"Reminder to verify email address",
+			"verification_reminder",
+			[]string{"userName", "verifyURL", "appName"},
+			"Please verify your email for {{.appName}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyInactiveAccount,
+			"Inactive Account Reminder",
+			"Reminder for inactive user to return",
+			"inactive_account",
+			[]string{"userName", "loginURL", "appName"},
+			"We miss you! Come back to {{.appName}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyTrialExpiring,
+			"Trial Expiring",
+			"Reminder that trial period is ending soon",
+			"trial_expiring",
+			[]string{"userName", "planName", "daysRemaining", "expiryDate", "renewURL", "appName"},
+			"Your {{.planName}} trial expires in {{.daysRemaining}} days",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeySubscriptionExpiring,
+			"Subscription Expiring",
+			"Reminder that subscription is expiring soon",
+			"subscription_expiring",
+			[]string{"userName", "planName", "daysRemaining", "expiryDate", "renewURL", "appName"},
+			"Your {{.planName}} subscription expires soon",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyPasswordExpiring,
+			"Password Expiring",
+			"Reminder to change password before expiry",
+			"password_expiring",
+			[]string{"userName", "daysRemaining", "changePasswordURL", "appName"},
+			"Your password expires in {{.daysRemaining}} days",
+		),
+		// Admin/moderation templates
+		createTemplateMetadataFromBuilder(
+			TemplateKeyAccountLocked,
+			"Account Locked",
+			"Notification that account has been locked by administrator",
+			"account_locked",
+			[]string{"userName", "lockReason", "unlockTime", "appName"},
+			"Your account has been locked",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyAccountUnlocked,
+			"Account Unlocked",
+			"Notification that account has been unlocked",
+			"account_unlocked",
+			[]string{"userName", "loginURL", "appName"},
+			"Your account has been unlocked",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyTermsUpdate,
+			"Terms of Service Updated",
+			"Notification of terms of service update",
+			"terms_update",
+			[]string{"userName", "termsURL", "effectiveDate", "appName"},
+			"Our Terms of Service have been updated",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyPrivacyUpdate,
+			"Privacy Policy Updated",
+			"Notification of privacy policy update",
+			"privacy_update",
+			[]string{"userName", "privacyURL", "appName"},
+			"Our Privacy Policy has been updated",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeyMaintenanceScheduled,
+			"Scheduled Maintenance",
+			"Notification of upcoming scheduled maintenance",
+			"maintenance_scheduled",
+			[]string{"userName", "maintenanceStart", "maintenanceEnd", "actionRequired", "appName"},
+			"Scheduled maintenance: {{.maintenanceStart}}",
+		),
+		createTemplateMetadataFromBuilder(
+			TemplateKeySecurityBreach,
+			"Security Breach Notification",
+			"Critical notification about security incident",
+			"security_breach",
+			[]string{"userName", "breachDetails", "actionRequired", "secureAccountURL", "appName"},
+			"URGENT: Security notice for your account",
+		),
 	}
 }
 

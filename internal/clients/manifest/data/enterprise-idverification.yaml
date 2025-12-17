@@ -15,7 +15,7 @@ routes:
         requiredChecks: '[]string!'
         successUrl: string!
       response:
-        session: '*schema.IdentityVerificationSession!'
+        session: '*base.IdentityVerificationSession!'
       request_type: CreateVerificationSession_req
       response_type: VerificationSessionResponse
     - name: GetVerificationSession
@@ -25,7 +25,7 @@ routes:
       method: GET
       path: /sessions/:id
       response:
-        session: '*schema.IdentityVerificationSession!'
+        session: '*base.IdentityVerificationSession!'
       response_type: VerificationSessionResponse
     - name: GetVerification
       description: |-
@@ -34,7 +34,7 @@ routes:
       method: GET
       path: /:id
       response:
-        verification: '*schema.IdentityVerification!'
+        verification: '*base.IdentityVerification!'
       response_type: VerificationResponse
     - name: GetUserVerifications
       description: |-
@@ -46,7 +46,7 @@ routes:
         limit: int!
         offset: int!
         total: int!
-        verifications: '[]*schema.IdentityVerification!'
+        verifications: '[]*base.IdentityVerification!'
       response_type: VerificationListResponse
     - name: GetUserVerificationStatus
       description: |-
@@ -55,7 +55,7 @@ routes:
       method: GET
       path: /me/status
       response:
-        status: '*schema.UserVerificationStatus!'
+        status: '*base.UserVerificationStatus!'
       response_type: UserVerificationStatusResponse
     - name: RequestReverification
       description: |-
@@ -97,7 +97,7 @@ routes:
       method: GET
       path: /users/:userId/status
       response:
-        status: '*schema.UserVerificationStatus!'
+        status: '*base.UserVerificationStatus!'
       response_type: UserVerificationStatusResponse
     - name: AdminGetUserVerifications
       description: |-
@@ -109,72 +109,9 @@ routes:
         limit: int!
         offset: int!
         total: int!
-        verifications: '[]*schema.IdentityVerification!'
+        verifications: '[]*base.IdentityVerification!'
       response_type: VerificationListResponse
 types:
-    - name: IDVerificationStatusResponse
-      fields:
-        status: '!'
-    - name: mockRepository
-      fields:
-        "": error
-    - name: CreateSessionRequest
-      fields:
-        "": ""
-    - name: VerificationResult
-      fields:
-        "": int
-    - name: ProviderCheckResult
-      fields:
-        "": bool
-    - name: IDVerificationWebhookResponse
-      fields:
-        status: string!
-    - name: VerificationSessionResponse
-      fields:
-        session: '*schema.IdentityVerificationSession!'
-    - name: ProviderSessionRequest
-      fields:
-        "": ""
-    - name: BlockUserRequest
-      fields:
-        reason: string!
-    - name: FacialCheckConfig
-      fields:
-        enabled: bool!
-        motionCapture: bool!
-        variant: string!
-    - name: StripeIdentityConfig
-      fields:
-        allowedTypes: '[]string!'
-        apiKey: string!
-        enabled: bool!
-        requireLiveCapture: bool!
-        requireMatchingSelfie: bool!
-        returnUrl: string!
-        useMock: bool!
-        webhookSecret: string!
-    - name: IDVerificationSessionResponse
-      fields:
-        session: '!'
-    - name: CreateSessionHTTPRequest
-      fields:
-        cancelUrl: string!
-        config: '!'
-        metadata: '!'
-        provider: string!
-        requiredChecks: '[]string!'
-        successUrl: string!
-    - name: UserVerificationStatusResponse
-      fields:
-        status: '*schema.UserVerificationStatus!'
-    - name: WebhookResponse
-      fields:
-        received: bool!
-        status: string!
-    - name: ProviderSession
-      fields:
-        "": string
     - name: Config
       fields:
         acceptedCountries: '[]string!'
@@ -215,18 +152,120 @@ types:
         webhookSecret: string!
         webhookUrl: string!
         webhooksEnabled: bool!
-    - name: Handler
+    - name: AdminBlockUser_req
       fields:
-        "": '*Service'
-    - name: Middleware
+        reason: string!
+    - name: Service
       fields:
-        "": '*Service'
-    - name: VerificationResponse
+        "": Repository
+    - name: ReverifyRequest
       fields:
-        verification: '*schema.IdentityVerification!'
+        reason: string!
+    - name: VerificationListResponse
+      fields:
+        limit: int!
+        offset: int!
+        total: int!
+        verifications: '[]*base.IdentityVerification!'
+    - name: ProviderSession
+      fields:
+        "": string
+    - name: IDVerificationSessionResponse
+      fields:
+        session: '!'
+    - name: mockProvider
+      fields:
+        "": error
+    - name: StripeIdentityProvider
+      fields:
+        "": bool
+    - name: VerificationSessionResponse
+      fields:
+        session: '*base.IdentityVerificationSession!'
     - name: AMLMatch
       fields:
         "": string
+    - name: OnfidoConfig
+      fields:
+        apiToken: string!
+        documentCheck: DocumentCheckConfig!
+        enabled: bool!
+        facialCheck: FacialCheckConfig!
+        includeDocumentReport: bool!
+        includeFacialReport: bool!
+        includeWatchlistReport: bool!
+        region: string!
+        webhookToken: string!
+        workflowId: string!
+    - name: StripeIdentityConfig
+      fields:
+        allowedTypes: '[]string!'
+        apiKey: string!
+        enabled: bool!
+        requireLiveCapture: bool!
+        requireMatchingSelfie: bool!
+        returnUrl: string!
+        useMock: bool!
+        webhookSecret: string!
+    - name: RequestReverification_req
+      fields:
+        reason: string!
+    - name: IDVerificationResponse
+      fields:
+        verification: '!'
+    - name: mockRepository
+      fields:
+        "": error
+    - name: BlockUserRequest
+      fields:
+        reason: string!
+    - name: VerificationResponse
+      fields:
+        verification: '*base.IdentityVerification!'
+    - name: OnfidoProvider
+      fields:
+        "": OnfidoConfig
+    - name: UnblockUserRequest
+      fields: {}
+    - name: UserVerificationStatusResponse
+      fields:
+        status: '*base.UserVerificationStatus!'
+    - name: ProviderCheckResult
+      fields:
+        "": string
+    - name: DocumentCheckConfig
+      fields:
+        enabled: bool!
+        extractData: bool!
+        validateDataConsistency: bool!
+        validateExpiry: bool!
+    - name: IDVerificationWebhookResponse
+      fields:
+        status: string!
+    - name: CreateVerificationRequest
+      fields:
+        "": string
+    - name: IDVerificationErrorResponse
+      fields:
+        error: string!
+    - name: IDVerificationListResponse
+      fields:
+        verifications: '[]!'
+    - name: CreateSessionRequest
+      fields:
+        "": '*xid.ID'
+    - name: WebhookResponse
+      fields:
+        received: bool!
+        status: string!
+    - name: WebhookPayload
+      fields:
+        "": string
+    - name: FacialCheckConfig
+      fields:
+        enabled: bool!
+        motionCapture: bool!
+        variant: string!
     - name: JumioConfig
       fields:
         apiSecret: string!
@@ -249,74 +288,35 @@ types:
         provider: string!
         requiredChecks: '[]string!'
         successUrl: string!
-    - name: StripeIdentityProvider
+    - name: Plugin
       fields:
-        "": bool
-    - name: CheckSubResult
+        "": '*Middleware'
+    - name: IDVerificationStatusResponse
       fields:
-        "": string
-    - name: WebhookPayload
-      fields:
-        "": ""
-    - name: OnfidoProvider
-      fields:
-        "": OnfidoConfig
-    - name: ReverifyRequest
-      fields:
-        reason: string!
-    - name: RequestReverification_req
-      fields:
-        reason: string!
-    - name: AdminBlockUser_req
-      fields:
-        reason: string!
-    - name: IDVerificationListResponse
-      fields:
-        verifications: '[]!'
+        status: '!'
     - name: JumioProvider
       fields:
         "": JumioConfig
-    - name: Service
+    - name: CreateSessionHTTPRequest
       fields:
-        "": Repository
-    - name: mockProvider
+        cancelUrl: string!
+        config: '!'
+        metadata: '!'
+        provider: string!
+        requiredChecks: '[]string!'
+        successUrl: string!
+    - name: VerificationResult
       fields:
-        "": error
-    - name: CreateVerificationRequest
+        "": string
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: Middleware
+      fields:
+        "": '*Service'
+    - name: ProviderSessionRequest
       fields:
         "": xid.ID
-    - name: OnfidoConfig
+    - name: CheckSubResult
       fields:
-        apiToken: string!
-        documentCheck: DocumentCheckConfig!
-        enabled: bool!
-        facialCheck: FacialCheckConfig!
-        includeDocumentReport: bool!
-        includeFacialReport: bool!
-        includeWatchlistReport: bool!
-        region: string!
-        webhookToken: string!
-        workflowId: string!
-    - name: DocumentCheckConfig
-      fields:
-        enabled: bool!
-        extractData: bool!
-        validateDataConsistency: bool!
-        validateExpiry: bool!
-    - name: Plugin
-      fields:
-        "": '*bun.DB'
-    - name: UnblockUserRequest
-      fields: {}
-    - name: VerificationListResponse
-      fields:
-        limit: int!
-        offset: int!
-        total: int!
-        verifications: '[]*schema.IdentityVerification!'
-    - name: IDVerificationErrorResponse
-      fields:
-        error: string!
-    - name: IDVerificationResponse
-      fields:
-        verification: '!'
+        "": string
