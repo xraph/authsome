@@ -459,13 +459,17 @@ When an account is locked, the API returns:
 ```json
 {
     "code": "ACCOUNT_LOCKED",
-    "message": "Account locked due to too many failed login attempts",
-    "locked_until": "2025-11-20T12:15:00Z",
-    "locked_minutes": 15
+    "message": "Account is locked",
+    "context": {
+        "reason": "locked for 15 minutes",
+        "lockedUntil": "2025-12-28T20:15:00Z",
+        "lockedMinutes": 15
+    },
+    "timestamp": "2025-12-28T20:00:00Z"
 }
 ```
 
-The account will automatically unlock after the `locked_minutes` period expires.
+The account will automatically unlock after the `lockedMinutes` period expires. The `lockedUntil` timestamp shows the exact time when the account will be unlocked.
 
 ## Troubleshooting
 

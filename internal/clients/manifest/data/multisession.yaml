@@ -1,13 +1,23 @@
 plugin_id: multisession
 version: 1.0.0
+base_path: /multi-session
 routes:
     - name: List
-      description: List returns sessions for the current user based on cookie
+      description: List returns sessions for the current user based on cookie with optional filtering
       method: GET
       path: /list
-      response:
-        sessions: '!'
-      response_type: SessionsResponse
+      request:
+        active: '*bool!'
+        createdFrom: '*string!'
+        createdTo: '*string!'
+        ipAddress: '*string!'
+        limit: int!
+        offset: int!
+        sortBy: '*string!'
+        sortOrder: '*string!'
+        userAgent: '*string!'
+      request_type: ListSessionsRequest
+      response_type: ListSessionsResponse
     - name: SetActive
       description: SetActive switches the current session cookie to the provided session id
       method: POST
@@ -15,9 +25,9 @@ routes:
       request:
         id: string!
       response:
-        session: '!'
+        session: '*session.Session!'
         token: string!
-      request_type: SetActive_body
+      request_type: SetActiveRequest
       response_type: SessionTokenResponse
     - name: Delete
       description: Delete revokes a session by id for the current user
@@ -29,7 +39,7 @@ routes:
       method: GET
       path: /current
       response:
-        session: '!'
+        session: '*session.Session!'
         token: string!
       response_type: SessionTokenResponse
     - name: GetByID
@@ -37,7 +47,7 @@ routes:
       method: GET
       path: /{id}
       response:
-        session: '!'
+        session: '*session.Session!'
         token: string!
       response_type: SessionTokenResponse
     - name: RevokeAll
@@ -46,66 +56,97 @@ routes:
       path: /revoke-all
       request:
         includeCurrentSession: bool!
-      request_type: RevokeAll_body
+      response:
+        revokedCount: int!
+        status: string!
+      request_type: RevokeAllRequest
+      response_type: RevokeResponse
     - name: RevokeOthers
       description: RevokeOthers revokes all sessions except the current one
       method: POST
       path: /revoke-others
+      response:
+        revokedCount: int!
+        status: string!
+      response_type: RevokeResponse
     - name: Refresh
       description: Refresh extends the current session's expiry time
       method: POST
       path: /refresh
       response:
-        session: '!'
+        session: '*session.Session!'
         token: string!
       response_type: SessionTokenResponse
     - name: GetStats
       description: GetStats returns aggregated session statistics for the current user
       method: GET
       path: /stats
+      response:
+        activeSessions: int!
+        deviceCount: int!
+        locationCount: int!
+        newestSession: '*string!'
+        oldestSession: '*string!'
+        totalSessions: int!
+      response_type: SessionStatsResponse
 types:
-    - name: SetActive_body
+    - name: SetActiveRequest
       fields:
         id: string!
     - name: MultiSessionErrorResponse
       fields:
         error: string!
-    - name: MultiSessionListResponse
+    - name: SessionStatsResponse
       fields:
-        sessions: '[]!'
+        activeSessions: int!
+        deviceCount: int!
+        locationCount: int!
+        newestSession: '*string!'
+        oldestSession: '*string!'
+        totalSessions: int!
+    - name: Plugin
+      fields:
+        "": '*Service'
+    - name: SessionTokenResponse
+      fields:
+        session: '*session.Session!'
+        token: string!
+    - name: Service
+      fields:
+        "": session.ServiceInterface
+    - name: ListSessionsRequest
+      fields:
+        active: '*bool!'
+        createdFrom: '*string!'
+        createdTo: '*string!'
+        ipAddress: '*string!'
+        limit: int!
+        offset: int!
+        sortBy: '*string!'
+        sortOrder: '*string!'
+        userAgent: '*string!'
     - name: SessionStats
       fields:
-        "": '*session.Session'
-    - name: RevokeAll_body
+        "": int
+    - name: RevokeResponse
+      fields:
+        revokedCount: int!
+        status: string!
+    - name: RevokeAllRequest
       fields:
         includeCurrentSession: bool!
+    - name: mockSessionService
+      fields:
+        "": '*bun.DB'
+    - name: DeviceInfo
+      fields:
+        "": bool
     - name: Config
       fields:
         allowCrossPlatform: bool!
         enableDeviceTracking: bool!
         maxSessionsPerUser: int!
         sessionExpiryHours: int!
-    - name: MultiSessionSetActiveResponse
-      fields:
-        session: '!'
-        token: string!
-    - name: SessionDetailResponse
-      fields:
-        device: '!'
-        session: '!'
-    - name: Service
-      fields:
-        "": session.Repository
-    - name: SessionTokenResponse
-      fields:
-        session: '!'
-        token: string!
-    - name: DeviceInfo
-      fields:
-        "": bool
-    - name: MultiSessionDeleteResponse
-      fields:
-        status: string!
     - name: DashboardExtension
       fields:
         "": '*dashboard.ExtensionRegistry'
@@ -115,24 +156,3 @@ types:
     - name: Handler
       fields:
         "": '*Service'
-    - name: mockSessionService
-      fields:
-        "": '*bun.DB'
-    - name: Plugin
-      fields:
-        "": forge.Logger
-    - name: RevokeAllResponse
-      fields:
-        revokedCount: int!
-        status: string!
-    - name: SessionStatsResponse
-      fields:
-        activeSessions: int!
-        deviceCount: int!
-        locationCount: int!
-        newestSession: '*string!'
-        oldestSession: '*string!'
-        totalSessions: int!
-    - name: SessionsResponse
-      fields:
-        sessions: '!'

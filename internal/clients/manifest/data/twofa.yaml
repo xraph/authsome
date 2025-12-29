@@ -4,76 +4,61 @@ routes:
     - name: Enable
       method: POST
       path: /2fa/enable
-      request:
-        method: string!
-        user_id: string!
-      request_type: Enable_body
     - name: Verify
       method: POST
       path: /2fa/verify
-      request:
-        code: string!
-        device_id: string!
-        remember_device: bool!
-        user_id: string!
-      request_type: Verify_body
       response_type: StatusResponse
     - name: Disable
       method: POST
       path: /2fa/disable
-      request:
-        user_id: string!
-      request_type: Disable_body
       response_type: StatusResponse
     - name: GenerateBackupCodes
       method: POST
       path: /2fa/generate-backup-codes
-      request:
-        count: int!
-        user_id: string!
       response:
         codes: '[]string!'
-      request_type: GenerateBackupCodes_body
       response_type: CodesResponse
     - name: SendOTP
       description: SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
       method: POST
       path: /2fa/send-otp
-      request:
-        user_id: string!
       response:
         code: string!
         status: string!
-      request_type: SendOTP_body
       response_type: OTPSentResponse
     - name: Status
       description: Status returns whether 2FA is enabled and whether the device is trusted
       method: POST
       path: /2fa/status
-      request:
-        device_id: string!
-        user_id: string!
       response:
         enabled: bool!
         method: string!
         trusted: bool!
-      request_type: Status_body
       response_type: TwoFAStatusResponse
 types:
-    - name: Enable_body
+    - name: DisableRequest
       fields:
-        method: string!
         user_id: string!
-    - name: Status_body
+    - name: SendOTPRequest
       fields:
-        device_id: string!
         user_id: string!
-    - name: Status
-      fields:
-        "": bool
     - name: CodesResponse
       fields:
         codes: '[]string!'
+    - name: TwoFASendOTPResponse
+      fields:
+        code: string!
+        status: string!
+    - name: VerifyRequest2FA
+      fields:
+        code: string!
+        device_id: string!
+        remember_device: bool!
+        user_id: string!
+    - name: GetStatusRequest
+      fields:
+        device_id: string!
+        user_id: string!
     - name: OTPSentResponse
       fields:
         code: string!
@@ -83,46 +68,51 @@ types:
         enabled: bool!
         method: string!
         trusted: bool!
-    - name: Disable_body
-      fields:
-        user_id: string!
     - name: TwoFAErrorResponse
       fields:
         error: string!
-    - name: TwoFASendOTPResponse
+    - name: TwoFAEnableResponse
       fields:
-        code: string!
         status: string!
+        totp_uri: string!
     - name: TwoFAStatusDetailResponse
       fields:
         enabled: bool!
         method: string!
         trusted: bool!
-    - name: Service
+    - name: VerifyRequest
       fields:
-        "": Config
-    - name: Handler
+        "": string
+    - name: EnableRequest2FA
       fields:
-        "": '*Service'
-    - name: Verify_body
-      fields:
-        code: string!
-        device_id: string!
-        remember_device: bool!
+        method: string!
         user_id: string!
-    - name: GenerateBackupCodes_body
+    - name: RegenerateCodesRequest
       fields:
         count: int!
         user_id: string!
-    - name: SendOTP_body
+    - name: EnableResponse
       fields:
-        user_id: string!
-    - name: Plugin
-      fields:
-        "": core.Authsome
+        status: string!
+        totp_uri: string!
     - name: TwoFABackupCodesResponse
       fields:
         codes: '[]string!'
+    - name: Service
+      fields:
+        "": Config
+    - name: Status
+      fields:
+        "": bool
+    - name: TOTPSecret
+      fields:
+        "": string
+    - name: Handler
+      fields:
+        "": '*Service'
+    - name: Plugin
+      fields:
+        "": Config
     - name: Config
       fields:
         backupCodeCount: int!
@@ -134,16 +124,6 @@ types:
         totpIssuer: string!
         totpPeriod: int!
         trustedDeviceDays: int!
-    - name: TwoFAEnableResponse
-      fields:
-        status: string!
-        totp_uri: string!
     - name: EnableRequest
-      fields:
-        "": string
-    - name: VerifyRequest
-      fields:
-        "": string
-    - name: TOTPSecret
       fields:
         "": string

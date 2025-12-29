@@ -1,5 +1,6 @@
 plugin_id: passkey
 version: 1.0.0
+base_path: /passkey
 routes:
     - name: BeginRegister
       description: BeginRegister initiates passkey registration with WebAuthn challenge

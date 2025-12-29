@@ -34,14 +34,14 @@ impl PhonePlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyRequest {
-        #[serde(rename = "phone")]
-        pub phone: String,
-        #[serde(rename = "remember")]
-        pub remember: bool,
         #[serde(rename = "code")]
         pub code: String,
         #[serde(rename = "email")]
         pub email: String,
+        #[serde(rename = "phone")]
+        pub phone: String,
+        #[serde(rename = "remember")]
+        pub remember: bool,
     }
 
     #[derive(Debug, Deserialize)]
@@ -65,14 +65,14 @@ impl PhonePlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct SignInRequest {
+        #[serde(rename = "code")]
+        pub code: String,
         #[serde(rename = "email")]
         pub email: String,
         #[serde(rename = "phone")]
         pub phone: String,
         #[serde(rename = "remember")]
         pub remember: bool,
-        #[serde(rename = "code")]
-        pub code: String,
     }
 
     #[derive(Debug, Deserialize)]

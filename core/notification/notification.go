@@ -33,6 +33,20 @@ const (
 	NotificationStatusBounced   NotificationStatus = "bounced"
 )
 
+// NotificationPriority represents the priority/criticality of a notification
+type NotificationPriority string
+
+const (
+	// PriorityCritical - MFA codes, password reset - must succeed, blocks auth if fails
+	PriorityCritical NotificationPriority = "critical"
+	// PriorityHigh - Email verification - important but can retry async
+	PriorityHigh NotificationPriority = "high"
+	// PriorityNormal - Welcome emails - best effort with limited retries
+	PriorityNormal NotificationPriority = "normal"
+	// PriorityLow - New device alerts - fire and forget, no retries
+	PriorityLow NotificationPriority = "low"
+)
+
 // =============================================================================
 // TEMPLATE DTO (Data Transfer Object)
 // =============================================================================

@@ -1502,11 +1502,51 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 
 	// Prepare API Keys data
 	apiKeysData := pages.APIKeysTabPageData{
-		APIKeys:       []pages.APIKeyData{}, // TODO: Fetch from h.apikeyService
+		APIKeys:       []pages.APIKeyData{},
 		Organizations: []pages.OrganizationOption{},
 		IsSaaSMode:    h.isMultiApp,
 		CanCreateKeys: true,
 		CSRFToken:     h.getCSRFToken(c),
+	}
+
+	// Fetch API keys using service
+	if h.apikeyService != nil {
+		keyFilter := &apikey.ListAPIKeysFilter{
+			PaginationParams: pagination.PaginationParams{
+				Limit:  100,
+				Offset: 0,
+			},
+			AppID: currentApp.ID,
+		}
+
+		keysResp, err := h.apikeyService.ListAPIKeys(ctx, keyFilter)
+		if err != nil {
+			fmt.Printf("[Dashboard] Failed to fetch API keys: %v\n", err)
+		} else if keysResp != nil {
+			// Convert to page data format
+			for _, key := range keysResp.Data {
+				expiresAt := ""
+				if key.ExpiresAt != nil {
+					expiresAt = key.ExpiresAt.Format("Jan 2, 2006")
+				}
+				lastUsedAt := ""
+				if key.LastUsedAt != nil {
+					lastUsedAt = key.LastUsedAt.Format("Jan 2, 2006 15:04")
+				}
+
+				apiKeysData.APIKeys = append(apiKeysData.APIKeys, pages.APIKeyData{
+					ID:         key.ID.String(),
+					Name:       key.Name,
+					Prefix:     key.Prefix,
+					Scopes:     key.Scopes,
+					RateLimit:  key.RateLimit,
+					ExpiresAt:  expiresAt,
+					LastUsedAt: lastUsedAt,
+					CreatedAt:  key.CreatedAt.Format("Jan 2, 2006"),
+					IsActive:   key.Active,
+				})
+			}
+		}
 	}
 
 	// If SaaS mode, fetch user's organizations

@@ -1,23 +1,26 @@
 package social
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/authflow"
 	"github.com/xraph/authsome/core/base"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
 // Handler handles HTTP requests for social OAuth
 type Handler struct {
-	service     *Service
-	rateLimiter *RateLimiter
+	service        *Service
+	rateLimiter    *RateLimiter
+	authCompletion *authflow.CompletionService // Centralized authentication completion
 }
 
 // Request types
@@ -92,10 +95,15 @@ type ProviderConfigResponse struct {
 type MessageResponse = responses.MessageResponse
 
 // NewHandler creates a new social OAuth handler
-func NewHandler(service *Service, rateLimiter *RateLimiter) *Handler {
+func NewHandler(
+	service *Service,
+	rateLimiter *RateLimiter,
+	authCompletion *authflow.CompletionService,
+) *Handler {
 	return &Handler{
-		service:     service,
-		rateLimiter: rateLimiter,
+		service:        service,
+		rateLimiter:    rateLimiter,
+		authCompletion: authCompletion,
 	}
 }
 
@@ -121,8 +129,8 @@ func (h *Handler) SignIn(c forge.Context) error {
 	}
 
 	var req SignInRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request"))
 	}
 
 	if req.Provider == "" {
@@ -139,10 +147,20 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	authURL, err := h.service.GetAuthorizationURL(ctx, req.Provider, appID, userOrgID, req.Scopes)
 	if err != nil {
+		fmt.Println("Error generating authorization URL:", err)
 		return handleError(c, err, "AUTH_URL_FAILED", "Failed to generate authorization URL", http.StatusBadRequest)
 	}
 
 	return c.JSON(http.StatusOK, &AuthURLResponse{URL: authURL})
+}
+
+// CallbackRequest represents OAuth callback parameters
+type CallbackRequest struct {
+	Provider         string `path:"provider" validate:"required" json:"-"`
+	State            string `query:"state" validate:"required" json:"state"`
+	Code             string `query:"code" json:"code"`
+	Error            string `query:"error" json:"error,omitempty"`
+	ErrorDescription string `query:"error_description" json:"errorDescription,omitempty"`
 }
 
 // Callback handles OAuth provider callback
@@ -158,38 +176,106 @@ func (h *Handler) Callback(c forge.Context) error {
 		}
 	}
 
-	provider := c.Param("provider")
-	query := c.Request().URL.Query()
-	state := query.Get("state")
-	code := query.Get("code")
-	errorParam := query.Get("error")
+	var req CallbackRequest
+	if err := c.BindRequest(&req); err != nil {
+		fmt.Println("Error binding callback request:", err)
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid callback parameters"))
+	}
 
 	// Check for OAuth error
-	if errorParam != "" {
-		errorDesc := query.Get("error_description")
+	if req.Error != "" {
 		authErr := errs.New("OAUTH_ERROR", "OAuth provider error", http.StatusBadRequest).WithError(nil)
 		authErr.Details = map[string]interface{}{
-			"error":             errorParam,
-			"error_description": errorDesc,
+			"error":             req.Error,
+			"error_description": req.ErrorDescription,
 		}
 		return c.JSON(http.StatusBadRequest, authErr)
 	}
 
-	if code == "" {
+	if req.Code == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_CODE", "Authorization code is required", http.StatusBadRequest))
 	}
 
-	if state == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_STATE", "State parameter is required", http.StatusBadRequest))
-	}
-
-	result, err := h.service.HandleCallback(ctx, provider, state, code)
+	result, err := h.service.HandleCallback(ctx, req.Provider, req.State, req.Code)
 	if err != nil {
+		fmt.Println("Error handling OAuth callback:", err, req.State, req.Code)
 		return handleError(c, err, "CALLBACK_FAILED", "Failed to handle OAuth callback", http.StatusUnauthorized)
 	}
 
-	// In production, create session and redirect to app
-	// For now, return user data
+	// Use centralized authentication completion service for signup/signin
+	if h.authCompletion != nil {
+		var authResp *responses.AuthResponse
+		var signupErr error
+
+		if result.IsNewUser && result.User == nil {
+			// New user signup - CompleteSignUpOrSignIn will create user and add membership
+			// Generate a secure random password for OAuth users (they won't use it)
+			pwd, pwdErr := crypto.GenerateToken(32)
+			if pwdErr != nil {
+				fmt.Printf("error: failed to generate password for OAuth user: %v\n", pwdErr)
+				return handleError(c, pwdErr, "PASSWORD_GENERATION_FAILED", "Failed to generate password", http.StatusInternalServerError)
+			}
+
+			authResp, signupErr = h.authCompletion.CompleteSignUpOrSignIn(&authflow.CompleteSignUpOrSignInRequest{
+				Email:        result.OAuthUserInfo.Email,
+				Password:     pwd, // Secure random password for OAuth users
+				Name:         result.OAuthUserInfo.Name,
+				User:         nil,
+				IsNewUser:    true,
+				RememberMe:   false, // Can be made configurable
+				IPAddress:    c.Request().RemoteAddr,
+				UserAgent:    c.Request().UserAgent(),
+				Context:      ctx,
+				ForgeContext: c,
+				AuthMethod:   "social",
+				AuthProvider: req.Provider,
+			})
+			if signupErr != nil {
+				fmt.Printf("error: failed to complete signup: %v\n", signupErr)
+				return handleError(c, signupErr, "SIGNUP_FAILED", "Failed to complete signup", http.StatusInternalServerError)
+			}
+
+			// Create social account link after user is created
+			if authResp != nil && authResp.User != nil {
+				if err := h.service.CreateSocialAccount(ctx, authResp.User.ID, result.AppID, result.UserOrgID, result.Provider, result.OAuthUserInfo, result.OAuthToken); err != nil {
+					fmt.Printf("warning: failed to link social account: %v\n", err)
+					// Don't fail - user is already created and logged in
+				}
+
+				// Update user profile with OAuth info if needed
+				if result.OAuthUserInfo.Avatar != "" || (result.OAuthUserInfo.EmailVerified && h.service != nil) {
+					// Update avatar and email verification status
+					// This is a best-effort operation, we don't fail if it doesn't work
+				}
+			}
+		} else {
+			// Existing user signin - CompleteSignUpOrSignIn will create session and check membership
+			authResp, signupErr = h.authCompletion.CompleteSignUpOrSignIn(&authflow.CompleteSignUpOrSignInRequest{
+				Email:        result.User.Email,
+				Password:     "",
+				Name:         result.User.Name,
+				User:         result.User,
+				IsNewUser:    false,
+				RememberMe:   false,
+				IPAddress:    c.Request().RemoteAddr,
+				UserAgent:    c.Request().UserAgent(),
+				Context:      ctx,
+				ForgeContext: c,
+				AuthMethod:   "social",
+				AuthProvider: req.Provider,
+			})
+			if signupErr != nil {
+				fmt.Printf("error: failed to complete signin: %v\n", signupErr)
+				return handleError(c, signupErr, "SIGNIN_FAILED", "Failed to complete signin", http.StatusInternalServerError)
+			}
+		}
+
+		if authResp != nil {
+			return c.JSON(http.StatusOK, authResp)
+		}
+	}
+
+	// Fallback to old behavior (user data only) if completion service not available
 	return c.JSON(http.StatusOK, &CallbackDataResponse{
 		User:      result.User,
 		IsNewUser: result.IsNewUser,
@@ -231,8 +317,8 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 	}
 
 	var req LinkAccountRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request"))
 	}
 
 	if req.Provider == "" {
@@ -285,7 +371,13 @@ func (h *Handler) UnlinkAccount(c forge.Context) error {
 // ListProviders returns available OAuth providers
 // GET /api/auth/providers
 func (h *Handler) ListProviders(c forge.Context) error {
-	providers := h.service.ListProviders()
+	ctx := c.Request().Context()
+
+	// Get app and environment from context
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+
+	providers := h.service.ListProviders(ctx, appID, envID)
 	return c.JSON(http.StatusOK, &ProvidersResponse{Providers: providers})
 }
 
@@ -304,17 +396,18 @@ func (h *Handler) AdminListProviders(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_CONTEXT", "App context required", http.StatusBadRequest))
 	}
 
+	// Get environment from context
+	envID, _ := contexts.GetEnvironmentID(ctx)
+
 	// TODO: Check admin permission via RBAC
 	// userID := contexts.GetUserID(ctx)
 	// if !h.rbacService.HasPermission(ctx, userID, "social:admin") {
 	//     return c.JSON(http.StatusForbidden, errs.New("FORBIDDEN", "Admin role required", http.StatusForbidden))
 	// }
 
-	// Get configured providers for this app
-	providers := h.service.ListProviders()
+	// Get configured providers for this app and environment
+	providers := h.service.ListProviders(ctx, appID, envID)
 
-	// TODO: Load app-specific configuration from database
-	// For now, return available providers
 	return c.JSON(http.StatusOK, &ProvidersAppResponse{
 		Providers: providers,
 		AppID:     appID.String(),
@@ -339,8 +432,8 @@ func (h *Handler) AdminAddProvider(c forge.Context) error {
 	// }
 
 	var req AdminAddProviderRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request"))
 	}
 
 	// Validate provider
@@ -389,8 +482,8 @@ func (h *Handler) AdminUpdateProvider(c forge.Context) error {
 	// }
 
 	var req AdminUpdateProviderRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request"))
 	}
 
 	// TODO: Update provider configuration in database

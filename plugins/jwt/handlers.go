@@ -1,9 +1,8 @@
 package jwt
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/jwt"
@@ -15,6 +14,40 @@ import (
 // Handler handles JWT-related HTTP requests
 type Handler struct {
 	service *jwt.Service
+}
+
+// Request types
+type CreateJWTKeyRequest struct {
+	IsPlatformKey bool                   `json:"isPlatformKey"`
+	Algorithm     string                 `json:"algorithm" validate:"required"`
+	KeyType       string                 `json:"keyType" validate:"required"`
+	Curve         string                 `json:"curve"`
+	ExpiresAt     *time.Time             `json:"expiresAt"`
+	Metadata      map[string]interface{} `json:"metadata"`
+}
+
+type ListJWTKeysRequest struct {
+	Page          int   `query:"page"`
+	Limit         int   `query:"limit"`
+	Active        *bool `query:"active"`
+	IsPlatformKey *bool `query:"is_platform_key"`
+}
+
+type GenerateTokenRequest struct {
+	UserID      string                 `json:"userId" validate:"required"`
+	SessionID   string                 `json:"sessionId"`
+	TokenType   string                 `json:"tokenType" validate:"required"`
+	Scopes      []string               `json:"scopes"`
+	Permissions []string               `json:"permissions"`
+	Audience    []string               `json:"audience"`
+	ExpiresIn   time.Duration          `json:"expiresIn"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
+type VerifyTokenRequest struct {
+	Token     string   `json:"token" validate:"required"`
+	Audience  []string `json:"audience"`
+	TokenType string   `json:"tokenType"`
 }
 
 // NewHandler creates a new JWT handler
@@ -34,9 +67,9 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 
 // CreateJWTKey creates a new JWT signing key
 func (h *Handler) CreateJWTKey(c forge.Context) error {
-	var req jwt.CreateJWTKeyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var req CreateJWTKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Get app ID from context
@@ -44,9 +77,18 @@ func (h *Handler) CreateJWTKey(c forge.Context) error {
 	if !ok {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID is required", http.StatusBadRequest))
 	}
-	req.AppID = appID
 
-	key, err := h.service.CreateJWTKey(c.Request().Context(), &req)
+	serviceReq := &jwt.CreateJWTKeyRequest{
+		AppID:         appID,
+		IsPlatformKey: req.IsPlatformKey,
+		Algorithm:     req.Algorithm,
+		KeyType:       req.KeyType,
+		Curve:         req.Curve,
+		ExpiresAt:     req.ExpiresAt,
+		Metadata:      req.Metadata,
+	}
+
+	key, err := h.service.CreateJWTKey(c.Request().Context(), serviceReq)
 	if err != nil {
 		return handleError(c, err, "CREATE_JWT_KEY_FAILED", "Failed to create JWT key", http.StatusInternalServerError)
 	}
@@ -62,44 +104,28 @@ func (h *Handler) ListJWTKeys(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID is required", http.StatusBadRequest))
 	}
 
-	// Parse query parameters
-	query := c.Request().URL.Query()
-	page, _ := strconv.Atoi(query.Get("page"))
-	limit, _ := strconv.Atoi(query.Get("limit"))
-
-	// Parse active filter
-	var active *bool
-	if activeStr := query.Get("active"); activeStr != "" {
-		if activeBool, err := strconv.ParseBool(activeStr); err == nil {
-			active = &activeBool
-		}
-	}
-
-	// Parse platform key filter
-	var isPlatformKey *bool
-	if platformStr := query.Get("is_platform_key"); platformStr != "" {
-		if platformBool, err := strconv.ParseBool(platformStr); err == nil {
-			isPlatformKey = &platformBool
-		}
+	var req ListJWTKeysRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Set defaults
-	if page == 0 {
-		page = 1
+	if req.Page == 0 {
+		req.Page = 1
 	}
-	if limit == 0 {
-		limit = 20
+	if req.Limit == 0 {
+		req.Limit = 20
 	}
 
 	// Create filter
 	filter := &jwt.ListJWTKeysFilter{
 		PaginationParams: pagination.PaginationParams{
-			Page:  page,
-			Limit: limit,
+			Page:  req.Page,
+			Limit: req.Limit,
 		},
 		AppID:         appID,
-		IsPlatformKey: isPlatformKey,
-		Active:        active,
+		IsPlatformKey: req.IsPlatformKey,
+		Active:        req.Active,
 	}
 
 	// Get paginated results
@@ -129,9 +155,9 @@ func (h *Handler) GetJWKS(c forge.Context) error {
 
 // GenerateToken generates a new JWT token
 func (h *Handler) GenerateToken(c forge.Context) error {
-	var req jwt.GenerateTokenRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var req GenerateTokenRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Get app ID from context
@@ -139,9 +165,20 @@ func (h *Handler) GenerateToken(c forge.Context) error {
 	if !ok {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID is required", http.StatusBadRequest))
 	}
-	req.AppID = appID
 
-	response, err := h.service.GenerateToken(c.Request().Context(), &req)
+	serviceReq := &jwt.GenerateTokenRequest{
+		AppID:       appID,
+		UserID:      req.UserID,
+		SessionID:   req.SessionID,
+		TokenType:   req.TokenType,
+		Scopes:      req.Scopes,
+		Permissions: req.Permissions,
+		Audience:    req.Audience,
+		ExpiresIn:   req.ExpiresIn,
+		Metadata:    req.Metadata,
+	}
+
+	response, err := h.service.GenerateToken(c.Request().Context(), serviceReq)
 	if err != nil {
 		return handleError(c, err, "GENERATE_TOKEN_FAILED", "Failed to generate token", http.StatusInternalServerError)
 	}
@@ -151,9 +188,9 @@ func (h *Handler) GenerateToken(c forge.Context) error {
 
 // VerifyToken verifies a JWT token
 func (h *Handler) VerifyToken(c forge.Context) error {
-	var req jwt.VerifyTokenRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var req VerifyTokenRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Get app ID from context
@@ -161,9 +198,15 @@ func (h *Handler) VerifyToken(c forge.Context) error {
 	if !ok {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID is required", http.StatusBadRequest))
 	}
-	req.AppID = appID
 
-	result, err := h.service.VerifyToken(c.Request().Context(), &req)
+	serviceReq := &jwt.VerifyTokenRequest{
+		AppID:     appID,
+		Token:     req.Token,
+		Audience:  req.Audience,
+		TokenType: req.TokenType,
+	}
+
+	result, err := h.service.VerifyToken(c.Request().Context(), serviceReq)
 	if err != nil {
 		return handleError(c, err, "VERIFY_TOKEN_FAILED", "Failed to verify token", http.StatusUnauthorized)
 	}

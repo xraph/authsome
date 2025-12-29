@@ -17,40 +17,38 @@ impl ImpersonationPlugin {{
         Self { client: None }
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct StartImpersonationRequest {
-        #[serde(rename = "ticket_number", skip_serializing_if = "Option::is_none")]
-        pub ticket_number: Option<String>,
-        #[serde(rename = "duration_minutes", skip_serializing_if = "Option::is_none")]
-        pub duration_minutes: Option<i32>,
-        #[serde(rename = "reason")]
-        pub reason: String,
+    #[derive(Debug, Deserialize)]
+    pub struct StartImpersonationResponse {
+        #[serde(rename = "started_at")]
+        pub started_at: String,
         #[serde(rename = "target_user_id")]
         pub target_user_id: String,
+        #[serde(rename = "impersonator_id")]
+        pub impersonator_id: String,
+        #[serde(rename = "session_id")]
+        pub session_id: String,
     }
 
     /// StartImpersonation handles POST /impersonation/start
     pub async fn start_impersonation(
         &self,
-        _request: StartImpersonationRequest,
-    ) -> Result<()> {
+    ) -> Result<StartImpersonationResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct EndImpersonationRequest {
-        #[serde(rename = "impersonation_id")]
-        pub impersonation_id: String,
-        #[serde(rename = "reason", skip_serializing_if = "Option::is_none")]
-        pub reason: Option<String>,
+    #[derive(Debug, Deserialize)]
+    pub struct EndImpersonationResponse {
+        #[serde(rename = "status")]
+        pub status: String,
+        #[serde(rename = "ended_at")]
+        pub ended_at: String,
     }
 
     /// EndImpersonation handles POST /impersonation/end
     pub async fn end_impersonation(
         &self,
-        _request: EndImpersonationRequest,
-    ) -> Result<()> {
+    ) -> Result<EndImpersonationResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -79,10 +77,20 @@ impl ImpersonationPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct VerifyImpersonationResponse {
+        #[serde(rename = "impersonator_id")]
+        pub impersonator_id: String,
+        #[serde(rename = "is_impersonating")]
+        pub is_impersonating: bool,
+        #[serde(rename = "target_user_id")]
+        pub target_user_id: String,
+    }
+
     /// VerifyImpersonation handles GET /impersonation/verify/:sessionId
     pub async fn verify_impersonation(
         &self,
-    ) -> Result<()> {
+    ) -> Result<VerifyImpersonationResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

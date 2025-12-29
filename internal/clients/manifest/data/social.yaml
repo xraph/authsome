@@ -21,6 +21,11 @@ routes:
         GET /api/auth/callback/:provider
       method: GET
       path: /callback/:provider
+      query:
+        state: string!
+        code: string
+        error: string
+        errorDescription: string
       response:
         action: string!
         isNewUser: bool!

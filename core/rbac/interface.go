@@ -102,6 +102,73 @@ type ServiceInterface interface {
 	// GetRolePermissions gets all permissions for a role
 	GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*schema.Permission, error)
 
+	// ====== Role Assignment Methods ======
+
+	// AssignRoleToUser assigns a single role to a user in an organization
+	AssignRoleToUser(ctx context.Context, userID, roleID, orgID xid.ID) error
+
+	// AssignRolesToUser assigns multiple roles to a user in an organization
+	AssignRolesToUser(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error
+
+	// AssignRoleToUsers assigns a single role to multiple users in an organization
+	AssignRoleToUsers(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (*BulkAssignmentResult, error)
+
+	// AssignAppLevelRole assigns a role at app-level (not org-scoped)
+	AssignAppLevelRole(ctx context.Context, userID, roleID, appID xid.ID) error
+
+	// ====== Role Unassignment Methods ======
+
+	// UnassignRoleFromUser removes a single role from a user in an organization
+	UnassignRoleFromUser(ctx context.Context, userID, roleID, orgID xid.ID) error
+
+	// UnassignRolesFromUser removes multiple roles from a user in an organization
+	UnassignRolesFromUser(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error
+
+	// UnassignRoleFromUsers removes a single role from multiple users in an organization
+	UnassignRoleFromUsers(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (*BulkAssignmentResult, error)
+
+	// ClearUserRolesInOrg removes all roles from a user in an organization
+	ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error
+
+	// ClearUserRolesInApp removes all roles from a user in an app
+	ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error
+
+	// ====== Role Transfer Methods ======
+
+	// TransferUserRoles moves roles from one org to another
+	TransferUserRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error
+
+	// CopyUserRoles duplicates roles from one org to another
+	CopyUserRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error
+
+	// ReplaceUserRoles atomically replaces all user roles in an org with a new set
+	ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error
+
+	// SyncRolesBetweenOrgs synchronizes roles between organizations
+	SyncRolesBetweenOrgs(ctx context.Context, userID xid.ID, config *RoleSyncConfig) error
+
+	// ====== Role Listing Methods ======
+
+	// GetUserRolesInOrg gets all roles (with permissions) for a specific user in an organization
+	GetUserRolesInOrg(ctx context.Context, userID, orgID, envID xid.ID) ([]*RoleWithPermissions, error)
+
+	// GetUserRolesInApp gets all roles (with permissions) for a specific user across all orgs in an app
+	GetUserRolesInApp(ctx context.Context, userID, appID, envID xid.ID) ([]*RoleWithPermissions, error)
+
+	// ListAllUserRolesInOrg lists all user-role assignments with permissions in an organization (admin view)
+	ListAllUserRolesInOrg(ctx context.Context, orgID, envID xid.ID) ([]*UserRoleAssignment, error)
+
+	// ListAllUserRolesInApp lists all user-role assignments with permissions across all orgs in an app (admin view)
+	ListAllUserRolesInApp(ctx context.Context, appID, envID xid.ID) ([]*UserRoleAssignment, error)
+
+	// ====== Access Control Methods ======
+
+	// CheckUserAccessInOrg checks if a user can perform an action on a resource in an organization
+	CheckUserAccessInOrg(ctx context.Context, userID, orgID, envID xid.ID, action, resource string, cachedRoles []*RoleWithPermissions) (*AccessCheckResult, error)
+
+	// CheckUserAccessInApp checks if a user can perform an action on a resource at app level
+	CheckUserAccessInApp(ctx context.Context, userID, appID, envID xid.ID, action, resource string, cachedRoles []*RoleWithPermissions) (*AccessCheckResult, error)
+
 	// ====== Repository Configuration ======
 
 	// SetRepositories sets the repository dependencies

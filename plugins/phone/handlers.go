@@ -1,7 +1,6 @@
 package phone
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 
@@ -59,8 +58,8 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 // SendCode handles sending of verification code via SMS
 func (h *Handler) SendCode(c forge.Context) error {
 	var req SendCodeRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	if h.rl != nil {
@@ -95,8 +94,8 @@ func (h *Handler) SendCode(c forge.Context) error {
 // Verify checks the code and creates a session on success
 func (h *Handler) Verify(c forge.Context) error {
 	var req VerifyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	ip := c.Request().RemoteAddr
@@ -128,8 +127,8 @@ func (h *Handler) Verify(c forge.Context) error {
 // SignIn aliases to Verify for convenience
 func (h *Handler) SignIn(c forge.Context) error {
 	var req VerifyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	ip := c.Request().RemoteAddr

@@ -12,39 +12,53 @@ export class ApikeyPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createAPIKey(): Promise<void> {
-    const path = '/createapikey';
-    return this.client.request<void>('POST', path);
+  async createAPIKey(request: types.CreateAPIKeyRequest): Promise<types.CreateAPIKeyResponse> {
+    const path = '/api-keys/createapikey';
+    return this.client.request<types.CreateAPIKeyResponse>('POST', path, {
+      body: request,
+    });
   }
 
-  async rotateAPIKey(): Promise<void> {
-    const path = '/:id/rotate';
-    return this.client.request<void>('POST', path);
+  async rotateAPIKey(params: { id: string }, request: types.RotateAPIKeyRequest): Promise<types.RotateAPIKeyResponse> {
+    const path = `/api-keys/${params.id}/rotate`;
+    return this.client.request<types.RotateAPIKeyResponse>('POST', path, {
+      body: request,
+    });
   }
 
-  async listAPIKeys(): Promise<void> {
-    const path = '/listapikeys';
-    return this.client.request<void>('GET', path);
+  async listAPIKeys(request?: types.ListAPIKeysRequest): Promise<types.ListAPIKeysResponse> {
+    const path = '/api-keys/listapikeys';
+    return this.client.request<types.ListAPIKeysResponse>('GET', path, {
+      query: this.client.toQueryParams(request),
+    });
   }
 
-  async getAPIKey(): Promise<void> {
-    const path = '/:id';
-    return this.client.request<void>('GET', path);
+  async getAPIKey(params: { id: string }, request?: types.GetAPIKeyRequest): Promise<types.APIKey> {
+    const path = `/api-keys/${params.id}`;
+    return this.client.request<types.APIKey>('GET', path, {
+      query: this.client.toQueryParams(request),
+    });
   }
 
-  async updateAPIKey(): Promise<void> {
-    const path = '/:id';
-    return this.client.request<void>('PUT', path);
+  async updateAPIKey(params: { id: string }, request: types.UpdateAPIKeyRequest): Promise<types.APIKey> {
+    const path = `/api-keys/${params.id}`;
+    return this.client.request<types.APIKey>('PUT', path, {
+      body: request,
+    });
   }
 
-  async deleteAPIKey(): Promise<types.MessageResponse> {
-    const path = '/:id';
-    return this.client.request<types.MessageResponse>('DELETE', path);
+  async deleteAPIKey(params: { id: string }, request?: types.DeleteAPIKeyRequest): Promise<types.MessageResponse> {
+    const path = `/api-keys/${params.id}`;
+    return this.client.request<types.MessageResponse>('DELETE', path, {
+      query: this.client.toQueryParams(request),
+    });
   }
 
-  async verifyAPIKey(): Promise<void> {
-    const path = '/verify';
-    return this.client.request<void>('POST', path);
+  async verifyAPIKey(request: types.VerifyAPIKeyRequest): Promise<types.VerifyAPIKeyResponse> {
+    const path = '/api-keys/verify';
+    return this.client.request<types.VerifyAPIKeyResponse>('POST', path, {
+      body: request,
+    });
   }
 
 }

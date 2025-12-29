@@ -31,21 +31,21 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // MigrateAll MigrateAll migrates all RBAC policies to the permissions system
 func (p *Plugin) MigrateAll(ctx context.Context, req *authsome.MigrateAllRequest) error {
-	path := "/migrate/all"
+	path := "/api/permissions/migrate/all"
 	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }
 
 // MigrateRoles MigrateRoles migrates role-based permissions to policies
 func (p *Plugin) MigrateRoles(ctx context.Context) error {
-	path := "/migrate/roles"
+	path := "/api/permissions/migrate/roles"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // PreviewConversion PreviewConversion previews the conversion of an RBAC policy
 func (p *Plugin) PreviewConversion(ctx context.Context, req *authsome.PreviewConversionRequest) error {
-	path := "/migrate/preview"
+	path := "/api/permissions/migrate/preview"
 	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }

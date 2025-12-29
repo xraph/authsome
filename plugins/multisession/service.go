@@ -3,6 +3,8 @@ package multisession
 import (
 	"context"
 	"errors"
+	"sort"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/auth"
@@ -32,16 +34,111 @@ func (s *Service) CurrentUserFromToken(ctx context.Context, token string) (xid.I
 	return res.User.ID, nil
 }
 
-// List returns all sessions for a user
-func (s *Service) List(ctx context.Context, userID xid.ID) (*session.ListSessionsResponse, error) {
-	// Default pagination: return up to 100 sessions
-	return s.sessionSvc.ListSessions(ctx, &session.ListSessionsFilter{
+// ListSessionsRequest represents filtering and pagination options for listing sessions
+type ListSessionsRequest struct {
+	// Filtering
+	Active      *bool   `json:"active" query:"active"`
+	UserAgent   *string `json:"userAgent" query:"user_agent"`
+	IPAddress   *string `json:"ipAddress" query:"ip_address"`
+	CreatedFrom *string `json:"createdFrom" query:"created_from"`
+	CreatedTo   *string `json:"createdTo" query:"created_to"`
+	
+	// Sorting
+	SortBy    *string `json:"sortBy" query:"sort_by"`
+	SortOrder *string `json:"sortOrder" query:"sort_order"`
+	
+	// Pagination
+	Limit  int `json:"limit" query:"limit"`
+	Offset int `json:"offset" query:"offset"`
+}
+
+// List returns all sessions for a user with optional filtering
+func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequest) (*session.ListSessionsResponse, error) {
+	// Build filter from request
+	filter := &session.ListSessionsFilter{
 		UserID: &userID,
+		Active: req.Active,
 		PaginationParams: pagination.PaginationParams{
-			Limit:  100,
-			Offset: 0,
+			Limit:  req.Limit,
+			Offset: req.Offset,
 		},
-	})
+	}
+	
+	// Note: UserAgent, IPAddress, CreatedFrom, CreatedTo, SortBy, and SortOrder
+	// are not currently supported by the core session.ListSessionsFilter.
+	// We'll need to filter the results in-memory for now.
+	// TODO: Add these fields to core session.ListSessionsFilter for database-level filtering
+	
+	listResp, err := s.sessionSvc.ListSessions(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Apply additional filters in-memory
+	filteredSessions := listResp.Data
+	
+	// Filter by UserAgent
+	if req.UserAgent != nil && *req.UserAgent != "" {
+		var filtered []*session.Session
+		for _, sess := range filteredSessions {
+			if sess.UserAgent == *req.UserAgent {
+				filtered = append(filtered, sess)
+			}
+		}
+		filteredSessions = filtered
+	}
+	
+	// Filter by IPAddress
+	if req.IPAddress != nil && *req.IPAddress != "" {
+		var filtered []*session.Session
+		for _, sess := range filteredSessions {
+			if sess.IPAddress == *req.IPAddress {
+				filtered = append(filtered, sess)
+			}
+		}
+		filteredSessions = filtered
+	}
+	
+	// Filter by CreatedFrom
+	if req.CreatedFrom != nil && *req.CreatedFrom != "" {
+		createdFrom, err := time.Parse(time.RFC3339, *req.CreatedFrom)
+		if err == nil {
+			var filtered []*session.Session
+			for _, sess := range filteredSessions {
+				if sess.CreatedAt.After(createdFrom) || sess.CreatedAt.Equal(createdFrom) {
+					filtered = append(filtered, sess)
+				}
+			}
+			filteredSessions = filtered
+		}
+	}
+	
+	// Filter by CreatedTo
+	if req.CreatedTo != nil && *req.CreatedTo != "" {
+		createdTo, err := time.Parse(time.RFC3339, *req.CreatedTo)
+		if err == nil {
+			var filtered []*session.Session
+			for _, sess := range filteredSessions {
+				if sess.CreatedAt.Before(createdTo) || sess.CreatedAt.Equal(createdTo) {
+					filtered = append(filtered, sess)
+				}
+			}
+			filteredSessions = filtered
+		}
+	}
+	
+	// Apply sorting (in-memory)
+	if req.SortBy != nil && *req.SortBy != "" {
+		sortSessions(filteredSessions, *req.SortBy, req.SortOrder)
+	}
+	
+	// Update response with filtered data
+	listResp.Data = filteredSessions
+	if listResp.Pagination != nil {
+		listResp.Pagination.Total = int64(len(filteredSessions))
+	}
+	
+	return listResp, nil
 }
 
 // Find returns a specific session by ID ensuring ownership
@@ -92,8 +189,12 @@ func (s *Service) GetCurrent(ctx context.Context, userID, sessionID xid.ID) (*se
 // Returns the count of successfully revoked sessions and any error encountered.
 // Use case: Sign out from all devices, or sign out everywhere except current device.
 func (s *Service) RevokeAll(ctx context.Context, userID xid.ID, includeCurrentSession bool, currentSessionID xid.ID) (int, error) {
-	// Get all sessions for user
-	listResp, err := s.List(ctx, userID)
+	// Get all sessions for user with default parameters
+	req := &ListSessionsRequest{
+		Limit:  100,
+		Offset: 0,
+	}
+	listResp, err := s.List(ctx, userID, req)
 	if err != nil {
 		return 0, err
 	}
@@ -161,8 +262,12 @@ type SessionStats struct {
 // and user account management interfaces.
 // Returns SessionStats containing all aggregated data or an error if retrieval fails.
 func (s *Service) GetStats(ctx context.Context, userID xid.ID) (*SessionStats, error) {
-	// Get all sessions for user
-	listResp, err := s.List(ctx, userID)
+	// Get all sessions for user with default parameters
+	req := &ListSessionsRequest{
+		Limit:  100,
+		Offset: 0,
+	}
+	listResp, err := s.List(ctx, userID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -208,4 +313,32 @@ func (s *Service) GetStats(ctx context.Context, userID xid.ID) (*SessionStats, e
 	stats.LocationCount = len(ipAddresses)
 
 	return stats, nil
+}
+
+// sortSessions sorts sessions based on the specified field and order
+func sortSessions(sessions []*session.Session, sortBy string, sortOrder *string) {
+	order := "desc"
+	if sortOrder != nil && *sortOrder != "" {
+		order = *sortOrder
+	}
+	
+	sort.Slice(sessions, func(i, j int) bool {
+		var less bool
+		switch sortBy {
+		case "created_at":
+			less = sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
+		case "expires_at":
+			less = sessions[i].ExpiresAt.Before(sessions[j].ExpiresAt)
+		case "updated_at":
+			less = sessions[i].UpdatedAt.Before(sessions[j].UpdatedAt)
+		default:
+			// Default to created_at
+			less = sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
+		}
+		
+		if order == "asc" {
+			return less
+		}
+		return !less
+	})
 }

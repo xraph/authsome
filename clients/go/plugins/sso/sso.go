@@ -2,6 +2,7 @@ package sso
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/xraph/authsome/clients/go"
 )
@@ -31,7 +32,7 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // RegisterProvider RegisterProvider registers a new SSO provider (SAML or OIDC)
 func (p *Plugin) RegisterProvider(ctx context.Context, req *authsome.RegisterProviderRequest) (*authsome.RegisterProviderResponse, error) {
-	path := "/provider/register"
+	path := "/sso/provider/register"
 	var result authsome.RegisterProviderResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -42,7 +43,7 @@ func (p *Plugin) RegisterProvider(ctx context.Context, req *authsome.RegisterPro
 
 // SAMLSPMetadata SAMLSPMetadata returns Service Provider metadata
 func (p *Plugin) SAMLSPMetadata(ctx context.Context) (*authsome.SAMLSPMetadataResponse, error) {
-	path := "/saml2/sp/metadata"
+	path := "/sso/saml2/sp/metadata"
 	var result authsome.SAMLSPMetadataResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -52,8 +53,8 @@ func (p *Plugin) SAMLSPMetadata(ctx context.Context) (*authsome.SAMLSPMetadataRe
 }
 
 // SAMLLogin SAMLLogin initiates SAML authentication by generating AuthnRequest
-func (p *Plugin) SAMLLogin(ctx context.Context, req *authsome.SAMLLoginRequest) (*authsome.SAMLLoginResponse, error) {
-	path := "/saml2/login/:providerId"
+func (p *Plugin) SAMLLogin(ctx context.Context, req *authsome.SAMLLoginRequest, providerId string) (*authsome.SAMLLoginResponse, error) {
+	path := "/sso/saml2/login/:providerId"
 	var result authsome.SAMLLoginResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -63,8 +64,8 @@ func (p *Plugin) SAMLLogin(ctx context.Context, req *authsome.SAMLLoginRequest) 
 }
 
 // SAMLCallback SAMLCallback handles SAML response callback and provisions user
-func (p *Plugin) SAMLCallback(ctx context.Context) (*authsome.SAMLCallbackResponse, error) {
-	path := "/saml2/callback/:providerId"
+func (p *Plugin) SAMLCallback(ctx context.Context, providerId string) (*authsome.SAMLCallbackResponse, error) {
+	path := "/sso/saml2/callback/:providerId"
 	var result authsome.SAMLCallbackResponse
 	err := p.client.Request(ctx, "POST", path, nil, &result, false)
 	if err != nil {
@@ -74,8 +75,8 @@ func (p *Plugin) SAMLCallback(ctx context.Context) (*authsome.SAMLCallbackRespon
 }
 
 // OIDCLogin OIDCLogin initiates OIDC authentication flow with PKCE
-func (p *Plugin) OIDCLogin(ctx context.Context, req *authsome.OIDCLoginRequest) (*authsome.OIDCLoginResponse, error) {
-	path := "/oidc/login/:providerId"
+func (p *Plugin) OIDCLogin(ctx context.Context, req *authsome.OIDCLoginRequest, providerId string) (*authsome.OIDCLoginResponse, error) {
+	path := "/sso/oidc/login/:providerId"
 	var result authsome.OIDCLoginResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -85,8 +86,8 @@ func (p *Plugin) OIDCLogin(ctx context.Context, req *authsome.OIDCLoginRequest) 
 }
 
 // OIDCCallback OIDCCallback handles OIDC callback and provisions user
-func (p *Plugin) OIDCCallback(ctx context.Context) (*authsome.OIDCCallbackResponse, error) {
-	path := "/oidc/callback/:providerId"
+func (p *Plugin) OIDCCallback(ctx context.Context, providerId string) (*authsome.OIDCCallbackResponse, error) {
+	path := "/sso/oidc/callback/:providerId"
 	var result authsome.OIDCCallbackResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {

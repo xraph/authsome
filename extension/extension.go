@@ -121,6 +121,9 @@ func (e *Extension) Register(app forge.App) error {
 	if e.config.UserConfig != nil {
 		opts = append(opts, authsome.WithUserConfig(*e.config.UserConfig))
 	}
+	if e.config.RequireEmailVerified {
+		opts = append(opts, authsome.WithRequireEmailVerification(true))
+	}
 	opts = append(opts, authsome.WithRBACEnforcement(e.config.RBACEnforce))
 
 	// Create AuthSome instance

@@ -143,12 +143,110 @@ routes:
     path: /devices/revoke
     auth: true
     request:
-      deviceId: string!
+      fingerprint: string!
     response:
-      success: boolean!
+      status: string!
     errors:
       - code: 400
         description: Invalid device ID
       - code: 401
         description: Not authenticated
+
+  - name: RefreshSession
+    description: Refresh access token using refresh token
+    method: POST
+    path: /refresh
+    request:
+      refreshToken: string!
+    response:
+      session: '!'
+      accessToken: string!
+      refreshToken: string!
+      expiresAt: string!
+      refreshExpiresAt: string!
+    errors:
+      - code: 400
+        description: Invalid request
+      - code: 401
+        description: Invalid or expired refresh token
+
+  - name: RequestPasswordReset
+    description: Request password reset link
+    method: POST
+    path: /password/reset/request
+    request:
+      email: string!
+    response:
+      message: string!
+    errors:
+      - code: 400
+        description: Invalid email format
+
+  - name: ResetPassword
+    description: Reset password using token
+    method: POST
+    path: /password/reset/confirm
+    request:
+      token: string!
+      newPassword: string!
+    response:
+      message: string!
+    errors:
+      - code: 400
+        description: Invalid or expired token
+
+  - name: ValidateResetToken
+    description: Validate password reset token
+    method: GET
+    path: /password/reset/validate
+    query:
+      token: string!
+    response:
+      valid: bool!
+    errors:
+      - code: 400
+        description: Missing token parameter
+
+  - name: ChangePassword
+    description: Change password for authenticated user
+    method: POST
+    path: /password/change
+    auth: true
+    request:
+      oldPassword: string!
+      newPassword: string!
+    response:
+      message: string!
+    errors:
+      - code: 400
+        description: Invalid request
+      - code: 401
+        description: Incorrect current password
+
+  - name: RequestEmailChange
+    description: Request email address change
+    method: POST
+    path: /email/change/request
+    auth: true
+    request:
+      newEmail: string!
+    response:
+      message: string!
+    errors:
+      - code: 400
+        description: Invalid email or email already taken
+      - code: 401
+        description: Not authenticated
+
+  - name: ConfirmEmailChange
+    description: Confirm email change using token
+    method: POST
+    path: /email/change/confirm
+    request:
+      token: string!
+    response:
+      message: string!
+    errors:
+      - code: 400
+        description: Invalid or expired token
 

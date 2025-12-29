@@ -19,12 +19,12 @@ impl SocialPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct SignInRequest {
+        #[serde(rename = "scopes")]
+        pub scopes: []string,
         #[serde(rename = "provider")]
         pub provider: String,
         #[serde(rename = "redirectUrl")]
         pub redirect_url: String,
-        #[serde(rename = "scopes")]
-        pub scopes: []string,
     }
 
     #[derive(Debug, Deserialize)]
@@ -45,12 +45,12 @@ POST /api/auth/signin/social
 
     #[derive(Debug, Deserialize)]
     pub struct CallbackResponse {
+        #[serde(rename = "user")]
+        pub user: *schema.User,
         #[serde(rename = "action")]
         pub action: String,
         #[serde(rename = "isNewUser")]
         pub is_new_user: bool,
-        #[serde(rename = "user")]
-        pub user: *schema.User,
     }
 
     /// Callback handles OAuth provider callback

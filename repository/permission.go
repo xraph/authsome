@@ -84,7 +84,8 @@ func (r *PermissionRepository) ListByApp(ctx context.Context, appID xid.ID) ([]*
 		Model(&perms).
 		Where("app_id = ?", appID).
 		Where("organization_id IS NULL"). // Only app-level permissions
-		Order("category ASC, name ASC").
+		Order("category ASC").
+		Order("name ASC").
 		Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -97,7 +98,8 @@ func (r *PermissionRepository) ListByOrg(ctx context.Context, orgID xid.ID) ([]*
 	err := r.db.NewSelect().
 		Model(&perms).
 		Where("organization_id = ?", orgID).
-		Order("category ASC, name ASC").
+		Order("category ASC").
+		Order("name ASC").
 		Scan(ctx)
 	if err != nil {
 		return nil, err

@@ -38,7 +38,8 @@ func TestCookieConfigMerge(t *testing.T) {
 		Name:     "override_session",
 		SameSite: "Strict",
 		// Note: Enabled and HttpOnly are false (zero values) here
-		// and will override the base according to current merge logic
+		// With the new merge logic, zero values don't override base values
+		// This prevents app metadata from accidentally disabling globally-enabled features
 	}
 
 	merged := base.Merge(&override)
@@ -56,14 +57,14 @@ func TestCookieConfigMerge(t *testing.T) {
 		t.Errorf("Expected Path to be '/' from base, got '%s'", merged.Path)
 	}
 
-	// Note: Enabled and HttpOnly will be false because override has zero values
-	// This is expected behavior - to keep base values, don't include them in override
-	// or use explicit true values in override
-	if merged.Enabled != false {
-		t.Error("Expected Enabled to be false from override (zero value)")
+	// NEW BEHAVIOR: Zero values in override don't override base values
+	// This prevents app metadata without explicit "enabled: true" from
+	// accidentally disabling globally-enabled cookies
+	if !merged.Enabled {
+		t.Error("Expected Enabled to remain true from base (zero value in override shouldn't disable)")
 	}
-	if merged.HttpOnly != false {
-		t.Error("Expected HttpOnly to be false from override (zero value)")
+	if !merged.HttpOnly {
+		t.Error("Expected HttpOnly to remain true from base (zero value in override shouldn't disable)")
 	}
 }
 
@@ -170,19 +171,42 @@ func TestCookieConfigMergeDomain(t *testing.T) {
 }
 
 func TestCookieConfigMergeEnabled(t *testing.T) {
-	// Test that Enabled field is always respected from override
+	// Test that Enabled=false in override doesn't disable base Enabled=true
+	// This is intentional - we can't distinguish between explicit false and unset (zero value)
+	// To prevent app metadata from accidentally disabling globally-enabled cookies,
+	// we only override Enabled if the override sets it to true
 	base := CookieConfig{
 		Enabled: true,
 		Name:    "base_session",
 	}
 
 	override := CookieConfig{
-		Enabled: false,
+		Enabled: false, // This is the same as not setting it (zero value)
 	}
 
 	merged := base.Merge(&override)
 
-	if merged.Enabled {
-		t.Error("Expected Enabled to be false from override")
+	// NEW BEHAVIOR: base.Enabled=true is preserved even when override.Enabled=false
+	// This prevents app metadata from accidentally disabling globally-enabled cookies
+	if !merged.Enabled {
+		t.Error("Expected Enabled to remain true from base (override.Enabled=false shouldn't disable)")
+	}
+}
+
+func TestCookieConfigMergeEnabledExplicitTrue(t *testing.T) {
+	// Test that Enabled=true in override can enable cookies even when base is disabled
+	base := CookieConfig{
+		Enabled: false,
+		Name:    "base_session",
+	}
+
+	override := CookieConfig{
+		Enabled: true, // Explicit enable
+	}
+
+	merged := base.Merge(&override)
+
+	if !merged.Enabled {
+		t.Error("Expected Enabled to be true from override (explicit enable)")
 	}
 }

@@ -31,18 +31,26 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // Send Send handles manual verification email sending
 POST /email-verification/send
-func (p *Plugin) Send(ctx context.Context, req *authsome.SendRequest) error {
+func (p *Plugin) Send(ctx context.Context, req *authsome.SendRequest) (*authsome.SendResponse, error) {
 	path := "/email-verification/send"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+	var result authsome.SendResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // Verify Verify handles email verification via token
 GET /email-verification/verify?token=xyz
-func (p *Plugin) Verify(ctx context.Context) error {
+func (p *Plugin) Verify(ctx context.Context, req *authsome.VerifyRequest) (*authsome.VerifyResponse, error) {
 	path := "/email-verification/verify"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+	var result authsome.VerifyResponse
+	err := p.client.Request(ctx, "GET", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // Resend Resend handles resending verification email

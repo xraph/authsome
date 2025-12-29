@@ -53,15 +53,31 @@ func (s *TemplateService) SendWithTemplate(ctx context.Context, req *SendWithTem
 		return nil, fmt.Errorf("failed to find template: %w", err)
 	}
 	if schemaTemplate == nil {
-		return nil, notification.TemplateNotFound()
+		// Template not found - try to initialize default templates for this app
+		fmt.Printf("[Notification] Template %s not found for app %s, initializing defaults...\n", req.TemplateKey, req.AppID)
+		if err := s.notificationSvc.InitializeDefaultTemplates(ctx, req.AppID); err != nil {
+			fmt.Printf("[Notification] Failed to initialize default templates: %v\n", err)
+			return nil, notification.TemplateNotFound()
+		}
+		
+		// Retry finding the template after initialization
+		schemaTemplate, err = s.repo.FindTemplateByKey(ctx, req.AppID, req.TemplateKey, string(req.Type), language)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find template after initialization: %w", err)
+		}
+		if schemaTemplate == nil {
+			return nil, notification.TemplateNotFound()
+		}
+		fmt.Printf("[Notification] Template %s initialized and found for app %s\n", req.TemplateKey, req.AppID)
 	}
 
 	// Send notification using the template
+	// Use schemaTemplate.Name (not the key) since core Send() looks up by name
 	return s.notificationSvc.Send(ctx, &notification.SendRequest{
 		AppID:        req.AppID,
 		Type:         req.Type,
 		Recipient:    req.Recipient,
-		TemplateName: req.TemplateKey,
+		TemplateName: schemaTemplate.Name,
 		Variables:    req.Variables,
 		Metadata:     req.Metadata,
 	})

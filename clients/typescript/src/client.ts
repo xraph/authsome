@@ -3,35 +3,35 @@
 import { ClientPlugin } from './plugin';
 import { createErrorFromResponse } from './errors';
 import * as types from './types';
-import { CmsPlugin } from './plugins/cms';
-import { JwtPlugin } from './plugins/jwt';
-import { WebhookPlugin } from './plugins/webhook';
-import { AnonymousPlugin } from './plugins/anonymous';
-import { EmailverificationPlugin } from './plugins/emailverification';
-import { NotificationPlugin } from './plugins/notification';
-import { OidcproviderPlugin } from './plugins/oidcprovider';
-import { SsoPlugin } from './plugins/sso';
-import { IdverificationPlugin } from './plugins/idverification';
-import { SecretsPlugin } from './plugins/secrets';
-import { ConsentPlugin } from './plugins/consent';
-import { ImpersonationPlugin } from './plugins/impersonation';
-import { MultiappPlugin } from './plugins/multiapp';
-import { SocialPlugin } from './plugins/social';
-import { ApikeyPlugin } from './plugins/apikey';
-import { BackupauthPlugin } from './plugins/backupauth';
-import { MagiclinkPlugin } from './plugins/magiclink';
-import { UsernamePlugin } from './plugins/username';
 import { AdminPlugin } from './plugins/admin';
+import { PermissionsPlugin } from './plugins/permissions';
+import { WebhookPlugin } from './plugins/webhook';
+import { CmsPlugin } from './plugins/cms';
+import { EmailverificationPlugin } from './plugins/emailverification';
+import { IdverificationPlugin } from './plugins/idverification';
+import { MagiclinkPlugin } from './plugins/magiclink';
+import { NotificationPlugin } from './plugins/notification';
+import { TwofaPlugin } from './plugins/twofa';
+import { ApikeyPlugin } from './plugins/apikey';
+import { EmailotpPlugin } from './plugins/emailotp';
+import { BackupauthPlugin } from './plugins/backupauth';
 import { CompliancePlugin } from './plugins/compliance';
 import { StepupPlugin } from './plugins/stepup';
-import { MultisessionPlugin } from './plugins/multisession';
-import { OrganizationPlugin } from './plugins/organization';
-import { PasskeyPlugin } from './plugins/passkey';
-import { PermissionsPlugin } from './plugins/permissions';
-import { PhonePlugin } from './plugins/phone';
-import { EmailotpPlugin } from './plugins/emailotp';
 import { MfaPlugin } from './plugins/mfa';
-import { TwofaPlugin } from './plugins/twofa';
+import { MultiappPlugin } from './plugins/multiapp';
+import { PhonePlugin } from './plugins/phone';
+import { AnonymousPlugin } from './plugins/anonymous';
+import { PasskeyPlugin } from './plugins/passkey';
+import { UsernamePlugin } from './plugins/username';
+import { MultisessionPlugin } from './plugins/multisession';
+import { ConsentPlugin } from './plugins/consent';
+import { ImpersonationPlugin } from './plugins/impersonation';
+import { OidcproviderPlugin } from './plugins/oidcprovider';
+import { OrganizationPlugin } from './plugins/organization';
+import { SsoPlugin } from './plugins/sso';
+import { SecretsPlugin } from './plugins/secrets';
+import { SocialPlugin } from './plugins/social';
+import { JwtPlugin } from './plugins/jwt';
 
 /**
  * AuthSome client configuration
@@ -131,6 +131,21 @@ export class AuthsomeClient {
   }
 
   /**
+   * Convert an object to query parameters, handling optional values and type conversion
+   */
+  public toQueryParams(obj?: Record<string, any>): Record<string, string> | undefined {
+    if (!obj) return undefined;
+    
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined && value !== null) {
+        params[key] = String(value);
+      }
+    }
+    return Object.keys(params).length > 0 ? params : undefined;
+  }
+
+  /**
    * Set global headers for all requests
    * @param headers - Headers to set
    * @param replace - If true, replaces all existing headers. If false (default), merges with existing headers
@@ -148,35 +163,35 @@ export class AuthsomeClient {
   }
 
   public readonly $plugins = {
-    cms: (): CmsPlugin | undefined => this.getPlugin<CmsPlugin>('cms'),
-    jwt: (): JwtPlugin | undefined => this.getPlugin<JwtPlugin>('jwt'),
-    webhook: (): WebhookPlugin | undefined => this.getPlugin<WebhookPlugin>('webhook'),
-    anonymous: (): AnonymousPlugin | undefined => this.getPlugin<AnonymousPlugin>('anonymous'),
-    emailverification: (): EmailverificationPlugin | undefined => this.getPlugin<EmailverificationPlugin>('emailverification'),
-    notification: (): NotificationPlugin | undefined => this.getPlugin<NotificationPlugin>('notification'),
-    oidcprovider: (): OidcproviderPlugin | undefined => this.getPlugin<OidcproviderPlugin>('oidcprovider'),
-    sso: (): SsoPlugin | undefined => this.getPlugin<SsoPlugin>('sso'),
-    idverification: (): IdverificationPlugin | undefined => this.getPlugin<IdverificationPlugin>('idverification'),
-    secrets: (): SecretsPlugin | undefined => this.getPlugin<SecretsPlugin>('secrets'),
-    consent: (): ConsentPlugin | undefined => this.getPlugin<ConsentPlugin>('consent'),
-    impersonation: (): ImpersonationPlugin | undefined => this.getPlugin<ImpersonationPlugin>('impersonation'),
-    multiapp: (): MultiappPlugin | undefined => this.getPlugin<MultiappPlugin>('multiapp'),
-    social: (): SocialPlugin | undefined => this.getPlugin<SocialPlugin>('social'),
-    apikey: (): ApikeyPlugin | undefined => this.getPlugin<ApikeyPlugin>('apikey'),
-    backupauth: (): BackupauthPlugin | undefined => this.getPlugin<BackupauthPlugin>('backupauth'),
-    magiclink: (): MagiclinkPlugin | undefined => this.getPlugin<MagiclinkPlugin>('magiclink'),
-    username: (): UsernamePlugin | undefined => this.getPlugin<UsernamePlugin>('username'),
     admin: (): AdminPlugin | undefined => this.getPlugin<AdminPlugin>('admin'),
+    permissions: (): PermissionsPlugin | undefined => this.getPlugin<PermissionsPlugin>('permissions'),
+    webhook: (): WebhookPlugin | undefined => this.getPlugin<WebhookPlugin>('webhook'),
+    cms: (): CmsPlugin | undefined => this.getPlugin<CmsPlugin>('cms'),
+    emailverification: (): EmailverificationPlugin | undefined => this.getPlugin<EmailverificationPlugin>('emailverification'),
+    idverification: (): IdverificationPlugin | undefined => this.getPlugin<IdverificationPlugin>('idverification'),
+    magiclink: (): MagiclinkPlugin | undefined => this.getPlugin<MagiclinkPlugin>('magiclink'),
+    notification: (): NotificationPlugin | undefined => this.getPlugin<NotificationPlugin>('notification'),
+    twofa: (): TwofaPlugin | undefined => this.getPlugin<TwofaPlugin>('twofa'),
+    apikey: (): ApikeyPlugin | undefined => this.getPlugin<ApikeyPlugin>('apikey'),
+    emailotp: (): EmailotpPlugin | undefined => this.getPlugin<EmailotpPlugin>('emailotp'),
+    backupauth: (): BackupauthPlugin | undefined => this.getPlugin<BackupauthPlugin>('backupauth'),
     compliance: (): CompliancePlugin | undefined => this.getPlugin<CompliancePlugin>('compliance'),
     stepup: (): StepupPlugin | undefined => this.getPlugin<StepupPlugin>('stepup'),
-    multisession: (): MultisessionPlugin | undefined => this.getPlugin<MultisessionPlugin>('multisession'),
-    organization: (): OrganizationPlugin | undefined => this.getPlugin<OrganizationPlugin>('organization'),
-    passkey: (): PasskeyPlugin | undefined => this.getPlugin<PasskeyPlugin>('passkey'),
-    permissions: (): PermissionsPlugin | undefined => this.getPlugin<PermissionsPlugin>('permissions'),
-    phone: (): PhonePlugin | undefined => this.getPlugin<PhonePlugin>('phone'),
-    emailotp: (): EmailotpPlugin | undefined => this.getPlugin<EmailotpPlugin>('emailotp'),
     mfa: (): MfaPlugin | undefined => this.getPlugin<MfaPlugin>('mfa'),
-    twofa: (): TwofaPlugin | undefined => this.getPlugin<TwofaPlugin>('twofa'),
+    multiapp: (): MultiappPlugin | undefined => this.getPlugin<MultiappPlugin>('multiapp'),
+    phone: (): PhonePlugin | undefined => this.getPlugin<PhonePlugin>('phone'),
+    anonymous: (): AnonymousPlugin | undefined => this.getPlugin<AnonymousPlugin>('anonymous'),
+    passkey: (): PasskeyPlugin | undefined => this.getPlugin<PasskeyPlugin>('passkey'),
+    username: (): UsernamePlugin | undefined => this.getPlugin<UsernamePlugin>('username'),
+    multisession: (): MultisessionPlugin | undefined => this.getPlugin<MultisessionPlugin>('multisession'),
+    consent: (): ConsentPlugin | undefined => this.getPlugin<ConsentPlugin>('consent'),
+    impersonation: (): ImpersonationPlugin | undefined => this.getPlugin<ImpersonationPlugin>('impersonation'),
+    oidcprovider: (): OidcproviderPlugin | undefined => this.getPlugin<OidcproviderPlugin>('oidcprovider'),
+    organization: (): OrganizationPlugin | undefined => this.getPlugin<OrganizationPlugin>('organization'),
+    sso: (): SsoPlugin | undefined => this.getPlugin<SsoPlugin>('sso'),
+    secrets: (): SecretsPlugin | undefined => this.getPlugin<SecretsPlugin>('secrets'),
+    social: (): SocialPlugin | undefined => this.getPlugin<SocialPlugin>('social'),
+    jwt: (): JwtPlugin | undefined => this.getPlugin<JwtPlugin>('jwt'),
   };
 
   public async request<T>(
@@ -224,14 +239,14 @@ export class AuthsomeClient {
     return response.json();
   }
 
-  async signUp(request: { name?: string; email: string; password: string }): Promise<{ user: types.User; session: types.Session }> {
+  async signUp(request: { email: string; password: string; name?: string }): Promise<{ user: types.User; session: types.Session }> {
     const path = '/signup';
     return this.request<{ user: types.User; session: types.Session }>('POST', path, {
       body: request,
     });
   }
 
-  async signIn(request: { email: string; password: string }): Promise<{ requiresTwoFactor: boolean; user: types.User; session: types.Session }> {
+  async signIn(request: { email: string; password: string }): Promise<{ user: types.User; session: types.Session; requiresTwoFactor: boolean }> {
     const path = '/signin';
     return this.request<{ user: types.User; session: types.Session; requiresTwoFactor: boolean }>('POST', path, {
       body: request,
@@ -245,14 +260,14 @@ export class AuthsomeClient {
     });
   }
 
-  async getSession(): Promise<{ session: types.Session; user: types.User }> {
+  async getSession(): Promise<{ user: types.User; session: types.Session }> {
     const path = '/session';
     return this.request<{ user: types.User; session: types.Session }>('GET', path, {
       auth: true,
     });
   }
 
-  async updateUser(request: { name?: string; email?: string }): Promise<{ user: types.User }> {
+  async updateUser(request: { email?: string; name?: string }): Promise<{ user: types.User }> {
     const path = '/user/update';
     return this.request<{ user: types.User }>('POST', path, {
       body: request,
@@ -267,11 +282,62 @@ export class AuthsomeClient {
     });
   }
 
-  async revokeDevice(request: { deviceId: string }): Promise<{ success: boolean }> {
+  async revokeDevice(request: { fingerprint: string }): Promise<{ status: string }> {
     const path = '/devices/revoke';
-    return this.request<{ success: boolean }>('POST', path, {
+    return this.request<{ status: string }>('POST', path, {
       body: request,
       auth: true,
+    });
+  }
+
+  async refreshSession(request: { refreshToken: string }): Promise<{ expiresAt: string; refreshExpiresAt: string; session: any; accessToken: string; refreshToken: string }> {
+    const path = '/refresh';
+    return this.request<{ session: any; accessToken: string; refreshToken: string; expiresAt: string; refreshExpiresAt: string }>('POST', path, {
+      body: request,
+    });
+  }
+
+  async requestPasswordReset(request: { email: string }): Promise<{ message: string }> {
+    const path = '/password/reset/request';
+    return this.request<{ message: string }>('POST', path, {
+      body: request,
+    });
+  }
+
+  async resetPassword(request: { token: string; newPassword: string }): Promise<{ message: string }> {
+    const path = '/password/reset/confirm';
+    return this.request<{ message: string }>('POST', path, {
+      body: request,
+    });
+  }
+
+  async validateResetToken(query?: { token?: string }): Promise<{ valid: boolean }> {
+    const path = '/password/reset/validate';
+    return this.request<{ valid: boolean }>('GET', path, {
+      query,
+    });
+  }
+
+  async changePassword(request: { oldPassword: string; newPassword: string }): Promise<{ message: string }> {
+    const path = '/password/change';
+    return this.request<{ message: string }>('POST', path, {
+      body: request,
+      auth: true,
+    });
+  }
+
+  async requestEmailChange(request: { newEmail: string }): Promise<{ message: string }> {
+    const path = '/email/change/request';
+    return this.request<{ message: string }>('POST', path, {
+      body: request,
+      auth: true,
+    });
+  }
+
+  async confirmEmailChange(request: { token: string }): Promise<{ message: string }> {
+    const path = '/email/change/confirm';
+    return this.request<{ message: string }>('POST', path, {
+      body: request,
     });
   }
 

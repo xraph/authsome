@@ -162,7 +162,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Create API group for impersonation
-	api := router.Group("/api/impersonation")
+	api := router.Group("/impersonation")
 
 	// Impersonation management endpoints
 	api.POST("/start", p.handler.StartImpersonation,
@@ -221,14 +221,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation", "Audit"),
 	)
-
-	fmt.Printf("[Impersonation Plugin] Routes registered:\n")
-	fmt.Printf("  - POST   /api/impersonation/start\n")
-	fmt.Printf("  - POST   /api/impersonation/end\n")
-	fmt.Printf("  - GET    /api/impersonation/:id\n")
-	fmt.Printf("  - GET    /api/impersonation/\n")
-	fmt.Printf("  - POST   /api/impersonation/verify\n")
-	fmt.Printf("  - GET    /api/impersonation/audit\n")
 
 	return nil
 }

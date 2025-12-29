@@ -25,6 +25,13 @@ routes:
       request_type: LinkRequest
       response_type: LinkResponse
 types:
+    - name: LinkResponse
+      fields:
+        message: string!
+        user: '!'
+    - name: Plugin
+      fields:
+        "": '*bun.DB'
     - name: Config
       fields:
         autoConvert: bool!
@@ -49,10 +56,3 @@ types:
         session: '!'
         token: string!
         user: '!'
-    - name: LinkResponse
-      fields:
-        message: string!
-        user: '!'
-    - name: Plugin
-      fields:
-        "": forge.Logger

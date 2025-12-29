@@ -2,6 +2,7 @@ package cms
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/xraph/authsome/clients/go"
 )
@@ -32,7 +33,7 @@ func (p *Plugin) Init(client *authsome.Client) error {
 // ListEntries ListEntries lists entries for a content type
 GET /cms/:type
 func (p *Plugin) ListEntries(ctx context.Context) error {
-	path := "/listentries"
+	path := "/cms/listentries"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
@@ -40,7 +41,7 @@ func (p *Plugin) ListEntries(ctx context.Context) error {
 // CreateEntry CreateEntry creates a new content entry
 POST /cms/:type
 func (p *Plugin) CreateEntry(ctx context.Context) error {
-	path := "/createentry"
+	path := "/cms/createentry"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
@@ -48,7 +49,7 @@ func (p *Plugin) CreateEntry(ctx context.Context) error {
 // GetEntry GetEntry retrieves a content entry by ID
 GET /cms/:type/:id
 func (p *Plugin) GetEntry(ctx context.Context) error {
-	path := "/getentry"
+	path := "/cms/getentry"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
@@ -56,7 +57,7 @@ func (p *Plugin) GetEntry(ctx context.Context) error {
 // UpdateEntry UpdateEntry updates a content entry
 PUT /cms/:type/:id
 func (p *Plugin) UpdateEntry(ctx context.Context) error {
-	path := "/updateentry"
+	path := "/cms/updateentry"
 	err := p.client.Request(ctx, "PUT", path, nil, nil, false)
 	return err
 }
@@ -64,7 +65,7 @@ func (p *Plugin) UpdateEntry(ctx context.Context) error {
 // DeleteEntry DeleteEntry deletes a content entry
 DELETE /cms/:type/:id
 func (p *Plugin) DeleteEntry(ctx context.Context) error {
-	path := "/deleteentry"
+	path := "/cms/deleteentry"
 	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
 	return err
 }
@@ -72,7 +73,7 @@ func (p *Plugin) DeleteEntry(ctx context.Context) error {
 // PublishEntry PublishEntry publishes a content entry
 POST /cms/:type/:id/publish
 func (p *Plugin) PublishEntry(ctx context.Context) error {
-	path := "/publish"
+	path := "/cms/publish"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
@@ -80,7 +81,7 @@ func (p *Plugin) PublishEntry(ctx context.Context) error {
 // UnpublishEntry UnpublishEntry unpublishes a content entry
 POST /cms/:type/:id/unpublish
 func (p *Plugin) UnpublishEntry(ctx context.Context) error {
-	path := "/unpublish"
+	path := "/cms/unpublish"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
@@ -88,7 +89,7 @@ func (p *Plugin) UnpublishEntry(ctx context.Context) error {
 // ArchiveEntry ArchiveEntry archives a content entry
 POST /cms/:type/:id/archive
 func (p *Plugin) ArchiveEntry(ctx context.Context) error {
-	path := "/archive"
+	path := "/cms/archive"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
@@ -96,39 +97,39 @@ func (p *Plugin) ArchiveEntry(ctx context.Context) error {
 // QueryEntries QueryEntries performs an advanced query on entries
 POST /cms/:type/query
 func (p *Plugin) QueryEntries(ctx context.Context) error {
-	path := "/query"
+	path := "/cms/query"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // BulkPublish BulkPublish publishes multiple entries
 POST /cms/:type/bulk/publish
-func (p *Plugin) BulkPublish(ctx context.Context, req *authsome.BulkPublishRequest) error {
-	path := "/publish"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
+func (p *Plugin) BulkPublish(ctx context.Context) error {
+	path := "/cms/publish"
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // BulkUnpublish BulkUnpublish unpublishes multiple entries
 POST /cms/:type/bulk/unpublish
-func (p *Plugin) BulkUnpublish(ctx context.Context, req *authsome.BulkUnpublishRequest) error {
-	path := "/unpublish"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
+func (p *Plugin) BulkUnpublish(ctx context.Context) error {
+	path := "/cms/unpublish"
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // BulkDelete BulkDelete deletes multiple entries
 POST /cms/:type/bulk/delete
-func (p *Plugin) BulkDelete(ctx context.Context, req *authsome.BulkDeleteRequest) error {
-	path := "/delete"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
+func (p *Plugin) BulkDelete(ctx context.Context) error {
+	path := "/cms/delete"
+	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // GetEntryStats GetEntryStats returns statistics for entries
 GET /cms/:type/stats
 func (p *Plugin) GetEntryStats(ctx context.Context) error {
-	path := "/stats"
+	path := "/cms/stats"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
@@ -136,7 +137,7 @@ func (p *Plugin) GetEntryStats(ctx context.Context) error {
 // ListContentTypes ListContentTypes lists all content types
 GET /cms/types
 func (p *Plugin) ListContentTypes(ctx context.Context) error {
-	path := "/listcontenttypes"
+	path := "/cms/listcontenttypes"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
@@ -144,31 +145,31 @@ func (p *Plugin) ListContentTypes(ctx context.Context) error {
 // CreateContentType CreateContentType creates a new content type
 POST /cms/types
 func (p *Plugin) CreateContentType(ctx context.Context) error {
-	path := "/createcontenttype"
+	path := "/cms/createcontenttype"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // GetContentType GetContentType retrieves a content type by slug
 GET /cms/types/:slug
-func (p *Plugin) GetContentType(ctx context.Context) error {
-	path := "/:slug"
+func (p *Plugin) GetContentType(ctx context.Context, slug string) error {
+	path := "/cms/:slug"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // UpdateContentType UpdateContentType updates a content type
 PUT /cms/types/:slug
-func (p *Plugin) UpdateContentType(ctx context.Context) error {
-	path := "/:slug"
+func (p *Plugin) UpdateContentType(ctx context.Context, slug string) error {
+	path := "/cms/:slug"
 	err := p.client.Request(ctx, "PUT", path, nil, nil, false)
 	return err
 }
 
 // DeleteContentType DeleteContentType deletes a content type
 DELETE /cms/types/:slug
-func (p *Plugin) DeleteContentType(ctx context.Context) error {
-	path := "/:slug"
+func (p *Plugin) DeleteContentType(ctx context.Context, slug string) error {
+	path := "/cms/:slug"
 	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
 	return err
 }
@@ -176,7 +177,7 @@ func (p *Plugin) DeleteContentType(ctx context.Context) error {
 // ListFields ListFields lists all fields for a content type
 GET /cms/types/:slug/fields
 func (p *Plugin) ListFields(ctx context.Context) error {
-	path := "/listfields"
+	path := "/cms/listfields"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
@@ -184,31 +185,31 @@ func (p *Plugin) ListFields(ctx context.Context) error {
 // AddField AddField adds a new field to a content type
 POST /cms/types/:slug/fields
 func (p *Plugin) AddField(ctx context.Context) error {
-	path := "/addfield"
+	path := "/cms/addfield"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // GetField GetField retrieves a field by slug
 GET /cms/types/:slug/fields/:fieldSlug
-func (p *Plugin) GetField(ctx context.Context) error {
-	path := "/:fieldSlug"
+func (p *Plugin) GetField(ctx context.Context, fieldSlug string) error {
+	path := "/cms/:fieldSlug"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // UpdateField UpdateField updates a field
 PUT /cms/types/:slug/fields/:fieldSlug
-func (p *Plugin) UpdateField(ctx context.Context) error {
-	path := "/:fieldSlug"
+func (p *Plugin) UpdateField(ctx context.Context, fieldSlug string) error {
+	path := "/cms/:fieldSlug"
 	err := p.client.Request(ctx, "PUT", path, nil, nil, false)
 	return err
 }
 
 // DeleteField DeleteField deletes a field
 DELETE /cms/types/:slug/fields/:fieldSlug
-func (p *Plugin) DeleteField(ctx context.Context) error {
-	path := "/:fieldSlug"
+func (p *Plugin) DeleteField(ctx context.Context, fieldSlug string) error {
+	path := "/cms/:fieldSlug"
 	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
 	return err
 }
@@ -216,7 +217,7 @@ func (p *Plugin) DeleteField(ctx context.Context) error {
 // ReorderFields ReorderFields reorders fields in a content type
 POST /cms/types/:slug/fields/reorder
 func (p *Plugin) ReorderFields(ctx context.Context) error {
-	path := "/reorder"
+	path := "/cms/reorder"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
@@ -224,7 +225,7 @@ func (p *Plugin) ReorderFields(ctx context.Context) error {
 // GetFieldTypes GetFieldTypes returns all available field types
 GET /cms/field-types
 func (p *Plugin) GetFieldTypes(ctx context.Context) error {
-	path := "/field-types"
+	path := "/cms/field-types"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
@@ -232,23 +233,23 @@ func (p *Plugin) GetFieldTypes(ctx context.Context) error {
 // ListRevisions ListRevisions lists revisions for an entry
 GET /cms/:type/:id/revisions
 func (p *Plugin) ListRevisions(ctx context.Context) error {
-	path := "/listrevisions"
+	path := "/cms/listrevisions"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // GetRevision GetRevision retrieves a specific revision
 GET /cms/:type/:id/revisions/:version
-func (p *Plugin) GetRevision(ctx context.Context) error {
-	path := "/:version"
+func (p *Plugin) GetRevision(ctx context.Context, version int) error {
+	path := "/cms/:version"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // RestoreRevision RestoreRevision restores an entry to a specific revision
 POST /cms/:type/:id/revisions/:version/restore
-func (p *Plugin) RestoreRevision(ctx context.Context) error {
-	path := "/:version/restore"
+func (p *Plugin) RestoreRevision(ctx context.Context, version int) error {
+	path := "/cms/:version/restore"
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
@@ -256,7 +257,7 @@ func (p *Plugin) RestoreRevision(ctx context.Context) error {
 // CompareRevisions CompareRevisions compares two revisions
 GET /cms/:type/:id/revisions/compare?from=:v1&to=:v2
 func (p *Plugin) CompareRevisions(ctx context.Context) error {
-	path := "/compare"
+	path := "/cms/compare"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }

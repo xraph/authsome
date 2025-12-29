@@ -140,7 +140,7 @@ func (s *Service) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]
 		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: roleRepo is nil\n")
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	
+
 	// Validate required parameters
 	if appID.IsNil() {
 		return nil, fmt.Errorf("app_id is required but was nil")
@@ -148,7 +148,7 @@ func (s *Service) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]
 	if envID.IsNil() {
 		return nil, fmt.Errorf("environment_id is required but was nil when getting role templates for app %s", appID.String())
 	}
-	
+
 	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: calling roleRepo.GetRoleTemplates for app %s, env %s\n", appID.String(), envID.String())
 	roles, err := s.roleRepo.GetRoleTemplates(ctx, appID, envID)
 	if err != nil {
@@ -280,7 +280,7 @@ func (s *Service) UpdateRoleTemplate(ctx context.Context, roleID xid.ID, name, d
 	if !role.IsTemplate {
 		return nil, fmt.Errorf("role %s is not a template", roleID.String())
 	}
-	
+
 	// Verify it has an environment_id (should never be nil, but safety check)
 	if role.EnvironmentID == nil || role.EnvironmentID.IsNil() {
 		return nil, fmt.Errorf("role template %s has invalid environment_id", roleID.String())
@@ -335,7 +335,7 @@ func (s *Service) GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schem
 	if s.roleRepo == nil {
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	
+
 	// Validate required parameters
 	if appID.IsNil() {
 		return nil, fmt.Errorf("app_id is required but was nil")
@@ -343,7 +343,7 @@ func (s *Service) GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schem
 	if envID.IsNil() {
 		return nil, fmt.Errorf("environment_id is required but was nil when getting owner role for app %s", appID.String())
 	}
-	
+
 	return s.roleRepo.GetOwnerRole(ctx, appID, envID)
 }
 
@@ -400,7 +400,7 @@ func (s *Service) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*sche
 	if s.roleRepo == nil {
 		return nil, fmt.Errorf("role repository not initialized")
 	}
-	
+
 	// Validate required parameters
 	if orgID.IsNil() {
 		return nil, fmt.Errorf("organization_id is required but was nil")
@@ -408,7 +408,7 @@ func (s *Service) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*sche
 	if envID.IsNil() {
 		return nil, fmt.Errorf("environment_id is required but was nil when getting roles for org %s", orgID.String())
 	}
-	
+
 	return s.roleRepo.GetOrgRoles(ctx, orgID, envID)
 }
 
@@ -633,4 +633,630 @@ func toTitleCase(s string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// ====== Role Assignment Methods ======
+
+// AssignRoleToUser assigns a single role to a user in an organization
+func (s *Service) AssignRoleToUser(ctx context.Context, userID, roleID, orgID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateRoleID(roleID); err != nil {
+		return err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.Assign(ctx, userID, roleID, orgID)
+}
+
+// AssignRolesToUser assigns multiple roles to a user in an organization
+func (s *Service) AssignRolesToUser(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateRoleIDs(roleIDs); err != nil {
+		return err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.AssignBatch(ctx, userID, roleIDs, orgID)
+}
+
+// AssignRoleToUsers assigns a single role to multiple users in an organization
+func (s *Service) AssignRoleToUsers(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (*BulkAssignmentResult, error) {
+	if s.userRoleRepo == nil {
+		return nil, fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserIDs(userIDs); err != nil {
+		return nil, err
+	}
+	if err := validateRoleID(roleID); err != nil {
+		return nil, err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return nil, err
+	}
+
+	errors, err := s.userRoleRepo.AssignBulk(ctx, userIDs, roleID, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &BulkAssignmentResult{
+		SuccessCount: len(userIDs) - len(errors),
+		FailureCount: len(errors),
+		Errors:       errors,
+	}
+
+	return result, nil
+}
+
+// AssignAppLevelRole assigns a role at app-level (not org-scoped)
+func (s *Service) AssignAppLevelRole(ctx context.Context, userID, roleID, appID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateRoleID(roleID); err != nil {
+		return err
+	}
+	if err := validateAppID(appID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.AssignAppLevel(ctx, userID, roleID, appID)
+}
+
+// ====== Role Unassignment Methods ======
+
+// UnassignRoleFromUser removes a single role from a user in an organization
+func (s *Service) UnassignRoleFromUser(ctx context.Context, userID, roleID, orgID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateRoleID(roleID); err != nil {
+		return err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.Unassign(ctx, userID, roleID, orgID)
+}
+
+// UnassignRolesFromUser removes multiple roles from a user in an organization
+func (s *Service) UnassignRolesFromUser(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateRoleIDs(roleIDs); err != nil {
+		return err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.UnassignBatch(ctx, userID, roleIDs, orgID)
+}
+
+// UnassignRoleFromUsers removes a single role from multiple users in an organization
+func (s *Service) UnassignRoleFromUsers(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (*BulkAssignmentResult, error) {
+	if s.userRoleRepo == nil {
+		return nil, fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserIDs(userIDs); err != nil {
+		return nil, err
+	}
+	if err := validateRoleID(roleID); err != nil {
+		return nil, err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return nil, err
+	}
+
+	errors, err := s.userRoleRepo.UnassignBulk(ctx, userIDs, roleID, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &BulkAssignmentResult{
+		SuccessCount: len(userIDs) - len(errors),
+		FailureCount: len(errors),
+		Errors:       errors,
+	}
+
+	return result, nil
+}
+
+// ClearUserRolesInOrg removes all roles from a user in an organization
+func (s *Service) ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.ClearUserRolesInOrg(ctx, userID, orgID)
+}
+
+// ClearUserRolesInApp removes all roles from a user in an app
+func (s *Service) ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateAppID(appID); err != nil {
+		return err
+	}
+
+	return s.userRoleRepo.ClearUserRolesInApp(ctx, userID, appID)
+}
+
+// ====== Role Transfer Methods ======
+
+// TransferUserRoles moves roles from one org to another
+func (s *Service) TransferUserRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateOrgID(sourceOrgID); err != nil {
+		return fmt.Errorf("source org: %w", err)
+	}
+	if err := validateOrgID(targetOrgID); err != nil {
+		return fmt.Errorf("target org: %w", err)
+	}
+	if len(roleIDs) > 0 {
+		if err := validateRoleIDs(roleIDs); err != nil {
+			return err
+		}
+	}
+
+	return s.userRoleRepo.TransferRoles(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+}
+
+// CopyUserRoles duplicates roles from one org to another
+func (s *Service) CopyUserRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateOrgID(sourceOrgID); err != nil {
+		return fmt.Errorf("source org: %w", err)
+	}
+	if err := validateOrgID(targetOrgID); err != nil {
+		return fmt.Errorf("target org: %w", err)
+	}
+	if len(roleIDs) > 0 {
+		if err := validateRoleIDs(roleIDs); err != nil {
+			return err
+		}
+	}
+
+	return s.userRoleRepo.CopyRoles(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+}
+
+// ReplaceUserRoles atomically replaces all user roles in an org with a new set
+func (s *Service) ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return err
+	}
+	if len(newRoleIDs) > 0 {
+		if err := validateRoleIDs(newRoleIDs); err != nil {
+			return err
+		}
+	}
+
+	return s.userRoleRepo.ReplaceUserRoles(ctx, userID, orgID, newRoleIDs)
+}
+
+// SyncRolesBetweenOrgs synchronizes roles between organizations
+func (s *Service) SyncRolesBetweenOrgs(ctx context.Context, userID xid.ID, config *RoleSyncConfig) error {
+	if s.userRoleRepo == nil {
+		return fmt.Errorf("user role repository not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return err
+	}
+	if config == nil {
+		return fmt.Errorf("sync config is required")
+	}
+	if err := validateOrgID(config.SourceOrgID); err != nil {
+		return fmt.Errorf("source org: %w", err)
+	}
+	if err := validateOrgID(config.TargetOrgID); err != nil {
+		return fmt.Errorf("target org: %w", err)
+	}
+
+	// Get roles from source org
+	sourceRoles, err := s.userRoleRepo.ListRolesForUser(ctx, userID, &config.SourceOrgID)
+	if err != nil {
+		return fmt.Errorf("failed to list source roles: %w", err)
+	}
+
+	// Filter by specific role IDs if provided
+	var roleIDsToSync []xid.ID
+	if len(config.RoleIDs) > 0 {
+		roleIDMap := make(map[xid.ID]bool)
+		for _, roleID := range config.RoleIDs {
+			roleIDMap[roleID] = true
+		}
+		for _, role := range sourceRoles {
+			if roleIDMap[role.ID] {
+				roleIDsToSync = append(roleIDsToSync, role.ID)
+			}
+		}
+	} else {
+		for _, role := range sourceRoles {
+			roleIDsToSync = append(roleIDsToSync, role.ID)
+		}
+	}
+
+	if len(roleIDsToSync) == 0 {
+		return nil
+	}
+
+	switch config.Mode {
+	case "mirror":
+		// Mirror: make target identical to source (replace all)
+		return s.userRoleRepo.ReplaceUserRoles(ctx, userID, config.TargetOrgID, roleIDsToSync)
+	case "merge":
+		// Merge: add missing roles from source to target
+		return s.userRoleRepo.CopyRoles(ctx, userID, config.SourceOrgID, config.TargetOrgID, roleIDsToSync)
+	default:
+		return fmt.Errorf("invalid sync mode: %s (must be 'mirror' or 'merge')", config.Mode)
+	}
+}
+
+// ====== Access Control Helper Methods ======
+
+// matchesPermission checks if a permission matches the requested action/resource
+// Supports wildcards: "manage on *", "* on users", "* on *"
+// Returns (matches, isWildcard)
+func matchesPermission(perm *schema.Permission, action, resource string) (bool, bool) {
+	// Try exact name match first: "view on users"
+	expectedName := action + " on " + resource
+	if perm.Name == expectedName {
+		return true, false // exact match, not wildcard
+	}
+
+	// Try wildcard matching
+	// Format: "action on resource" where either can be "*"
+	parts := strings.Split(perm.Name, " on ")
+	if len(parts) != 2 {
+		return false, false
+	}
+
+	permAction := strings.TrimSpace(parts[0])
+	permResource := strings.TrimSpace(parts[1])
+
+	actionMatch := permAction == "*" || permAction == action
+	resourceMatch := permResource == "*" || permResource == resource
+
+	if actionMatch && resourceMatch {
+		return true, true // wildcard match
+	}
+
+	return false, false
+}
+
+// ====== Role Listing Methods ======
+
+// GetUserRolesInOrg gets all roles (with permissions) for a specific user in an organization
+func (s *Service) GetUserRolesInOrg(ctx context.Context, userID, orgID, envID xid.ID) ([]*RoleWithPermissions, error) {
+	if s.userRoleRepo == nil || s.rolePermissionRepo == nil {
+		return nil, fmt.Errorf("repositories not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return nil, err
+	}
+	if err := validateOrgID(orgID); err != nil {
+		return nil, err
+	}
+	if err := validateEnvID(envID); err != nil {
+		return nil, err
+	}
+
+	// Get roles from repository
+	roles, err := s.userRoleRepo.ListRolesForUserInOrg(ctx, userID, orgID, envID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list roles: %w", err)
+	}
+
+	// Load permissions for each role
+	rolesWithPermissions := make([]*RoleWithPermissions, len(roles))
+	for i, role := range roles {
+		permissions, err := s.rolePermissionRepo.GetRolePermissions(ctx, role.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load permissions for role %s: %w", role.ID.String(), err)
+		}
+		rolesWithPermissions[i] = &RoleWithPermissions{
+			Role:        &role,
+			Permissions: permissions,
+		}
+	}
+
+	return rolesWithPermissions, nil
+}
+
+// GetUserRolesInApp gets all roles (with permissions) for a specific user across all orgs in an app
+func (s *Service) GetUserRolesInApp(ctx context.Context, userID, appID, envID xid.ID) ([]*RoleWithPermissions, error) {
+	if s.userRoleRepo == nil || s.rolePermissionRepo == nil {
+		return nil, fmt.Errorf("repositories not initialized")
+	}
+
+	if err := validateUserID(userID); err != nil {
+		return nil, err
+	}
+	if err := validateAppID(appID); err != nil {
+		return nil, err
+	}
+	if err := validateEnvID(envID); err != nil {
+		return nil, err
+	}
+
+	// Get roles from repository
+	roles, err := s.userRoleRepo.ListRolesForUserInApp(ctx, userID, appID, envID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list roles: %w", err)
+	}
+
+	// Load permissions for each role
+	rolesWithPermissions := make([]*RoleWithPermissions, len(roles))
+	for i, role := range roles {
+		permissions, err := s.rolePermissionRepo.GetRolePermissions(ctx, role.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load permissions for role %s: %w", role.ID.String(), err)
+		}
+		rolesWithPermissions[i] = &RoleWithPermissions{
+			Role:        &role,
+			Permissions: permissions,
+		}
+	}
+
+	return rolesWithPermissions, nil
+}
+
+// ListAllUserRolesInOrg lists all user-role assignments with permissions in an organization (admin view)
+func (s *Service) ListAllUserRolesInOrg(ctx context.Context, orgID, envID xid.ID) ([]*UserRoleAssignment, error) {
+	if s.userRoleRepo == nil || s.rolePermissionRepo == nil {
+		return nil, fmt.Errorf("repositories not initialized")
+	}
+
+	if err := validateOrgID(orgID); err != nil {
+		return nil, err
+	}
+	if err := validateEnvID(envID); err != nil {
+		return nil, err
+	}
+
+	// Get all user-role assignments
+	userRoles, err := s.userRoleRepo.ListAllUserRolesInOrg(ctx, orgID, envID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list user roles: %w", err)
+	}
+
+	// Group by user and load permissions
+	userRoleMap := make(map[xid.ID]*UserRoleAssignment)
+	for _, ur := range userRoles {
+		if _, exists := userRoleMap[ur.UserID]; !exists {
+			userRoleMap[ur.UserID] = &UserRoleAssignment{
+				UserID:         ur.UserID,
+				OrganizationID: &orgID,
+				Roles:          []*RoleWithPermissions{},
+			}
+		}
+
+		// Load permissions for this role
+		permissions, err := s.rolePermissionRepo.GetRolePermissions(ctx, ur.RoleID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load permissions for role %s: %w", ur.RoleID.String(), err)
+		}
+
+		userRoleMap[ur.UserID].Roles = append(userRoleMap[ur.UserID].Roles, &RoleWithPermissions{
+			Role:        ur.Role,
+			Permissions: permissions,
+		})
+	}
+
+	// Convert map to slice
+	result := make([]*UserRoleAssignment, 0, len(userRoleMap))
+	for _, assignment := range userRoleMap {
+		result = append(result, assignment)
+	}
+
+	return result, nil
+}
+
+// ListAllUserRolesInApp lists all user-role assignments with permissions across all orgs in an app (admin view)
+func (s *Service) ListAllUserRolesInApp(ctx context.Context, appID, envID xid.ID) ([]*UserRoleAssignment, error) {
+	if s.userRoleRepo == nil || s.rolePermissionRepo == nil {
+		return nil, fmt.Errorf("repositories not initialized")
+	}
+
+	if err := validateAppID(appID); err != nil {
+		return nil, err
+	}
+	if err := validateEnvID(envID); err != nil {
+		return nil, err
+	}
+
+	// Get all user-role assignments
+	userRoles, err := s.userRoleRepo.ListAllUserRolesInApp(ctx, appID, envID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list user roles: %w", err)
+	}
+
+	// Group by user and org, load permissions
+	type userOrgKey struct {
+		UserID xid.ID
+		OrgID  xid.ID
+	}
+	userRoleMap := make(map[userOrgKey]*UserRoleAssignment)
+
+	for _, ur := range userRoles {
+		key := userOrgKey{UserID: ur.UserID, OrgID: ur.AppID}
+		if _, exists := userRoleMap[key]; !exists {
+			orgID := ur.AppID
+			userRoleMap[key] = &UserRoleAssignment{
+				UserID:         ur.UserID,
+				OrganizationID: &orgID,
+				Roles:          []*RoleWithPermissions{},
+			}
+		}
+
+		// Load permissions for this role
+		permissions, err := s.rolePermissionRepo.GetRolePermissions(ctx, ur.RoleID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load permissions for role %s: %w", ur.RoleID.String(), err)
+		}
+
+		userRoleMap[key].Roles = append(userRoleMap[key].Roles, &RoleWithPermissions{
+			Role:        ur.Role,
+			Permissions: permissions,
+		})
+	}
+
+	// Convert map to slice
+	result := make([]*UserRoleAssignment, 0, len(userRoleMap))
+	for _, assignment := range userRoleMap {
+		result = append(result, assignment)
+	}
+
+	return result, nil
+}
+
+// ====== Access Control Check Methods ======
+
+// CheckUserAccessInOrg checks if a user has permission to perform an action on a resource in an organization
+// Accepts optional pre-loaded roles/permissions for performance optimization
+func (s *Service) CheckUserAccessInOrg(
+	ctx context.Context,
+	userID, orgID, envID xid.ID,
+	action, resource string,
+	cachedRoles []*RoleWithPermissions,
+) (*AccessCheckResult, error) {
+	var roles []*RoleWithPermissions
+	var err error
+
+	// Use cached roles if provided, otherwise fetch
+	if cachedRoles != nil {
+		roles = cachedRoles
+	} else {
+		roles, err = s.GetUserRolesInOrg(ctx, userID, orgID, envID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user roles: %w", err)
+		}
+	}
+
+	// Check each role's permissions
+	for _, roleWithPerms := range roles {
+		for _, perm := range roleWithPerms.Permissions {
+			if matches, isWildcard := matchesPermission(perm, action, resource); matches {
+				return &AccessCheckResult{
+					Allowed:           true,
+					Reason:            fmt.Sprintf("User has '%s' permission via role '%s'", perm.Name, roleWithPerms.Name),
+					MatchedPermission: perm,
+					MatchedRole:       roleWithPerms.Role,
+					IsWildcard:        isWildcard,
+				}, nil
+			}
+		}
+	}
+
+	return &AccessCheckResult{
+		Allowed: false,
+		Reason:  fmt.Sprintf("User does not have permission to '%s' on '%s'", action, resource),
+	}, nil
+}
+
+// CheckUserAccessInApp checks if a user has permission to perform an action on a resource at app level
+// Accepts optional pre-loaded roles/permissions for performance optimization
+func (s *Service) CheckUserAccessInApp(
+	ctx context.Context,
+	userID, appID, envID xid.ID,
+	action, resource string,
+	cachedRoles []*RoleWithPermissions,
+) (*AccessCheckResult, error) {
+	var roles []*RoleWithPermissions
+	var err error
+
+	// Use cached roles if provided, otherwise fetch
+	if cachedRoles != nil {
+		roles = cachedRoles
+	} else {
+		roles, err = s.GetUserRolesInApp(ctx, userID, appID, envID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user roles: %w", err)
+		}
+	}
+
+	// Check each role's permissions
+	for _, roleWithPerms := range roles {
+		for _, perm := range roleWithPerms.Permissions {
+			if matches, isWildcard := matchesPermission(perm, action, resource); matches {
+				return &AccessCheckResult{
+					Allowed:           true,
+					Reason:            fmt.Sprintf("User has '%s' permission via role '%s'", perm.Name, roleWithPerms.Name),
+					MatchedPermission: perm,
+					MatchedRole:       roleWithPerms.Role,
+					IsWildcard:        isWildcard,
+				}, nil
+			}
+		}
+	}
+
+	return &AccessCheckResult{
+		Allowed: false,
+		Reason:  fmt.Sprintf("User does not have permission to '%s' on '%s'", action, resource),
+	}, nil
 }

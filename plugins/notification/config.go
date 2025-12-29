@@ -46,6 +46,27 @@ type Config struct {
 
 	// Providers configuration for email and SMS
 	Providers ProvidersConfig `json:"providers" yaml:"providers"`
+
+	// Async configuration for notification processing
+	Async AsyncConfig `json:"async" yaml:"async"`
+}
+
+// AsyncConfig controls asynchronous notification processing
+type AsyncConfig struct {
+	// Enabled enables async processing for non-critical notifications
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// WorkerPoolSize is the number of workers for async processing
+	WorkerPoolSize int `json:"worker_pool_size" yaml:"worker_pool_size"`
+	// QueueSize is the buffer size for async queues
+	QueueSize int `json:"queue_size" yaml:"queue_size"`
+	// RetryEnabled enables retry for failed notifications
+	RetryEnabled bool `json:"retry_enabled" yaml:"retry_enabled"`
+	// MaxRetries is the maximum number of retry attempts
+	MaxRetries int `json:"max_retries" yaml:"max_retries"`
+	// RetryBackoff are the delays between retries (e.g., ["1m", "5m", "15m"])
+	RetryBackoff []string `json:"retry_backoff" yaml:"retry_backoff"`
+	// PersistFailures persists permanently failed notifications to DB
+	PersistFailures bool `json:"persist_failures" yaml:"persist_failures"`
 }
 
 // AutoSendConfig controls automatic notification sending for lifecycle events
@@ -191,6 +212,15 @@ func DefaultConfig() Config {
 			},
 			// SMS is optional - not configured by default
 			SMS: nil,
+		},
+		Async: AsyncConfig{
+			Enabled:         true,                          // Enable async by default
+			WorkerPoolSize:  5,                             // 5 workers per priority
+			QueueSize:       1000,                          // Buffer 1000 notifications
+			RetryEnabled:    true,                          // Enable retry by default
+			MaxRetries:      3,                             // 3 retry attempts
+			RetryBackoff:    []string{"1m", "5m", "15m"},   // Exponential backoff
+			PersistFailures: true,                          // Persist failed to DB
 		},
 	}
 }

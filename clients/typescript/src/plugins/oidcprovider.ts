@@ -12,75 +12,81 @@ export class OidcproviderPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async registerClient(request: types.ClientRegistrationRequest): Promise<void> {
-    const path = '/register';
-    return this.client.request<void>('POST', path, {
+  async registerClient(request: types.ClientRegistrationRequest): Promise<types.ClientRegistrationResponse> {
+    const path = '/oauth2/register';
+    return this.client.request<types.ClientRegistrationResponse>('POST', path, {
       body: request,
     });
   }
 
-  async listClients(): Promise<void> {
-    const path = '/listclients';
-    return this.client.request<void>('GET', path);
+  async listClients(): Promise<types.ClientsListResponse> {
+    const path = '/oauth2/listclients';
+    return this.client.request<types.ClientsListResponse>('GET', path);
   }
 
-  async getClient(): Promise<void> {
-    const path = '/:clientId';
-    return this.client.request<void>('GET', path);
+  async getClient(params: { clientId: string }): Promise<types.ClientDetailsResponse> {
+    const path = `/oauth2/${params.clientId}`;
+    return this.client.request<types.ClientDetailsResponse>('GET', path);
   }
 
-  async updateClient(request: types.ClientUpdateRequest): Promise<void> {
-    const path = '/:clientId';
-    return this.client.request<void>('PUT', path, {
+  async updateClient(params: { clientId: string }, request: types.ClientUpdateRequest): Promise<types.ClientDetailsResponse> {
+    const path = `/oauth2/${params.clientId}`;
+    return this.client.request<types.ClientDetailsResponse>('PUT', path, {
       body: request,
     });
   }
 
-  async deleteClient(): Promise<void> {
-    const path = '/:clientId';
+  async deleteClient(params: { clientId: string }): Promise<void> {
+    const path = `/oauth2/${params.clientId}`;
     return this.client.request<void>('DELETE', path);
   }
 
-  async discovery(): Promise<void> {
-    const path = '/.well-known/openid-configuration';
-    return this.client.request<void>('GET', path);
+  async discovery(): Promise<types.DiscoveryResponse> {
+    const path = '/oauth2/.well-known/openid-configuration';
+    return this.client.request<types.DiscoveryResponse>('GET', path);
   }
 
-  async jWKS(): Promise<void> {
-    const path = '/jwks';
-    return this.client.request<void>('GET', path);
+  async jWKS(): Promise<types.JWKSResponse> {
+    const path = '/oauth2/jwks';
+    return this.client.request<types.JWKSResponse>('GET', path);
   }
 
   async authorize(): Promise<void> {
-    const path = '/authorize';
+    const path = '/oauth2/authorize';
     return this.client.request<void>('GET', path);
   }
 
-  async handleConsent(): Promise<void> {
-    const path = '/consent';
-    return this.client.request<void>('POST', path);
-  }
-
-  async token(request: types.TokenRequest): Promise<void> {
-    const path = '/token';
+  async handleConsent(request: types.ConsentRequest): Promise<void> {
+    const path = '/oauth2/consent';
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async userInfo(): Promise<void> {
-    const path = '/userinfo';
-    return this.client.request<void>('GET', path);
+  async token(request: types.TokenRequest): Promise<types.TokenResponse> {
+    const path = '/oauth2/token';
+    return this.client.request<types.TokenResponse>('POST', path, {
+      body: request,
+    });
   }
 
-  async introspectToken(): Promise<void> {
-    const path = '/introspect';
-    return this.client.request<void>('POST', path);
+  async userInfo(): Promise<types.UserInfoResponse> {
+    const path = '/oauth2/userinfo';
+    return this.client.request<types.UserInfoResponse>('GET', path);
   }
 
-  async revokeToken(): Promise<types.StatusResponse> {
-    const path = '/revoke';
-    return this.client.request<types.StatusResponse>('POST', path);
+  async introspectToken(request: types.TokenIntrospectionRequest): Promise<types.TokenIntrospectionResponse> {
+    const path = '/oauth2/introspect';
+    return this.client.request<types.TokenIntrospectionResponse>('POST', path, {
+      body: request,
+    });
+  }
+
+  async revokeToken(request: types.TokenRevocationRequest): Promise<types.StatusResponse> {
+    const path = '/oauth2/revoke';
+    return this.client.request<types.StatusResponse>('POST', path, {
+      body: request,
+    });
   }
 
 }

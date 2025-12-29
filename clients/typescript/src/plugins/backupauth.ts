@@ -12,192 +12,192 @@ export class BackupauthPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async startRecovery(request: types.StartRecoveryRequest): Promise<types.ErrorResponse> {
-    const path = '/recovery/start';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async startRecovery(request: types.StartRecoveryRequest): Promise<types.BackupAuthRecoveryResponse> {
+    const path = '/admin/recovery/start';
+    return this.client.request<types.BackupAuthRecoveryResponse>('POST', path, {
       body: request,
     });
   }
 
-  async continueRecovery(request: types.ContinueRecoveryRequest): Promise<types.ErrorResponse> {
-    const path = '/recovery/continue';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async continueRecovery(request: types.ContinueRecoveryRequest): Promise<types.BackupAuthRecoveryResponse> {
+    const path = '/admin/recovery/continue';
+    return this.client.request<types.BackupAuthRecoveryResponse>('POST', path, {
       body: request,
     });
   }
 
-  async completeRecovery(request: types.CompleteRecoveryRequest): Promise<types.ErrorResponse> {
-    const path = '/recovery/complete';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async completeRecovery(request: types.CompleteRecoveryRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/recovery/complete';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async cancelRecovery(request: types.CancelRecoveryRequest): Promise<types.SuccessResponse> {
-    const path = '/recovery/cancel';
-    return this.client.request<types.SuccessResponse>('POST', path, {
+  async cancelRecovery(request: types.CancelRecoveryRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/recovery/cancel';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async generateRecoveryCodes(request: types.GenerateRecoveryCodesRequest): Promise<types.ErrorResponse> {
-    const path = '/recovery-codes/generate';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async generateRecoveryCodes(request: types.GenerateRecoveryCodesRequest): Promise<types.BackupAuthCodesResponse> {
+    const path = '/admin/recovery-codes/generate';
+    return this.client.request<types.BackupAuthCodesResponse>('POST', path, {
       body: request,
     });
   }
 
-  async verifyRecoveryCode(request: types.VerifyRecoveryCodeRequest): Promise<types.ErrorResponse> {
-    const path = '/recovery-codes/verify';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async verifyRecoveryCode(request: types.VerifyRecoveryCodeRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/recovery-codes/verify';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async setupSecurityQuestions(request: types.SetupSecurityQuestionsRequest): Promise<types.ErrorResponse> {
-    const path = '/security-questions/setup';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async setupSecurityQuestions(request: types.SetupSecurityQuestionsRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/security-questions/setup';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async getSecurityQuestions(request: types.GetSecurityQuestionsRequest): Promise<types.ErrorResponse> {
-    const path = '/security-questions/get';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async getSecurityQuestions(request: types.GetSecurityQuestionsRequest): Promise<types.BackupAuthQuestionsResponse> {
+    const path = '/admin/security-questions/get';
+    return this.client.request<types.BackupAuthQuestionsResponse>('POST', path, {
       body: request,
     });
   }
 
-  async verifySecurityAnswers(request: types.VerifySecurityAnswersRequest): Promise<types.ErrorResponse> {
-    const path = '/security-questions/verify';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async verifySecurityAnswers(request: types.VerifySecurityAnswersRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/security-questions/verify';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async addTrustedContact(request: types.AddTrustedContactRequest): Promise<types.ErrorResponse> {
-    const path = '/trusted-contacts/add';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async addTrustedContact(request: types.AddTrustedContactRequest): Promise<types.BackupAuthContactResponse> {
+    const path = '/admin/trusted-contacts/add';
+    return this.client.request<types.BackupAuthContactResponse>('POST', path, {
       body: request,
     });
   }
 
-  async listTrustedContacts(): Promise<types.ErrorResponse> {
-    const path = '/trusted-contacts';
-    return this.client.request<types.ErrorResponse>('GET', path);
+  async listTrustedContacts(): Promise<types.BackupAuthContactsResponse> {
+    const path = '/admin/trusted-contacts';
+    return this.client.request<types.BackupAuthContactsResponse>('GET', path);
   }
 
-  async verifyTrustedContact(request: types.VerifyTrustedContactRequest): Promise<types.ErrorResponse> {
-    const path = '/trusted-contacts/verify';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async verifyTrustedContact(request: types.VerifyTrustedContactRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/trusted-contacts/verify';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async requestTrustedContactVerification(request: types.RequestTrustedContactVerificationRequest): Promise<types.ErrorResponse> {
-    const path = '/trusted-contacts/request-verification';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async requestTrustedContactVerification(request: types.RequestTrustedContactVerificationRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/trusted-contacts/request-verification';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async removeTrustedContact(): Promise<types.SuccessResponse> {
-    const path = '/trusted-contacts/:id';
-    return this.client.request<types.SuccessResponse>('DELETE', path);
+  async removeTrustedContact(params: { id: string }): Promise<types.BackupAuthStatusResponse> {
+    const path = `/admin/trusted-contacts/${params.id}`;
+    return this.client.request<types.BackupAuthStatusResponse>('DELETE', path);
   }
 
-  async sendVerificationCode(request: types.SendVerificationCodeRequest): Promise<types.ErrorResponse> {
-    const path = '/verification/send';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async sendVerificationCode(request: types.SendVerificationCodeRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/verification/send';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async verifyCode(request: types.VerifyCodeRequest): Promise<types.ErrorResponse> {
-    const path = '/verification/verify';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async verifyCode(request: types.VerifyCodeRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/verification/verify';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async scheduleVideoSession(request: types.ScheduleVideoSessionRequest): Promise<types.ErrorResponse> {
-    const path = '/video/schedule';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async scheduleVideoSession(request: types.ScheduleVideoSessionRequest): Promise<types.BackupAuthVideoResponse> {
+    const path = '/admin/video/schedule';
+    return this.client.request<types.BackupAuthVideoResponse>('POST', path, {
       body: request,
     });
   }
 
-  async startVideoSession(request: types.StartVideoSessionRequest): Promise<types.ErrorResponse> {
-    const path = '/video/start';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async startVideoSession(request: types.StartVideoSessionRequest): Promise<types.BackupAuthVideoResponse> {
+    const path = '/admin/video/start';
+    return this.client.request<types.BackupAuthVideoResponse>('POST', path, {
       body: request,
     });
   }
 
-  async completeVideoSession(request: types.CompleteVideoSessionRequest): Promise<types.ErrorResponse> {
-    const path = '/video/complete';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async completeVideoSession(request: types.CompleteVideoSessionRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = '/admin/video/complete';
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async uploadDocument(request: types.UploadDocumentRequest): Promise<types.ErrorResponse> {
-    const path = '/documents/upload';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async uploadDocument(request: types.UploadDocumentRequest): Promise<types.BackupAuthDocumentResponse> {
+    const path = '/admin/documents/upload';
+    return this.client.request<types.BackupAuthDocumentResponse>('POST', path, {
       body: request,
     });
   }
 
-  async getDocumentVerification(): Promise<types.ErrorResponse> {
-    const path = '/documents/:id';
-    return this.client.request<types.ErrorResponse>('GET', path);
+  async getDocumentVerification(params: { id: string }): Promise<types.BackupAuthDocumentResponse> {
+    const path = `/admin/documents/${params.id}`;
+    return this.client.request<types.BackupAuthDocumentResponse>('GET', path);
   }
 
-  async reviewDocument(request: types.ReviewDocumentRequest): Promise<types.SuccessResponse> {
-    const path = '/documents/:id/review';
-    return this.client.request<types.SuccessResponse>('POST', path, {
+  async reviewDocument(params: { id: string }, request: types.ReviewDocumentRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = `/admin/documents/${params.id}/review`;
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async listRecoverySessions(): Promise<void> {
-    const path = '/sessions';
-    return this.client.request<void>('GET', path);
+  async listRecoverySessions(): Promise<types.BackupAuthSessionsResponse> {
+    const path = '/admin/sessions';
+    return this.client.request<types.BackupAuthSessionsResponse>('GET', path);
   }
 
-  async approveRecovery(request: types.ApproveRecoveryRequest): Promise<types.ErrorResponse> {
-    const path = '/sessions/:id/approve';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async approveRecovery(params: { id: string }, request: types.ApproveRecoveryRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = `/admin/sessions/${params.id}/approve`;
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async rejectRecovery(request: types.RejectRecoveryRequest): Promise<types.ErrorResponse> {
-    const path = '/sessions/:id/reject';
-    return this.client.request<types.ErrorResponse>('POST', path, {
+  async rejectRecovery(params: { id: string }, request: types.RejectRecoveryRequest): Promise<types.BackupAuthStatusResponse> {
+    const path = `/admin/sessions/${params.id}/reject`;
+    return this.client.request<types.BackupAuthStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async getRecoveryStats(): Promise<void> {
-    const path = '/stats';
-    return this.client.request<void>('GET', path);
+  async getRecoveryStats(): Promise<types.BackupAuthStatsResponse> {
+    const path = '/admin/stats';
+    return this.client.request<types.BackupAuthStatsResponse>('GET', path);
   }
 
-  async getRecoveryConfig(): Promise<void> {
-    const path = '/config';
-    return this.client.request<void>('GET', path);
+  async getRecoveryConfig(): Promise<types.BackupAuthConfigResponse> {
+    const path = '/admin/config';
+    return this.client.request<types.BackupAuthConfigResponse>('GET', path);
   }
 
-  async updateRecoveryConfig(request: types.UpdateRecoveryConfigRequest): Promise<types.SuccessResponse> {
-    const path = '/config';
-    return this.client.request<types.SuccessResponse>('PUT', path, {
+  async updateRecoveryConfig(request: types.UpdateRecoveryConfigRequest): Promise<types.BackupAuthConfigResponse> {
+    const path = '/admin/config';
+    return this.client.request<types.BackupAuthConfigResponse>('PUT', path, {
       body: request,
     });
   }
 
   async healthCheck(): Promise<void> {
-    const path = '/health';
+    const path = '/admin/health';
     return this.client.request<void>('GET', path);
   }
 

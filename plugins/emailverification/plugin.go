@@ -215,6 +215,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("emailverification.verify"),
 		forge.WithSummary("Verify email token"),
 		forge.WithDescription("Verifies email address using token from verification link. Optionally creates a session for auto-login."),
+		forge.WithRequestSchema(VerifyRequest{}),
 		forge.WithResponseSchema(200, "Email verified", VerifyResponse{}),
 		forge.WithResponseSchema(400, "Invalid request or already verified", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Token not found", ErrorResponse{}),
@@ -270,10 +271,17 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		hookRegistry.RegisterAfterSignUp(func(ctx context.Context, resp *responses.AuthResponse) error {
 			// Only send if user is not verified
 			if resp.User != nil && !resp.User.EmailVerified {
-				// Get app context
-				appID, ok := contexts.GetAppID(ctx)
-				if !ok || appID.IsNil() {
-					p.logger.Warn("app context not available in after sign up hook")
+				// Get AuthContext with complete authentication state
+				authCtx, ok := contexts.GetAuthContext(ctx)
+				if !ok || authCtx == nil {
+					p.logger.Warn("auth context not available in after sign up hook")
+					return nil // Don't fail the sign-up
+				}
+
+				// Use AppID from AuthContext
+				appID := authCtx.AppID
+				if appID.IsNil() {
+					p.logger.Warn("app ID not available in auth context")
 					return nil // Don't fail the sign-up
 				}
 

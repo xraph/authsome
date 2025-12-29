@@ -66,7 +66,44 @@ type RolePermissionRepository interface {
 
 // UserRoleRepository handles user-role assignments for RBAC
 type UserRoleRepository interface {
+	// Single assignment (legacy)
 	Assign(ctx context.Context, userID, roleID, orgID xid.ID) error
 	Unassign(ctx context.Context, userID, roleID, orgID xid.ID) error
 	ListRolesForUser(ctx context.Context, userID xid.ID, orgID *xid.ID) ([]schema.Role, error)
+
+	// ====== Assignment Methods ======
+	// AssignBatch assigns multiple roles to a single user in an organization
+	AssignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error
+	// AssignBulk assigns a single role to multiple users in an organization
+	AssignBulk(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (map[xid.ID]error, error)
+	// AssignAppLevel assigns a role at app-level (not org-scoped)
+	AssignAppLevel(ctx context.Context, userID, roleID, appID xid.ID) error
+
+	// ====== Unassignment Methods ======
+	// UnassignBatch removes multiple roles from a single user in an organization
+	UnassignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error
+	// UnassignBulk removes a single role from multiple users in an organization
+	UnassignBulk(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (map[xid.ID]error, error)
+	// ClearUserRolesInOrg removes all roles from a user in an organization
+	ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error
+	// ClearUserRolesInApp removes all roles from a user in an app
+	ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error
+
+	// ====== Transfer/Move Methods ======
+	// TransferRoles moves roles from one org to another (delete + insert)
+	TransferRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error
+	// CopyRoles duplicates roles from one org to another (insert only)
+	CopyRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error
+	// ReplaceUserRoles atomically replaces all user roles in an org with a new set
+	ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error
+
+	// ====== Listing Methods ======
+	// ListRolesForUserInOrg gets roles for a specific user in an organization with environment filter
+	ListRolesForUserInOrg(ctx context.Context, userID, orgID, envID xid.ID) ([]schema.Role, error)
+	// ListRolesForUserInApp gets roles for a specific user across all orgs in an app with environment filter
+	ListRolesForUserInApp(ctx context.Context, userID, appID, envID xid.ID) ([]schema.Role, error)
+	// ListAllUserRolesInOrg lists all user-role assignments in an organization (admin view)
+	ListAllUserRolesInOrg(ctx context.Context, orgID, envID xid.ID) ([]schema.UserRole, error)
+	// ListAllUserRolesInApp lists all user-role assignments in an app across all orgs (admin view)
+	ListAllUserRolesInApp(ctx context.Context, appID, envID xid.ID) ([]schema.UserRole, error)
 }

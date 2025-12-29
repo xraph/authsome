@@ -15,6 +15,9 @@ import (
 
 // Config holds the configuration for the AuthSome extension
 type Config struct {
+	// RequireEmailVerified requires email verification for all users
+	RequireEmailVerified bool `yaml:"requireEmailVerified" json:"requireEmailVerified"`
+
 	// DisableOpenAPI disables the OpenAPI documentation
 	DisableOpenAPI bool `yaml:"disableOpenAPI" json:"disableOpenAPI"`
 
@@ -462,5 +465,11 @@ func WithMinPasswordLength(length int) ConfigOption {
 			c.UserConfig = &user.Config{}
 		}
 		c.UserConfig.PasswordRequirements.MinLength = length
+	}
+}
+
+func WithRequireEmailVerification(require bool) ConfigOption {
+	return func(c *Config) {
+		c.RequireEmailVerified = require
 	}
 }

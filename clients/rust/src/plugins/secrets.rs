@@ -17,74 +17,103 @@ impl SecretsPlugin {{
         Self { client: None }
     }
 
+    #[derive(Debug, Serialize)]
+    pub struct ListRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<i32>,
+    }
+
     /// List handles GET /secrets
     pub async fn list(
         &self,
+        _request: ListRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct CreateResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "error")]
-        pub error: String,
-        #[serde(rename = "message")]
-        pub message: String,
+    #[derive(Debug, Serialize)]
+    pub struct CreateRequest {
+        #[serde(rename = "valueType")]
+        pub value_type: String,
+        #[serde(rename = "description")]
+        pub description: String,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "path")]
+        pub path: String,
+        #[serde(rename = "tags")]
+        pub tags: []string,
+        #[serde(rename = "value")]
+        pub value: ,
     }
 
     /// Create handles POST /secrets
     pub async fn create(
         &self,
-    ) -> Result<CreateResponse> {{
-        // TODO: Implement plugin method
-        unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct GetResponse {
-        #[serde(rename = "message")]
-        pub message: String,
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "error")]
-        pub error: String,
-    }
-
-    /// Get handles GET /secrets/:id
-    pub async fn get(
-        &self,
-    ) -> Result<GetResponse> {{
-        // TODO: Implement plugin method
-        unimplemented!("Plugin methods need client access")
-    }
-
-    /// GetValue handles GET /secrets/:id/value
-    pub async fn get_value(
-        &self,
+        _request: CreateRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct UpdateResponse {
-        #[serde(rename = "error")]
-        pub error: String,
-        #[serde(rename = "message")]
-        pub message: String,
-        #[serde(rename = "code")]
-        pub code: String,
+    #[derive(Debug, Serialize)]
+    pub struct GetRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
+    }
+
+    /// Get handles GET /secrets/:id
+    pub async fn get(
+        &self,
+        _request: GetRequest,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct GetValueRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
+    }
+
+    /// GetValue handles GET /secrets/:id/value
+    pub async fn get_value(
+        &self,
+        _request: GetValueRequest,
+    ) -> Result<()> {
+        // TODO: Implement plugin method
+        unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct UpdateRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
+        #[serde(rename = "description")]
+        pub description: String,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "tags")]
+        pub tags: []string,
+        #[serde(rename = "value")]
+        pub value: ,
     }
 
     /// Update handles PUT /secrets/:id
     pub async fn update(
         &self,
-    ) -> Result<UpdateResponse> {{
+        _request: UpdateRequest,
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct DeleteRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -100,6 +129,7 @@ impl SecretsPlugin {{
     /// Delete handles DELETE /secrets/:id
     pub async fn delete(
         &self,
+        _request: DeleteRequest,
     ) -> Result<DeleteResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
@@ -123,9 +153,16 @@ impl SecretsPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Serialize)]
+    pub struct GetVersionsRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<i32>,
+    }
+
     /// GetVersions handles GET /secrets/:id/versions
     pub async fn get_versions(
         &self,
+        _request: GetVersionsRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
@@ -135,23 +172,15 @@ impl SecretsPlugin {{
     pub struct RollbackRequest {
         #[serde(rename = "reason")]
         pub reason: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct RollbackResponse {
-        #[serde(rename = "code")]
-        pub code: String,
-        #[serde(rename = "error")]
-        pub error: String,
-        #[serde(rename = "message")]
-        pub message: String,
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
     }
 
     /// Rollback handles POST /secrets/:id/rollback/:version
     pub async fn rollback(
         &self,
         _request: RollbackRequest,
-    ) -> Result<RollbackResponse> {{
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -164,9 +193,16 @@ impl SecretsPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Serialize)]
+    pub struct GetTreeRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
+    }
+
     /// GetTree handles GET /secrets/tree
     pub async fn get_tree(
         &self,
+        _request: GetTreeRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")

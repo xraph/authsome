@@ -33,6 +33,9 @@ func (p *Parser) LoadFile(path string) error {
 		return fmt.Errorf("failed to parse manifest file %s: %w", path, err)
 	}
 
+	// Enrich manifest with extracted path parameters
+	enrichManifestWithPathParams(&manifest)
+
 	if err := manifest.Validate(); err != nil {
 		return fmt.Errorf("invalid manifest %s: %w", path, err)
 	}
@@ -116,4 +119,90 @@ func (p *Parser) GetPluginManifests() []*Manifest {
 		}
 	}
 	return manifests
+}
+
+// enrichManifestWithPathParams extracts path parameters from route paths
+// and populates the Params field if it's empty
+func enrichManifestWithPathParams(manifest *Manifest) {
+	for i := range manifest.Routes {
+		route := &manifest.Routes[i]
+		
+		// Only extract if Params is not already populated
+		if len(route.Params) == 0 {
+			route.Params = extractPathParams(route.Path)
+		}
+	}
+}
+
+// extractPathParams extracts path parameters from a route path string
+// Supports both :param (Forge/Express style) and {param} (OpenAPI style)
+// Returns a map of parameter names to their inferred types
+func extractPathParams(path string) map[string]string {
+	params := make(map[string]string)
+	
+	// Split path by '/'
+	segments := strings.Split(path, "/")
+	
+	for _, segment := range segments {
+		var paramName string
+		
+		// Check for :param style
+		if strings.HasPrefix(segment, ":") {
+			paramName = strings.TrimPrefix(segment, ":")
+		} else if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			// Check for {param} style
+			paramName = strings.TrimPrefix(strings.TrimSuffix(segment, "}"), "{")
+		}
+		
+		if paramName != "" {
+			// Infer type based on parameter name patterns
+			paramType := inferParamType(paramName)
+			params[paramName] = paramType
+		}
+	}
+	
+	return params
+}
+
+// inferParamType infers the type of a path parameter based on its name
+func inferParamType(paramName string) string {
+	// Lowercase for case-insensitive matching
+	lowerName := strings.ToLower(paramName)
+	
+	// ID parameters (ending with 'id' or exactly 'id')
+	if lowerName == "id" || strings.HasSuffix(lowerName, "id") {
+		// Special cases that should remain strings
+		if lowerName == "clientid" || lowerName == "providerid" {
+			return "string!"
+		}
+		return "xid.ID!"
+	}
+	
+	// Version numbers
+	if lowerName == "version" {
+		return "int!"
+	}
+	
+	// Slug parameters (SEO-friendly identifiers)
+	if lowerName == "slug" || strings.HasSuffix(lowerName, "slug") {
+		return "string!"
+	}
+	
+	// Provider names (e.g., OAuth providers)
+	if lowerName == "provider" {
+		return "string!"
+	}
+	
+	// Token parameters
+	if lowerName == "token" || strings.HasSuffix(lowerName, "token") {
+		return "string!"
+	}
+	
+	// Standard parameters
+	if lowerName == "standard" {
+		return "string!"
+	}
+	
+	// Default to string for all other parameters
+	return "string!"
 }

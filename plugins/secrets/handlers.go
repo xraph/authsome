@@ -28,6 +28,68 @@ func NewHandler(service *Service, logger forge.Logger) *Handler {
 // Request/Response DTOs
 // =============================================================================
 
+// Request types
+type ListSecretsRequest struct {
+	Prefix    string   `query:"prefix"`
+	ValueType string   `query:"valueType"`
+	Search    string   `query:"search"`
+	SortBy    string   `query:"sortBy"`
+	SortOrder string   `query:"sortOrder"`
+	Recursive bool     `query:"recursive"`
+	Page      int      `query:"page"`
+	PageSize  int      `query:"pageSize"`
+	Tags      []string `query:"tags"`
+}
+
+type CreateSecretRequest struct {
+	Path        string                 `json:"path" validate:"required"`
+	Value       interface{}            `json:"value" validate:"required"`
+	ValueType   string                 `json:"valueType" validate:"required"`
+	Description string                 `json:"description"`
+	Tags        []string               `json:"tags"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
+type GetSecretRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type UpdateSecretRequest struct {
+	ID          string                 `path:"id" validate:"required"`
+	Value       interface{}            `json:"value"`
+	Description string                 `json:"description"`
+	Tags        []string               `json:"tags"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
+type DeleteSecretRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type GetValueRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type GetByPathRequest struct {
+	Path string `query:"path" validate:"required"`
+}
+
+type GetVersionsRequest struct {
+	ID       string `path:"id" validate:"required"`
+	Page     int    `query:"page"`
+	PageSize int    `query:"pageSize"`
+}
+
+type RollbackRequest struct {
+	ID      string `path:"id" validate:"required"`
+	Version string `path:"version" validate:"required"`
+	Reason  string `json:"reason"`
+}
+
+type GetTreeRequest struct {
+	Prefix string `query:"prefix"`
+}
+
 // ErrorResponse is the standard error response
 type ErrorResponse struct {
 	Error   string `json:"error"`
@@ -48,30 +110,32 @@ type SuccessResponse struct {
 
 // List handles GET /secrets
 func (h *Handler) List(c forge.Context) error {
+	var req ListSecretsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
+		})
+	}
+
+	// Set defaults
+	if req.SortBy == "" {
+		req.SortBy = "path"
+	}
+	if req.SortOrder == "" {
+		req.SortOrder = "asc"
+	}
+
 	query := &core.ListSecretsQuery{
-		Prefix:    c.QueryDefault("prefix", ""),
-		ValueType: c.QueryDefault("valueType", ""),
-		Search:    c.QueryDefault("search", ""),
-		SortBy:    c.QueryDefault("sortBy", "path"),
-		SortOrder: c.QueryDefault("sortOrder", "asc"),
-		Recursive: c.QueryDefault("recursive", "true") == "true",
-	}
-
-	// Parse pagination
-	if page := c.QueryDefault("page", ""); page != "" {
-		if p, err := strconv.Atoi(page); err == nil {
-			query.Page = p
-		}
-	}
-	if pageSize := c.QueryDefault("pageSize", ""); pageSize != "" {
-		if ps, err := strconv.Atoi(pageSize); err == nil {
-			query.PageSize = ps
-		}
-	}
-
-	// Parse tags
-	if tags := c.QueryDefault("tags", ""); tags != "" {
-		query.Tags = splitTags(tags)
+		Prefix:    req.Prefix,
+		ValueType: req.ValueType,
+		Search:    req.Search,
+		SortBy:    req.SortBy,
+		SortOrder: req.SortOrder,
+		Recursive: req.Recursive,
+		Page:      req.Page,
+		PageSize:  req.PageSize,
+		Tags:      req.Tags,
 	}
 
 	secrets, pagination, err := h.service.List(c.Request().Context(), query)
@@ -90,15 +154,24 @@ func (h *Handler) List(c forge.Context) error {
 
 // Create handles POST /secrets
 func (h *Handler) Create(c forge.Context) error {
-	var req core.CreateSecretRequest
-	if err := c.BindJSON(&req); err != nil {
+	var req CreateSecretRequest
+	if err := c.BindRequest(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_request",
 			Message: "Invalid request body: " + err.Error(),
 		})
 	}
 
-	secret, err := h.service.Create(c.Request().Context(), &req)
+	serviceReq := &core.CreateSecretRequest{
+		Path:        req.Path,
+		Value:       req.Value,
+		ValueType:   req.ValueType,
+		Description: req.Description,
+		Tags:        req.Tags,
+		Metadata:    req.Metadata,
+	}
+
+	secret, err := h.service.Create(c.Request().Context(), serviceReq)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -108,11 +181,19 @@ func (h *Handler) Create(c forge.Context) error {
 
 // Get handles GET /secrets/:id
 func (h *Handler) Get(c forge.Context) error {
-	id, err := h.parseID(c, "id")
+	var req GetSecretRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
+		})
+	}
+
+	id, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_id",
-			Message: "Invalid secret ID",
+			Message: "Invalid secret ID format",
 		})
 	}
 
@@ -126,11 +207,19 @@ func (h *Handler) Get(c forge.Context) error {
 
 // GetValue handles GET /secrets/:id/value
 func (h *Handler) GetValue(c forge.Context) error {
-	id, err := h.parseID(c, "id")
+	var req GetValueRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
+		})
+	}
+
+	id, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_id",
-			Message: "Invalid secret ID",
+			Message: "Invalid secret ID format",
 		})
 	}
 
@@ -150,23 +239,30 @@ func (h *Handler) GetValue(c forge.Context) error {
 
 // Update handles PUT /secrets/:id
 func (h *Handler) Update(c forge.Context) error {
-	id, err := h.parseID(c, "id")
+	var req UpdateSecretRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
+		})
+	}
+
+	id, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_id",
-			Message: "Invalid secret ID",
+			Message: "Invalid secret ID format",
 		})
 	}
 
-	var req core.UpdateSecretRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "Invalid request body: " + err.Error(),
-		})
+	serviceReq := &core.UpdateSecretRequest{
+		Value:       req.Value,
+		Description: req.Description,
+		Tags:        req.Tags,
+		Metadata:    req.Metadata,
 	}
 
-	secret, err := h.service.Update(c.Request().Context(), id, &req)
+	secret, err := h.service.Update(c.Request().Context(), id, serviceReq)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -176,11 +272,19 @@ func (h *Handler) Update(c forge.Context) error {
 
 // Delete handles DELETE /secrets/:id
 func (h *Handler) Delete(c forge.Context) error {
-	id, err := h.parseID(c, "id")
+	var req DeleteSecretRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
+		})
+	}
+
+	id, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_id",
-			Message: "Invalid secret ID",
+			Message: "Invalid secret ID format",
 		})
 	}
 
@@ -246,26 +350,30 @@ func (h *Handler) GetValueByPath(c forge.Context) error {
 
 // GetVersions handles GET /secrets/:id/versions
 func (h *Handler) GetVersions(c forge.Context) error {
-	id, err := h.parseID(c, "id")
-	if err != nil {
+	var req GetVersionsRequest
+	if err := c.BindRequest(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_id",
-			Message: "Invalid secret ID",
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
 		})
 	}
 
-	page := 1
-	pageSize := 20
-
-	if p := c.QueryDefault("page", ""); p != "" {
-		if parsed, err := strconv.Atoi(p); err == nil {
-			page = parsed
-		}
+	id, err := xid.FromString(req.ID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_id",
+			Message: "Invalid secret ID format",
+		})
 	}
-	if ps := c.QueryDefault("pageSize", ""); ps != "" {
-		if parsed, err := strconv.Atoi(ps); err == nil {
-			pageSize = parsed
-		}
+
+	// Set defaults
+	page := req.Page
+	pageSize := req.PageSize
+	if page == 0 {
+		page = 1
+	}
+	if pageSize == 0 {
+		pageSize = 20
 	}
 
 	versions, pagination, err := h.service.GetVersions(c.Request().Context(), id, page, pageSize)
@@ -284,28 +392,29 @@ func (h *Handler) GetVersions(c forge.Context) error {
 
 // Rollback handles POST /secrets/:id/rollback/:version
 func (h *Handler) Rollback(c forge.Context) error {
-	id, err := h.parseID(c, "id")
-	if err != nil {
+	var req RollbackRequest
+	if err := c.BindRequest(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_id",
-			Message: "Invalid secret ID",
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
 		})
 	}
 
-	versionStr := c.Param("version")
-	version, err := strconv.Atoi(versionStr)
+	id, err := xid.FromString(req.ID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_id",
+			Message: "Invalid secret ID format",
+		})
+	}
+
+	version, err := strconv.Atoi(req.Version)
 	if err != nil || version < 1 {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_version",
 			Message: "Invalid version number",
 		})
 	}
-
-	// Parse optional reason from body
-	var req struct {
-		Reason string `json:"reason"`
-	}
-	_ = c.BindJSON(&req) // Ignore error, reason is optional
 
 	secret, err := h.service.Rollback(c.Request().Context(), id, version, req.Reason)
 	if err != nil {
@@ -331,9 +440,15 @@ func (h *Handler) GetStats(c forge.Context) error {
 
 // GetTree handles GET /secrets/tree
 func (h *Handler) GetTree(c forge.Context) error {
-	prefix := c.QueryDefault("prefix", "")
+	var req GetTreeRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request: " + err.Error(),
+		})
+	}
 
-	tree, err := h.service.GetTree(c.Request().Context(), prefix)
+	tree, err := h.service.GetTree(c.Request().Context(), req.Prefix)
 	if err != nil {
 		return h.handleError(c, err)
 	}

@@ -23,21 +23,48 @@ impl EmailverificationPlugin {{
         pub email: String,
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct SendResponse {
+        #[serde(rename = "devToken")]
+        pub dev_token: String,
+        #[serde(rename = "status")]
+        pub status: String,
+    }
+
     /// Send handles manual verification email sending
 POST /email-verification/send
     pub async fn send(
         &self,
         _request: SendRequest,
-    ) -> Result<()> {
+    ) -> Result<SendResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct VerifyRequest {
+        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+        pub : Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct VerifyResponse {
+        #[serde(rename = "session")]
+        pub session: *session.Session,
+        #[serde(rename = "success")]
+        pub success: bool,
+        #[serde(rename = "token")]
+        pub token: String,
+        #[serde(rename = "user")]
+        pub user: *user.User,
     }
 
     /// Verify handles email verification via token
 GET /email-verification/verify?token=xyz
     pub async fn verify(
         &self,
-    ) -> Result<()> {
+        _request: VerifyRequest,
+    ) -> Result<VerifyResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

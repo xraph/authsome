@@ -6,6 +6,7 @@ import (
 
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/responses"
@@ -477,7 +478,15 @@ func (p *Plugin) onAfterSignIn(ctx context.Context, response *responses.AuthResp
 		return nil
 	}
 
-	// Log successful sign-in for compliance audit trail
+	// Get AuthContext with complete authentication state
+	authCtx, ok := contexts.GetAuthContext(ctx)
+	if !ok || authCtx == nil {
+		// Context not available, skip compliance logging
+		return nil
+	}
+
+	// Log successful sign-in for compliance audit trail with full context
+	// authCtx.AppID, authCtx.EnvironmentID, authCtx.IPAddress, authCtx.UserAgent are all available
 	// Check session policies
 
 	return nil

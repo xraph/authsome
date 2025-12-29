@@ -1,33 +1,62 @@
 plugin_id: jwt
 version: 1.0.0
+base_path: /jwt
 routes:
     - name: CreateJWTKey
       description: CreateJWTKey creates a new JWT signing key
       method: POST
       path: /createjwtkey
-      request_type: jwt.CreateJWTKeyRequest
+      request:
+        algorithm: string!
+        curve: string!
+        expiresAt: '*time.Time!'
+        isPlatformKey: bool!
+        keyType: string!
+        metadata: '!'
+      request_type: CreateJWTKeyRequest
+      response_type: JWTKey
     - name: ListJWTKeys
       description: ListJWTKeys lists JWT signing keys
       method: GET
       path: /listjwtkeys
+      request:
+        "": '*bool'
+      request_type: ListJWTKeysRequest
+      response_type: ListJWTKeysResponse
     - name: GetJWKS
       description: GetJWKS returns the JSON Web Key Set
       method: GET
       path: /jwks
+      response_type: JWKSResponse
     - name: GenerateToken
       description: GenerateToken generates a new JWT token
       method: POST
       path: /generate
-      request_type: jwt.GenerateTokenRequest
+      request:
+        audience: '[]string!'
+        expiresIn: time.Duration!
+        metadata: '!'
+        permissions: '[]string!'
+        scopes: '[]string!'
+        sessionId: string!
+        tokenType: string!
+        userId: string!
+      request_type: GenerateTokenRequest
+      response_type: GenerateTokenResponse
     - name: VerifyToken
       description: VerifyToken verifies a JWT token
       method: POST
       path: /verify
-      request_type: jwt.VerifyTokenRequest
+      request:
+        audience: '[]string!'
+        token: string!
+        tokenType: string!
+      request_type: VerifyTokenRequest
+      response_type: VerifyTokenResponse
 types:
     - name: Plugin
       fields:
-        "": Config
+        "": '*jwt.Service'
     - name: Config
       fields:
         accessExpirySeconds: int!
@@ -38,3 +67,29 @@ types:
     - name: Handler
       fields:
         "": '*jwt.Service'
+    - name: CreateJWTKeyRequest
+      fields:
+        algorithm: string!
+        curve: string!
+        expiresAt: '*time.Time!'
+        isPlatformKey: bool!
+        keyType: string!
+        metadata: '!'
+    - name: ListJWTKeysRequest
+      fields:
+        "": int
+    - name: GenerateTokenRequest
+      fields:
+        audience: '[]string!'
+        expiresIn: time.Duration!
+        metadata: '!'
+        permissions: '[]string!'
+        scopes: '[]string!'
+        sessionId: string!
+        tokenType: string!
+        userId: string!
+    - name: VerifyTokenRequest
+      fields:
+        audience: '[]string!'
+        token: string!
+        tokenType: string!

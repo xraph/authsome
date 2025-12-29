@@ -79,7 +79,7 @@ func main() {
 ### 3. Create Your First Policy
 
 ```bash
-curl -X POST http://localhost:8080/api/permissions/policies \
+curl -X POST http://localhost:8080/permissions/policies \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -94,7 +94,7 @@ curl -X POST http://localhost:8080/api/permissions/policies \
 ### 4. Evaluate Permissions
 
 ```bash
-curl -X POST http://localhost:8080/api/permissions/evaluate \
+curl -X POST http://localhost:8080/permissions/evaluate \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -160,7 +160,7 @@ resource.metadata.confidentiality == "public" ||
 ### 1. Create Namespace
 
 ```bash
-curl -X POST http://localhost:8080/api/permissions/namespaces \
+curl -X POST http://localhost:8080/permissions/namespaces \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "orgId": "org_abc123",
@@ -172,7 +172,7 @@ curl -X POST http://localhost:8080/api/permissions/namespaces \
 ### 2. Define Custom Resources
 
 ```bash
-curl -X POST http://localhost:8080/api/permissions/resources \
+curl -X POST http://localhost:8080/permissions/resources \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "namespaceId": "ns_xyz",
@@ -189,7 +189,7 @@ curl -X POST http://localhost:8080/api/permissions/resources \
 ### 3. Define Actions
 
 ```bash
-curl -X POST http://localhost:8080/api/permissions/actions \
+curl -X POST http://localhost:8080/permissions/actions \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "namespaceId": "ns_xyz",
@@ -203,7 +203,7 @@ curl -X POST http://localhost:8080/api/permissions/actions \
 ### Automatic Migration
 
 ```bash
-curl -X POST http://localhost:8080/api/permissions/migrate/rbac \
+curl -X POST http://localhost:8080/permissions/migrate/rbac \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "orgId": "org_abc123",
@@ -224,7 +224,7 @@ auth:
 
 Check migration status:
 ```bash
-curl http://localhost:8080/api/permissions/migrate/rbac/status?orgId=org_abc123 \
+curl http://localhost:8080/permissions/migrate/rbac/status?orgId=org_abc123 \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -285,37 +285,37 @@ performance:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/permissions/policies` | POST | Create policy |
-| `/api/permissions/policies` | GET | List policies |
-| `/api/permissions/policies/:id` | GET | Get policy |
-| `/api/permissions/policies/:id` | PUT | Update policy |
-| `/api/permissions/policies/:id` | DELETE | Delete policy |
-| `/api/permissions/policies/validate` | POST | Validate syntax |
-| `/api/permissions/policies/test` | POST | Test policy |
+| `/permissions/policies` | POST | Create policy |
+| `/permissions/policies` | GET | List policies |
+| `/permissions/policies/:id` | GET | Get policy |
+| `/permissions/policies/:id` | PUT | Update policy |
+| `/permissions/policies/:id` | DELETE | Delete policy |
+| `/permissions/policies/validate` | POST | Validate syntax |
+| `/permissions/policies/test` | POST | Test policy |
 
 ### Resource Management
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/permissions/resources` | POST | Define resource type |
-| `/api/permissions/resources` | GET | List resource types |
-| `/api/permissions/resources/:id` | GET | Get resource definition |
-| `/api/permissions/resources/:id` | DELETE | Delete resource type |
+| `/permissions/resources` | POST | Define resource type |
+| `/permissions/resources` | GET | List resource types |
+| `/permissions/resources/:id` | GET | Get resource definition |
+| `/permissions/resources/:id` | DELETE | Delete resource type |
 
 ### Evaluation
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/permissions/evaluate` | POST | Check authorization |
-| `/api/permissions/evaluate/batch` | POST | Batch evaluation |
+| `/permissions/evaluate` | POST | Check authorization |
+| `/permissions/evaluate/batch` | POST | Batch evaluation |
 
 ### Templates
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/permissions/templates` | GET | List templates |
-| `/api/permissions/templates/:id` | GET | Get template |
-| `/api/permissions/templates/:id/instantiate` | POST | Use template |
+| `/permissions/templates` | GET | List templates |
+| `/permissions/templates/:id` | GET | Get template |
+| `/permissions/templates/:id/instantiate` | POST | Use template |
 
 ## Monitoring
 
@@ -396,13 +396,13 @@ cache:
 
 Validate before creating:
 ```bash
-curl -X POST http://localhost:8080/api/permissions/policies/validate \
+curl -X POST http://localhost:8080/permissions/policies/validate \
   -d '{"expression": "resource.owner == principal.id"}'
 ```
 
 Test with sample data:
 ```bash
-curl -X POST http://localhost:8080/api/permissions/policies/test \
+curl -X POST http://localhost:8080/permissions/policies/test \
   -d '{
     "expression": "...",
     "testCases": [...]

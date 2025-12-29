@@ -98,49 +98,28 @@ POST /cms/:type/query
         unimplemented!("Plugin methods need client access")
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct BulkPublishRequest {
-        #[serde(rename = "ids")]
-        pub ids: []string,
-    }
-
     /// BulkPublish publishes multiple entries
 POST /cms/:type/bulk/publish
     pub async fn bulk_publish(
         &self,
-        _request: BulkPublishRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Serialize)]
-    pub struct BulkUnpublishRequest {
-        #[serde(rename = "ids")]
-        pub ids: []string,
     }
 
     /// BulkUnpublish unpublishes multiple entries
 POST /cms/:type/bulk/unpublish
     pub async fn bulk_unpublish(
         &self,
-        _request: BulkUnpublishRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Serialize)]
-    pub struct BulkDeleteRequest {
-        #[serde(rename = "ids")]
-        pub ids: []string,
     }
 
     /// BulkDelete deletes multiple entries
 POST /cms/:type/bulk/delete
     pub async fn bulk_delete(
         &self,
-        _request: BulkDeleteRequest,
     ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")

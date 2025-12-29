@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/rs/xid"
 	coreapp "github.com/xraph/authsome/core/app"
@@ -26,15 +24,15 @@ func NewAppHandler(appService *coreapp.ServiceImpl) *AppHandler {
 
 // CreateApp handles app creation requests
 func (h *AppHandler) CreateApp(c forge.Context) error {
-	var req coreapp.CreateAppRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var req CreateAppRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// TODO: Get creator user ID from context/session
 	// creatorUserID := "system" // placeholder
 
-	a, err := h.appService.CreateApp(c.Request().Context(), &req)
+	a, err := h.appService.CreateApp(c.Request().Context(), &req.CreateAppRequest)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError))
 	}
@@ -44,12 +42,12 @@ func (h *AppHandler) CreateApp(c forge.Context) error {
 
 // GetApp handles get app requests
 func (h *AppHandler) GetApp(c forge.Context) error {
-	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	var req GetAppRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	appID, err := xid.FromString(id)
+	appID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
 	}
@@ -64,26 +62,17 @@ func (h *AppHandler) GetApp(c forge.Context) error {
 
 // UpdateApp handles app update requests
 func (h *AppHandler) UpdateApp(c forge.Context) error {
-	idStr := c.Param("id")
-	if idStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	var req UpdateAppRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	appID, err := xid.FromString(idStr)
+	appID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
 	}
 
-	var req coreapp.UpdateAppRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
-	}
-
-	a, err := h.appService.UpdateApp(c.Request().Context(), appID, &coreapp.UpdateAppRequest{
-		Name:     req.Name,
-		Logo:     req.Logo,
-		Metadata: req.Metadata,
-	})
+	a, err := h.appService.UpdateApp(c.Request().Context(), appID, &req.UpdateAppRequest)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError))
 	}
@@ -93,12 +82,12 @@ func (h *AppHandler) UpdateApp(c forge.Context) error {
 
 // DeleteApp handles app deletion requests
 func (h *AppHandler) DeleteApp(c forge.Context) error {
-	idStr := c.Param("id")
-	if idStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	var req DeleteAppRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	appID, err := xid.FromString(idStr)
+	appID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
 	}
@@ -113,23 +102,19 @@ func (h *AppHandler) DeleteApp(c forge.Context) error {
 
 // ListApps handles list apps requests
 func (h *AppHandler) ListApps(c forge.Context) error {
-	// Parse pagination parameters
-	limitStr := c.Request().URL.Query().Get("limit")
-	offsetStr := c.Request().URL.Query().Get("offset")
-
-	limit := 10 // default
-	offset := 0 // default
-
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	var req ListAppsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
+	// Set defaults
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	offset := req.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
 	filter := &coreapp.ListAppsFilter{

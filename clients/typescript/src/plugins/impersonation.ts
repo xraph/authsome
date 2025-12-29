@@ -12,38 +12,34 @@ export class ImpersonationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async startImpersonation(request: types.StartImpersonation_reqBody): Promise<void> {
-    const path = '/start';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+  async startImpersonation(): Promise<types.ImpersonationStartResponse> {
+    const path = '/impersonation/start';
+    return this.client.request<types.ImpersonationStartResponse>('POST', path);
   }
 
-  async endImpersonation(request: types.EndImpersonation_reqBody): Promise<void> {
-    const path = '/end';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+  async endImpersonation(): Promise<types.ImpersonationEndResponse> {
+    const path = '/impersonation/end';
+    return this.client.request<types.ImpersonationEndResponse>('POST', path);
   }
 
-  async getImpersonation(): Promise<void> {
-    const path = '/:id';
-    return this.client.request<void>('GET', path);
+  async getImpersonation(params: { id: string }): Promise<types.ImpersonationSession> {
+    const path = `/impersonation/${params.id}`;
+    return this.client.request<types.ImpersonationSession>('GET', path);
   }
 
-  async listImpersonations(): Promise<void> {
-    const path = '/';
-    return this.client.request<void>('GET', path);
+  async listImpersonations(): Promise<types.ImpersonationListResponse> {
+    const path = '/impersonation/';
+    return this.client.request<types.ImpersonationListResponse>('GET', path);
   }
 
-  async listAuditEvents(): Promise<void> {
-    const path = '/audit';
-    return this.client.request<void>('GET', path);
+  async listAuditEvents(): Promise<types.ImpersonationAuditResponse> {
+    const path = '/impersonation/audit';
+    return this.client.request<types.ImpersonationAuditResponse>('GET', path);
   }
 
-  async verifyImpersonation(): Promise<void> {
-    const path = '/verify';
-    return this.client.request<void>('POST', path);
+  async verifyImpersonation(): Promise<types.ImpersonationVerifyResponse> {
+    const path = '/impersonation/verify';
+    return this.client.request<types.ImpersonationVerifyResponse>('POST', path);
   }
 
 }

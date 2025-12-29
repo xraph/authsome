@@ -91,6 +91,11 @@ func (e *DashboardExtension) HandleCreateProvider(c forge.Context) error {
 		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+create+provider")
 	}
 
+	// Invalidate cache for this environment
+	if e.plugin != nil && e.plugin.service != nil {
+		e.plugin.service.InvalidateEnvironmentCache(currentApp.ID, envID)
+	}
+
 	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+created+successfully")
 }
 
@@ -162,6 +167,11 @@ func (e *DashboardExtension) HandleUpdateProvider(c forge.Context) error {
 		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+update+provider")
 	}
 
+	// Invalidate cache for this environment
+	if e.plugin != nil && e.plugin.service != nil {
+		e.plugin.service.InvalidateEnvironmentCache(config.AppID, config.EnvironmentID)
+	}
+
 	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+updated+successfully")
 }
 
@@ -203,6 +213,11 @@ func (e *DashboardExtension) HandleToggleProvider(c forge.Context) error {
 		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+toggle+provider")
 	}
 
+	// Invalidate cache for this environment
+	if e.plugin != nil && e.plugin.service != nil {
+		e.plugin.service.InvalidateEnvironmentCache(config.AppID, config.EnvironmentID)
+	}
+
 	status := "enabled"
 	if !newEnabled {
 		status = "disabled"
@@ -237,9 +252,20 @@ func (e *DashboardExtension) HandleDeleteProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 	redirectURL := basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/social"
 
+	// Get existing config to retrieve environment ID for cache invalidation
+	config, err := e.configRepo.FindByID(ctx, configID)
+	if err != nil {
+		return c.Redirect(http.StatusFound, redirectURL+"?error=Provider+not+found")
+	}
+
 	// Delete the config (soft delete)
 	if err := e.configRepo.Delete(ctx, configID); err != nil {
 		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+delete+provider")
+	}
+
+	// Invalidate cache for this environment
+	if e.plugin != nil && e.plugin.service != nil {
+		e.plugin.service.InvalidateEnvironmentCache(config.AppID, config.EnvironmentID)
 	}
 
 	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+deleted+successfully")

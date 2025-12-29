@@ -5,38 +5,47 @@ routes:
       description: SignUp handles user registration with username and password
       method: POST
       path: /username/signup
+      request:
+        password: string!
+        username: string!
       response:
         message: string!
         status: string!
+      request_type: SignUpRequest
       response_type: SignUpResponse
     - name: SignIn
       description: SignIn handles user authentication with username and password
       method: POST
       path: /username/signin
+      request:
+        password: string!
+        remember: bool!
+        username: string!
       response:
-        session: '*session.Session!'
-        token: string!
+        device_id: string!
+        require_twofa: bool!
         user: '*user.User!'
-      response_type: SignInResponse
+      request_type: SignInRequest
+      response_type: TwoFARequiredResponse
 types:
+    - name: SignUpRequest
+      fields:
+        password: string!
+        username: string!
+    - name: SignInRequest
+      fields:
+        password: string!
+        remember: bool!
+        username: string!
     - name: SignUpResponse
       fields:
         message: string!
         status: string!
-    - name: SignInResponse
+    - name: TwoFARequiredResponse
       fields:
-        session: '*session.Session!'
-        token: string!
+        device_id: string!
+        require_twofa: bool!
         user: '*user.User!'
-    - name: AccountLockedResponse
-      fields:
-        code: string!
-        locked_minutes: int!
-        locked_until: time.Time!
-        message: string!
-    - name: Plugin
-      fields:
-        "": '*Service'
     - name: Config
       fields:
         allowUsernameLogin: bool!
@@ -56,25 +65,6 @@ types:
         requireNumber: bool!
         requireSpecialChar: bool!
         requireUppercase: bool!
-    - name: RateLimitRule
-      fields:
-        max: int!
-        window: time.Duration!
-    - name: Service
-      fields:
-        "": Config
-    - name: Handler
-      fields:
-        "": '*repo.TwoFARepository'
-    - name: SignUpRequest
-      fields:
-        password: string!
-        username: string!
-    - name: TwoFARequiredResponse
-      fields:
-        device_id: string!
-        require_twofa: bool!
-        user: '*user.User!'
     - name: RateLimitConfig
       fields:
         enabled: bool!
@@ -85,11 +75,30 @@ types:
         signinPerUser: RateLimitRule!
         signupPerIp: RateLimitRule!
         useRedis: bool!
+    - name: RateLimitRule
+      fields:
+        max: int!
+        window: time.Duration!
     - name: AccountLockoutError
       fields:
         "": int
-    - name: SignInRequest
+    - name: Handler
       fields:
-        password: string!
-        remember: bool!
-        username: string!
+        "": '*repo.TwoFARepository'
+    - name: SignInResponse
+      fields:
+        session: '*session.Session!'
+        token: string!
+        user: '*user.User!'
+    - name: AccountLockedResponse
+      fields:
+        code: string!
+        locked_minutes: int!
+        locked_until: time.Time!
+        message: string!
+    - name: Plugin
+      fields:
+        "": forge.Logger
+    - name: Service
+      fields:
+        "": '*auth.Service'

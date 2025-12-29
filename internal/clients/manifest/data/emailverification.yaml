@@ -9,13 +9,26 @@ routes:
       path: /email-verification/send
       request:
         email: string!
+      response:
+        devToken: string!
+        status: string!
       request_type: SendRequest
+      response_type: SendResponse
     - name: Verify
       description: |-
         Verify handles email verification via token
         GET /email-verification/verify?token=xyz
       method: GET
       path: /email-verification/verify
+      request:
+        "": string
+      response:
+        session: '*session.Session!'
+        success: bool!
+        token: string!
+        user: '*user.User!'
+      request_type: VerifyRequest
+      response_type: VerifyResponse
     - name: Resend
       description: |-
         Resend handles resending verification email
@@ -32,6 +45,22 @@ types:
     - name: Handler
       fields:
         "": core.Authsome
+    - name: VerificationRepository
+      fields:
+        "": '*bun.DB'
+    - name: Service
+      fields:
+        "": '*notificationPlugin.Adapter'
+    - name: SendRequest
+      fields:
+        email: string!
+    - name: ResendResponse
+      fields:
+        status: string!
+    - name: StatusResponse
+      fields:
+        emailVerified: bool!
+        emailVerifiedAt: '*time.Time!'
     - name: Plugin
       fields:
         "": core.Authsome
@@ -44,16 +73,13 @@ types:
         maxResendPerHour: int!
         tokenLength: int!
         verificationURL: string!
-    - name: Service
-      fields:
-        "": '*VerificationRepository'
     - name: SendResponse
       fields:
         devToken: string!
         status: string!
     - name: VerifyRequest
       fields:
-        token: string!
+        "": string
     - name: VerifyResponse
       fields:
         session: '*session.Session!'
@@ -63,16 +89,3 @@ types:
     - name: ResendRequest
       fields:
         email: string!
-    - name: VerificationRepository
-      fields:
-        "": '*bun.DB'
-    - name: SendRequest
-      fields:
-        email: string!
-    - name: ResendResponse
-      fields:
-        status: string!
-    - name: StatusResponse
-      fields:
-        emailVerified: bool!
-        emailVerifiedAt: '*time.Time!'

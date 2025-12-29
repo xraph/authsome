@@ -33,14 +33,14 @@ func NewRevisionHandler(
 // ListRevisions lists revisions for an entry
 // GET /cms/:type/:id/revisions
 func (h *RevisionHandler) ListRevisions(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
-	if typeSlug == "" || entryID == "" {
-		return c.JSON(400, map[string]string{"error": "type and id are required"})
+	var req ListRevisionsRequest
+
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Parse entry ID
-	id, err := xid.FromString(entryID)
+	id, err := xid.FromString(req.EntryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
@@ -68,21 +68,20 @@ func (h *RevisionHandler) ListRevisions(c forge.Context) error {
 // GetRevision retrieves a specific revision
 // GET /cms/:type/:id/revisions/:version
 func (h *RevisionHandler) GetRevision(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
-	versionStr := c.Param("version")
-	if typeSlug == "" || entryID == "" || versionStr == "" {
-		return c.JSON(400, map[string]string{"error": "type, id, and version are required"})
+	var req GetRevisionRequest
+
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Parse entry ID
-	id, err := xid.FromString(entryID)
+	id, err := xid.FromString(req.EntryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
 	// Parse version
-	version, err := strconv.Atoi(versionStr)
+	version, err := strconv.Atoi(req.RevisionID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid version number"})
 	}
@@ -98,21 +97,20 @@ func (h *RevisionHandler) GetRevision(c forge.Context) error {
 // RestoreRevision restores an entry to a specific revision
 // POST /cms/:type/:id/revisions/:version/restore
 func (h *RevisionHandler) RestoreRevision(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
-	versionStr := c.Param("version")
-	if typeSlug == "" || entryID == "" || versionStr == "" {
-		return c.JSON(400, map[string]string{"error": "type, id, and version are required"})
+	var req GetRevisionRequest
+
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Parse entry ID
-	id, err := xid.FromString(entryID)
+	id, err := xid.FromString(req.EntryID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
 	// Parse version
-	version, err := strconv.Atoi(versionStr)
+	version, err := strconv.Atoi(req.RevisionID)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid version number"})
 	}

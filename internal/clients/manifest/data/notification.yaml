@@ -7,53 +7,82 @@ routes:
       path: /:id/preview
       request:
         variables: '!'
+      response:
+        body: string!
+        subject: string!
       request_type: PreviewTemplate_req
+      response_type: NotificationPreviewResponse
     - name: CreateTemplate
       description: CreateTemplate creates a new notification template
       method: POST
       path: /createtemplate
+      response:
+        template: '!'
       request_type: notification.CreateTemplateRequest
-      response_type: error
+      response_type: NotificationTemplateResponse
     - name: GetTemplate
       description: GetTemplate retrieves a template by ID
       method: GET
       path: /:id
+      response:
+        template: '!'
+      response_type: NotificationTemplateResponse
     - name: ListTemplates
       description: ListTemplates lists all templates with pagination
       method: GET
       path: /listtemplates
+      response:
+        templates: '[]!'
+        total: int!
+      response_type: NotificationTemplateListResponse
     - name: UpdateTemplate
       description: UpdateTemplate updates a template
       method: PUT
       path: /:id
+      response:
+        template: '!'
       request_type: notification.UpdateTemplateRequest
-      response_type: MessageResponse
+      response_type: NotificationTemplateResponse
     - name: DeleteTemplate
       description: DeleteTemplate deletes a template
       method: DELETE
       path: /:id
-      response_type: MessageResponse
+      response:
+        status: string!
+      response_type: NotificationStatusResponse
     - name: ResetTemplate
       description: ResetTemplate resets a template to default values
       method: POST
       path: /:id/reset
-      response_type: MessageResponse
+      response:
+        status: string!
+      response_type: NotificationStatusResponse
     - name: ResetAllTemplates
       description: ResetAllTemplates resets all templates for an app to defaults
       method: POST
       path: /reset-all
-      response_type: MessageResponse
+      response:
+        status: string!
+      response_type: NotificationStatusResponse
     - name: GetTemplateDefaults
       description: GetTemplateDefaults returns default template metadata
       method: GET
       path: /defaults
+      response:
+        templates: '[]!'
+        total: int!
+      response_type: NotificationTemplateListResponse
     - name: PreviewTemplate
       description: PreviewTemplate renders a template with provided variables
       method: POST
       path: /:id/preview
       request:
         variables: '!'
+      response:
+        body: string!
+        subject: string!
       request_type: PreviewTemplate_req
+      response_type: NotificationPreviewResponse
     - name: RenderTemplate
       description: RenderTemplate renders a template string with variables (no template ID required)
       method: POST
@@ -61,95 +90,53 @@ routes:
       request:
         template: string!
         variables: '!'
+      response:
+        body: string!
+        subject: string!
       request_type: RenderTemplate_req
+      response_type: NotificationPreviewResponse
     - name: SendNotification
       description: SendNotification sends a notification
       method: POST
       path: /send
+      response:
+        notification: '!'
       request_type: notification.SendRequest
+      response_type: NotificationResponse
     - name: GetNotification
       description: GetNotification retrieves a notification by ID
       method: GET
       path: /:id
+      response:
+        notification: '!'
+      response_type: NotificationResponse
     - name: ListNotifications
       description: ListNotifications lists all notifications with pagination
       method: GET
       path: /listnotifications
+      response:
+        notifications: '[]!'
+        total: int!
+      response_type: NotificationListResponse
     - name: ResendNotification
       description: ResendNotification resends a notification
       method: POST
       path: /:id/resend
+      response:
+        notification: '!'
+      response_type: NotificationResponse
     - name: HandleWebhook
       description: HandleWebhook handles provider webhook callbacks
       method: POST
       path: /notifications/webhook/:provider
-      response_type: StatusResponse
-types:
-    - name: SaveBuilderTemplate_req
-      fields:
-        document: builder.Document!
-        name: string!
-        subject: string!
-        templateId: string
-        templateKey: string!
-    - name: CreateTemplateVersion_req
-      fields:
-        changes: string!
-    - name: NotificationErrorResponse
-      fields:
-        error: string!
-    - name: NotificationStatusResponse
-      fields:
+      response:
         status: string!
-    - name: NotificationPreviewResponse
-      fields:
-        body: string!
-        subject: string!
-    - name: NotificationResponse
-      fields:
-        notification: '!'
+      response_type: NotificationWebhookResponse
+types:
     - name: ProvidersConfig
       fields:
         email: EmailProviderConfig!
         sms: '*SMSProviderConfig!'
-    - name: PreviewTemplate_req
-      fields:
-        variables: '!'
-    - name: TestSendTemplate_req
-      fields:
-        recipient: string!
-        variables: '!'
-    - name: TemplatesResponse
-      fields:
-        count: int!
-        templates: '!'
-    - name: RenderTemplate_req
-      fields:
-        template: string!
-        variables: '!'
-    - name: SaveNotificationSettings_req
-      fields:
-        autoSendWelcome: bool!
-        cleanupAfter: string!
-        retryAttempts: int!
-        retryDelay: string!
-    - name: TemplateDefault
-      fields:
-        "": string
-    - name: Handler
-      fields:
-        "": '*notification.ABTestService'
-    - name: ChannelsResponse
-      fields:
-        channels: '!'
-        count: int!
-    - name: Plugin
-      fields:
-        "": '*TemplateService'
-    - name: RateLimit
-      fields:
-        max_requests: int!
-        window: time.Duration!
     - name: EmailProviderConfig
       fields:
         config: '!'
@@ -157,34 +144,65 @@ types:
         from_name: string!
         provider: string!
         reply_to: string!
-    - name: DashboardExtension
-      fields:
-        "": '*dashboard.ExtensionRegistry'
-    - name: NotificationsResponse
-      fields:
-        count: int!
-        notifications: '!'
     - name: DeclareABTestWinner_req
       fields:
         abTestGroup: string!
         winnerId: string!
-    - name: TemplateService
+    - name: HandleUpdateSettings_updates
+      fields: {}
+    - name: NotificationErrorResponse
       fields:
-        "": Config
+        error: string!
+    - name: NotificationStatusResponse
+      fields:
+        status: string!
+    - name: RenderTemplateRequest
+      fields:
+        "": string
+    - name: ResendNotificationRequest
+      fields:
+        "": string
     - name: CreateABTestVariant_req
       fields:
         body: string!
         name: string!
         subject: string!
         weight: int!
+    - name: DeleteTemplateRequest
+      fields:
+        "": string
+    - name: AsyncConfig
+      fields:
+        enabled: bool!
+        max_retries: int!
+        persist_failures: bool!
+        queue_size: int!
+        retry_backoff: '[]string!'
+        retry_enabled: bool!
+        worker_pool_size: int!
+    - name: GetTemplateAnalyticsRequest
+      fields:
+        "": string
+    - name: DashboardExtension
+      fields:
+        "": '*dashboard.ExtensionRegistry'
+    - name: ChannelsResponse
+      fields:
+        channels: '!'
+        count: int!
+    - name: UpdateProvider_req
+      fields:
+        config: '!'
+        isActive: bool!
+        isDefault: bool!
     - name: NotificationTemplateListResponse
       fields:
         templates: '[]!'
         total: int!
-    - name: NotificationListResponse
+    - name: NotificationPreviewResponse
       fields:
-        notifications: '[]!'
-        total: int!
+        body: string!
+        subject: string!
     - name: SendWithTemplateRequest
       fields:
         appId: xid.ID!
@@ -194,9 +212,13 @@ types:
         templateKey: string!
         type: notification.NotificationType!
         variables: '!'
-    - name: Adapter
+    - name: GetABTestResultsRequest
       fields:
-        "": '*TemplateService'
+        "": string
+    - name: RateLimit
+      fields:
+        max_requests: int!
+        window: time.Duration!
     - name: CreateProvider_req
       fields:
         config: '!'
@@ -204,30 +226,34 @@ types:
         organizationId: '*string'
         providerName: string!
         providerType: string!
-    - name: UpdateProvider_req
-      fields:
-        config: '!'
-        isActive: bool!
-        isDefault: bool!
-    - name: TrackNotificationEvent_req
-      fields:
-        event: string!
-        eventData: ""
-        notificationId: string!
-        organizationId: '*string'
-        templateId: string!
     - name: NotificationTemplateResponse
       fields:
         template: '!'
-    - name: TemplateEngine
+    - name: GetNotificationRequest
       fields:
-        "": template.FuncMap
+        "": string
+    - name: GetProviderRequest
+      fields:
+        "": string
+    - name: NotificationListResponse
+      fields:
+        notifications: '[]!'
+        total: int!
+    - name: ResetTemplateRequest
+      fields:
+        "": string
+    - name: AsyncAdapter
+      fields:
+        "": '*notification.RetryService'
     - name: Config
       fields:
         add_default_templates: bool!
         allow_app_overrides: bool!
         allow_template_reset: bool!
+        app_name: string!
+        async: AsyncConfig!
         auto_populate_templates: bool!
+        auto_send: AutoSendConfig!
         auto_send_welcome: bool!
         cleanup_after: time.Duration!
         default_language: string!
@@ -235,11 +261,113 @@ types:
         rate_limits: '!'
         retry_attempts: int!
         retry_delay: time.Duration!
+    - name: TemplatesResponse
+      fields:
+        count: int!
+        templates: '!'
+    - name: CreateTemplateVersion_req
+      fields:
+        changes: string!
+    - name: TrackNotificationEvent_req
+      fields:
+        event: string!
+        eventData: ""
+        notificationId: string!
+        organizationId: '*string'
+        templateId: string!
+    - name: DeclareABTestWinnerRequest
+      fields:
+        "": string
+    - name: Adapter
+      fields:
+        "": ""
+    - name: AuthAutoSendConfig
+      fields:
+        email_otp: bool!
+        magic_link: bool!
+        mfa_code: bool!
+        password_reset: bool!
+        verification_email: bool!
+        welcome: bool!
+    - name: PreviewTemplate_req
+      fields:
+        variables: '!'
+    - name: TemplateDefault
+      fields:
+        "": string
+    - name: RenderTemplate_req
+      fields:
+        template: string!
+        variables: '!'
+    - name: TemplateService
+      fields:
+        "": Config
+    - name: GetTemplateRequest
+      fields:
+        "": string
+    - name: OrganizationAutoSendConfig
+      fields:
+        deleted: bool!
+        invite: bool!
+        member_added: bool!
+        member_left: bool!
+        member_removed: bool!
+        role_changed: bool!
+        transfer: bool!
+    - name: AccountAutoSendConfig
+      fields:
+        deleted: bool!
+        email_change_request: bool!
+        email_changed: bool!
+        password_changed: bool!
+        reactivated: bool!
+        suspended: bool!
+        username_changed: bool!
+    - name: SaveNotificationSettings_req
+      fields:
+        autoSendWelcome: bool!
+        cleanupAfter: string!
+        retryAttempts: int!
+        retryDelay: string!
+    - name: settingField
+      fields:
+        "": bool
+    - name: mockNotificationProvider
+      fields:
+        "": '[]mockSentNotification'
+    - name: TemplateEngine
+      fields:
+        "": template.FuncMap
+    - name: DeleteProviderRequest
+      fields:
+        "": string
+    - name: mockSentNotification
+      fields:
+        "": time.Time
+    - name: NotificationResponse
+      fields:
+        notification: '!'
+    - name: UpdateTemplateRequest
+      fields:
+        "": string
+    - name: AutoSendConfig
+      fields:
+        account: AccountAutoSendConfig!
+        auth: AuthAutoSendConfig!
+        organization: OrganizationAutoSendConfig!
+        session: SessionAutoSendConfig!
     - name: SMSProviderConfig
       fields:
         config: '!'
         from: string!
         provider: string!
+    - name: NotificationsResponse
+      fields:
+        count: int!
+        notifications: '!'
+    - name: GetTemplateVersionRequest
+      fields:
+        "": string
     - name: TestProvider_req
       fields:
         providerName: string!
@@ -248,3 +376,36 @@ types:
     - name: NotificationWebhookResponse
       fields:
         status: string!
+    - name: SaveBuilderTemplate_req
+      fields:
+        document: builder.Document!
+        name: string!
+        subject: string!
+        templateId: string
+        templateKey: string!
+    - name: Plugin
+      fields:
+        "": Config
+    - name: PreviewTemplateRequest
+      fields:
+        "": string
+    - name: UpdateProviderRequest
+      fields:
+        "": string
+    - name: RestoreTemplateVersionRequest
+      fields:
+        "": string
+    - name: SessionAutoSendConfig
+      fields:
+        all_revoked: bool!
+        device_removed: bool!
+        new_device: bool!
+        new_location: bool!
+        suspicious_login: bool!
+    - name: TestSendTemplate_req
+      fields:
+        recipient: string!
+        variables: '!'
+    - name: Handler
+      fields:
+        "": '*notification.ABTestService'

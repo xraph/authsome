@@ -1,19 +1,11 @@
 plugin_id: admin
 version: 1.0.0
+base_path: /admin
 routes:
     - name: CreateUser
       description: CreateUser handles POST /admin/users
       method: POST
       path: /users
-      request:
-        email: string!
-        email_verified: bool!
-        metadata: ""
-        name: string
-        password: string
-        role: string
-        username: string
-      request_type: CreateUser_reqBody
     - name: ListUsers
       description: ListUsers handles GET /admin/users
       method: GET
@@ -27,33 +19,20 @@ routes:
       description: BanUser handles POST /admin/users/:id/ban
       method: POST
       path: /users/:id/ban
-      request:
-        expires_at: '*time.Time'
-        reason: string!
-      request_type: BanUser_reqBody
       response_type: MessageResponse
     - name: UnbanUser
       description: UnbanUser handles POST /admin/users/:id/unban
       method: POST
       path: /users/:id/unban
-      request:
-        reason: string
-      request_type: UnbanUser_reqBody
       response_type: MessageResponse
     - name: ImpersonateUser
       description: ImpersonateUser handles POST /admin/users/:id/impersonate
       method: POST
       path: /users/:id/impersonate
-      request:
-        duration: time.Duration
-      request_type: ImpersonateUser_reqBody
     - name: SetUserRole
       description: SetUserRole handles POST /admin/users/:id/role
       method: POST
       path: /users/:id/role
-      request:
-        role: string!
-      request_type: SetUserRole_reqBody
       response_type: MessageResponse
     - name: ListSessions
       description: ListSessions handles GET /admin/sessions
@@ -73,56 +52,31 @@ routes:
       method: GET
       path: /audit-logs
 types:
-    - name: ListUsersResponse
+    - name: ImpersonateUserRequestDTO
       fields:
-        limit: int!
-        page: int!
-        total: int!
-        total_pages: int!
-        users: '[]*user.User!'
-    - name: StatsResponse
-      fields:
-        active_sessions: int!
-        active_users: int!
-        banned_users: int!
-        timestamp: string!
-        total_sessions: int!
-        total_users: int!
-    - name: SetUserRole_reqBody
-      fields:
-        role: string!
-    - name: CreateUserRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        email: string!
-        email_verified: bool!
-        metadata: '!'
-        name: string!
-        password: string!
-        role: string!
-        user_organization_id: '*xid.ID!'
-        username: string!
-    - name: UnbanUserRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        reason: string!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
-    - name: ImpersonateUserRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
+        "": string
         duration: time.Duration!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
     - name: Handler
       fields:
         "": '*Service'
-    - name: UnbanUser_reqBody
+    - name: ListUsersRequestDTO
       fields:
-        reason: string
+        "": string
+    - name: DeleteUserRequestDTO
+      fields:
+        "": string
+    - name: BanUserRequestDTO
+      fields:
+        "": string
+        expires_at: '*time.Time!'
+        reason: string!
+    - name: SetUserRoleRequestDTO
+      fields:
+        "": string
+        role: string!
+    - name: RevokeSessionRequestDTO
+      fields:
+        "": string
     - name: Config
       fields:
         allow_impersonation: bool!
@@ -130,40 +84,6 @@ types:
         allow_user_deletion: bool!
         max_impersonation_duration: time.Duration!
         required_role: string!
-    - name: BanUserRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        expires_at: '*time.Time!'
-        reason: string!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
-    - name: ListSessionsResponse
-      fields:
-        limit: int!
-        page: int!
-        sessions: '[]*session.Session!'
-        total: int!
-        total_pages: int!
-    - name: CreateUser_reqBody
-      fields:
-        email: string!
-        email_verified: bool!
-        metadata: ""
-        name: string
-        password: string
-        role: string
-        username: string
-    - name: BanUser_reqBody
-      fields:
-        expires_at: '*time.Time'
-        reason: string!
-    - name: ImpersonateUser_reqBody
-      fields:
-        duration: time.Duration
-    - name: Plugin
-      fields:
-        "": '*Handler'
     - name: ListUsersRequest
       fields:
         '-': xid.ID!
@@ -173,6 +93,28 @@ types:
         role: string!
         search: string!
         status: string!
+        user_organization_id: '*xid.ID!'
+    - name: BanUserRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        expires_at: '*time.Time!'
+        reason: string!
+        user_id: xid.ID!
+        user_organization_id: '*xid.ID!'
+    - name: UnbanUserRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        reason: string!
+        user_id: xid.ID!
+        user_organization_id: '*xid.ID!'
+    - name: ImpersonateUserRequest
+      fields:
+        '-': string!
+        app_id: xid.ID!
+        duration: time.Duration!
+        user_id: xid.ID!
         user_organization_id: '*xid.ID!'
     - name: SetUserRoleRequest
       fields:
@@ -189,6 +131,65 @@ types:
         page: int!
         user_id: '*xid.ID!'
         user_organization_id: '*xid.ID!'
+    - name: StatsResponse
+      fields:
+        active_sessions: int!
+        active_users: int!
+        banned_users: int!
+        timestamp: string!
+        total_sessions: int!
+        total_users: int!
+    - name: Plugin
+      fields:
+        "": '*Handler'
+    - name: CreateUserRequestDTO
+      fields:
+        email: string!
+        email_verified: bool!
+        metadata: '!'
+        name: string!
+        password: string!
+        role: string!
+        username: string!
+    - name: UnbanUserRequestDTO
+      fields:
+        "": string
+        reason: string!
     - name: Service
       fields:
-        "": '*rbac.Service'
+        "": Config
+    - name: CreateUserRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        email: string!
+        email_verified: bool!
+        metadata: '!'
+        name: string!
+        password: string!
+        role: string!
+        user_organization_id: '*xid.ID!'
+        username: string!
+    - name: ListUsersResponse
+      fields:
+        limit: int!
+        page: int!
+        total: int!
+        total_pages: int!
+        users: '[]*user.User!'
+    - name: ListSessionsResponse
+      fields:
+        limit: int!
+        page: int!
+        sessions: '[]*session.Session!'
+        total: int!
+        total_pages: int!
+    - name: GetStatsRequestDTO
+      fields:
+        "": string
+    - name: ListSessionsRequestDTO
+      fields:
+        "": string
+    - name: GetAuditLogsRequestDTO
+      fields:
+        "": int

@@ -2,6 +2,8 @@ package compliance
 
 import (
 	"time"
+
+	"github.com/uptrace/bun"
 )
 
 // ComplianceStandard represents different compliance frameworks
@@ -18,8 +20,9 @@ const (
 
 // ComplianceProfile defines compliance requirements for an app
 type ComplianceProfile struct {
-	ID        string               `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	AppID     string               `json:"appId" bun:"app_id,notnull"`
+	bun.BaseModel `bun:"table:compliance_profiles,alias:cp"`
+	ID            string               `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	AppID         string               `json:"appId" bun:"app_id,notnull"`
 	Name      string               `json:"name" bun:"name,notnull"`
 	Standards []ComplianceStandard `json:"standards" bun:"standards,array"`
 	Status    string               `json:"status" bun:"status,notnull"` // active, suspended, audit
@@ -65,6 +68,7 @@ type ComplianceProfile struct {
 
 // ComplianceCheck represents an automated compliance check
 type ComplianceCheck struct {
+	bun.BaseModel `bun:"table:compliance_checks,alias:cc"`
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
 	AppID         string                 `json:"appId" bun:"app_id,notnull"`
@@ -79,6 +83,7 @@ type ComplianceCheck struct {
 
 // ComplianceViolation represents a policy violation
 type ComplianceViolation struct {
+	bun.BaseModel `bun:"table:compliance_violations,alias:cv"`
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
 	AppID         string                 `json:"appId" bun:"app_id,notnull"`
@@ -95,8 +100,9 @@ type ComplianceViolation struct {
 
 // ComplianceReport represents a generated compliance report
 type ComplianceReport struct {
-	ID          string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID   string                 `json:"profileId" bun:"profile_id,notnull"`
+	bun.BaseModel `bun:"table:compliance_reports,alias:cr"`
+	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
 	AppID       string                 `json:"appId" bun:"app_id,notnull"`
 	ReportType  string                 `json:"reportType" bun:"report_type,notnull"` // soc2, hipaa, audit_export
 	Standard    ComplianceStandard     `json:"standard" bun:"standard"`
@@ -113,8 +119,9 @@ type ComplianceReport struct {
 
 // ComplianceEvidence stores evidence for compliance audits
 type ComplianceEvidence struct {
-	ID           string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID    string                 `json:"profileId" bun:"profile_id,notnull"`
+	bun.BaseModel `bun:"table:compliance_evidence,alias:ce"`
+	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
 	AppID        string                 `json:"appId" bun:"app_id,notnull"`
 	EvidenceType string                 `json:"evidenceType" bun:"evidence_type,notnull"` // audit_log, policy_doc, etc.
 	Standard     ComplianceStandard     `json:"standard" bun:"standard"`
@@ -130,6 +137,7 @@ type ComplianceEvidence struct {
 
 // CompliancePolicy represents a policy document
 type CompliancePolicy struct {
+	bun.BaseModel `bun:"table:compliance_policies,alias:cpol"`
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
 	AppID         string                 `json:"appId" bun:"app_id,notnull"`
@@ -150,8 +158,9 @@ type CompliancePolicy struct {
 
 // ComplianceTraining tracks compliance training completion
 type ComplianceTraining struct {
-	ID           string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
-	ProfileID    string                 `json:"profileId" bun:"profile_id,notnull"`
+	bun.BaseModel `bun:"table:compliance_training,alias:ct"`
+	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
 	AppID        string                 `json:"appId" bun:"app_id,notnull"`
 	UserID       string                 `json:"userId" bun:"user_id,notnull"`
 	TrainingType string                 `json:"trainingType" bun:"training_type,notnull"` // security_awareness, hipaa_basics

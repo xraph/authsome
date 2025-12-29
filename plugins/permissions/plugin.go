@@ -339,7 +339,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	routeOpts := p.authInst.GetGlobalRoutesOptions()
 
 	// API group for permissions
-	api := router.Group("/api/permissions")
+	api := router.Group("/permissions")
 
 	// Policy management
 	api.POST("/policies", p.handler.CreatePolicy,

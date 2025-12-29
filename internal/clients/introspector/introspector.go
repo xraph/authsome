@@ -280,6 +280,31 @@ func (i *Introspector) parseRoutesFile(filePath string) ([]RouteRegistration, er
 	return registrations, nil
 }
 
+// parseSchemaAnnotation extracts type name from forge.WithXxxSchema() call
+func (i *Introspector) parseSchemaAnnotation(call *ast.CallExpr) string {
+	// Handle: forge.WithRequestSchema(TypeName{})
+	// or: forge.WithResponseSchema(200, "desc", TypeName{})
+	if len(call.Args) == 0 {
+		return ""
+	}
+
+	// Get the last argument which should be the type composite literal
+	lastArg := call.Args[len(call.Args)-1]
+
+	if compLit, ok := lastArg.(*ast.CompositeLit); ok {
+		// Handle simple type: TypeName{}
+		if ident, ok := compLit.Type.(*ast.Ident); ok {
+			return ident.Name
+		}
+		// Handle qualified type: package.TypeName{}
+		if sel, ok := compLit.Type.(*ast.SelectorExpr); ok {
+			return sel.Sel.Name // Strip package qualifier
+		}
+	}
+
+	return ""
+}
+
 // extractRouteRegistration extracts route registration from a call expression
 func (i *Introspector) extractRouteRegistration(call *ast.CallExpr) *RouteRegistration {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
@@ -317,11 +342,39 @@ func (i *Introspector) extractRouteRegistration(call *ast.CallExpr) *RouteRegist
 		handlerName = handler.Name
 	}
 
-	return &RouteRegistration{
+	reg := &RouteRegistration{
 		Method:      method,
 		Path:        path,
 		HandlerName: handlerName,
 	}
+
+	// Process forge.WithXXX options (args 2+)
+	for idx := 2; idx < len(call.Args); idx++ {
+		if optCall, ok := call.Args[idx].(*ast.CallExpr); ok {
+			if sel, ok := optCall.Fun.(*ast.SelectorExpr); ok {
+				switch sel.Sel.Name {
+				case "WithRequestSchema":
+					reg.RequestType = i.parseSchemaAnnotation(optCall)
+				case "WithResponseSchema":
+					// Handle: WithResponseSchema(200, "desc", Type{})
+					// Only extract success responses (200-299 status codes)
+					if len(optCall.Args) >= 3 {
+						// First arg is status code
+						if statusLit, ok := optCall.Args[0].(*ast.BasicLit); ok {
+							if statusCode := statusLit.Value; statusCode >= "200" && statusCode < "300" {
+								// Only use 2xx success responses, ignore error responses (4xx, 5xx)
+								if responseType := i.parseSchemaAnnotation(optCall); responseType != "" {
+									reg.ResponseType = responseType
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return reg
 }
 
 // IntrospectPlugin analyzes a plugin directory
@@ -420,15 +473,26 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 			path = "/" + strings.ToLower(route.Name)
 		}
 
+		// Prefer schema types from route registration (WithRequestSchema/WithResponseSchema)
+		// over types extracted from handler code
+		requestType := route.RequestType
+		if reg.RequestType != "" {
+			requestType = reg.RequestType
+		}
+		responseType := route.ResponseType
+		if reg.ResponseType != "" {
+			responseType = reg.ResponseType
+		}
+
 		manifestRoute := manifest.Route{
 			Name:         route.Name,
 			Description:  route.Description,
 			Method:       reg.Method,
 			Path:         path,
-			Request:      i.convertTypeToFields(route.RequestType, routeInfo),
-			Response:     i.convertTypeToFields(route.ResponseType, routeInfo),
-			RequestType:  route.RequestType,  // Store the named type
-			ResponseType: route.ResponseType, // Store the named type
+			Request:      i.convertTypeToFields(requestType, routeInfo),
+			Response:     i.convertTypeToFields(responseType, routeInfo),
+			RequestType:  requestType,  // Store the named type
+			ResponseType: responseType, // Store the named type
 		}
 
 		m.Routes = append(m.Routes, manifestRoute)
@@ -676,9 +740,11 @@ type FieldInfo struct {
 }
 
 type RouteRegistration struct {
-	Method      string
-	Path        string
-	HandlerName string
+	Method       string
+	Path         string
+	HandlerName  string
+	RequestType  string // Type name from WithRequestSchema
+	ResponseType string // Type name from WithResponseSchema
 }
 
 type PluginInfo struct {

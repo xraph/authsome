@@ -16,6 +16,7 @@ func NewSecurityRepository(db *bun.DB) *SecurityRepository { return &SecurityRep
 func (r *SecurityRepository) toSchema(e *core.SecurityEvent) *schema.SecurityEvent {
 	return &schema.SecurityEvent{
 		ID:        e.ID,
+		AppID:     e.AppID,
 		UserID:    e.UserID,
 		Type:      e.Type,
 		IPAddress: e.IPAddress,
@@ -30,6 +31,7 @@ func (r *SecurityRepository) fromSchema(se *schema.SecurityEvent) *core.Security
 	}
 	return &core.SecurityEvent{
 		ID:        se.ID,
+		AppID:     se.AppID,
 		UserID:    se.UserID,
 		Type:      se.Type,
 		IPAddress: se.IPAddress,

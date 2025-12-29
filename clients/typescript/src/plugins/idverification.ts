@@ -12,65 +12,65 @@ export class IdverificationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createVerificationSession(request: types.CreateVerificationSession_req): Promise<types.VerificationSessionResponse> {
-    const path = '/sessions';
-    return this.client.request<types.VerificationSessionResponse>('POST', path, {
+  async createVerificationSession(request: types.CreateVerificationSession_req): Promise<types.IDVerificationSessionResponse> {
+    const path = '/verification/sessions';
+    return this.client.request<types.IDVerificationSessionResponse>('POST', path, {
       body: request,
     });
   }
 
-  async getVerificationSession(): Promise<types.VerificationSessionResponse> {
-    const path = '/sessions/:id';
-    return this.client.request<types.VerificationSessionResponse>('GET', path);
+  async getVerificationSession(params: { id: string }): Promise<types.IDVerificationSessionResponse> {
+    const path = `/verification/sessions/${params.id}`;
+    return this.client.request<types.IDVerificationSessionResponse>('GET', path);
   }
 
-  async getVerification(): Promise<types.VerificationResponse> {
-    const path = '/:id';
-    return this.client.request<types.VerificationResponse>('GET', path);
+  async getVerification(params: { id: string }): Promise<types.IDVerificationResponse> {
+    const path = `/verification/${params.id}`;
+    return this.client.request<types.IDVerificationResponse>('GET', path);
   }
 
-  async getUserVerifications(): Promise<types.VerificationListResponse> {
-    const path = '/me';
-    return this.client.request<types.VerificationListResponse>('GET', path);
+  async getUserVerifications(): Promise<types.IDVerificationListResponse> {
+    const path = '/verification/me';
+    return this.client.request<types.IDVerificationListResponse>('GET', path);
   }
 
-  async getUserVerificationStatus(): Promise<types.UserVerificationStatusResponse> {
-    const path = '/me/status';
-    return this.client.request<types.UserVerificationStatusResponse>('GET', path);
+  async getUserVerificationStatus(): Promise<types.IDVerificationStatusResponse> {
+    const path = '/verification/me/status';
+    return this.client.request<types.IDVerificationStatusResponse>('GET', path);
   }
 
-  async requestReverification(request: types.RequestReverification_req): Promise<types.MessageResponse> {
-    const path = '/me/reverify';
-    return this.client.request<types.MessageResponse>('POST', path, {
+  async requestReverification(request: types.RequestReverification_req): Promise<types.IDVerificationSessionResponse> {
+    const path = '/verification/me/reverify';
+    return this.client.request<types.IDVerificationSessionResponse>('POST', path, {
       body: request,
     });
   }
 
-  async handleWebhook(): Promise<void> {
-    const path = '/webhook/:provider';
-    return this.client.request<void>('POST', path);
+  async handleWebhook(params: { provider: string }): Promise<types.IDVerificationWebhookResponse> {
+    const path = `/verification/webhook/${params.provider}`;
+    return this.client.request<types.IDVerificationWebhookResponse>('POST', path);
   }
 
-  async adminBlockUser(request: types.AdminBlockUser_req): Promise<types.MessageResponse> {
-    const path = '/users/:userId/block';
-    return this.client.request<types.MessageResponse>('POST', path, {
+  async adminBlockUser(params: { userId: string }, request: types.AdminBlockUser_req): Promise<types.IDVerificationStatusResponse> {
+    const path = `/verification/users/${params.userId}/block`;
+    return this.client.request<types.IDVerificationStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async adminUnblockUser(): Promise<types.MessageResponse> {
-    const path = '/users/:userId/unblock';
-    return this.client.request<types.MessageResponse>('POST', path);
+  async adminUnblockUser(params: { userId: string }): Promise<types.IDVerificationStatusResponse> {
+    const path = `/verification/users/${params.userId}/unblock`;
+    return this.client.request<types.IDVerificationStatusResponse>('POST', path);
   }
 
-  async adminGetUserVerificationStatus(): Promise<types.UserVerificationStatusResponse> {
-    const path = '/users/:userId/status';
-    return this.client.request<types.UserVerificationStatusResponse>('GET', path);
+  async adminGetUserVerificationStatus(params: { userId: string }): Promise<types.IDVerificationStatusResponse> {
+    const path = `/verification/users/${params.userId}/status`;
+    return this.client.request<types.IDVerificationStatusResponse>('GET', path);
   }
 
-  async adminGetUserVerifications(): Promise<types.VerificationListResponse> {
-    const path = '/users/:userId/verifications';
-    return this.client.request<types.VerificationListResponse>('GET', path);
+  async adminGetUserVerifications(params: { userId: string }): Promise<types.IDVerificationListResponse> {
+    const path = `/verification/users/${params.userId}/verifications`;
+    return this.client.request<types.IDVerificationListResponse>('GET', path);
   }
 
 }

@@ -1,9 +1,7 @@
 package admin
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/rs/xid"
@@ -18,6 +16,69 @@ import (
 // Updated for V2 architecture: App → Environment → Organization
 type Handler struct {
 	service *Service
+}
+
+// Request types
+type CreateUserRequestDTO struct {
+	Email         string            `json:"email" validate:"required,email"`
+	Password      string            `json:"password,omitempty"`
+	Name          string            `json:"name,omitempty"`
+	Username      string            `json:"username,omitempty"`
+	Role          string            `json:"role,omitempty"`
+	EmailVerified bool              `json:"email_verified"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+}
+
+type ListUsersRequestDTO struct {
+	Page   int    `query:"page"`
+	Limit  int    `query:"limit"`
+	Search string `query:"search"`
+	Role   string `query:"role"`
+	Status string `query:"status"`
+}
+
+type DeleteUserRequestDTO struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type BanUserRequestDTO struct {
+	ID        string     `path:"id" validate:"required"`
+	Reason    string     `json:"reason,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+type UnbanUserRequestDTO struct {
+	ID     string `path:"id" validate:"required"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type SetUserRoleRequestDTO struct {
+	ID   string `path:"id" validate:"required"`
+	Role string `json:"role" validate:"required"`
+}
+
+type RevokeSessionRequestDTO struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type ImpersonateUserRequestDTO struct {
+	ID       string        `path:"id" validate:"required"`
+	Duration time.Duration `json:"duration,omitempty"`
+}
+
+type GetStatsRequestDTO struct {
+	Period string `query:"period"`
+}
+
+type ListSessionsRequestDTO struct {
+	Page   int    `query:"page"`
+	Limit  int    `query:"limit"`
+	UserID string `query:"user_id"`
+}
+
+type GetAuditLogsRequestDTO struct {
+	Page     int `query:"page"`
+	PageSize int `query:"page_size"`
 }
 
 // Response types - use shared responses from core
@@ -51,17 +112,9 @@ func (h *Handler) CreateUser(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.RequiredField("app_id"))
 	}
 
-	var reqBody struct {
-		Email         string            `json:"email"`
-		Password      string            `json:"password,omitempty"`
-		Name          string            `json:"name,omitempty"`
-		Username      string            `json:"username,omitempty"`
-		Role          string            `json:"role,omitempty"`
-		EmailVerified bool              `json:"email_verified"`
-		Metadata      map[string]string `json:"metadata,omitempty"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
+	var reqBody CreateUserRequestDTO
+	if err := c.BindRequest(&reqBody); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Build service request with V2 context
@@ -102,21 +155,21 @@ func (h *Handler) ListUsers(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context required"))
 	}
 
-	// Parse query parameters
-	q := c.Request().URL.Query()
-	page, _ := strconv.Atoi(q.Get("page"))
+	var reqDTO ListUsersRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	// Apply defaults
+	page := reqDTO.Page
 	if page < 1 {
 		page = 1
 	}
 
-	limit, _ := strconv.Atoi(q.Get("limit"))
+	limit := reqDTO.Limit
 	if limit < 1 || limit > 100 {
 		limit = 20
 	}
-
-	status := q.Get("status")
-	search := q.Get("search")
-	role := q.Get("role")
 
 	// Build service request with V2 context
 	var orgIDPtr *xid.ID
@@ -129,9 +182,9 @@ func (h *Handler) ListUsers(c forge.Context) error {
 		UserOrganizationID: orgIDPtr,
 		Page:               page,
 		Limit:              limit,
-		Search:             search,
-		Role:               role,
-		Status:             status,
+		Search:             reqDTO.Search,
+		Role:               reqDTO.Role,
+		Status:             reqDTO.Status,
 		AdminID:            userID,
 	}
 
@@ -152,13 +205,12 @@ func (h *Handler) DeleteUser(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
-	// Parse target user ID from URL
-	targetUserIDStr := c.Param("id")
-	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
+	var req DeleteUserRequestDTO
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	targetUserID, err := xid.FromString(targetUserIDStr)
+	targetUserID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}
@@ -182,23 +234,14 @@ func (h *Handler) BanUser(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
-	// Parse target user ID from URL
-	targetUserIDStr := c.Param("id")
-	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
+	var reqDTO BanUserRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	targetUserID, err := xid.FromString(targetUserIDStr)
+	targetUserID, err := xid.FromString(reqDTO.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
-	}
-
-	var reqBody struct {
-		Reason    string     `json:"reason"`
-		ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -211,8 +254,8 @@ func (h *Handler) BanUser(c forge.Context) error {
 		AppID:              appID,
 		UserOrganizationID: orgIDPtr,
 		UserID:             targetUserID,
-		Reason:             reqBody.Reason,
-		ExpiresAt:          reqBody.ExpiresAt,
+		Reason:             reqDTO.Reason,
+		ExpiresAt:          reqDTO.ExpiresAt,
 		AdminID:            adminID,
 	}
 
@@ -235,22 +278,14 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
-	// Parse target user ID from URL
-	targetUserIDStr := c.Param("id")
-	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
+	var reqDTO UnbanUserRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	targetUserID, err := xid.FromString(targetUserIDStr)
+	targetUserID, err := xid.FromString(reqDTO.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
-	}
-
-	var reqBody struct {
-		Reason string `json:"reason,omitempty"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -263,7 +298,7 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 		AppID:              appID,
 		UserOrganizationID: orgIDPtr,
 		UserID:             targetUserID,
-		Reason:             reqBody.Reason,
+		Reason:             reqDTO.Reason,
 		AdminID:            adminID,
 	}
 
@@ -286,22 +321,14 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
-	// Parse target user ID from URL
-	targetUserIDStr := c.Param("id")
-	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
+	var reqDTO ImpersonateUserRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	targetUserID, err := xid.FromString(targetUserIDStr)
+	targetUserID, err := xid.FromString(reqDTO.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
-	}
-
-	var reqBody struct {
-		Duration time.Duration `json:"duration,omitempty"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -314,7 +341,7 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 		AppID:              appID,
 		UserOrganizationID: orgIDPtr,
 		UserID:             targetUserID,
-		Duration:           reqBody.Duration,
+		Duration:           reqDTO.Duration,
 		IPAddress:          c.Request().RemoteAddr,
 		UserAgent:          c.Request().UserAgent(),
 		AdminID:            adminID,
@@ -339,22 +366,14 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
-	// Parse target user ID from URL
-	targetUserIDStr := c.Param("id")
-	if targetUserIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("User ID is required"))
+	var reqDTO SetUserRoleRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	targetUserID, err := xid.FromString(targetUserIDStr)
+	targetUserID, err := xid.FromString(reqDTO.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
-	}
-
-	var reqBody struct {
-		Role string `json:"role"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid request body"))
 	}
 
 	// Build service request with V2 context
@@ -367,7 +386,7 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 		AppID:              appID,
 		UserOrganizationID: orgIDPtr,
 		UserID:             targetUserID,
-		Role:               reqBody.Role,
+		Role:               reqDTO.Role,
 		AdminID:            adminID,
 	}
 
@@ -390,22 +409,25 @@ func (h *Handler) ListSessions(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("App context and user required"))
 	}
 
-	// Parse query parameters
-	q := c.Request().URL.Query()
-	page, _ := strconv.Atoi(q.Get("page"))
+	var reqDTO ListSessionsRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	page := reqDTO.Page
 	if page < 1 {
 		page = 1
 	}
 
-	limit, _ := strconv.Atoi(q.Get("limit"))
+	limit := reqDTO.Limit
 	if limit < 1 || limit > 100 {
 		limit = 20
 	}
 
 	// Optional user ID filter
 	var userIDPtr *xid.ID
-	if userIDStr := q.Get("user_id"); userIDStr != "" {
-		if uid, err := xid.FromString(userIDStr); err == nil {
+	if reqDTO.UserID != "" {
+		if uid, err := xid.FromString(reqDTO.UserID); err == nil {
 			userIDPtr = &uid
 		}
 	}
@@ -442,13 +464,12 @@ func (h *Handler) RevokeSession(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
-	// Parse session ID from URL
-	sessionIDStr := c.Param("id")
-	if sessionIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.BadRequest("Session ID is required"))
+	var req RevokeSessionRequestDTO
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	sessionID, err := xid.FromString(sessionIDStr)
+	sessionID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid session ID"))
 	}
@@ -491,14 +512,17 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.BadRequest("Unauthorized"))
 	}
 
-	// Parse query parameters
-	q := c.Request().URL.Query()
-	page, _ := strconv.Atoi(q.Get("page"))
+	var reqDTO GetAuditLogsRequestDTO
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	page := reqDTO.Page
 	if page < 1 {
 		page = 1
 	}
 
-	pageSize, _ := strconv.Atoi(q.Get("page_size"))
+	pageSize := reqDTO.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}

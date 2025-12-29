@@ -988,15 +988,17 @@ func (s *Service) getAppAndOrgFromContext(ctx context.Context) (xid.ID, *xid.ID)
 }
 
 func (s *Service) getIPFromContext(ctx context.Context) string {
-	if ip, ok := ctx.Value("ip_address").(string); ok {
-		return ip
+	// Get IP from AuthContext if available
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
+		return authCtx.IPAddress
 	}
 	return ""
 }
 
 func (s *Service) getUserAgentFromContext(ctx context.Context) string {
-	if ua, ok := ctx.Value("user_agent").(string); ok {
-		return ua
+	// Get User Agent from AuthContext if available
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
+		return authCtx.UserAgent
 	}
 	return ""
 }

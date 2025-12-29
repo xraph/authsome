@@ -12,16 +12,18 @@ export class EmailverificationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async send(request: types.SendRequest): Promise<void> {
+  async send(request: types.SendRequest): Promise<types.SendResponse> {
     const path = '/email-verification/send';
-    return this.client.request<void>('POST', path, {
+    return this.client.request<types.SendResponse>('POST', path, {
       body: request,
     });
   }
 
-  async verify(): Promise<void> {
+  async verify(request?: types.VerifyRequest): Promise<types.VerifyResponse> {
     const path = '/email-verification/verify';
-    return this.client.request<void>('GET', path);
+    return this.client.request<types.VerifyResponse>('GET', path, {
+      query: this.client.toQueryParams(request),
+    });
   }
 
   async resend(request: types.ResendRequest): Promise<types.ResendResponse> {

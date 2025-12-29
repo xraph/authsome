@@ -200,7 +200,10 @@ func TestService_ListProviders(t *testing.T) {
 	}
 
 	// Initially no providers configured
-	providersList := service.ListProviders()
+	ctx := context.Background()
+	appID := xid.New()
+	envID := xid.New()
+	providersList := service.ListProviders(ctx, appID, envID)
 	assert.Empty(t, providersList)
 }
 

@@ -12,29 +12,37 @@ export class JwtPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createJWTKey(): Promise<void> {
-    const path = '/createjwtkey';
-    return this.client.request<void>('POST', path);
+  async createJWTKey(request: types.CreateJWTKeyRequest): Promise<types.JWTKey> {
+    const path = '/jwt/createjwtkey';
+    return this.client.request<types.JWTKey>('POST', path, {
+      body: request,
+    });
   }
 
-  async listJWTKeys(): Promise<void> {
-    const path = '/listjwtkeys';
-    return this.client.request<void>('GET', path);
+  async listJWTKeys(request?: types.ListJWTKeysRequest): Promise<types.ListJWTKeysResponse> {
+    const path = '/jwt/listjwtkeys';
+    return this.client.request<types.ListJWTKeysResponse>('GET', path, {
+      query: this.client.toQueryParams(request),
+    });
   }
 
-  async getJWKS(): Promise<void> {
-    const path = '/jwks';
-    return this.client.request<void>('GET', path);
+  async getJWKS(): Promise<types.JWKSResponse> {
+    const path = '/jwt/jwks';
+    return this.client.request<types.JWKSResponse>('GET', path);
   }
 
-  async generateToken(): Promise<void> {
-    const path = '/generate';
-    return this.client.request<void>('POST', path);
+  async generateToken(request: types.GenerateTokenRequest): Promise<types.GenerateTokenResponse> {
+    const path = '/jwt/generate';
+    return this.client.request<types.GenerateTokenResponse>('POST', path, {
+      body: request,
+    });
   }
 
-  async verifyToken(): Promise<void> {
-    const path = '/verify';
-    return this.client.request<void>('POST', path);
+  async verifyToken(request: types.VerifyTokenRequest): Promise<types.VerifyTokenResponse> {
+    const path = '/jwt/verify';
+    return this.client.request<types.VerifyTokenResponse>('POST', path, {
+      body: request,
+    });
   }
 
 }

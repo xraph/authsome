@@ -2,6 +2,7 @@ package multisession
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/xraph/authsome/clients/go"
 )
@@ -29,20 +30,16 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// List List returns sessions for the current user based on cookie
-func (p *Plugin) List(ctx context.Context) (*authsome.ListResponse, error) {
-	path := "/list"
-	var result authsome.ListResponse
-	err := p.client.Request(ctx, "GET", path, nil, &result, false)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+// List List returns sessions for the current user based on cookie with optional filtering
+func (p *Plugin) List(ctx context.Context, req *authsome.ListRequest) error {
+	path := "/multi-session/list"
+	err := p.client.Request(ctx, "GET", path, req, nil, false)
+	return err
 }
 
 // SetActive SetActive switches the current session cookie to the provided session id
 func (p *Plugin) SetActive(ctx context.Context, req *authsome.SetActiveRequest) (*authsome.SetActiveResponse, error) {
-	path := "/set-active"
+	path := "/multi-session/set-active"
 	var result authsome.SetActiveResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -52,15 +49,15 @@ func (p *Plugin) SetActive(ctx context.Context, req *authsome.SetActiveRequest) 
 }
 
 // Delete Delete revokes a session by id for the current user
-func (p *Plugin) Delete(ctx context.Context) error {
-	path := "/delete/{id}"
+func (p *Plugin) Delete(ctx context.Context, id xid.ID) error {
+	path := "/multi-session/delete/" + url.PathEscape(id) + ""
 	err := p.client.Request(ctx, "POST", path, nil, nil, false)
 	return err
 }
 
 // GetCurrent GetCurrent returns details about the currently active session
 func (p *Plugin) GetCurrent(ctx context.Context) (*authsome.GetCurrentResponse, error) {
-	path := "/current"
+	path := "/multi-session/current"
 	var result authsome.GetCurrentResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -70,8 +67,8 @@ func (p *Plugin) GetCurrent(ctx context.Context) (*authsome.GetCurrentResponse, 
 }
 
 // GetByID GetByID returns details about a specific session by ID
-func (p *Plugin) GetByID(ctx context.Context) (*authsome.GetByIDResponse, error) {
-	path := "/{id}"
+func (p *Plugin) GetByID(ctx context.Context, id xid.ID) (*authsome.GetByIDResponse, error) {
+	path := "/multi-session/" + url.PathEscape(id) + ""
 	var result authsome.GetByIDResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -81,22 +78,30 @@ func (p *Plugin) GetByID(ctx context.Context) (*authsome.GetByIDResponse, error)
 }
 
 // RevokeAll RevokeAll revokes all sessions for the current user
-func (p *Plugin) RevokeAll(ctx context.Context, req *authsome.RevokeAllRequest) error {
-	path := "/revoke-all"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+func (p *Plugin) RevokeAll(ctx context.Context, req *authsome.RevokeAllRequest) (*authsome.RevokeAllResponse, error) {
+	path := "/multi-session/revoke-all"
+	var result authsome.RevokeAllResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // RevokeOthers RevokeOthers revokes all sessions except the current one
-func (p *Plugin) RevokeOthers(ctx context.Context) error {
-	path := "/revoke-others"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+func (p *Plugin) RevokeOthers(ctx context.Context) (*authsome.RevokeOthersResponse, error) {
+	path := "/multi-session/revoke-others"
+	var result authsome.RevokeOthersResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // Refresh Refresh extends the current session's expiry time
 func (p *Plugin) Refresh(ctx context.Context) (*authsome.RefreshResponse, error) {
-	path := "/refresh"
+	path := "/multi-session/refresh"
 	var result authsome.RefreshResponse
 	err := p.client.Request(ctx, "POST", path, nil, &result, false)
 	if err != nil {
@@ -106,9 +111,13 @@ func (p *Plugin) Refresh(ctx context.Context) (*authsome.RefreshResponse, error)
 }
 
 // GetStats GetStats returns aggregated session statistics for the current user
-func (p *Plugin) GetStats(ctx context.Context) error {
-	path := "/stats"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+func (p *Plugin) GetStats(ctx context.Context) (*authsome.GetStatsResponse, error) {
+	path := "/multi-session/stats"
+	var result authsome.GetStatsResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 

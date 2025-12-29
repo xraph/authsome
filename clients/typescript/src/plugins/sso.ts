@@ -13,38 +13,38 @@ export class SsoPlugin implements ClientPlugin {
   }
 
   async registerProvider(request: types.RegisterProviderRequest): Promise<types.ProviderRegisteredResponse> {
-    const path = '/provider/register';
+    const path = '/sso/provider/register';
     return this.client.request<types.ProviderRegisteredResponse>('POST', path, {
       body: request,
     });
   }
 
   async sAMLSPMetadata(): Promise<types.MetadataResponse> {
-    const path = '/saml2/sp/metadata';
+    const path = '/sso/saml2/sp/metadata';
     return this.client.request<types.MetadataResponse>('GET', path);
   }
 
-  async sAMLLogin(request: types.SAMLLoginRequest): Promise<types.SAMLLoginResponse> {
-    const path = '/saml2/login/:providerId';
+  async sAMLLogin(params: { providerId: string }, request: types.SAMLLoginRequest): Promise<types.SAMLLoginResponse> {
+    const path = `/sso/saml2/login/${params.providerId}`;
     return this.client.request<types.SAMLLoginResponse>('POST', path, {
       body: request,
     });
   }
 
-  async sAMLCallback(): Promise<types.SSOAuthResponse> {
-    const path = '/saml2/callback/:providerId';
+  async sAMLCallback(params: { providerId: string }): Promise<types.SSOAuthResponse> {
+    const path = `/sso/saml2/callback/${params.providerId}`;
     return this.client.request<types.SSOAuthResponse>('POST', path);
   }
 
-  async oIDCLogin(request: types.OIDCLoginRequest): Promise<types.OIDCLoginResponse> {
-    const path = '/oidc/login/:providerId';
+  async oIDCLogin(params: { providerId: string }, request: types.OIDCLoginRequest): Promise<types.OIDCLoginResponse> {
+    const path = `/sso/oidc/login/${params.providerId}`;
     return this.client.request<types.OIDCLoginResponse>('POST', path, {
       body: request,
     });
   }
 
-  async oIDCCallback(): Promise<types.SSOAuthResponse> {
-    const path = '/oidc/callback/:providerId';
+  async oIDCCallback(params: { providerId: string }): Promise<types.SSOAuthResponse> {
+    const path = `/sso/oidc/callback/${params.providerId}`;
     return this.client.request<types.SSOAuthResponse>('GET', path);
   }
 

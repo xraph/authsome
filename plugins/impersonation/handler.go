@@ -1,9 +1,6 @@
 package impersonation
 
 import (
-	"encoding/json"
-	"strconv"
-
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/impersonation"
@@ -18,6 +15,44 @@ import (
 type Handler struct {
 	service *impersonation.Service
 	config  Config
+}
+
+// Request types
+type StartImpersonationRequest struct {
+	TargetUserID    string `json:"target_user_id" validate:"required"`
+	Reason          string `json:"reason" validate:"required"`
+	TicketNumber    string `json:"ticket_number"`
+	DurationMinutes int    `json:"duration_minutes"`
+}
+
+type EndImpersonationRequest struct {
+	ImpersonationID string `json:"impersonation_id" validate:"required"`
+	Reason          string `json:"reason"`
+}
+
+type GetImpersonationRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type ListImpersonationsRequest struct {
+	Page           int    `query:"page"`
+	Limit          int    `query:"limit"`
+	Offset         int    `query:"offset"`
+	ActiveOnly     *bool  `query:"active_only"`
+	ImpersonatorID string `query:"impersonator_id"`
+	TargetUserID   string `query:"target_user_id"`
+}
+
+type ListAuditEventsRequest struct {
+	Page            int    `query:"page"`
+	Limit           int    `query:"limit"`
+	Offset          int    `query:"offset"`
+	ImpersonationID string `query:"impersonation_id"`
+	EventType       string `query:"event_type"`
+}
+
+type VerifyImpersonationRequest struct {
+	SessionID string `path:"sessionId" validate:"required"`
 }
 
 // Response types - use shared responses from core
@@ -46,14 +81,9 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
-	var reqBody struct {
-		TargetUserID    string `json:"target_user_id"`
-		Reason          string `json:"reason"`
-		TicketNumber    string `json:"ticket_number,omitempty"`
-		DurationMinutes int    `json:"duration_minutes,omitempty"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
+	var reqBody StartImpersonationRequest
+	if err := c.BindRequest(&reqBody); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
 	// Parse target user ID
@@ -112,12 +142,9 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
-	var reqBody struct {
-		ImpersonationID string `json:"impersonation_id"`
-		Reason          string `json:"reason,omitempty"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		return c.JSON(400, errs.New("INVALID_REQUEST", "Invalid request body", 400))
+	var reqBody EndImpersonationRequest
+	if err := c.BindRequest(&reqBody); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
 	// Parse impersonation ID
@@ -170,12 +197,12 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
-	idParam := c.Param("id")
-	if idParam == "" {
-		return c.JSON(400, errs.New("IMPERSONATION_ID_REQUIRED", "Impersonation ID is required", 400))
+	var reqParams GetImpersonationRequest
+	if err := c.BindRequest(&reqParams); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	id, err := xid.FromString(idParam)
+	id, err := xid.FromString(reqParams.ID)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_IMPERSONATION_ID", "Invalid impersonation ID", 400))
 	}
@@ -222,33 +249,29 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
-	// Parse query parameters
-	limit, _ := strconv.Atoi(c.Request().URL.Query().Get("limit"))
+	var reqParams ListImpersonationsRequest
+	if err := c.BindRequest(&reqParams); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
+	}
+
+	// Set defaults
+	limit := reqParams.Limit
 	if limit == 0 {
 		limit = 50
 	}
 
-	offset, _ := strconv.Atoi(c.Request().URL.Query().Get("offset"))
-
-	activeOnlyStr := c.Request().URL.Query().Get("active_only")
-	var activeOnly *bool
-	if activeOnlyStr != "" {
-		val := activeOnlyStr == "true"
-		activeOnly = &val
-	}
-
 	// Optional filters from query params
 	var impersonatorID *xid.ID
-	if impersonatorIDStr := c.Request().URL.Query().Get("impersonator_id"); impersonatorIDStr != "" {
-		id, err := xid.FromString(impersonatorIDStr)
+	if reqParams.ImpersonatorID != "" {
+		id, err := xid.FromString(reqParams.ImpersonatorID)
 		if err == nil {
 			impersonatorID = &id
 		}
 	}
 
 	var targetUserID *xid.ID
-	if targetUserIDStr := c.Request().URL.Query().Get("target_user_id"); targetUserIDStr != "" {
-		id, err := xid.FromString(targetUserIDStr)
+	if reqParams.TargetUserID != "" {
+		id, err := xid.FromString(reqParams.TargetUserID)
 		if err == nil {
 			targetUserID = &id
 		}
@@ -267,14 +290,14 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	filter := &impersonation.ListSessionsFilter{
 		PaginationParams: pagination.PaginationParams{
 			Limit:  limit,
-			Offset: offset,
+			Offset: reqParams.Offset,
 		},
 		AppID:          appID,
 		EnvironmentID:  envIDPtr,
 		OrganizationID: orgIDPtr,
 		ImpersonatorID: impersonatorID,
 		TargetUserID:   targetUserID,
-		ActiveOnly:     activeOnly,
+		ActiveOnly:     reqParams.ActiveOnly,
 	}
 
 	resp, err := h.service.List(c.Request().Context(), filter)
@@ -296,27 +319,29 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 		return c.JSON(400, errs.New("APP_CONTEXT_REQUIRED", "App context required", 400))
 	}
 
-	// Parse query parameters
-	limit, _ := strconv.Atoi(c.Request().URL.Query().Get("limit"))
+	var reqParams ListAuditEventsRequest
+	if err := c.BindRequest(&reqParams); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
+	}
+
+	// Set defaults
+	limit := reqParams.Limit
 	if limit == 0 {
 		limit = 50
 	}
 
-	offset, _ := strconv.Atoi(c.Request().URL.Query().Get("offset"))
-
 	// Optional filters
 	var impersonationID *xid.ID
-	if impersonationIDStr := c.Request().URL.Query().Get("impersonation_id"); impersonationIDStr != "" {
-		id, err := xid.FromString(impersonationIDStr)
+	if reqParams.ImpersonationID != "" {
+		id, err := xid.FromString(reqParams.ImpersonationID)
 		if err == nil {
 			impersonationID = &id
 		}
 	}
 
-	eventType := c.Request().URL.Query().Get("event_type")
 	var eventTypePtr *string
-	if eventType != "" {
-		eventTypePtr = &eventType
+	if reqParams.EventType != "" {
+		eventTypePtr = &reqParams.EventType
 	}
 
 	// Build service filter with V2 context
@@ -332,7 +357,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 	filter := &impersonation.ListAuditEventsFilter{
 		PaginationParams: pagination.PaginationParams{
 			Limit:  limit,
-			Offset: offset,
+			Offset: reqParams.Offset,
 		},
 		AppID:           appID,
 		EnvironmentID:   envIDPtr,
@@ -351,12 +376,12 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 
 // VerifyImpersonation handles GET /impersonation/verify/:sessionId
 func (h *Handler) VerifyImpersonation(c forge.Context) error {
-	sessionIDParam := c.Param("sessionId")
-	if sessionIDParam == "" {
-		return c.JSON(400, errs.New("SESSION_ID_REQUIRED", "Session ID is required", 400))
+	var reqParams VerifyImpersonationRequest
+	if err := c.BindRequest(&reqParams); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	sessionID, err := xid.FromString(sessionIDParam)
+	sessionID, err := xid.FromString(reqParams.SessionID)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_SESSION_ID", "Invalid session ID", 400))
 	}

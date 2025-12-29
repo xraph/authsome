@@ -60,6 +60,11 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	// if verification is required, do not create session
 	if s.config.RequireEmailVerification {
 		response := &responses.AuthResponse{User: u}
+		
+		// Update AuthContext in context before executing hooks
+		authCtx := s.buildAuthContextFromResponse(ctx, response, req.IPAddress, req.UserAgent)
+		ctx = contexts.SetAuthContext(ctx, authCtx)
+		
 		// Execute after sign up hooks
 		if s.hookExecutor != nil {
 			if err := s.hookExecutor.ExecuteAfterSignUp(ctx, response); err != nil {
@@ -82,6 +87,10 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	}
 
 	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
+
+	// Update AuthContext in context before executing hooks
+	authCtx := s.buildAuthContextFromResponse(ctx, response, req.IPAddress, req.UserAgent)
+	ctx = contexts.SetAuthContext(ctx, authCtx)
 
 	// Execute after sign up hooks
 	if s.hookExecutor != nil {
@@ -135,6 +144,10 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 
 	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
 
+	// Update AuthContext in context before executing hooks
+	authCtx := s.buildAuthContextFromResponse(ctx, response, req.IPAddress, req.UserAgent)
+	ctx = contexts.SetAuthContext(ctx, authCtx)
+
 	// Execute after sign in hooks
 	if s.hookExecutor != nil {
 		if err := s.hookExecutor.ExecuteAfterSignIn(ctx, response); err != nil {
@@ -155,6 +168,12 @@ func (s *Service) CheckCredentials(ctx context.Context, email, password string) 
 	if ok := crypto.CheckPassword(password, u.PasswordHash); !ok {
 		return nil, types.ErrInvalidCredentials
 	}
+	
+	// Check email verification if required
+	if s.config.RequireEmailVerification && !u.EmailVerified {
+		return nil, types.ErrEmailNotVerified
+	}
+	
 	return u, nil
 }
 
@@ -179,6 +198,10 @@ func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, rememb
 	}
 
 	response := &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}
+
+	// Update AuthContext in context before executing hooks
+	authCtx := s.buildAuthContextFromResponse(ctx, response, ip, ua)
+	ctx = contexts.SetAuthContext(ctx, authCtx)
 
 	// Execute after sign in hooks
 	// Note: BeforeSignIn hooks are not executed here because credentials were already validated
@@ -264,6 +287,11 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*res
 			Session: refreshResp.Session,
 			Token:   refreshResp.AccessToken,
 		}
+		
+		// Update AuthContext in context before executing hooks
+		authCtx := s.buildAuthContextFromResponse(ctx, authResp, "", "")
+		ctx = contexts.SetAuthContext(ctx, authCtx)
+		
 		_ = s.hookExecutor.ExecuteAfterSignIn(ctx, authResp)
 	}
 
@@ -275,4 +303,40 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*res
 		ExpiresAt:        refreshResp.ExpiresAt.Format(time.RFC3339),
 		RefreshExpiresAt: refreshResp.RefreshExpiresAt.Format(time.RFC3339),
 	}, nil
+}
+
+// buildAuthContextFromResponse constructs an AuthContext from auth operation result
+// This ensures hooks receive complete authentication context
+func (s *Service) buildAuthContextFromResponse(ctx context.Context, response *responses.AuthResponse, ipAddress, userAgent string) *contexts.AuthContext {
+	// Extract app/env from existing context or response
+	appID, _ := contexts.GetAppID(ctx)
+	envID, _ := contexts.GetEnvironmentID(ctx)
+	
+	// If we have a session, use its context values
+	if response.Session != nil {
+		if !response.Session.AppID.IsNil() {
+			appID = response.Session.AppID
+		}
+		if response.Session.EnvironmentID != nil && !response.Session.EnvironmentID.IsNil() {
+			envID = *response.Session.EnvironmentID
+		}
+	}
+	
+	authCtx := &contexts.AuthContext{
+		User:            response.User,
+		Session:         response.Session,
+		AppID:           appID,
+		EnvironmentID:   envID,
+		Method:          contexts.AuthMethodSession,
+		IsAuthenticated: true,
+		IsUserAuth:      true,
+		IPAddress:       ipAddress,
+		UserAgent:       userAgent,
+	}
+	
+	if response.Session != nil && response.Session.OrganizationID != nil {
+		authCtx.OrganizationID = response.Session.OrganizationID
+	}
+	
+	return authCtx
 }

@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/xraph/authsome/clients/go"
 )
@@ -30,114 +31,178 @@ func (p *Plugin) Init(client *authsome.Client) error {
 }
 
 // PreviewTemplate PreviewTemplate handles template preview requests
-func (p *Plugin) PreviewTemplate(ctx context.Context, req *authsome.PreviewTemplateRequest) error {
+func (p *Plugin) PreviewTemplate(ctx context.Context, req *authsome.PreviewTemplateRequest, id xid.ID) (*authsome.PreviewTemplateResponse, error) {
 	path := "/:id/preview"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+	var result authsome.PreviewTemplateResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // CreateTemplate CreateTemplate creates a new notification template
-func (p *Plugin) CreateTemplate(ctx context.Context) error {
+func (p *Plugin) CreateTemplate(ctx context.Context) (*authsome.CreateTemplateResponse, error) {
 	path := "/createtemplate"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+	var result authsome.CreateTemplateResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // GetTemplate GetTemplate retrieves a template by ID
-func (p *Plugin) GetTemplate(ctx context.Context) error {
+func (p *Plugin) GetTemplate(ctx context.Context, id xid.ID) (*authsome.GetTemplateResponse, error) {
 	path := "/:id"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+	var result authsome.GetTemplateResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // ListTemplates ListTemplates lists all templates with pagination
-func (p *Plugin) ListTemplates(ctx context.Context) error {
+func (p *Plugin) ListTemplates(ctx context.Context) (*authsome.ListTemplatesResponse, error) {
 	path := "/listtemplates"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+	var result authsome.ListTemplatesResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // UpdateTemplate UpdateTemplate updates a template
-func (p *Plugin) UpdateTemplate(ctx context.Context) error {
+func (p *Plugin) UpdateTemplate(ctx context.Context, id xid.ID) (*authsome.UpdateTemplateResponse, error) {
 	path := "/:id"
-	err := p.client.Request(ctx, "PUT", path, nil, nil, false)
-	return err
+	var result authsome.UpdateTemplateResponse
+	err := p.client.Request(ctx, "PUT", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // DeleteTemplate DeleteTemplate deletes a template
-func (p *Plugin) DeleteTemplate(ctx context.Context) error {
+func (p *Plugin) DeleteTemplate(ctx context.Context, id xid.ID) (*authsome.DeleteTemplateResponse, error) {
 	path := "/:id"
-	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
-	return err
+	var result authsome.DeleteTemplateResponse
+	err := p.client.Request(ctx, "DELETE", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // ResetTemplate ResetTemplate resets a template to default values
-func (p *Plugin) ResetTemplate(ctx context.Context) error {
+func (p *Plugin) ResetTemplate(ctx context.Context, id xid.ID) (*authsome.ResetTemplateResponse, error) {
 	path := "/:id/reset"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+	var result authsome.ResetTemplateResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // ResetAllTemplates ResetAllTemplates resets all templates for an app to defaults
-func (p *Plugin) ResetAllTemplates(ctx context.Context) error {
+func (p *Plugin) ResetAllTemplates(ctx context.Context) (*authsome.ResetAllTemplatesResponse, error) {
 	path := "/reset-all"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+	var result authsome.ResetAllTemplatesResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // GetTemplateDefaults GetTemplateDefaults returns default template metadata
-func (p *Plugin) GetTemplateDefaults(ctx context.Context) error {
+func (p *Plugin) GetTemplateDefaults(ctx context.Context) (*authsome.GetTemplateDefaultsResponse, error) {
 	path := "/defaults"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+	var result authsome.GetTemplateDefaultsResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // PreviewTemplate PreviewTemplate renders a template with provided variables
-func (p *Plugin) PreviewTemplate(ctx context.Context, req *authsome.PreviewTemplateRequest) error {
+func (p *Plugin) PreviewTemplate(ctx context.Context, req *authsome.PreviewTemplateRequest, id xid.ID) (*authsome.PreviewTemplateResponse, error) {
 	path := "/:id/preview"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+	var result authsome.PreviewTemplateResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // RenderTemplate RenderTemplate renders a template string with variables (no template ID required)
-func (p *Plugin) RenderTemplate(ctx context.Context, req *authsome.RenderTemplateRequest) error {
+func (p *Plugin) RenderTemplate(ctx context.Context, req *authsome.RenderTemplateRequest) (*authsome.RenderTemplateResponse, error) {
 	path := "/render"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+	var result authsome.RenderTemplateResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // SendNotification SendNotification sends a notification
-func (p *Plugin) SendNotification(ctx context.Context) error {
+func (p *Plugin) SendNotification(ctx context.Context) (*authsome.SendNotificationResponse, error) {
 	path := "/send"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+	var result authsome.SendNotificationResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // GetNotification GetNotification retrieves a notification by ID
-func (p *Plugin) GetNotification(ctx context.Context) error {
+func (p *Plugin) GetNotification(ctx context.Context, id xid.ID) (*authsome.GetNotificationResponse, error) {
 	path := "/:id"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+	var result authsome.GetNotificationResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // ListNotifications ListNotifications lists all notifications with pagination
-func (p *Plugin) ListNotifications(ctx context.Context) error {
+func (p *Plugin) ListNotifications(ctx context.Context) (*authsome.ListNotificationsResponse, error) {
 	path := "/listnotifications"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
-	return err
+	var result authsome.ListNotificationsResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // ResendNotification ResendNotification resends a notification
-func (p *Plugin) ResendNotification(ctx context.Context) error {
+func (p *Plugin) ResendNotification(ctx context.Context, id xid.ID) (*authsome.ResendNotificationResponse, error) {
 	path := "/:id/resend"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+	var result authsome.ResendNotificationResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // HandleWebhook HandleWebhook handles provider webhook callbacks
-func (p *Plugin) HandleWebhook(ctx context.Context) error {
+func (p *Plugin) HandleWebhook(ctx context.Context, provider string) (*authsome.HandleWebhookResponse, error) {
 	path := "/notifications/webhook/:provider"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+	var result authsome.HandleWebhookResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 

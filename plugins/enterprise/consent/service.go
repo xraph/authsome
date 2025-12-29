@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 )
 
@@ -72,13 +73,9 @@ func (s *Service) CreateConsent(ctx context.Context, orgID, userID string, req *
 		consent.ExpiresAt = &expiryDate
 	}
 
-	// Extract IP and user agent from context if available
-	if ipAddr, ok := ctx.Value("ip_address").(string); ok {
-		consent.IPAddress = ipAddr
-	}
-	if userAgent, ok := ctx.Value("user_agent").(string); ok {
-		consent.UserAgent = userAgent
-	}
+	// Extract IP and user agent from AuthContext
+	consent.IPAddress = s.getIPFromContext(ctx)
+	consent.UserAgent = s.getUserAgentFromContext(ctx)
 
 	if err := s.repo.CreateConsent(ctx, consent); err != nil {
 		return nil, fmt.Errorf("failed to create consent: %w", err)
@@ -396,13 +393,9 @@ func (s *Service) RecordCookieConsent(ctx context.Context, orgID, userID string,
 		ExpiresAt:            time.Now().Add(s.config.CookieConsent.ValidityPeriod),
 	}
 
-	// Extract IP and user agent
-	if ipAddr, ok := ctx.Value("ip_address").(string); ok {
-		consent.IPAddress = ipAddr
-	}
-	if userAgent, ok := ctx.Value("user_agent").(string); ok {
-		consent.UserAgent = userAgent
-	}
+	// Extract IP and user agent from AuthContext
+	consent.IPAddress = s.getIPFromContext(ctx)
+	consent.UserAgent = s.getUserAgentFromContext(ctx)
 
 	if err := s.repo.CreateCookieConsent(ctx, consent); err != nil {
 		return nil, fmt.Errorf("failed to record cookie consent: %w", err)
@@ -484,10 +477,8 @@ func (s *Service) RequestDataExport(ctx context.Context, userID, orgID string, r
 		IncludeSections: includeSections,
 	}
 
-	// Extract IP
-	if ipAddr, ok := ctx.Value("ip_address").(string); ok {
-		exportReq.IPAddress = ipAddr
-	}
+	// Extract IP from AuthContext
+	exportReq.IPAddress = s.getIPFromContext(ctx)
 
 	if err := s.repo.CreateExportRequest(ctx, exportReq); err != nil {
 		return nil, fmt.Errorf("failed to create export request: %w", err)
@@ -643,10 +634,8 @@ func (s *Service) RequestDataDeletion(ctx context.Context, userID, orgID string,
 		RetentionExempt: false, // Will be checked during approval
 	}
 
-	// Extract IP
-	if ipAddr, ok := ctx.Value("ip_address").(string); ok {
-		deletionReq.IPAddress = ipAddr
-	}
+	// Extract IP from AuthContext
+	deletionReq.IPAddress = s.getIPFromContext(ctx)
 
 	if err := s.repo.CreateDeletionRequest(ctx, deletionReq); err != nil {
 		return nil, fmt.Errorf("failed to create deletion request: %w", err)
@@ -989,13 +978,9 @@ func (s *Service) createAuditLog(ctx context.Context, userID, orgID, consentID s
 		NewValue:       newMap,
 	}
 
-	// Extract IP and user agent
-	if ipAddr, ok := ctx.Value("ip_address").(string); ok {
-		log.IPAddress = ipAddr
-	}
-	if userAgent, ok := ctx.Value("user_agent").(string); ok {
-		log.UserAgent = userAgent
-	}
+	// Extract IP and user agent from AuthContext
+	log.IPAddress = s.getIPFromContext(ctx)
+	log.UserAgent = s.getUserAgentFromContext(ctx)
 
 	s.repo.CreateAuditLog(ctx, log)
 }
@@ -1064,10 +1049,8 @@ func (s *Service) CreateDPA(ctx context.Context, orgID, signedBy string, req *Cr
 		Metadata:         req.Metadata,
 	}
 
-	// Extract IP
-	if ipAddr, ok := ctx.Value("ip_address").(string); ok {
-		dpa.IPAddress = ipAddr
-	}
+	// Extract IP from AuthContext
+	dpa.IPAddress = s.getIPFromContext(ctx)
 
 	if err := s.repo.CreateDPA(ctx, dpa); err != nil {
 		return nil, fmt.Errorf("failed to create DPA: %w", err)
@@ -1083,4 +1066,20 @@ func (s *Service) generateDigitalSignature(content, email string) string {
 	data := fmt.Sprintf("%s:%s:%d", content, email, time.Now().Unix())
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
+}
+
+// Helper functions to extract IP and User Agent from AuthContext
+
+func (s *Service) getIPFromContext(ctx context.Context) string {
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
+		return authCtx.IPAddress
+	}
+	return ""
+}
+
+func (s *Service) getUserAgentFromContext(ctx context.Context) string {
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
+		return authCtx.UserAgent
+	}
+	return ""
 }

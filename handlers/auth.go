@@ -162,6 +162,10 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		}
 		if h.sec.IsLockedOut(c.Request().Context(), lockKey) {
 			_ = h.sec.LogEvent(c.Request().Context(), "lockout_active", nil, ip, c.Request().UserAgent(), "")
+			lockedUntil := h.sec.GetLockoutTime(c.Request().Context(), lockKey)
+			if !lockedUntil.IsZero() {
+				return c.JSON(423, errs.AccountLockedWithTime("too many failed attempts", lockedUntil))
+			}
 			return c.JSON(423, errs.AccountLocked("too many failed attempts"))
 		}
 	}
@@ -170,17 +174,31 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 	// Separate credentials check from session creation to allow 2FA gating
 	u, err := h.auth.CheckCredentials(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
+		var attemptsRemaining int
 		if h.sec != nil {
 			lockKey := req.Email
 			if lockKey == "" {
 				lockKey = ip
 			}
 			h.sec.RecordFailedAttempt(c.Request().Context(), lockKey)
+			attemptsRemaining = h.sec.GetAttemptsRemaining(c.Request().Context(), lockKey)
 			_ = h.sec.LogEvent(c.Request().Context(), "signin_failed", nil, ip, req.UserAgent, "")
 		}
 		if h.aud != nil {
 			_ = h.aud.Log(c.Request().Context(), nil, "signin_failed", "auth:signin", ip, req.UserAgent, "")
 		}
+		
+		// Check if error is specifically about unverified email
+		if errors.Is(err, types.ErrEmailNotVerified) {
+			return c.JSON(http.StatusForbidden, errs.EmailNotVerified(req.Email))
+		}
+		
+		// Return unauthorized with attempts remaining warning
+		if attemptsRemaining > 0 {
+			return c.JSON(http.StatusUnauthorized, errs.InvalidCredentialsWithAttempts(attemptsRemaining))
+		}
+		
+		// Return generic unauthorized for all other errors (invalid credentials, etc.)
 		return c.JSON(http.StatusUnauthorized, errs.Wrap(err, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized))
 	}
 	// Determine device fingerprint
@@ -501,6 +519,19 @@ func (h *AuthHandler) GetSession(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, errs.Wrap(err, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized))
 	}
+
+	// Populate device field if device service is available
+	if h.dev != nil && res.Session != nil && res.User != nil {
+		fingerprint := res.Session.UserAgent + "|" + res.Session.IPAddress
+		if currentDevice, err := h.dev.GetDeviceByFingerprint(
+			c.Request().Context(),
+			res.User.ID,
+			fingerprint,
+		); err == nil && currentDevice != nil {
+			res.Session.Device = currentDevice
+		}
+	}
+
 	if h.aud != nil && res.User != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID

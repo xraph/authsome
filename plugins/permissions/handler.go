@@ -75,7 +75,7 @@ func toErrorResponse(err error) interface{} {
 // POLICY MANAGEMENT
 // =============================================================================
 
-// CreatePolicy handles POST /api/permissions/policies
+// CreatePolicy handles POST /permissions/policies
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -97,7 +97,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	return c.JSON(201, handlers.ToPolicyResponse(policy))
 }
 
-// ListPolicies handles GET /api/permissions/policies
+// ListPolicies handles GET /permissions/policies
 func (h *Handler) ListPolicies(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -150,7 +150,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 	})
 }
 
-// GetPolicy handles GET /api/permissions/policies/:id
+// GetPolicy handles GET /permissions/policies/:id
 func (h *Handler) GetPolicy(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -173,7 +173,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 	return c.JSON(200, handlers.ToPolicyResponse(policy))
 }
 
-// UpdatePolicy handles PUT /api/permissions/policies/:id
+// UpdatePolicy handles PUT /permissions/policies/:id
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -202,7 +202,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	return c.JSON(200, handlers.ToPolicyResponse(policy))
 }
 
-// DeletePolicy handles DELETE /api/permissions/policies/:id
+// DeletePolicy handles DELETE /permissions/policies/:id
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -224,7 +224,7 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 	return c.JSON(204, nil)
 }
 
-// ValidatePolicy handles POST /api/permissions/policies/validate
+// ValidatePolicy handles POST /permissions/policies/validate
 func (h *Handler) ValidatePolicy(c forge.Context) error {
 	// Parse request
 	var req handlers.ValidatePolicyRequest
@@ -241,7 +241,7 @@ func (h *Handler) ValidatePolicy(c forge.Context) error {
 	return c.JSON(200, validation)
 }
 
-// TestPolicy handles POST /api/permissions/policies/test
+// TestPolicy handles POST /permissions/policies/test
 func (h *Handler) TestPolicy(c forge.Context) error {
 	// Parse request
 	var req handlers.TestPolicyRequest
@@ -262,7 +262,7 @@ func (h *Handler) TestPolicy(c forge.Context) error {
 // RESOURCE MANAGEMENT
 // =============================================================================
 
-// CreateResource handles POST /api/permissions/resources
+// CreateResource handles POST /permissions/resources
 func (h *Handler) CreateResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -284,7 +284,7 @@ func (h *Handler) CreateResource(c forge.Context) error {
 	return c.JSON(201, handlers.ToResourceResponse(resource))
 }
 
-// ListResources handles GET /api/permissions/resources
+// ListResources handles GET /permissions/resources
 func (h *Handler) ListResources(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -318,7 +318,7 @@ func (h *Handler) ListResources(c forge.Context) error {
 	})
 }
 
-// GetResource handles GET /api/permissions/resources/:id
+// GetResource handles GET /permissions/resources/:id
 func (h *Handler) GetResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -341,7 +341,7 @@ func (h *Handler) GetResource(c forge.Context) error {
 	return c.JSON(200, handlers.ToResourceResponse(resource))
 }
 
-// DeleteResource handles DELETE /api/permissions/resources/:id
+// DeleteResource handles DELETE /permissions/resources/:id
 func (h *Handler) DeleteResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -367,7 +367,7 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 // ACTION MANAGEMENT
 // =============================================================================
 
-// CreateAction handles POST /api/permissions/actions
+// CreateAction handles POST /permissions/actions
 func (h *Handler) CreateAction(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -389,7 +389,7 @@ func (h *Handler) CreateAction(c forge.Context) error {
 	return c.JSON(201, handlers.ToActionResponse(action))
 }
 
-// ListActions handles GET /api/permissions/actions
+// ListActions handles GET /permissions/actions
 func (h *Handler) ListActions(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -423,7 +423,7 @@ func (h *Handler) ListActions(c forge.Context) error {
 	})
 }
 
-// DeleteAction handles DELETE /api/permissions/actions/:id
+// DeleteAction handles DELETE /permissions/actions/:id
 func (h *Handler) DeleteAction(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -449,7 +449,7 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 // NAMESPACE MANAGEMENT
 // =============================================================================
 
-// CreateNamespace handles POST /api/permissions/namespaces
+// CreateNamespace handles POST /permissions/namespaces
 func (h *Handler) CreateNamespace(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -471,7 +471,7 @@ func (h *Handler) CreateNamespace(c forge.Context) error {
 	return c.JSON(201, handlers.ToNamespaceResponse(namespace))
 }
 
-// ListNamespaces handles GET /api/permissions/namespaces
+// ListNamespaces handles GET /permissions/namespaces
 func (h *Handler) ListNamespaces(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -496,7 +496,7 @@ func (h *Handler) ListNamespaces(c forge.Context) error {
 	})
 }
 
-// GetNamespace handles GET /api/permissions/namespaces/:id
+// GetNamespace handles GET /permissions/namespaces/:id
 func (h *Handler) GetNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -519,7 +519,7 @@ func (h *Handler) GetNamespace(c forge.Context) error {
 	return c.JSON(200, handlers.ToNamespaceResponse(namespace))
 }
 
-// UpdateNamespace handles PUT /api/permissions/namespaces/:id
+// UpdateNamespace handles PUT /permissions/namespaces/:id
 func (h *Handler) UpdateNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -548,7 +548,7 @@ func (h *Handler) UpdateNamespace(c forge.Context) error {
 	return c.JSON(200, handlers.ToNamespaceResponse(namespace))
 }
 
-// DeleteNamespace handles DELETE /api/permissions/namespaces/:id
+// DeleteNamespace handles DELETE /permissions/namespaces/:id
 func (h *Handler) DeleteNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -574,7 +574,7 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 // EVALUATION
 // =============================================================================
 
-// Evaluate handles POST /api/permissions/evaluate
+// Evaluate handles POST /permissions/evaluate
 func (h *Handler) Evaluate(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -606,7 +606,7 @@ func (h *Handler) Evaluate(c forge.Context) error {
 	return c.JSON(200, response)
 }
 
-// EvaluateBatch handles POST /api/permissions/evaluate/batch
+// EvaluateBatch handles POST /permissions/evaluate/batch
 func (h *Handler) EvaluateBatch(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -651,7 +651,7 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 // TEMPLATES
 // =============================================================================
 
-// ListTemplates handles GET /api/permissions/templates
+// ListTemplates handles GET /permissions/templates
 func (h *Handler) ListTemplates(c forge.Context) error {
 	// Call service
 	templates, err := h.service.ListTemplates(c.Request().Context())
@@ -680,7 +680,7 @@ func (h *Handler) ListTemplates(c forge.Context) error {
 	})
 }
 
-// GetTemplate handles GET /api/permissions/templates/:id
+// GetTemplate handles GET /permissions/templates/:id
 func (h *Handler) GetTemplate(c forge.Context) error {
 	templateID := c.Param("id")
 
@@ -693,7 +693,7 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 	return c.JSON(200, toTemplateResponse(template))
 }
 
-// InstantiateTemplate handles POST /api/permissions/templates/:id/instantiate
+// InstantiateTemplate handles POST /permissions/templates/:id/instantiate
 func (h *Handler) InstantiateTemplate(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -735,7 +735,7 @@ func toTemplateResponse(t *core.PolicyTemplate) *handlers.TemplateResponse {
 // MIGRATION
 // =============================================================================
 
-// MigrateFromRBAC handles POST /api/permissions/migrate/rbac
+// MigrateFromRBAC handles POST /permissions/migrate/rbac
 func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -757,7 +757,7 @@ func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 	return c.JSON(200, toMigrationStatusResponse(status))
 }
 
-// GetMigrationStatus handles GET /api/permissions/migrate/rbac/status
+// GetMigrationStatus handles GET /permissions/migrate/rbac/status
 func (h *Handler) GetMigrationStatus(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -801,7 +801,7 @@ func toMigrationStatusResponse(s *core.MigrationStatus) *handlers.MigrationStatu
 // AUDIT & ANALYTICS
 // =============================================================================
 
-// GetAuditLog handles GET /api/permissions/audit
+// GetAuditLog handles GET /permissions/audit
 func (h *Handler) GetAuditLog(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -852,7 +852,7 @@ func (h *Handler) GetAuditLog(c forge.Context) error {
 	})
 }
 
-// GetAnalytics handles GET /api/permissions/analytics
+// GetAnalytics handles GET /permissions/analytics
 func (h *Handler) GetAnalytics(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {

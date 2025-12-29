@@ -102,12 +102,12 @@ func (r *APIKeyRoleRepository) GetPermissions(ctx context.Context, apiKeyID xid.
 	query := r.db.NewSelect().
 		Model(&permissions).
 		Distinct().
-		Join("INNER JOIN role_permissions rp ON rp.permission_id = permission.id").
+		Join("INNER JOIN role_permissions rp ON rp.permission_id = perm.id").
 		Join("INNER JOIN apikey_roles akr ON akr.role_id = rp.role_id").
 		Where("akr.api_key_id = ?", apiKeyID).
 		Where("akr.deleted_at IS NULL").
 		Where("rp.deleted_at IS NULL").
-		Where("permission.deleted_at IS NULL")
+		Where("perm.deleted_at IS NULL")
 
 	if orgID != nil {
 		query = query.Where("akr.organization_id = ?", *orgID)
@@ -177,12 +177,12 @@ func (r *APIKeyRoleRepository) GetCreatorPermissions(ctx context.Context, creato
 	query := r.db.NewSelect().
 		Model(&permissions).
 		Distinct().
-		Join("INNER JOIN role_permissions rp ON rp.permission_id = permission.id").
+		Join("INNER JOIN role_permissions rp ON rp.permission_id = perm.id").
 		Join("INNER JOIN user_roles ur ON ur.role_id = rp.role_id").
 		Where("ur.user_id = ?", creatorID).
 		Where("ur.deleted_at IS NULL").
 		Where("rp.deleted_at IS NULL").
-		Where("permission.deleted_at IS NULL")
+		Where("perm.deleted_at IS NULL")
 
 	if orgID != nil {
 		query = query.Where("ur.organization_id = ?", *orgID)

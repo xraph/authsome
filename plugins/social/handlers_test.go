@@ -120,9 +120,12 @@ func TestHandler_ListProviders(t *testing.T) {
 		audit:      mockAudit,
 	}
 
-	_ = NewHandler(service, nil)
+	_ = NewHandler(service, nil, nil)
 
-	providers := service.ListProviders()
+	ctx := context.Background()
+	appID := xid.New()
+	envID := xid.New()
+	providers := service.ListProviders(ctx, appID, envID)
 	assert.NotNil(t, providers)
 	assert.IsType(t, []string{}, providers)
 }

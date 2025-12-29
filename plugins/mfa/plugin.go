@@ -301,15 +301,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		})
 	})
 
-	fmt.Println("[MFA] Routes registered successfully")
-	fmt.Println("[MFA] Available endpoints:")
-	fmt.Println("  - POST /mfa/factors/enroll")
-	fmt.Println("  - GET  /mfa/factors")
-	fmt.Println("  - POST /mfa/challenge")
-	fmt.Println("  - POST /mfa/verify")
-	fmt.Println("  - GET  /mfa/status")
-	fmt.Println("  - GET  /mfa/ping (test endpoint)")
-
 	return nil
 }
 

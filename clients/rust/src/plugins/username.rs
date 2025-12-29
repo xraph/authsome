@@ -17,6 +17,14 @@ impl UsernamePlugin {{
         Self { client: None }
     }
 
+    #[derive(Debug, Serialize)]
+    pub struct SignUpRequest {
+        #[serde(rename = "password")]
+        pub password: String,
+        #[serde(rename = "username")]
+        pub username: String,
+    }
+
     #[derive(Debug, Deserialize)]
     pub struct SignUpResponse {
         #[serde(rename = "message")]
@@ -28,17 +36,28 @@ impl UsernamePlugin {{
     /// SignUp handles user registration with username and password
     pub async fn sign_up(
         &self,
+        _request: SignUpRequest,
     ) -> Result<SignUpResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Serialize)]
+    pub struct SignInRequest {
+        #[serde(rename = "password")]
+        pub password: String,
+        #[serde(rename = "remember")]
+        pub remember: bool,
+        #[serde(rename = "username")]
+        pub username: String,
+    }
+
     #[derive(Debug, Deserialize)]
     pub struct SignInResponse {
-        #[serde(rename = "session")]
-        pub session: *session.Session,
-        #[serde(rename = "token")]
-        pub token: String,
+        #[serde(rename = "device_id")]
+        pub device_id: String,
+        #[serde(rename = "require_twofa")]
+        pub require_twofa: bool,
         #[serde(rename = "user")]
         pub user: *user.User,
     }
@@ -46,6 +65,7 @@ impl UsernamePlugin {{
     /// SignIn handles user authentication with username and password
     pub async fn sign_in(
         &self,
+        _request: SignInRequest,
     ) -> Result<SignInResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")

@@ -26,6 +26,37 @@ type RoleCustomization struct {
 	ExcludePermissions []xid.ID `json:"excludePermissions,omitempty"` // Permissions to exclude from template
 }
 
+// UserRoleAssignment represents a user's role assignment with full details
+type UserRoleAssignment struct {
+	UserID         xid.ID                 `json:"userId"`
+	OrganizationID *xid.ID                `json:"organizationId,omitempty"` // nil for app-level
+	Roles          []*RoleWithPermissions `json:"roles"`
+}
+
+// RoleSyncConfig configures role synchronization between orgs
+type RoleSyncConfig struct {
+	SourceOrgID xid.ID   `json:"sourceOrgId"`
+	TargetOrgID xid.ID   `json:"targetOrgId"`
+	RoleIDs     []xid.ID `json:"roleIds"` // empty = sync all
+	Mode        string   `json:"mode"`    // "mirror" or "merge"
+}
+
+// BulkAssignmentResult tracks success/failure for bulk operations
+type BulkAssignmentResult struct {
+	SuccessCount int              `json:"successCount"`
+	FailureCount int              `json:"failureCount"`
+	Errors       map[xid.ID]error `json:"errors"` // userID/roleID -> error
+}
+
+// AccessCheckResult contains the result of an access control check
+type AccessCheckResult struct {
+	Allowed           bool               `json:"allowed"`
+	Reason            string             `json:"reason"`
+	MatchedPermission *schema.Permission `json:"matchedPermission,omitempty"`
+	MatchedRole       *schema.Role       `json:"matchedRole,omitempty"`
+	IsWildcard        bool               `json:"isWildcard"` // true if matched via wildcard
+}
+
 // PermissionCategory groups permissions by functional area
 type PermissionCategory string
 

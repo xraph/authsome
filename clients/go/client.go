@@ -280,3 +280,80 @@ func (c *Client) RevokeDevice(ctx context.Context, req *RevokeDeviceRequest) (*R
 	return &result, nil
 }
 
+// RefreshSession Refresh access token using refresh token
+func (c *Client) RefreshSession(ctx context.Context, req *RefreshSessionRequest) (*RefreshSessionResponse, error) {
+	path := "/api/auth/refresh"
+	var result RefreshSessionResponse
+	err := c.request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RequestPasswordReset Request password reset link
+func (c *Client) RequestPasswordReset(ctx context.Context, req *RequestPasswordResetRequest) (*RequestPasswordResetResponse, error) {
+	path := "/api/auth/password/reset/request"
+	var result RequestPasswordResetResponse
+	err := c.request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResetPassword Reset password using token
+func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (*ResetPasswordResponse, error) {
+	path := "/api/auth/password/reset/confirm"
+	var result ResetPasswordResponse
+	err := c.request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ValidateResetToken Validate password reset token
+func (c *Client) ValidateResetToken(ctx context.Context) (*ValidateResetTokenResponse, error) {
+	path := "/api/auth/password/reset/validate"
+	var result ValidateResetTokenResponse
+	err := c.request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ChangePassword Change password for authenticated user
+func (c *Client) ChangePassword(ctx context.Context, req *ChangePasswordRequest) (*ChangePasswordResponse, error) {
+	path := "/api/auth/password/change"
+	var result ChangePasswordResponse
+	err := c.request(ctx, "POST", path, req, &result, true)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RequestEmailChange Request email address change
+func (c *Client) RequestEmailChange(ctx context.Context, req *RequestEmailChangeRequest) (*RequestEmailChangeResponse, error) {
+	path := "/api/auth/email/change/request"
+	var result RequestEmailChangeResponse
+	err := c.request(ctx, "POST", path, req, &result, true)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ConfirmEmailChange Confirm email change using token
+func (c *Client) ConfirmEmailChange(ctx context.Context, req *ConfirmEmailChangeRequest) (*ConfirmEmailChangeResponse, error) {
+	path := "/api/auth/email/change/confirm"
+	var result ConfirmEmailChangeResponse
+	err := c.request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+

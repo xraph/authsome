@@ -30,37 +30,37 @@ func (p *Plugin) Init(client *authsome.Client) error {
 }
 
 // CreateJWTKey CreateJWTKey creates a new JWT signing key
-func (p *Plugin) CreateJWTKey(ctx context.Context) error {
-	path := "/createjwtkey"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+func (p *Plugin) CreateJWTKey(ctx context.Context, req *authsome.CreateJWTKeyRequest) error {
+	path := "/jwt/createjwtkey"
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }
 
 // ListJWTKeys ListJWTKeys lists JWT signing keys
-func (p *Plugin) ListJWTKeys(ctx context.Context) error {
-	path := "/listjwtkeys"
-	err := p.client.Request(ctx, "GET", path, nil, nil, false)
+func (p *Plugin) ListJWTKeys(ctx context.Context, req *authsome.ListJWTKeysRequest) error {
+	path := "/jwt/listjwtkeys"
+	err := p.client.Request(ctx, "GET", path, req, nil, false)
 	return err
 }
 
 // GetJWKS GetJWKS returns the JSON Web Key Set
 func (p *Plugin) GetJWKS(ctx context.Context) error {
-	path := "/jwks"
+	path := "/jwt/jwks"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // GenerateToken GenerateToken generates a new JWT token
-func (p *Plugin) GenerateToken(ctx context.Context) error {
-	path := "/generate"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+func (p *Plugin) GenerateToken(ctx context.Context, req *authsome.GenerateTokenRequest) error {
+	path := "/jwt/generate"
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }
 
 // VerifyToken VerifyToken verifies a JWT token
-func (p *Plugin) VerifyToken(ctx context.Context) error {
-	path := "/verify"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
+func (p *Plugin) VerifyToken(ctx context.Context, req *authsome.VerifyTokenRequest) error {
+	path := "/jwt/verify"
+	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }
 

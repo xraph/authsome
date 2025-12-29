@@ -25,6 +25,9 @@ type Session struct {
 	RefreshToken          *string    `json:"refreshToken,omitempty"`
 	RefreshTokenExpiresAt *time.Time `json:"refreshTokenExpiresAt,omitempty"`
 	LastRefreshedAt       *time.Time `json:"lastRefreshedAt,omitempty"`
+
+	// Device info (computed on-demand, not stored in DB)
+	Device interface{} `json:"device,omitempty" bun:"-"`
 }
 
 // ToSchema converts Session DTO to schema.Session

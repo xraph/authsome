@@ -1,12 +1,10 @@
 package apikey
 
 import (
-	"encoding/json"
-	"strconv"
-
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
@@ -17,6 +15,68 @@ import (
 type Handler struct {
 	service *apikey.Service
 	config  Config
+}
+
+// Request types
+type CreateAPIKeyRequest struct {
+	Name        string            `json:"name" validate:"required"`
+	Description string            `json:"description"`
+	Scopes      []string          `json:"scopes" validate:"required,min=1"`
+	Permissions map[string]string `json:"permissions"`
+	RateLimit   int               `json:"rate_limit"`
+	AllowedIPs  []string          `json:"allowed_ips"`
+	Metadata    map[string]string `json:"metadata"`
+}
+
+type ListAPIKeysRequest struct {
+	Page   int   `query:"page"`
+	Limit  int   `query:"limit"`
+	Active *bool `query:"active"`
+}
+
+type GetAPIKeyRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type UpdateAPIKeyRequest struct {
+	ID          string            `path:"id" validate:"required"`
+	Name        *string           `json:"name"`
+	Description *string           `json:"description"`
+	Scopes      []string          `json:"scopes"`
+	Permissions map[string]string `json:"permissions"`
+	RateLimit   *int              `json:"rate_limit"`
+	AllowedIPs  []string          `json:"allowed_ips"`
+	Metadata    map[string]string `json:"metadata"`
+}
+
+type DeleteAPIKeyRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type RotateAPIKeyRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type VerifyAPIKeyRequest struct {
+	Key string `json:"key" validate:"required"`
+}
+
+type AssignRoleRequest struct {
+	ID     string `path:"id" validate:"required"`
+	RoleID string `json:"roleID" validate:"required"`
+}
+
+type UnassignRoleRequest struct {
+	ID     string `path:"id" validate:"required"`
+	RoleID string `path:"roleId" validate:"required"`
+}
+
+type GetRolesRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type GetEffectivePermissionsRequest struct {
+	ID string `path:"id" validate:"required"`
 }
 
 // Response types
@@ -66,30 +126,9 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse request body (only for mutable fields)
-	var reqBody struct {
-		Name        string            `json:"name"`
-		Description string            `json:"description,omitempty"`
-		Scopes      []string          `json:"scopes"`
-		Permissions map[string]string `json:"permissions,omitempty"`
-		RateLimit   int               `json:"rate_limit,omitempty"`
-		AllowedIPs  []string          `json:"allowed_ips,omitempty"`
-		Metadata    map[string]string `json:"metadata,omitempty"`
-	}
-
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
-		return c.JSON(authErr.HTTPStatus, authErr)
-	}
-
-	// Validate required fields
-	if reqBody.Name == "" {
-		err := errs.New("NAME_REQUIRED", "Name is required", 400)
-		return c.JSON(err.HTTPStatus, err)
-	}
-	if len(reqBody.Scopes) == 0 {
-		err := errs.New("SCOPES_REQUIRED", "At least one scope is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req CreateAPIKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
 	// Build request with context
@@ -98,21 +137,21 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 		orgIDPtr = &orgID
 	}
 
-	req := &apikey.CreateAPIKeyRequest{
+	serviceReq := &apikey.CreateAPIKeyRequest{
 		AppID:         appID,
 		EnvironmentID: envID,
 		OrgID:         orgIDPtr,
 		UserID:        userID,
-		Name:          reqBody.Name,
-		Description:   reqBody.Description,
-		Scopes:        reqBody.Scopes,
-		Permissions:   reqBody.Permissions,
-		RateLimit:     reqBody.RateLimit,
-		AllowedIPs:    reqBody.AllowedIPs,
-		Metadata:      reqBody.Metadata,
+		Name:          req.Name,
+		Description:   req.Description,
+		Scopes:        req.Scopes,
+		Permissions:   req.Permissions,
+		RateLimit:     req.RateLimit,
+		AllowedIPs:    req.AllowedIPs,
+		Metadata:      req.Metadata,
 	}
 
-	key, err := h.service.CreateAPIKey(c.Request().Context(), req)
+	key, err := h.service.CreateAPIKey(c.Request().Context(), serviceReq)
 	if err != nil {
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
 			return c.JSON(authErr.HTTPStatus, authErr)
@@ -140,29 +179,28 @@ func (h *Handler) ListAPIKeys(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse pagination and filter parameters
-	query := c.Request().URL.Query()
-
-	page := 1 // default
-	if pageStr := query.Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	var req ListAPIKeysRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	limit := 20 // default
-	if limitStr := query.Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	// Set defaults
+	if req.Page == 0 {
+		req.Page = 1
+	}
+	if req.Limit == 0 {
+		req.Limit = 20
 	}
 
 	// Build filter with optional parameters
 	filter := &apikey.ListAPIKeysFilter{
-		AppID: appID,
+		PaginationParams: pagination.PaginationParams{
+			Page:  req.Page,
+			Limit: req.Limit,
+		},
+		AppID:  appID,
+		Active: req.Active,
 	}
-	filter.Page = page
-	filter.Limit = limit
 
 	// Optional filters
 	if !envID.IsNil() {
@@ -173,13 +211,6 @@ func (h *Handler) ListAPIKeys(c forge.Context) error {
 	}
 	if !userID.IsNil() {
 		filter.UserID = &userID
-	}
-
-	// Parse active filter
-	if activeStr := query.Get("active"); activeStr != "" {
-		if active, err := strconv.ParseBool(activeStr); err == nil {
-			filter.Active = &active
-		}
 	}
 
 	response, err := h.service.ListAPIKeys(c.Request().Context(), filter)
@@ -206,14 +237,12 @@ func (h *Handler) GetAPIKey(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req GetAPIKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
@@ -248,22 +277,14 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req UpdateAPIKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
-		return c.JSON(authErr.HTTPStatus, authErr)
-	}
-
-	var req apikey.UpdateAPIKeyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -272,7 +293,16 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 		orgIDPtr = &orgID
 	}
 
-	key, err := h.service.UpdateAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr, &req)
+	serviceReq := &apikey.UpdateAPIKeyRequest{
+		Name:        req.Name,
+		Description: req.Description,
+		Scopes:      req.Scopes,
+		Permissions: req.Permissions,
+		RateLimit:   req.RateLimit,
+		Metadata:    req.Metadata,
+	}
+
+	key, err := h.service.UpdateAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr, serviceReq)
 	if err != nil {
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
 			return c.JSON(authErr.HTTPStatus, authErr)
@@ -296,14 +326,12 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req DeleteAPIKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
@@ -341,14 +369,12 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req RotateAPIKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
@@ -359,7 +385,7 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 		orgIDPtr = &orgID
 	}
 
-	rotateReq := &apikey.RotateAPIKeyRequest{
+	serviceReq := &apikey.RotateAPIKeyRequest{
 		ID:             keyID,
 		AppID:          appID,
 		EnvironmentID:  envID,
@@ -367,7 +393,7 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 		UserID:         userID,
 	}
 
-	newKey, err := h.service.RotateAPIKey(c.Request().Context(), rotateReq)
+	newKey, err := h.service.RotateAPIKey(c.Request().Context(), serviceReq)
 	if err != nil {
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
 			return c.JSON(authErr.HTTPStatus, authErr)
@@ -384,23 +410,19 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 
 // VerifyAPIKey handles POST /api-keys/verify
 func (h *Handler) VerifyAPIKey(c forge.Context) error {
-	var req apikey.VerifyAPIKeyRequest
-
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
-		return c.JSON(authErr.HTTPStatus, authErr)
-	}
-
-	if req.Key == "" {
-		err := errs.New("KEY_REQUIRED", "API key is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req VerifyAPIKeyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
 	// Set IP and User Agent from request
-	req.IP = c.Request().RemoteAddr
-	req.UserAgent = c.Request().Header.Get("User-Agent")
+	serviceReq := &apikey.VerifyAPIKeyRequest{
+		Key:       req.Key,
+		IP:        c.Request().RemoteAddr,
+		UserAgent: c.Request().Header.Get("User-Agent"),
+	}
 
-	response, err := h.service.VerifyAPIKey(c.Request().Context(), &req)
+	response, err := h.service.VerifyAPIKey(c.Request().Context(), serviceReq)
 	if err != nil {
 		if authErr, ok := err.(*errs.AuthsomeError); ok {
 			return c.JSON(authErr.HTTPStatus, authErr)
@@ -432,35 +454,18 @@ func (h *Handler) AssignRole(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req AssignRoleRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
-	// Parse request body
-	var reqBody struct {
-		RoleID string `json:"roleID"`
-	}
-
-	if err := json.NewDecoder(c.Request().Body).Decode(&reqBody); err != nil {
-		authErr := errs.New("INVALID_REQUEST", "Invalid request body", 400)
-		return c.JSON(authErr.HTTPStatus, authErr)
-	}
-
-	if reqBody.RoleID == "" {
-		err := errs.New("ROLE_ID_REQUIRED", "Role ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
-	}
-
-	roleID, err := xid.FromString(reqBody.RoleID)
+	roleID, err := xid.FromString(req.RoleID)
 	if err != nil {
 		authErr := errs.New("INVALID_ROLE_ID", "Invalid role ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
@@ -493,27 +498,18 @@ func (h *Handler) UnassignRole(c forge.Context) error {
 		return c.JSON(err.HTTPStatus, err)
 	}
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req UnassignRoleRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
-	// Parse role ID
-	roleIDStr := c.Param("roleId")
-	if roleIDStr == "" {
-		err := errs.New("ROLE_ID_REQUIRED", "Role ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
-	}
-
-	roleID, err := xid.FromString(roleIDStr)
+	roleID, err := xid.FromString(req.RoleID)
 	if err != nil {
 		authErr := errs.New("INVALID_ROLE_ID", "Invalid role ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
@@ -540,14 +536,12 @@ func (h *Handler) GetRoles(c forge.Context) error {
 	// Extract context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req GetRolesRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)
@@ -575,14 +569,12 @@ func (h *Handler) GetEffectivePermissions(c forge.Context) error {
 	// Extract context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 
-	// Parse key ID
-	keyIDStr := c.Param("id")
-	if keyIDStr == "" {
-		err := errs.New("KEY_ID_REQUIRED", "Key ID is required", 400)
-		return c.JSON(err.HTTPStatus, err)
+	var req GetEffectivePermissionsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	keyID, err := xid.FromString(keyIDStr)
+	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
 		return c.JSON(authErr.HTTPStatus, authErr)

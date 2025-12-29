@@ -19,8 +19,6 @@ impl IdverificationPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateVerificationSessionRequest {
-        #[serde(rename = "successUrl")]
-        pub success_url: String,
         #[serde(rename = "cancelUrl")]
         pub cancel_url: String,
         #[serde(rename = "config")]
@@ -31,12 +29,14 @@ impl IdverificationPlugin {{
         pub provider: String,
         #[serde(rename = "requiredChecks")]
         pub required_checks: []string,
+        #[serde(rename = "successUrl")]
+        pub success_url: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct CreateVerificationSessionResponse {
         #[serde(rename = "session")]
-        pub session: *base.IdentityVerificationSession,
+        pub session: ,
     }
 
     /// CreateVerificationSession creates a new verification session
@@ -52,7 +52,7 @@ POST /verification/sessions
     #[derive(Debug, Deserialize)]
     pub struct GetVerificationSessionResponse {
         #[serde(rename = "session")]
-        pub session: *base.IdentityVerificationSession,
+        pub session: ,
     }
 
     /// GetVerificationSession retrieves a verification session
@@ -67,7 +67,7 @@ GET /verification/sessions/:id
     #[derive(Debug, Deserialize)]
     pub struct GetVerificationResponse {
         #[serde(rename = "verification")]
-        pub verification: *base.IdentityVerification,
+        pub verification: ,
     }
 
     /// GetVerification retrieves a verification by ID
@@ -81,14 +81,8 @@ GET /verification/:id
 
     #[derive(Debug, Deserialize)]
     pub struct GetUserVerificationsResponse {
-        #[serde(rename = "total")]
-        pub total: i32,
         #[serde(rename = "verifications")]
-        pub verifications: []*base.IdentityVerification,
-        #[serde(rename = "limit")]
-        pub limit: i32,
-        #[serde(rename = "offset")]
-        pub offset: i32,
+        pub verifications: Vec<>,
     }
 
     /// GetUserVerifications retrieves all verifications for the current user
@@ -103,7 +97,7 @@ GET /verification/me
     #[derive(Debug, Deserialize)]
     pub struct GetUserVerificationStatusResponse {
         #[serde(rename = "status")]
-        pub status: *base.UserVerificationStatus,
+        pub status: ,
     }
 
     /// GetUserVerificationStatus retrieves the verification status for the current user
@@ -121,21 +115,33 @@ GET /verification/me/status
         pub reason: String,
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct RequestReverificationResponse {
+        #[serde(rename = "session")]
+        pub session: ,
+    }
+
     /// RequestReverification requests re-verification for the current user
 POST /verification/me/reverify
     pub async fn request_reverification(
         &self,
         _request: RequestReverificationRequest,
-    ) -> Result<()> {
+    ) -> Result<RequestReverificationResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct HandleWebhookResponse {
+        #[serde(rename = "status")]
+        pub status: String,
     }
 
     /// HandleWebhook handles provider webhook callbacks
 POST /verification/webhook/:provider
     pub async fn handle_webhook(
         &self,
-    ) -> Result<()> {
+    ) -> Result<HandleWebhookResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -146,21 +152,33 @@ POST /verification/webhook/:provider
         pub reason: String,
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct AdminBlockUserResponse {
+        #[serde(rename = "status")]
+        pub status: ,
+    }
+
     /// AdminBlockUser blocks a user from verification (admin only)
 POST /verification/admin/users/:userId/block
     pub async fn admin_block_user(
         &self,
         _request: AdminBlockUserRequest,
-    ) -> Result<()> {
+    ) -> Result<AdminBlockUserResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct AdminUnblockUserResponse {
+        #[serde(rename = "status")]
+        pub status: ,
     }
 
     /// AdminUnblockUser unblocks a user (admin only)
 POST /verification/admin/users/:userId/unblock
     pub async fn admin_unblock_user(
         &self,
-    ) -> Result<()> {
+    ) -> Result<AdminUnblockUserResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -168,7 +186,7 @@ POST /verification/admin/users/:userId/unblock
     #[derive(Debug, Deserialize)]
     pub struct AdminGetUserVerificationStatusResponse {
         #[serde(rename = "status")]
-        pub status: *base.UserVerificationStatus,
+        pub status: ,
     }
 
     /// AdminGetUserVerificationStatus retrieves verification status for any user (admin only)
@@ -182,14 +200,8 @@ GET /verification/admin/users/:userId/status
 
     #[derive(Debug, Deserialize)]
     pub struct AdminGetUserVerificationsResponse {
-        #[serde(rename = "limit")]
-        pub limit: i32,
-        #[serde(rename = "offset")]
-        pub offset: i32,
-        #[serde(rename = "total")]
-        pub total: i32,
         #[serde(rename = "verifications")]
-        pub verifications: []*base.IdentityVerification,
+        pub verifications: Vec<>,
     }
 
     /// AdminGetUserVerifications retrieves all verifications for any user (admin only)

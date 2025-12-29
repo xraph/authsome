@@ -1,7 +1,6 @@
 package anonymous
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -80,7 +79,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	// Optional body (for future extensions)
 	var req SignInRequest
-	_ = json.NewDecoder(c.Request().Body).Decode(&req)
+	_ = c.BindRequest(&req)
 
 	// Create guest session
 	sess, err := h.svc.SignInGuest(c.Request().Context(), appID, envID, orgIDPtr, c.Request().RemoteAddr, c.Request().UserAgent())
@@ -106,8 +105,8 @@ func (h *Handler) SignIn(c forge.Context) error {
 // Link upgrades an anonymous session to a real account
 func (h *Handler) Link(c forge.Context) error {
 	var req LinkRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Read session token from cookie or header

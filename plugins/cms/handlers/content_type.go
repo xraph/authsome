@@ -35,13 +35,25 @@ func NewContentTypeHandler(
 func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	// Parse query params manually
+	var req ListContentTypesRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	// Apply defaults
+	if req.Page < 1 {
+		req.Page = 1
+	}
+	if req.PageSize < 1 {
+		req.PageSize = 20
+	}
+
 	query := core.ListContentTypesQuery{
-		Search:    c.Query("search"),
-		SortBy:    c.Query("sortBy"),
-		SortOrder: c.Query("sortOrder"),
-		Page:      parseIntDefault(c.Query("page"), 1),
-		PageSize:  parseIntDefault(c.Query("pageSize"), 20),
+		Search:    req.Search,
+		SortBy:    req.SortBy,
+		SortOrder: req.SortOrder,
+		Page:      req.Page,
+		PageSize:  req.PageSize,
 	}
 
 	result, err := h.service.List(ctx, &query)
@@ -75,12 +87,12 @@ func (h *ContentTypeHandler) CreateContentType(c forge.Context) error {
 func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, map[string]string{"error": "slug is required"})
+	var req GetContentTypeRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
-	result, err := h.service.GetByName(ctx, slug)
+	result, err := h.service.GetByName(ctx, req.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -93,13 +105,13 @@ func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
 func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, map[string]string{"error": "slug is required"})
+	var pathReq UpdateContentTypeRequest
+	if err := c.BindRequest(&pathReq); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetByName(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, pathReq.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -129,13 +141,13 @@ func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, map[string]string{"error": "slug is required"})
+	var req DeleteContentTypeRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetByName(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, req.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -162,13 +174,13 @@ func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, map[string]string{"error": "slug is required"})
+	var req GetContentTypeRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetByName(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, req.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -194,10 +206,11 @@ func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 func (h *ContentTypeHandler) AddField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, map[string]string{"error": "slug is required"})
+	var pathReq AddFieldRequest
+	if err := c.BindRequest(&pathReq); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+	slug := pathReq.Slug
 
 	// Get the content type first
 	contentType, err := h.service.GetByName(ctx, slug)
@@ -230,14 +243,13 @@ func (h *ContentTypeHandler) AddField(c forge.Context) error {
 func (h *ContentTypeHandler) GetField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	fieldSlug := c.Param("fieldSlug")
-	if slug == "" || fieldSlug == "" {
-		return c.JSON(400, map[string]string{"error": "slug and fieldSlug are required"})
+	var req UpdateFieldRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetByName(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, req.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -248,7 +260,7 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	field, err := h.fieldService.GetByName(ctx, id, fieldSlug)
+	field, err := h.fieldService.GetByName(ctx, id, req.FieldID)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -261,14 +273,13 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	fieldSlug := c.Param("fieldSlug")
-	if slug == "" || fieldSlug == "" {
-		return c.JSON(400, map[string]string{"error": "slug and fieldSlug are required"})
+	var pathReq UpdateFieldRequest
+	if err := c.BindRequest(&pathReq); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetByName(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, pathReq.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -280,7 +291,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	}
 
 	// Get the field
-	field, err := h.fieldService.GetByName(ctx, contentTypeID, fieldSlug)
+	field, err := h.fieldService.GetByName(ctx, contentTypeID, pathReq.FieldID)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -310,14 +321,13 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	fieldSlug := c.Param("fieldSlug")
-	if slug == "" || fieldSlug == "" {
-		return c.JSON(400, map[string]string{"error": "slug and fieldSlug are required"})
+	var req DeleteFieldRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Get the content type first
-	contentType, err := h.service.GetByName(ctx, slug)
+	contentType, err := h.service.GetByName(ctx, req.Slug)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -329,7 +339,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	}
 
 	// Get the field
-	field, err := h.fieldService.GetByName(ctx, contentTypeID, fieldSlug)
+	field, err := h.fieldService.GetByName(ctx, contentTypeID, req.FieldID)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -352,10 +362,11 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, map[string]string{"error": "slug is required"})
+	var pathReq ReorderFieldsRequest
+	if err := c.BindRequest(&pathReq); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+	slug := pathReq.Slug
 
 	// Get the content type first
 	contentType, err := h.service.GetByName(ctx, slug)

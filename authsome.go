@@ -256,7 +256,9 @@ func (a *Auth) Initialize(ctx context.Context) error {
 
 	a.userService = user.NewService(a.repo.User(), userConfig, a.webhookService, a.hookRegistry)
 	a.sessionService = session.NewService(a.repo.Session(), a.config.SessionConfig, a.webhookService, a.hookRegistry)
-	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{}, a.hookRegistry)
+	a.authService = auth.NewService(a.userService, a.sessionService, auth.Config{
+		RequireEmailVerification: a.config.RequireEmailVerification,
+	}, a.hookRegistry)
 
 	// Initialize global authentication middleware now that all required services are ready
 	// Use provided config or sensible defaults

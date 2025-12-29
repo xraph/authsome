@@ -13,37 +13,37 @@ export class PasskeyPlugin implements ClientPlugin {
   }
 
   async beginRegister(): Promise<void> {
-    const path = '/register/begin';
+    const path = '/passkey/register/begin';
     return this.client.request<void>('POST', path);
   }
 
   async finishRegister(): Promise<void> {
-    const path = '/register/finish';
+    const path = '/passkey/register/finish';
     return this.client.request<void>('POST', path);
   }
 
   async beginLogin(): Promise<void> {
-    const path = '/login/begin';
+    const path = '/passkey/login/begin';
     return this.client.request<void>('POST', path);
   }
 
   async finishLogin(): Promise<void> {
-    const path = '/login/finish';
+    const path = '/passkey/login/finish';
     return this.client.request<void>('POST', path);
   }
 
   async list(): Promise<void> {
-    const path = '/list';
+    const path = '/passkey/list';
     return this.client.request<void>('GET', path);
   }
 
-  async update(): Promise<void> {
-    const path = '/:id';
+  async update(params: { id: string }): Promise<void> {
+    const path = `/passkey/${params.id}`;
     return this.client.request<void>('PUT', path);
   }
 
-  async delete(): Promise<types.StatusResponse> {
-    const path = '/:id';
+  async delete(params: { id: string }): Promise<types.StatusResponse> {
+    const path = `/passkey/${params.id}`;
     return this.client.request<types.StatusResponse>('DELETE', path);
   }
 

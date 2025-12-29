@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/responses"
@@ -432,36 +432,30 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				return nil
 			}
 
-			userID := response.User.ID
-
-			// Extract app ID from context
-			appID, ok := ctx.Value("app_id").(xid.ID)
-			if !ok || appID.IsNil() {
-				// Try alternative context key
-				if appIDPtr, ok := ctx.Value("appID").(*xid.ID); ok && appIDPtr != nil {
-					appID = *appIDPtr
-				} else {
-					return nil
-				}
+			// Get AuthContext with complete authentication state
+			authCtx, ok := contexts.GetAuthContext(ctx)
+			if !ok || authCtx == nil {
+				fmt.Println("[Geofence] Warning: auth context not available in after sign in hook")
+				return nil
 			}
 
-			// Extract IP address from context
-			ipAddress, ok := ctx.Value("ip_address").(string)
-			if !ok || ipAddress == "" {
-				// Try alternative extraction
-				if req, ok := ctx.Value("forge.request").(interface{ RemoteAddr() string }); ok {
-					ipAddress = req.RemoteAddr()
-				}
-				if ipAddress == "" {
-					return nil
-				}
+			// Use typed fields directly from AuthContext
+			userID := response.User.ID
+			appID := authCtx.AppID
+			ipAddress := authCtx.IPAddress
+
+			// Validate required fields
+			if appID.IsNil() || ipAddress == "" {
+				fmt.Printf("[Geofence] Warning: missing required context fields - app_id: %s, ip_address: %s\n",
+					appID.String(), ipAddress)
+				return nil
 			}
 
 			// Perform security checks asynchronously (don't block authentication)
 			go func() {
 				bgCtx := context.Background()
-				// Copy important context values
-				bgCtx = context.WithValue(bgCtx, "app_id", appID)
+				// Copy AuthContext to background context
+				bgCtx = contexts.SetAuthContext(bgCtx, authCtx)
 
 				if err := p.service.CheckSessionSecurity(bgCtx, userID, appID, ipAddress); err != nil {
 					fmt.Printf("[Geofence] Session security check failed: %v\n", err)

@@ -239,15 +239,15 @@ impl AuthsomeClient {
     /// Request for revoke_device
     #[derive(Debug, Serialize)]
     pub struct RevokeDeviceRequest {
-        #[serde(rename = "deviceId")]
-        pub device_id: String,
+        #[serde(rename = "fingerprint")]
+        pub fingerprint: String,
     }
 
     /// Response for revoke_device
     #[derive(Debug, Deserialize)]
     pub struct RevokeDeviceResponse {
-        #[serde(rename = "success")]
-        pub success: bool,
+        #[serde(rename = "status")]
+        pub status: String,
     }
 
     /// Revoke a device
@@ -261,6 +261,206 @@ impl AuthsomeClient {
             &path,
             Some(request),
             true,
+        ).await
+    }
+
+    /// Request for refresh_session
+    #[derive(Debug, Serialize)]
+    pub struct RefreshSessionRequest {
+        #[serde(rename = "refreshToken")]
+        pub refresh_token: String,
+    }
+
+    /// Response for refresh_session
+    #[derive(Debug, Deserialize)]
+    pub struct RefreshSessionResponse {
+        #[serde(rename = "expiresAt")]
+        pub expires_at: String,
+        #[serde(rename = "refreshExpiresAt")]
+        pub refresh_expires_at: String,
+        #[serde(rename = "session")]
+        pub session: ,
+        #[serde(rename = "accessToken")]
+        pub access_token: String,
+        #[serde(rename = "refreshToken")]
+        pub refresh_token: String,
+    }
+
+    /// Refresh access token using refresh token
+    pub async fn refresh_session(
+        &self,
+        request: RefreshSessionRequest,
+    ) -> Result<RefreshSessionResponse> {
+        let path = "/api/auth/refresh";
+        self.request(
+            Method::POST,
+            &path,
+            Some(request),
+            false,
+        ).await
+    }
+
+    /// Request for request_password_reset
+    #[derive(Debug, Serialize)]
+    pub struct RequestPasswordResetRequest {
+        #[serde(rename = "email")]
+        pub email: String,
+    }
+
+    /// Response for request_password_reset
+    #[derive(Debug, Deserialize)]
+    pub struct RequestPasswordResetResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+    }
+
+    /// Request password reset link
+    pub async fn request_password_reset(
+        &self,
+        request: RequestPasswordResetRequest,
+    ) -> Result<RequestPasswordResetResponse> {
+        let path = "/api/auth/password/reset/request";
+        self.request(
+            Method::POST,
+            &path,
+            Some(request),
+            false,
+        ).await
+    }
+
+    /// Request for reset_password
+    #[derive(Debug, Serialize)]
+    pub struct ResetPasswordRequest {
+        #[serde(rename = "token")]
+        pub token: String,
+        #[serde(rename = "newPassword")]
+        pub new_password: String,
+    }
+
+    /// Response for reset_password
+    #[derive(Debug, Deserialize)]
+    pub struct ResetPasswordResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+    }
+
+    /// Reset password using token
+    pub async fn reset_password(
+        &self,
+        request: ResetPasswordRequest,
+    ) -> Result<ResetPasswordResponse> {
+        let path = "/api/auth/password/reset/confirm";
+        self.request(
+            Method::POST,
+            &path,
+            Some(request),
+            false,
+        ).await
+    }
+
+    /// Response for validate_reset_token
+    #[derive(Debug, Deserialize)]
+    pub struct ValidateResetTokenResponse {
+        #[serde(rename = "valid")]
+        pub valid: bool,
+    }
+
+    /// Validate password reset token
+    pub async fn validate_reset_token(
+        &self,
+    ) -> Result<ValidateResetTokenResponse> {
+        let path = "/api/auth/password/reset/validate";
+        self.request(
+            Method::GET,
+            &path,
+            None::<()>,
+            false,
+        ).await
+    }
+
+    /// Request for change_password
+    #[derive(Debug, Serialize)]
+    pub struct ChangePasswordRequest {
+        #[serde(rename = "oldPassword")]
+        pub old_password: String,
+        #[serde(rename = "newPassword")]
+        pub new_password: String,
+    }
+
+    /// Response for change_password
+    #[derive(Debug, Deserialize)]
+    pub struct ChangePasswordResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+    }
+
+    /// Change password for authenticated user
+    pub async fn change_password(
+        &self,
+        request: ChangePasswordRequest,
+    ) -> Result<ChangePasswordResponse> {
+        let path = "/api/auth/password/change";
+        self.request(
+            Method::POST,
+            &path,
+            Some(request),
+            true,
+        ).await
+    }
+
+    /// Request for request_email_change
+    #[derive(Debug, Serialize)]
+    pub struct RequestEmailChangeRequest {
+        #[serde(rename = "newEmail")]
+        pub new_email: String,
+    }
+
+    /// Response for request_email_change
+    #[derive(Debug, Deserialize)]
+    pub struct RequestEmailChangeResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+    }
+
+    /// Request email address change
+    pub async fn request_email_change(
+        &self,
+        request: RequestEmailChangeRequest,
+    ) -> Result<RequestEmailChangeResponse> {
+        let path = "/api/auth/email/change/request";
+        self.request(
+            Method::POST,
+            &path,
+            Some(request),
+            true,
+        ).await
+    }
+
+    /// Request for confirm_email_change
+    #[derive(Debug, Serialize)]
+    pub struct ConfirmEmailChangeRequest {
+        #[serde(rename = "token")]
+        pub token: String,
+    }
+
+    /// Response for confirm_email_change
+    #[derive(Debug, Deserialize)]
+    pub struct ConfirmEmailChangeResponse {
+        #[serde(rename = "message")]
+        pub message: String,
+    }
+
+    /// Confirm email change using token
+    pub async fn confirm_email_change(
+        &self,
+        request: ConfirmEmailChangeRequest,
+    ) -> Result<ConfirmEmailChangeResponse> {
+        let path = "/api/auth/email/change/confirm";
+        self.request(
+            Method::POST,
+            &path,
+            Some(request),
+            false,
         ).await
     }
 

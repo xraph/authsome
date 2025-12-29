@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 )
 
 // Config for security checks
@@ -66,7 +67,24 @@ func (s *Service) CheckIPAllowed(_ context.Context, ip string) bool {
 
 // LogEvent logs a security event
 func (s *Service) LogEvent(ctx context.Context, typ string, userID *xid.ID, ip, ua, geo string) error {
-	e := &SecurityEvent{ID: xid.New(), UserID: userID, Type: typ, IPAddress: ip, UserAgent: ua, Geo: geo, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	// Extract AppID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		// Graceful degradation: skip event if no app context
+		return nil
+	}
+
+	e := &SecurityEvent{
+		ID:        xid.New(),
+		AppID:     appID,
+		UserID:    userID,
+		Type:      typ,
+		IPAddress: ip,
+		UserAgent: ua,
+		Geo:       geo,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
 	return s.repo.Create(ctx, e)
 }
 
@@ -128,6 +146,19 @@ func (s *Service) IsLockedOut(_ context.Context, key string) bool {
 	return ok && time.Now().Before(until)
 }
 
+// GetLockoutTime returns the lockout expiration time for a key if locked out
+// Returns zero time if not locked out
+func (s *Service) GetLockoutTime(_ context.Context, key string) time.Time {
+	until, ok := s.lockoutUntil[key]
+	if !ok {
+		return time.Time{}
+	}
+	if time.Now().Before(until) {
+		return until
+	}
+	return time.Time{}
+}
+
 // RecordFailedAttempt increments failed attempt count and applies lockout if threshold reached
 func (s *Service) RecordFailedAttempt(_ context.Context, key string) {
 	// default thresholds
@@ -146,6 +177,26 @@ func (s *Service) RecordFailedAttempt(_ context.Context, key string) {
 			s.failedCounts[k] = 0
 		}(key)
 	}
+}
+
+// GetFailedAttemptCount returns the current number of failed attempts for a key
+func (s *Service) GetFailedAttemptCount(_ context.Context, key string) int {
+	count, ok := s.failedCounts[key]
+	if !ok {
+		return 0
+	}
+	return count
+}
+
+// GetAttemptsRemaining returns the number of attempts remaining before lockout
+func (s *Service) GetAttemptsRemaining(_ context.Context, key string) int {
+	const defaultMax = 5
+	count := s.GetFailedAttemptCount(context.Background(), key)
+	remaining := defaultMax - count
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
 }
 
 // ResetFailedAttempts clears counters and lockout for a key

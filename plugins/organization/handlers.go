@@ -1,9 +1,6 @@
 package organization
 
 import (
-	"encoding/json"
-	"strconv"
-
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/organization"
@@ -17,6 +14,86 @@ import (
 type OrganizationHandler struct {
 	orgService *organization.Service
 	plugin     *Plugin // Reference to plugin for notification sending
+}
+
+// Handler-level request types with path parameters
+type CreateOrganizationHandlerRequest struct {
+	organization.CreateOrganizationRequest
+}
+
+type GetOrganizationRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type ListOrganizationsRequest struct {
+	Page  int `query:"page"`
+	Limit int `query:"limit"`
+}
+
+type UpdateOrganizationHandlerRequest struct {
+	ID string `path:"id" validate:"required"`
+	organization.UpdateOrganizationRequest
+}
+
+type DeleteOrganizationRequest struct {
+	ID string `path:"id" validate:"required"`
+}
+
+type GetOrganizationBySlugRequest struct {
+	Slug string `path:"slug" validate:"required"`
+}
+
+type ListMembersRequest struct {
+	ID    string `path:"id" validate:"required"`
+	Page  int    `query:"page"`
+	Limit int    `query:"limit"`
+	Role  string `query:"role"`
+}
+
+type InviteMemberHandlerRequest struct {
+	ID string `path:"id" validate:"required"`
+	organization.InviteMemberRequest
+}
+
+type UpdateMemberHandlerRequest struct {
+	ID       string `path:"id" validate:"required"`
+	MemberID string `path:"memberId" validate:"required"`
+	organization.UpdateMemberRequest
+}
+
+type RemoveMemberRequest struct {
+	ID       string `path:"id" validate:"required"`
+	MemberID string `path:"memberId" validate:"required"`
+}
+
+type AcceptInvitationRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type DeclineInvitationRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type ListTeamsRequest struct {
+	ID    string `path:"id" validate:"required"`
+	Page  int    `query:"page"`
+	Limit int    `query:"limit"`
+}
+
+type CreateTeamHandlerRequest struct {
+	ID string `path:"id" validate:"required"`
+	organization.CreateTeamRequest
+}
+
+type UpdateTeamHandlerRequest struct {
+	ID     string `path:"id" validate:"required"`
+	TeamID string `path:"teamId" validate:"required"`
+	organization.UpdateTeamRequest
+}
+
+type DeleteTeamRequest struct {
+	ID     string `path:"id" validate:"required"`
+	TeamID string `path:"teamId" validate:"required"`
 }
 
 // Response types
@@ -67,12 +144,12 @@ func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 		return c.JSON(400, errs.BadRequest("environment context required"))
 	}
 
-	var req CreateOrganizationRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, errs.BadRequest("invalid request"))
+	var req CreateOrganizationHandlerRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	org, err := h.orgService.CreateOrganization(ctx, &req, userID, appID, environmentID)
+	org, err := h.orgService.CreateOrganization(ctx, &req.CreateOrganizationRequest, userID, appID, environmentID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -90,12 +167,12 @@ func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	id := c.Param("id")
-	if id == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req GetOrganizationRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	orgID, err := xid.FromString(id)
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -124,12 +201,17 @@ func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	// Get pagination parameters
-	limit, _ := strconv.Atoi(c.Query("limit"))
+	var req ListOrganizationsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
+	}
+
+	// Set defaults
+	limit := req.Limit
 	if limit <= 0 {
 		limit = 10
 	}
-	page, _ := strconv.Atoi(c.Query("page"))
+	page := req.Page
 	if page <= 0 {
 		page = 1
 	}
@@ -157,12 +239,12 @@ func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	idStr := c.Param("id")
-	if idStr == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req UpdateOrganizationHandlerRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	orgID, err := xid.FromString(idStr)
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -175,12 +257,7 @@ func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 		}
 	}
 
-	var req UpdateOrganizationRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, errs.BadRequest("invalid request"))
-	}
-
-	org, err := h.orgService.UpdateOrganization(ctx, orgID, &req)
+	org, err := h.orgService.UpdateOrganization(ctx, orgID, &req.UpdateOrganizationRequest)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -198,12 +275,12 @@ func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	idStr := c.Param("id")
-	if idStr == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req DeleteOrganizationRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	orgID, err := xid.FromString(idStr)
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -234,9 +311,9 @@ func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(400, errs.RequiredField("organization_slug"))
+	var req GetOrganizationBySlugRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
 	// Get app ID from context
@@ -251,7 +328,7 @@ func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 		return c.JSON(400, errs.BadRequest("environment context required"))
 	}
 
-	org, err := h.orgService.FindOrganizationBySlug(ctx, appID, environmentID, slug)
+	org, err := h.orgService.FindOrganizationBySlug(ctx, appID, environmentID, req.Slug)
 	if err != nil {
 		return c.JSON(404, errs.OrganizationNotFound())
 	}
@@ -275,11 +352,12 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	orgIDStr := c.Param("id")
-	if orgIDStr == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req ListMembersRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	orgID, err := xid.FromString(orgIDStr)
+
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -290,23 +368,14 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 		return c.JSON(403, errs.PermissionDenied("view", "organization"))
 	}
 
-	// Parse pagination parameters
-	limitStr := c.Request().URL.Query().Get("limit")
-	pageStr := c.Request().URL.Query().Get("page")
-
-	limit := 10 // default
-	page := 1   // default
-
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	// Set defaults
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
 	}
-
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	page := req.Page
+	if page <= 0 {
+		page = 1
 	}
 
 	filter := &organization.ListMembersFilter{
@@ -315,6 +384,7 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 			Limit: limit,
 		},
 		OrganizationID: orgID,
+		Role:           &req.Role,
 	}
 
 	members, err := h.orgService.ListMembers(ctx, filter)
@@ -335,11 +405,12 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	orgIDStr := c.Param("id")
-	if orgIDStr == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req InviteMemberHandlerRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	orgID, err := xid.FromString(orgIDStr)
+
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -352,12 +423,7 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 		}
 	}
 
-	var req InviteMemberRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, errs.BadRequest("invalid request"))
-	}
-
-	invitation, err := h.orgService.InviteMember(ctx, orgID, &req, userID)
+	invitation, err := h.orgService.InviteMember(ctx, orgID, &req.InviteMemberRequest, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -392,22 +458,18 @@ func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	memberIDStr := c.Param("memberId")
-	if memberIDStr == "" {
-		return c.JSON(400, errs.RequiredField("member_id"))
+	var req UpdateMemberHandlerRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	memberID, err := xid.FromString(memberIDStr)
+
+	memberID, err := xid.FromString(req.MemberID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid member ID"))
 	}
 
-	var req UpdateMemberRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, errs.BadRequest("invalid request"))
-	}
-
 	// Permission check is handled in the service layer (UpdateMember checks admin/owner)
-	member, err := h.orgService.UpdateMember(ctx, memberID, &req, userID)
+	member, err := h.orgService.UpdateMember(ctx, memberID, &req.UpdateMemberRequest, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -425,11 +487,12 @@ func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	memberIDStr := c.Param("memberId")
-	if memberIDStr == "" {
-		return c.JSON(400, errs.RequiredField("member_id"))
+	var req RemoveMemberRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	memberID, err := xid.FromString(memberIDStr)
+
+	memberID, err := xid.FromString(req.MemberID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid member ID"))
 	}
@@ -453,12 +516,12 @@ func (h *OrganizationHandler) AcceptInvitation(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	token := c.Param("token")
-	if token == "" {
-		return c.JSON(400, errs.RequiredField("invitation_token"))
+	var req AcceptInvitationRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	member, err := h.orgService.AcceptInvitation(ctx, token, userID)
+	member, err := h.orgService.AcceptInvitation(ctx, req.Token, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -473,12 +536,12 @@ func (h *OrganizationHandler) DeclineInvitation(c forge.Context) error {
 	// User doesn't need to be authenticated to decline an invitation
 	// (they might not have an account yet)
 
-	token := c.Param("token")
-	if token == "" {
-		return c.JSON(400, errs.RequiredField("invitation_token"))
+	var req DeclineInvitationRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	err := h.orgService.DeclineInvitation(ctx, token)
+	err := h.orgService.DeclineInvitation(ctx, req.Token)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -496,11 +559,12 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	orgIDStr := c.Param("id")
-	if orgIDStr == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req ListTeamsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	orgID, err := xid.FromString(orgIDStr)
+
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -511,23 +575,14 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 		return c.JSON(403, errs.PermissionDenied("view", "organization"))
 	}
 
-	// Parse pagination parameters
-	limitStr := c.Request().URL.Query().Get("limit")
-	pageStr := c.Request().URL.Query().Get("page")
-
-	limit := 10 // default
-	page := 1   // default
-
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	// Set defaults
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
 	}
-
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	page := req.Page
+	if page <= 0 {
+		page = 1
 	}
 
 	filter := &organization.ListTeamsFilter{
@@ -556,11 +611,12 @@ func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	orgIDStr := c.Param("id")
-	if orgIDStr == "" {
-		return c.JSON(400, errs.RequiredField("organization_id"))
+	var req CreateTeamHandlerRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	orgID, err := xid.FromString(orgIDStr)
+
+	orgID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid organization ID"))
 	}
@@ -573,12 +629,7 @@ func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 		}
 	}
 
-	var req CreateTeamRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, errs.BadRequest("invalid request"))
-	}
-
-	team, err := h.orgService.CreateTeam(ctx, orgID, &req, userID)
+	team, err := h.orgService.CreateTeam(ctx, orgID, &req.CreateTeamRequest, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -596,22 +647,18 @@ func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	teamIDStr := c.Param("teamId")
-	if teamIDStr == "" {
-		return c.JSON(400, errs.RequiredField("team_id"))
+	var req UpdateTeamHandlerRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	teamID, err := xid.FromString(teamIDStr)
+
+	teamID, err := xid.FromString(req.TeamID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid team ID"))
 	}
 
-	var req UpdateTeamRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(400, errs.BadRequest("invalid request"))
-	}
-
 	// Permission check is handled in the service layer (UpdateTeam checks admin/owner)
-	team, err := h.orgService.UpdateTeam(ctx, teamID, &req, userID)
+	team, err := h.orgService.UpdateTeam(ctx, teamID, &req.UpdateTeamRequest, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
 	}
@@ -636,11 +683,12 @@ func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 		return c.JSON(401, errs.Unauthorized())
 	}
 
-	teamIDStr := c.Param("teamId")
-	if teamIDStr == "" {
-		return c.JSON(400, errs.RequiredField("team_id"))
+	var req DeleteTeamRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
-	teamID, err := xid.FromString(teamIDStr)
+
+	teamID, err := xid.FromString(req.TeamID)
 	if err != nil {
 		return c.JSON(400, errs.BadRequest("invalid team ID"))
 	}

@@ -108,6 +108,19 @@ func (s *APIKeyStrategy) Authenticate(ctx context.Context, credentials interface
 		}
 	}
 
+	// Check if verification was successful and APIKey is not nil
+	if !resp.Valid || resp.APIKey == nil {
+		errMsg := "invalid API key"
+		if resp.Error != "" {
+			errMsg = resp.Error
+		}
+		return nil, &AuthStrategyError{
+			Strategy: s.ID(),
+			Message:  errMsg,
+			Err:      nil,
+		}
+	}
+
 	// Build auth context
 	authCtx := &contexts.AuthContext{
 		Method:          contexts.AuthMethodAPIKey,

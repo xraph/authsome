@@ -12,68 +12,58 @@ export class AdminPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createUser(request: types.CreateUser_reqBody): Promise<void> {
-    const path = '/users';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+  async createUser(): Promise<void> {
+    const path = '/admin/users';
+    return this.client.request<void>('POST', path);
   }
 
   async listUsers(): Promise<void> {
-    const path = '/users';
+    const path = '/admin/users';
     return this.client.request<void>('GET', path);
   }
 
-  async deleteUser(): Promise<types.MessageResponse> {
-    const path = '/users/:id';
+  async deleteUser(params: { id: string }): Promise<types.MessageResponse> {
+    const path = `/admin/users/${params.id}`;
     return this.client.request<types.MessageResponse>('DELETE', path);
   }
 
-  async banUser(request: types.BanUser_reqBody): Promise<types.MessageResponse> {
-    const path = '/users/:id/ban';
-    return this.client.request<types.MessageResponse>('POST', path, {
-      body: request,
-    });
+  async banUser(params: { id: string }): Promise<types.MessageResponse> {
+    const path = `/admin/users/${params.id}/ban`;
+    return this.client.request<types.MessageResponse>('POST', path);
   }
 
-  async unbanUser(request: types.UnbanUser_reqBody): Promise<types.MessageResponse> {
-    const path = '/users/:id/unban';
-    return this.client.request<types.MessageResponse>('POST', path, {
-      body: request,
-    });
+  async unbanUser(params: { id: string }): Promise<types.MessageResponse> {
+    const path = `/admin/users/${params.id}/unban`;
+    return this.client.request<types.MessageResponse>('POST', path);
   }
 
-  async impersonateUser(request: types.ImpersonateUser_reqBody): Promise<void> {
-    const path = '/users/:id/impersonate';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+  async impersonateUser(params: { id: string }): Promise<void> {
+    const path = `/admin/users/${params.id}/impersonate`;
+    return this.client.request<void>('POST', path);
   }
 
-  async setUserRole(request: types.SetUserRole_reqBody): Promise<types.MessageResponse> {
-    const path = '/users/:id/role';
-    return this.client.request<types.MessageResponse>('POST', path, {
-      body: request,
-    });
+  async setUserRole(params: { id: string }): Promise<types.MessageResponse> {
+    const path = `/admin/users/${params.id}/role`;
+    return this.client.request<types.MessageResponse>('POST', path);
   }
 
   async listSessions(): Promise<void> {
-    const path = '/sessions';
+    const path = '/admin/sessions';
     return this.client.request<void>('GET', path);
   }
 
-  async revokeSession(): Promise<types.MessageResponse> {
-    const path = '/sessions/:id';
+  async revokeSession(params: { id: string }): Promise<types.MessageResponse> {
+    const path = `/admin/sessions/${params.id}`;
     return this.client.request<types.MessageResponse>('DELETE', path);
   }
 
   async getStats(): Promise<void> {
-    const path = '/stats';
+    const path = '/admin/stats';
     return this.client.request<void>('GET', path);
   }
 
   async getAuditLogs(): Promise<void> {
-    const path = '/audit-logs';
+    const path = '/admin/audit-logs';
     return this.client.request<void>('GET', path);
   }
 

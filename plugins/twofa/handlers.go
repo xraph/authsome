@@ -1,7 +1,6 @@
 package twofa
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/xraph/authsome/core/responses"
@@ -11,6 +10,37 @@ import (
 
 // Handler exposes HTTP endpoints for 2FA operations
 type Handler struct{ svc *Service }
+
+// Request types
+type EnableRequest2FA struct {
+	UserID string `json:"user_id" validate:"required"`
+	Method string `json:"method"`
+}
+
+type VerifyRequest2FA struct {
+	UserID         string `json:"user_id" validate:"required"`
+	Code           string `json:"code" validate:"required"`
+	RememberDevice bool   `json:"remember_device"`
+	DeviceID       string `json:"device_id"`
+}
+
+type DisableRequest struct {
+	UserID string `json:"user_id" validate:"required"`
+}
+
+type RegenerateCodesRequest struct {
+	UserID string `json:"user_id" validate:"required"`
+	Count  int    `json:"count"`
+}
+
+type SendOTPRequest struct {
+	UserID string `json:"user_id" validate:"required"`
+}
+
+type GetStatusRequest struct {
+	UserID   string `json:"user_id" validate:"required"`
+	DeviceID string `json:"device_id"`
+}
 
 // Response types - use shared responses from core
 type StatusResponse = responses.StatusResponse
@@ -31,6 +61,11 @@ type TwoFAStatusResponse struct {
 	Trusted bool   `json:"trusted"`
 }
 
+type EnableResponse struct {
+	Status  string `json:"status"`
+	TOTPURI string `json:"totp_uri,omitempty"`
+}
+
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
 // handleError returns the error in a structured format
@@ -42,77 +77,63 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 }
 
 func (h *Handler) Enable(c forge.Context) error {
-	var body struct {
-		UserID string `json:"user_id"`
-		Method string `json:"method"`
+	var req EnableRequest2FA
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
-	}
-	if body.UserID == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_USER_ID", "User ID is required", http.StatusBadRequest))
-	}
-	bundle, err := h.svc.Enable(c.Request().Context(), body.UserID, &EnableRequest{Method: body.Method})
+
+	bundle, err := h.svc.Enable(c.Request().Context(), req.UserID, &EnableRequest{Method: req.Method})
 	if err != nil {
 		return handleError(c, err, "ENABLE_2FA_FAILED", "Failed to enable 2FA", http.StatusBadRequest)
 	}
-	resp := map[string]interface{}{"status": "2fa_enabled"}
+
+	resp := EnableResponse{Status: "2fa_enabled"}
 	if bundle != nil {
-		resp["totp_uri"] = bundle.URI
+		resp.TOTPURI = bundle.URI
 	}
 	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *Handler) Verify(c forge.Context) error {
-	var body struct {
-		UserID         string `json:"user_id"`
-		Code           string `json:"code"`
-		RememberDevice bool   `json:"remember_device"`
-		DeviceID       string `json:"device_id"`
+	var req VerifyRequest2FA
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
-	}
-	if body.UserID == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_USER_ID", "User ID is required", http.StatusBadRequest))
-	}
-	ok, err := h.svc.Verify(c.Request().Context(), body.UserID, &VerifyRequest{Code: body.Code})
+
+	ok, err := h.svc.Verify(c.Request().Context(), req.UserID, &VerifyRequest{Code: req.Code})
 	if err != nil || !ok {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired 2FA code", http.StatusUnauthorized))
 	}
 	// Optionally mark device as trusted
-	if body.RememberDevice && body.DeviceID != "" {
-		_ = h.svc.MarkTrusted(c.Request().Context(), body.UserID, body.DeviceID, 30)
+	if req.RememberDevice && req.DeviceID != "" {
+		_ = h.svc.MarkTrusted(c.Request().Context(), req.UserID, req.DeviceID, 30)
 	}
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "verified"})
 }
 
 func (h *Handler) Disable(c forge.Context) error {
-	var body struct {
-		UserID string `json:"user_id"`
+	var req DisableRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
-	_ = json.NewDecoder(c.Request().Body).Decode(&body)
-	if body.UserID == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_USER_ID", "User ID is required", http.StatusBadRequest))
-	}
-	if err := h.svc.Disable(c.Request().Context(), body.UserID); err != nil {
+
+	if err := h.svc.Disable(c.Request().Context(), req.UserID); err != nil {
 		return handleError(c, err, "DISABLE_2FA_FAILED", "Failed to disable 2FA", http.StatusBadRequest)
 	}
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "2fa_disabled"})
 }
 
 func (h *Handler) GenerateBackupCodes(c forge.Context) error {
-	var body struct {
-		UserID string `json:"user_id"`
-		Count  int    `json:"count"`
+	var req RegenerateCodesRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		body.Count = 10
+
+	count := req.Count
+	if count == 0 {
+		count = 10
 	}
-	if body.UserID == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_USER_ID", "User ID is required", http.StatusBadRequest))
-	}
-	codes, err := h.svc.GenerateBackupCodes(c.Request().Context(), body.UserID, body.Count)
+	codes, err := h.svc.GenerateBackupCodes(c.Request().Context(), req.UserID, count)
 	if err != nil {
 		return handleError(c, err, "GENERATE_CODES_FAILED", "Failed to generate backup codes", http.StatusBadRequest)
 	}
@@ -121,16 +142,12 @@ func (h *Handler) GenerateBackupCodes(c forge.Context) error {
 
 // SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
 func (h *Handler) SendOTP(c forge.Context) error {
-	var body struct {
-		UserID string `json:"user_id"`
+	var req SendOTPRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
-	}
-	if body.UserID == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_USER_ID", "User ID is required", http.StatusBadRequest))
-	}
-	code, err := h.svc.SendOTP(c.Request().Context(), body.UserID)
+
+	code, err := h.svc.SendOTP(c.Request().Context(), req.UserID)
 	if err != nil {
 		return handleError(c, err, "SEND_OTP_FAILED", "Failed to send OTP", http.StatusBadRequest)
 	}
@@ -140,17 +157,12 @@ func (h *Handler) SendOTP(c forge.Context) error {
 
 // Status returns whether 2FA is enabled and whether the device is trusted
 func (h *Handler) Status(c forge.Context) error {
-	var body struct {
-		UserID   string `json:"user_id"`
-		DeviceID string `json:"device_id"`
+	var req GetStatusRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
-	}
-	if body.UserID == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_USER_ID", "User ID is required", http.StatusBadRequest))
-	}
-	st, err := h.svc.GetStatus(c.Request().Context(), body.UserID, body.DeviceID)
+
+	st, err := h.svc.GetStatus(c.Request().Context(), req.UserID, req.DeviceID)
 	if err != nil {
 		// Provide a friendlier message when the user_id is not a valid xid
 		if err.Error() == "xid: invalid ID" {

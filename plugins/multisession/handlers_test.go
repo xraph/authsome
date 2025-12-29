@@ -175,8 +175,12 @@ func TestService_ListSessions(t *testing.T) {
 		// auth, sessions, devices not needed for List test
 	}
 
-	// Test List
-	result, err := svc.List(ctx, user.ID)
+	// Test List with default params
+	req := &ListSessionsRequest{
+		Limit:  100,
+		Offset: 0,
+	}
+	result, err := svc.List(ctx, user.ID, req)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}

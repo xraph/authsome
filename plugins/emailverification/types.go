@@ -20,7 +20,7 @@ type SendResponse struct {
 }
 
 type VerifyRequest struct {
-	Token string `json:"token" validate:"required" example:"abc123xyz789"`
+	Token string `query:"token" validate:"required" example:"abc123xyz789"`
 }
 
 type VerifyResponse struct {

@@ -397,7 +397,7 @@ func TestHandler_StartImpersonation_Success(t *testing.T) {
 		DurationMinutes: 30,
 	}
 
-	ctx := newMockForgeContext("POST", "/api/impersonation/start", reqBody)
+	ctx := newMockForgeContext("POST", "/impersonation/start", reqBody)
 
 	err := handler.StartImpersonation(ctx)
 
@@ -417,7 +417,7 @@ func TestHandler_StartImpersonation_InvalidJSON(t *testing.T) {
 	handler, _, _, _ := setupTestHandler(t)
 
 	// Send invalid JSON
-	req := httptest.NewRequest("POST", "/api/impersonation/start", bytes.NewReader([]byte("invalid json")))
+	req := httptest.NewRequest("POST", "/impersonation/start", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
 	mock := authsometesting.Mock{}
@@ -444,7 +444,7 @@ func TestHandler_StartImpersonation_CannotImpersonateSelf(t *testing.T) {
 		Reason:         "Testing self impersonation",
 	}
 
-	ctx := newMockForgeContext("POST", "/api/impersonation/start", reqBody)
+	ctx := newMockForgeContext("POST", "/impersonation/start", reqBody)
 
 	err := handler.StartImpersonation(ctx)
 
@@ -479,7 +479,7 @@ func TestHandler_StartImpersonation_AlreadyImpersonating(t *testing.T) {
 		Reason:         "Testing concurrent impersonations",
 	}
 
-	ctx := newMockForgeContext("POST", "/api/impersonation/start", reqBody)
+	ctx := newMockForgeContext("POST", "/impersonation/start", reqBody)
 
 	err := handler.StartImpersonation(ctx)
 
@@ -515,7 +515,7 @@ func TestHandler_EndImpersonation_Success(t *testing.T) {
 		Reason:          "manual",
 	}
 
-	ctx := newMockForgeContext("POST", "/api/impersonation/end", reqBody)
+	ctx := newMockForgeContext("POST", "/impersonation/end", reqBody)
 
 	err := handler.EndImpersonation(ctx)
 
@@ -547,7 +547,7 @@ func TestHandler_GetImpersonation_Success(t *testing.T) {
 	impSession.UpdatedAt = time.Now()
 	repo.sessions[impSession.ID.String()] = impSession
 
-	ctx := newMockForgeContext("GET", "/api/impersonation/"+impSession.ID.String(), nil)
+	ctx := newMockForgeContext("GET", "/impersonation/"+impSession.ID.String(), nil)
 	ctx.SetParam("id", impSession.ID.String())
 	ctx.Request().URL.RawQuery = "org_id=" + orgID.String()
 
@@ -567,7 +567,7 @@ func TestHandler_GetImpersonation_Success(t *testing.T) {
 func TestHandler_GetImpersonation_InvalidID(t *testing.T) {
 	handler, _, _, _ := setupTestHandler(t)
 
-	ctx := newMockForgeContext("GET", "/api/impersonation/invalid", nil)
+	ctx := newMockForgeContext("GET", "/impersonation/invalid", nil)
 	ctx.SetParam("id", "invalid-id")
 
 	err := handler.GetImpersonation(ctx)
@@ -583,7 +583,7 @@ func TestHandler_GetImpersonation_MissingOrgID(t *testing.T) {
 	handler, _, _, _ := setupTestHandler(t)
 	impID := xid.New()
 
-	ctx := newMockForgeContext("GET", "/api/impersonation/"+impID.String(), nil)
+	ctx := newMockForgeContext("GET", "/impersonation/"+impID.String(), nil)
 	ctx.SetParam("id", impID.String())
 	// No org_id in query params
 
@@ -617,7 +617,7 @@ func TestHandler_ListImpersonations_Success(t *testing.T) {
 		repo.sessions[session.ID.String()] = session
 	}
 
-	ctx := newMockForgeContext("GET", "/api/impersonation", nil)
+	ctx := newMockForgeContext("GET", "/impersonation", nil)
 	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() + "&limit=10&offset=0"
 
 	err := handler.ListImpersonations(ctx)
@@ -665,7 +665,7 @@ func TestHandler_ListImpersonations_WithFilters(t *testing.T) {
 	}
 
 	// Filter by target user
-	ctx := newMockForgeContext("GET", "/api/impersonation", nil)
+	ctx := newMockForgeContext("GET", "/impersonation", nil)
 	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() +
 		"&target_user_id=" + target.ID.String() +
 		"&limit=10"
@@ -702,7 +702,7 @@ func TestHandler_VerifyImpersonation_Active(t *testing.T) {
 		SessionID: sessionID,
 	}
 
-	ctx := newMockForgeContext("POST", "/api/impersonation/verify", reqBody)
+	ctx := newMockForgeContext("POST", "/impersonation/verify", reqBody)
 
 	err := handler.VerifyImpersonation(ctx)
 
@@ -723,7 +723,7 @@ func TestHandler_VerifyImpersonation_NotImpersonating(t *testing.T) {
 		SessionID: xid.New(), // Non-existent
 	}
 
-	ctx := newMockForgeContext("POST", "/api/impersonation/verify", reqBody)
+	ctx := newMockForgeContext("POST", "/impersonation/verify", reqBody)
 
 	err := handler.VerifyImpersonation(ctx)
 
@@ -759,7 +759,7 @@ func TestHandler_ListAuditEvents_Success(t *testing.T) {
 		repo.auditEvents[event.ID.String()] = event
 	}
 
-	ctx := newMockForgeContext("GET", "/api/impersonation/audit", nil)
+	ctx := newMockForgeContext("GET", "/impersonation/audit", nil)
 	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() + "&limit=10&offset=0"
 
 	err := handler.ListAuditEvents(ctx)
@@ -796,7 +796,7 @@ func TestHandler_ListAuditEvents_FilterByImpersonationID(t *testing.T) {
 		repo.auditEvents[event.ID.String()] = event
 	}
 
-	ctx := newMockForgeContext("GET", "/api/impersonation/audit", nil)
+	ctx := newMockForgeContext("GET", "/impersonation/audit", nil)
 	ctx.Request().URL.RawQuery = "org_id=" + orgID.String() +
 		"&impersonation_id=" + impID1.String() +
 		"&limit=10"
@@ -815,7 +815,7 @@ func TestHandler_PaginationDefaults(t *testing.T) {
 	handler, _, _, _ := setupTestHandler(t)
 	orgID := xid.New()
 
-	ctx := newMockForgeContext("GET", "/api/impersonation", nil)
+	ctx := newMockForgeContext("GET", "/impersonation", nil)
 	ctx.Request().URL.RawQuery = "org_id=" + orgID.String()
 	// No limit/offset specified
 

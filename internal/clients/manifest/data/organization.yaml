@@ -1,14 +1,17 @@
 plugin_id: organization
 version: 1.0.0
+base_path: /organizations
 routes:
     - name: CreateOrganization
       description: CreateOrganization handles organization creation
       method: POST
       path: /createorganization
+      response_type: Organization
     - name: UpdateOrganization
       description: UpdateOrganization handles organization updates
       method: PATCH
       path: /:id
+      response_type: Organization
     - name: DeleteOrganization
       description: DeleteOrganization handles organization deletion
       method: DELETE
@@ -37,20 +40,22 @@ routes:
       description: CreateOrganization handles organization creation requests
       method: POST
       path: /createorganization
-      request_type: CreateOrganizationRequest
+      response_type: Organization
     - name: GetOrganization
       description: GetOrganization handles get organization requests
       method: GET
       path: /:id
+      response_type: Organization
     - name: ListOrganizations
       description: ListOrganizations handles list organizations requests (user's organizations)
       method: GET
       path: /listorganizations
+      response_type: Organization
     - name: UpdateOrganization
       description: UpdateOrganization handles organization update requests
       method: PATCH
       path: /:id
-      request_type: UpdateOrganizationRequest
+      response_type: Organization
     - name: DeleteOrganization
       description: DeleteOrganization handles organization deletion requests
       method: DELETE
@@ -59,6 +64,7 @@ routes:
       description: GetOrganizationBySlug handles get organization by slug requests
       method: GET
       path: /slug/:slug
+      response_type: Organization
     - name: ListMembers
       description: ListMembers handles list organization members requests
       method: GET
@@ -67,12 +73,10 @@ routes:
       description: InviteMember handles member invitation requests
       method: POST
       path: /invite
-      request_type: InviteMemberRequest
     - name: UpdateMember
       description: UpdateMember handles member update requests
       method: PATCH
       path: /:memberId
-      request_type: UpdateMemberRequest
     - name: RemoveMember
       description: RemoveMember handles member removal requests
       method: DELETE
@@ -94,49 +98,94 @@ routes:
       description: CreateTeam handles team creation requests
       method: POST
       path: /createteam
-      request_type: CreateTeamRequest
     - name: UpdateTeam
       description: UpdateTeam handles team update requests
       method: PATCH
       path: /:teamId
-      request_type: UpdateTeamRequest
     - name: DeleteTeam
       description: DeleteTeam handles team deletion requests
       method: DELETE
       path: /:teamId
 types:
-    - name: DashboardExtension
-      fields:
-        "": string
     - name: InvitationResponse
       fields:
         invitation: '*organization.Invitation!'
         message: string!
+    - name: TeamsResponse
+      fields:
+        teams: '[]*organization.Team!'
+        total: int!
     - name: MockService
       fields:
         "": error
+    - name: Plugin
+      fields:
+        "": '*rbac.Service'
+    - name: OrganizationHandler
+      fields:
+        "": '*Plugin'
+    - name: GetOrganizationRequest
+      fields:
+        "": string
+    - name: UpdateMemberHandlerRequest
+      fields:
+        "": string
+    - name: RemoveMemberRequest
+      fields:
+        "": string
+    - name: AcceptInvitationRequest
+      fields:
+        token: string!
+    - name: DeclineInvitationRequest
+      fields:
+        token: string!
+    - name: CreateTeamHandlerRequest
+      fields:
+        "": string
+    - name: CreateOrganizationHandlerRequest
+      fields: {}
+    - name: InviteMemberHandlerRequest
+      fields:
+        "": string
+    - name: UpdateTeamHandlerRequest
+      fields:
+        "": string
+    - name: MockOrganizationUIExtension
+      fields:
+        "": '[]ui.OrganizationAction'
     - name: AddCustomPermission_req
       fields:
         category: string!
         description: string!
         name: string!
-    - name: OrganizationHandler
+    - name: GetOrganizationBySlugRequest
       fields:
-        "": '*organization.Service'
+        "": string
+    - name: ListMembersRequest
+      fields:
+        "": string
+    - name: ListTeamsRequest
+      fields:
+        "": string
+    - name: DeleteTeamRequest
+      fields:
+        "": string
     - name: MembersResponse
       fields:
         members: '[]*organization.Member!'
         total: int!
-    - name: TeamsResponse
-      fields:
-        teams: '[]*organization.Team!'
-        total: int!
-    - name: Plugin
-      fields:
-        "": Config
     - name: OrganizationUIRegistry
       fields:
         "": sync.RWMutex
-    - name: MockOrganizationUIExtension
+    - name: DashboardExtension
       fields:
-        "": '[]ui.OrganizationQuickLink'
+        "": string
+    - name: ListOrganizationsRequest
+      fields:
+        "": int
+    - name: UpdateOrganizationHandlerRequest
+      fields:
+        "": string
+    - name: DeleteOrganizationRequest
+      fields:
+        "": string

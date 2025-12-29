@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
@@ -192,15 +193,85 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// API key management routes (protected by session auth)
 	apikeys := router.Group("/api-keys")
 	{
-		apikeys.POST("", p.handler.CreateAPIKey)
-		apikeys.GET("", p.handler.ListAPIKeys)
-		apikeys.GET("/:id", p.handler.GetAPIKey)
-		apikeys.PUT("/:id", p.handler.UpdateAPIKey)
-		apikeys.DELETE("/:id", p.handler.DeleteAPIKey)
-		apikeys.POST("/:id/rotate", p.handler.RotateAPIKey)
+		apikeys.POST("", p.handler.CreateAPIKey,
+			forge.WithName("apikey.create"),
+			forge.WithSummary("Create API key"),
+			forge.WithDescription("Creates a new API key for the authenticated user"),
+			forge.WithRequestSchema(CreateAPIKeyRequest{}),
+			forge.WithResponseSchema(200, "API key created", CreateAPIKeyResponse{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Management"),
+			forge.WithValidation(true),
+		)
+		apikeys.GET("", p.handler.ListAPIKeys,
+			forge.WithName("apikey.list"),
+			forge.WithSummary("List API keys"),
+			forge.WithDescription("Lists all API keys for the authenticated user"),
+			forge.WithRequestSchema(ListAPIKeysRequest{}),
+			forge.WithResponseSchema(200, "API keys retrieved", apikey.ListAPIKeysResponse{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Management"),
+		)
+		apikeys.GET("/:id", p.handler.GetAPIKey,
+			forge.WithName("apikey.get"),
+			forge.WithSummary("Get API key"),
+			forge.WithDescription("Retrieves a specific API key by ID"),
+			forge.WithRequestSchema(GetAPIKeyRequest{}),
+			forge.WithResponseSchema(200, "API key retrieved", apikey.APIKey{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithResponseSchema(404, "Not found", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Management"),
+		)
+		apikeys.PUT("/:id", p.handler.UpdateAPIKey,
+			forge.WithName("apikey.update"),
+			forge.WithSummary("Update API key"),
+			forge.WithDescription("Updates an existing API key"),
+			forge.WithRequestSchema(UpdateAPIKeyRequest{}),
+			forge.WithResponseSchema(200, "API key updated", apikey.APIKey{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithResponseSchema(404, "Not found", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Management"),
+			forge.WithValidation(true),
+		)
+		apikeys.DELETE("/:id", p.handler.DeleteAPIKey,
+			forge.WithName("apikey.delete"),
+			forge.WithSummary("Delete API key"),
+			forge.WithDescription("Deletes an API key"),
+			forge.WithRequestSchema(DeleteAPIKeyRequest{}),
+			forge.WithResponseSchema(200, "API key deleted", MessageResponse{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithResponseSchema(404, "Not found", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Management"),
+		)
+		apikeys.POST("/:id/rotate", p.handler.RotateAPIKey,
+			forge.WithName("apikey.rotate"),
+			forge.WithSummary("Rotate API key"),
+			forge.WithDescription("Rotates an API key, generating a new key value"),
+			forge.WithRequestSchema(RotateAPIKeyRequest{}),
+			forge.WithResponseSchema(200, "API key rotated", RotateAPIKeyResponse{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithResponseSchema(404, "Not found", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Management"),
+		)
 
 		// Public verification endpoint for testing
-		apikeys.POST("/verify", p.handler.VerifyAPIKey)
+		apikeys.POST("/verify", p.handler.VerifyAPIKey,
+			forge.WithName("apikey.verify"),
+			forge.WithSummary("Verify API key"),
+			forge.WithDescription("Verifies an API key and returns validity status"),
+			forge.WithRequestSchema(VerifyAPIKeyRequest{}),
+			forge.WithResponseSchema(200, "API key verified", apikey.VerifyAPIKeyResponse{}),
+			forge.WithResponseSchema(400, "Bad request", errs.AuthsomeError{}),
+			forge.WithResponseSchema(401, "Unauthorized", errs.AuthsomeError{}),
+			forge.WithTags("APIKey", "Verification"),
+			forge.WithValidation(true),
+		)
 	}
 
 	return nil

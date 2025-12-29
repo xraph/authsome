@@ -12,46 +12,34 @@ export class TwofaPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async enable(request: types.Enable_body): Promise<void> {
+  async enable(): Promise<void> {
     const path = '/2fa/enable';
-    return this.client.request<void>('POST', path, {
-      body: request,
-    });
+    return this.client.request<void>('POST', path);
   }
 
-  async verify(request: types.Verify_body): Promise<types.StatusResponse> {
+  async verify(): Promise<types.StatusResponse> {
     const path = '/2fa/verify';
-    return this.client.request<types.StatusResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.StatusResponse>('POST', path);
   }
 
-  async disable(request: types.Disable_body): Promise<types.StatusResponse> {
+  async disable(): Promise<types.StatusResponse> {
     const path = '/2fa/disable';
-    return this.client.request<types.StatusResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.StatusResponse>('POST', path);
   }
 
-  async generateBackupCodes(request: types.GenerateBackupCodes_body): Promise<types.CodesResponse> {
+  async generateBackupCodes(): Promise<types.CodesResponse> {
     const path = '/2fa/generate-backup-codes';
-    return this.client.request<types.CodesResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.CodesResponse>('POST', path);
   }
 
-  async sendOTP(request: types.SendOTP_body): Promise<types.OTPSentResponse> {
+  async sendOTP(): Promise<types.OTPSentResponse> {
     const path = '/2fa/send-otp';
-    return this.client.request<types.OTPSentResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.OTPSentResponse>('POST', path);
   }
 
-  async status(request: types.Status_body): Promise<types.TwoFAStatusResponse> {
+  async status(): Promise<types.TwoFAStatusResponse> {
     const path = '/2fa/status';
-    return this.client.request<types.TwoFAStatusResponse>('POST', path, {
-      body: request,
-    });
+    return this.client.request<types.TwoFAStatusResponse>('POST', path);
   }
 
 }

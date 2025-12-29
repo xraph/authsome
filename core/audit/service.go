@@ -19,12 +19,33 @@ type Repository interface {
 
 // Service handles audit logging
 type Service struct {
-	repo Repository
+	repo      Repository
+	providers *ProviderRegistry
 }
 
-// NewService creates a new audit service
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// NewService creates a new audit service with optional providers
+func NewService(repo Repository, opts ...ServiceOption) *Service {
+	cfg := &ServiceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	svc := &Service{
+		repo:      repo,
+		providers: cfg.Providers,
+	}
+
+	// Initialize with null providers if not provided (backward compatibility)
+	if svc.providers == nil {
+		svc.providers = NewProviderRegistry()
+	}
+
+	return svc
+}
+
+// GetProviders returns the provider registry (for external use)
+func (s *Service) GetProviders() *ProviderRegistry {
+	return s.providers
 }
 
 // Log creates an audit event with timestamps
@@ -52,6 +73,11 @@ func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip,
 	// Convert to schema and create
 	if err := s.repo.Create(ctx, e.ToSchema()); err != nil {
 		return AuditEventCreateFailed(err)
+	}
+
+	// Notify audit providers (non-blocking)
+	if s.providers != nil {
+		s.providers.NotifyAuditEvent(ctx, e)
 	}
 
 	return nil
@@ -95,6 +121,11 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 	// Convert to schema and create
 	if err := s.repo.Create(ctx, event.ToSchema()); err != nil {
 		return nil, AuditEventCreateFailed(err)
+	}
+
+	// Notify audit providers (non-blocking)
+	if s.providers != nil {
+		s.providers.NotifyAuditEvent(ctx, event)
 	}
 
 	return event, nil

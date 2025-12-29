@@ -11,7 +11,6 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/contexts"
-	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
@@ -105,7 +104,17 @@ func (s *Service) Send(ctx context.Context, appID xid.ID, email, ip, ua string) 
 	return "", nil
 }
 
-func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, token string, remember bool, ip, ua string) (*responses.AuthResponse, error) {
+// VerifyResult holds the result of magic link verification
+type VerifyResult struct {
+	Email     string      // Email from magic link
+	User      *user.User  // Nil for new users, populated for existing users
+	IsNewUser bool        // True if this is a new user signup
+	AppID     xid.ID      // App ID for context
+	EnvID     xid.ID      // Environment ID for context
+	OrgID     *xid.ID     // Optional organization ID
+}
+
+func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, token string, remember bool, ip, ua string) (*VerifyResult, error) {
 	// Validate app context
 	if appID.IsNil() {
 		return nil, errs.New("APP_CONTEXT_REQUIRED", "App context is required", 400)
@@ -132,59 +141,38 @@ func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID
 
 	_ = s.repo.Consume(ctx, rec, time.Now())
 
-	// Find or create user
+	// Check if user exists
 	u, err := s.users.FindByEmail(ctx, rec.Email)
 	if err != nil || u == nil {
 		if !s.config.AllowImplicitSignup {
 			return nil, errs.UserNotFound()
 		}
-		// Implicit sign-up: create user if missing
-		pwd, genErr := crypto.GenerateToken(16)
-		if genErr != nil {
-			return nil, errs.Wrap(genErr, "PASSWORD_GENERATION_FAILED", "Failed to generate password", 500)
+		// Return info for new user - handler will create via authService.SignUp
+		if s.audit != nil {
+			_ = s.audit.Log(ctx, nil, "magiclink_verify_success_new_user", "email:"+rec.Email, ip, ua, "")
 		}
-		name := rec.Email
-		if at := strings.Index(rec.Email, "@"); at > 0 {
-			name = rec.Email[:at]
-		}
-		u, err = s.users.Create(ctx, &user.CreateUserRequest{
-			AppID:    appID,
-			Email:    rec.Email,
-			Password: pwd,
-			Name:     name,
-		})
-		if err != nil {
-			return nil, errs.Wrap(err, "USER_CREATION_FAILED", "Failed to create user", 500)
-		}
+		return &VerifyResult{
+			Email:     rec.Email,
+			User:      nil,
+			IsNewUser: true,
+			AppID:     appID,
+			EnvID:     envID,
+			OrgID:     orgID,
+		}, nil
 	}
 
+	// Return existing user info - handler will create session via authService
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "magiclink_verify_success", "email:"+rec.Email, ip, ua, "")
+		_ = s.audit.Log(ctx, &uid, "magiclink_verify_success_existing_user", "email:"+rec.Email, ip, ua, "")
 	}
 
-	// Create session with app/environment context
-	sess, err := s.sessions.Create(ctx, &session.CreateSessionRequest{
-		AppID:          appID,
-		EnvironmentID:  &envID,
-		OrganizationID: orgID,
-		UserID:         u.ID,
-		Remember:       remember,
-		IPAddress:      ip,
-		UserAgent:      ua,
-	})
-	if err != nil {
-		return nil, errs.Wrap(err, "SESSION_CREATION_FAILED", "Failed to create session", 500)
-	}
-
-	if s.audit != nil {
-		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "magiclink_login", "user:"+uid.String(), ip, ua, "")
-	}
-
-	return &responses.AuthResponse{
-		User:    u,
-		Session: sess,
-		Token:   sess.Token,
+	return &VerifyResult{
+		Email:     rec.Email,
+		User:      u,
+		IsNewUser: false,
+		AppID:     appID,
+		EnvID:     envID,
+		OrgID:     orgID,
 	}, nil
 }

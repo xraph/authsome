@@ -27,6 +27,16 @@ type memberWithUser struct {
 func (m *memberWithUser) toMemberWithUserInfo() *organization.Member {
 	member := organization.FromSchemaMember(&m.OrganizationMember)
 	if member != nil {
+		member.UserID = m.UserID
+		member.OrganizationID = m.OrganizationID
+		member.Role = m.Role
+		member.Status = m.Status
+		member.JoinedAt = m.JoinedAt
+		member.CreatedAt = m.CreatedAt
+		member.UpdatedAt = m.UpdatedAt
+		member.DeletedAt = m.DeletedAt
+		
+
 		member.User = &organization.UserInfo{
 			ID:              m.UserID,
 			Name:            m.UserName,

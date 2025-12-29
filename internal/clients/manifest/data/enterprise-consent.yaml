@@ -13,11 +13,17 @@ routes:
         purpose: string!
         userId: string!
         version: string!
+      response:
+        id: string!
       request_type: CreateConsentRequest
+      response_type: ConsentRecordResponse
     - name: GetConsent
       description: GetConsent handles GET /consent/records/:id
       method: GET
       path: /records/:id
+      response:
+        id: string!
+      response_type: ConsentRecordResponse
     - name: UpdateConsent
       description: UpdateConsent handles PATCH /consent/records/:id
       method: PUT
@@ -26,7 +32,10 @@ routes:
         granted: '*bool!'
         metadata: '!'
         reason: string!
+      response:
+        id: string!
       request_type: UpdateConsentRequest
+      response_type: ConsentRecordResponse
     - name: RevokeConsent
       description: RevokeConsent handles POST /consent/records/:id/revoke
       method: POST
@@ -35,8 +44,10 @@ routes:
         granted: '*bool!'
         metadata: '!'
         reason: string!
+      response:
+        status: string!
       request_type: UpdateConsentRequest
-      response_type: MessageResponse
+      response_type: ConsentStatusResponse
     - name: CreateConsentPolicy
       description: CreateConsentPolicy handles POST /consent/policies
       method: POST
@@ -51,11 +62,17 @@ routes:
         required: bool!
         validityPeriod: '*int!'
         version: string!
+      response:
+        id: string!
       request_type: CreatePolicyRequest
+      response_type: ConsentPolicyResponse
     - name: GetConsentPolicy
       description: GetConsentPolicy handles GET /consent/policies/:id
       method: GET
       path: /policies/:id
+      response:
+        id: string!
+      response_type: ConsentPolicyResponse
     - name: RecordCookieConsent
       description: RecordCookieConsent handles POST /consent/cookies
       method: POST
@@ -69,11 +86,17 @@ routes:
         personalization: bool!
         sessionId: string!
         thirdParty: bool!
+      response:
+        preferences: '!'
       request_type: CookieConsentRequest
+      response_type: ConsentCookieResponse
     - name: GetCookieConsent
       description: GetCookieConsent handles GET /consent/cookies
       method: GET
       path: /cookies
+      response:
+        preferences: '!'
+      response_type: ConsentCookieResponse
     - name: RequestDataExport
       description: RequestDataExport handles POST /consent/data-exports
       method: POST
@@ -81,15 +104,27 @@ routes:
       request:
         format: string!
         includeSections: '[]string!'
+      response:
+        id: string!
+        status: string!
       request_type: DataExportRequestInput
+      response_type: ConsentExportResponse
     - name: GetDataExport
       description: GetDataExport handles GET /consent/data-exports/:id
       method: GET
       path: /export/:id
+      response:
+        id: string!
+        status: string!
+      response_type: ConsentExportResponse
     - name: DownloadDataExport
       description: DownloadDataExport handles GET /consent/data-exports/:id/download
       method: GET
       path: /export/:id/download
+      response:
+        content_type: string!
+        data: '[]byte!'
+      response_type: ConsentExportFileResponse
     - name: RequestDataDeletion
       description: RequestDataDeletion handles POST /consent/data-deletions
       method: POST
@@ -97,20 +132,33 @@ routes:
       request:
         deleteSections: '[]string!'
         reason: string!
+      response:
+        id: string!
+        status: string!
       request_type: DataDeletionRequestInput
+      response_type: ConsentDeletionResponse
     - name: GetDataDeletion
       description: GetDataDeletion handles GET /consent/data-deletions/:id
       method: GET
       path: /deletion/:id
+      response:
+        id: string!
+        status: string!
+      response_type: ConsentDeletionResponse
     - name: ApproveDeletionRequest
       description: ApproveDeletionRequest handles POST /consent/data-deletions/:id/approve (Admin only)
       method: POST
       path: /deletion/:id/approve
-      response_type: MessageResponse
+      response:
+        status: string!
+      response_type: ConsentStatusResponse
     - name: GetPrivacySettings
       description: GetPrivacySettings handles GET /consent/privacy-settings
       method: GET
       path: /settings
+      response:
+        settings: '!'
+      response_type: ConsentSettingsResponse
     - name: UpdatePrivacySettings
       description: UpdatePrivacySettings handles PATCH /consent/privacy-settings (Admin only)
       method: PUT
@@ -133,37 +181,58 @@ routes:
         gdprMode: '*bool!'
         requireAdminApprovalForDeletion: '*bool!'
         requireExplicitConsent: '*bool!'
+      response:
+        settings: '!'
       request_type: PrivacySettingsRequest
+      response_type: ConsentSettingsResponse
     - name: GetConsentAuditLogs
       description: GetConsentAuditLogs handles GET /consent/audit-logs
       method: GET
       path: /audit
+      response:
+        audit_logs: '[]!'
+      response_type: ConsentAuditLogsResponse
     - name: GenerateConsentReport
       description: GenerateConsentReport handles GET /consent/reports
       method: POST
       path: /reports
+      response:
+        id: string!
+      response_type: ConsentReportResponse
 types:
-    - name: DataExportRequest
+    - name: ConsentAuditLogsResponse
       fields:
+        audit_logs: '[]!'
+    - name: DataDeletionRequest
+      fields:
+        approvedAt: '*time.Time!'
+        approvedBy: string!
+        archivePath: string!
         completedAt: '*time.Time!'
         createdAt: time.Time!
+        deleteSections: '[]string!'
         errorMessage: string!
-        expiresAt: '*time.Time!'
-        exportPath: string!
-        exportSize: int64!
-        exportUrl: string!
-        format: string!
+        exemptionReason: string!
         id: xid.ID!
-        includeSections: '[]string!'
         ipAddress: string!
         organizationId: string!
+        rejectedAt: '*time.Time!'
+        requestReason: string!
+        retentionExempt: bool!
         status: string!
         updatedAt: time.Time!
         userId: string!
-    - name: ConsentsResponse
+    - name: ConsentNotificationsConfig
       fields:
-        consents: '!'
-        count: int!
+        channels: '[]string!'
+        enabled: bool!
+        notifyDeletionApproved: bool!
+        notifyDeletionComplete: bool!
+        notifyDpoEmail: string!
+        notifyExportReady: bool!
+        notifyOnExpiry: bool!
+        notifyOnGrant: bool!
+        notifyOnRevoke: bool!
     - name: CookieConsentRequest
       fields:
         analytics: bool!
@@ -174,13 +243,99 @@ types:
         personalization: bool!
         sessionId: string!
         thirdParty: bool!
+    - name: ConsentTypeStatus
+      fields:
+        expiresAt: '*time.Time!'
+        granted: bool!
+        grantedAt: time.Time!
+        needsRenewal: bool!
+        type: string!
+        version: string!
+    - name: ConsentStatusResponse
+      fields:
+        status: string!
+    - name: Config
+      fields:
+        audit: ConsentAuditConfig!
+        ccpaEnabled: bool!
+        cookieConsent: CookieConsentConfig!
+        dashboard: ConsentDashboardConfig!
+        dataDeletion: DataDeletionConfig!
+        dataExport: DataExportConfig!
+        enabled: bool!
+        expiry: ConsentExpiryConfig!
+        gdprEnabled: bool!
+        notifications: ConsentNotificationsConfig!
+    - name: ConsentAuditConfig
+      fields:
+        archiveInterval: time.Duration!
+        archiveOldLogs: bool!
+        enabled: bool!
+        exportFormat: string!
+        immutable: bool!
+        logAllChanges: bool!
+        logIpAddress: bool!
+        logUserAgent: bool!
+        retentionDays: int!
+        signLogs: bool!
+    - name: ConsentExpiryConfig
+      fields:
+        allowRenewal: bool!
+        autoExpireCheck: bool!
+        defaultValidityDays: int!
+        enabled: bool!
+        expireCheckInterval: time.Duration!
+        renewalReminderDays: int!
+        requireReConsent: bool!
+    - name: ConsentsResponse
+      fields:
+        consents: '!'
+        count: int!
+    - name: ErrorResponse
+      fields:
+        error: string!
+        message: string!
     - name: DataDeletionRequestInput
       fields:
         deleteSections: '[]string!'
         reason: string!
+    - name: ConsentSummary
+      fields:
+        consentsByType: '!'
+        expiredConsents: int!
+        grantedConsents: int!
+        hasPendingDeletion: bool!
+        hasPendingExport: bool!
+        lastConsentUpdate: '*time.Time!'
+        organizationId: string!
+        pendingRenewals: int!
+        revokedConsents: int!
+        totalConsents: int!
+        userId: string!
+    - name: ConsentReport
+      fields:
+        completedDeletions: int!
+        consentRate: float64!
+        consentsByType: '!'
+        dataExportsThisPeriod: int!
+        dpasActive: int!
+        dpasExpiringSoon: int!
+        organizationId: string!
+        pendingDeletions: int!
+        reportPeriodEnd: time.Time!
+        reportPeriodStart: time.Time!
+        totalUsers: int!
+        usersWithConsent: int!
+    - name: Plugin
+      fields:
+        "": ""
     - name: ConsentCookieResponse
       fields:
         preferences: '!'
+    - name: ConsentExportResponse
+      fields:
+        id: string!
+        status: string!
     - name: ConsentReportResponse
       fields:
         id: string!
@@ -201,115 +356,6 @@ types:
         userAgent: string!
         userId: string!
         version: string!
-    - name: CookieConsent
-      fields:
-        analytics: bool!
-        consentBannerVersion: string!
-        createdAt: time.Time!
-        essential: bool!
-        expiresAt: time.Time!
-        functional: bool!
-        id: xid.ID!
-        ipAddress: string!
-        marketing: bool!
-        organizationId: string!
-        personalization: bool!
-        sessionId: string!
-        thirdParty: bool!
-        updatedAt: time.Time!
-        userAgent: string!
-        userId: string!
-    - name: ConsentAuditConfig
-      fields:
-        archiveInterval: time.Duration!
-        archiveOldLogs: bool!
-        enabled: bool!
-        exportFormat: string!
-        immutable: bool!
-        logAllChanges: bool!
-        logIpAddress: bool!
-        logUserAgent: bool!
-        retentionDays: int!
-        signLogs: bool!
-    - name: ErrorResponse
-      fields:
-        error: string!
-        message: string!
-    - name: ConsentStatusResponse
-      fields:
-        status: string!
-    - name: Handler
-      fields:
-        "": '*Service'
-    - name: ConsentSummary
-      fields:
-        consentsByType: '!'
-        expiredConsents: int!
-        grantedConsents: int!
-        hasPendingDeletion: bool!
-        hasPendingExport: bool!
-        lastConsentUpdate: '*time.Time!'
-        organizationId: string!
-        pendingRenewals: int!
-        revokedConsents: int!
-        totalConsents: int!
-        userId: string!
-    - name: ConsentTypeStatus
-      fields:
-        expiresAt: '*time.Time!'
-        granted: bool!
-        grantedAt: time.Time!
-        needsRenewal: bool!
-        type: string!
-        version: string!
-    - name: PrivacySettingsRequest
-      fields:
-        allowDataPortability: '*bool!'
-        anonymousConsentEnabled: '*bool!'
-        autoDeleteAfterDays: '*int!'
-        ccpaMode: '*bool!'
-        consentRequired: '*bool!'
-        contactEmail: string!
-        contactPhone: string!
-        cookieConsentEnabled: '*bool!'
-        cookieConsentStyle: string!
-        dataExportExpiryHours: '*int!'
-        dataRetentionDays: '*int!'
-        deletionGracePeriodDays: '*int!'
-        dpoEmail: string!
-        exportFormat: '[]string!'
-        gdprMode: '*bool!'
-        requireAdminApprovalForDeletion: '*bool!'
-        requireExplicitConsent: '*bool!'
-    - name: CreatePolicyRequest
-      fields:
-        consentType: string!
-        content: string!
-        description: string!
-        metadata: '!'
-        name: string!
-        renewable: bool!
-        required: bool!
-        validityPeriod: '*int!'
-        version: string!
-    - name: ConsentReport
-      fields:
-        completedDeletions: int!
-        consentRate: float64!
-        consentsByType: '!'
-        dataExportsThisPeriod: int!
-        dpasActive: int!
-        dpasExpiringSoon: int!
-        organizationId: string!
-        pendingDeletions: int!
-        reportPeriodEnd: time.Time!
-        reportPeriodStart: time.Time!
-        totalUsers: int!
-        usersWithConsent: int!
-    - name: ConsentDeletionResponse
-      fields:
-        id: string!
-        status: string!
     - name: ConsentPolicy
       fields:
         active: bool!
@@ -328,69 +374,6 @@ types:
         updatedAt: time.Time!
         validityPeriod: '*int!'
         version: string!
-    - name: Config
-      fields:
-        audit: ConsentAuditConfig!
-        ccpaEnabled: bool!
-        cookieConsent: CookieConsentConfig!
-        dashboard: ConsentDashboardConfig!
-        dataDeletion: DataDeletionConfig!
-        dataExport: DataExportConfig!
-        enabled: bool!
-        expiry: ConsentExpiryConfig!
-        gdprEnabled: bool!
-        notifications: ConsentNotificationsConfig!
-    - name: DataExportConfig
-      fields:
-        allowedFormats: '[]string!'
-        autoCleanup: bool!
-        cleanupInterval: time.Duration!
-        defaultFormat: string!
-        enabled: bool!
-        expiryHours: int!
-        includeSections: '[]string!'
-        maxExportSize: int64!
-        maxRequests: int!
-        requestPeriod: time.Duration!
-        storagePath: string!
-    - name: DataDeletionConfig
-      fields:
-        allowPartialDeletion: bool!
-        archiveBeforeDeletion: bool!
-        archivePath: string!
-        autoProcessAfterGrace: bool!
-        enabled: bool!
-        gracePeriodDays: int!
-        notifyBeforeDeletion: bool!
-        preserveLegalData: bool!
-        requireAdminApproval: bool!
-        retentionExemptions: '[]string!'
-    - name: CreateConsentRequest
-      fields:
-        consentType: string!
-        expiresIn: '*int!'
-        granted: bool!
-        metadata: '!'
-        purpose: string!
-        userId: string!
-        version: string!
-    - name: UpdatePolicyRequest
-      fields:
-        active: '*bool!'
-        content: string!
-        description: string!
-        metadata: '!'
-        name: string!
-        renewable: '*bool!'
-        required: '*bool!'
-        validityPeriod: '*int!'
-    - name: DataExportRequestInput
-      fields:
-        format: string!
-        includeSections: '[]string!'
-    - name: ConsentAuditLogsResponse
-      fields:
-        audit_logs: '[]!'
     - name: PrivacySettings
       fields:
         allowDataPortability: bool!
@@ -415,26 +398,42 @@ types:
         requireAdminApprovalForDeletion: bool!
         requireExplicitConsent: bool!
         updatedAt: time.Time!
-    - name: ConsentStats
+    - name: DataExportConfig
       fields:
-        averageLifetime: int!
-        expiredCount: int!
-        grantRate: float64!
-        grantedCount: int!
-        revokedCount: int!
-        totalConsents: int!
-        type: string!
-    - name: ConsentRecordResponse
+        allowedFormats: '[]string!'
+        autoCleanup: bool!
+        cleanupInterval: time.Duration!
+        defaultFormat: string!
+        enabled: bool!
+        expiryHours: int!
+        includeSections: '[]string!'
+        maxExportSize: int64!
+        maxRequests: int!
+        requestPeriod: time.Duration!
+        storagePath: string!
+    - name: DataExportRequestInput
       fields:
-        id: string!
-    - name: ConsentExportResponse
+        format: string!
+        includeSections: '[]string!'
+    - name: PrivacySettingsRequest
       fields:
-        id: string!
-        status: string!
-    - name: ConsentExportFileResponse
-      fields:
-        content_type: string!
-        data: '[]byte!'
+        allowDataPortability: '*bool!'
+        anonymousConsentEnabled: '*bool!'
+        autoDeleteAfterDays: '*int!'
+        ccpaMode: '*bool!'
+        consentRequired: '*bool!'
+        contactEmail: string!
+        contactPhone: string!
+        cookieConsentEnabled: '*bool!'
+        cookieConsentStyle: string!
+        dataExportExpiryHours: '*int!'
+        dataRetentionDays: '*int!'
+        deletionGracePeriodDays: '*int!'
+        dpoEmail: string!
+        exportFormat: '[]string!'
+        gdprMode: '*bool!'
+        requireAdminApprovalForDeletion: '*bool!'
+        requireExplicitConsent: '*bool!'
     - name: ConsentAuditLog
       fields:
         action: string!
@@ -450,9 +449,6 @@ types:
         reason: string!
         userAgent: string!
         userId: string!
-    - name: MockRepository
-      fields:
-        "": ""
     - name: CookieConsentConfig
       fields:
         allowAnonymous: bool!
@@ -462,20 +458,123 @@ types:
         enabled: bool!
         requireExplicit: bool!
         validityPeriod: time.Duration!
-    - name: ConsentNotificationsConfig
+    - name: UpdateConsentRequest
       fields:
-        channels: '[]string!'
-        enabled: bool!
-        notifyDeletionApproved: bool!
-        notifyDeletionComplete: bool!
-        notifyDpoEmail: string!
-        notifyExportReady: bool!
-        notifyOnExpiry: bool!
-        notifyOnGrant: bool!
-        notifyOnRevoke: bool!
+        granted: '*bool!'
+        metadata: '!'
+        reason: string!
+    - name: CreatePolicyRequest
+      fields:
+        consentType: string!
+        content: string!
+        description: string!
+        metadata: '!'
+        name: string!
+        renewable: bool!
+        required: bool!
+        validityPeriod: '*int!'
+        version: string!
+    - name: ConsentExportFileResponse
+      fields:
+        content_type: string!
+        data: '[]byte!'
+    - name: BunRepository
+      fields:
+        "": '*bun.DB'
+    - name: CookieConsent
+      fields:
+        analytics: bool!
+        consentBannerVersion: string!
+        createdAt: time.Time!
+        essential: bool!
+        expiresAt: time.Time!
+        functional: bool!
+        id: xid.ID!
+        ipAddress: string!
+        marketing: bool!
+        organizationId: string!
+        personalization: bool!
+        sessionId: string!
+        thirdParty: bool!
+        updatedAt: time.Time!
+        userAgent: string!
+        userId: string!
+    - name: Service
+      fields:
+        "": '*user.Service'
+    - name: UpdatePolicyRequest
+      fields:
+        active: '*bool!'
+        content: string!
+        description: string!
+        metadata: '!'
+        name: string!
+        renewable: '*bool!'
+        required: '*bool!'
+        validityPeriod: '*int!'
+    - name: CreateDPARequest
+      fields:
+        agreementType: string!
+        content: string!
+        effectiveDate: time.Time!
+        expiryDate: '*time.Time!'
+        metadata: '!'
+        signedByEmail: string!
+        signedByName: string!
+        signedByTitle: string!
+        version: string!
+    - name: ConsentStats
+      fields:
+        averageLifetime: int!
+        expiredCount: int!
+        grantRate: float64!
+        grantedCount: int!
+        revokedCount: int!
+        totalConsents: int!
+        type: string!
+    - name: ConsentRecordResponse
+      fields:
+        id: string!
     - name: ConsentPolicyResponse
       fields:
         id: string!
+    - name: DataExportRequest
+      fields:
+        completedAt: '*time.Time!'
+        createdAt: time.Time!
+        errorMessage: string!
+        expiresAt: '*time.Time!'
+        exportPath: string!
+        exportSize: int64!
+        exportUrl: string!
+        format: string!
+        id: xid.ID!
+        includeSections: '[]string!'
+        ipAddress: string!
+        organizationId: string!
+        status: string!
+        updatedAt: time.Time!
+        userId: string!
+    - name: MockRepository
+      fields:
+        "": ""
+    - name: ConsentDashboardConfig
+      fields:
+        enabled: bool!
+        path: string!
+        showAuditLog: bool!
+        showConsentHistory: bool!
+        showCookiePreferences: bool!
+        showDataDeletion: bool!
+        showDataExport: bool!
+        showPolicies: bool!
+    - name: ConsentDeletionResponse
+      fields:
+        id: string!
+        status: string!
+    - name: ConsentSettingsResponse
+      fields:
+        settings: '!'
     - name: DataProcessingAgreement
       fields:
         agreementType: string!
@@ -495,69 +594,27 @@ types:
         status: string!
         updatedAt: time.Time!
         version: string!
-    - name: DataDeletionRequest
+    - name: DataDeletionConfig
       fields:
-        approvedAt: '*time.Time!'
-        approvedBy: string!
+        allowPartialDeletion: bool!
+        archiveBeforeDeletion: bool!
         archivePath: string!
-        completedAt: '*time.Time!'
-        createdAt: time.Time!
-        deleteSections: '[]string!'
-        errorMessage: string!
-        exemptionReason: string!
-        id: xid.ID!
-        ipAddress: string!
-        organizationId: string!
-        rejectedAt: '*time.Time!'
-        requestReason: string!
-        retentionExempt: bool!
-        status: string!
-        updatedAt: time.Time!
-        userId: string!
-    - name: Service
-      fields:
-        "": '*user.Service'
-    - name: ConsentExpiryConfig
-      fields:
-        allowRenewal: bool!
-        autoExpireCheck: bool!
-        defaultValidityDays: int!
+        autoProcessAfterGrace: bool!
         enabled: bool!
-        expireCheckInterval: time.Duration!
-        renewalReminderDays: int!
-        requireReConsent: bool!
-    - name: ConsentDashboardConfig
-      fields:
-        enabled: bool!
-        path: string!
-        showAuditLog: bool!
-        showConsentHistory: bool!
-        showCookiePreferences: bool!
-        showDataDeletion: bool!
-        showDataExport: bool!
-        showPolicies: bool!
-    - name: UpdateConsentRequest
-      fields:
-        granted: '*bool!'
-        metadata: '!'
-        reason: string!
-    - name: CreateDPARequest
-      fields:
-        agreementType: string!
-        content: string!
-        effectiveDate: time.Time!
-        expiryDate: '*time.Time!'
-        metadata: '!'
-        signedByEmail: string!
-        signedByName: string!
-        signedByTitle: string!
-        version: string!
-    - name: Plugin
+        gracePeriodDays: int!
+        notifyBeforeDeletion: bool!
+        preserveLegalData: bool!
+        requireAdminApproval: bool!
+        retentionExemptions: '[]string!'
+    - name: Handler
       fields:
         "": '*Service'
-    - name: ConsentSettingsResponse
+    - name: CreateConsentRequest
       fields:
-        settings: '!'
-    - name: BunRepository
-      fields:
-        "": '*bun.DB'
+        consentType: string!
+        expiresIn: '*int!'
+        granted: bool!
+        metadata: '!'
+        purpose: string!
+        userId: string!
+        version: string!

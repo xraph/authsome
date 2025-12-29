@@ -2,6 +2,7 @@ package social
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/xraph/authsome/clients/go"
 )
@@ -43,7 +44,7 @@ func (p *Plugin) SignIn(ctx context.Context, req *authsome.SignInRequest) (*auth
 
 // Callback Callback handles OAuth provider callback
 GET /api/auth/callback/:provider
-func (p *Plugin) Callback(ctx context.Context) (*authsome.CallbackResponse, error) {
+func (p *Plugin) Callback(ctx context.Context, provider string) (*authsome.CallbackResponse, error) {
 	path := "/callback/:provider"
 	var result authsome.CallbackResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
@@ -67,7 +68,7 @@ func (p *Plugin) LinkAccount(ctx context.Context, req *authsome.LinkAccountReque
 
 // UnlinkAccount UnlinkAccount unlinks a social provider from the current user
 DELETE /api/auth/account/unlink/:provider
-func (p *Plugin) UnlinkAccount(ctx context.Context) error {
+func (p *Plugin) UnlinkAccount(ctx context.Context, provider string) error {
 	path := "/account/unlink/:provider"
 	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
 	return err

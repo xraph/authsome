@@ -9,6 +9,7 @@ import (
 // SecurityEvent represents a logged security event
 type SecurityEvent struct {
 	ID        xid.ID    `json:"id"`
+	AppID     xid.ID    `json:"appId"`
 	UserID    *xid.ID   `json:"userId"`
 	Type      string    `json:"type"`
 	IPAddress string    `json:"ipAddress"`

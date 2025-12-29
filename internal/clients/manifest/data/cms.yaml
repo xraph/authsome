@@ -1,5 +1,6 @@
 plugin_id: cms
 version: 1.0.0
+base_path: /cms
 routes:
     - name: ListEntries
       description: |-
@@ -64,27 +65,18 @@ routes:
         POST /cms/:type/bulk/publish
       method: POST
       path: /publish
-      request:
-        ids: '[]string!'
-      request_type: BulkRequest
     - name: BulkUnpublish
       description: |-
         BulkUnpublish unpublishes multiple entries
         POST /cms/:type/bulk/unpublish
       method: POST
       path: /unpublish
-      request:
-        ids: '[]string!'
-      request_type: BulkRequest
     - name: BulkDelete
       description: |-
         BulkDelete deletes multiple entries
         POST /cms/:type/bulk/delete
       method: POST
       path: /delete
-      request:
-        ids: '[]string!'
-      request_type: BulkRequest
     - name: GetEntryStats
       description: |-
         GetEntryStats returns statistics for entries
@@ -193,20 +185,24 @@ routes:
       method: GET
       path: /compare
 types:
-    - name: ContentEntryHandler
+    - name: UpdateEntryRequest
       fields:
-        "": '*service.ContentTypeService'
+        "": string
+    - name: GetRevisionRequest
+      fields:
+        "": string
     - name: BulkRequest
       fields:
         ids: '[]string!'
-    - name: ContentTypeHandler
+    - name: GetEntryStatsRequest
       fields:
-        "": '*service.ContentFieldService'
-    - name: ErrorResponse
+        "": string
+    - name: CompareRevisionsRequest
       fields:
-        code: string!
-        details: '!'
-        error: string!
+        "": string
+    - name: DeleteEntryRequest
+      fields:
+        "": string
     - name: SuccessResponse
       fields:
         data: '!'
@@ -214,3 +210,92 @@ types:
     - name: RevisionHandler
       fields:
         "": '*service.ContentTypeService'
+    - name: CloneContentTypeRequest
+      fields:
+        "": string
+    - name: UpdateFieldRequest
+      fields:
+        "": string
+    - name: ListEntriesRequest
+      fields:
+        "": int
+    - name: GetEntryRequest
+      fields:
+        "": string
+    - name: BulkUnpublishRequest
+      fields:
+        "": string
+        ids: '[]string!'
+    - name: DeleteContentTypeRequest
+      fields:
+        "": string
+    - name: UnpublishContentTypeRequest
+      fields:
+        "": string
+    - name: ValidateContentTypeRequest
+      fields:
+        "": string
+    - name: AddFieldRequest
+      fields:
+        "": string
+    - name: DeleteFieldRequest
+      fields:
+        "": string
+    - name: PublishEntryRequest
+      fields:
+        "": string
+    - name: UnpublishEntryRequest
+      fields:
+        "": string
+    - name: ListContentTypesRequest
+      fields:
+        "": int
+    - name: QueryEntriesRequest
+      fields:
+        "": string
+    - name: ContentEntryHandler
+      fields:
+        "": '*service.ContentEntryService'
+    - name: UpdateContentTypeRequest
+      fields:
+        "": string
+    - name: ArchiveEntryRequest
+      fields:
+        "": string
+    - name: BulkPublishRequest
+      fields:
+        "": string
+        ids: '[]string!'
+    - name: ListRevisionsRequest
+      fields:
+        "": string
+    - name: GetContentTypeRequest
+      fields:
+        "": string
+    - name: PublishContentTypeRequest
+      fields:
+        "": string
+    - name: CreateEntryRequest
+      fields:
+        "": string
+    - name: BulkDeleteRequest
+      fields:
+        "": string
+        ids: '[]string!'
+    - name: ErrorResponse
+      fields:
+        code: string!
+        details: '!'
+        error: string!
+    - name: ReorderFieldsRequest
+      fields:
+        "": string
+    - name: RestoreEntryRequest
+      fields:
+        "": string
+    - name: RestoreRevisionRequest
+      fields:
+        "": string
+    - name: ContentTypeHandler
+      fields:
+        "": '*service.ContentFieldService'

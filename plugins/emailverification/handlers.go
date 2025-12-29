@@ -1,7 +1,6 @@
 package emailverification
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/rs/xid"
@@ -37,8 +36,8 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 // POST /email-verification/send
 func (h *Handler) Send(c forge.Context) error {
 	var req SendRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
 
 	// Get app context
@@ -76,9 +75,9 @@ func (h *Handler) Send(c forge.Context) error {
 // Verify handles email verification via token
 // GET /email-verification/verify?token=xyz
 func (h *Handler) Verify(c forge.Context) error {
-	token := c.Query("token")
-	if token == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("TOKEN_REQUIRED", "Verification token is required", http.StatusBadRequest))
+	var req VerifyRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("verification token is required"))
 	}
 
 	// Get app context
@@ -93,7 +92,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	ua := c.Request().Header.Get("User-Agent")
 
 	// Verify token
-	response, err := h.svc.VerifyToken(c.Request().Context(), appID, token, true, ip, ua)
+	response, err := h.svc.VerifyToken(c.Request().Context(), appID, req.Token, true, ip, ua)
 	if err != nil {
 		if err == ErrTokenNotFound {
 			return c.JSON(http.StatusNotFound, err)
@@ -119,8 +118,8 @@ func (h *Handler) Verify(c forge.Context) error {
 // POST /email-verification/resend
 func (h *Handler) Resend(c forge.Context) error {
 	var req ResendRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindJSON(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request"))
 	}
 
 	// Get app context

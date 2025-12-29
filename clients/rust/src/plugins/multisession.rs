@@ -17,16 +17,33 @@ impl MultisessionPlugin {{
         Self { client: None }
     }
 
-    #[derive(Debug, Deserialize)]
-    pub struct ListResponse {
-        #[serde(rename = "sessions")]
-        pub sessions: ,
+    #[derive(Debug, Serialize)]
+    pub struct ListRequest {
+        #[serde(rename = "active")]
+        pub active: *bool,
+        #[serde(rename = "createdFrom")]
+        pub created_from: *string,
+        #[serde(rename = "offset")]
+        pub offset: i32,
+        #[serde(rename = "sortOrder")]
+        pub sort_order: *string,
+        #[serde(rename = "createdTo")]
+        pub created_to: *string,
+        #[serde(rename = "ipAddress")]
+        pub ip_address: *string,
+        #[serde(rename = "limit")]
+        pub limit: i32,
+        #[serde(rename = "sortBy")]
+        pub sort_by: *string,
+        #[serde(rename = "userAgent")]
+        pub user_agent: *string,
     }
 
-    /// List returns sessions for the current user based on cookie
+    /// List returns sessions for the current user based on cookie with optional filtering
     pub async fn list(
         &self,
-    ) -> Result<ListResponse> {{
+        _request: ListRequest,
+    ) -> Result<()> {
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -40,7 +57,7 @@ impl MultisessionPlugin {{
     #[derive(Debug, Deserialize)]
     pub struct SetActiveResponse {
         #[serde(rename = "session")]
-        pub session: ,
+        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
     }
@@ -65,7 +82,7 @@ impl MultisessionPlugin {{
     #[derive(Debug, Deserialize)]
     pub struct GetCurrentResponse {
         #[serde(rename = "session")]
-        pub session: ,
+        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
     }
@@ -81,7 +98,7 @@ impl MultisessionPlugin {{
     #[derive(Debug, Deserialize)]
     pub struct GetByIDResponse {
         #[serde(rename = "session")]
-        pub session: ,
+        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
     }
@@ -100,19 +117,35 @@ impl MultisessionPlugin {{
         pub include_current_session: bool,
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct RevokeAllResponse {
+        #[serde(rename = "revokedCount")]
+        pub revoked_count: i32,
+        #[serde(rename = "status")]
+        pub status: String,
+    }
+
     /// RevokeAll revokes all sessions for the current user
     pub async fn revoke_all(
         &self,
         _request: RevokeAllRequest,
-    ) -> Result<()> {
+    ) -> Result<RevokeAllResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct RevokeOthersResponse {
+        #[serde(rename = "revokedCount")]
+        pub revoked_count: i32,
+        #[serde(rename = "status")]
+        pub status: String,
     }
 
     /// RevokeOthers revokes all sessions except the current one
     pub async fn revoke_others(
         &self,
-    ) -> Result<()> {
+    ) -> Result<RevokeOthersResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }
@@ -120,7 +153,7 @@ impl MultisessionPlugin {{
     #[derive(Debug, Deserialize)]
     pub struct RefreshResponse {
         #[serde(rename = "session")]
-        pub session: ,
+        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
     }
@@ -133,10 +166,26 @@ impl MultisessionPlugin {{
         unimplemented!("Plugin methods need client access")
     }
 
+    #[derive(Debug, Deserialize)]
+    pub struct GetStatsResponse {
+        #[serde(rename = "totalSessions")]
+        pub total_sessions: i32,
+        #[serde(rename = "activeSessions")]
+        pub active_sessions: i32,
+        #[serde(rename = "deviceCount")]
+        pub device_count: i32,
+        #[serde(rename = "locationCount")]
+        pub location_count: i32,
+        #[serde(rename = "newestSession")]
+        pub newest_session: *string,
+        #[serde(rename = "oldestSession")]
+        pub oldest_session: *string,
+    }
+
     /// GetStats returns aggregated session statistics for the current user
     pub async fn get_stats(
         &self,
-    ) -> Result<()> {
+    ) -> Result<GetStatsResponse> {{
         // TODO: Implement plugin method
         unimplemented!("Plugin methods need client access")
     }

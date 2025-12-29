@@ -12,83 +12,83 @@ export class OrganizationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async createOrganization(): Promise<void> {
-    const path = '/createorganization';
-    return this.client.request<void>('POST', path);
+  async createOrganization(): Promise<types.Organization> {
+    const path = '/organizations/createorganization';
+    return this.client.request<types.Organization>('POST', path);
   }
 
-  async updateOrganization(): Promise<void> {
-    const path = '/:id';
-    return this.client.request<void>('PATCH', path);
+  async updateOrganization(params: { id: string }): Promise<types.Organization> {
+    const path = `/organizations/${params.id}`;
+    return this.client.request<types.Organization>('PATCH', path);
   }
 
-  async deleteOrganization(): Promise<void> {
-    const path = '/:id';
+  async deleteOrganization(params: { id: string }): Promise<void> {
+    const path = `/organizations/${params.id}`;
     return this.client.request<void>('DELETE', path);
   }
 
   async inviteMember(): Promise<void> {
-    const path = '/invite';
+    const path = '/organizations/invite';
     return this.client.request<void>('POST', path);
   }
 
-  async removeMember(): Promise<void> {
-    const path = '/:memberId';
+  async removeMember(params: { memberId: string }): Promise<void> {
+    const path = `/organizations/${params.memberId}`;
     return this.client.request<void>('DELETE', path);
   }
 
   async createTeam(): Promise<void> {
-    const path = '/createteam';
+    const path = '/organizations/createteam';
     return this.client.request<void>('POST', path);
   }
 
-  async updateTeam(): Promise<void> {
-    const path = '/:teamId';
+  async updateTeam(params: { teamId: string }): Promise<void> {
+    const path = `/organizations/${params.teamId}`;
     return this.client.request<void>('PATCH', path);
   }
 
-  async deleteTeam(): Promise<void> {
-    const path = '/:teamId';
+  async deleteTeam(params: { teamId: string }): Promise<void> {
+    const path = `/organizations/${params.teamId}`;
     return this.client.request<void>('DELETE', path);
   }
 
-  async getOrganization(): Promise<void> {
-    const path = '/:id';
-    return this.client.request<void>('GET', path);
+  async getOrganization(params: { id: string }): Promise<types.Organization> {
+    const path = `/organizations/${params.id}`;
+    return this.client.request<types.Organization>('GET', path);
   }
 
-  async listOrganizations(): Promise<void> {
-    const path = '/listorganizations';
-    return this.client.request<void>('GET', path);
+  async listOrganizations(): Promise<types.Organization> {
+    const path = '/organizations/listorganizations';
+    return this.client.request<types.Organization>('GET', path);
   }
 
-  async getOrganizationBySlug(): Promise<void> {
-    const path = '/slug/:slug';
-    return this.client.request<void>('GET', path);
+  async getOrganizationBySlug(params: { slug: string }): Promise<types.Organization> {
+    const path = `/organizations/slug/${params.slug}`;
+    return this.client.request<types.Organization>('GET', path);
   }
 
   async listMembers(): Promise<void> {
-    const path = '/listmembers';
+    const path = '/organizations/listmembers';
     return this.client.request<void>('GET', path);
   }
 
-  async updateMember(): Promise<void> {
-    const path = '/:memberId';
+  async updateMember(params: { memberId: string }): Promise<void> {
+    const path = `/organizations/${params.memberId}`;
     return this.client.request<void>('PATCH', path);
   }
 
-  async acceptInvitation(): Promise<void> {
-    const path = '/:token/accept';
+  async acceptInvitation(params: { token: string }): Promise<void> {
+    const path = `/organizations/${params.token}/accept`;
     return this.client.request<void>('POST', path);
   }
 
-  async declineInvitation(): Promise<types.StatusResponse> {
-    const path = '/:token/decline';
+  async declineInvitation(params: { token: string }): Promise<types.StatusResponse> {
+    const path = `/organizations/${params.token}/decline`;
     return this.client.request<types.StatusResponse>('POST', path);
   }
 
   async listTeams(): Promise<void> {
-    const path = '/listteams';
+    const path = '/organizations/listteams';
     return this.client.request<void>('GET', path);
   }
 

@@ -12,6 +12,49 @@ import (
 	"github.com/xraph/authsome/core/user"
 )
 
+// =============================================================================
+// Hook Context Access Pattern
+// =============================================================================
+//
+// All hooks receive a context.Context that contains AuthContext with complete
+// authentication state. Hooks should extract it using:
+//
+//   authCtx, ok := contexts.GetAuthContext(ctx)
+//   if !ok || authCtx == nil {
+//       // Handle missing context - typically log warning and return nil
+//       return nil
+//   }
+//
+// AuthContext provides:
+//   - authCtx.User / Session          - Current user and session
+//   - authCtx.AppID / EnvironmentID   - App context
+//   - authCtx.OrganizationID          - Organization scope
+//   - authCtx.IPAddress / UserAgent   - Security metadata
+//   - authCtx.APIKey / Scopes         - API key auth (if present)
+//   - authCtx.UserRoles / Permissions - RBAC data
+//
+// For after-auth hooks (AfterSignIn, AfterSignUp), AuthContext is freshly
+// populated with the newly created session/user immediately before hook execution.
+//
+// Example:
+//
+//   hookRegistry.RegisterAfterSignIn(func(ctx context.Context, response *responses.AuthResponse) error {
+//       authCtx, ok := contexts.GetAuthContext(ctx)
+//       if !ok || authCtx == nil {
+//           return nil // Context not available
+//       }
+//
+//       // Access complete auth state
+//       appID := authCtx.AppID
+//       ipAddress := authCtx.IPAddress
+//       userAgent := authCtx.UserAgent
+//
+//       // Your hook logic here...
+//       return nil
+//   })
+//
+// =============================================================================
+
 // HookRegistry manages all hooks for the authentication system.
 // It is thread-safe and timing-independent - hooks can be registered
 // at any point in the application lifecycle and will always be executed.

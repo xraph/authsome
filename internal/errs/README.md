@@ -95,7 +95,8 @@ func (h *Handler) GetUser(c forge.Context) error {
 ```go
 errs.InvalidCredentials()              // Invalid email or password
 errs.EmailNotVerified(email)           // Email not verified
-errs.AccountLocked(reason)             // Account locked
+errs.AccountLocked(reason)             // Account locked (basic)
+errs.AccountLockedWithTime(reason, time) // Account locked with duration info
 errs.TwoFactorRequired()               // 2FA required
 errs.TokenExpired()                    // Token expired
 errs.InvalidOTP()                      // Invalid OTP code

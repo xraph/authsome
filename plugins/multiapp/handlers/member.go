@@ -28,22 +28,14 @@ func NewMemberHandler(appService *coreapp.ServiceImpl) *MemberHandler {
 
 // AddMember handles adding a member to an organization
 func (h *MemberHandler) AddMember(c forge.Context) error {
-	appIDStr := c.Param("orgId")
-	if appIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
+	var req AddMemberRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	appID, err := xid.FromString(appIDStr)
+	appID, err := xid.FromString(req.AppID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
-	}
-
-	var req struct {
-		UserID string `json:"user_id"`
-		Role   string `json:"role"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	userID, err := xid.FromString(req.UserID)

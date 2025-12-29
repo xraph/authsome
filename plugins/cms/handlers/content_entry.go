@@ -33,10 +33,13 @@ func NewContentEntryHandler(
 // ListEntries lists entries for a content type
 // GET /cms/:type
 func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var req ListEntriesRequest
+
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+
+	typeSlug := req.TypeSlug
 
 	ctx := getContextWithHeaders(c)
 
@@ -129,10 +132,12 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 // CreateEntry creates a new content entry
 // POST /cms/:type
 func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var pathReq CreateEntryRequest
+	if err := c.BindRequest(&pathReq); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+
+	typeSlug := pathReq.TypeSlug
 
 	ctx := getContextWithHeaders(c)
 
@@ -148,13 +153,13 @@ func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid content type ID"})
 	}
 
-	// Parse request
-	var req core.CreateEntryRequest
-	if err := c.BindJSON(&req); err != nil {
+	// Parse request body
+	var bodyReq core.CreateEntryRequest
+	if err := c.BindJSON(&bodyReq); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.entryService.Create(ctx, contentTypeID, &req)
+	result, err := h.entryService.Create(ctx, contentTypeID, &bodyReq)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -165,8 +170,13 @@ func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 // GetEntry retrieves a content entry by ID
 // GET /cms/:type/:id
 func (h *ContentEntryHandler) GetEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
+	var req GetEntryRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	typeSlug := req.TypeSlug
+	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
@@ -190,8 +200,13 @@ func (h *ContentEntryHandler) GetEntry(c forge.Context) error {
 // UpdateEntry updates a content entry
 // PUT /cms/:type/:id
 func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
+	var req UpdateEntryRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	typeSlug := req.TypeSlug
+	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
@@ -204,13 +219,13 @@ func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 		return c.JSON(400, map[string]string{"error": "invalid entry ID"})
 	}
 
-	// Parse request
-	var req core.UpdateEntryRequest
-	if err := c.BindJSON(&req); err != nil {
+	// Parse request body
+	var bodyReq core.UpdateEntryRequest
+	if err := c.BindJSON(&bodyReq); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request body"})
 	}
 
-	result, err := h.entryService.Update(ctx, id, &req)
+	result, err := h.entryService.Update(ctx, id, &bodyReq)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -221,8 +236,13 @@ func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 // DeleteEntry deletes a content entry
 // DELETE /cms/:type/:id
 func (h *ContentEntryHandler) DeleteEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
+	var req DeleteEntryRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	typeSlug := req.TypeSlug
+	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
@@ -249,8 +269,13 @@ func (h *ContentEntryHandler) DeleteEntry(c forge.Context) error {
 // PublishEntry publishes a content entry
 // POST /cms/:type/:id/publish
 func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
+	var req PublishEntryRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	typeSlug := req.TypeSlug
+	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
@@ -264,10 +289,10 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 	}
 
 	// Parse optional request body
-	var req core.PublishEntryRequest
-	_ = c.BindJSON(&req) // Ignore error, body is optional
+	var bodyReq core.PublishEntryRequest
+	_ = c.BindJSON(&bodyReq) // Ignore error, body is optional
 
-	result, err := h.entryService.Publish(ctx, id, &req)
+	result, err := h.entryService.Publish(ctx, id, &bodyReq)
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -278,8 +303,13 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 // UnpublishEntry unpublishes a content entry
 // POST /cms/:type/:id/unpublish
 func (h *ContentEntryHandler) UnpublishEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
+	var req UnpublishEntryRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	typeSlug := req.TypeSlug
+	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
@@ -303,8 +333,13 @@ func (h *ContentEntryHandler) UnpublishEntry(c forge.Context) error {
 // ArchiveEntry archives a content entry
 // POST /cms/:type/:id/archive
 func (h *ContentEntryHandler) ArchiveEntry(c forge.Context) error {
-	typeSlug := c.Param("type")
-	entryID := c.Param("id")
+	var req ArchiveEntryRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
+	}
+
+	typeSlug := req.TypeSlug
+	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
 	}
@@ -332,10 +367,12 @@ func (h *ContentEntryHandler) ArchiveEntry(c forge.Context) error {
 // QueryEntries performs an advanced query on entries
 // POST /cms/:type/query
 func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var pathReq QueryEntriesRequest
+	if err := c.BindRequest(&pathReq); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+
+	typeSlug := pathReq.TypeSlug
 
 	ctx := getContextWithHeaders(c)
 
@@ -461,17 +498,12 @@ type BulkRequest struct {
 // BulkPublish publishes multiple entries
 // POST /cms/:type/bulk/publish
 func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var req BulkPublishRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	ctx := getContextWithHeaders(c)
-
-	var req BulkRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request body"})
-	}
 
 	ids := make([]xid.ID, len(req.IDs))
 	for i, idStr := range req.IDs {
@@ -495,17 +527,12 @@ func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
 // BulkUnpublish unpublishes multiple entries
 // POST /cms/:type/bulk/unpublish
 func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var req BulkUnpublishRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	ctx := getContextWithHeaders(c)
-
-	var req BulkRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request body"})
-	}
 
 	ids := make([]xid.ID, len(req.IDs))
 	for i, idStr := range req.IDs {
@@ -529,17 +556,12 @@ func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
 // BulkDelete deletes multiple entries
 // POST /cms/:type/bulk/delete
 func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var req BulkDeleteRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
 
 	ctx := getContextWithHeaders(c)
-
-	var req BulkRequest
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request body"})
-	}
 
 	ids := make([]xid.ID, len(req.IDs))
 	for i, idStr := range req.IDs {
@@ -567,10 +589,12 @@ func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 // GetEntryStats returns statistics for entries
 // GET /cms/:type/stats
 func (h *ContentEntryHandler) GetEntryStats(c forge.Context) error {
-	typeSlug := c.Param("type")
-	if typeSlug == "" {
-		return c.JSON(400, map[string]string{"error": "type is required"})
+	var req GetEntryStatsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+
+	typeSlug := req.TypeSlug
 
 	ctx := getContextWithHeaders(c)
 

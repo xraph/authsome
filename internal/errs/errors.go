@@ -281,6 +281,17 @@ func InvalidCredentials() *AuthsomeError {
 	return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized)
 }
 
+// InvalidCredentialsWithAttempts returns invalid credentials error with remaining attempts warning
+func InvalidCredentialsWithAttempts(attemptsRemaining int) *AuthsomeError {
+	if attemptsRemaining <= 0 {
+		return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized)
+	}
+	
+	return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized).
+		WithContext("attemptsRemaining", attemptsRemaining).
+		WithContext("warning", fmt.Sprintf("Account will be locked after %d more failed attempt(s)", attemptsRemaining))
+}
+
 func EmailNotVerified(email string) *AuthsomeError {
 	return New(CodeEmailNotVerified, "Email address not verified", http.StatusForbidden).
 		WithContext("email", email)
@@ -289,6 +300,19 @@ func EmailNotVerified(email string) *AuthsomeError {
 func AccountLocked(reason string) *AuthsomeError {
 	return New(CodeAccountLocked, "Account is locked", http.StatusForbidden).
 		WithContext("reason", reason)
+}
+
+// AccountLockedWithTime returns an account locked error with lockout duration info
+func AccountLockedWithTime(reason string, lockedUntil time.Time) *AuthsomeError {
+	minutesLeft := int(time.Until(lockedUntil).Minutes())
+	if minutesLeft < 0 {
+		minutesLeft = 0
+	}
+	
+	return New(CodeAccountLocked, "Account is locked", http.StatusForbidden).
+		WithContext("reason", reason).
+		WithContext("lockedUntil", lockedUntil.Format(time.RFC3339)).
+		WithContext("lockedMinutes", minutesLeft)
 }
 
 func AccountDisabled() *AuthsomeError {

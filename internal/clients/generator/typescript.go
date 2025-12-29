@@ -138,28 +138,137 @@ func (g *TypeScriptGenerator) generateTypes() error {
 		}
 	}
 
+	// Collect all referenced types from routes (request_type and response_type)
+	referencedTypes := make(map[string]bool)
+	for _, m := range g.manifests {
+		for _, route := range m.Routes {
+			if route.RequestType != "" {
+				// Strip package qualifier
+				typeName := route.RequestType
+				if idx := strings.LastIndex(typeName, "."); idx != -1 {
+					typeName = typeName[idx+1:]
+				}
+				referencedTypes[typeName] = true
+			}
+			if route.ResponseType != "" {
+				// Strip package qualifier
+				typeName := route.ResponseType
+				if idx := strings.LastIndex(typeName, "."); idx != -1 {
+					typeName = typeName[idx+1:]
+				}
+				referencedTypes[typeName] = true
+			}
+			// Also collect types from response fields (like *apikey.APIKey)
+			for _, typeStr := range route.Response {
+				if typeStr == "" || typeStr == "-" {
+					continue
+				}
+				field := manifest.ParseField("", typeStr)
+				// Extract type name from qualified types
+				if strings.Contains(field.Type, ".") {
+					parts := strings.Split(field.Type, ".")
+					if len(parts) == 2 {
+						typeName := parts[1]
+						referencedTypes[typeName] = true
+						// Create synthetic type if not already defined
+						if _, exists := typeMap[typeName]; !exists {
+							typeMap[typeName] = &manifest.TypeDef{
+								Name:   typeName,
+								Fields: make(map[string]string),
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Also scan through all type definitions to find referenced types in fields
+		for _, typeDef := range m.Types {
+			for _, fieldType := range typeDef.Fields {
+				if fieldType == "" || fieldType == "-" {
+					continue
+				}
+				field := manifest.ParseField("", fieldType)
+				// Extract type name from qualified types or plain custom types
+				if strings.Contains(field.Type, ".") {
+					parts := strings.Split(field.Type, ".")
+					if len(parts) == 2 {
+						typeName := parts[1]
+						// Skip invalid type names (with special characters)
+						if typeName != "" && !strings.ContainsAny(typeName, "[](){}*") {
+							referencedTypes[typeName] = true
+							// Create synthetic type if not already defined
+							if _, exists := typeMap[typeName]; !exists {
+								typeMap[typeName] = &manifest.TypeDef{
+									Name:   typeName,
+									Fields: make(map[string]string),
+								}
+							}
+						}
+					}
+				} else {
+					// Check if it's a custom type (not a primitive)
+					// Skip invalid type names (with special characters, array notation, etc.)
+					if !g.isPrimitiveType(field.Type) && field.Type != "" && !strings.ContainsAny(field.Type, "[](){}*") {
+						// Skip lowercase types (Go internal types)
+						if len(field.Type) > 0 && (field.Type[0] < 'a' || field.Type[0] > 'z') {
+							referencedTypes[field.Type] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Create placeholder types for referenced but undefined types
+	for typeName := range referencedTypes {
+		if _, exists := typeMap[typeName]; !exists {
+			// Create a minimal type definition
+			typeMap[typeName] = &manifest.TypeDef{
+				Name:   typeName,
+				Fields: map[string]string{},
+			}
+		}
+	}
+
 	// Generate type definitions
 	for _, t := range typeMap {
+		// Skip types with invalid names (empty, array notation, special characters)
+		if t.Name == "" || strings.HasPrefix(t.Name, "[") || strings.ContainsAny(t.Name, "[](){}*") {
+			continue
+		}
+
+		// Skip lowercase types (these are usually Go internal types or errors in extraction)
+		if len(t.Name) > 0 && t.Name[0] >= 'a' && t.Name[0] <= 'z' {
+			continue
+		}
+
 		sb.WriteString(fmt.Sprintf("export interface %s {\n", t.Name))
-		for name, typeStr := range t.Fields {
-			// Skip fields with empty or invalid names (embedded fields)
-			if name == "" || name == "-" {
-				continue
+
+		// Handle empty types (placeholders)
+		if len(t.Fields) == 0 {
+			sb.WriteString("  [key: string]: any;\n")
+		} else {
+			for name, typeStr := range t.Fields {
+				// Skip fields with empty or invalid names (embedded fields)
+				if name == "" || name == "-" {
+					continue
+				}
+
+				field := manifest.ParseField(name, typeStr)
+				tsType := g.mapTypeToTSForTypesFile(field.Type)
+
+				if field.Array {
+					tsType += "[]"
+				}
+
+				optional := ""
+				if !field.Required {
+					optional = "?"
+				}
+
+				sb.WriteString(fmt.Sprintf("  %s%s: %s;\n", field.Name, optional, tsType))
 			}
-
-			field := manifest.ParseField(name, typeStr)
-			tsType := g.mapTypeToTSForTypesFile(field.Type)
-
-			if field.Array {
-				tsType += "[]"
-			}
-
-			optional := ""
-			if !field.Required {
-				optional = "?"
-			}
-
-			sb.WriteString(fmt.Sprintf("  %s%s: %s;\n", field.Name, optional, tsType))
 		}
 		sb.WriteString("}\n\n")
 	}
@@ -406,6 +515,22 @@ func (g *TypeScriptGenerator) generateClient() error {
 	sb.WriteString("    this.basePath = basePath;\n")
 	sb.WriteString("  }\n\n")
 
+	// Add toQueryParams helper
+	sb.WriteString("  /**\n")
+	sb.WriteString("   * Convert an object to query parameters, handling optional values and type conversion\n")
+	sb.WriteString("   */\n")
+	sb.WriteString("  public toQueryParams(obj?: Record<string, any>): Record<string, string> | undefined {\n")
+	sb.WriteString("    if (!obj) return undefined;\n")
+	sb.WriteString("    \n")
+	sb.WriteString("    const params: Record<string, string> = {};\n")
+	sb.WriteString("    for (const [key, value] of Object.entries(obj)) {\n")
+	sb.WriteString("      if (value !== undefined && value !== null) {\n")
+	sb.WriteString("        params[key] = String(value);\n")
+	sb.WriteString("      }\n")
+	sb.WriteString("    }\n")
+	sb.WriteString("    return Object.keys(params).length > 0 ? params : undefined;\n")
+	sb.WriteString("  }\n\n")
+
 	// Add setGlobalHeaders method
 	sb.WriteString("  /**\n")
 	sb.WriteString("   * Set global headers for all requests\n")
@@ -492,14 +617,20 @@ func (g *TypeScriptGenerator) generateTSMethod(sb *strings.Builder, m *manifest.
 	// Generate method signature
 	sb.WriteString(fmt.Sprintf("  async %s(", methodName))
 
-	// Parameters
+	// Build parameters in order: path params, request body, query params
 	params := []string{}
-	if len(route.Request) > 0 {
-		params = append(params, fmt.Sprintf("request: { %s }", g.generateTSRequestType(route)))
-	}
+
+	// 1. Path parameters - keep as params object
 	if len(route.Params) > 0 {
 		params = append(params, fmt.Sprintf("params: { %s }", g.generateTSParamsType(route)))
 	}
+
+	// 2. Request body
+	if len(route.Request) > 0 {
+		params = append(params, fmt.Sprintf("request: { %s }", g.generateTSRequestType(route)))
+	}
+
+	// 3. Query parameters (optional)
 	if len(route.Query) > 0 {
 		params = append(params, fmt.Sprintf("query?: { %s }", g.generateTSQueryType(route)))
 	}
@@ -507,11 +638,13 @@ func (g *TypeScriptGenerator) generateTSMethod(sb *strings.Builder, m *manifest.
 	sb.WriteString(strings.Join(params, ", "))
 	sb.WriteString(fmt.Sprintf("): Promise<{ %s }> {\n", g.generateTSResponseType(route)))
 
-	// Build path
+	// Build path with interpolated parameters
 	path := route.Path
 	if len(route.Params) > 0 {
 		for paramName := range route.Params {
+			// Replace both {paramName} and :paramName styles with params.paramName
 			path = strings.ReplaceAll(path, "{"+paramName+"}", "${params."+paramName+"}")
+			path = strings.ReplaceAll(path, ":"+paramName, "${params."+paramName+"}")
 		}
 		sb.WriteString(fmt.Sprintf("    const path = `%s`;\n", path))
 	} else {
@@ -668,24 +801,44 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 
 	sb.WriteString(fmt.Sprintf("  async %s(", methodName))
 
+	// Build parameters in order: path params, request body, query params
 	params := []string{}
-	if len(route.Request) > 0 {
+
+	// 1. Path parameters - keep as params object
+	if len(route.Params) > 0 {
+		params = append(params, fmt.Sprintf("params: { %s }", g.generateTSParamsType(route)))
+	}
+
+	// 2. Request body or query params
+	method := strings.ToUpper(route.Method)
+	isGetLike := method == "GET" || method == "DELETE" || method == "HEAD"
+	hasRequest := len(route.Request) > 0 || route.RequestType != ""
+
+	if hasRequest {
 		// Use named type if available, otherwise inline type
+		var requestTypeStr string
 		if route.RequestType != "" {
 			// Strip package qualifier if present (e.g., "responses.CreateRequest" -> "CreateRequest")
 			typeName := route.RequestType
 			if idx := strings.LastIndex(typeName, "."); idx != -1 {
 				typeName = typeName[idx+1:]
 			}
-			params = append(params, fmt.Sprintf("request: types.%s", typeName))
+			requestTypeStr = "types." + typeName
+		} else if len(route.Request) > 0 {
+			requestTypeStr = fmt.Sprintf("{ %s }", g.generateTSRequestType(route))
+		}
+
+		// For GET/DELETE/HEAD, make request optional (query params)
+		// For POST/PUT/PATCH, make request required (body)
+		if isGetLike {
+			params = append(params, fmt.Sprintf("request?: %s", requestTypeStr))
 		} else {
-			params = append(params, fmt.Sprintf("request: { %s }", g.generateTSRequestType(route)))
+			params = append(params, fmt.Sprintf("request: %s", requestTypeStr))
 		}
 	}
-	if len(route.Params) > 0 {
-		params = append(params, fmt.Sprintf("params: { %s }", g.generateTSParamsType(route)))
-	}
-	if len(route.Query) > 0 {
+
+	// 3. Explicit query parameters (optional, separate from request)
+	if len(route.Query) > 0 && !hasRequest {
 		params = append(params, fmt.Sprintf("query?: { %s }", g.generateTSQueryType(route)))
 	}
 
@@ -707,11 +860,17 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 	}
 	sb.WriteString(fmt.Sprintf("): Promise<%s> {\n", responseType))
 
-	// Build path
+	// Build path with interpolated parameters
 	path := route.Path
+	// Prepend base path if defined in manifest
+	if m.BasePath != "" {
+		path = m.BasePath + path
+	}
 	if len(route.Params) > 0 {
 		for paramName := range route.Params {
+			// Replace both {paramName} and :paramName styles with params.paramName
 			path = strings.ReplaceAll(path, "{"+paramName+"}", "${params."+paramName+"}")
+			path = strings.ReplaceAll(path, ":"+paramName, "${params."+paramName+"}")
 		}
 		sb.WriteString(fmt.Sprintf("    const path = `%s`;\n", path))
 	} else {
@@ -720,13 +879,26 @@ func (g *TypeScriptGenerator) generatePluginTSMethod(sb *strings.Builder, m *man
 
 	sb.WriteString(fmt.Sprintf("    return this.client.request<%s>('%s', path", responseType, strings.ToUpper(route.Method)))
 
-	if len(route.Request) > 0 || len(route.Query) > 0 || route.Auth {
+	// For GET/DELETE methods, request goes as query params
+	// For POST/PUT/PATCH methods, request goes as body
+	// Reuse variables declared above
+	hasExplicitQuery := len(route.Query) > 0
+	hasRequestBody := hasRequest && !isGetLike
+	hasQueryParams := hasExplicitQuery || (hasRequest && isGetLike)
+
+	if hasRequestBody || hasQueryParams || route.Auth {
 		sb.WriteString(", {\n")
-		if len(route.Request) > 0 {
+		if hasRequestBody {
 			sb.WriteString("      body: request,\n")
 		}
-		if len(route.Query) > 0 {
-			sb.WriteString("      query,\n")
+		if hasQueryParams {
+			// If there are explicit query params (not from request), use 'query' parameter
+			// Otherwise convert request object to query params
+			if hasExplicitQuery && !hasRequest {
+				sb.WriteString("      query: this.client.toQueryParams(query),\n")
+			} else {
+				sb.WriteString("      query: this.client.toQueryParams(request),\n")
+			}
 		}
 		if route.Auth {
 			sb.WriteString("      auth: true,\n")
@@ -761,12 +933,34 @@ func (g *TypeScriptGenerator) generateIndex() error {
 	return g.writeFile("src/index.ts", sb.String())
 }
 
+// isPrimitiveType checks if a Go type is a primitive type
+func (g *TypeScriptGenerator) isPrimitiveType(goType string) bool {
+	primitives := map[string]bool{
+		"string": true, "int": true, "int32": true, "int64": true,
+		"uint": true, "uint32": true, "uint64": true,
+		"float32": true, "float64": true, "bool": true, "boolean": true,
+		"byte": true, "object": true, "map": true, "error": true,
+		"any": true, "interface{}": true, "Duration": true,
+	}
+	return primitives[goType]
+}
+
 // mapTypeToTSForTypesFile maps Go types to TypeScript without the types. prefix
 // Used when generating the types.ts file itself
 func (g *TypeScriptGenerator) mapTypeToTSForTypesFile(goType string) string {
 	// Handle empty types
 	if goType == "" {
 		return "any"
+	}
+
+	// Handle Go map syntax: map[keyType]valueType
+	if strings.HasPrefix(goType, "map[") {
+		// Extract key and value types
+		// Simple extraction: map[string]interface{} -> Record<string, any>
+		if strings.Contains(goType, "string]") {
+			return "Record<string, any>"
+		}
+		return "Record<string, any>"
 	}
 
 	// Handle array notation (shouldn't happen after ParseField, but just in case)
@@ -781,7 +975,7 @@ func (g *TypeScriptGenerator) mapTypeToTSForTypesFile(goType string) string {
 		return innerType + " | undefined"
 	}
 
-	// Handle qualified types (e.g., xid.ID, time.Time, types.User)
+	// Handle qualified types (e.g., xid.ID, time.Time, types.User, apikey.APIKey)
 	if strings.Contains(goType, ".") {
 		// For qualified types, just return string or appropriate mapping
 		switch {
@@ -793,6 +987,12 @@ func (g *TypeScriptGenerator) mapTypeToTSForTypesFile(goType string) string {
 			// Already prefixed with types. - just use the type name without prefix
 			return strings.TrimPrefix(goType, "types.")
 		default:
+			// For other package-qualified types (e.g., apikey.APIKey, user.User)
+			// Extract just the type name (last part after the dot)
+			parts := strings.Split(goType, ".")
+			if len(parts) == 2 {
+				return parts[1]
+			}
 			return "any"
 		}
 	}
@@ -812,6 +1012,9 @@ func (g *TypeScriptGenerator) mapTypeToTSForTypesFile(goType string) string {
 		return "Error"
 	case "any", "interface{}":
 		return "any"
+	case "Duration":
+		// time.Duration in Go is typically represented as a string in JSON (e.g., "5m", "1h")
+		return "string"
 	// Enums and special types that should be strings
 	case "ComplianceStandard", "RecoveryMethod", "FactorType", "FactorPriority", "RecoveryStatus", "SecurityLevel", "ChallengeStatus", "FactorStatus", "VerificationMethod", "RiskLevel":
 		return "string"
@@ -829,6 +1032,16 @@ func (g *TypeScriptGenerator) mapTypeToTS(goType string) string {
 	// Handle empty types
 	if goType == "" {
 		return "any"
+	}
+
+	// Handle Go map syntax: map[keyType]valueType
+	if strings.HasPrefix(goType, "map[") {
+		// Extract key and value types
+		// Simple extraction: map[string]interface{} -> Record<string, any>
+		if strings.Contains(goType, "string]") {
+			return "Record<string, any>"
+		}
+		return "Record<string, any>"
 	}
 
 	// Handle array notation (shouldn't happen after ParseField, but just in case)

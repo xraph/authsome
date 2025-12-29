@@ -7,6 +7,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
+	"github.com/xraph/authsome/core/authflow"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/ui"
@@ -197,8 +198,36 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		fmt.Printf("[Social] Rate limiting enabled with Redis\n")
 	}
 
-	// Create handler
-	p.handler = NewHandler(p.service, rateLimiter)
+	// Create centralized authentication completion service
+	var authCompletion *authflow.CompletionService
+	serviceRegistry := authInst.GetServiceRegistry()
+	if serviceRegistry != nil {
+		authService := serviceRegistry.AuthService()
+		deviceService := serviceRegistry.DeviceService()
+		auditService := serviceRegistry.AuditService()
+		appServiceImpl := serviceRegistry.AppService()
+
+		// Create completion service - use App sub-service for cookie config
+		// The appService.GetCookieConfig() method already handles getting the global
+		// cookie config (set via SetGlobalCookieConfig in authsome.go) as a fallback
+		var appService authflow.AppServiceInterface
+		if appServiceImpl != nil {
+			appService = appServiceImpl.App // Access the AppService from ServiceImpl
+		}
+
+		// Pass nil for cookieConfig - appService.GetCookieConfig() handles global config
+		authCompletion = authflow.NewCompletionService(
+			authService,
+			deviceService,
+			auditService,
+			appService,
+			nil, // Cookie config comes from appService.GetCookieConfig()
+		)
+		fmt.Printf("[Social] Authentication completion service initialized (appService=%v)\n", appService != nil)
+	}
+
+	// Create handler with centralized completion service
+	p.handler = NewHandler(p.service, rateLimiter, authCompletion)
 
 	// Initialize dashboard extension
 	p.dashboardExt = NewDashboardExtension(p, p.configRepo)
@@ -271,10 +300,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	router.GET("/callback/:provider", wrapHandler(handler.Callback),
 		forge.WithName("social.callback"),
 		forge.WithSummary("OAuth callback"),
-		forge.WithDescription("Handle OAuth provider callback and complete authentication"),
+		forge.WithDescription("Handle OAuth provider callback and complete authentication. This endpoint receives the authorization code and state from the OAuth provider after user grants permission."),
+		forge.WithRequestSchema(CallbackRequest{}),
 		forge.WithResponseSchema(200, "Authentication successful", CallbackDataResponse{}),
-		forge.WithResponseSchema(400, "OAuth error", ErrorResponse{}),
+		forge.WithResponseSchema(400, "OAuth error or missing parameters", ErrorResponse{}),
+		forge.WithResponseSchema(401, "Invalid state or callback failed", ErrorResponse{}),
+		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
+		forge.WithValidation(true),
 	)
 	router.POST("/account/link", wrapHandler(handler.LinkAccount),
 		forge.WithName("social.link"),

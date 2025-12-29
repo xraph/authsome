@@ -14,6 +14,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/internal/errs"
+	secretscore "github.com/xraph/authsome/plugins/secrets/core"
 	"github.com/xraph/authsome/plugins/secrets/schema"
 )
 
@@ -252,25 +253,33 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("secrets.list"),
 		forge.WithSummary("List secrets"),
 		forge.WithDescription("List secrets with optional filtering and pagination"),
+		forge.WithRequestSchema(ListSecretsRequest{}),
+		forge.WithResponseSchema(200, "Secrets listed", secretscore.ListSecretsResponse{}),
 		forge.WithTags("Secrets"))
 
 	secrets.POST("", p.handler.Create,
 		forge.WithName("secrets.create"),
 		forge.WithSummary("Create a secret"),
 		forge.WithDescription("Create a new encrypted secret"),
-		forge.WithTags("Secrets"))
+		forge.WithRequestSchema(CreateSecretRequest{}),
+		forge.WithResponseSchema(201, "Secret created", secretscore.SecretDTO{}),
+		forge.WithTags("Secrets"),
+		forge.WithValidation(true))
 
 	// Stats and tree (before :id routes)
 	secrets.GET("/stats", p.handler.GetStats,
 		forge.WithName("secrets.stats"),
 		forge.WithSummary("Get secrets statistics"),
 		forge.WithDescription("Get statistics about secrets"),
+		forge.WithResponseSchema(200, "Statistics retrieved", secretscore.StatsDTO{}),
 		forge.WithTags("Secrets"))
 
 	secrets.GET("/tree", p.handler.GetTree,
 		forge.WithName("secrets.tree"),
 		forge.WithSummary("Get secrets tree"),
 		forge.WithDescription("Get secrets organized in a tree structure"),
+		forge.WithRequestSchema(GetTreeRequest{}),
+		forge.WithResponseSchema(200, "Tree retrieved", secretscore.SecretTreeNode{}),
 		forge.WithTags("Secrets"))
 
 	// Path-based access
@@ -285,24 +294,33 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("secrets.get"),
 		forge.WithSummary("Get a secret"),
 		forge.WithDescription("Retrieve secret metadata by ID"),
+		forge.WithRequestSchema(GetSecretRequest{}),
+		forge.WithResponseSchema(200, "Secret retrieved", secretscore.SecretDTO{}),
 		forge.WithTags("Secrets"))
 
 	secrets.GET("/:id/value", p.handler.GetValue,
 		forge.WithName("secrets.getValue"),
 		forge.WithSummary("Get secret value"),
 		forge.WithDescription("Retrieve the decrypted secret value"),
+		forge.WithRequestSchema(GetValueRequest{}),
+		forge.WithResponseSchema(200, "Value retrieved", secretscore.RevealValueResponse{}),
 		forge.WithTags("Secrets"))
 
 	secrets.PUT("/:id", p.handler.Update,
 		forge.WithName("secrets.update"),
 		forge.WithSummary("Update a secret"),
 		forge.WithDescription("Update an existing secret"),
-		forge.WithTags("Secrets"))
+		forge.WithRequestSchema(UpdateSecretRequest{}),
+		forge.WithResponseSchema(200, "Secret updated", secretscore.SecretDTO{}),
+		forge.WithTags("Secrets"),
+		forge.WithValidation(true))
 
 	secrets.DELETE("/:id", p.handler.Delete,
 		forge.WithName("secrets.delete"),
 		forge.WithSummary("Delete a secret"),
 		forge.WithDescription("Soft-delete a secret"),
+		forge.WithRequestSchema(DeleteSecretRequest{}),
+		forge.WithResponseSchema(200, "Secret deleted", SuccessResponse{}),
 		forge.WithTags("Secrets"))
 
 	// Version operations
@@ -310,12 +328,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithName("secrets.versions"),
 		forge.WithSummary("Get secret versions"),
 		forge.WithDescription("Get version history for a secret"),
+		forge.WithRequestSchema(GetVersionsRequest{}),
+		forge.WithResponseSchema(200, "Versions retrieved", secretscore.ListVersionsResponse{}),
 		forge.WithTags("Secrets"))
 
 	secrets.POST("/:id/rollback/:version", p.handler.Rollback,
 		forge.WithName("secrets.rollback"),
 		forge.WithSummary("Rollback secret"),
 		forge.WithDescription("Rollback a secret to a previous version"),
+		forge.WithRequestSchema(RollbackRequest{}),
+		forge.WithResponseSchema(200, "Secret rolled back", secretscore.SecretDTO{}),
 		forge.WithTags("Secrets"))
 
 	p.logger.Debug("registered secrets routes")

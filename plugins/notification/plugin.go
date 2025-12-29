@@ -34,6 +34,9 @@ type Plugin struct {
 	dashboardExtension *DashboardExtension
 	authInst           core.Authsome
 	notifAdapter       *Adapter
+	asyncAdapter       *AsyncAdapter
+	dispatcher         *notification.Dispatcher
+	retryService       *notification.RetryService
 }
 
 // PluginOption is a functional option for configuring the notification plugin
@@ -184,6 +187,47 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Initialize dashboard extension
 	p.dashboardExtension = NewDashboardExtension(p)
+
+	// Initialize async infrastructure if enabled
+	if p.config.Async.Enabled {
+		// Create retry storage (in-memory for now, can be upgraded to DB later)
+		retryStorage := notification.NewInMemoryRetryStorage()
+
+		// Create retry config
+		retryConfig := notification.RetryConfig{
+			Enabled:         p.config.Async.RetryEnabled,
+			MaxRetries:      p.config.Async.MaxRetries,
+			PersistFailures: p.config.Async.PersistFailures,
+		}
+		for _, d := range p.config.Async.RetryBackoff {
+			if duration, err := time.ParseDuration(d); err == nil {
+				retryConfig.BackoffDurations = append(retryConfig.BackoffDurations, duration)
+			}
+		}
+		if len(retryConfig.BackoffDurations) == 0 {
+			retryConfig.BackoffDurations = notification.DefaultRetryConfig().BackoffDurations
+		}
+
+		// Create retry service
+		p.retryService = notification.NewRetryService(retryConfig, retryStorage, p.service)
+
+		// Create dispatcher config
+		dispatcherConfig := notification.DispatcherConfig{
+			AsyncEnabled:   p.config.Async.Enabled,
+			WorkerPoolSize: p.config.Async.WorkerPoolSize,
+			QueueSize:      p.config.Async.QueueSize,
+		}
+
+		// Create dispatcher
+		p.dispatcher = notification.NewDispatcher(dispatcherConfig, p.service, p.retryService)
+
+		// Create async adapter
+		baseAdapter := NewAdapter(p.templateSvc)
+		p.asyncAdapter = NewAsyncAdapter(baseAdapter, p.config.Async, p.dispatcher, p.retryService)
+
+		fmt.Printf("[Notification] Async processing enabled (workers=%d, queue=%d)\n",
+			p.config.Async.WorkerPoolSize, p.config.Async.QueueSize)
+	}
 
 	return nil
 }
@@ -377,8 +421,8 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 					return nil
 				}
 
-				// Create adapter for sending
-				adapter := NewAdapter(p.templateSvc)
+				// Use async adapter for normal priority notification (fire-and-forget)
+				adapter := p.getAsyncAdapter()
 
 				// Send welcome email
 				userName := createdUser.Name
@@ -388,7 +432,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 				err = adapter.SendWelcomeEmail(ctx, platformApp.ID, createdUser.Email, userName, "")
 				if err != nil {
-					// Log error but don't fail user creation
+					// Log error but don't fail user creation (should rarely happen with async)
 					fmt.Printf("Failed to send welcome email: %v\n", err)
 				}
 			}
@@ -406,6 +450,8 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				return nil
 			}
 
+			fmt.Printf("[Notification] New device hook called for user %s in app %s\n", userID.String(), appID.String())
+
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
@@ -414,7 +460,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in new device hook: %v\n", err)
+				fmt.Printf("[Notification] Failed to get user details in new device hook for user %s: %v\n", userID.String(), err)
 				return nil
 			}
 
@@ -425,9 +471,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			
+			// Check if template service is available
+			if p.templateSvc == nil {
+				fmt.Printf("[Notification] Template service not initialized, skipping new device notification\n")
+				return nil
+			}
+			
+			// Use async adapter for fire-and-forget low priority notification
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendNewDeviceLogin(ctx, appID, user.Email, userName, deviceName, location, timestamp, ipAddress)
 			if err != nil {
+				// This should rarely happen since async adapter fires-and-forgets for low priority
 				fmt.Printf("[Notification] Failed to send new device notification: %v\n", err)
 			}
 
@@ -463,7 +518,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendDeviceRemoved(ctx, appID, user.Email, userName, deviceName, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send device removed notification: %v\n", err)
@@ -504,7 +559,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendEmailChangeRequest(ctx, appID, oldEmail, userName, newEmail, confirmationUrl, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send email change request notification: %v\n", err)
@@ -542,7 +597,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendEmailChanged(ctx, appID, user.Email, userName, oldEmail, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send email changed notification: %v\n", err)
@@ -580,7 +635,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendUsernameChanged(ctx, appID, user.Email, userName, oldUsername, newUsername, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send username changed notification: %v\n", err)
@@ -618,7 +673,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendAccountDeleted(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send account deleted notification: %v\n", err)
@@ -656,7 +711,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendAccountSuspended(ctx, appID, user.Email, userName, reason, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send account suspended notification: %v\n", err)
@@ -694,7 +749,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendAccountReactivated(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send account reactivated notification: %v\n", err)
@@ -732,7 +787,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			adapter := NewAdapter(p.templateSvc)
+			adapter := p.getAsyncAdapter()
 			err = adapter.SendPasswordChanged(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
 				fmt.Printf("[Notification] Failed to send password changed notification: %v\n", err)
@@ -744,7 +799,45 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 	fmt.Println("[Notification] Registered account lifecycle notification hooks")
 
+	// Start async infrastructure if enabled
+	if p.dispatcher != nil {
+		p.dispatcher.Start()
+		fmt.Println("[Notification] Started async notification dispatcher")
+	}
+	if p.retryService != nil {
+		p.retryService.Start()
+		fmt.Println("[Notification] Started notification retry service")
+	}
+
 	return nil
+}
+
+// Stop gracefully stops the plugin's background services
+func (p *Plugin) Stop() {
+	if p.dispatcher != nil {
+		p.dispatcher.Stop()
+	}
+	if p.retryService != nil {
+		p.retryService.Stop()
+	}
+}
+
+// getAdapter returns the async adapter if available, otherwise returns the base adapter
+func (p *Plugin) getAdapter() *Adapter {
+	if p.asyncAdapter != nil {
+		return p.asyncAdapter.Adapter
+	}
+	return NewAdapter(p.templateSvc)
+}
+
+// getAsyncAdapter returns the async adapter if available, otherwise creates a new base adapter
+func (p *Plugin) getAsyncAdapter() *AsyncAdapter {
+	if p.asyncAdapter != nil {
+		return p.asyncAdapter
+	}
+	// Fallback to sync adapter wrapped in async adapter with async disabled
+	baseAdapter := NewAdapter(p.templateSvc)
+	return NewAsyncAdapter(baseAdapter, AsyncConfig{Enabled: false}, nil, nil)
 }
 
 // RegisterServiceDecorators registers the notification service and adapter

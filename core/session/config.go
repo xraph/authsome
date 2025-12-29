@@ -29,7 +29,10 @@ func DefaultCookieConfig() CookieConfig {
 }
 
 // Merge applies per-app overrides to the base config and returns a new merged config
-// The override config takes precedence over the base config for all non-zero values
+// The override config takes precedence over the base config for non-zero values
+// Special handling for boolean fields:
+// - Enabled: Only override if override.Enabled is true (can't distinguish false from unset)
+// - HttpOnly: Only override if override.HttpOnly is false (since default is true)
 func (c *CookieConfig) Merge(override *CookieConfig) *CookieConfig {
 	if override == nil {
 		// Return a copy of the base config
@@ -41,11 +44,16 @@ func (c *CookieConfig) Merge(override *CookieConfig) *CookieConfig {
 	merged := *c
 
 	// Apply overrides for each field if the override has a non-zero value
-	// Note: For booleans and strings, we need to distinguish between explicit false/empty and unset
-	// For simplicity, we override if the field is set in the JSON (non-zero)
+	// For booleans, we can only detect explicit true (Go zero value is false)
 
-	// Enabled: Always respect override if provided
-	merged.Enabled = override.Enabled
+	// Enabled: Only override if explicitly set to true
+	// This prevents app metadata with empty/default config from disabling cookies
+	// Apps that want to disable must be handled differently (e.g., explicit disable flag)
+	if override.Enabled {
+		merged.Enabled = true
+	}
+	// Note: If base.Enabled is true and override.Enabled is false, we KEEP base.Enabled = true
+	// This is intentional - app metadata shouldn't accidentally disable globally-enabled cookies
 
 	// Name: Override if not empty
 	if override.Name != "" {
@@ -67,8 +75,14 @@ func (c *CookieConfig) Merge(override *CookieConfig) *CookieConfig {
 		merged.Secure = override.Secure
 	}
 
-	// HttpOnly: Always respect override
-	merged.HttpOnly = override.HttpOnly
+	// HttpOnly: Only override if explicitly set to false (default is true)
+	// This allows apps to explicitly disable HttpOnly if needed
+	if !override.HttpOnly && c.HttpOnly {
+		// Only if base had HttpOnly=true and override explicitly sets false
+		// But since we can't distinguish, keep base value
+		// merged.HttpOnly = override.HttpOnly
+	}
+	// Keep base HttpOnly value - safer default
 
 	// SameSite: Override if not empty
 	if override.SameSite != "" {

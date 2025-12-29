@@ -11,10 +11,21 @@ import (
 
 // Config holds the notification service configuration
 type Config struct {
-	DefaultProvider map[NotificationType]string `json:"default_provider"`
-	RetryAttempts   int                         `json:"retry_attempts"`
-	RetryDelay      time.Duration               `json:"retry_delay"`
-	CleanupAfter    time.Duration               `json:"cleanup_after"`
+	DefaultProvider map[NotificationType]string `json:"defaultProvider"`
+	RetryAttempts   int                         `json:"retryAttempts"`
+	RetryDelay      time.Duration               `json:"retryDelay"`
+	CleanupAfter    time.Duration               `json:"cleanupAfter"`
+
+	// Async processing configuration
+	AsyncEnabled    bool          `json:"asyncEnabled"`    // Enable async processing for non-critical notifications
+	WorkerPoolSize  int           `json:"workerPoolSize"`  // Number of workers per priority level
+	QueueSize       int           `json:"queueSize"`       // Buffer size for async queues
+
+	// Retry configuration
+	RetryEnabled     bool     `json:"retryEnabled"`     // Enable retry for failed notifications
+	MaxRetries       int      `json:"maxRetries"`       // Maximum retry attempts (default: 3)
+	RetryBackoff     []string `json:"retryBackoff"`     // Backoff durations (default: ["1m", "5m", "15m"])
+	PersistFailures  bool     `json:"persistFailures"`  // Persist permanently failed notifications to DB
 }
 
 // Service provides notification functionality
@@ -33,7 +44,7 @@ func NewService(
 	auditSvc *audit.Service,
 	cfg Config,
 ) *Service {
-	// Set defaults
+	// Set defaults for legacy config
 	if cfg.RetryAttempts == 0 {
 		cfg.RetryAttempts = 3
 	}
@@ -44,12 +55,57 @@ func NewService(
 		cfg.CleanupAfter = 30 * 24 * time.Hour // 30 days
 	}
 
+	// Set defaults for async processing
+	if cfg.WorkerPoolSize == 0 {
+		cfg.WorkerPoolSize = 5
+	}
+	if cfg.QueueSize == 0 {
+		cfg.QueueSize = 1000
+	}
+
+	// Set defaults for retry configuration
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = 3
+	}
+	if len(cfg.RetryBackoff) == 0 {
+		cfg.RetryBackoff = []string{"1m", "5m", "15m"}
+	}
+
 	return &Service{
 		repo:      repo,
 		engine:    engine,
 		providers: make(map[string]Provider),
 		auditSvc:  auditSvc,
 		config:    cfg,
+	}
+}
+
+// GetDispatcherConfig returns the dispatcher configuration from service config
+func (s *Service) GetDispatcherConfig() DispatcherConfig {
+	return DispatcherConfig{
+		AsyncEnabled:   s.config.AsyncEnabled,
+		WorkerPoolSize: s.config.WorkerPoolSize,
+		QueueSize:      s.config.QueueSize,
+	}
+}
+
+// GetRetryConfig returns the retry configuration from service config
+func (s *Service) GetRetryConfig() RetryConfig {
+	backoffDurations := make([]time.Duration, 0, len(s.config.RetryBackoff))
+	for _, d := range s.config.RetryBackoff {
+		if duration, err := time.ParseDuration(d); err == nil {
+			backoffDurations = append(backoffDurations, duration)
+		}
+	}
+	if len(backoffDurations) == 0 {
+		backoffDurations = DefaultRetryConfig().BackoffDurations
+	}
+
+	return RetryConfig{
+		Enabled:          s.config.RetryEnabled,
+		MaxRetries:       s.config.MaxRetries,
+		BackoffDurations: backoffDurations,
+		PersistFailures:  s.config.PersistFailures,
 	}
 }
 

@@ -413,11 +413,26 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 	// Find user by username
 	u, err := s.users.FindByUsername(ctx, un)
 	if err != nil || u == nil {
-		// Record failed attempt
+		// Record failed attempt and calculate remaining
 		if s.config.LockoutEnabled {
 			_ = s.recordFailedLoginAttempt(ctx, un, appID, ip, ua)
+			
+			// Get current attempt count and calculate remaining
+			since := time.Now().Add(-s.config.FailedAttemptWindow)
+			count, _ := s.usernameRepo.GetFailedAttempts(ctx, un, appID, since)
+			attemptsRemaining := s.config.MaxFailedAttempts - count
+
+			// Audit invalid credentials
+			if s.audit != nil {
+				_ = s.audit.Log(ctx, nil, "username_invalid_credentials",
+					fmt.Sprintf("username:%s reason:user_not_found attempts:%d remaining:%d", un, count, attemptsRemaining), ip, ua,
+					fmt.Sprintf(`{"username":"%s","reason":"user_not_found","attempts":%d,"remaining":%d}`, un, count, attemptsRemaining))
+			}
+
+			return nil, errs.InvalidCredentialsWithAttempts(attemptsRemaining)
 		}
 
+		// Lockout not enabled - return basic error
 		// Audit invalid credentials
 		if s.audit != nil {
 			_ = s.audit.Log(ctx, nil, "username_invalid_credentials",
@@ -441,7 +456,10 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 						un, uid.String(), lockoutErr.LockedUntil.Format(time.RFC3339)))
 			}
 
-			return nil, errs.AccountLocked(fmt.Sprintf("locked for %d minutes", lockoutErr.LockedMinutes))
+			return nil, errs.AccountLockedWithTime(
+				fmt.Sprintf("locked for %d minutes", lockoutErr.LockedMinutes),
+				lockoutErr.LockedUntil,
+			)
 		}
 		return nil, fmt.Errorf("lockout check failed: %w", err)
 	}
@@ -478,15 +496,33 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 				return nil, errs.InvalidCredentials()
 			}
 
+			// Get current attempt count and calculate remaining
+			since := time.Now().Add(-s.config.FailedAttemptWindow)
+			count, _ := s.usernameRepo.GetFailedAttempts(ctx, un, appID, since)
+			attemptsRemaining := s.config.MaxFailedAttempts - count
+			
 			// Audit failed attempt recorded
 			if s.audit != nil {
 				uid := u.ID
 				_ = s.audit.Log(ctx, &uid, "username_failed_attempt_recorded",
-					fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
-					fmt.Sprintf(`{"username":"%s","user_id":"%s"}`, un, uid.String()))
+					fmt.Sprintf("username:%s user_id:%s attempts:%d remaining:%d", un, uid.String(), count, attemptsRemaining), ip, ua,
+					fmt.Sprintf(`{"username":"%s","user_id":"%s","attempts":%d,"remaining":%d}`, un, uid.String(), count, attemptsRemaining))
 			}
+
+			// Audit invalid credentials
+			if s.audit != nil {
+				uid := u.ID
+				_ = s.audit.Log(ctx, &uid, "username_invalid_credentials",
+					fmt.Sprintf("username:%s user_id:%s reason:invalid_password", un, uid.String()),
+					ip, ua,
+					fmt.Sprintf(`{"username":"%s","user_id":"%s","reason":"invalid_password"}`, un, uid.String()))
+			}
+
+			// Return error with attempts remaining warning
+			return nil, errs.InvalidCredentialsWithAttempts(attemptsRemaining)
 		}
 
+		// Lockout not enabled - return basic error
 		// Audit invalid credentials
 		if s.audit != nil {
 			uid := u.ID

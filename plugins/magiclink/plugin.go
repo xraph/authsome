@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
+	"github.com/xraph/authsome/core/authflow"
 	"github.com/xraph/authsome/core/hooks"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/registry"
@@ -176,13 +177,56 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
+// createAuthCompletionService creates the authentication completion service
+func (p *Plugin) createAuthCompletionService() *authflow.CompletionService {
+	serviceRegistry := p.authInst.GetServiceRegistry()
+	if serviceRegistry == nil {
+		return nil
+	}
+
+	// Get services from registry
+	var authService authflow.AuthServiceInterface
+	var appService authflow.AppServiceInterface
+	var deviceService authflow.DeviceServiceInterface
+	var auditService authflow.AuditServiceInterface
+
+	// Get services from registry (they return concrete types directly)
+	authService = serviceRegistry.AuthService()
+	auditService = serviceRegistry.AuditService()
+
+	// Wrap device and app services with adapters
+	deviceSvc := serviceRegistry.DeviceService()
+	if deviceSvc != nil {
+		deviceService = &authflow.DeviceServiceAdapter{DeviceService: deviceSvc}
+	}
+
+	appSvc := serviceRegistry.AppService()
+	if appSvc != nil && appSvc.App != nil {
+		appService = &authflow.AppServiceAdapter{AppService: appSvc.App}
+	}
+
+	// Pass nil for cookieConfig - appService.GetCookieConfig() handles getting
+	// the global cookie config (set via SetGlobalCookieConfig in authsome.go)
+	return authflow.NewCompletionService(
+		authService,
+		deviceService,
+		auditService,
+		appService,
+		nil, // Cookie config comes from appService.GetCookieConfig()
+	)
+}
+
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
 	}
 	// Router is already scoped to the correct basePath
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/magic-link/send": {Window: time.Minute, Max: 5}}})
-	h := NewHandler(p.service, rls, p.authInst)
+	
+	// Create authentication completion service for centralized auth flow
+	authCompletionService := p.createAuthCompletionService()
+	
+	h := NewHandler(p.service, rls, p.authInst, authCompletionService)
 
 	// Get authentication middleware for API key validation
 	authMw := p.authInst.AuthMiddleware()

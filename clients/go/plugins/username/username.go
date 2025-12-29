@@ -30,10 +30,10 @@ func (p *Plugin) Init(client *authsome.Client) error {
 }
 
 // SignUp SignUp handles user registration with username and password
-func (p *Plugin) SignUp(ctx context.Context) (*authsome.SignUpResponse, error) {
+func (p *Plugin) SignUp(ctx context.Context, req *authsome.SignUpRequest) (*authsome.SignUpResponse, error) {
 	path := "/username/signup"
 	var result authsome.SignUpResponse
-	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
 		return nil, err
 	}
@@ -41,10 +41,10 @@ func (p *Plugin) SignUp(ctx context.Context) (*authsome.SignUpResponse, error) {
 }
 
 // SignIn SignIn handles user authentication with username and password
-func (p *Plugin) SignIn(ctx context.Context) (*authsome.SignInResponse, error) {
+func (p *Plugin) SignIn(ctx context.Context, req *authsome.SignInRequest) (*authsome.SignInResponse, error) {
 	path := "/username/signin"
 	var result authsome.SignInResponse
-	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
 		return nil, err
 	}

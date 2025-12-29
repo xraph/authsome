@@ -397,3 +397,9 @@ func WithMinPasswordLength(length int) Option {
 		a.config.UserConfig.PasswordRequirements.MinLength = length
 	}
 }
+
+func WithRequireEmailVerification(require bool) Option {
+	return func(a *Auth) {
+		a.config.RequireEmailVerification = require
+	}
+}

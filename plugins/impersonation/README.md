@@ -141,7 +141,7 @@ auth:
 
 ### Start Impersonation
 
-**POST** `/api/impersonation/start`
+**POST** `/impersonation/start`
 
 Start impersonating a user.
 
@@ -175,7 +175,7 @@ Start impersonating a user.
 
 ### End Impersonation
 
-**POST** `/api/impersonation/end`
+**POST** `/impersonation/end`
 
 End an active impersonation session.
 
@@ -201,7 +201,7 @@ End an active impersonation session.
 
 ### Get Impersonation Session
 
-**GET** `/api/impersonation/:id?org_id=org_abc123`
+**GET** `/impersonation/:id?org_id=org_abc123`
 
 Retrieve details of an impersonation session.
 
@@ -226,7 +226,7 @@ Retrieve details of an impersonation session.
 
 ### List Impersonation Sessions
 
-**GET** `/api/impersonation?org_id=org_abc123&active_only=true&limit=20&offset=0`
+**GET** `/impersonation?org_id=org_abc123&active_only=true&limit=20&offset=0`
 
 List impersonation sessions with filters.
 
@@ -261,7 +261,7 @@ List impersonation sessions with filters.
 
 ### Verify Impersonation
 
-**POST** `/api/impersonation/verify`
+**POST** `/impersonation/verify`
 
 Check if a session is an impersonation session.
 
@@ -285,7 +285,7 @@ Check if a session is an impersonation session.
 
 ### List Audit Events
 
-**GET** `/api/impersonation/audit?org_id=org_abc123&limit=50&offset=0`
+**GET** `/impersonation/audit?org_id=org_abc123&limit=50&offset=0`
 
 List impersonation audit events.
 
@@ -434,7 +434,7 @@ if (isImpersonating) {
 
 ```javascript
 async function endImpersonation(impersonationId) {
-    const response = await fetch('/api/impersonation/end', {
+    const response = await fetch('/impersonation/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

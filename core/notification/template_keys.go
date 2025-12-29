@@ -71,14 +71,15 @@ const (
 
 // TemplateMetadata contains metadata about a template including default content
 type TemplateMetadata struct {
-	Key             string           `json:"key"`
-	Name            string           `json:"name"`
-	Description     string           `json:"description"`
-	Type            NotificationType `json:"type"`
-	Variables       []string         `json:"variables"`
-	DefaultSubject  string           `json:"defaultSubject"`
-	DefaultBody     string           `json:"defaultBody"`
-	DefaultBodyHTML string           `json:"defaultBodyHTML,omitempty"`
+	Key             string               `json:"key"`
+	Name            string               `json:"name"`
+	Description     string               `json:"description"`
+	Type            NotificationType     `json:"type"`
+	Priority        NotificationPriority `json:"priority"` // Default priority for this template type
+	Variables       []string             `json:"variables"`
+	DefaultSubject  string               `json:"defaultSubject"`
+	DefaultBody     string               `json:"defaultBody"`
+	DefaultBodyHTML string               `json:"defaultBodyHTML,omitempty"`
 }
 
 // createTemplateMetadataFromBuilder generates TemplateMetadata from a builder template
@@ -86,6 +87,16 @@ func createTemplateMetadataFromBuilder(
 	key, name, description, builderKey string,
 	variables []string,
 	subject string,
+) TemplateMetadata {
+	return createTemplateMetadataFromBuilderWithPriority(key, name, description, builderKey, variables, subject, PriorityNormal)
+}
+
+// createTemplateMetadataFromBuilderWithPriority generates TemplateMetadata with explicit priority
+func createTemplateMetadataFromBuilderWithPriority(
+	key, name, description, builderKey string,
+	variables []string,
+	subject string,
+	priority NotificationPriority,
 ) TemplateMetadata {
 	// Get builder template
 	doc, err := builder.GetSampleTemplate(builderKey)
@@ -96,6 +107,7 @@ func createTemplateMetadataFromBuilder(
 			Name:           name,
 			Description:    description,
 			Type:           NotificationTypeEmail,
+			Priority:       priority,
 			Variables:      variables,
 			DefaultSubject: subject,
 			DefaultBody:    "Template rendering failed",
@@ -117,6 +129,7 @@ func createTemplateMetadataFromBuilder(
 		Name:            name,
 		Description:     description,
 		Type:            NotificationTypeEmail,
+		Priority:        priority,
 		Variables:       variables,
 		DefaultSubject:  subject,
 		DefaultBody:     textBody,
@@ -151,6 +164,7 @@ func GetDefaultTemplateMetadata() []TemplateMetadata {
 			Name:           "Welcome Email",
 			Description:    "Welcome email sent to new users after successful registration",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityNormal, // Welcome emails are nice-to-have
 			Variables:      []string{"userName", "appName", "loginURL"},
 			DefaultSubject: "Welcome to {{.appName}}!",
 			DefaultBody: `Hello {{.userName}},
@@ -192,6 +206,7 @@ The {{.appName}} Team`,
 			Name:           "Email Verification",
 			Description:    "Email verification link sent to users to verify their email address",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityHigh, // Important but can retry async
 			Variables:      []string{"userName", "verificationURL", "code", "appName"},
 			DefaultSubject: "Verify your email for {{.appName}}",
 			DefaultBody: `Hello {{.userName}},
@@ -239,6 +254,7 @@ The {{.appName}} Team`,
 			Name:           "Password Reset",
 			Description:    "Password reset link sent to users who request a password reset",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityCritical, // Critical - user is blocked without this
 			Variables:      []string{"userName", "resetURL", "code", "appName"},
 			DefaultSubject: "Reset your password for {{.appName}}",
 			DefaultBody: `Hello {{.userName}},
@@ -286,6 +302,7 @@ The {{.appName}} Team`,
 			Name:           "MFA Code",
 			Description:    "Multi-factor authentication code sent to users during login",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityCritical, // Critical - blocks auth flow
 			Variables:      []string{"userName", "code", "appName"},
 			DefaultSubject: "Your {{.appName}} verification code",
 			DefaultBody: `Hello {{.userName}},
@@ -327,6 +344,7 @@ The {{.appName}} Team`,
 			Name:           "Magic Link",
 			Description:    "Passwordless login link sent to users",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityCritical, // Critical - required for auth
 			Variables:      []string{"userName", "magicURL", "appName"},
 			DefaultSubject: "Your {{.appName}} login link",
 			DefaultBody: `Hello {{.userName}},
@@ -368,6 +386,7 @@ The {{.appName}} Team`,
 			Name:           "Email OTP",
 			Description:    "One-time password sent via email for authentication",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityCritical, // Critical - required for auth
 			Variables:      []string{"userName", "otp", "appName"},
 			DefaultSubject: "Your {{.appName}} one-time password",
 			DefaultBody: `Hello {{.userName}},
@@ -409,6 +428,7 @@ The {{.appName}} Team`,
 			Name:           "Phone OTP",
 			Description:    "One-time password sent via SMS for authentication",
 			Type:           NotificationTypeSMS,
+			Priority:       PriorityCritical, // Critical - required for auth
 			Variables:      []string{"otp", "appName"},
 			DefaultSubject: "", // SMS doesn't have subjects
 			DefaultBody:    `Your {{.appName}} verification code is: {{.otp}}. Valid for 5 minutes. Do not share this code.`,
@@ -418,6 +438,7 @@ The {{.appName}} Team`,
 			Name:           "Security Alert",
 			Description:    "Security alert notification for suspicious account activity",
 			Type:           NotificationTypeEmail,
+			Priority:       PriorityHigh, // High - important but async
 			Variables:      []string{"userName", "alertMessage", "timestamp", "ipAddress", "location", "appName"},
 			DefaultSubject: "Security alert for your {{.appName}} account",
 			DefaultBody: `Hello {{.userName}},
@@ -599,46 +620,51 @@ The {{.appName}} Security Team`,
 			[]string{"userName", "downloadURL", "appName"},
 			"Your data export is ready",
 		),
-		// Session/device templates
-		createTemplateMetadataFromBuilder(
+		// Session/device templates - Low priority (informational, fire-and-forget)
+		createTemplateMetadataFromBuilderWithPriority(
 			TemplateKeyNewDeviceLogin,
 			"New Device Sign-In",
 			"Notification of sign-in from a new device",
 			"new_device_login",
 			[]string{"userName", "deviceName", "browserName", "osName", "location", "timestamp", "confirmURL", "secureAccountURL", "appName"},
 			"New device sign-in detected",
+			PriorityLow, // Informational - fire and forget
 		),
-		createTemplateMetadataFromBuilder(
+		createTemplateMetadataFromBuilderWithPriority(
 			TemplateKeyNewLocationLogin,
 			"New Location Sign-In",
 			"Notification of sign-in from a new location",
 			"new_location_login",
 			[]string{"userName", "location", "ipAddress", "timestamp", "secureAccountURL", "appName"},
 			"Sign-in from new location",
+			PriorityLow, // Informational - fire and forget
 		),
-		createTemplateMetadataFromBuilder(
+		createTemplateMetadataFromBuilderWithPriority(
 			TemplateKeySuspiciousLogin,
 			"Suspicious Login Detected",
 			"Alert for suspicious login attempt",
 			"suspicious_login",
 			[]string{"userName", "location", "ipAddress", "deviceName", "timestamp", "secureAccountURL", "appName"},
 			"Suspicious login attempt on your account",
+			PriorityHigh, // Security concern - should retry
 		),
-		createTemplateMetadataFromBuilder(
+		createTemplateMetadataFromBuilderWithPriority(
 			TemplateKeyDeviceRemoved,
 			"Device Removed",
 			"Notification when a device is removed from account",
 			"device_removed",
 			[]string{"userName", "deviceName", "deviceType", "timestamp", "secureAccountURL", "appName"},
 			"Device removed from your account",
+			PriorityLow, // Informational - fire and forget
 		),
-		createTemplateMetadataFromBuilder(
+		createTemplateMetadataFromBuilderWithPriority(
 			TemplateKeyAllSessionsRevoked,
 			"All Sessions Signed Out",
 			"Notification when all sessions are revoked for security",
 			"all_sessions_revoked",
 			[]string{"userName", "loginURL", "appName"},
 			"All sessions have been signed out",
+			PriorityLow, // Informational - fire and forget
 		),
 		// Reminder templates
 		createTemplateMetadataFromBuilder(
@@ -760,4 +786,14 @@ func GetTemplateKeysByType(notifType NotificationType) []string {
 func ValidateTemplateKey(key string) bool {
 	_, err := GetDefaultTemplate(key)
 	return err == nil
+}
+
+// GetTemplatePriority returns the default priority for a template key
+// Returns PriorityNormal if template not found
+func GetTemplatePriority(key string) NotificationPriority {
+	template, err := GetDefaultTemplate(key)
+	if err != nil || template.Priority == "" {
+		return PriorityNormal
+	}
+	return template.Priority
 }

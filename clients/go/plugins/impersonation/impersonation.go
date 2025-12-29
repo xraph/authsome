@@ -3,7 +3,8 @@ package impersonation
 import (
 	"context"
 
-	"github.com/xraph/authsome/clients/go"
+	"github.com/rs/xid"
+	authsome "github.com/xraph/authsome/clients/go"
 )
 
 // Auto-generated impersonation plugin
@@ -30,44 +31,55 @@ func (p *Plugin) Init(client *authsome.Client) error {
 }
 
 // StartImpersonation StartImpersonation handles POST /impersonation/start
-func (p *Plugin) StartImpersonation(ctx context.Context, req *authsome.StartImpersonationRequest) error {
-	path := "/start"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+func (p *Plugin) StartImpersonation(ctx context.Context) (*authsome.StartImpersonationResponse, error) {
+	path := "/impersonation/start"
+	var result authsome.StartImpersonationResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // EndImpersonation EndImpersonation handles POST /impersonation/end
-func (p *Plugin) EndImpersonation(ctx context.Context, req *authsome.EndImpersonationRequest) error {
-	path := "/end"
-	err := p.client.Request(ctx, "POST", path, req, nil, false)
-	return err
+func (p *Plugin) EndImpersonation(ctx context.Context) (*authsome.EndImpersonationResponse, error) {
+	path := "/impersonation/end"
+	var result authsome.EndImpersonationResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // GetImpersonation GetImpersonation handles GET /impersonation/:id
-func (p *Plugin) GetImpersonation(ctx context.Context) error {
-	path := "/:id"
+func (p *Plugin) GetImpersonation(ctx context.Context, id xid.ID) error {
+	path := "/impersonation/:id"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // ListImpersonations ListImpersonations handles GET /impersonation
 func (p *Plugin) ListImpersonations(ctx context.Context) error {
-	path := "/"
+	path := "/impersonation/"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // ListAuditEvents ListAuditEvents handles GET /impersonation/audit
 func (p *Plugin) ListAuditEvents(ctx context.Context) error {
-	path := "/audit"
+	path := "/impersonation/audit"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }
 
 // VerifyImpersonation VerifyImpersonation handles GET /impersonation/verify/:sessionId
-func (p *Plugin) VerifyImpersonation(ctx context.Context) error {
-	path := "/verify"
-	err := p.client.Request(ctx, "POST", path, nil, nil, false)
-	return err
+func (p *Plugin) VerifyImpersonation(ctx context.Context) (*authsome.VerifyImpersonationResponse, error) {
+	path := "/impersonation/verify"
+	var result authsome.VerifyImpersonationResponse
+	err := p.client.Request(ctx, "POST", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
-

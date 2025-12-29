@@ -19,9 +19,11 @@ export class SocialPlugin implements ClientPlugin {
     });
   }
 
-  async callback(): Promise<types.CallbackDataResponse> {
-    const path = '/callback/:provider';
-    return this.client.request<types.CallbackDataResponse>('GET', path);
+  async callback(params: { provider: string }, query?: { state?: string; code?: string; error?: string; errorDescription?: string }): Promise<types.CallbackDataResponse> {
+    const path = `/callback/${params.provider}`;
+    return this.client.request<types.CallbackDataResponse>('GET', path, {
+      query: this.client.toQueryParams(query),
+    });
   }
 
   async linkAccount(request: types.LinkAccountRequest): Promise<types.AuthURLResponse> {
@@ -31,8 +33,8 @@ export class SocialPlugin implements ClientPlugin {
     });
   }
 
-  async unlinkAccount(): Promise<types.MessageResponse> {
-    const path = '/account/unlink/:provider';
+  async unlinkAccount(params: { provider: string }): Promise<types.MessageResponse> {
+    const path = `/account/unlink/${params.provider}`;
     return this.client.request<types.MessageResponse>('DELETE', path);
   }
 

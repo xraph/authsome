@@ -1,102 +1,132 @@
 plugin_id: apikey
 version: 1.0.0
+base_path: /api-keys
 routes:
     - name: CreateAPIKey
       description: CreateAPIKey handles API key creation
       method: POST
       path: /createapikey
+      request:
+        allowed_ips: '[]string!'
+        description: string!
+        metadata: '!'
+        name: string!
+        permissions: '!'
+        rate_limit: int!
+        scopes: '[]string!'
+      response:
+        api_key: '*apikey.APIKey!'
+        message: string!
+      request_type: CreateAPIKeyRequest
+      response_type: CreateAPIKeyResponse
     - name: RotateAPIKey
       description: RotateAPIKey handles API key rotation
       method: POST
       path: /:id/rotate
+      request:
+        "": string
+      response:
+        api_key: '*apikey.APIKey!'
+        message: string!
+      request_type: RotateAPIKeyRequest
+      response_type: RotateAPIKeyResponse
     - name: CreateAPIKey
       description: CreateAPIKey handles POST /api-keys
       method: POST
       path: /createapikey
       request:
-        allowed_ips: '[]string'
-        description: string
-        metadata: ""
+        allowed_ips: '[]string!'
+        description: string!
+        metadata: '!'
         name: string!
-        permissions: ""
-        rate_limit: int
+        permissions: '!'
+        rate_limit: int!
         scopes: '[]string!'
       response:
         api_key: '*apikey.APIKey!'
         message: string!
-      request_type: CreateAPIKey_reqBody
+      request_type: CreateAPIKeyRequest
       response_type: CreateAPIKeyResponse
     - name: ListAPIKeys
       description: ListAPIKeys handles GET /api-keys
       method: GET
       path: /listapikeys
+      request:
+        "": '*bool'
+      request_type: ListAPIKeysRequest
+      response_type: ListAPIKeysResponse
     - name: GetAPIKey
       description: GetAPIKey handles GET /api-keys/:id
       method: GET
       path: /:id
+      request:
+        "": string
+      request_type: GetAPIKeyRequest
+      response_type: APIKey
     - name: UpdateAPIKey
       description: UpdateAPIKey handles PATCH /api-keys/:id
       method: PUT
       path: /:id
-      request_type: apikey.UpdateAPIKeyRequest
+      request:
+        "": string
+        allowed_ips: '[]string!'
+        description: '*string!'
+        metadata: '!'
+        name: '*string!'
+        permissions: '!'
+        rate_limit: '*int!'
+        scopes: '[]string!'
+      request_type: UpdateAPIKeyRequest
+      response_type: APIKey
     - name: DeleteAPIKey
       description: DeleteAPIKey handles DELETE /api-keys/:id
       method: DELETE
       path: /:id
+      request:
+        "": string
+      request_type: DeleteAPIKeyRequest
       response_type: MessageResponse
     - name: RotateAPIKey
       description: RotateAPIKey handles POST /api-keys/:id/rotate
       method: POST
       path: /:id/rotate
+      request:
+        "": string
       response:
         api_key: '*apikey.APIKey!'
         message: string!
+      request_type: RotateAPIKeyRequest
       response_type: RotateAPIKeyResponse
     - name: VerifyAPIKey
       description: VerifyAPIKey handles POST /api-keys/verify
       method: POST
       path: /verify
-      request_type: apikey.VerifyAPIKeyRequest
+      request:
+        key: string!
+      request_type: VerifyAPIKeyRequest
+      response_type: VerifyAPIKeyResponse
 types:
-    - name: RateLimitConfig
-      fields:
-        enabled: bool!
-        window: time.Duration!
-    - name: AutoCleanupConfig
-      fields:
-        enabled: bool!
-        interval: time.Duration!
-    - name: Handler
-      fields:
-        "": '*apikey.Service'
-    - name: AssignRole_reqBody
-      fields:
-        roleID: string!
-    - name: RolesResponse
-      fields:
-        roles: '[]*apikey.Role!'
-    - name: CreateAPIKey_reqBody
-      fields:
-        allowed_ips: '[]string'
-        description: string
-        metadata: ""
-        name: string!
-        permissions: ""
-        rate_limit: int
-        scopes: '[]string!'
-    - name: DashboardExtension
-      fields:
-        "": '*dashboard.ExtensionRegistry'
     - name: CreateAPIKeyResponse
+      fields:
+        api_key: '*apikey.APIKey!'
+        message: string!
+    - name: IPWhitelistConfig
+      fields:
+        enabled: bool!
+        strict_mode: bool!
+    - name: RotateAPIKeyRequest
+      fields:
+        "": string
+    - name: GetEffectivePermissionsRequest
+      fields:
+        "": string
+    - name: RotateAPIKeyResponse
       fields:
         api_key: '*apikey.APIKey!'
         message: string!
     - name: Middleware
       fields:
         "": Config
-    - name: ScopeDefinition
-      fields:
-        "": string
     - name: Config
       fields:
         allow_query_param: bool!
@@ -110,10 +140,6 @@ types:
         max_rate_limit: int!
         rate_limiting: RateLimitConfig!
         webhooks: WebhookConfig!
-    - name: IPWhitelistConfig
-      fields:
-        enabled: bool!
-        strict_mode: bool!
     - name: WebhookConfig
       fields:
         enabled: bool!
@@ -124,13 +150,70 @@ types:
         notify_on_rate_limit: bool!
         notify_on_rotated: bool!
         webhook_urls: '[]string!'
-    - name: KeyStats
+    - name: Handler
+      fields:
+        "": '*apikey.Service'
+    - name: CreateAPIKeyRequest
+      fields:
+        allowed_ips: '[]string!'
+        description: string!
+        metadata: '!'
+        name: string!
+        permissions: '!'
+        rate_limit: int!
+        scopes: '[]string!'
+    - name: UpdateAPIKeyRequest
       fields:
         "": string
-    - name: RotateAPIKeyResponse
+        allowed_ips: '[]string!'
+        description: '*string!'
+        metadata: '!'
+        name: '*string!'
+        permissions: '!'
+        rate_limit: '*int!'
+        scopes: '[]string!'
+    - name: DeleteAPIKeyRequest
       fields:
-        api_key: '*apikey.APIKey!'
-        message: string!
+        "": string
+    - name: RolesResponse
+      fields:
+        roles: '[]*apikey.Role!'
     - name: Plugin
       fields:
-        "": '*time.Ticker'
+        "": '*apikey.Service'
+    - name: ScopeDefinition
+      fields:
+        "": string
+    - name: DashboardExtension
+      fields:
+        "": '*dashboard.ExtensionRegistry'
+    - name: VerifyAPIKeyRequest
+      fields:
+        key: string!
+    - name: UnassignRoleRequest
+      fields:
+        "": string
+    - name: RateLimitConfig
+      fields:
+        enabled: bool!
+        window: time.Duration!
+    - name: AutoCleanupConfig
+      fields:
+        enabled: bool!
+        interval: time.Duration!
+    - name: KeyStats
+      fields:
+        "": int
+    - name: ListAPIKeysRequest
+      fields:
+        "": '*bool'
+    - name: GetAPIKeyRequest
+      fields:
+        "": string
+    - name: AssignRoleRequest
+      fields:
+        "": string
+        roleID: string!
+    - name: GetRolesRequest
+      fields:
+        "": string

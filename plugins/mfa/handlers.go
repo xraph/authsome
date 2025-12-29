@@ -1,7 +1,6 @@
 package mfa
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 
@@ -51,12 +50,17 @@ func (h *Handler) EnrollFactor(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	var req FactorEnrollmentRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var req EnrollFactorRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	resp, err := h.service.EnrollFactor(c.Request().Context(), userID, &req)
+	resp, err := h.service.EnrollFactor(c.Request().Context(), userID, &FactorEnrollmentRequest{
+		Type:     req.Type,
+		Priority: req.Priority,
+		Name:     req.Name,
+		Metadata: req.Metadata,
+	})
 	if err != nil {
 		return handleError(c, err, "ENROLL_FACTOR_FAILED", "Failed to enroll factor", http.StatusBadRequest)
 	}
@@ -71,10 +75,12 @@ func (h *Handler) ListFactors(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	// Check for active_only query param
-	activeOnly := c.Request().URL.Query().Get("active_only") == "true"
+	var req ListFactorsRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
 
-	factors, err := h.service.ListFactors(c.Request().Context(), userID, activeOnly)
+	factors, err := h.service.ListFactors(c.Request().Context(), userID, req.ActiveOnly)
 	if err != nil {
 		return handleError(c, err, "LIST_FACTORS_FAILED", "Failed to list factors", http.StatusInternalServerError)
 	}
@@ -89,8 +95,12 @@ func (h *Handler) GetFactor(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	factorIDStr := c.Param("id")
-	factorID, err := xid.FromString(factorIDStr)
+	var req GetFactorRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	factorID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
@@ -115,8 +125,12 @@ func (h *Handler) UpdateFactor(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	factorIDStr := c.Param("id")
-	factorID, err := xid.FromString(factorIDStr)
+	var req UpdateFactorRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	factorID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
@@ -130,9 +144,19 @@ func (h *Handler) UpdateFactor(c forge.Context) error {
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
 
-	var updates map[string]interface{}
-	if err := json.NewDecoder(c.Request().Body).Decode(&updates); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	// Convert UpdateFactorRequest to map for service layer
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Priority != nil {
+		updates["priority"] = *req.Priority
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
+	if req.Metadata != nil {
+		updates["metadata"] = req.Metadata
 	}
 
 	if err := h.service.UpdateFactor(c.Request().Context(), factorID, updates); err != nil {
@@ -149,8 +173,12 @@ func (h *Handler) DeleteFactor(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	factorIDStr := c.Param("id")
-	factorID, err := xid.FromString(factorIDStr)
+	var req DeleteFactorRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	factorID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
@@ -178,8 +206,12 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	factorIDStr := c.Param("id")
-	factorID, err := xid.FromString(factorIDStr)
+	var req VerifyEnrolledFactorRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	factorID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid factor ID"))
 	}
@@ -191,13 +223,6 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 	}
 	if factor.UserID != userID {
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
-	}
-
-	var req struct {
-		Code string `json:"code"`
-	}
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
 
 	if err := h.service.VerifyEnrollment(c.Request().Context(), factorID, req.Code); err != nil {
@@ -216,19 +241,24 @@ func (h *Handler) InitiateChallenge(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	var req ChallengeRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	var reqDTO InitiateChallengeRequest
+	if err := c.BindRequest(&reqDTO); err != nil {
 		// Use empty request if no body provided
-		req = ChallengeRequest{}
+		reqDTO = InitiateChallengeRequest{}
 	}
 
-	// Override userID from context
-	req.UserID = userID
-
-	// Add IP and user agent to metadata
+	// Create service request
+	req := ChallengeRequest{
+		UserID:      userID,
+		FactorTypes: reqDTO.FactorTypes,
+		Context:     reqDTO.Context,
+		Metadata:    reqDTO.Metadata,
+	}
 	if req.Metadata == nil {
 		req.Metadata = make(map[string]any)
 	}
+
+	// Add IP and user agent to metadata
 	ip := c.Request().RemoteAddr
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
@@ -251,9 +281,19 @@ func (h *Handler) VerifyChallenge(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	var req VerificationRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var reqDTO VerifyChallengeRequest
+	if err := c.BindRequest(&reqDTO); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	// Create service request
+	req := VerificationRequest{
+		ChallengeID:    reqDTO.ChallengeID,
+		FactorID:       reqDTO.FactorID,
+		Code:           reqDTO.Code,
+		Data:           reqDTO.Data,
+		RememberDevice: reqDTO.RememberDevice,
+		DeviceInfo:     reqDTO.DeviceInfo,
 	}
 
 	// Verify challenge belongs to user (done in service)
@@ -274,12 +314,12 @@ func (h *Handler) GetChallengeStatus(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	sessionIDStr := c.Param("id")
-	if sessionIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.RequiredField("sessionId"))
+	var req GetChallengeStatusRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	sessionID, err := xid.FromString(sessionIDStr)
+	sessionID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid session ID"))
 	}
@@ -301,12 +341,18 @@ func (h *Handler) TrustDevice(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	var deviceInfo DeviceInfo
-	if err := json.NewDecoder(c.Request().Body).Decode(&deviceInfo); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	var req TrustDeviceRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	if err := h.service.TrustDevice(c.Request().Context(), userID, &deviceInfo); err != nil {
+	deviceInfo := &DeviceInfo{
+		DeviceID: req.DeviceID,
+		Name:     req.Name,
+		Metadata: req.Metadata,
+	}
+
+	if err := h.service.TrustDevice(c.Request().Context(), userID, deviceInfo); err != nil {
 		return handleError(c, err, "TRUST_DEVICE_FAILED", "Failed to trust device", http.StatusBadRequest)
 	}
 
@@ -335,8 +381,12 @@ func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
-	deviceIDStr := c.Param("id")
-	deviceID, err := xid.FromString(deviceIDStr)
+	var req RevokeTrustedDeviceRequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
+	}
+
+	deviceID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid device ID"))
 	}
@@ -468,8 +518,8 @@ func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
 	// }
 
 	var req AdminPolicyRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Validate policy
@@ -509,8 +559,8 @@ func (h *Handler) AdminGrantBypass(c forge.Context) error {
 	// }
 
 	var req AdminBypassRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
 	// Validate request
@@ -546,12 +596,12 @@ func (h *Handler) AdminResetUserMFA(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("APP_CONTEXT_REQUIRED", "App context required", http.StatusBadRequest))
 	}
 
-	userIDStr := c.Param("id")
-	if userIDStr == "" {
-		return c.JSON(http.StatusBadRequest, errs.RequiredField("userId"))
+	var req ResetUserMFARequest
+	if err := c.BindRequest(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	userID, err := xid.FromString(userIDStr)
+	userID, err := xid.FromString(req.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid user ID"))
 	}

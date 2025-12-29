@@ -46,9 +46,10 @@ func (r *RolePermissionRepository) GetRolePermissions(ctx context.Context, roleI
 	var permissions []*schema.Permission
 	err := r.db.NewSelect().
 		Model(&permissions).
-		Join("INNER JOIN role_permissions AS rp ON rp.permission_id = permission.id").
+		Join("INNER JOIN role_permissions AS rp ON rp.permission_id = perm.id").
 		Where("rp.role_id = ?", roleID).
-		Order("permission.category ASC, permission.name ASC").
+		Order("perm.category ASC").
+		Order("perm.name ASC").
 		Scan(ctx)
 	if err != nil {
 		return nil, err

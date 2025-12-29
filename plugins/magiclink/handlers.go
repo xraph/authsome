@@ -4,25 +4,33 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core"
+	"github.com/xraph/authsome/core/authflow"
 	"github.com/xraph/authsome/core/contexts"
 	rl "github.com/xraph/authsome/core/ratelimit"
 	"github.com/xraph/authsome/core/responses"
-	"github.com/xraph/authsome/helpers"
+	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
 type Handler struct {
-	svc      *Service
-	rl       *rl.Service
-	authInst core.Authsome
+	svc            *Service
+	rl             *rl.Service
+	authInst       core.Authsome
+	authCompletion *authflow.CompletionService
 }
 
-func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome) *Handler {
-	return &Handler{svc: s, rl: rls, authInst: authInst}
+func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome, authCompletion *authflow.CompletionService) *Handler {
+	return &Handler{
+		svc:            s,
+		rl:             rls,
+		authInst:       authInst,
+		authCompletion: authCompletion,
+	}
 }
 
 // Request types
@@ -125,20 +133,74 @@ func (h *Handler) Verify(c forge.Context) error {
 	}
 	ua := c.Request().UserAgent()
 
-	// Call service with explicit context IDs
-	res, err := h.svc.Verify(c.Request().Context(), appID, envID, orgIDPtr, token, remember, ip, ua)
+	// Call service to verify token and get user info
+	result, err := h.svc.Verify(c.Request().Context(), appID, envID, orgIDPtr, token, remember, ip, ua)
 	if err != nil {
 		return handleError(c, err, "VERIFY_MAGIC_LINK_FAILED", "Failed to verify magic link", http.StatusBadRequest)
 	}
 
-	// Set session cookie if enabled
-	if h.authInst != nil && res.Session != nil {
-		_ = helpers.SetSessionCookieFromAuth(c, h.authInst, res.Token, res.Session.ExpiresAt)
+	// Use centralized authentication completion service for signup/signin
+	if h.authCompletion != nil {
+		var authResp *responses.AuthResponse
+		var authErr error
+
+		if result.IsNewUser {
+			// New user signup - CompleteSignUpOrSignIn will create user and add membership
+			// Generate a random password for magic link users
+			pwd, pwdErr := crypto.GenerateToken(16)
+			if pwdErr != nil {
+				return handleError(c, pwdErr, "PASSWORD_GENERATION_FAILED", "Failed to generate password", http.StatusInternalServerError)
+			}
+			
+			// Extract name from email
+			name := result.Email
+			if at := strings.Index(result.Email, "@"); at > 0 {
+				name = result.Email[:at]
+			}
+
+			authResp, authErr = h.authCompletion.CompleteSignUpOrSignIn(&authflow.CompleteSignUpOrSignInRequest{
+				Email:        result.Email,
+				Password:     pwd,
+				Name:         name,
+				User:         nil,
+				IsNewUser:    true,
+				RememberMe:   remember,
+				IPAddress:    ip,
+				UserAgent:    ua,
+				Context:      c.Request().Context(),
+				ForgeContext: c,
+				AuthMethod:   "magiclink",
+				AuthProvider: "",
+			})
+		} else {
+			// Existing user signin - CompleteSignUpOrSignIn will create session and check membership
+			authResp, authErr = h.authCompletion.CompleteSignUpOrSignIn(&authflow.CompleteSignUpOrSignInRequest{
+				Email:        result.Email,
+				Password:     "",
+				Name:         result.User.Name,
+				User:         result.User,
+				IsNewUser:    false,
+				RememberMe:   remember,
+				IPAddress:    ip,
+				UserAgent:    ua,
+				Context:      c.Request().Context(),
+				ForgeContext: c,
+				AuthMethod:   "magiclink",
+				AuthProvider: "",
+			})
+		}
+
+		if authErr != nil {
+			return handleError(c, authErr, "AUTH_COMPLETION_FAILED", "Failed to complete authentication", http.StatusInternalServerError)
+		}
+
+		return c.JSON(http.StatusOK, VerifyResponse{
+			User:    authResp.User,
+			Session: authResp.Session,
+			Token:   authResp.Token,
+		})
 	}
 
-	return c.JSON(http.StatusOK, VerifyResponse{
-		User:    res.User,
-		Session: res.Session,
-		Token:   res.Token,
-	})
+	// Fallback if completion service not available (should not happen)
+	return handleError(c, errs.New("AUTH_COMPLETION_NOT_AVAILABLE", "Authentication completion service not available", http.StatusInternalServerError), "AUTH_COMPLETION_NOT_AVAILABLE", "Authentication completion service not available", http.StatusInternalServerError)
 }
