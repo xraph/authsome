@@ -1,3 +1,4 @@
 github.com/xraph/forge v0.1.0/go.mod h1:iGd+zKxTC7sGMgaaH/5O/El4DbNEjzaHvjlSw2w5yc4=
 github.com/xraph/forge v0.6.0/go.mod h1:vrrTwf/D/nlYpbKfKm3Qi9Bp9QDYdXgma51aWVHreHE=
 github.com/xraph/forge v0.7.5/go.mod h1:obUhZBP0Pt8O5dUvAKIH2rbG1OLaB1m8qiIvS4tZBUE=
+github.com/xraph/forge v0.8.0/go.mod h1:KBhjeB626yKC7ly3T/hWzc0A2MotSb5wyhQToplqjJw=
