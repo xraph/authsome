@@ -359,7 +359,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// device service is optional for tests; pass nil to keep scope minimal
 	var dSvc *dev.Service
 	// security and audit services optional for tests; pass nil
-	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, auditSvc, nil, nil, nil)
+	h := handlers.NewAuthHandler(aSvc, rlSvc, dSvc, nil, auditSvc, nil, nil, nil, nil, "")
 
 	// Create a test AppID
 	testAppID := xid.New()

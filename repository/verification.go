@@ -84,3 +84,23 @@ func (r *verificationRepository) FindVerificationByUserAndType(ctx context.Conte
 
 	return &verification, err
 }
+
+// FindVerificationByCode finds a verification by 6-digit code and type
+func (r *verificationRepository) FindVerificationByCode(ctx context.Context, code string, verificationType string) (*schema.Verification, error) {
+	var verification schema.Verification
+	err := r.db.NewSelect().
+		Model(&verification).
+		Where("code = ?", code).
+		Where("type = ?", verificationType).
+		Where("used = ?", false).
+		Where("expires_at > ?", time.Now().UTC()).
+		Order("created_at DESC").
+		Limit(1).
+		Scan(ctx)
+
+	if err == sql.ErrNoRows {
+		return nil, sql.ErrNoRows
+	}
+
+	return &verification, err
+}

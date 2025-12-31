@@ -17,7 +17,7 @@ func (s *Service) getNotificationAdapter() interface{} {
 	// Type assert to access service registry
 	authInst, ok := s.authInst.(interface {
 		GetServiceRegistry() interface {
-			Get(string) (interface{}, error)
+			Get(string) (interface{}, bool)
 		}
 	})
 	if !ok {
@@ -29,8 +29,8 @@ func (s *Service) getNotificationAdapter() interface{} {
 		return nil
 	}
 
-	adapter, err := registry.Get("notification.adapter")
-	if err != nil {
+	adapter, exists := registry.Get("notification.adapter")
+	if !exists {
 		return nil
 	}
 

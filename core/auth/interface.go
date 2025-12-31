@@ -21,8 +21,10 @@ type ServiceInterface interface {
 	RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error)
 
 	// Password management
-	RequestPasswordReset(ctx context.Context, email string) (string, error)
+	// RequestPasswordReset returns (token, code, error) where token is for URL links and code is 6-digit for mobile
+	RequestPasswordReset(ctx context.Context, email string) (string, string, error)
 	ResetPassword(ctx context.Context, token, newPassword string) error
+	ResetPasswordWithCode(ctx context.Context, code, newPassword string) error
 	ValidateResetToken(ctx context.Context, token string) (bool, error)
 	ChangePassword(ctx context.Context, userID xid.ID, oldPassword, newPassword string) error
 

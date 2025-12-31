@@ -16,6 +16,7 @@ type Verification struct {
 	AppID     xid.ID     `bun:"app_id,notnull,type:varchar(20)"`
 	UserID    xid.ID     `bun:"user_id,notnull,type:varchar(20)"`
 	Token     string     `bun:"token,notnull,unique"`
+	Code      string     `bun:"code"`         // 6-digit numeric code for mobile-friendly verification
 	Type      string     `bun:"type,notnull"` // email, phone, password_reset
 	ExpiresAt time.Time  `bun:"expires_at,notnull"`
 	Used      bool       `bun:"used,notnull,default:false"`

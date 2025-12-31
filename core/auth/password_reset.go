@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/rs/xid"
@@ -15,6 +17,7 @@ import (
 type PasswordResetRepository interface {
 	CreateVerification(ctx context.Context, verification *schema.Verification) error
 	FindVerificationByToken(ctx context.Context, token string) (*schema.Verification, error)
+	FindVerificationByCode(ctx context.Context, code string, verificationType string) (*schema.Verification, error)
 	MarkVerificationAsUsed(ctx context.Context, id xid.ID) error
 	DeleteExpiredVerifications(ctx context.Context) error
 }
@@ -26,16 +29,36 @@ type RequestPasswordResetRequest struct {
 
 // ResetPasswordRequest represents a password reset confirmation
 type ResetPasswordRequest struct {
-	Token       string `json:"token" validate:"required"`
+	Token       string `json:"token,omitempty"`       // URL token for link-based reset
+	Code        string `json:"code,omitempty"`        // 6-digit code for manual entry
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 
+// PasswordResetResult contains both token and code for password reset
+type PasswordResetResult struct {
+	Token string // URL-safe token for email links
+	Code  string // 6-digit numeric code for mobile entry
+}
+
+// generateNumericCode generates a cryptographically secure n-digit numeric code
+func generateNumericCode(digits int) (string, error) {
+	max := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(digits)), nil)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", err
+	}
+	// Pad with leading zeros if needed
+	format := fmt.Sprintf("%%0%dd", digits)
+	return fmt.Sprintf(format, n), nil
+}
+
 // RequestPasswordReset initiates a password reset flow
-func (s *Service) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+// Returns token (for URL links) and code (for mobile entry)
+func (s *Service) RequestPasswordReset(ctx context.Context, email string) (string, string, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
-		return "", contexts.ErrAppContextRequired
+		return "", "", contexts.ErrAppContextRequired
 	}
 
 	// Find user by email
@@ -43,13 +66,19 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) (strin
 	if err != nil {
 		// Don't reveal if user exists - security best practice
 		// Still return success but don't send email
-		return "", nil
+		return "", "", nil
 	}
 
-	// Generate reset token
+	// Generate reset token (for URL links)
 	token, err := crypto.GenerateToken(32)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate reset token: %w", err)
+		return "", "", fmt.Errorf("failed to generate reset token: %w", err)
+	}
+
+	// Generate 6-digit code (for mobile entry)
+	code, err := generateNumericCode(6)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate reset code: %w", err)
 	}
 
 	// Create verification record
@@ -58,6 +87,7 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) (strin
 		AppID:     appID,
 		UserID:    user.ID,
 		Token:     token,
+		Code:      code,
 		Type:      "password_reset",
 		ExpiresAt: time.Now().UTC().Add(1 * time.Hour), // 1 hour expiry
 		Used:      false,
@@ -70,14 +100,14 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) (strin
 	// Store verification token
 	if repo, ok := s.getPasswordResetRepo(); ok {
 		if err := repo.CreateVerification(ctx, verification); err != nil {
-			return "", fmt.Errorf("failed to create verification: %w", err)
+			return "", "", fmt.Errorf("failed to create verification: %w", err)
 		}
 	}
 
-	return token, nil
+	return token, code, nil
 }
 
-// ResetPassword completes the password reset flow
+// ResetPassword completes the password reset flow using token
 func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -96,6 +126,33 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 		return ErrInvalidResetToken
 	}
 
+	return s.completePasswordReset(ctx, appID, verification, newPassword, repo)
+}
+
+// ResetPasswordWithCode completes the password reset flow using 6-digit code
+func (s *Service) ResetPasswordWithCode(ctx context.Context, code, newPassword string) error {
+	// Extract AppID from context
+	appID, ok := contexts.GetAppID(ctx)
+	if !ok || appID.IsNil() {
+		return contexts.ErrAppContextRequired
+	}
+
+	// Find verification by code
+	repo, ok := s.getPasswordResetRepo()
+	if !ok {
+		return fmt.Errorf("password reset repository not available")
+	}
+
+	verification, err := repo.FindVerificationByCode(ctx, code, "password_reset")
+	if err != nil {
+		return ErrInvalidResetToken
+	}
+
+	return s.completePasswordReset(ctx, appID, verification, newPassword, repo)
+}
+
+// completePasswordReset is the shared logic for completing password reset
+func (s *Service) completePasswordReset(ctx context.Context, appID xid.ID, verification *schema.Verification, newPassword string, repo PasswordResetRepository) error {
 	// Validate token
 	if verification.Used {
 		return ErrResetTokenAlreadyUsed

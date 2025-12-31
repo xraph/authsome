@@ -14,6 +14,10 @@ type Config struct {
 	// BasePath is the base path for auth routes
 	BasePath string `json:"basePath" yaml:"basePath"`
 
+	// BaseURL is the base URL for constructing verification links (e.g., "https://myapp.com")
+	// Used for password reset, email verification, magic links, and other notification URLs
+	BaseURL string `json:"baseUrl" yaml:"baseUrl"`
+
 	// CORS configuration
 	CORSEnabled    bool     `json:"corsEnabled" yaml:"corsEnabled"`       // Enable/disable CORS middleware (default: false)
 	TrustedOrigins []string `json:"trustedOrigins" yaml:"trustedOrigins"` // Allowed origins for CORS

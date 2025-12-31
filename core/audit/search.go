@@ -36,11 +36,12 @@ type SearchQuery struct {
 	Offset int `json:"offset"`
 
 	// Standard filters (AND combined with search query)
-	AppID  *xid.ID    `json:"appId,omitempty"`
-	UserID *xid.ID    `json:"userId,omitempty"`
-	Action string     `json:"action,omitempty"`
-	Since  *time.Time `json:"since,omitempty"`
-	Until  *time.Time `json:"until,omitempty"`
+	AppID         *xid.ID    `json:"appId,omitempty"`
+	EnvironmentID *xid.ID    `json:"environmentId,omitempty"` // Environment filtering
+	UserID        *xid.ID    `json:"userId,omitempty"`
+	Action        string     `json:"action,omitempty"`
+	Since         *time.Time `json:"since,omitempty"`
+	Until         *time.Time `json:"until,omitempty"`
 }
 
 // SearchResult represents a single search result

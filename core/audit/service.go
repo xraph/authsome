@@ -57,17 +57,24 @@ func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip,
 		return nil
 	}
 
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	e := &Event{
-		ID:        xid.New(),
-		AppID:     appID,
-		UserID:    userID,
-		Action:    action,
-		Resource:  resource,
-		IPAddress: ip,
-		UserAgent: ua,
-		Metadata:  metadata,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		ID:            xid.New(),
+		AppID:         appID,
+		EnvironmentID: environmentID,
+		UserID:        userID,
+		Action:        action,
+		Resource:      resource,
+		IPAddress:     ip,
+		UserAgent:     ua,
+		Metadata:      metadata,
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
 	}
 
 	// Convert to schema and create
@@ -96,6 +103,15 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 		appID = ctxAppID
 	}
 
+	// Extract EnvironmentID from context or use from request
+	environmentID := req.EnvironmentID
+	if environmentID == nil || environmentID.IsNil() {
+		// Try to get from context
+		if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+			environmentID = &envID
+		}
+	}
+
 	// Validate required fields
 	if req.Action == "" {
 		return nil, InvalidFilter("action", "action is required")
@@ -106,16 +122,17 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 
 	now := time.Now().UTC()
 	event := &Event{
-		ID:        xid.New(),
-		AppID:     appID,
-		UserID:    req.UserID,
-		Action:    req.Action,
-		Resource:  req.Resource,
-		IPAddress: req.IPAddress,
-		UserAgent: req.UserAgent,
-		Metadata:  req.Metadata,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:            xid.New(),
+		AppID:         appID,
+		EnvironmentID: environmentID,
+		UserID:        req.UserID,
+		Action:        req.Action,
+		Resource:      req.Resource,
+		IPAddress:     req.IPAddress,
+		UserAgent:     req.UserAgent,
+		Metadata:      req.Metadata,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	// Convert to schema and create

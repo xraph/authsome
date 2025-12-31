@@ -225,13 +225,19 @@ func (s *MultiTenantAuthService) RefreshSession(ctx context.Context, refreshToke
 }
 
 // RequestPasswordReset initiates a password reset flow
-func (s *MultiTenantAuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+// Returns token (for URL links) and code (for mobile entry)
+func (s *MultiTenantAuthService) RequestPasswordReset(ctx context.Context, email string) (string, string, error) {
 	return s.authService.RequestPasswordReset(ctx, email)
 }
 
 // ResetPassword completes the password reset flow
 func (s *MultiTenantAuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
 	return s.authService.ResetPassword(ctx, token, newPassword)
+}
+
+// ResetPasswordWithCode completes the password reset flow using 6-digit code
+func (s *MultiTenantAuthService) ResetPasswordWithCode(ctx context.Context, code, newPassword string) error {
+	return s.authService.ResetPasswordWithCode(ctx, code, newPassword)
 }
 
 // ValidateResetToken checks if a reset token is valid

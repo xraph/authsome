@@ -556,7 +556,7 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 		a.config.SessionCookie.Name = a.config.SessionCookieName
 	}
 
-	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA(), a.appService, &a.config.SessionCookie)
+	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA(), a.appService, &a.config.SessionCookie, a.serviceRegistry, a.config.BaseURL)
 	audH := handlers.NewAuditHandler(a.auditService)
 	appH := handlers.NewAppHandler(a.appService, a.rateLimitService, a.sessionService, a.rbacService, a.repo.UserRole(), a.repo.Role(), a.repo.Policy(), a.config.RBACEnforce)
 
