@@ -30,7 +30,7 @@ require (
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.15
 	github.com/uptrace/bun/driver/pgdriver v1.2.8
 	github.com/uptrace/bun/driver/sqliteshim v1.2.15
-	github.com/xraph/forge v0.8.4
+	github.com/xraph/forge v0.8.5
 	golang.org/x/crypto v0.44.0
 	golang.org/x/oauth2 v0.32.0
 	golang.org/x/time v0.12.0
