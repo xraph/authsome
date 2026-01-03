@@ -102,7 +102,6 @@ func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metada
 		err := a.notifAdapter.SendMFACode(ctx, appID, phoneNumber, code, 10, notification.NotificationTypeSMS)
 		if err != nil {
 			// Log error but try fallback
-			fmt.Printf("Failed to send SMS code via notification plugin: %v\n", err)
 			// Fall through to phone service fallback
 		} else {
 			// Successfully sent via notification

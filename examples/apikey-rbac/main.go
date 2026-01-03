@@ -63,14 +63,6 @@ func main() {
 
 	app.Router().GET("/api/api-keys/:id/permissions", handleGetEffectivePermissions)
 
-	fmt.Println("Server running on :8080")
-	fmt.Println("\nAPI Key RBAC Examples:")
-	fmt.Println("  GET    /api/users               - List users (requires view:users RBAC permission)")
-	fmt.Println("  POST   /api/users               - Create user (requires create:users scope OR RBAC)")
-	fmt.Println("  DELETE /api/users/:id           - Delete user (runtime permission check)")
-	fmt.Println("  GET    /api/dashboard           - Dashboard (requires view:analytics OR view:reports)")
-	fmt.Println("  POST   /api/api-keys/:id/roles  - Assign role to API key")
-	fmt.Println("  GET    /api/api-keys/:id/permissions - Get effective permissions")
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
@@ -213,39 +205,31 @@ func handleGetEffectivePermissions(c forge.Context) error {
 
 // DemonstratePermissionPatterns shows different permission check patterns
 func DemonstratePermissionPatterns(authCtx *contexts.AuthContext) {
-	fmt.Println("\n=== Permission Check Patterns ===")
 
 	// Pattern 1: Legacy scope check
-	fmt.Printf("Has scope 'users:read': %v\n", authCtx.HasScope("users:read"))
 
 	// Pattern 2: RBAC permission check
-	fmt.Printf("Has RBAC permission view:users: %v\n", authCtx.HasRBACPermission("view", "users"))
 
 	// Pattern 3: Flexible check (scope OR RBAC)
-	fmt.Printf("Can access view:users: %v\n", authCtx.CanAccess("view", "users"))
 
 	// Pattern 4: Multiple permission check
-	fmt.Printf("Has any permission: %v\n", authCtx.HasAnyPermission("view:users", "edit:users"))
 
 	// Pattern 5: All permissions required
-	fmt.Printf("Has all permissions: %v\n", authCtx.HasAllPermissions("view:users", "edit:users"))
 
 	// Check delegation
 	if authCtx.IsDelegatingCreatorPermissions() {
-		fmt.Println("⚠️  API key is delegating creator's permissions")
-		fmt.Printf("Creator permissions: %v\n", authCtx.CreatorPermissions)
+
+
 	}
 
 	// Check impersonation
 	if authCtx.IsImpersonating() {
-		fmt.Println("⚠️  API key is impersonating a user")
-		fmt.Printf("Impersonated user ID: %v\n", authCtx.GetImpersonatedUserID())
+
 	}
 }
 
 // DemonstrateScopeMapping shows scope-to-RBAC conversion
 func DemonstrateScopeMapping() {
-	fmt.Println("\n=== Scope to RBAC Mapping ===")
 
 	scopes := []string{
 		"users:read",
@@ -256,10 +240,10 @@ func DemonstrateScopeMapping() {
 
 	for _, scope := range scopes {
 		action, resource := apikey.MapScopeToRBAC(scope)
-		fmt.Printf("Scope '%s' → RBAC: action=%s, resource=%s\n", scope, action, resource)
+
 	}
 
 	// Suggest role based on scopes
 	suggested := apikey.GenerateSuggestedRole(scopes)
-	fmt.Printf("\nSuggested role for these scopes: %s\n", suggested)
+
 }

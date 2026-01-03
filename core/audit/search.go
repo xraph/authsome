@@ -36,12 +36,13 @@ type SearchQuery struct {
 	Offset int `json:"offset"`
 
 	// Standard filters (AND combined with search query)
-	AppID         *xid.ID    `json:"appId,omitempty"`
-	EnvironmentID *xid.ID    `json:"environmentId,omitempty"` // Environment filtering
-	UserID        *xid.ID    `json:"userId,omitempty"`
-	Action        string     `json:"action,omitempty"`
-	Since         *time.Time `json:"since,omitempty"`
-	Until         *time.Time `json:"until,omitempty"`
+	AppID          *xid.ID    `json:"appId,omitempty"`
+	OrganizationID *xid.ID    `json:"organizationId,omitempty"` // Organization filtering (optional)
+	EnvironmentID  *xid.ID    `json:"environmentId,omitempty"`  // Environment filtering
+	UserID         *xid.ID    `json:"userId,omitempty"`
+	Action         string     `json:"action,omitempty"`
+	Since          *time.Time `json:"since,omitempty"`
+	Until          *time.Time `json:"until,omitempty"`
 }
 
 // SearchResult represents a single search result
@@ -192,6 +193,18 @@ func (b *SearchQueryBuilder) Fuzzy() *SearchQueryBuilder {
 // ForApp filters by app ID
 func (b *SearchQueryBuilder) ForApp(appID xid.ID) *SearchQueryBuilder {
 	b.query.AppID = &appID
+	return b
+}
+
+// ForOrganization filters by organization ID (optional)
+func (b *SearchQueryBuilder) ForOrganization(orgID xid.ID) *SearchQueryBuilder {
+	b.query.OrganizationID = &orgID
+	return b
+}
+
+// ForEnvironment filters by environment ID
+func (b *SearchQueryBuilder) ForEnvironment(envID xid.ID) *SearchQueryBuilder {
+	b.query.EnvironmentID = &envID
 	return b
 }
 

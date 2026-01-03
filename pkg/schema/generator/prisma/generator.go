@@ -44,11 +44,8 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Generated Prisma schema:\n")
-		fmt.Printf("  %s\n", schemaPath)
-		fmt.Printf("\nNext steps:\n")
-		fmt.Printf("  1. cd %s\n", opts.OutputDir)
-		fmt.Printf("  2. npx prisma migrate dev --name initial\n")
+
+
 	}
 
 	return nil

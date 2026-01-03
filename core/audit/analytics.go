@@ -41,6 +41,7 @@ func NewAnalyticsService(repo Repository) *AnalyticsService {
 // Baseline represents statistical baseline for user behavior
 type Baseline struct {
 	UserID           xid.ID                 `json:"userId"`
+	OrganizationID   *xid.ID                `json:"organizationId,omitempty"` // Optional org scope
 	Period           time.Duration          `json:"period"`
 	EventsPerHour    float64                `json:"eventsPerHour"`
 	TopActions       map[string]int         `json:"topActions"`
@@ -66,11 +67,21 @@ func NewBaselineCalculator(repo Repository) *BaselineCalculator {
 
 // Calculate calculates baseline for a user over a period
 func (bc *BaselineCalculator) Calculate(ctx context.Context, userID xid.ID, period time.Duration) (*Baseline, error) {
+	return bc.CalculateWithOptions(ctx, userID, period, nil)
+}
+
+// CalculateWithOptions calculates baseline for a user over a period with optional organization scope
+func (bc *BaselineCalculator) CalculateWithOptions(ctx context.Context, userID xid.ID, period time.Duration, organizationID *xid.ID) (*Baseline, error) {
+	// Calculate time range
+	until := time.Now()
+	since := until.Add(-period)
+
 	// Fetch events for the period
-	// Note: In production, would add time-range filtering to ListEventsFilter
 	filter := &ListEventsFilter{
-		UserID: &userID,
-		// Would add: StartTime, EndTime fields to filter for time-range queries
+		UserID:         &userID,
+		OrganizationID: organizationID, // Optional org scope
+		Since:          &since,
+		Until:          &until,
 	}
 
 	resp, err := bc.repo.List(ctx, filter)
@@ -84,12 +95,13 @@ func (bc *BaselineCalculator) Calculate(ctx context.Context, userID xid.ID, peri
 	}
 
 	baseline := &Baseline{
-		UserID:       userID,
-		Period:       period,
-		TopActions:   make(map[string]int),
-		TopResources: make(map[string]int),
-		CalculatedAt: time.Now(),
-		Metadata:     make(map[string]interface{}),
+		UserID:         userID,
+		OrganizationID: organizationID,
+		Period:         period,
+		TopActions:     make(map[string]int),
+		TopResources:   make(map[string]int),
+		CalculatedAt:   time.Now(),
+		Metadata:       make(map[string]interface{}),
 	}
 
 	// Calculate statistics

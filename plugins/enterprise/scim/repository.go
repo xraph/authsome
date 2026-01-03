@@ -500,7 +500,6 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
 
-	fmt.Println("[SCIM] Database migrations completed successfully")
 	return nil
 }
 

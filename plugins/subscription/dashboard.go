@@ -60,7 +60,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				return activePage == "billing" || activePage == "plans" || activePage == "subscriptions" ||
 					activePage == "addons" || activePage == "invoices" || activePage == "usage" ||
 					activePage == "coupons" || activePage == "analytics" || activePage == "alerts" ||
-					activePage == "features"
+					activePage == "features" || activePage == "payment-methods"
 			},
 			RequiresPlugin: "subscription",
 		},
@@ -293,6 +293,45 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			Name:         "subscription.invoices.mark-paid",
 			Summary:      "Mark Invoice Paid",
 			Description:  "Mark an invoice as paid",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		// Payment Methods
+		{
+			Method:      "GET",
+			Path:        "/billing/payment-methods",
+			Handler:     e.ServePaymentMethodsPage,
+			Name:        "subscription.payment_methods.page",
+			Summary:     "Payment Methods",
+			Description: "Manage payment methods",
+			RequireAuth: true,
+		},
+		{
+			Method:      "GET",
+			Path:        "/billing/payment-methods/add",
+			Handler:     e.ServeAddPaymentMethodPage,
+			Name:        "subscription.payment_methods.add_page",
+			Summary:     "Add Payment Method",
+			Description: "Add a new payment method",
+			RequireAuth: true,
+		},
+		{
+			Method:       "POST",
+			Path:         "/billing/payment-methods/set-default/:id",
+			Handler:      e.HandleSetDefaultPaymentMethod,
+			Name:         "subscription.payment_methods.set_default_action",
+			Summary:      "Set Default Payment Method",
+			Description:  "Set a payment method as default",
+			RequireAuth:  true,
+			RequireAdmin: true,
+		},
+		{
+			Method:       "DELETE",
+			Path:         "/billing/payment-methods/:id",
+			Handler:      e.HandleRemovePaymentMethod,
+			Name:         "subscription.payment_methods.remove_action",
+			Summary:      "Remove Payment Method",
+			Description:  "Remove a payment method",
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},

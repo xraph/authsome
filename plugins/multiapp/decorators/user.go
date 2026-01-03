@@ -47,7 +47,6 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 		}
 	}
 
-	fmt.Printf("[MultiTenancy] Users count: %d, appID: %s\n", usersCount, appID.String())
 
 	if usersCount == 0 {
 		// No users exist yet - this is the first user (system owner)
@@ -79,7 +78,6 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 				return nil, err
 			}
 
-			fmt.Printf("[MultiTenancy] First user created (system owner): %s\n", newUser.Email)
 			return newUser, nil
 		}
 
@@ -159,7 +157,6 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 		platformOrg, err := s.appService.FindAppBySlug(ctx, "platform")
 		if err != nil {
 			// Platform org doesn't exist yet - might be during first user setup
-			fmt.Printf("[MultiTenancy] No platform org found, allowing user lookup: %s\n", email)
 			return foundUser, nil
 		}
 
@@ -170,7 +167,6 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 			return nil, fmt.Errorf("app context required")
 		}
 
-		fmt.Printf("[MultiTenancy] Platform user login without org context: %s\n", email)
 		return foundUser, nil
 	}
 
@@ -256,7 +252,6 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 		if err != nil || len(response.Data) == 0 {
 			// No organizations exist yet - this is the first user
 			// Allow update without organization check (e.g., for email verification)
-			fmt.Printf("[MultiTenancy] First user update allowed without org context: %s\n", u.Email)
 			return s.userService.Update(ctx, u, req)
 		}
 

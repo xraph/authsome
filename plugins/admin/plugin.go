@@ -119,7 +119,6 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 		return fmt.Errorf("invalid role registry type")
 	}
 
-	fmt.Printf("[Admin] Registering admin role definitions and permissions...\n")
 
 	// Register Admin Role - Platform-level administrative operations
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
@@ -170,10 +169,8 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 		},
 	}); err != nil {
 		// If superadmin already exists, that's ok - log it
-		fmt.Printf("[Admin] Note: Superadmin role registration returned error (may already exist): %v\n", err)
 	}
 
-	fmt.Printf("[Admin] ✅ Admin role definitions and permissions registered\n")
 	return nil
 }
 

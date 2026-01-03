@@ -223,7 +223,6 @@ func (s *Service) savePasswordHistory(ctx context.Context, userID xid.ID, passwo
 	// Cleanup old history entries
 	if err := s.usernameRepo.CleanupOldPasswordHistory(ctx, userID, s.config.PasswordHistorySize); err != nil {
 		// Log error but don't fail
-		fmt.Printf("Failed to cleanup old password history: %v\n", err)
 	}
 
 	return nil
@@ -367,7 +366,6 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	// Save password to history
 	if err := s.savePasswordHistory(ctx, u.ID, u.PasswordHash); err != nil {
 		// Log error but don't fail signup
-		fmt.Printf("Failed to save initial password history: %v\n", err)
 	}
 
 	// Audit successful signup
@@ -539,7 +537,6 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 	if s.config.LockoutEnabled {
 		if err := s.clearFailedAttempts(ctx, un, appID); err != nil {
 			// Log error but don't fail signin
-			fmt.Printf("Failed to clear failed attempts: %v\n", err)
 		} else {
 			// Audit cleared attempts
 			if s.audit != nil {

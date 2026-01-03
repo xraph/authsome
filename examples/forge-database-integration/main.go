@@ -109,34 +109,10 @@ func main() {
 
 	// Display integration methods
 	separator := strings.Repeat("=", 60)
-	fmt.Println("\n" + separator)
-	fmt.Println("AuthSome + Forge Database Extension Integration")
-	fmt.Println(separator)
-	fmt.Println("\n✨ Three ways to integrate:")
-	fmt.Println("\n1. WithDatabaseFromForge() - Recommended")
-	fmt.Println("   auth := authsome.New(")
-	fmt.Println("       authsome.WithForgeApp(app),")
-	fmt.Println("       authsome.WithDatabaseFromForge(),")
-	fmt.Println("   )")
-	fmt.Println("\n2. WithDatabaseManager() - Advanced")
-	fmt.Println("   manager, _ := authsome.ResolveDatabaseManager(app.Container())")
-	fmt.Println("   auth := authsome.New(")
-	fmt.Println("       authsome.WithForgeApp(app),")
-	fmt.Println("       authsome.WithDatabaseManager(manager, \"default\"),")
-	fmt.Println("   )")
-	fmt.Println("\n3. WithDatabase() - Traditional (backwards compatible)")
-	fmt.Println("   db := bun.NewDB(...)")
-	fmt.Println("   auth := authsome.New(")
-	fmt.Println("       authsome.WithForgeApp(app),")
-	fmt.Println("       authsome.WithDatabase(db),")
-	fmt.Println("   )")
-	fmt.Println("\n" + separator)
-	fmt.Println("\n🌟 Server ready on http://localhost:8080")
-	fmt.Println("🔐 Auth API: http://localhost:8080/api/auth")
-	fmt.Println(separator + "\n")
+
 
 	// Run migrations
-	fmt.Println("Running migrations...")
+
 	// TODO: Add migration runner here
 
 	// In a real app, you would start the server here
@@ -144,5 +120,4 @@ func main() {
 	// 	log.Fatalf("Server failed: %v", err)
 	// }
 
-	fmt.Println("✅ All integration methods verified successfully!")
 }

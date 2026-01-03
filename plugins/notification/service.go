@@ -54,9 +54,7 @@ func (s *TemplateService) SendWithTemplate(ctx context.Context, req *SendWithTem
 	}
 	if schemaTemplate == nil {
 		// Template not found - try to initialize default templates for this app
-		fmt.Printf("[Notification] Template %s not found for app %s, initializing defaults...\n", req.TemplateKey, req.AppID)
 		if err := s.notificationSvc.InitializeDefaultTemplates(ctx, req.AppID); err != nil {
-			fmt.Printf("[Notification] Failed to initialize default templates: %v\n", err)
 			return nil, notification.TemplateNotFound()
 		}
 		
@@ -68,7 +66,6 @@ func (s *TemplateService) SendWithTemplate(ctx context.Context, req *SendWithTem
 		if schemaTemplate == nil {
 			return nil, notification.TemplateNotFound()
 		}
-		fmt.Printf("[Notification] Template %s initialized and found for app %s\n", req.TemplateKey, req.AppID)
 	}
 
 	// Send notification using the template

@@ -68,7 +68,7 @@ func (s *AppService) CreateApp(ctx context.Context, req *CreateAppRequest) (*App
 	if s.hookRegistry != nil {
 		if err := s.hookRegistry.ExecuteAfterAppCreate(ctx, app.ToSchema()); err != nil {
 			// Log error but don't fail app creation
-			fmt.Printf("Warning: AfterAppCreate hook failed: %v\n", err)
+			_ = err
 		}
 	}
 
@@ -226,16 +226,13 @@ func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*sessio
 	var baseConfig session.CookieConfig
 	if s.globalCookieConfig != nil {
 		baseConfig = *s.globalCookieConfig
-		fmt.Printf("[AppService.GetCookieConfig] Using global cookie config: enabled=%v, name=%s\n", baseConfig.Enabled, baseConfig.Name)
 	} else {
 		// Use defaults if no global config is set
 		baseConfig = session.DefaultCookieConfig()
-		fmt.Printf("[AppService.GetCookieConfig] Using default cookie config (no global set): enabled=%v\n", baseConfig.Enabled)
 	}
 
 	// If no app ID provided, return global config
 	if appID.IsNil() {
-		fmt.Printf("[AppService.GetCookieConfig] No appID provided, returning base config\n")
 		return &baseConfig, nil
 	}
 
@@ -243,23 +240,18 @@ func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*sessio
 	app, err := s.repo.FindAppByID(ctx, appID)
 	if err != nil {
 		// If app not found, return global config
-		fmt.Printf("[AppService.GetCookieConfig] App %s not found, returning base config\n", appID)
 		return &baseConfig, nil
 	}
 
 	// Check if app has cookie config override in metadata
 	if app.Metadata == nil {
-		fmt.Printf("[AppService.GetCookieConfig] App %s has no metadata, returning base config\n", appID)
 		return &baseConfig, nil
 	}
 
 	cookieConfigData, exists := app.Metadata["sessionCookie"]
 	if !exists {
-		fmt.Printf("[AppService.GetCookieConfig] App %s has no sessionCookie in metadata, returning base config\n", appID)
 		return &baseConfig, nil
 	}
-
-	fmt.Printf("[AppService.GetCookieConfig] App %s has sessionCookie metadata: %+v\n", appID, cookieConfigData)
 
 	// Parse the cookie config from metadata
 	var appCookieConfig session.CookieConfig

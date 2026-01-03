@@ -71,9 +71,6 @@ func (ts *TestSuite) PrintResults() {
 	passed := 0
 	total := len(ts.results)
 
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("INTEGRATION TEST RESULTS")
-	fmt.Println(strings.Repeat("=", 60))
 
 	for _, result := range ts.results {
 		status := "❌ FAIL"
@@ -82,62 +79,56 @@ func (ts *TestSuite) PrintResults() {
 			passed++
 		}
 
-		fmt.Printf("%s %s\n", status, result.Name)
 		if result.Message != "" {
-			fmt.Printf("   %s\n", result.Message)
+
 		}
 		if result.Error != nil {
-			fmt.Printf("   Error: %v\n", result.Error)
+
 		}
 	}
 
-	fmt.Println(strings.Repeat("-", 60))
-	fmt.Printf("SUMMARY: %d/%d tests passed (%.1f%%)\n", passed, total, float64(passed)/float64(total)*100)
 
 	if passed == total {
-		fmt.Println("🎉 All tests passed!")
+
 	} else {
-		fmt.Printf("⚠️  %d tests failed\n", total-passed)
+
 	}
 }
 
 func main() {
-	fmt.Println("AuthSome Phase 10 Integration Tests")
-	fmt.Println("===================================")
+
 
 	// Check if dev server is running
-	fmt.Println("\n1. Checking if AuthSome dev server is running...")
+
 	if !checkServerHealth() {
-		fmt.Println("❌ AuthSome dev server is not running at", baseURL)
-		fmt.Println("Please start the dev server with: go run ./cmd/dev")
+
+
 		os.Exit(1)
 	}
-	fmt.Println("✅ AuthSome dev server is running")
 
 	// Initialize test suite
 	ts := NewTestSuite()
 
 	// Run all integration tests
-	fmt.Println("\n2. Running Integration Tests...")
 
 	// API Key Management Tests
-	fmt.Println("\n  🔑 API Key Management Tests")
+
 	testAPIKeyManagement(ts)
 
 	// JWT Token Tests
-	fmt.Println("\n  🎫 JWT Token Tests")
+
 	testJWTTokens(ts)
 
 	// Webhook Management Tests
-	fmt.Println("\n  🪝 Webhook Management Tests")
+
 	testWebhookManagement(ts)
 
 	// Notification Tests
-	fmt.Println("\n  📧 Notification Tests")
+
 	testNotifications(ts)
 
 	// Provider Tests
-	fmt.Println("\n  📨 Provider Tests")
+
 	testProviders(ts)
 
 	// Print final results

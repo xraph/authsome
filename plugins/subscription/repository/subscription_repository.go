@@ -118,9 +118,7 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *SubscriptionF
 
 	if filter != nil {
 		if filter.AppID != nil {
-			query = query.
-				Join("JOIN subscription_plans AS plan ON plan.id = sub.plan_id").
-				Where("plan.app_id = ?", *filter.AppID)
+			query = query.Where("plan.app_id = ?", *filter.AppID)
 		}
 		if filter.OrganizationID != nil {
 			query = query.Where("sub.organization_id = ?", *filter.OrganizationID)

@@ -141,14 +141,7 @@ func main() {
 	})
 
 	// Start server
-	fmt.Println("🚀 Server starting on :8080")
-	fmt.Println("📊 AuthSome tables will be created in 'auth' schema")
-	fmt.Println("📍 Endpoints:")
-	fmt.Println("   - http://localhost:8080/")
-	fmt.Println("   - http://localhost:8080/health")
-	fmt.Println("   - http://localhost:8080/schema-info")
-	fmt.Println("   - http://localhost:8080/api/auth/*")
-	fmt.Println("")
+
 
 	if err := app.Run(":8080"); err != nil {
 		log.Fatal(err)

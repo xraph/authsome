@@ -51,31 +51,4 @@ func main() {
 	log.Println("✅ Dashboard plugin registered successfully!")
 	log.Println("   Assets will be available when the plugin is mounted to a Forge app")
 
-	fmt.Printf(`
-Integration Complete!
-====================
-
-To use the dashboard plugin in your Forge application:
-
-1. Register the plugin:
-   auth.RegisterPlugin(dashboard.NewPlugin())
-
-2. Initialize AuthSome:
-   auth.Initialize(context.Background())
-
-3. Mount to your Forge app:
-   auth.Mount(app, "/api/auth")
-
-4. The dashboard will be available at:
-   http://localhost:PORT/dashboard
-
-Features included:
-- 📊 User management interface
-
-- 🔐 Session monitoring
-- ⚙️  Security settings
-- 🔌 Plugin management
-- 📈 Analytics dashboard
-\n
-`)
 }

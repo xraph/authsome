@@ -204,7 +204,7 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 	// Update usage statistics
 	if err := s.repo.UpdateJWTKeyUsage(ctx, signingKey.KeyID); err != nil {
 		// Log error but don't fail the request
-		fmt.Printf("failed to update key usage: %v\n", err)
+		_ = err
 	}
 
 	return &GenerateTokenResponse{

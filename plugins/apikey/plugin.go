@@ -131,7 +131,6 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Load configuration from Forge config manager with provided defaults
 	if err := configManager.BindWithDefault("auth.apikey", &p.config, p.defaultConfig); err != nil {
 		// Use defaults if binding fails
-		fmt.Printf("[APIKey] Warning: failed to bind config: %v\n", err)
 		p.config = p.defaultConfig
 	}
 	p.config.Validate() // Ensure defaults are set

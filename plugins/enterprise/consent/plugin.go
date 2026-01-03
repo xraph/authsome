@@ -436,12 +436,10 @@ func (p *Plugin) runExpiryCheck() {
 	count, err := p.service.ExpireConsents(ctx)
 	if err != nil {
 		// Log error (would use proper logger in production)
-		fmt.Printf("[Consent Plugin] Failed to expire consents: %v\n", err)
 		return
 	}
 
 	if count > 0 {
-		fmt.Printf("[Consent Plugin] Expired %d consent(s)\n", count)
 	}
 }
 
@@ -456,12 +454,10 @@ func (p *Plugin) cleanupExpiredExports() {
 
 	count, err := p.service.repo.DeleteExpiredExports(ctx, time.Now())
 	if err != nil {
-		fmt.Printf("[Consent Plugin] Failed to cleanup expired exports: %v\n", err)
 		return
 	}
 
 	if count > 0 {
-		fmt.Printf("[Consent Plugin] Cleaned up %d expired export(s)\n", count)
 	}
 }
 

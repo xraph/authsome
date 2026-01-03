@@ -52,8 +52,7 @@ func (m *MockWebhookEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Log the request
-	fmt.Printf("  📥 Mock endpoint %s received call #%d\n", m.URL, m.CallCount)
-	fmt.Printf("     Event: %s, Data: %v\n", event.Type, event.Data)
+
 
 	// Return configured response
 	w.WriteHeader(m.ResponseCode)
@@ -96,8 +95,6 @@ func (i *IntermittentEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		i.ReceivedData = append(i.ReceivedData, event)
 	}
 
-	fmt.Printf("  📥 Intermittent endpoint received call #%d\n", i.CallCount)
-
 	// Fail first 2 attempts, succeed on 3rd
 	if i.CallCount <= 2 {
 		w.WriteHeader(500)
@@ -109,11 +106,9 @@ func (i *IntermittentEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func main() {
-	fmt.Println("Testing AuthSome Webhook Delivery and Retry Logic")
-	fmt.Println("================================================")
+
 
 	// Start mock webhook servers
-	fmt.Println("\n1. Starting Mock Webhook Endpoints:")
 
 	// Success endpoint (always returns 200)
 	successEndpoint := NewMockWebhookEndpoint("http://localhost:8081/webhook", 200, 100*time.Millisecond)
@@ -137,38 +132,33 @@ func main() {
 
 	// Wait for servers to start
 	time.Sleep(500 * time.Millisecond)
-	fmt.Println("  ✅ Mock webhook endpoints started")
 
 	// Test webhook delivery scenarios
-	fmt.Println("\n2. Testing Webhook Delivery Scenarios:")
 
 	// Test 1: Successful delivery
-	fmt.Println("\n  Test 1: Successful Delivery")
+
 	testSuccessfulDelivery(successEndpoint)
 
 	// Test 2: Failed delivery with retries
-	fmt.Println("\n  Test 2: Failed Delivery with Retries")
+
 	testFailedDelivery(failureEndpoint)
 
 	// Test 3: Timeout handling
-	fmt.Println("\n  Test 3: Timeout Handling")
+
 	testTimeoutHandling(slowEndpoint)
 
 	// Test 4: Intermittent failures (eventual success)
-	fmt.Println("\n  Test 4: Intermittent Failures")
+
 	testIntermittentFailures(intermittentEndpoint)
 
 	// Test 5: Multiple webhooks with different configurations
-	fmt.Println("\n  Test 5: Multiple Webhook Configurations")
+
 	testMultipleWebhooks(successEndpoint, failureEndpoint)
 
-	fmt.Println("\n3. Testing Webhook Configuration Management:")
 	testWebhookConfiguration()
 
-	fmt.Println("\n4. Testing Webhook Event Types:")
 	testWebhookEventTypes()
 
-	fmt.Println("\nAll webhook tests completed!")
 }
 
 // startMockServer starts a mock HTTP server for webhook testing
@@ -219,7 +209,6 @@ func testSuccessfulDelivery(endpoint *MockWebhookEndpoint) {
 	}
 
 	// Simulate webhook delivery
-	fmt.Printf("    📤 Sending webhook to %s\n", endpoint.URL)
 
 	success := simulateWebhookDelivery(webhookConfig, event)
 
@@ -227,10 +216,9 @@ func testSuccessfulDelivery(endpoint *MockWebhookEndpoint) {
 	callCount, receivedData := endpoint.GetStats()
 
 	if success && callCount == 1 && len(receivedData) == 1 {
-		fmt.Printf("    ✅ Webhook delivered successfully on first attempt\n")
-		fmt.Printf("    ✅ Received event: %s\n", receivedData[0].Type)
+
+
 	} else {
-		fmt.Printf("    ❌ Unexpected result: success=%v, calls=%d, data=%d\n", success, callCount, len(receivedData))
 	}
 }
 
@@ -266,17 +254,15 @@ func testFailedDelivery(endpoint *MockWebhookEndpoint) {
 		CreatedAt:  time.Now(),
 	}
 
-	fmt.Printf("    📤 Sending webhook to failing endpoint %s\n", endpoint.URL)
-
 	// Simulate webhook delivery with retries
 	success := simulateWebhookDeliveryWithRetries(webhookConfig, event)
 
 	callCount, _ := endpoint.GetStats()
 
 	if !success && callCount == 4 { // 1 initial + 3 retries
-		fmt.Printf("    ✅ Webhook failed as expected after %d attempts\n", callCount)
+
 	} else {
-		fmt.Printf("    ❌ Unexpected result: success=%v, calls=%d\n", success, callCount)
+
 	}
 }
 
@@ -312,16 +298,15 @@ func testTimeoutHandling(endpoint *MockWebhookEndpoint) {
 		CreatedAt:  time.Now(),
 	}
 
-	fmt.Printf("    📤 Sending webhook to slow endpoint %s (timeout test)\n", endpoint.URL)
 
 	start := time.Now()
 	success := simulateWebhookDeliveryWithTimeout(webhookConfig, event, 500*time.Millisecond)
 	duration := time.Since(start)
 
 	if !success && duration < 1*time.Second {
-		fmt.Printf("    ✅ Webhook timed out as expected in %v\n", duration)
+
 	} else {
-		fmt.Printf("    ❌ Unexpected result: success=%v, duration=%v\n", success, duration)
+
 	}
 }
 
@@ -357,15 +342,12 @@ func testIntermittentFailures(endpoint *IntermittentEndpoint) {
 		CreatedAt:  time.Now(),
 	}
 
-	fmt.Printf("    📤 Sending webhook to intermittent endpoint %s\n", endpoint.URL)
-
 	success := simulateWebhookDeliveryWithRetries(webhookConfig, event)
 	callCount, _ := endpoint.GetStats()
 
 	if success && callCount == 3 {
-		fmt.Printf("    ✅ Webhook succeeded after %d attempts (intermittent failure handled)\n", callCount)
 	} else {
-		fmt.Printf("    ❌ Unexpected result: success=%v, calls=%d\n", success, callCount)
+
 	}
 }
 
@@ -416,12 +398,10 @@ func testMultipleWebhooks(successEndpoint, failureEndpoint *MockWebhookEndpoint)
 		CreatedAt:  time.Now(),
 	}
 
-	fmt.Printf("    📤 Sending webhook to multiple endpoints\n")
-
 	// Simulate delivery to multiple webhooks
 	successCount := 0
 	for i, webhookConfig := range webhooks {
-		fmt.Printf("      Webhook %d: %s\n", i+1, webhookConfig.URL)
+
 		if simulateWebhookDelivery(webhookConfig, event) {
 			successCount++
 		}
@@ -430,13 +410,11 @@ func testMultipleWebhooks(successEndpoint, failureEndpoint *MockWebhookEndpoint)
 	successCalls, _ := successEndpoint.GetStats()
 	failureCalls, _ := failureEndpoint.GetStats()
 
-	fmt.Printf("    ✅ Delivered to %d/%d webhooks\n", successCount, len(webhooks))
-	fmt.Printf("    ✅ Success endpoint calls: %d, Failure endpoint calls: %d\n", successCalls, failureCalls)
+
 }
 
 // testWebhookConfiguration tests webhook configuration validation
 func testWebhookConfiguration() {
-	fmt.Println("    Testing webhook configuration validation...")
 
 	// V2 Architecture: Create test app and environment IDs
 	testAppID := xid.New()
@@ -456,9 +434,9 @@ func testWebhookConfiguration() {
 	}
 
 	if err := validateWebhookConfig(validConfig); err == nil {
-		fmt.Printf("    ✅ Valid configuration accepted\n")
+
 	} else {
-		fmt.Printf("    ❌ Valid configuration rejected: %v\n", err)
+
 	}
 
 	// Test invalid configurations
@@ -476,7 +454,6 @@ func testWebhookConfiguration() {
 		}
 	}
 
-	fmt.Printf("    ✅ Rejected %d/%d invalid configurations\n", invalidCount, len(invalidConfigs))
 }
 
 // testWebhookEventTypes tests different webhook event types
@@ -487,7 +464,6 @@ func testWebhookEventTypes() {
 
 	events := webhook.AllEventTypes()
 
-	fmt.Printf("    Testing %d webhook event types...\n", len(events))
 
 	for _, eventType := range events {
 		event := &webhook.Event{
@@ -504,11 +480,10 @@ func testWebhookEventTypes() {
 
 		// Validate event structure (V2 architecture)
 		if event.ID.IsNil() || event.Type == "" || event.AppID.IsNil() || event.EnvironmentID.IsNil() {
-			fmt.Printf("    ❌ Invalid event structure for %s\n", eventType)
+
 		}
 	}
 
-	fmt.Printf("    ✅ All %d event types validated\n", len(events))
 }
 
 // Helper functions for simulating webhook delivery

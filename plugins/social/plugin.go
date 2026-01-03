@@ -134,7 +134,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		// Bind configuration using Forge ConfigManager with provided defaults
 		if err := configManager.BindWithDefault("auth.social", &p.config, p.defaultConfig); err != nil {
 			// Log but don't fail - use defaults
-			fmt.Printf("[Social] Warning: failed to bind config: %v\n", err)
 			p.config = p.defaultConfig
 		}
 	} else {
@@ -165,15 +164,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		// Test Redis connection
 		ctx := context.Background()
 		if err := redisClient.Ping(ctx).Err(); err != nil {
-			fmt.Printf("[Social] Warning: failed to connect to Redis, falling back to memory storage: %v\n", err)
 			stateStore = NewMemoryStateStore()
 		} else {
 			stateStore = NewRedisStateStore(redisClient)
-			fmt.Printf("[Social] Using Redis for OAuth state storage\n")
 		}
 	} else {
 		stateStore = NewMemoryStateStore()
-		fmt.Printf("[Social] Using in-memory OAuth state storage\n")
 	}
 
 	// Create social service
@@ -195,7 +191,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 			DB:       p.config.StateStorage.RedisDB,
 		})
 		rateLimiter = NewRateLimiter(redisClient)
-		fmt.Printf("[Social] Rate limiting enabled with Redis\n")
 	}
 
 	// Create centralized authentication completion service
@@ -223,7 +218,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 			appService,
 			nil, // Cookie config comes from appService.GetCookieConfig()
 		)
-		fmt.Printf("[Social] Authentication completion service initialized (appService=%v)\n", appService != nil)
 	}
 
 	// Create handler with centralized completion service
@@ -231,7 +225,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Initialize dashboard extension
 	p.dashboardExt = NewDashboardExtension(p, p.configRepo)
-	fmt.Printf("[Social] Dashboard extension initialized\n")
 
 	return nil
 }

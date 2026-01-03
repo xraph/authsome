@@ -91,24 +91,20 @@ var globalRateLimiter = newRateLimiter(100, time.Minute)
 func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			fmt.Printf("[Dashboard] RequireAuth: Checking authentication for path: %s\n", c.Request().URL.Path)
 
 			// Extract session token from cookie
 			cookie, err := c.Request().Cookie(sessionCookieName)
 			if err != nil || cookie == nil || cookie.Value == "" {
-				fmt.Printf("[Dashboard] RequireAuth: No session cookie found\n")
 				// No session cookie, redirect to dashboard login
 				loginURL := p.basePath + "/dashboard/login?redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
 			sessionToken := cookie.Value
-			fmt.Printf("[Dashboard] RequireAuth: Found session token: %s...\n", sessionToken[:min(10, len(sessionToken))])
 
 			// Validate session
 			sess, err := p.sessionSvc.FindByToken(c.Request().Context(), sessionToken)
 			if err != nil {
-				fmt.Printf("[Dashboard] RequireAuth: Error finding session: %v\n", err)
 				// Invalid session, clear cookie and redirect
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     sessionCookieName,
@@ -122,7 +118,6 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 			}
 
 			if sess == nil {
-				fmt.Printf("[Dashboard] RequireAuth: Session not found\n")
 				// Session not found, clear cookie and redirect
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     sessionCookieName,
@@ -137,7 +132,6 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 
 			// Check if session is expired
 			if time.Now().After(sess.ExpiresAt) {
-				fmt.Printf("[Dashboard] RequireAuth: Session expired at %v\n", sess.ExpiresAt)
 				// Expired session, clear cookie and redirect
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     sessionCookieName,
@@ -150,21 +144,18 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
-			fmt.Printf("[Dashboard] RequireAuth: Session valid, fetching user: %s\n", sess.UserID)
 
 			// Set app context from session for user lookup
 			ctx := contexts.SetAppID(c.Request().Context(), sess.AppID)
 
 			// If session has no app_id (legacy session), try to get user without app context first
 			if sess.AppID.IsNil() {
-				fmt.Printf("[Dashboard] RequireAuth: Session has no app_id, trying user lookup without app context\n")
 				ctx = c.Request().Context()
 			}
 
 			// Get user information
 			user, err := p.userSvc.FindByID(ctx, sess.UserID)
 			if err != nil {
-				fmt.Printf("[Dashboard] RequireAuth: Error finding user: %v\n", err)
 				// User not found, clear session and redirect
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     sessionCookieName,
@@ -178,7 +169,6 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 			}
 
 			if user == nil {
-				fmt.Printf("[Dashboard] RequireAuth: User is nil\n")
 				// User is nil, clear session and redirect
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     sessionCookieName,
@@ -191,7 +181,6 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
-			fmt.Printf("[Dashboard] RequireAuth: User authenticated: %s (%s)\n", user.Email, user.ID)
 
 			// Store user and session in context ONLY if all checks passed
 			// Reuse ctx that already has AppID set
@@ -219,12 +208,10 @@ func min(a, b int) int {
 func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-			fmt.Printf("[Dashboard] RequireAdmin middleware called for path: %s\n", c.Request().URL.Path)
 
 			// Get user from context (set by RequireAuth)
 			userVal := c.Request().Context().Value("user")
 			if userVal == nil {
-				fmt.Printf("[Dashboard] No user in context, redirecting to login\n")
 				return c.Redirect(http.StatusFound, p.basePath+"/dashboard/login?error=auth_required")
 			}
 
@@ -240,7 +227,6 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 				rbacContext := &user.User{} // Placeholder - need proper Context type
 				_ = rbacContext
 				// For now, allow all authenticated users when permission checker is not available
-				fmt.Printf("[Dashboard] Permission checker not initialized, allowing access for user: %s\n", userObj.Email)
 				return next(c)
 
 				/* TODO: Fix when rbac.Context is properly imported
@@ -490,7 +476,6 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 			if cookie, err := c.Request().Cookie(environmentCookieName); err == nil && cookie != nil && cookie.Value != "" {
 				if id, err := xid.FromString(cookie.Value); err == nil {
 					envID = id
-					fmt.Printf("[Dashboard] Environment from cookie: %s\n", envID.String())
 				}
 			}
 
@@ -500,7 +485,6 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 				defaultEnv, err := envService.GetDefaultEnvironment(ctx, appID)
 				if err == nil && defaultEnv != nil {
 					envID = defaultEnv.ID
-					fmt.Printf("[Dashboard] Using default environment: %s\n", envID.String())
 
 					// Step 5: Set cookie for future requests (30-day expiry)
 					// This persists the environment selection across sessions
@@ -520,11 +504,9 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 			// This makes the environment ID available to all downstream handlers and services
 			if !envID.IsNil() {
 				ctx = contexts.SetEnvironmentID(ctx, envID)
-				fmt.Printf("[Dashboard] Environment context set: %s\n", envID.String())
 			} else {
 				// No environment available - this is acceptable in some scenarios
 				// (e.g., app has no environments yet, environment service error)
-				fmt.Printf("[Dashboard] No environment available for app: %s\n", appID.String())
 			}
 
 			// Update request with the enriched context

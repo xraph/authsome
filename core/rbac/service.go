@@ -137,7 +137,6 @@ func (s *Service) LoadPolicies(ctx context.Context, repo PolicyRepository) error
 // GetRoleTemplates gets all role templates for an app and environment
 func (s *Service) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error) {
 	if s.roleRepo == nil {
-		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: roleRepo is nil\n")
 		return nil, fmt.Errorf("role repository not initialized")
 	}
 
@@ -149,13 +148,10 @@ func (s *Service) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]
 		return nil, fmt.Errorf("environment_id is required but was nil when getting role templates for app %s", appID.String())
 	}
 
-	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: calling roleRepo.GetRoleTemplates for app %s, env %s\n", appID.String(), envID.String())
 	roles, err := s.roleRepo.GetRoleTemplates(ctx, appID, envID)
 	if err != nil {
-		fmt.Printf("[DEBUG RBAC] GetRoleTemplates: error: %v\n", err)
 		return nil, err
 	}
-	fmt.Printf("[DEBUG RBAC] GetRoleTemplates: found %d templates\n", len(roles))
 	return roles, nil
 }
 
@@ -412,6 +408,60 @@ func (s *Service) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*sche
 	return s.roleRepo.GetOrgRoles(ctx, orgID, envID)
 }
 
+// CreateOrgRole creates a new organization-specific role
+func (s *Service) CreateOrgRole(ctx context.Context, appID, orgID, envID xid.ID, name, displayName, description string, permissionIDs []xid.ID) (*schema.Role, error) {
+	if s.roleRepo == nil {
+		return nil, fmt.Errorf("role repository not initialized")
+	}
+
+	// Validate required parameters
+	if appID.IsNil() {
+		return nil, fmt.Errorf("app_id is required but was nil for role %s", name)
+	}
+	if orgID.IsNil() {
+		return nil, fmt.Errorf("organization_id is required but was nil")
+	}
+	if envID.IsNil() {
+		return nil, fmt.Errorf("environment_id is required but was nil for role %s", name)
+	}
+	if name == "" {
+		return nil, fmt.Errorf("role name is required")
+	}
+
+	// Default display name from name if not provided
+	if displayName == "" {
+		displayName = toTitleCase(name)
+	}
+
+	// Create the organization-specific role
+	role := &schema.Role{
+		ID:             xid.New(),
+		AppID:          &appID,
+		OrganizationID: &orgID,
+		EnvironmentID:  &envID,
+		Name:           name,
+		DisplayName:    displayName,
+		Description:    description,
+		IsTemplate:     false,
+		IsOwnerRole:    false,
+	}
+
+	if err := s.roleRepo.Create(ctx, role); err != nil {
+		return nil, fmt.Errorf("failed to create organization role: %w", err)
+	}
+
+	// Assign permissions if provided
+	if len(permissionIDs) > 0 && s.rolePermissionRepo != nil {
+		if err := s.AssignPermissionsToRole(ctx, role.ID, permissionIDs); err != nil {
+			// Rollback: delete the created role
+			_ = s.roleRepo.Delete(ctx, role.ID)
+			return nil, fmt.Errorf("failed to assign permissions: %w", err)
+		}
+	}
+
+	return role, nil
+}
+
 // GetOrgRoleWithPermissions gets a role with its permissions loaded
 func (s *Service) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*RoleWithPermissions, error) {
 	if s.roleRepo == nil {
@@ -579,6 +629,31 @@ func (s *Service) CreateCustomPermission(ctx context.Context, name, description,
 		return nil, fmt.Errorf("permission repository not initialized")
 	}
 	return s.permissionRepo.CreateCustomPermission(ctx, name, description, category, orgID)
+}
+
+// CreateAppPermission creates an app-level custom permission
+// Used for registering application-specific permissions during bootstrap
+// These are marked as custom to distinguish them from Authsome's internal system permissions
+func (s *Service) CreateAppPermission(ctx context.Context, appID xid.ID, name, description, category string) (*schema.Permission, error) {
+	if s.permissionRepo == nil {
+		return nil, fmt.Errorf("permission repository not initialized")
+	}
+
+	permission := &schema.Permission{
+		ID:             xid.New(),
+		AppID:          &appID,
+		OrganizationID: nil, // App-level permission
+		Name:           name,
+		Description:    description,
+		IsCustom:       true, // Mark as custom to distinguish from Authsome's internal permissions
+		Category:       category,
+	}
+
+	if err := s.permissionRepo.Create(ctx, permission); err != nil {
+		return nil, fmt.Errorf("failed to create app permission: %w", err)
+	}
+
+	return permission, nil
 }
 
 // ====== Role-Permission Management ======

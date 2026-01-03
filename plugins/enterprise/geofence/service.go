@@ -659,7 +659,6 @@ func (s *Service) CheckSessionSecurity(ctx context.Context, userID xid.ID, appID
 	currentLoc, err := s.GetGeolocation(ctx, ipAddress)
 	if err != nil {
 		// Don't fail auth on geolocation errors
-		fmt.Printf("[Geofence] Failed to get location for %s: %v\n", ipAddress, err)
 		return nil
 	}
 
@@ -693,7 +692,6 @@ func (s *Service) CheckSessionSecurity(ctx context.Context, userID xid.ID, appID
 		if err == nil && lastLoc != nil {
 			distance := s.calculateDistanceBetweenLocations(lastLoc, currentLoc)
 			if distance >= s.config.Notifications.NewLocationThresholdKm {
-				fmt.Printf("[Geofence] New location detected for user %s: %.0f km\n", userID, distance)
 				_ = s.notifyNewLocation(ctx, userID, appID, currentLoc, lastLoc, distance)
 			}
 		}
@@ -702,7 +700,6 @@ func (s *Service) CheckSessionSecurity(ctx context.Context, userID xid.ID, appID
 	// Check for suspicious patterns
 	if s.config.Notifications.SuspiciousLoginEnabled {
 		if suspicious, reason := s.isSuspicious(ctx, userID, currentLoc, locationEvent); suspicious {
-			fmt.Printf("[Geofence] Suspicious login detected for user %s: %s\n", userID, reason)
 			_ = s.notifySuspiciousLogin(ctx, userID, appID, reason, currentLoc)
 		}
 	}

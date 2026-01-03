@@ -83,6 +83,7 @@ type Plugin struct {
 	// Feature handlers
 	featureHandlers *handlers.FeatureHandlers
 	publicHandlers  *handlers.PublicHandlers
+	paymentHandlers *handlers.PaymentHandlers
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -323,6 +324,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Initialize handlers
 	p.featureHandlers = handlers.NewFeatureHandlers(p.featureSvc, p.featureUsageSvc)
 	p.publicHandlers = handlers.NewPublicHandlers(p.featureSvc, p.planSvc)
+	p.paymentHandlers = handlers.NewPaymentHandlers(p.paymentSvc, p.customerSvc)
 
 	// Initialize dashboard extension
 	p.dashboardExt = NewDashboardExtension(p)
@@ -572,6 +574,54 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 	}
 
+	// Payment method routes
+	paymentGroup := router.Group("/subscription/payment-methods")
+	{
+		paymentGroup.POST("/setup-intent", p.handleCreateSetupIntent,
+			forge.WithName("subscription.payment_methods.setup_intent"),
+			forge.WithSummary("Create setup intent"),
+			forge.WithDescription("Create a Stripe setup intent for adding payment method"),
+			forge.WithTags("Subscription", "Payment Methods"),
+			forge.WithValidation(true),
+		)
+
+		paymentGroup.POST("", p.handleAddPaymentMethod,
+			forge.WithName("subscription.payment_methods.add"),
+			forge.WithSummary("Add payment method"),
+			forge.WithDescription("Attach a tokenized payment method to organization"),
+			forge.WithTags("Subscription", "Payment Methods"),
+			forge.WithValidation(true),
+		)
+
+		paymentGroup.GET("", p.handleListPaymentMethods,
+			forge.WithName("subscription.payment_methods.list"),
+			forge.WithSummary("List payment methods"),
+			forge.WithDescription("List all payment methods for organization"),
+			forge.WithTags("Subscription", "Payment Methods"),
+		)
+
+		paymentGroup.GET("/:id", p.handleGetPaymentMethod,
+			forge.WithName("subscription.payment_methods.get"),
+			forge.WithSummary("Get payment method"),
+			forge.WithDescription("Get a specific payment method by ID"),
+			forge.WithTags("Subscription", "Payment Methods"),
+		)
+
+		paymentGroup.POST("/:id/set-default", p.handleSetDefaultPaymentMethod,
+			forge.WithName("subscription.payment_methods.set_default"),
+			forge.WithSummary("Set default payment method"),
+			forge.WithDescription("Set a payment method as the default"),
+			forge.WithTags("Subscription", "Payment Methods"),
+		)
+
+		paymentGroup.DELETE("/:id", p.handleRemovePaymentMethod,
+			forge.WithName("subscription.payment_methods.remove"),
+			forge.WithSummary("Remove payment method"),
+			forge.WithDescription("Remove a payment method from organization"),
+			forge.WithTags("Subscription", "Payment Methods"),
+		)
+	}
+
 	// Webhook routes
 	router.POST("/subscription/webhooks/stripe", p.handleStripeWebhook,
 		forge.WithName("subscription.webhooks.stripe"),
@@ -697,6 +747,22 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	}); err != nil {
 		// Ignore duplicate role errors (role might already exist)
 		p.logger.Debug("subscription_admin role registration", forge.F("note", err.Error()))
+	}
+
+	// Register billing manager role
+	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
+		Name:        "billing_manager",
+		DisplayName: "Billing Manager",
+		Description: "Can manage billing, subscriptions, and payment methods",
+		Permissions: []string{
+			"view on subscriptions",
+			"manage on payment_methods",
+			"view on subscription_invoices",
+			"manage on subscription_usage",
+		},
+		IsPlatform: false,
+	}); err != nil {
+		p.logger.Debug("billing_manager role registration", forge.F("note", err.Error()))
 	}
 
 	return nil
@@ -1133,4 +1199,30 @@ func (p *Plugin) handleListPublicFeatures(c forge.Context) error {
 
 func (p *Plugin) handleComparePlans(c forge.Context) error {
 	return p.publicHandlers.HandleComparePlans(c)
+}
+
+// Payment method handler wrappers
+
+func (p *Plugin) handleCreateSetupIntent(c forge.Context) error {
+	return p.paymentHandlers.HandleCreateSetupIntent(c)
+}
+
+func (p *Plugin) handleAddPaymentMethod(c forge.Context) error {
+	return p.paymentHandlers.HandleAddPaymentMethod(c)
+}
+
+func (p *Plugin) handleListPaymentMethods(c forge.Context) error {
+	return p.paymentHandlers.HandleListPaymentMethods(c)
+}
+
+func (p *Plugin) handleGetPaymentMethod(c forge.Context) error {
+	return p.paymentHandlers.HandleGetPaymentMethod(c)
+}
+
+func (p *Plugin) handleSetDefaultPaymentMethod(c forge.Context) error {
+	return p.paymentHandlers.HandleSetDefaultPaymentMethod(c)
+}
+
+func (p *Plugin) handleRemovePaymentMethod(c forge.Context) error {
+	return p.paymentHandlers.HandleRemovePaymentMethod(c)
 }

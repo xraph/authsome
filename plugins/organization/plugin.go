@@ -208,8 +208,6 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.config.InvitationExpiryHours = 72 // 3 days
 	}
 
-	fmt.Println("Organization plugin initialized", p.config)
-
 	// Create repositories
 	orgRepo := orgrepo.NewOrganizationRepository(p.db)
 	memberRepo := orgrepo.NewOrganizationMemberRepository(p.db)
@@ -713,7 +711,7 @@ func (p *Plugin) SendInvitationNotification(ctx context.Context, invitation *org
 // RegisterServiceDecorators registers service decorators
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	services.SetOrganizationService(p.orgService)
-	fmt.Println("Organization service set")
+
 	return nil
 }
 
@@ -777,7 +775,6 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 		return fmt.Errorf("invalid role registry type")
 	}
 
-	fmt.Printf("[Organization] Registering organization role definitions and permissions...\n")
 
 	// Extend Owner role with full organization management permissions
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
@@ -867,7 +864,6 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 		return fmt.Errorf("failed to register member organization permissions: %w", err)
 	}
 
-	fmt.Printf("[Organization] ✅ Organization roles registered\n")
 	return nil
 }
 

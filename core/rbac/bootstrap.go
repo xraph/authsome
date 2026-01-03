@@ -136,9 +136,6 @@ func (r *RoleRegistry) ListRoles() []*RoleDefinition {
 // 2. Permission records in the database
 // 3. RBAC policy expressions in the policy engine
 func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformAppID xid.ID) error {
-	fmt.Printf("[RoleBootstrap] Starting role bootstrap for platform app: %s\n", platformAppID.String())
-	fmt.Printf("[RoleBootstrap] Registered roles: %d\n", len(r.roles))
-
 	// Get the default environment for this app
 	var defaultEnvID xid.ID
 	err := db.NewSelect().
@@ -164,8 +161,6 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 		}
 	}
 
-	fmt.Printf("[RoleBootstrap] Using environment: %s\n", defaultEnvID.String())
-
 	// Resolve role inheritance and build final permission sets
 	resolvedRoles, err := r.resolveInheritance()
 	if err != nil {
@@ -181,7 +176,6 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 	}
 
 	// Upsert permissions in database
-	fmt.Printf("[RoleBootstrap] Creating %d unique permissions...\n", len(permissionMap))
 	for permName := range permissionMap {
 		if err := r.upsertPermission(ctx, db, platformAppID, permName); err != nil {
 			return fmt.Errorf("failed to upsert permission %s: %w", permName, err)
@@ -207,13 +201,12 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 				policyExpr := fmt.Sprintf("role:%s can %s", roleDef.Name, perm)
 				if err := rbacService.AddExpression(policyExpr); err != nil {
 					// Log error but don't fail bootstrap - some expressions may be invalid
-					fmt.Printf("[RoleBootstrap] Warning: failed to add policy expression %q: %v\n", policyExpr, err)
+					_ = err
 				}
 			}
 		}
 	}
 
-	fmt.Printf("[RoleBootstrap] ✅ Bootstrap complete - %d roles, %d permissions processed\n", len(resolvedRoles), len(permissionMap))
 	return nil
 }
 
@@ -332,11 +325,6 @@ func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, appID x
 		if err != nil {
 			return fmt.Errorf("failed to insert permission: %w", err)
 		}
-
-		fmt.Printf("[RoleBootstrap]   Created permission: %s\n", permissionExpr)
-	} else {
-		// Permission exists - just log it (no need to update)
-		fmt.Printf("[RoleBootstrap]   Permission exists: %s\n", permissionExpr)
 	}
 
 	return nil
@@ -389,8 +377,6 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID 
 		if err != nil {
 			return fmt.Errorf("failed to insert role: %w", err)
 		}
-
-		fmt.Printf("[RoleBootstrap]   Created role: %s (%s) (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, displayName, newRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
 	} else {
 		// Role exists - update it
 		existingRole.DisplayName = displayName
@@ -410,8 +396,6 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID 
 		if err != nil {
 			return fmt.Errorf("failed to update role: %w", err)
 		}
-
-		fmt.Printf("[RoleBootstrap]   Updated role: %s (%s) (ID: %s, IsTemplate: %v, IsOwnerRole: %v)\n", def.Name, displayName, existingRole.ID.String(), def.IsTemplate, def.IsOwnerRole)
 	}
 
 	return nil

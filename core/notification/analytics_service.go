@@ -38,7 +38,7 @@ func (s *AnalyticsService) TrackEvent(ctx context.Context, notificationID, templ
 	// Update template analytics counters
 	if err := s.incrementTemplateCounter(ctx, templateID, eventType); err != nil {
 		// Log but don't fail - analytics are non-critical
-		fmt.Printf("Warning: failed to increment template counter: %v\n", err)
+		_ = err
 	}
 
 	return nil

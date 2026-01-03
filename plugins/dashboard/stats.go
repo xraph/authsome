@@ -69,7 +69,6 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	}
 	totalUsers, err := h.userSvc.CountUsers(ctx, userFilter)
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to count users: %v\n", err)
 		totalUsers = 0
 	}
 
@@ -81,7 +80,6 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	}
 	newUsersToday, err = h.userSvc.CountUsers(ctx, newUserFilter)
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to count new users: %v\n", err)
 		newUsersToday = 0
 	}
 
@@ -96,7 +94,6 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	sessionResponse, err := h.sessionSvc.ListSessions(ctx, sessionFilter)
 	allSessions := []*session.Session{}
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to fetch sessions: %v\n", err)
 	} else if sessionResponse != nil {
 		allSessions = sessionResponse.Data
 	}
@@ -181,7 +178,6 @@ func (h *Handler) getFailedLoginCount(ctx context.Context) int {
 
 	eventsResponse, err := h.auditSvc.List(ctx, filter)
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to fetch failed login events: %v\n", err)
 		return 0
 	}
 
@@ -216,7 +212,6 @@ func (h *Handler) getRecentActivity(ctx context.Context) []ActivityItem {
 
 	eventsResponse, err := h.auditSvc.List(ctx, filter)
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to fetch recent activity: %v\n", err)
 		return []ActivityItem{}
 	}
 

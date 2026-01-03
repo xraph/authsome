@@ -161,6 +161,11 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 		opt(p)
 	}
 
+	// Initialize UI extensions early so they're available during plugin scanning
+	// These don't depend on any runtime services, just the plugin reference
+	p.orgUIExt = NewOrganizationUIExtension(p)
+	p.dashboardExt = NewDashboardExtension(p)
+
 	return p
 }
 
@@ -257,13 +262,9 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	// Initialize handler
 	p.handler = NewHandler(p.service, p.config)
 
-	// Initialize dashboard extension
-	p.dashboardExt = NewDashboardExtension(p)
+	// UI extensions (orgUIExt and dashboardExt) are already initialized in NewPlugin()
+	// to ensure they're available during plugin scanning, regardless of init order
 
-	// Initialize organization UI extension
-	p.orgUIExt = NewOrganizationUIExtension(p)
-
-	fmt.Println("[SCIM] Plugin initialized successfully")
 	return nil
 }
 
@@ -587,16 +588,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("SCIM", "Admin", "Stats"),
 	)
 
-	fmt.Println("[SCIM] Routes registered successfully")
-	fmt.Println("  - POST   /scim/v2/Users (create user)")
-	fmt.Println("  - GET    /scim/v2/Users (list users)")
-	fmt.Println("  - GET    /scim/v2/Users/:id (get user)")
-	fmt.Println("  - PUT    /scim/v2/Users/:id (replace user)")
-	fmt.Println("  - PATCH  /scim/v2/Users/:id (update user)")
-	fmt.Println("  - DELETE /scim/v2/Users/:id (delete user)")
-	fmt.Println("  - POST   /scim/v2/Groups (create group)")
-	fmt.Println("  - GET    /scim/v2/Groups (list groups)")
-	fmt.Println("  - POST   /scim/v2/Bulk (bulk operations)")
 
 	return nil
 }

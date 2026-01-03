@@ -60,36 +60,36 @@ func DefaultExporterConfig(name string) *ExporterConfig {
 
 // ExportManager manages multiple SIEM exporters
 type ExportManager struct {
-	exporters      map[string]*ManagedExporter
-	eventBuffer    chan *audit.Event
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
-	mu             sync.RWMutex
+	exporters   map[string]*ManagedExporter
+	eventBuffer chan *audit.Event
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	mu          sync.RWMutex
 }
 
 // ManagedExporter wraps an exporter with buffering, retries, and circuit breaker
 type ManagedExporter struct {
-	exporter       Exporter
-	config         *ExporterConfig
-	buffer         []*audit.Event
-	mu             sync.Mutex
+	exporter          Exporter
+	config            *ExporterConfig
+	buffer            []*audit.Event
+	mu                sync.Mutex
 	consecutiveErrors int
-	circuitOpen    bool
-	circuitOpenedAt time.Time
-	stats          *ExporterStats
+	circuitOpen       bool
+	circuitOpenedAt   time.Time
+	stats             *ExporterStats
 }
 
 // ExporterStats tracks exporter statistics
 type ExporterStats struct {
-	EventsExported int64     `json:"eventsExported"`
-	EventsFailed   int64     `json:"eventsFailed"`
-	BatchesExported int64    `json:"batchesExported"`
-	BatchesFailed  int64     `json:"batchesFailed"`
-	LastExportAt   time.Time `json:"lastExportAt"`
-	LastErrorAt    time.Time `json:"lastErrorAt"`
-	LastError      string    `json:"lastError"`
-	CircuitOpen    bool      `json:"circuitOpen"`
+	EventsExported  int64     `json:"eventsExported"`
+	EventsFailed    int64     `json:"eventsFailed"`
+	BatchesExported int64     `json:"batchesExported"`
+	BatchesFailed   int64     `json:"batchesFailed"`
+	LastExportAt    time.Time `json:"lastExportAt"`
+	LastErrorAt     time.Time `json:"lastErrorAt"`
+	LastError       string    `json:"lastError"`
+	CircuitOpen     bool      `json:"circuitOpen"`
 }
 
 // NewExportManager creates a new export manager
@@ -352,10 +352,10 @@ func (em *ExportManager) Shutdown(timeout time.Duration) error {
 	em.mu.Lock()
 	defer em.mu.Unlock()
 
-	for name, managed := range em.exporters {
+	for _, managed := range em.exporters {
 		if err := managed.exporter.Close(); err != nil {
 			// Log error but continue
-			fmt.Printf("Error closing exporter '%s': %v\n", name, err)
+			_ = err
 		}
 	}
 
@@ -373,7 +373,7 @@ func isRetryable(err error) bool {
 	// - Temporary failures
 	// - Rate limits (429)
 	// - Server errors (5xx)
-	
+
 	// Simplified version - would check specific error types in production
 	return true
 }
@@ -427,4 +427,3 @@ func (f *LEEFFormatter) Format(event *audit.Event) ([]byte, error) {
 	)
 	return []byte(leef), nil
 }
-

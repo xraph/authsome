@@ -193,8 +193,6 @@ func (r *RetryService) Start() {
 
 	r.wg.Add(1)
 	go r.processor()
-
-	fmt.Println("[RetryService] Started retry processor")
 }
 
 // Stop stops the retry processor
@@ -209,8 +207,6 @@ func (r *RetryService) Stop() {
 
 	close(r.stopCh)
 	r.wg.Wait()
-
-	fmt.Println("[RetryService] Stopped")
 }
 
 // processor runs the retry processing loop
@@ -237,7 +233,6 @@ func (r *RetryService) processRetries() {
 	// Get items ready for retry
 	items, err := r.storage.Dequeue(ctx, 100)
 	if err != nil {
-		fmt.Printf("[RetryService] Failed to dequeue items: %v\n", err)
 		return
 	}
 
@@ -264,10 +259,7 @@ func (r *RetryService) processItem(ctx context.Context, item *RetryItem) {
 	_, err := r.sender.Send(ctx, sendReq)
 	if err == nil {
 		// Success - remove from queue
-		if delErr := r.storage.Delete(ctx, item.ID); delErr != nil {
-			fmt.Printf("[RetryService] Failed to delete successful item: %v\n", delErr)
-		}
-		fmt.Printf("[RetryService] Successfully sent notification %s on retry attempt %d\n", item.ID, item.Attempts)
+		_ = r.storage.Delete(ctx, item.ID)
 		return
 	}
 
@@ -277,11 +269,8 @@ func (r *RetryService) processItem(ctx context.Context, item *RetryItem) {
 
 	// Check if max retries exceeded
 	if item.Attempts >= r.config.MaxRetries {
-		fmt.Printf("[RetryService] Notification %s permanently failed after %d attempts: %v\n", item.ID, item.Attempts, err)
 		if r.config.PersistFailures {
-			if failErr := r.storage.MarkFailed(ctx, item); failErr != nil {
-				fmt.Printf("[RetryService] Failed to mark as failed: %v\n", failErr)
-			}
+			_ = r.storage.MarkFailed(ctx, item)
 		} else {
 			_ = r.storage.Delete(ctx, item.ID)
 		}
@@ -296,11 +285,7 @@ func (r *RetryService) processItem(ctx context.Context, item *RetryItem) {
 	item.NextRetry = time.Now().Add(r.config.BackoffDurations[backoffIndex])
 
 	// Update in storage
-	if updateErr := r.storage.Update(ctx, item); updateErr != nil {
-		fmt.Printf("[RetryService] Failed to update retry item: %v\n", updateErr)
-	}
-
-	fmt.Printf("[RetryService] Notification %s scheduled for retry %d at %s\n", item.ID, item.Attempts, item.NextRetry.Format(time.RFC3339))
+	_ = r.storage.Update(ctx, item)
 }
 
 // QueueForRetry queues a failed notification for retry
@@ -335,7 +320,6 @@ func (r *RetryService) QueueForRetry(ctx context.Context, req *DispatchRequest, 
 		return fmt.Errorf("failed to enqueue for retry: %w", err)
 	}
 
-	fmt.Printf("[RetryService] Queued notification for retry: %s (next retry at %s)\n", item.ID, item.NextRetry.Format(time.RFC3339))
 	return nil
 }
 

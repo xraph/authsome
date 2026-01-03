@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting Consent Plugin Demo Application...")
 
 	// Create Forge app
 	app := forge.New()
@@ -43,38 +42,6 @@ func main() {
 	// Setup demo routes
 	setupDemoRoutes(app, auth, nil)
 
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("Consent Plugin Demo Server Started!")
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("\nAPI Endpoints:")
-	fmt.Println("  Auth:")
-	fmt.Println("    POST   http://localhost:8080/api/auth/signup")
-	fmt.Println("    POST   http://localhost:8080/api/auth/signin")
-	fmt.Println("    POST   http://localhost:8080/api/auth/signout")
-	fmt.Println("\n  Consent Management:")
-	fmt.Println("    POST   http://localhost:8080/api/auth/consent/records")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/records")
-	fmt.Println("    POST   http://localhost:8080/api/auth/consent/revoke")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/summary")
-	fmt.Println("\n  Cookie Consent:")
-	fmt.Println("    POST   http://localhost:8080/api/auth/consent/cookies")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/cookies")
-	fmt.Println("\n  Data Export (GDPR Article 20):")
-	fmt.Println("    POST   http://localhost:8080/api/auth/consent/export")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/export")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/export/:id")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/export/:id/download")
-	fmt.Println("\n  Data Deletion (GDPR Article 17):")
-	fmt.Println("    POST   http://localhost:8080/api/auth/consent/deletion")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/deletion")
-	fmt.Println("    GET    http://localhost:8080/api/auth/consent/deletion/:id")
-	fmt.Println("\n  Demo Endpoints:")
-	fmt.Println("    GET    http://localhost:8080/demo")
-	fmt.Println("    GET    http://localhost:8080/marketing/subscribe (requires marketing consent)")
-	fmt.Println("    GET    http://localhost:8080/analytics/track (requires analytics consent)")
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("\nServer listening on :8080")
-	fmt.Println("Press Ctrl+C to stop")
 
 	// Start server
 	if err := app.Run(); err != nil {

@@ -249,36 +249,8 @@ func createDemoAPIKey(service *apikey.Service) {
 		return
 	}
 
-	fmt.Println()
-	fmt.Println("=================================")
-	fmt.Println("✅ DEMO API KEY CREATED")
-	fmt.Println("=================================")
-	fmt.Printf("Key:         %s\n", key.Key)
-	fmt.Printf("Name:        %s\n", key.Name)
-	// fmt.Printf("Organization: %s\n", key.OrgID) // V2 architecture change
-	fmt.Printf("Scopes:      %v\n", key.Scopes)
-	fmt.Printf("Rate Limit:  %d req/hour\n", key.RateLimit)
-	fmt.Println()
-	fmt.Println("⚠️  STORE THIS KEY SECURELY - IT WON'T BE SHOWN AGAIN")
-	fmt.Println()
-	fmt.Println("Test Commands:")
-	fmt.Println("=================================")
-	fmt.Printf("# Public endpoint (no auth)\n")
-	fmt.Printf("curl http://localhost:3000/api/v1/public\n\n")
-	fmt.Printf("# With API key (Authorization header)\n")
-	fmt.Printf("curl -H 'Authorization: ApiKey %s' \\\n", key.Key)
-	fmt.Printf("     http://localhost:3000/api/v1/users\n\n")
-	fmt.Printf("# With API key (X-API-Key header)\n")
-	fmt.Printf("curl -H 'X-API-Key: %s' \\\n", key.Key)
-	fmt.Printf("     http://localhost:3000/api/v1/users\n\n")
-	fmt.Printf("# Admin endpoint (requires 'admin' scope)\n")
-	fmt.Printf("curl -H 'Authorization: ApiKey %s' \\\n", key.Key)
-	fmt.Printf("     http://localhost:3000/api/v1/admin/users\n\n")
-	fmt.Printf("# Settings endpoint (requires 'settings:write' permission)\n")
-	fmt.Printf("curl -X POST -H 'Authorization: ApiKey %s' \\\n", key.Key)
-	fmt.Printf("     http://localhost:3000/api/v1/settings\n\n")
-	fmt.Printf("# List all keys\n")
-	fmt.Printf("curl 'http://localhost:3000/api/auth/api-keys?org_id=demo_org&user_id=demo_user'\n")
-	fmt.Println("=================================")
-	fmt.Println()
+
+	// Commented out: Organization field from V2 architecture change
+
+
 }

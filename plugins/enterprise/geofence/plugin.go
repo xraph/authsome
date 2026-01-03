@@ -80,7 +80,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.config = &config
 
 	if !p.config.Enabled {
-		fmt.Println("[Geofence Plugin] Disabled in configuration")
+
 		return nil
 	}
 
@@ -97,7 +97,6 @@ func (p *Plugin) Init(auth interface{}) error {
 	if config.Detection.DetectVPN || config.Detection.DetectProxy || config.Detection.DetectTor {
 		p.detectionProvider = p.createDetectionProvider(config.Detection.Provider)
 		if p.detectionProvider == nil {
-			fmt.Printf("[Geofence Plugin] Warning: detection provider %s not available\n", config.Detection.Provider)
 		}
 	}
 
@@ -122,7 +121,6 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Initialize middleware
 	p.middleware = NewMiddleware(p.service, p.config)
 
-	fmt.Printf("[Geofence Plugin] Initialized with provider: %s\n", p.geoProvider.Name())
 
 	return nil
 }
@@ -143,7 +141,6 @@ func (p *Plugin) createGeoProvider(name string) GeoProvider {
 		return NewIPGeolocationProvider(p.config.Geolocation.IPGeolocationKey)
 	default:
 		// Fallback to a basic provider
-		fmt.Printf("[Geofence Plugin] Unknown provider %s, using static provider\n", name)
 		return nil
 	}
 }
@@ -404,7 +401,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 	}
 
-	fmt.Printf("[Geofence Plugin] Registered routes under %s\n", basePath)
 
 	return nil
 }
@@ -435,7 +431,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get AuthContext with complete authentication state
 			authCtx, ok := contexts.GetAuthContext(ctx)
 			if !ok || authCtx == nil {
-				fmt.Println("[Geofence] Warning: auth context not available in after sign in hook")
+
 				return nil
 			}
 
@@ -446,8 +442,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			// Validate required fields
 			if appID.IsNil() || ipAddress == "" {
-				fmt.Printf("[Geofence] Warning: missing required context fields - app_id: %s, ip_address: %s\n",
-					appID.String(), ipAddress)
 				return nil
 			}
 
@@ -458,14 +452,12 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				bgCtx = contexts.SetAuthContext(bgCtx, authCtx)
 
 				if err := p.service.CheckSessionSecurity(bgCtx, userID, appID, ipAddress); err != nil {
-					fmt.Printf("[Geofence] Session security check failed: %v\n", err)
 				}
 			}()
 
 			return nil
 		})
 
-		fmt.Println("[Geofence] Registered session security notification hooks")
 	}
 
 	return nil

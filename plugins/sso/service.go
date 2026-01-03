@@ -440,12 +440,26 @@ func (s *Service) CreateSSOSession(
 	// Extract app context
 	appID, _ := contexts.GetAppID(ctx)
 
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	// Create session request
 	createReq := &session.CreateSessionRequest{
-		AppID:     appID,
-		UserID:    userID,
-		IPAddress: "", // Would be extracted from HTTP request
-		UserAgent: "", // Would be extracted from HTTP request
+		AppID:          appID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
+		UserID:         userID,
+		IPAddress:      "", // Would be extracted from HTTP request
+		UserAgent:      "", // Would be extracted from HTTP request
 	}
 
 	// Create session via session service

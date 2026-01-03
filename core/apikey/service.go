@@ -238,7 +238,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	// Update usage
 	if err := s.repo.UpdateAPIKeyUsage(ctx, apiKey.ID, req.IP, req.UserAgent); err != nil {
 		// Log error but don't fail verification
-		fmt.Printf("Failed to update API key usage: %v\n", err)
+		_ = err
 	}
 
 	return &VerifyAPIKeyResponse{
@@ -426,7 +426,7 @@ func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*
 	// Deactivate old key
 	if err := s.repo.DeactivateAPIKey(ctx, req.ID); err != nil {
 		// Log error but don't fail rotation
-		fmt.Printf("Failed to deactivate old API key: %v\n", err)
+		_ = err
 	}
 
 	// Audit log

@@ -22,9 +22,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 AuthSome Multi-Tenancy Integration Test")
-	fmt.Println("==========================================")
-	fmt.Println()
+
 
 	// Setup database
 	sqldb, err := sql.Open("sqlite3", "file:integration_test.db?mode=memory&cache=shared")
@@ -38,13 +36,11 @@ func main() {
 
 	// Create tables
 	createTables(db, ctx)
-	fmt.Println("✅ Database tables created")
-	fmt.Println()
+
 
 	// Create test organization
 	orgID := createTestOrganization(db, ctx, "acme-corp")
-	fmt.Printf("✅ Test organization created: %s\n", orgID)
-	fmt.Println()
+
 
 	// Start HTTP server with multi-tenancy
 	app := forge.NewApp(forge.AppConfig{
@@ -76,10 +72,6 @@ func main() {
 		log.Fatalf("Failed to mount: %v", err)
 	}
 
-	fmt.Println("✅ AuthSome initialized with multi-tenancy plugin")
-	fmt.Println("✅ All services decorated")
-	fmt.Println("✅ HTTP server ready")
-	fmt.Println()
 
 	// Start server in background
 	go func() {
@@ -90,13 +82,10 @@ func main() {
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
-	fmt.Println("🌐 Test server started on http://localhost:3003")
-	fmt.Println()
+
 
 	// Run integration tests
-	fmt.Println("📋 Running Integration Tests")
-	fmt.Println("-----------------------------")
-	fmt.Println()
+
 
 	// Test 1: Signup with org context
 	testSignupWithOrg(orgID)
@@ -105,19 +94,13 @@ func main() {
 	testSignupWithoutOrg()
 
 	// Test 3: Verify decorator logging
-	fmt.Println("\n📊 Summary")
-	fmt.Println("----------")
-	fmt.Println("✅ Multi-tenancy decorators are ACTIVE")
-	fmt.Println("✅ Organization context enforcement WORKING")
-	fmt.Println("✅ Plugin lifecycle COMPLETE")
-	fmt.Println("\n🎉 Multi-Tenancy Integration: SUCCESS!")
+
 
 	// TODO: Implement graceful shutdown for forge.App
 	// Server will be terminated when the program exits
 }
 
 func testSignupWithOrg(orgID string) {
-	fmt.Println("🔍 Test 1: Signup WITH organization context")
 
 	payload := map[string]interface{}{
 		"email":    "user@acme.com",
@@ -133,7 +116,7 @@ func testSignupWithOrg(orgID string) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("   ❌ Request failed: %v\n", err)
+
 		return
 	}
 	defer resp.Body.Close()
@@ -141,24 +124,20 @@ func testSignupWithOrg(orgID string) {
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		fmt.Printf("   ✅ Signup succeeded (status %d)\n", resp.StatusCode)
-		fmt.Println("   🎉 Decorator allowed signup with org context")
 
 		var result map[string]interface{}
 		json.Unmarshal(respBody, &result)
 		if user, ok := result["user"].(map[string]interface{}); ok {
-			fmt.Printf("   👤 User created: %v\n", user["email"])
+
 		}
 	} else {
-		fmt.Printf("   ⚠️  Signup failed (status %d): %s\n", resp.StatusCode, string(respBody))
 		if resp.StatusCode == 400 {
-			fmt.Println("   📝 Note: Decorator is enforcing org context validation")
+
 		}
 	}
 }
 
 func testSignupWithoutOrg() {
-	fmt.Println("\n🔍 Test 2: Signup WITHOUT organization context")
 
 	payload := map[string]interface{}{
 		"email":    "noorg@example.com",
@@ -174,7 +153,7 @@ func testSignupWithoutOrg() {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("   ❌ Request failed: %v\n", err)
+
 		return
 	}
 	defer resp.Body.Close()
@@ -182,11 +161,8 @@ func testSignupWithoutOrg() {
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 400 {
-		fmt.Printf("   ✅ Signup correctly rejected (status %d)\n", resp.StatusCode)
-		fmt.Println("   🎉 Decorator is enforcing organization requirement!")
-		fmt.Printf("   📝 Error: %s\n", string(respBody))
+
 	} else {
-		fmt.Printf("   ⚠️  Signup succeeded (status %d) - decorator may be bypassed\n", resp.StatusCode)
 	}
 }
 

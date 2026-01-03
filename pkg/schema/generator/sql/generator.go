@@ -75,9 +75,8 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Generated SQL migrations:\n")
-		fmt.Printf("  Up: %s\n", upPath)
-		fmt.Printf("  Down: %s\n", downPath)
+
+
 	}
 
 	return nil

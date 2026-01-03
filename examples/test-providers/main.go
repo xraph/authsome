@@ -10,26 +10,24 @@ import (
 )
 
 func main() {
-	fmt.Println("Testing AuthSome Providers and Templates")
-	fmt.Println("========================================")
+
 
 	// Test email templates
-	fmt.Println("\n1. Testing Email Templates:")
+
 	testEmailTemplates()
 
 	// Test SMS templates
-	fmt.Println("\n2. Testing SMS Templates:")
+
 	testSMSTemplates()
 
 	// Test email provider
-	fmt.Println("\n3. Testing Email Provider:")
+
 	testEmailProvider()
 
 	// Test SMS provider
-	fmt.Println("\n4. Testing SMS Provider:")
+
 	testSMSProvider()
 
-	fmt.Println("\nAll tests completed!")
 }
 
 func testEmailTemplates() {
@@ -54,17 +52,13 @@ func testEmailTemplates() {
 
 	templates := email.ListTemplates()
 	for _, templateName := range templates {
-		fmt.Printf("  Testing template: %s\n", templateName)
 
 		rendered, err := email.RenderTemplate(templateName, data)
 		if err != nil {
-			fmt.Printf("    ❌ Error: %v\n", err)
+
 			continue
 		}
 
-		fmt.Printf("    ✅ Subject: %s\n", rendered.Subject)
-		fmt.Printf("    ✅ HTML body: %d characters\n", len(rendered.HTMLBody))
-		fmt.Printf("    ✅ Text body: %d characters\n", len(rendered.TextBody))
 	}
 }
 
@@ -88,20 +82,17 @@ func testSMSTemplates() {
 
 	templates := sms.ListTemplates()
 	for _, templateName := range templates {
-		fmt.Printf("  Testing template: %s\n", templateName)
 
 		rendered, err := sms.RenderTemplate(templateName, data)
 		if err != nil {
-			fmt.Printf("    ❌ Error: %v\n", err)
+
 			continue
 		}
 
-		fmt.Printf("    ✅ Body: %s\n", rendered.Body)
-		fmt.Printf("    ✅ Length: %d characters\n", len(rendered.Body))
 
 		// Validate template
 		if err := sms.ValidateTemplate(templateName); err != nil {
-			fmt.Printf("    ⚠️  Validation warning: %v\n", err)
+
 		}
 	}
 }
@@ -118,9 +109,7 @@ func testEmailProvider() {
 	}
 
 	provider := email.NewSMTPProvider(config)
-	fmt.Printf("  ✅ SMTP Provider created: %s:%d\n", config.Host, config.Port)
-	fmt.Printf("  ✅ Provider ID: %s\n", provider.ID())
-	fmt.Printf("  ✅ Provider Type: %s\n", provider.Type())
+
 
 	// Test notification request creation (without actually sending)
 	testAppID := xid.New()
@@ -132,12 +121,9 @@ func testEmailProvider() {
 		Body:      "Hello World\n\nThis is a test email.",
 	}
 
-	fmt.Printf("  ✅ Notification request created for: %s\n", notificationReq.Recipient)
-	fmt.Printf("  ✅ Subject: %s\n", notificationReq.Subject)
 
 	// Note: We're not actually sending the email in this test
 	// In a real scenario, you would call: provider.Send(context.Background(), notification)
-	fmt.Printf("  ℹ️  Email sending skipped (test mode)\n")
 }
 
 func testSMSProvider() {
@@ -149,9 +135,7 @@ func testSMSProvider() {
 	}
 
 	provider := sms.NewTwilioProvider(config)
-	fmt.Printf("  ✅ Twilio Provider created with from number: %s\n", config.FromNumber)
-	fmt.Printf("  ✅ Provider ID: %s\n", provider.ID())
-	fmt.Printf("  ✅ Provider Type: %s\n", provider.Type())
+
 
 	// Test SMS notification request creation (without actually sending)
 	testSMSAppID := xid.New()
@@ -162,10 +146,7 @@ func testSMSProvider() {
 		Body:      "Hello! This is a test SMS from AuthSome.",
 	}
 
-	fmt.Printf("  ✅ SMS notification request created for: %s\n", notificationReq.Recipient)
-	fmt.Printf("  ✅ Body: %s\n", notificationReq.Body)
 
 	// Note: We're not actually sending the SMS in this test
 	// In a real scenario, you would call: provider.Send(context.Background(), notification)
-	fmt.Printf("  ℹ️  SMS sending skipped (test mode)\n")
 }

@@ -148,7 +148,6 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.
 		_, err := s.userService.Update(ctx, createdUser, updateReq)
 		if err != nil {
 			// Log but don't fail
-			fmt.Printf("[SCIM] Failed to auto-activate user: %v\n", err)
 		}
 	}
 
@@ -162,7 +161,6 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.
 	// Sync groups if provided
 	if len(scimUser.Groups) > 0 && s.config.GroupSync.Enabled {
 		if err := s.syncUserGroups(ctx, createdUser.ID, scimUser.Groups, orgID); err != nil {
-			fmt.Printf("[SCIM] Failed to sync user groups: %v\n", err)
 		}
 	}
 
@@ -514,7 +512,6 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 		// Update team with SCIM provisioning information
 		if err := s.updateTeamProvisioningInfo(ctx, teamID, scimGroup.ExternalID); err != nil {
 			// Log warning but don't fail the operation
-			fmt.Printf("[SCIM] Warning: Failed to update team provisioning info: %v\n", err)
 		}
 
 		// Store mapping
@@ -546,7 +543,6 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 			return nil, fmt.Errorf("invalid group ID: %w", err)
 		}
 		if err := s.syncGroupMembers(ctx, scimGroupID, scimGroup.Members, orgID); err != nil {
-			fmt.Printf("[SCIM] Failed to sync group members: %v\n", err)
 		}
 	}
 
@@ -748,7 +744,6 @@ func (s *Service) ReplaceGroup(ctx context.Context, id, orgID xid.ID, scimGroup 
 	// Sync members
 	if len(scimGroup.Members) > 0 {
 		if err := s.syncGroupMembers(ctx, id, scimGroup.Members, orgID); err != nil {
-			fmt.Printf("[SCIM] Failed to sync group members: %v\n", err)
 		}
 	}
 
@@ -1244,14 +1239,12 @@ func (s *Service) syncUserGroups(ctx context.Context, userID xid.ID, groups []Gr
 		// Find team by external ID (group value)
 		mapping, err := s.repo.FindGroupMappingBySCIMID(ctx, xid.ID{}, xid.ID{}, orgID, groupRef.Value)
 		if err != nil {
-			fmt.Printf("[SCIM] Group mapping not found for %s: %v\n", groupRef.Value, err)
 			continue
 		}
 
 		// Add user to team
 		teamID := mapping.TargetID
 		if err := s.getOrgService().AddTeamMember(ctx, teamID, memberID, "member"); err != nil {
-			fmt.Printf("[SCIM] Failed to add user to team: %v\n", err)
 		}
 	}
 
@@ -1278,27 +1271,23 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID xid.ID, members 
 		userIDStr := memberRef.Value
 		userID, err := xid.FromString(userIDStr)
 		if err != nil {
-			fmt.Printf("[SCIM] Invalid user ID %s: %v\n", userIDStr, err)
 			continue
 		}
 
 		// Get member ID by user ID
 		memberID, err := s.getOrgService().GetMemberIDByUserID(ctx, orgID, userID)
 		if err != nil {
-			fmt.Printf("[SCIM] User %s not found in organization\n", memberRef.Value)
 			continue
 		}
 
 		// Add to team
 		if err := s.getOrgService().AddTeamMember(ctx, groupID, memberID, "member"); err != nil {
-			fmt.Printf("[SCIM] Failed to add member to team: %v\n", err)
 			continue
 		}
 
 		// Mark this team membership as SCIM-provisioned
 		if err := s.repo.UpdateTeamMemberProvisioningInfo(ctx, groupID, memberID, strPtr("scim")); err != nil {
 			// Log warning but don't fail the operation
-			fmt.Printf("[SCIM] Warning: Failed to update team member provisioning info: %v\n", err)
 		}
 	}
 

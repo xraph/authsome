@@ -305,12 +305,10 @@ func (p *Plugin) runSessionCleanup() {
 	count, err := p.repo.ExpireRecoverySessions(ctx, time.Now())
 	if err != nil {
 		// Log error (would use proper logger in production)
-		fmt.Printf("[Backup Auth Plugin] Failed to expire sessions: %v\n", err)
 		return
 	}
 
 	if count > 0 {
-		fmt.Printf("[Backup Auth Plugin] Expired %d recovery session(s)\n", count)
 	}
 }
 

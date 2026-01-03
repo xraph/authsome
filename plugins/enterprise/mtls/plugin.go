@@ -97,7 +97,6 @@ func (p *Plugin) Init(auth interface{}) error {
 	p.hsmManager = NewHSMManager(p.config, p.repo)
 	if err := p.hsmManager.Init(context.Background()); err != nil {
 		// HSM initialization failure is not fatal - log and continue
-		fmt.Printf("Warning: HSM initialization failed: %v\n", err)
 	}
 
 	// Initialize service

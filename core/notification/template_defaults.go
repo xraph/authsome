@@ -17,24 +17,19 @@ import (
 func (s *Service) InitializeDefaultTemplates(ctx context.Context, appID xid.ID) error {
 	// Get all default template metadata
 	defaultTemplates := GetDefaultTemplateMetadata()
-	fmt.Printf("[InitializeDefaultTemplates] Found %d default templates to process for app %s\n", len(defaultTemplates), appID)
 
 	// Create each default template if it doesn't exist
 	for _, metadata := range defaultTemplates {
 		// Check if template already exists
 		exists, err := s.TemplateExists(ctx, appID, metadata.Key)
 		if err != nil {
-			fmt.Printf("[InitializeDefaultTemplates] Error checking existence for %s: %v\n", metadata.Key, err)
 			return fmt.Errorf("failed to check template existence: %w", err)
 		}
 
 		if exists {
 			// Skip if template already exists
-			fmt.Printf("[InitializeDefaultTemplates] Template %s already exists, skipping\n", metadata.Key)
 			continue
 		}
-
-		fmt.Printf("[InitializeDefaultTemplates] Creating template %s for app %s\n", metadata.Key, appID)
 
 		// Use HTML body if available, otherwise use text body
 		body := metadata.DefaultBody
@@ -66,13 +61,10 @@ func (s *Service) InitializeDefaultTemplates(ctx context.Context, appID xid.ID) 
 		}
 
 		if err := s.repo.CreateTemplate(ctx, template); err != nil {
-			fmt.Printf("[InitializeDefaultTemplates] Error creating template %s: %v\n", metadata.Key, err)
 			return fmt.Errorf("failed to create template %s: %w", metadata.Key, err)
 		}
-		fmt.Printf("[InitializeDefaultTemplates] Successfully created template %s\n", metadata.Key)
 	}
 
-	fmt.Printf("[InitializeDefaultTemplates] Completed initialization for app %s\n", appID)
 	return nil
 }
 
@@ -125,7 +117,6 @@ func (s *Service) ResetTemplate(ctx context.Context, templateID xid.ID) error {
 
 // ResetAllTemplates resets all templates for an app to defaults
 func (s *Service) ResetAllTemplates(ctx context.Context, appID xid.ID) error {
-	fmt.Println("Resetting all templates for app", appID)
 	// First, ensure all default templates exist
 	// InitializeDefaultTemplates is idempotent - it only creates missing templates
 	if err := s.InitializeDefaultTemplates(ctx, appID); err != nil {
@@ -146,10 +137,7 @@ func (s *Service) ResetAllTemplates(ctx context.Context, appID xid.ID) error {
 	// Reset each template that is a default template
 	for _, template := range response.Data {
 		if template.IsDefault {
-			if err := s.ResetTemplate(ctx, template.ID); err != nil {
-				// Log error but continue with other templates
-				fmt.Printf("Failed to reset template %s: %v\n", template.ID, err)
-			}
+			_ = s.ResetTemplate(ctx, template.ID)
 		}
 	}
 
@@ -163,20 +151,16 @@ func (s *Service) TemplateExists(ctx context.Context, appID xid.ID, templateKey 
 	if err != nil {
 		// Check if it's a not found error
 		if IsTemplateNotFoundError(err) {
-			fmt.Printf("[TemplateExists] Template %s not found for app %s (this is expected for new templates)\n", templateKey, appID)
 			return false, nil
 		}
-		fmt.Printf("[TemplateExists] Error checking template %s for app %s: %v\n", templateKey, appID, err)
 		return false, fmt.Errorf("failed to check template existence: %w", err)
 	}
 
 	// Check if template is nil (some repos return nil, nil for not found)
 	if template == nil {
-		fmt.Printf("[TemplateExists] Template %s not found for app %s (nil result)\n", templateKey, appID)
 		return false, nil
 	}
 
-	fmt.Printf("[TemplateExists] Template %s exists for app %s (ID: %s)\n", templateKey, appID, template.ID)
 	return true, nil
 }
 

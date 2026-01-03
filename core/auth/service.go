@@ -60,11 +60,11 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	// if verification is required, do not create session
 	if s.config.RequireEmailVerification {
 		response := &responses.AuthResponse{User: u}
-		
+
 		// Update AuthContext in context before executing hooks
 		authCtx := s.buildAuthContextFromResponse(ctx, response, req.IPAddress, req.UserAgent)
 		ctx = contexts.SetAuthContext(ctx, authCtx)
-		
+
 		// Execute after sign up hooks
 		if s.hookExecutor != nil {
 			if err := s.hookExecutor.ExecuteAfterSignUp(ctx, response); err != nil {
@@ -75,12 +75,26 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 		return response, nil
 	}
 
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
-		AppID:     appID,
-		UserID:    u.ID,
-		Remember:  req.RememberMe,
-		IPAddress: req.IPAddress,
-		UserAgent: req.UserAgent,
+		AppID:          appID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
+		UserID:         u.ID,
+		Remember:       req.RememberMe,
+		IPAddress:      req.IPAddress,
+		UserAgent:      req.UserAgent,
 	})
 	if err != nil {
 		return nil, err
@@ -131,12 +145,26 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 		return nil, types.ErrEmailNotVerified
 	}
 
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
-		AppID:     appID,
-		UserID:    u.ID,
-		Remember:  req.RememberMe,
-		IPAddress: req.IPAddress,
-		UserAgent: req.UserAgent,
+		AppID:          appID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
+		UserID:         u.ID,
+		Remember:       req.RememberMe,
+		IPAddress:      req.IPAddress,
+		UserAgent:      req.UserAgent,
 	})
 	if err != nil {
 		return nil, err
@@ -168,12 +196,12 @@ func (s *Service) CheckCredentials(ctx context.Context, email, password string) 
 	if ok := crypto.CheckPassword(password, u.PasswordHash); !ok {
 		return nil, types.ErrInvalidCredentials
 	}
-	
+
 	// Check email verification if required
 	if s.config.RequireEmailVerification && !u.EmailVerified {
 		return nil, types.ErrEmailNotVerified
 	}
-	
+
 	return u, nil
 }
 
@@ -186,12 +214,26 @@ func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, rememb
 		return nil, contexts.ErrAppContextRequired
 	}
 
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	sess, err := s.session.Create(ctx, &session.CreateSessionRequest{
-		AppID:     appID,
-		UserID:    u.ID,
-		Remember:  remember,
-		IPAddress: ip,
-		UserAgent: ua,
+		AppID:          appID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
+		UserID:         u.ID,
+		Remember:       remember,
+		IPAddress:      ip,
+		UserAgent:      ua,
 	})
 	if err != nil {
 		return nil, err
@@ -287,11 +329,11 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*res
 			Session: refreshResp.Session,
 			Token:   refreshResp.AccessToken,
 		}
-		
+
 		// Update AuthContext in context before executing hooks
 		authCtx := s.buildAuthContextFromResponse(ctx, authResp, "", "")
 		ctx = contexts.SetAuthContext(ctx, authCtx)
-		
+
 		_ = s.hookExecutor.ExecuteAfterSignIn(ctx, authResp)
 	}
 
@@ -311,7 +353,7 @@ func (s *Service) buildAuthContextFromResponse(ctx context.Context, response *re
 	// Extract app/env from existing context or response
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
-	
+
 	// If we have a session, use its context values
 	if response.Session != nil {
 		if !response.Session.AppID.IsNil() {
@@ -321,7 +363,7 @@ func (s *Service) buildAuthContextFromResponse(ctx context.Context, response *re
 			envID = *response.Session.EnvironmentID
 		}
 	}
-	
+
 	authCtx := &contexts.AuthContext{
 		User:            response.User,
 		Session:         response.Session,
@@ -333,10 +375,10 @@ func (s *Service) buildAuthContextFromResponse(ctx context.Context, response *re
 		IPAddress:       ipAddress,
 		UserAgent:       userAgent,
 	}
-	
+
 	if response.Session != nil && response.Session.OrganizationID != nil {
 		authCtx.OrganizationID = response.Session.OrganizationID
 	}
-	
+
 	return authCtx
 }

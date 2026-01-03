@@ -1507,6 +1507,62 @@ func (a *userRoleRepoAdapter) ListRolesForUser(ctx context.Context, userID xid.I
 	return a.repo.ListRolesForUser(ctx, userID, orgID)
 }
 
+func (a *userRoleRepoAdapter) AssignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
+	return a.repo.AssignBatch(ctx, userID, roleIDs, orgID)
+}
+
+func (a *userRoleRepoAdapter) AssignBulk(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (map[xid.ID]error, error) {
+	return a.repo.AssignBulk(ctx, userIDs, roleID, orgID)
+}
+
+func (a *userRoleRepoAdapter) AssignAppLevel(ctx context.Context, userID, roleID, appID xid.ID) error {
+	return a.repo.AssignAppLevel(ctx, userID, roleID, appID)
+}
+
+func (a *userRoleRepoAdapter) UnassignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
+	return a.repo.UnassignBatch(ctx, userID, roleIDs, orgID)
+}
+
+func (a *userRoleRepoAdapter) UnassignBulk(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (map[xid.ID]error, error) {
+	return a.repo.UnassignBulk(ctx, userIDs, roleID, orgID)
+}
+
+func (a *userRoleRepoAdapter) ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error {
+	return a.repo.ClearUserRolesInOrg(ctx, userID, orgID)
+}
+
+func (a *userRoleRepoAdapter) ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error {
+	return a.repo.ClearUserRolesInApp(ctx, userID, appID)
+}
+
+func (a *userRoleRepoAdapter) TransferRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
+	return a.repo.TransferRoles(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+}
+
+func (a *userRoleRepoAdapter) CopyRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
+	return a.repo.CopyRoles(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+}
+
+func (a *userRoleRepoAdapter) ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error {
+	return a.repo.ReplaceUserRoles(ctx, userID, orgID, newRoleIDs)
+}
+
+func (a *userRoleRepoAdapter) ListRolesForUserInOrg(ctx context.Context, userID, orgID, envID xid.ID) ([]mainSchema.Role, error) {
+	return a.repo.ListRolesForUserInOrg(ctx, userID, orgID, envID)
+}
+
+func (a *userRoleRepoAdapter) ListRolesForUserInApp(ctx context.Context, userID, appID, envID xid.ID) ([]mainSchema.Role, error) {
+	return a.repo.ListRolesForUserInApp(ctx, userID, appID, envID)
+}
+
+func (a *userRoleRepoAdapter) ListAllUserRolesInOrg(ctx context.Context, orgID, envID xid.ID) ([]mainSchema.UserRole, error) {
+	return a.repo.ListAllUserRolesInOrg(ctx, orgID, envID)
+}
+
+func (a *userRoleRepoAdapter) ListAllUserRolesInApp(ctx context.Context, appID, envID xid.ID) ([]mainSchema.UserRole, error) {
+	return a.repo.ListAllUserRolesInApp(ctx, appID, envID)
+}
+
 // policyRepoAdapter adapts repository.PolicyRepository to rbac.PolicyRepository
 type policyRepoAdapter struct {
 	repo *mainRepo.PolicyRepository

@@ -55,7 +55,6 @@ func (s *MemberService) getRoleIDByName(ctx context.Context, appID xid.ID, roleN
 	if !ok || envID.IsNil() {
 		// If no environment in context, use the deprecated method as fallback
 		// This maintains backward compatibility but should be fixed at the call site
-		fmt.Printf("[MemberService] WARNING: Environment not in context for app %s, using deprecated FindByNameAndApp\n", appID.String())
 		role, err := s.roleRepo.FindByNameAndApp(ctx, rbacRoleName, appID)
 		if err != nil {
 			return xid.NilID(), fmt.Errorf("role %s not found for app %s: %w", rbacRoleName, appID, err)
@@ -117,7 +116,6 @@ func (s *MemberService) assignSuperAdminRole(ctx context.Context, userID, appID 
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok || envID.IsNil() {
 		// Fallback to deprecated method with warning
-		fmt.Printf("[MemberService] WARNING: Environment not in context for superadmin assignment, using deprecated method\n")
 		superAdminRole, err := s.roleRepo.FindByNameAndApp(ctx, rbac.RoleSuperAdmin, appID)
 		if err != nil {
 			return fmt.Errorf("superadmin role not found: %w", err)
@@ -153,8 +151,6 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 	existingMember, err := s.repo.FindMember(ctx, member.AppID, member.UserID)
 	if err == nil && existingMember != nil {
 		// Member already exists - return existing member (idempotent behavior)
-		fmt.Printf("[MemberService] Member already exists for user %s in app %s - returning existing\n",
-			member.UserID, member.AppID)
 		return FromSchemaMember(existingMember), nil
 	}
 
@@ -176,8 +172,6 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 
 	isFirstMember := memberCount == 0
 	if isFirstMember {
-		fmt.Printf("[MemberService] First member detected in app %s - promoting to owner: %s\n",
-			member.AppID, member.UserID)
 		member.Role = MemberRoleOwner
 	}
 
@@ -199,13 +193,9 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 	if isFirstMember {
 		platformApp, err := s.appRepo.GetPlatformApp(ctx)
 		if err == nil && platformApp.ID == member.AppID {
-			fmt.Printf("[MemberService] First member of platform app - promoting to superadmin: %s\n",
-				member.UserID)
 			if err := s.assignSuperAdminRole(ctx, member.UserID, member.AppID); err != nil {
-				fmt.Printf("[MemberService] Warning: Failed to assign superadmin role: %v\n", err)
 				// Don't fail - user is still owner which is highly privileged
-			} else {
-				fmt.Printf("[MemberService] Successfully assigned superadmin role\n")
+				_ = err
 			}
 		}
 	}
@@ -307,14 +297,11 @@ func (s *MemberService) DeleteMember(ctx context.Context, id xid.ID) error {
 	roles, err := s.userRoleRepo.ListRolesForUser(ctx, member.UserID, &member.AppID)
 	if err != nil {
 		// Log but don't fail - member is already deleted
-		fmt.Printf("Warning: failed to list roles for cleanup: %v\n", err)
 		return nil
 	}
 
 	for _, role := range roles {
-		if err := s.userRoleRepo.Unassign(ctx, member.UserID, role.ID, member.AppID); err != nil {
-			fmt.Printf("Warning: failed to unassign role %s: %v\n", role.Name, err)
-		}
+		_ = s.userRoleRepo.Unassign(ctx, member.UserID, role.ID, member.AppID)
 	}
 
 	return nil

@@ -2,7 +2,6 @@ package notification
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -133,8 +132,6 @@ func (d *Dispatcher) Start() {
 			go d.worker(priority)
 		}
 	}
-
-	fmt.Printf("[Dispatcher] Started with %d workers per priority level\n", d.config.WorkerPoolSize)
 }
 
 // Stop gracefully stops the dispatcher
@@ -158,9 +155,7 @@ func (d *Dispatcher) Stop() {
 
 	select {
 	case <-done:
-		fmt.Println("[Dispatcher] Shutdown complete")
 	case <-time.After(d.config.ShutdownTimeout):
-		fmt.Println("[Dispatcher] Shutdown timed out, some notifications may not have been sent")
 	}
 }
 
@@ -209,9 +204,7 @@ func (d *Dispatcher) processJob(job *dispatchJob) {
 
 		// Queue for retry based on priority
 		if d.retry != nil && req.Priority != PriorityLow {
-			if retryErr := d.retry.QueueForRetry(ctx, req, err); retryErr != nil {
-				fmt.Printf("[Dispatcher] Failed to queue for retry: %v\n", retryErr)
-			}
+			_ = d.retry.QueueForRetry(ctx, req, err)
 		}
 	} else {
 		result.NotificationID = notification.ID
@@ -294,7 +287,6 @@ func (d *Dispatcher) dispatchAsync(ctx context.Context, req *DispatchRequest) *D
 		}
 	default:
 		// Queue is full, process synchronously as fallback
-		fmt.Printf("[Dispatcher] Queue full for priority %s, falling back to sync\n", req.Priority)
 		return d.dispatchSync(ctx, req)
 	}
 }
@@ -330,4 +322,3 @@ func (d *Dispatcher) IsRunning() bool {
 	defer d.mu.RUnlock()
 	return d.running
 }
-

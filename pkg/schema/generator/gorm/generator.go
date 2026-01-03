@@ -52,9 +52,8 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Generated GORM files:\n")
-		fmt.Printf("  %s\n", modelsPath)
-		fmt.Printf("  %s\n", migrationPath)
+
+
 	}
 
 	return nil

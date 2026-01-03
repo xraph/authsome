@@ -31,6 +31,7 @@ import (
 	"github.com/xraph/authsome/plugins/dashboard/components"
 	"github.com/xraph/authsome/plugins/dashboard/components/pages"
 	"github.com/xraph/forge"
+	"gopkg.in/yaml.v3"
 	g "maragu.dev/gomponents"
 )
 
@@ -51,6 +52,7 @@ type Handler struct {
 	enabledPlugins    map[string]bool
 	hookRegistry      *hooks.HookRegistry // For executing lifecycle hooks
 	extensionRegistry *ExtensionRegistry  // For rendering extension navigation items and widgets
+	configManager     forge.ConfigManager // For config viewer page
 }
 
 // Response types - use shared responses from core
@@ -75,6 +77,7 @@ func NewHandler(
 	basePath string,
 	enabledPlugins map[string]bool,
 	hookRegistry *hooks.HookRegistry,
+	configManager forge.ConfigManager,
 ) *Handler {
 	h := &Handler{
 		assets:         assets,
@@ -91,6 +94,7 @@ func NewHandler(
 		basePath:       basePath,
 		enabledPlugins: enabledPlugins,
 		hookRegistry:   hookRegistry,
+		configManager:  configManager,
 	}
 
 	return h
@@ -185,7 +189,6 @@ func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.
 	if err != nil {
 		// If environment extraction fails, log but don't fail the request
 		// This allows the dashboard to work even if environments aren't set up yet
-		fmt.Printf("[Dashboard] Warning: Could not extract environment: %v\n", err)
 	}
 	_ = env // Environment is stored in context, no need to return it here
 
@@ -361,6 +364,70 @@ func (h *Handler) renderAppCards(c forge.Context, ctx context.Context, currentUs
 	}
 
 	content := pages.AppsListPage(appsListData)
+	return h.renderWithHeaderLayout(c, pageData, content)
+}
+
+// ServeConfigViewer serves the configuration viewer page
+// This page displays all configuration values from Forge ConfigManager as YAML
+func (h *Handler) ServeConfigViewer(c forge.Context) error {
+	currentUser := h.getUserFromContext(c)
+	if currentUser == nil {
+		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+	}
+
+	// Get all config values from ConfigManager
+	var configYAML string
+	var sourceMetadata []pages.ConfigSourceMetadata
+
+	if h.configManager != nil {
+		// Get all settings as map
+		allSettings := h.configManager.GetAllSettings()
+
+		// Convert to YAML
+		yamlBytes, err := yaml.Marshal(allSettings)
+		if err != nil {
+			configYAML = fmt.Sprintf("# Error marshaling config: %v", err)
+		} else {
+			configYAML = string(yamlBytes)
+		}
+
+		// Get source metadata
+		sourceMeta := h.configManager.GetSourceMetadata()
+		for name, meta := range sourceMeta {
+			sourceMetadata = append(sourceMetadata, pages.ConfigSourceMetadata{
+				Name:         name,
+				Type:         meta.Type,
+				Priority:     meta.Priority,
+				LastLoaded:   meta.LastLoaded,
+				LastModified: meta.LastModified,
+				IsWatching:   meta.IsWatching,
+				KeyCount:     meta.KeyCount,
+				ErrorCount:   meta.ErrorCount,
+				LastError:    meta.LastError,
+			})
+		}
+	} else {
+		configYAML = "# No ConfigManager available"
+	}
+
+	pageData := components.PageData{
+		Title:          "Configuration Viewer",
+		User:           currentUser,
+		CSRFToken:      h.getCSRFToken(c),
+		ActivePage:     "config",
+		BasePath:       h.basePath,
+		EnabledPlugins: h.enabledPlugins,
+		IsMultiApp:     h.isMultiApp,
+		Year:           time.Now().Year(),
+	}
+
+	configData := pages.ConfigViewerPageData{
+		ConfigYAML:     configYAML,
+		SourceMetadata: sourceMetadata,
+		BasePath:       h.basePath,
+	}
+
+	content := pages.ConfigViewerPage(configData)
 	return h.renderWithHeaderLayout(c, pageData, content)
 }
 
@@ -784,13 +851,10 @@ func (h *Handler) HandleUserEdit(c forge.Context) error {
 		updateReq.Username = &username
 	}
 
-	updatedUser, err := h.userSvc.Update(ctx, targetUser, updateReq)
+	_, err = h.userSvc.Update(ctx, targetUser, updateReq)
 	if err != nil {
-		fmt.Printf("[Dashboard] Failed to update user: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to update user")
 	}
-
-	fmt.Printf("[Dashboard] User %s updated by admin %s\n", updatedUser.ID, currentUser.ID)
 
 	// Redirect back to user detail page with success message
 	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/users/"+userID+"?success=updated")
@@ -823,11 +887,8 @@ func (h *Handler) HandleUserDelete(c forge.Context) error {
 
 	// Delete user
 	if err := h.userSvc.Delete(ctx, id); err != nil {
-		fmt.Printf("[Dashboard] Failed to delete user: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to delete user")
 	}
-
-	fmt.Printf("[Dashboard] User %s deleted by admin %s\n", userID, currentUser.ID)
 
 	// Redirect to users list with success message
 	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/users?success=deleted")
@@ -868,7 +929,6 @@ func (h *Handler) ServeSessions(c forge.Context) error {
 	if err == nil && sessionResponse != nil {
 		allSessions = sessionResponse.Data
 	} else if err != nil {
-		fmt.Printf("[Dashboard] Failed to list sessions: %v\n", err)
 	}
 
 	// Filter sessions if search query provided
@@ -956,11 +1016,8 @@ func (h *Handler) HandleRevokeSession(c forge.Context) error {
 
 	// Revoke session
 	if err := h.sessionSvc.RevokeByID(ctx, id); err != nil {
-		fmt.Printf("[Dashboard] Failed to revoke session: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to revoke session")
 	}
-
-	fmt.Printf("[Dashboard] Session %s revoked by admin %s\n", sessionID, currentUser.ID)
 
 	// Redirect back to sessions list with success message
 	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/sessions?success=revoked")
@@ -1497,8 +1554,6 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 	// TODO: Load these from actual configuration
 
 	// Debug: Log enabled plugins
-	fmt.Printf("[Dashboard] Settings page - Enabled plugins: %v\n", h.enabledPlugins)
-	fmt.Printf("[Dashboard] Settings page - API Key plugin enabled: %v\n", h.enabledPlugins["apikey"])
 
 	// Prepare API Keys data
 	apiKeysData := pages.APIKeysTabPageData{
@@ -1521,7 +1576,6 @@ func (h *Handler) ServeSettings(c forge.Context) error {
 
 		keysResp, err := h.apikeyService.ListAPIKeys(ctx, keyFilter)
 		if err != nil {
-			fmt.Printf("[Dashboard] Failed to fetch API keys: %v\n", err)
 		} else if keysResp != nil {
 			// Convert to page data format
 			for _, key := range keysResp.Data {
@@ -1689,7 +1743,6 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 	if err == nil && sessionResponse != nil {
 		sessions = sessionResponse.Data
 	} else if err != nil {
-		fmt.Printf("[Dashboard] Failed to list user sessions: %v\n", err)
 		return c.String(http.StatusInternalServerError, "Failed to list user sessions")
 	}
 
@@ -1697,13 +1750,10 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 	revokedCount := 0
 	for _, sess := range sessions {
 		if err := h.sessionSvc.RevokeByID(ctx, sess.ID); err != nil {
-			fmt.Printf("[Dashboard] Failed to revoke session %s: %v\n", sess.ID, err)
 			continue
 		}
 		revokedCount++
 	}
-
-	fmt.Printf("[Dashboard] %d sessions revoked for user %s by admin %s\n", revokedCount, userIDStr, currentUser.ID)
 
 	// Redirect back with success message
 	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/sessions?success=revoked_all&count="+fmt.Sprintf("%d", revokedCount))
@@ -1711,11 +1761,9 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 
 // ServeLogin serves the login page
 func (h *Handler) ServeLogin(c forge.Context) error {
-	fmt.Printf("[Dashboard] ServeLogin called for path: %s\n", c.Request().URL.Path)
 
 	// Check if already authenticated (check session cookie directly since no auth middleware)
 	if user := h.checkExistingSession(c); user != nil {
-		fmt.Printf("[Dashboard] User already authenticated: %s, redirecting to dashboard\n", user.Email)
 		// Already logged in, redirect to dashboard
 		redirect := c.Query("redirect")
 		if redirect == "" {
@@ -1723,8 +1771,6 @@ func (h *Handler) ServeLogin(c forge.Context) error {
 		}
 		return c.Redirect(http.StatusFound, redirect)
 	}
-
-	fmt.Printf("[Dashboard] No valid session, showing login page\n")
 
 	redirect := c.Query("redirect")
 	errorParam := c.Query("error")
@@ -1765,7 +1811,6 @@ func (h *Handler) ServeLogin(c forge.Context) error {
 func (h *Handler) HandleLogin(c forge.Context) error {
 	// Check if already authenticated
 	if user := h.checkExistingSession(c); user != nil {
-		fmt.Printf("[Dashboard] User already authenticated during login attempt: %s, redirecting\n", user.Email)
 		redirect := c.Request().FormValue("redirect")
 		if redirect == "" {
 			redirect = h.basePath + "/dashboard/"
@@ -1798,7 +1843,6 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 	ctx := c.Request().Context()
 	platformApp, err := h.appService.GetPlatformApp(ctx)
 	if err != nil {
-		fmt.Printf("[Dashboard] Login error: Failed to get platform app: %v\n", err)
 		return h.renderLoginError(c, "System configuration error. Please contact administrator.", redirect)
 	}
 
@@ -1806,35 +1850,16 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 
 	// Find user by email in platform app context
 	user, err := h.userSvc.FindByAppAndEmail(ctx, platformApp.ID, email)
-	fmt.Printf("[Dashboard] Login: Email: %s, Platform App: %s\n", email, platformApp.ID.String())
-	fmt.Printf("[Dashboard] Login: User: %+v\n", user)
-	fmt.Printf("[Dashboard] Login: Error: %+v\n", err)
 
 	if err != nil || user == nil {
-		fmt.Printf("[Dashboard] Login error: Failed to find user: %v\n", err)
 		return h.renderLoginError(c, "Invalid email or password", redirect)
 	}
-
-	fmt.Printf("[Dashboard] Login: Found user %s (ID: %s), checking password...\n", user.Email, user.ID)
-	fmt.Printf("[Dashboard] Login: Password hash length: %d, hash preview: %s...\n", len(user.PasswordHash), func() string {
-		if len(user.PasswordHash) > 20 {
-			return user.PasswordHash[:20]
-		}
-		return user.PasswordHash
-	}())
-
-	fmt.Printf("[Dashboard] Login: Password: %s\n", password)
-	fmt.Printf("[Dashboard] Login: Password hash: %s\n", user.PasswordHash)
 
 	// Verify password
 	passwordValid := crypto.CheckPassword(password, user.PasswordHash)
-	fmt.Printf("[Dashboard] Login: Password check result: %v\n", passwordValid)
 	if !passwordValid {
-		fmt.Printf("[Dashboard] Login error: Password verification failed for user %s\n", user.Email)
 		return h.renderLoginError(c, "Invalid email or password", redirect)
 	}
-
-	fmt.Printf("[Dashboard] Login: Password verified successfully for user %s\n", user.Email)
 
 	// Note: Role checking is handled by the RequireAdmin middleware
 	// The middleware will check if the user has the required permissions
@@ -1842,13 +1867,27 @@ func (h *Handler) HandleLogin(c forge.Context) error {
 
 	// App membership verification happens in extractAndInjectAppID for app-scoped routes
 
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	// Create session
 	sess, err := h.sessionSvc.Create(c.Request().Context(), &session.CreateSessionRequest{
-		UserID:    user.ID,
-		IPAddress: c.Request().RemoteAddr,
-		UserAgent: c.Request().UserAgent(),
-		Remember:  false,
-		AppID:     platformApp.ID,
+		UserID:         user.ID,
+		IPAddress:      c.Request().RemoteAddr,
+		UserAgent:      c.Request().UserAgent(),
+		Remember:       false,
+		AppID:          platformApp.ID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
 	})
 	if err != nil {
 		return h.renderLoginError(c, "Failed to create session", redirect)
@@ -1895,7 +1934,6 @@ func (h *Handler) renderLoginError(c forge.Context, message string, redirect str
 func (h *Handler) ServeSignup(c forge.Context) error {
 	// Check if already authenticated (check session cookie directly since no auth middleware)
 	if user := h.checkExistingSession(c); user != nil {
-		fmt.Printf("[Dashboard] User already authenticated: %s, redirecting to dashboard\n", user.Email)
 		// Already logged in, redirect to dashboard
 		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/")
 	}
@@ -1926,7 +1964,6 @@ func (h *Handler) ServeSignup(c forge.Context) error {
 func (h *Handler) HandleSignup(c forge.Context) error {
 	// Check if already authenticated
 	if user := h.checkExistingSession(c); user != nil {
-		fmt.Printf("[Dashboard] User already authenticated during signup attempt: %s, redirecting\n", user.Email)
 		redirect := c.Request().FormValue("redirect")
 		if redirect == "" {
 			redirect = h.basePath + "/dashboard/"
@@ -1936,7 +1973,6 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
-		fmt.Printf("[Dashboard] Signup form parse error: %v\n", err)
 		return h.renderSignupError(c, "Invalid form data", c.Query("redirect"))
 	}
 
@@ -1947,27 +1983,21 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 	redirect := c.Request().FormValue("redirect")
 	csrfToken := c.Request().FormValue("csrf_token")
 
-	fmt.Printf("[Dashboard] Signup attempt for email: %s\n", email)
-
 	// Validate CSRF token
 	if csrfToken == "" {
-		fmt.Printf("[Dashboard] Signup error: Missing CSRF token\n")
 		return h.renderSignupError(c, "Invalid CSRF token", redirect)
 	}
 
 	// Validate inputs
 	if name == "" || email == "" || password == "" {
-		fmt.Printf("[Dashboard] Signup error: Missing required fields\n")
 		return h.renderSignupError(c, "All fields are required", redirect)
 	}
 
 	if password != confirmPassword {
-		fmt.Printf("[Dashboard] Signup error: Passwords don't match\n")
 		return h.renderSignupError(c, "Passwords do not match", redirect)
 	}
 
 	if len(password) < 8 {
-		fmt.Printf("[Dashboard] Signup error: Password too short\n")
 		return h.renderSignupError(c, "Password must be at least 8 characters", redirect)
 	}
 
@@ -1975,7 +2005,6 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 	ctx := c.Request().Context()
 	platformApp, err := h.appService.GetPlatformApp(ctx)
 	if err != nil {
-		fmt.Printf("[Dashboard] Signup error: Failed to get platform app: %v\n", err)
 		return h.renderSignupError(c, "System configuration error. Please contact administrator.", redirect)
 	}
 
@@ -1987,14 +2016,11 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		defaultEnv, err := h.envService.GetDefaultEnvironment(ctx, platformApp.ID)
 		if err == nil && defaultEnv != nil {
 			ctx = contexts.SetEnvironmentID(ctx, defaultEnv.ID)
-			fmt.Printf("[Dashboard] Signup: Environment context set: %s\n", defaultEnv.ID.String())
 		} else {
-			fmt.Printf("[Dashboard] Signup warning: Failed to get default environment: %v\n", err)
 		}
 	}
 
 	// Create user in platform app context
-	fmt.Printf("[Dashboard] Signup: Creating user with email: %s in platform app: %s\n", email, platformApp.ID.String())
 	newUser, err := h.userSvc.Create(ctx, &user.CreateUserRequest{
 		Email:    email,
 		Password: password,
@@ -2002,7 +2028,6 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		AppID:    platformApp.ID,
 	})
 	if err != nil {
-		fmt.Printf("[Dashboard] Signup error: Failed to create user: %v\n", err)
 		return h.renderSignupError(c, fmt.Sprintf("Failed to create account: %v", err), redirect)
 	}
 
@@ -2018,39 +2043,39 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 		JoinedAt: time.Now(),
 	})
 	if err != nil {
-		fmt.Printf("[Dashboard] Signup warning: Failed to add user to platform app: %v\n", err)
 		// Continue anyway - user is created, just not added to app yet
 	}
 
-	fmt.Printf("[Dashboard] User created successfully: %s (%s)\n", newUser.Email, newUser.ID.String())
-	fmt.Printf("[Dashboard] Signup: Password hash stored - length: %d, preview: %s...\n", len(newUser.PasswordHash), func() string {
-		if len(newUser.PasswordHash) > 20 {
-			return newUser.PasswordHash[:20]
-		}
-		return newUser.PasswordHash
-	}())
-
 	// Test password verification immediately after creation
 	testPasswordCheck := crypto.CheckPassword(password, newUser.PasswordHash)
-	fmt.Printf("[Dashboard] Signup: Immediate password verification test: %v\n", testPasswordCheck)
 	if !testPasswordCheck {
-		fmt.Printf("[Dashboard] ERROR: Password verification failed immediately after creation! This indicates a hashing issue.\n")
+	}
+
+	// Extract OrganizationID from context (optional)
+	var signupOrganizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		signupOrganizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var signupEnvironmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		signupEnvironmentID = &envID
 	}
 
 	// Create session for the new user
 	sess, err := h.sessionSvc.Create(c.Request().Context(), &session.CreateSessionRequest{
-		UserID:    newUser.ID,
-		IPAddress: c.Request().RemoteAddr,
-		UserAgent: c.Request().UserAgent(),
-		Remember:  false,
-		AppID:     platformApp.ID,
+		UserID:         newUser.ID,
+		IPAddress:      c.Request().RemoteAddr,
+		UserAgent:      c.Request().UserAgent(),
+		Remember:       false,
+		AppID:          platformApp.ID,
+		EnvironmentID:  signupEnvironmentID,
+		OrganizationID: signupOrganizationID,
 	})
 	if err != nil {
-		fmt.Printf("[Dashboard] Signup error: Failed to create session: %v\n", err)
 		return h.renderSignupError(c, "Account created but failed to log you in. Please try logging in.", redirect)
 	}
-
-	fmt.Printf("[Dashboard] Session created for user: %s\n", newUser.Email)
 
 	// Set session cookie
 	cookie := &http.Cookie{
@@ -2064,14 +2089,11 @@ func (h *Handler) HandleSignup(c forge.Context) error {
 	}
 	http.SetCookie(c.Response(), cookie)
 
-	fmt.Printf("[Dashboard] Session cookie set for user: %s\n", newUser.Email)
-
 	// Redirect to dashboard or specified redirect URL
 	if redirect == "" {
 		redirect = h.basePath + "/dashboard/"
 	}
 
-	fmt.Printf("[Dashboard] Redirecting user to: %s\n", redirect)
 	return c.Redirect(http.StatusFound, redirect)
 }
 
@@ -2097,7 +2119,6 @@ func (h *Handler) renderSignupError(c forge.Context, message string, redirect st
 
 // HandleLogout processes the logout request
 func (h *Handler) HandleLogout(c forge.Context) error {
-	fmt.Printf("[Dashboard] Logout requested\n")
 
 	// Get session token from cookie
 	cookie, err := c.Request().Cookie(sessionCookieName)
@@ -2106,9 +2127,7 @@ func (h *Handler) HandleLogout(c forge.Context) error {
 		sess, err := h.sessionSvc.FindByToken(c.Request().Context(), cookie.Value)
 		if err == nil && sess != nil {
 			if err := h.sessionSvc.RevokeByID(c.Request().Context(), sess.ID); err != nil {
-				fmt.Printf("[Dashboard] Failed to revoke session: %v\n", err)
 			} else {
-				fmt.Printf("[Dashboard] Session revoked: %s\n", sess.ID)
 			}
 		}
 	}
@@ -2123,8 +2142,6 @@ func (h *Handler) HandleLogout(c forge.Context) error {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1, // Delete cookie
 	})
-
-	fmt.Printf("[Dashboard] Session cookie cleared, redirecting to login\n")
 
 	// Redirect to login page
 	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
@@ -2710,13 +2727,11 @@ func (h *Handler) checkExistingSession(c forge.Context) *user.User {
 	// Validate session
 	sess, err := h.sessionSvc.FindByToken(c.Request().Context(), sessionToken)
 	if err != nil || sess == nil {
-		fmt.Printf("[Dashboard] checkExistingSession: Failed to find session: %v\n", err)
 		return nil
 	}
 
 	// Check if session is expired
 	if time.Now().After(sess.ExpiresAt) {
-		fmt.Printf("[Dashboard] checkExistingSession: Session expired\n")
 		return nil
 	}
 
@@ -2724,19 +2739,15 @@ func (h *Handler) checkExistingSession(c forge.Context) *user.User {
 	ctx := c.Request().Context()
 	if !sess.AppID.IsNil() {
 		ctx = contexts.SetAppID(ctx, sess.AppID)
-		fmt.Printf("[Dashboard] checkExistingSession: Set app context from session: %s\n", sess.AppID)
 	} else {
-		fmt.Printf("[Dashboard] checkExistingSession: Session has no app_id, using context as-is\n")
 	}
 
 	// Get user information
 	user, err := h.userSvc.FindByID(ctx, sess.UserID)
 	if err != nil || user == nil {
-		fmt.Printf("[Dashboard] checkExistingSession: Failed to find user %s: %v\n", sess.UserID, err)
 		return nil
 	}
 
-	fmt.Printf("[Dashboard] checkExistingSession: User authenticated: %s\n", user.Email)
 	return user
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/crypto"
@@ -166,12 +167,26 @@ func (s *Service) VerifyToken(ctx context.Context, appID xid.ID, token string, a
 
 	// Optionally create session (auto-login)
 	if autoLogin && s.config.AutoLoginAfterVerify {
+		// Extract OrganizationID from context (optional)
+		var organizationID *xid.ID
+		if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+			organizationID = &orgID
+		}
+
+		// Extract EnvironmentID from context (optional)
+		var environmentID *xid.ID
+		if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+			environmentID = &envID
+		}
+
 		sess, err := s.sessions.Create(ctx, &session.CreateSessionRequest{
-			AppID:     appID,
-			UserID:    u.ID,
-			Remember:  true,
-			IPAddress: ip,
-			UserAgent: ua,
+			AppID:          appID,
+			EnvironmentID:  environmentID,
+			OrganizationID: organizationID,
+			UserID:         u.ID,
+			Remember:       true,
+			IPAddress:      ip,
+			UserAgent:      ua,
 		})
 		if err != nil {
 			s.logger.Error("failed to create session after verification",

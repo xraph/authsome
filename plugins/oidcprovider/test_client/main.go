@@ -478,7 +478,7 @@ func main() {
 	log.Println()
 	
 	// Wait for user input
-	fmt.Print("Enter the authorization code: ")
+
 	var authCode string
 	fmt.Scanln(&authCode)
 	

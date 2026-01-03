@@ -3,7 +3,6 @@ package audit
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -45,7 +44,7 @@ type clientListener struct {
 // listener should be *pgdriver.Listener from github.com/uptrace/bun/driver/pgdriver
 func NewStreamService(listener interface{}) *StreamService {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	svc := &StreamService{
 		listener:  listener,
 		listeners: make(map[string]*clientListener),
@@ -114,9 +113,8 @@ func (s *StreamService) listen() {
 	// 1. listener.Listen(ctx, "audit_events")
 	// 2. for notification := range listener.Channel() { ... }
 	// 3. Parse notification.Payload and broadcast to clients
-	
+
 	// For now, this is a stub that external implementations can override
-	fmt.Println("StreamService.listen() requires PostgreSQL pgdriver.Listener implementation")
 }
 
 // parseNotification parses PostgreSQL notification payload into Event
@@ -257,9 +255,7 @@ func (s *StreamService) heartbeat() {
 			s.mu.RUnlock()
 
 			// Log active connections (would use structured logger)
-			if count > 0 {
-				fmt.Printf("[StreamService] Active connections: %d\n", count)
-			}
+			_ = count
 		}
 	}
 }
@@ -417,7 +413,7 @@ func (s *PollingStreamService) fetchNewEvents() {
 	// Broadcast new events
 	for _, schemaEvent := range resp.Data {
 		event := FromSchemaEvent(schemaEvent)
-		
+
 		// Update lastID
 		if event.ID.Compare(s.lastID) > 0 {
 			s.lastID = event.ID
@@ -495,4 +491,3 @@ func matchesFilter(event *Event, filter *StreamFilter) bool {
 
 	return true
 }
-

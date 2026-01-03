@@ -1,7 +1,6 @@
 package social
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/rs/xid"
@@ -147,7 +146,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	authURL, err := h.service.GetAuthorizationURL(ctx, req.Provider, appID, userOrgID, req.Scopes)
 	if err != nil {
-		fmt.Println("Error generating authorization URL:", err)
+
 		return handleError(c, err, "AUTH_URL_FAILED", "Failed to generate authorization URL", http.StatusBadRequest)
 	}
 
@@ -178,7 +177,7 @@ func (h *Handler) Callback(c forge.Context) error {
 
 	var req CallbackRequest
 	if err := c.BindRequest(&req); err != nil {
-		fmt.Println("Error binding callback request:", err)
+
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid callback parameters"))
 	}
 
@@ -198,7 +197,7 @@ func (h *Handler) Callback(c forge.Context) error {
 
 	result, err := h.service.HandleCallback(ctx, req.Provider, req.State, req.Code)
 	if err != nil {
-		fmt.Println("Error handling OAuth callback:", err, req.State, req.Code)
+
 		return handleError(c, err, "CALLBACK_FAILED", "Failed to handle OAuth callback", http.StatusUnauthorized)
 	}
 
@@ -212,7 +211,6 @@ func (h *Handler) Callback(c forge.Context) error {
 			// Generate a secure random password for OAuth users (they won't use it)
 			pwd, pwdErr := crypto.GenerateToken(32)
 			if pwdErr != nil {
-				fmt.Printf("error: failed to generate password for OAuth user: %v\n", pwdErr)
 				return handleError(c, pwdErr, "PASSWORD_GENERATION_FAILED", "Failed to generate password", http.StatusInternalServerError)
 			}
 
@@ -231,14 +229,12 @@ func (h *Handler) Callback(c forge.Context) error {
 				AuthProvider: req.Provider,
 			})
 			if signupErr != nil {
-				fmt.Printf("error: failed to complete signup: %v\n", signupErr)
 				return handleError(c, signupErr, "SIGNUP_FAILED", "Failed to complete signup", http.StatusInternalServerError)
 			}
 
 			// Create social account link after user is created
 			if authResp != nil && authResp.User != nil {
 				if err := h.service.CreateSocialAccount(ctx, authResp.User.ID, result.AppID, result.UserOrgID, result.Provider, result.OAuthUserInfo, result.OAuthToken); err != nil {
-					fmt.Printf("warning: failed to link social account: %v\n", err)
 					// Don't fail - user is already created and logged in
 				}
 
@@ -265,7 +261,6 @@ func (h *Handler) Callback(c forge.Context) error {
 				AuthProvider: req.Provider,
 			})
 			if signupErr != nil {
-				fmt.Printf("error: failed to complete signin: %v\n", signupErr)
 				return handleError(c, signupErr, "SIGNIN_FAILED", "Failed to complete signin", http.StatusInternalServerError)
 			}
 		}

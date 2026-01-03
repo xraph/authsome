@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/xid"
@@ -17,6 +18,21 @@ func NewRolePermissionRepository(db *bun.DB) *RolePermissionRepository {
 }
 
 func (r *RolePermissionRepository) AssignPermission(ctx context.Context, roleID, permissionID xid.ID) error {
+	// Check if the assignment already exists
+	exists, err := r.db.NewSelect().
+		Model((*schema.RolePermission)(nil)).
+		Where("role_id = ?", roleID).
+		Where("permission_id = ?", permissionID).
+		Exists(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check existing assignment: %w", err)
+	}
+
+	// Skip if already assigned
+	if exists {
+		return nil
+	}
+
 	now := time.Now()
 	rp := &schema.RolePermission{
 		ID:           xid.New(),
@@ -26,9 +42,8 @@ func (r *RolePermissionRepository) AssignPermission(ctx context.Context, roleID,
 		UpdatedAt:    now,
 	}
 
-	_, err := r.db.NewInsert().
+	_, err = r.db.NewInsert().
 		Model(rp).
-		On("CONFLICT (role_id, permission_id) DO NOTHING").
 		Exec(ctx)
 	return err
 }

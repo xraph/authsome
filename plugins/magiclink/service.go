@@ -90,7 +90,6 @@ func (s *Service) Send(ctx context.Context, appID xid.ID, email, ip, ua string) 
 		err := s.notifAdapter.SendMagicLink(ctx, appID, e, userName, magicLink, s.config.ExpiryMinutes)
 		if err != nil {
 			// Log error but don't fail the operation
-			fmt.Printf("Failed to send magic link via notification plugin: %v\n", err)
 		}
 	}
 

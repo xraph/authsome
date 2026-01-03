@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
@@ -92,6 +93,16 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		q = r.applyFullTextSearch(q, *filter.SearchQuery, filter.SearchFields)
 	}
 
+	// ========== App Filtering ==========
+	if filter.AppID != nil {
+		q = q.Where("app_id = ?", filter.AppID.String())
+	}
+
+	// ========== Organization Filtering ==========
+	if filter.OrganizationID != nil {
+		q = q.Where("organization_id = ?", filter.OrganizationID.String())
+	}
+
 	// ========== Environment Filtering ==========
 	if filter.EnvironmentID != nil {
 		q = q.Where("environment_id = ?", filter.EnvironmentID.String())
@@ -115,6 +126,22 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 	}
 
 	// ========== Multiple Value Filters (IN clauses) ==========
+	if len(filter.AppIDs) > 0 {
+		appIDStrs := make([]string, len(filter.AppIDs))
+		for i, id := range filter.AppIDs {
+			appIDStrs[i] = id.String()
+		}
+		q = q.Where("app_id IN (?)", bun.In(appIDStrs))
+	}
+
+	if len(filter.OrganizationIDs) > 0 {
+		orgIDStrs := make([]string, len(filter.OrganizationIDs))
+		for i, id := range filter.OrganizationIDs {
+			orgIDStrs[i] = id.String()
+		}
+		q = q.Where("organization_id IN (?)", bun.In(orgIDStrs))
+	}
+
 	if len(filter.UserIDs) > 0 {
 		userIDStrs := make([]string, len(filter.UserIDs))
 		for i, id := range filter.UserIDs {
@@ -309,6 +336,10 @@ func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.Sea
 		baseQuery = baseQuery.Where("app_id = ?", query.AppID.String())
 	}
 
+	if query.OrganizationID != nil {
+		baseQuery = baseQuery.Where("organization_id = ?", query.OrganizationID.String())
+	}
+
 	if query.EnvironmentID != nil {
 		baseQuery = baseQuery.Where("environment_id = ?", query.EnvironmentID.String())
 	}
@@ -396,3 +427,698 @@ func (r *AuditRepository) SearchSQLite(ctx context.Context, query *audit.SearchQ
 }
 
 var ErrSearchNotSupported = audit.InvalidFilter("search", "full-text search not supported for this database")
+
+// =============================================================================
+// COUNT OPERATIONS
+// =============================================================================
+
+// Count returns the count of audit events matching the filter
+func (r *AuditRepository) Count(ctx context.Context, filter *audit.ListEventsFilter) (int64, error) {
+	// Build base query
+	q := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
+
+	// Apply filters
+	q = r.applyFilters(q, filter)
+
+	// Execute count
+	count, err := q.Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(count), nil
+}
+
+// =============================================================================
+// RETENTION/CLEANUP OPERATIONS
+// =============================================================================
+
+// DeleteOlderThan deletes audit events older than the specified time
+func (r *AuditRepository) DeleteOlderThan(ctx context.Context, filter *audit.DeleteFilter, before time.Time) (int64, error) {
+	// Build delete query
+	q := r.db.NewDelete().Model((*schema.AuditEvent)(nil))
+
+	// Apply delete filters
+	q = r.applyDeleteFilters(q, filter)
+
+	// Apply time constraint
+	q = q.Where("created_at < ?", before)
+
+	// Execute deletion
+	res, err := q.Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return res.RowsAffected()
+}
+
+// applyDeleteFilters applies filter conditions to delete queries
+func (r *AuditRepository) applyDeleteFilters(q *bun.DeleteQuery, filter *audit.DeleteFilter) *bun.DeleteQuery {
+	if filter == nil {
+		return q
+	}
+
+	// ========== App Filtering ==========
+	if filter.AppID != nil {
+		q = q.Where("app_id = ?", filter.AppID.String())
+	}
+
+	// ========== Organization Filtering ==========
+	if filter.OrganizationID != nil {
+		q = q.Where("organization_id = ?", filter.OrganizationID.String())
+	}
+
+	// ========== Environment Filtering ==========
+	if filter.EnvironmentID != nil {
+		q = q.Where("environment_id = ?", filter.EnvironmentID.String())
+	}
+
+	// ========== User Filtering ==========
+	if filter.UserID != nil {
+		q = q.Where("user_id = ?", filter.UserID.String())
+	}
+
+	// ========== Action Filtering ==========
+	if filter.Action != nil {
+		q = q.Where("action = ?", *filter.Action)
+	}
+
+	// ========== Resource Filtering ==========
+	if filter.Resource != nil {
+		q = q.Where("resource = ?", *filter.Resource)
+	}
+
+	// ========== Metadata Filtering ==========
+	if len(filter.MetadataFilters) > 0 {
+		for _, mf := range filter.MetadataFilters {
+			switch mf.Operator {
+			case "exists":
+				q = q.Where("metadata LIKE ?", "%\""+mf.Key+"\":%")
+			case "not_exists":
+				q = q.Where("(metadata IS NULL OR metadata NOT LIKE ?)", "%\""+mf.Key+"\":%")
+			case "contains":
+				if strVal, ok := mf.Value.(string); ok {
+					q = q.Where("metadata LIKE ?", "%"+strVal+"%")
+				}
+			case "equals":
+				if strVal, ok := mf.Value.(string); ok {
+					q = q.Where("metadata LIKE ?", "%\""+mf.Key+"\":\""+strVal+"\"%")
+				}
+			default:
+				if strVal, ok := mf.Value.(string); ok {
+					q = q.Where("metadata LIKE ?", "%"+strVal+"%")
+				}
+			}
+		}
+	}
+
+	return q
+}
+
+// =============================================================================
+// STATISTICS/AGGREGATION OPERATIONS
+// =============================================================================
+
+// GetStatisticsByAction returns aggregated statistics grouped by action
+func (r *AuditRepository) GetStatisticsByAction(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ActionStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("action").
+		ColumnExpr("COUNT(*) AS count").
+		ColumnExpr("MIN(created_at) AS first_occurred").
+		ColumnExpr("MAX(created_at) AS last_occurred").
+		Group("action").
+		Order("count DESC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Apply limit
+	if filter != nil && filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	} else {
+		q = q.Limit(100) // Default limit
+	}
+
+	// Execute query
+	var results []struct {
+		Action        string    `bun:"action"`
+		Count         int64     `bun:"count"`
+		FirstOccurred time.Time `bun:"first_occurred"`
+		LastOccurred  time.Time `bun:"last_occurred"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.ActionStatistic, len(results))
+	for i, r := range results {
+		stats[i] = &audit.ActionStatistic{
+			Action:        r.Action,
+			Count:         r.Count,
+			FirstOccurred: r.FirstOccurred,
+			LastOccurred:  r.LastOccurred,
+		}
+	}
+
+	return stats, nil
+}
+
+// GetStatisticsByResource returns aggregated statistics grouped by resource
+func (r *AuditRepository) GetStatisticsByResource(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ResourceStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("resource").
+		ColumnExpr("COUNT(*) AS count").
+		ColumnExpr("MIN(created_at) AS first_occurred").
+		ColumnExpr("MAX(created_at) AS last_occurred").
+		Group("resource").
+		Order("count DESC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Apply limit
+	if filter != nil && filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	} else {
+		q = q.Limit(100) // Default limit
+	}
+
+	// Execute query
+	var results []struct {
+		Resource      string    `bun:"resource"`
+		Count         int64     `bun:"count"`
+		FirstOccurred time.Time `bun:"first_occurred"`
+		LastOccurred  time.Time `bun:"last_occurred"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.ResourceStatistic, len(results))
+	for i, r := range results {
+		stats[i] = &audit.ResourceStatistic{
+			Resource:      r.Resource,
+			Count:         r.Count,
+			FirstOccurred: r.FirstOccurred,
+			LastOccurred:  r.LastOccurred,
+		}
+	}
+
+	return stats, nil
+}
+
+// GetStatisticsByUser returns aggregated statistics grouped by user
+func (r *AuditRepository) GetStatisticsByUser(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.UserStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("user_id").
+		ColumnExpr("COUNT(*) AS count").
+		ColumnExpr("MIN(created_at) AS first_occurred").
+		ColumnExpr("MAX(created_at) AS last_occurred").
+		Group("user_id").
+		Order("count DESC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Apply limit
+	if filter != nil && filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	} else {
+		q = q.Limit(100) // Default limit
+	}
+
+	// Execute query
+	var results []struct {
+		UserID        *string   `bun:"user_id"`
+		Count         int64     `bun:"count"`
+		FirstOccurred time.Time `bun:"first_occurred"`
+		LastOccurred  time.Time `bun:"last_occurred"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.UserStatistic, len(results))
+	for i, r := range results {
+		stat := &audit.UserStatistic{
+			Count:         r.Count,
+			FirstOccurred: r.FirstOccurred,
+			LastOccurred:  r.LastOccurred,
+		}
+		// Parse user ID if present
+		if r.UserID != nil && *r.UserID != "" {
+			if userID, err := xid.FromString(*r.UserID); err == nil {
+				stat.UserID = &userID
+			}
+		}
+		stats[i] = stat
+	}
+
+	return stats, nil
+}
+
+// applyStatisticsFilters applies filter conditions to statistics queries
+func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *audit.StatisticsFilter) *bun.SelectQuery {
+	if filter == nil {
+		return q
+	}
+
+	// ========== App Filtering ==========
+	if filter.AppID != nil {
+		q = q.Where("app_id = ?", filter.AppID.String())
+	}
+
+	// ========== Organization Filtering ==========
+	if filter.OrganizationID != nil {
+		q = q.Where("organization_id = ?", filter.OrganizationID.String())
+	}
+
+	// ========== Environment Filtering ==========
+	if filter.EnvironmentID != nil {
+		q = q.Where("environment_id = ?", filter.EnvironmentID.String())
+	}
+
+	// ========== User Filtering ==========
+	if filter.UserID != nil {
+		q = q.Where("user_id = ?", filter.UserID.String())
+	}
+
+	// ========== Action Filtering ==========
+	if filter.Action != nil {
+		q = q.Where("action = ?", *filter.Action)
+	}
+
+	// ========== Resource Filtering ==========
+	if filter.Resource != nil {
+		q = q.Where("resource = ?", *filter.Resource)
+	}
+
+	// ========== Time Range Filters ==========
+	if filter.Since != nil {
+		q = q.Where("created_at >= ?", *filter.Since)
+	}
+
+	if filter.Until != nil {
+		q = q.Where("created_at <= ?", *filter.Until)
+	}
+
+	// ========== Metadata Filtering ==========
+	if len(filter.MetadataFilters) > 0 {
+		q = r.applyMetadataFilters(q, filter.MetadataFilters)
+	}
+
+	return q
+}
+
+// =============================================================================
+// UTILITY OPERATIONS
+// =============================================================================
+
+// GetOldestEvent retrieves the oldest audit event matching the filter
+func (r *AuditRepository) GetOldestEvent(ctx context.Context, filter *audit.ListEventsFilter) (*schema.AuditEvent, error) {
+	// Build base query
+	q := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
+
+	// Apply filters
+	q = r.applyFilters(q, filter)
+
+	// Order by created_at ASC to get oldest first
+	q = q.Order("created_at ASC")
+
+	// Limit to 1
+	q = q.Limit(1)
+
+	// Execute query
+	var event schema.AuditEvent
+	err := q.Scan(ctx, &event)
+	if err != nil {
+		// Check if it's a no rows error
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// Check if we got a result (ID will be nil/empty if no rows)
+	if event.ID.IsNil() {
+		return nil, nil
+	}
+
+	return &event, nil
+}
+
+// =============================================================================
+// TIME-BASED AGGREGATION OPERATIONS
+// =============================================================================
+
+// GetTimeSeries returns event counts over time with configurable intervals
+func (r *AuditRepository) GetTimeSeries(ctx context.Context, filter *audit.TimeSeriesFilter) ([]*audit.TimeSeriesPoint, error) {
+	// Determine the date_trunc interval
+	var truncInterval string
+	switch filter.Interval {
+	case audit.IntervalHourly:
+		truncInterval = "hour"
+	case audit.IntervalDaily:
+		truncInterval = "day"
+	case audit.IntervalWeekly:
+		truncInterval = "week"
+	case audit.IntervalMonthly:
+		truncInterval = "month"
+	default:
+		truncInterval = "day"
+	}
+
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("date_trunc(?, created_at) AS timestamp", truncInterval).
+		ColumnExpr("COUNT(*) AS count").
+		Group("timestamp").
+		Order("timestamp ASC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, &filter.StatisticsFilter)
+
+	// Execute query
+	var results []struct {
+		Timestamp time.Time `bun:"timestamp"`
+		Count     int64     `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	points := make([]*audit.TimeSeriesPoint, len(results))
+	for i, r := range results {
+		points[i] = &audit.TimeSeriesPoint{
+			Timestamp: r.Timestamp,
+			Count:     r.Count,
+		}
+	}
+
+	return points, nil
+}
+
+// GetStatisticsByHour returns event distribution by hour of day (0-23)
+func (r *AuditRepository) GetStatisticsByHour(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.HourStatistic, error) {
+	// Build aggregation query - EXTRACT(HOUR FROM created_at)
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("EXTRACT(HOUR FROM created_at)::int AS hour").
+		ColumnExpr("COUNT(*) AS count").
+		Group("hour").
+		Order("hour ASC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Execute query
+	var results []struct {
+		Hour  int   `bun:"hour"`
+		Count int64 `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.HourStatistic, len(results))
+	for i, r := range results {
+		stats[i] = &audit.HourStatistic{
+			Hour:  r.Hour,
+			Count: r.Count,
+		}
+	}
+
+	return stats, nil
+}
+
+// GetStatisticsByDay returns event distribution by day of week
+func (r *AuditRepository) GetStatisticsByDay(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.DayStatistic, error) {
+	// Build aggregation query - EXTRACT(DOW FROM created_at) returns 0=Sunday, 1=Monday, etc.
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("EXTRACT(DOW FROM created_at)::int AS day_index").
+		ColumnExpr("COUNT(*) AS count").
+		Group("day_index").
+		Order("day_index ASC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Execute query
+	var results []struct {
+		DayIndex int   `bun:"day_index"`
+		Count    int64 `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Day names mapping
+	dayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
+	// Convert to DTOs
+	stats := make([]*audit.DayStatistic, len(results))
+	for i, r := range results {
+		dayName := "Unknown"
+		if r.DayIndex >= 0 && r.DayIndex < 7 {
+			dayName = dayNames[r.DayIndex]
+		}
+		stats[i] = &audit.DayStatistic{
+			Day:      dayName,
+			DayIndex: r.DayIndex,
+			Count:    r.Count,
+		}
+	}
+
+	return stats, nil
+}
+
+// GetStatisticsByDate returns daily event counts for a date range
+func (r *AuditRepository) GetStatisticsByDate(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.DateStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("DATE(created_at) AS date").
+		ColumnExpr("COUNT(*) AS count").
+		Group("date").
+		Order("date ASC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Execute query
+	var results []struct {
+		Date  time.Time `bun:"date"`
+		Count int64     `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.DateStatistic, len(results))
+	for i, r := range results {
+		stats[i] = &audit.DateStatistic{
+			Date:  r.Date.Format("2006-01-02"),
+			Count: r.Count,
+		}
+	}
+
+	return stats, nil
+}
+
+// =============================================================================
+// IP/NETWORK AGGREGATION OPERATIONS
+// =============================================================================
+
+// GetStatisticsByIPAddress returns event counts grouped by IP address
+func (r *AuditRepository) GetStatisticsByIPAddress(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.IPStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("ip_address").
+		ColumnExpr("COUNT(*) AS count").
+		ColumnExpr("MIN(created_at) AS first_occurred").
+		ColumnExpr("MAX(created_at) AS last_occurred").
+		Where("ip_address IS NOT NULL AND ip_address != ''").
+		Group("ip_address").
+		Order("count DESC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Apply limit
+	if filter != nil && filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	} else {
+		q = q.Limit(100) // Default limit
+	}
+
+	// Execute query
+	var results []struct {
+		IPAddress     string    `bun:"ip_address"`
+		Count         int64     `bun:"count"`
+		FirstOccurred time.Time `bun:"first_occurred"`
+		LastOccurred  time.Time `bun:"last_occurred"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.IPStatistic, len(results))
+	for i, r := range results {
+		stats[i] = &audit.IPStatistic{
+			IPAddress:     r.IPAddress,
+			Count:         r.Count,
+			FirstOccurred: r.FirstOccurred,
+			LastOccurred:  r.LastOccurred,
+		}
+	}
+
+	return stats, nil
+}
+
+// GetUniqueIPCount returns the count of unique IP addresses
+func (r *AuditRepository) GetUniqueIPCount(ctx context.Context, filter *audit.StatisticsFilter) (int64, error) {
+	// Build count query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("COUNT(DISTINCT ip_address) AS count").
+		Where("ip_address IS NOT NULL AND ip_address != ''")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Execute query
+	var result struct {
+		Count int64 `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &result); err != nil {
+		return 0, err
+	}
+
+	return result.Count, nil
+}
+
+// =============================================================================
+// MULTI-DIMENSIONAL AGGREGATION OPERATIONS
+// =============================================================================
+
+// GetStatisticsByActionAndUser returns event counts grouped by action and user
+func (r *AuditRepository) GetStatisticsByActionAndUser(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ActionUserStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("action").
+		ColumnExpr("user_id").
+		ColumnExpr("COUNT(*) AS count").
+		Group("action", "user_id").
+		Order("count DESC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Apply limit
+	if filter != nil && filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	} else {
+		q = q.Limit(100) // Default limit
+	}
+
+	// Execute query
+	var results []struct {
+		Action string  `bun:"action"`
+		UserID *string `bun:"user_id"`
+		Count  int64   `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.ActionUserStatistic, len(results))
+	for i, r := range results {
+		stat := &audit.ActionUserStatistic{
+			Action: r.Action,
+			Count:  r.Count,
+		}
+		// Parse user ID if present
+		if r.UserID != nil && *r.UserID != "" {
+			if userID, err := xid.FromString(*r.UserID); err == nil {
+				stat.UserID = &userID
+			}
+		}
+		stats[i] = stat
+	}
+
+	return stats, nil
+}
+
+// GetStatisticsByResourceAndAction returns event counts grouped by resource and action
+func (r *AuditRepository) GetStatisticsByResourceAndAction(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ResourceActionStatistic, error) {
+	// Build aggregation query
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		ColumnExpr("resource").
+		ColumnExpr("action").
+		ColumnExpr("COUNT(*) AS count").
+		Group("resource", "action").
+		Order("count DESC")
+
+	// Apply statistics filters
+	q = r.applyStatisticsFilters(q, filter)
+
+	// Apply limit
+	if filter != nil && filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	} else {
+		q = q.Limit(100) // Default limit
+	}
+
+	// Execute query
+	var results []struct {
+		Resource string `bun:"resource"`
+		Action   string `bun:"action"`
+		Count    int64  `bun:"count"`
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DTOs
+	stats := make([]*audit.ResourceActionStatistic, len(results))
+	for i, r := range results {
+		stats[i] = &audit.ResourceActionStatistic{
+			Resource: r.Resource,
+			Action:   r.Action,
+			Count:    r.Count,
+		}
+	}
+
+	return stats, nil
+}

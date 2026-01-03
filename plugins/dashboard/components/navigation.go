@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -296,7 +295,7 @@ func appSwitcherLink(app *app.App, basePath string, isActive bool) g.Node {
 }
 
 func EnvironmentSwitcher(data PageData) g.Node {
-	fmt.Println("EnvironmentSwitcher", data.CurrentEnvironment, data.UserEnvironments)
+
 	if data.CurrentEnvironment == nil || len(data.UserEnvironments) < 1 {
 		return g.Text("") // Don't show if no environment or only one environment
 	}

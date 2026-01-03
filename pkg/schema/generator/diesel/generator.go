@@ -54,13 +54,8 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Generated Diesel migration:\n")
-		fmt.Printf("  %s/\n", migrationDir)
-		fmt.Printf("    up.sql\n")
-		fmt.Printf("    down.sql\n")
-		fmt.Printf("\nNext steps:\n")
-		fmt.Printf("  1. diesel migration run\n")
-		fmt.Printf("  2. diesel print-schema > src/schema.rs\n")
+
+
 	}
 
 	return nil

@@ -86,12 +86,6 @@ func main() {
 	// Start server
 	port := 8080
 
-	fmt.Printf("🍪 Cookie Sessions Example\n")
-	fmt.Printf("   Server: http://localhost:%d\n", port)
-	fmt.Printf("   SignUp: POST http://localhost:%d/auth/signup\n", port)
-	fmt.Printf("   SignIn: POST http://localhost:%d/auth/signin\n", port)
-	fmt.Printf("   Test:   GET  http://localhost:%d/api/me (with cookie)\n\n", port)
-	fmt.Printf("💡 Cookies are automatically set on successful authentication!\n\n")
 
 	// Start the Forge app (use your actual Forge server start method)
 	log.Printf("Example server ready on port %d", port)

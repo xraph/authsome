@@ -24,6 +24,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/core/session"
@@ -256,7 +257,6 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"created_user_id":"%s","email":"%s","name":"%s","app_id":"%s","organization_id":"%s"}`, newUser.ID.String(), newUser.Email, newUser.Name, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return newUser, nil
@@ -344,7 +344,6 @@ func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error 
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"deleted_user_id":"%s","email":"%s","name":"%s"}`, targetUser.ID.String(), targetUser.Email, targetUser.Name)); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return nil
@@ -380,7 +379,6 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"banned_user_id":"%s","reason":"%s","expires_at":%s}`, req.UserID.String(), req.Reason, expiresAtStr)); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return nil
@@ -409,7 +407,6 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"unbanned_user_id":"%s"}`, req.UserID.String())); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return nil
@@ -444,12 +441,30 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 		duration = s.config.MaxImpersonationDuration
 	}
 
+	// Extract AppID from context
+	appID, _ := contexts.GetAppID(ctx)
+
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	// Create impersonation session
 	sessionReq := &session.CreateSessionRequest{
-		UserID:    req.UserID,
-		IPAddress: req.IPAddress,
-		UserAgent: req.UserAgent,
-		Remember:  false,
+		AppID:          appID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
+		UserID:         req.UserID,
+		IPAddress:      req.IPAddress,
+		UserAgent:      req.UserAgent,
+		Remember:       false,
 	}
 
 	newSession, err := s.getSessionService().Create(ctx, sessionReq)
@@ -462,7 +477,6 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 		req.IPAddress, req.UserAgent,
 		fmt.Sprintf(`{"impersonated_user_id":"%s","session_id":"%s","duration":"%s"}`, req.UserID.String(), newSession.ID.String(), duration.String())); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return newSession, nil
@@ -489,7 +503,6 @@ func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) erro
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"target_user_id":"%s","role":"%s","app_id":"%s","organization_id":"%s"}`, req.UserID.String(), req.Role, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return nil
@@ -541,7 +554,6 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) 
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"revoked_session_id":"%s"}`, sessionID.String())); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Failed to log audit event: %v\n", err)
 	}
 
 	return nil

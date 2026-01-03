@@ -90,13 +90,13 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 		err = s.rbacSvc.BootstrapOrgRoles(ctx, org.ID, appID, environmentID, req.RoleTemplateIDs, req.RoleCustomizations)
 		if err != nil {
 			// Log error but don't fail org creation - roles can be added later
-			fmt.Printf("[OrgService] Warning: failed to bootstrap org roles for %s: %v\n", org.ID.String(), err)
+			_ = err
 		} else {
 			// Auto-assign owner role to creator
 			err = s.rbacSvc.AssignOwnerRole(ctx, creatorUserID, org.ID, environmentID)
 			if err != nil {
 				// Log error but don't fail - owner can be assigned manually
-				fmt.Printf("[OrgService] Warning: failed to assign owner role to creator for %s: %v\n", org.ID.String(), err)
+				_ = err
 			}
 		}
 	}

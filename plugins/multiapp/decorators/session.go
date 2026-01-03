@@ -83,7 +83,6 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 		if err != nil || len(response.Data) == 0 {
 			// No organizations exist yet - this is the first user
 			// Allow session creation (organization will be created by hook)
-			fmt.Printf("[MultiTenancy] First user session creation allowed (no orgs yet): %s\n", req.UserID)
 			return s.sessionService.Create(ctx, req)
 		}
 
@@ -96,7 +95,6 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 
 		// Use the first organization the user belongs to
 		appID = memberships[0].AppID
-		fmt.Printf("[MultiTenancy] No app context provided, using user's primary app for session: %s\n", appID)
 	}
 
 	// Verify organization exists
@@ -177,7 +175,6 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 		})
 		if err != nil || len(response.Data) == 0 {
 			// No organizations exist yet - allow (first user scenario)
-			fmt.Printf("[MultiTenancy] Session lookup without org context (no orgs yet): %s\n", sess.UserID)
 			s.cacheSession(token, sess, true)
 			return sess, nil
 		}
@@ -189,7 +186,6 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 			// This handles the race condition where the organization hook hasn't completed yet
 			// Allow sessions created in the last 10 seconds to give hooks time to complete
 			if time.Since(sess.CreatedAt) < 10*time.Second {
-				fmt.Printf("[MultiTenancy] Session lookup: newly created session (created %v ago), allowing while org hook completes: %s\n", time.Since(sess.CreatedAt), sess.UserID)
 				s.cacheSession(token, sess, true)
 				return sess, nil
 			}
@@ -200,7 +196,6 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 
 		// User has organizations - allow the session
 		// (In a more sophisticated system, you might want to set org context here)
-		fmt.Printf("[MultiTenancy] Session lookup without org context, user has orgs: %s\n", sess.UserID)
 		s.cacheSession(token, sess, true)
 		return sess, nil
 	}

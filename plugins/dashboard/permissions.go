@@ -481,29 +481,24 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 // EnsureFirstUserIsSuperAdmin assigns superadmin role to the first user
 // This makes them the platform owner with full system access
 func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo rbac.UserRoleRepository, roleRepo rbac.RoleRepository) error {
-	fmt.Printf("[Dashboard] EnsureFirstUserIsSuperAdmin called - userID: %s, orgID: %s\n", userID.String(), orgID.String())
 
 	// Check if superadmin role exists in the platform organization
 	orgIDStr := orgID.String()
 	roles, err := roleRepo.ListByOrg(ctx, &orgIDStr)
 	if err != nil {
-		fmt.Printf("[Dashboard] ERROR: Failed to list roles: %v\n", err)
 		return fmt.Errorf("failed to list roles: %w", err)
 	}
-	fmt.Printf("[Dashboard] Found %d existing roles in platform organization\n", len(roles))
 
 	var superadminRole *schema.Role
 	for i := range roles {
 		if roles[i].Name == rbac.RoleSuperAdmin {
 			superadminRole = &roles[i]
-			fmt.Printf("[Dashboard] Found existing superadmin role: %s\n", superadminRole.ID.String())
 			break
 		}
 	}
 
 	// Create superadmin role if it doesn't exist
 	if superadminRole == nil {
-		fmt.Printf("[Dashboard] Superadmin role not found, creating new one...\n")
 		superadminRole = &schema.Role{
 			ID:          xid.New(),
 			AppID:       &orgID,
@@ -513,22 +508,15 @@ func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, user
 		superadminRole.CreatedBy = userID
 		superadminRole.UpdatedBy = userID
 
-		fmt.Printf("[Dashboard] Creating role in platform organization: ID=%s, Name=%s, OrgID=%s\n", superadminRole.ID.String(), superadminRole.Name, orgID.String())
 		if err := roleRepo.Create(ctx, superadminRole); err != nil {
-			fmt.Printf("[Dashboard] ERROR: Failed to create superadmin role in database: %v\n", err)
 			return fmt.Errorf("failed to create superadmin role: %w", err)
 		}
-		fmt.Printf("[Dashboard] ✅ Superadmin role created in database: %s\n", superadminRole.ID.String())
 	}
 
 	// Assign superadmin role to user
-	fmt.Printf("[Dashboard] Assigning superadmin role to user - userID: %s, roleID: %s, orgID: %s\n",
-		userID.String(), superadminRole.ID.String(), orgID.String())
 	if err := userRoleRepo.Assign(ctx, userID, superadminRole.ID, orgID); err != nil {
-		fmt.Printf("[Dashboard] ERROR: Failed to assign role to user: %v\n", err)
 		return fmt.Errorf("failed to assign superadmin role: %w", err)
 	}
-	fmt.Printf("[Dashboard] ✅ Role assignment successful\n")
 
 	return nil
 }

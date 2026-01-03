@@ -126,7 +126,7 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, token string) error {
 	// Mark token as used
 	if err := repo.MarkVerificationAsUsed(ctx, verification.ID); err != nil {
 		// Log error but don't fail
-		fmt.Printf("failed to mark verification as used: %v\n", err)
+		_ = err
 	}
 
 	return nil

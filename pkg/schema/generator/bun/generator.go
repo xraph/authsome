@@ -44,8 +44,8 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Generated Bun migration:\n")
-		fmt.Printf("  %s\n", migrationPath)
+
+
 	}
 
 	return nil

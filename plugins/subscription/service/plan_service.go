@@ -140,7 +140,6 @@ func (s *PlanService) Create(ctx context.Context, appID xid.ID, req *core.Create
 		if err := s.provider.SyncPlan(ctx, result); err != nil {
 			// Log the error but don't fail the creation
 			// The plan can be synced manually later
-			fmt.Printf("warning: failed to auto-sync plan to provider: %v\n", err)
 		} else {
 			// Update provider IDs in database
 			plan.ProviderPlanID = result.ProviderPlanID
@@ -438,7 +437,6 @@ func (s *PlanService) SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]
 		prices, err := s.provider.ListPrices(ctx, product.ID)
 		if err != nil {
 			// Log error but continue with other products
-			fmt.Printf("warning: failed to list prices for product %s: %v\n", product.ID, err)
 			continue
 		}
 
@@ -451,7 +449,6 @@ func (s *PlanService) SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]
 			// Update existing plan
 			plan, err = s.updatePlanFromProvider(ctx, existingPlan, product, prices)
 			if err != nil {
-				fmt.Printf("warning: failed to update plan from provider %s: %v\n", product.ID, err)
 				continue
 			}
 		} else {
@@ -473,7 +470,6 @@ func (s *PlanService) SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]
 			// Create new plan
 			plan, err = s.createPlanFromProvider(ctx, productAppID, product, prices)
 			if err != nil {
-				fmt.Printf("warning: failed to create plan from provider %s: %v\n", product.ID, err)
 				continue
 			}
 		}

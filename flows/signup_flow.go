@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 )
@@ -197,8 +198,26 @@ func (f *SignupFlow) createSessionHandler(ctx context.Context, step *Step, data 
 		}, nil
 	}
 
+	// Extract AppID from context
+	appID, _ := contexts.GetAppID(ctx)
+
+	// Extract OrganizationID from context (optional)
+	var organizationID *xid.ID
+	if orgID, ok := contexts.GetOrganizationID(ctx); ok && !orgID.IsNil() {
+		organizationID = &orgID
+	}
+
+	// Extract EnvironmentID from context (optional)
+	var environmentID *xid.ID
+	if envID, ok := contexts.GetEnvironmentID(ctx); ok && !envID.IsNil() {
+		environmentID = &envID
+	}
+
 	createReq := &session.CreateSessionRequest{
-		UserID: userID,
+		AppID:          appID,
+		EnvironmentID:  environmentID,
+		OrganizationID: organizationID,
+		UserID:         userID,
 	}
 
 	newSession, err := f.sessionService.Create(ctx, createReq)

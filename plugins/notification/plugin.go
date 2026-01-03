@@ -145,15 +145,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		// Bind configuration using Forge ConfigManager with provided defaults
 		if err := configManager.BindWithDefault("auth.notification", &p.config, p.defaultConfig); err != nil {
 			// Log but don't fail - use defaults
-			fmt.Printf("[Notification] Warning: failed to bind config: %v\n", err)
 			p.config = p.defaultConfig
 		}
 	} else {
 		// Fallback to default config if no Forge app
 		p.config = p.defaultConfig
 	}
-
-	fmt.Println("[Notification] Initialized", p.config.Providers.Email)
 
 	// Initialize repositories
 	notificationRepo := repo.NewNotificationRepository(db)
@@ -225,8 +222,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		baseAdapter := NewAdapter(p.templateSvc)
 		p.asyncAdapter = NewAsyncAdapter(baseAdapter, p.config.Async, p.dispatcher, p.retryService)
 
-		fmt.Printf("[Notification] Async processing enabled (workers=%d, queue=%d)\n",
-			p.config.Async.WorkerPoolSize, p.config.Async.QueueSize)
 	}
 
 	return nil
@@ -394,7 +389,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				// Initialize default templates for new app
 				if err := p.service.InitializeDefaultTemplates(ctx, appData.ID); err != nil {
 					// Log error but don't fail app creation
-					fmt.Printf("Failed to initialize default templates for app %s: %v\n", appData.ID, err)
 				}
 			}
 			return nil
@@ -417,7 +411,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 					Scan(ctx)
 				if err != nil {
 					// Log error but don't fail user creation
-					fmt.Printf("Failed to find platform app for welcome email: %v\n", err)
 					return nil
 				}
 
@@ -433,7 +426,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				err = adapter.SendWelcomeEmail(ctx, platformApp.ID, createdUser.Email, userName, "")
 				if err != nil {
 					// Log error but don't fail user creation (should rarely happen with async)
-					fmt.Printf("Failed to send welcome email: %v\n", err)
 				}
 			}
 			return nil
@@ -446,21 +438,19 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in new device detected hook")
+
 				return nil
 			}
 
-			fmt.Printf("[Notification] New device hook called for user %s in app %s\n", userID.String(), appID.String())
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in new device hook for user %s: %v\n", userID.String(), err)
 				return nil
 			}
 
@@ -474,7 +464,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			
 			// Check if template service is available
 			if p.templateSvc == nil {
-				fmt.Printf("[Notification] Template service not initialized, skipping new device notification\n")
 				return nil
 			}
 			
@@ -483,7 +472,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			err = adapter.SendNewDeviceLogin(ctx, appID, user.Email, userName, deviceName, location, timestamp, ipAddress)
 			if err != nil {
 				// This should rarely happen since async adapter fires-and-forgets for low priority
-				fmt.Printf("[Notification] Failed to send new device notification: %v\n", err)
 			}
 
 			return nil
@@ -495,19 +483,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in device removed hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in device removed hook: %v\n", err)
 				return nil
 			}
 
@@ -521,14 +508,11 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendDeviceRemoved(ctx, appID, user.Email, userName, deviceName, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send device removed notification: %v\n", err)
 			}
 
 			return nil
 		})
 	}
-
-	fmt.Println("[Notification] Registered device/session security notification hooks")
 
 	// Register account lifecycle hooks
 	if p.config.AutoSend.Account.EmailChangeRequest {
@@ -536,19 +520,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in email change request hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in email change request hook: %v\n", err)
 				return nil
 			}
 
@@ -562,7 +545,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendEmailChangeRequest(ctx, appID, oldEmail, userName, newEmail, confirmationUrl, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send email change request notification: %v\n", err)
 			}
 
 			return nil
@@ -574,19 +556,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in email changed hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in email changed hook: %v\n", err)
 				return nil
 			}
 
@@ -600,7 +581,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendEmailChanged(ctx, appID, user.Email, userName, oldEmail, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send email changed notification: %v\n", err)
 			}
 
 			return nil
@@ -612,19 +592,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in username changed hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in username changed hook: %v\n", err)
 				return nil
 			}
 
@@ -638,7 +617,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendUsernameChanged(ctx, appID, user.Email, userName, oldUsername, newUsername, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send username changed notification: %v\n", err)
 			}
 
 			return nil
@@ -650,14 +628,14 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in account deleted hook")
+
 				return nil
 			}
 
 			// Get user details before deletion (may already be deleted, so this might not work)
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
@@ -676,7 +654,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendAccountDeleted(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send account deleted notification: %v\n", err)
 			}
 
 			return nil
@@ -688,19 +665,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in account suspended hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in account suspended hook: %v\n", err)
 				return nil
 			}
 
@@ -714,7 +690,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendAccountSuspended(ctx, appID, user.Email, userName, reason, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send account suspended notification: %v\n", err)
 			}
 
 			return nil
@@ -726,19 +701,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in account reactivated hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in account reactivated hook: %v\n", err)
 				return nil
 			}
 
@@ -752,7 +726,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendAccountReactivated(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send account reactivated notification: %v\n", err)
 			}
 
 			return nil
@@ -764,19 +737,18 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-				fmt.Println("[Notification] App context not available in password changed hook")
+
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-				fmt.Println("[Notification] User service not available")
+
 				return nil
 			}
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
-				fmt.Printf("[Notification] Failed to get user details in password changed hook: %v\n", err)
 				return nil
 			}
 
@@ -790,23 +762,20 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendPasswordChanged(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
-				fmt.Printf("[Notification] Failed to send password changed notification: %v\n", err)
 			}
 
 			return nil
 		})
 	}
 
-	fmt.Println("[Notification] Registered account lifecycle notification hooks")
-
 	// Start async infrastructure if enabled
 	if p.dispatcher != nil {
 		p.dispatcher.Start()
-		fmt.Println("[Notification] Started async notification dispatcher")
+
 	}
 	if p.retryService != nil {
 		p.retryService.Start()
-		fmt.Println("[Notification] Started notification retry service")
+
 	}
 
 	return nil
@@ -856,10 +825,9 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 	// Register notification adapter for other plugins to use
 	if p.notifAdapter != nil {
 		if err := services.Register("notification.adapter", p.notifAdapter); err != nil {
-			fmt.Printf("[Notification] Warning: failed to register notification adapter in service registry: %v\n", err)
 			// Don't fail - adapter will still work for this plugin's own use
 		} else {
-			fmt.Println("[Notification] Registered notification adapter in service registry")
+
 		}
 	}
 

@@ -105,13 +105,6 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Initialize middleware
 	p.middleware = NewMiddleware(p.service, p.config)
 
-	fmt.Printf("[StepUp] Plugin initialized successfully\n")
-	fmt.Printf("[StepUp] Enabled: %v\n", p.config.Enabled)
-	fmt.Printf("[StepUp] Route rules: %d\n", len(p.config.RouteRules))
-	fmt.Printf("[StepUp] Amount rules: %d\n", len(p.config.AmountRules))
-	fmt.Printf("[StepUp] Resource rules: %d\n", len(p.config.ResourceRules))
-	fmt.Printf("[StepUp] Remember devices: %v\n", p.config.RememberStepUp)
-	fmt.Printf("[StepUp] Risk-based: %v\n", p.config.RiskBasedEnabled)
 
 	return nil
 }
@@ -240,22 +233,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Step-Up", "Audit"),
 	)
 
-	fmt.Println("[StepUp] Routes registered successfully")
-	fmt.Println("[StepUp] Available endpoints:")
-	fmt.Println("  - POST   /stepup/evaluate")
-	fmt.Println("  - POST   /stepup/verify")
-	fmt.Println("  - GET    /stepup/status")
-	fmt.Println("  - GET    /stepup/requirements/:id")
-	fmt.Println("  - GET    /stepup/requirements/pending")
-	fmt.Println("  - GET    /stepup/verifications")
-	fmt.Println("  - GET    /stepup/devices")
-	fmt.Println("  - DELETE /stepup/devices/:id")
-	fmt.Println("  - POST   /stepup/policies")
-	fmt.Println("  - GET    /stepup/policies")
-	fmt.Println("  - GET    /stepup/policies/:id")
-	fmt.Println("  - PUT    /stepup/policies/:id")
-	fmt.Println("  - DELETE /stepup/policies/:id")
-	fmt.Println("  - GET    /stepup/audit")
 
 	return nil
 }
@@ -270,7 +247,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// This would typically be registered with a job scheduler
 	// For now, we'll just register a hook that can be called manually
 
-	fmt.Println("[StepUp] Hooks registered successfully")
 	return nil
 }
 
@@ -313,7 +289,6 @@ func (p *Plugin) Migrate() error {
 		return fmt.Errorf("failed to create indexes: %w", err)
 	}
 
-	fmt.Println("[StepUp] Database migration completed successfully")
 	return nil
 }
 
@@ -399,12 +374,10 @@ func (p *Plugin) StartCleanupScheduler(interval time.Duration) {
 			ctx := context.Background()
 			if err := p.service.CleanupExpired(ctx); err != nil {
 				// Log error but continue
-				fmt.Printf("[StepUp] Cleanup error: %v\n", err)
 			}
 		}
 	}()
 
-	fmt.Printf("[StepUp] Cleanup scheduler started (interval: %v)\n", interval)
 }
 
 // Health checks the plugin health
@@ -427,16 +400,13 @@ func (p *Plugin) Health(ctx context.Context) error {
 
 // Shutdown gracefully shuts down the plugin
 func (p *Plugin) Shutdown(ctx context.Context) error {
-	fmt.Println("[StepUp] Shutting down plugin...")
 
 	// Perform any cleanup needed
 	if p.service != nil {
 		if err := p.service.CleanupExpired(ctx); err != nil {
-			fmt.Printf("[StepUp] Final cleanup error: %v\n", err)
 		}
 	}
 
-	fmt.Println("[StepUp] Plugin shut down successfully")
 	return nil
 }
 

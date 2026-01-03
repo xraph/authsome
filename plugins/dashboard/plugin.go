@@ -313,6 +313,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.basePath,
 		p.enabledPlugins,
 		hookRegistry,
+		configManager,
 	)
 
 	// Store service registry for later access in RegisterRoutes
@@ -333,7 +334,6 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 		return fmt.Errorf("invalid role registry type")
 	}
 
-	fmt.Printf("[Dashboard] Registering dashboard roles in RoleRegistry...\n")
 
 	// Dashboard plugin extends/modifies the default roles with additional permissions
 	// Note: Default roles (superadmin, owner, admin, member) are already registered by core
@@ -342,7 +342,6 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 		return fmt.Errorf("failed to register dashboard roles: %w", err)
 	}
 
-	fmt.Printf("[Dashboard] ✅ Dashboard roles registered\n")
 	return nil
 }
 
@@ -504,6 +503,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "App list or redirect", DashboardHTMLResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
 		forge.WithTags("Dashboard", "Apps"),
+	)
+
+	// Config viewer page - shows all config values from Forge ConfigManager as YAML
+	// Non-app-scoped, accessible after login for admins
+	router.GET("/dashboard/config", chain(p.handler.ServeConfigViewer),
+		forge.WithName("dashboard.config.viewer"),
+		forge.WithSummary("Configuration viewer"),
+		forge.WithDescription("View all configuration values from Forge ConfigManager with source metadata"),
+		forge.WithResponseSchema(200, "Config viewer page HTML", DashboardHTMLResponse{}),
+		forge.WithResponseSchema(401, "Not authenticated", DashboardErrorResponse{}),
+		forge.WithTags("Dashboard", "Admin", "Configuration"),
 	)
 
 	// App-scoped dashboard pages (with auth middleware)

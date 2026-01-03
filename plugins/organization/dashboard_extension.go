@@ -517,7 +517,6 @@ func (e *DashboardExtension) renderOrganizationsListContent(c forge.Context, cur
 	envID, err := e.extractEnvironmentFromURL(c, currentApp.ID)
 	if err != nil {
 		// Log error but continue with empty list
-		fmt.Printf("[OrgDashboard] Warning: failed to get environment: %v\n", err)
 	}
 
 	// Fetch organizations for the current app and environment
@@ -3415,7 +3414,6 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 	// Fetch role templates
 	var roleTemplates []*schema.Role
 	if e.plugin.rbacService == nil {
-		fmt.Printf("[DEBUG] rbacService is nil!\n")
 		roleTemplates = []*schema.Role{}
 	} else {
 		// Get default environment for the app
@@ -3440,15 +3438,12 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 		}
 
 		if err != nil {
-			fmt.Printf("[DEBUG] No environment found for app %s: %v\n", currentApp.ID.String(), err)
 			roleTemplates = []*schema.Role{}
 		} else {
 			roleTemplates, err = e.plugin.rbacService.GetRoleTemplates(ctx, currentApp.ID, defaultEnvID)
 			if err != nil {
-				fmt.Printf("[DEBUG] GetRoleTemplates error for app %s, env %s: %v\n", currentApp.ID.String(), defaultEnvID.String(), err)
 				roleTemplates = []*schema.Role{}
 			} else {
-				fmt.Printf("[DEBUG] GetRoleTemplates for app %s, env %s returned %d templates\n", currentApp.ID.String(), defaultEnvID.String(), len(roleTemplates))
 			}
 		}
 	}

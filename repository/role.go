@@ -131,14 +131,12 @@ func (r *RoleRepository) GetRoleTemplates(ctx context.Context, appID, envID xid.
 		Where("is_template = ?", true).
 		Order("name ASC")
 
-	fmt.Printf("[DEBUG REPO] GetRoleTemplates SQL: %s, appID: %s, envID: %s\n", query.String(), appID.String(), envID.String())
 
 	err := query.Scan(ctx)
 	if err != nil {
-		fmt.Printf("[DEBUG REPO] GetRoleTemplates error: %v\n", err)
+
 		return nil, err
 	}
-	fmt.Printf("[DEBUG REPO] GetRoleTemplates found %d roles\n", len(roles))
 	return roles, nil
 }
 
@@ -223,7 +221,6 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 
 	if err == nil {
 		// Role already exists, return it (idempotent)
-		fmt.Printf("[RoleRepository] Role '%s' already exists for org %s, returning existing role\n", roleName, orgID.String())
 		
 		// Load permissions for the existing role
 		err = r.db.NewSelect().
@@ -266,7 +263,6 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 	newRole.Version = 1
 
 	// Insert the new role
-	fmt.Printf("[RoleRepository] Creating new role '%s' for org %s (template: %s)\n", roleName, orgID.String(), templateID.String())
 	_, err = r.db.NewInsert().Model(newRole).Exec(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloned role '%s' for org %s: %w", roleName, orgID.String(), err)

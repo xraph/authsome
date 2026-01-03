@@ -146,7 +146,6 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 						p, s.config.SMSProvider, err.Error(), appID.String()))
 			}
 			// Log error but don't fail - code is still valid for verification
-			fmt.Printf("Failed to send phone OTP via notification plugin: %v\n", err)
 		} else {
 			// Audit successful SMS send
 			if s.audit != nil {

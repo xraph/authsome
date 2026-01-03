@@ -102,7 +102,6 @@ func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, meta
 		err := a.notifAdapter.SendMFACode(ctx, appID, email, code, 10, notification.NotificationTypeEmail)
 		if err != nil {
 			// Log error but try fallback
-			fmt.Printf("Failed to send MFA code via notification plugin: %v\n", err)
 			// Fall through to emailotp fallback
 		} else {
 			// Successfully sent via notification

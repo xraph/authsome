@@ -2,7 +2,6 @@ package notification
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/notification"
@@ -49,7 +48,6 @@ func (a *AsyncAdapter) sendWithPriority(ctx context.Context, priority notificati
 	if priority == notification.PriorityHigh {
 		go func() {
 			if err := sendFunc(asyncCtx); err != nil {
-				fmt.Printf("[AsyncAdapter] High priority notification failed: %v\n", err)
 			}
 		}()
 		return nil
@@ -60,7 +58,6 @@ func (a *AsyncAdapter) sendWithPriority(ctx context.Context, priority notificati
 		if err := sendFunc(asyncCtx); err != nil {
 			// Only log for debugging, don't retry low priority
 			if priority != notification.PriorityLow {
-				fmt.Printf("[AsyncAdapter] Notification failed (priority=%s): %v\n", priority, err)
 			}
 		}
 	}()

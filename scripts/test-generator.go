@@ -34,12 +34,8 @@ func main() {
 	manifestDir := filepath.Join(root, "internal/clients/manifest/data")
 	outputDir := filepath.Join(root, "clients")
 	moduleName := "github.com/xraph/authsome/clients/go"
-	
-	fmt.Println("🔧 Generating Go client SDK...")
-	fmt.Printf("  Manifest dir: %s\n", manifestDir)
-	fmt.Printf("  Output dir: %s\n", outputDir)
-	fmt.Printf("  Module name: %s\n", moduleName)
-	
+
+
 	gen, err := generator.NewGenerator(manifestDir, outputDir, moduleName)
 	if err != nil {
 		log.Fatalf("Failed to create generator: %v", err)
@@ -48,7 +44,6 @@ func main() {
 	if err := gen.Generate(generator.LanguageGo, nil); err != nil {
 		log.Fatalf("Failed to generate client: %v", err)
 	}
-	
-	fmt.Println("✅ Go client generated successfully!")
+
 }
 

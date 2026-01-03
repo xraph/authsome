@@ -2,7 +2,6 @@ package authflow
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/auth"
@@ -109,7 +108,6 @@ func (s *CompletionService) CompleteAuthentication(req *CompleteAuthenticationRe
 	// 3. Track device if enabled
 	if s.deviceService != nil {
 		fingerprint := req.UserAgent + "|" + req.IPAddress
-		fmt.Printf("[CompletionService] Tracking device for user %s in app %s\n", req.User.ID.String(), appID.String())
 		_, _ = s.deviceService.TrackDevice(ctx, appID, req.User.ID, fingerprint, req.UserAgent, req.IPAddress)
 	}
 
@@ -169,7 +167,6 @@ func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRe
 	// 3. Track device if enabled (only if we have a user and session was created)
 	if s.deviceService != nil && authResp != nil && authResp.User != nil {
 		fingerprint := req.UserAgent + "|" + req.IPAddress
-		fmt.Printf("[CompletionService] Tracking device for user %s in app %s\n", authResp.User.ID.String(), appID.String())
 		_, _ = s.deviceService.TrackDevice(ctx, appID, authResp.User.ID, fingerprint, req.UserAgent, req.IPAddress)
 	}
 
@@ -201,7 +198,6 @@ func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRe
 // setSessionCookie sets the session cookie in the response
 func (s *CompletionService) setSessionCookie(ctx context.Context, c forge.Context, authResp *responses.AuthResponse, appID xid.ID) {
 	if authResp.Session == nil || authResp.Token == "" {
-		fmt.Printf("[CompletionService] Skipping cookie - no session or token\n")
 		return
 	}
 
@@ -211,32 +207,23 @@ func (s *CompletionService) setSessionCookie(ctx context.Context, c forge.Contex
 		appCookieCfg, err := s.appService.GetCookieConfig(ctx, appID)
 		if err == nil && appCookieCfg != nil {
 			cookieConfig = appCookieCfg
-			fmt.Printf("[CompletionService] Got cookie config from appService: enabled=%v, name=%s\n", cookieConfig.Enabled, cookieConfig.Name)
-		} else if err != nil {
-			fmt.Printf("[CompletionService] Error getting cookie config from appService: %v\n", err)
 		}
 	}
 
 	// Fallback to completion service's cookie config
 	if cookieConfig == nil && s.cookieConfig != nil {
 		cookieConfig = s.cookieConfig
-		fmt.Printf("[CompletionService] Using fallback cookie config: enabled=%v, name=%s\n", cookieConfig.Enabled, cookieConfig.Name)
 	}
 
 	if cookieConfig == nil {
-		fmt.Printf("[CompletionService] No cookie config available - skipping cookie\n")
 		return
 	}
 
 	if !cookieConfig.Enabled {
-		fmt.Printf("[CompletionService] Cookie config disabled - skipping cookie\n")
 		return
 	}
 
-	fmt.Printf("[CompletionService] Setting session cookie: name=%s, token=%s...\n", cookieConfig.Name, authResp.Token[:min(10, len(authResp.Token))])
-	if err := session.SetCookie(c, authResp.Token, authResp.Session.ExpiresAt, cookieConfig); err != nil {
-		fmt.Printf("[CompletionService] Error setting cookie: %v\n", err)
-	}
+	_ = session.SetCookie(c, authResp.Token, authResp.Session.ExpiresAt, cookieConfig)
 }
 
 // AppServiceAdapter adapts app.AppService to AppServiceInterface

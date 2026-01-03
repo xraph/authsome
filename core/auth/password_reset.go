@@ -190,7 +190,7 @@ func (s *Service) completePasswordReset(ctx context.Context, appID xid.ID, verif
 	// Mark token as used
 	if err := repo.MarkVerificationAsUsed(ctx, verification.ID); err != nil {
 		// Log error but don't fail - password is already updated
-		fmt.Printf("failed to mark verification as used: %v\n", err)
+		_ = err
 	}
 
 	// TODO: Optionally revoke all existing sessions for security

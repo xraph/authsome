@@ -146,11 +146,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		go p.runCleanupTask()
 	}
 
-	fmt.Printf("[Impersonation Plugin] Initialized successfully\n")
-	fmt.Printf("  - Default Duration: %d minutes\n", p.config.DefaultDurationMinutes)
-	fmt.Printf("  - Max Duration: %d minutes\n", p.config.MaxDurationMinutes)
-	fmt.Printf("  - Require Permission: %v\n", p.config.RequirePermission)
-	fmt.Printf("  - Auto Cleanup: %v (every %v)\n", p.config.AutoCleanupEnabled, p.config.CleanupInterval)
 
 	return nil
 }
@@ -275,7 +270,6 @@ func (p *Plugin) Migrate() error {
 
 	// Migrations will be handled by the main AuthSome migration system
 	// The schema is already defined in schema/impersonation.go
-	fmt.Println("[Impersonation Plugin] Migrations will be handled by main migration system")
 
 	return nil
 }
@@ -287,7 +281,6 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 		close(p.stopCleanup)
 	}
 
-	fmt.Println("[Impersonation Plugin] Shutdown complete")
 	return nil
 }
 
@@ -330,7 +323,7 @@ func (p *Plugin) runCleanupTask() {
 		case <-ticker.C:
 			p.cleanupExpiredSessions()
 		case <-p.stopCleanup:
-			fmt.Println("[Impersonation Plugin] Cleanup task stopped")
+
 			return
 		}
 	}
@@ -341,11 +334,9 @@ func (p *Plugin) cleanupExpiredSessions() {
 	ctx := context.Background()
 	count, err := p.service.ExpireSessions(ctx)
 	if err != nil {
-		fmt.Printf("[Impersonation Plugin] Cleanup error: %v\n", err)
 		return
 	}
 
 	if count > 0 {
-		fmt.Printf("[Impersonation Plugin] Expired %d impersonation sessions\n", count)
 	}
 }

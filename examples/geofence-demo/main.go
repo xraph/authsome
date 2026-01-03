@@ -10,50 +10,35 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Geofencing Plugin Demo ===")
-	fmt.Println()
+
 
 	// Create a new plugin
 	plugin := geofence.NewPlugin()
-	fmt.Printf("✓ Plugin created: %s v%s\n", plugin.Name(), plugin.Version())
-	fmt.Printf("  Description: %s\n\n", plugin.Description())
 
 	// Test configuration
 	config := geofence.DefaultConfig()
-	fmt.Println("✓ Default configuration loaded:")
-	fmt.Printf("  - Enabled: %v\n", config.Enabled)
-	fmt.Printf("  - Geo Provider: %s\n", config.Geolocation.Provider)
-	fmt.Printf("  - Cache Duration: %v\n", config.Geolocation.CacheDuration)
-	fmt.Printf("  - Travel Detection: %v\n", config.Travel.Enabled)
-	fmt.Printf("  - Min Travel Distance: %.0f km\n", config.Travel.MinDistanceKm)
-	fmt.Printf("  - Max Speed: %.0f km/h\n\n", config.Travel.MaxSpeedKmh)
+
 
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		log.Fatal("Config validation failed:", err)
 	}
-	fmt.Println("✓ Configuration validated successfully")
 
 	// Test haversine distance calculation
-	fmt.Println("=== Distance Calculations ===")
 
 	// San Francisco to New York
 	sfLat, sfLon := 37.7749, -122.4194
 	nyLat, nyLon := 40.7128, -74.0060
 	distance := calculateDistance(sfLat, sfLon, nyLat, nyLon)
-	fmt.Printf("San Francisco to New York: %.2f km\n", distance)
 
 	// San Francisco to London
 	londonLat, londonLon := 51.5074, -0.1278
 	distance = calculateDistance(sfLat, sfLon, londonLat, londonLon)
-	fmt.Printf("San Francisco to London: %.2f km\n", distance)
 
 	// Nearby points
 	distance = calculateDistance(sfLat, sfLon, 37.8199, -122.4783)
-	fmt.Printf("San Francisco to Berkeley: %.2f km\n\n", distance)
 
 	// Test geofence rule creation
-	fmt.Println("=== Geofence Rules ===")
 
 	// Country blocking rule
 	rule1 := &geofence.GeofenceRule{
@@ -70,7 +55,6 @@ func main() {
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
-	fmt.Printf("✓ Created rule: %s (Priority: %d)\n", rule1.Name, rule1.Priority)
 
 	// VPN detection rule
 	rule2 := &geofence.GeofenceRule{
@@ -88,7 +72,6 @@ func main() {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	fmt.Printf("✓ Created rule: %s (Priority: %d)\n", rule2.Name, rule2.Priority)
 
 	// Circular geofence rule
 	centerLat := 37.7749
@@ -111,10 +94,9 @@ func main() {
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	fmt.Printf("✓ Created rule: %s (Radius: %.0f km)\n\n", rule3.Name, *rule3.RadiusKm)
 
 	// Test point-in-polygon
-	fmt.Println("=== Point-in-Polygon Test ===")
+
 	polygon := [][2]float64{
 		{37.8, -122.5},
 		{37.8, -122.3},
@@ -124,14 +106,12 @@ func main() {
 
 	testPoint1 := [2]float64{37.75, -122.4}
 	inside1 := pointInPolygon(testPoint1[0], testPoint1[1], polygon)
-	fmt.Printf("Point (%.2f, %.2f) inside polygon: %v\n", testPoint1[0], testPoint1[1], inside1)
 
 	testPoint2 := [2]float64{37.9, -122.4}
 	inside2 := pointInPolygon(testPoint2[0], testPoint2[1], polygon)
-	fmt.Printf("Point (%.2f, %.2f) inside polygon: %v\n\n", testPoint2[0], testPoint2[1], inside2)
 
 	// Test location event
-	fmt.Println("=== Location Event ===")
+
 	lat := 37.7749
 	lon := -122.4194
 	event := &geofence.LocationEvent{
@@ -149,12 +129,9 @@ func main() {
 		EventResult: "allowed",
 		Timestamp:   time.Now(),
 	}
-	fmt.Printf("✓ Location Event: %s from %s, %s (%s)\n", event.EventType, event.City, event.Country, event.IPAddress)
-	fmt.Printf("  Coordinates: %.4f, %.4f\n", *event.Latitude, *event.Longitude)
-	fmt.Printf("  Result: %s\n\n", event.EventResult)
+
 
 	// Test travel alert
-	fmt.Println("=== Travel Detection ===")
 
 	// Simulate travel from SF to NY in 2 hours (impossible)
 	travelTime := 2 * time.Hour
@@ -179,16 +156,9 @@ func main() {
 		UpdatedAt:        time.Now(),
 	}
 
-	fmt.Printf("✓ Travel Alert: %s\n", alert.AlertType)
-	fmt.Printf("  From: %s to %s\n", alert.FromCity, alert.ToCity)
-	fmt.Printf("  Distance: %.0f km\n", alert.DistanceKm)
-	fmt.Printf("  Time: %s\n", alert.TimeDifference)
-	fmt.Printf("  Speed: %.0f km/h ⚠️ (Max: %.0f km/h)\n", alert.CalculatedSpeed, config.Travel.MaxSpeedKmh)
-	fmt.Printf("  Severity: %s\n", alert.Severity)
-	fmt.Printf("  Requires Approval: %v\n\n", alert.RequiresApproval)
 
 	// Test trusted location
-	fmt.Println("=== Trusted Location ===")
+
 	trusted := &geofence.TrustedLocation{
 		ID:          xid.New(),
 		UserID:      xid.New(),
@@ -209,20 +179,7 @@ func main() {
 		UpdatedAt:   time.Now(),
 	}
 
-	fmt.Printf("✓ Trusted Location: %s\n", trusted.Name)
-	fmt.Printf("  Location: %s, %s\n", trusted.City, trusted.Country)
-	fmt.Printf("  Radius: %.0f km\n", trusted.RadiusKm)
-	fmt.Printf("  Usage: %d times\n", trusted.UsageCount)
-	fmt.Printf("  Auto-approve: %v\n\n", trusted.AutoApprove)
 
-	fmt.Println("=== Demo Complete ===")
-	fmt.Println("✓ All geofencing components working correctly!")
-	fmt.Println("\nTo use in production:")
-	fmt.Println("  1. Configure geolocation provider (MaxMind, IPInfo, etc.)")
-	fmt.Println("  2. Set up VPN/proxy detection (IPQualityScore, ProxyCheck)")
-	fmt.Println("  3. Create geofence rules for your organization")
-	fmt.Println("  4. Enable travel notifications")
-	fmt.Println("  5. Add trusted locations for users")
 }
 
 // Helper function to calculate distance (same as haversineDistance)

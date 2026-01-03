@@ -650,19 +650,16 @@ func getEnvironmentIDFromContext(ctx context.Context) xid.ID {
 func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID) (map[string]providers.Provider, error) {
 	// If no config repo is set, use static providers
 	if s.configRepo == nil {
-		fmt.Printf("[Social] No config repo set, using static providers (count: %d)\n", len(s.providers))
 		return s.providers, nil
 	}
 
 	// If environment is not set, use static providers
 	if envID.IsNil() {
-		fmt.Printf("[Social] No environment ID provided, using static providers (count: %d)\n", len(s.providers))
 		return s.providers, nil
 	}
 
 	// Create cache key
 	envKey := fmt.Sprintf("%s:%s", appID.String(), envID.String())
-	fmt.Printf("[Social] Loading providers for app:%s env:%s\n", appID.String(), envID.String())
 
 	// Check cache first (read lock)
 	s.envMutex.RLock()
@@ -670,7 +667,6 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 	s.envMutex.RUnlock()
 
 	if exists {
-		fmt.Printf("[Social] Using cached providers for %s (count: %d)\n", envKey, len(cached))
 		return cached, nil
 	}
 
@@ -686,15 +682,12 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 	// Get enabled configurations from database
 	configs, err := s.configRepo.ListEnabledByEnvironment(ctx, appID, envID)
 	if err != nil {
-		fmt.Printf("[Social] Failed to load configs from DB: %v\n", err)
 		return nil, fmt.Errorf("failed to load provider configs from database: %w", err)
 	}
 
-	fmt.Printf("[Social] Loaded %d provider configs from database for %s\n", len(configs), envKey)
 
 	// If no configs found in DB, use static providers as fallback
 	if len(configs) == 0 {
-		fmt.Printf("[Social] No DB configs found, using static providers as fallback (count: %d)\n", len(s.providers))
 		s.envProviders[envKey] = s.providers
 		return s.providers, nil
 	}
@@ -748,15 +741,12 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 		provider := s.createProviderInstance(cfg.ProviderName, providerConfig)
 		if provider != nil {
 			envProviders[cfg.ProviderName] = provider
-			fmt.Printf("[Social] Created provider %s with clientID: %s...\n", cfg.ProviderName, cfg.ClientID[:10])
 		} else {
-			fmt.Printf("[Social] WARNING: Failed to create provider instance for %s\n", cfg.ProviderName)
 		}
 	}
 
 	// Cache the result
 	s.envProviders[envKey] = envProviders
-	fmt.Printf("[Social] Cached %d providers for %s\n", len(envProviders), envKey)
 
 	return envProviders, nil
 }

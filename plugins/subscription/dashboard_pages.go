@@ -156,6 +156,24 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 				),
 			),
 		),
+
+		// Payment Methods Widget
+		Div(
+			Class("rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+			Div(
+				Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
+				H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Payment Methods")),
+				A(
+					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/payment-methods"),
+					Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
+					g.Text("Manage all →"),
+				),
+			),
+			Div(
+				Class("px-6 py-4"),
+				e.renderPaymentMethodsOverviewWidget(ctx, currentApp, basePath),
+			),
+		),
 	)
 
 	pageData := components.PageData{
@@ -1618,6 +1636,98 @@ func (e *DashboardExtension) renderMetricCard(title, value string, change float6
 			Div(
 				Class("rounded-full bg-violet-100 p-3 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400"),
 				icon,
+			),
+		),
+	)
+}
+
+// renderPaymentMethodsOverviewWidget renders the payment methods widget for billing overview
+func (e *DashboardExtension) renderPaymentMethodsOverviewWidget(ctx context.Context, currentApp *app.App, basePath string) g.Node {
+	// Get payment methods for this organization
+	paymentMethods, err := e.plugin.paymentSvc.ListPaymentMethods(ctx, currentApp.ID)
+	if err != nil || len(paymentMethods) == 0 {
+		return Div(
+			Class("text-center py-8 text-slate-500 dark:text-gray-400"),
+			lucide.CreditCard(Class("mx-auto h-12 w-12 mb-3")),
+			P(g.Text("No payment methods added")),
+			A(
+				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/payment-methods/add"),
+				Class("mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
+				lucide.Plus(Class("size-4")),
+				g.Text("Add payment method"),
+			),
+		)
+	}
+
+	// Find default payment method
+	var defaultPM *core.PaymentMethod
+	for _, pm := range paymentMethods {
+		if pm.IsDefault {
+			defaultPM = pm
+			break
+		}
+	}
+
+	// If no default but have methods, use first one
+	if defaultPM == nil && len(paymentMethods) > 0 {
+		defaultPM = paymentMethods[0]
+	}
+
+	return Div(
+		Class("space-y-4"),
+		// Default payment method card
+		g.If(defaultPM != nil,
+			Div(
+				Class("flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-gray-800"),
+				Div(
+					Class("flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-gray-700"),
+					g.If(defaultPM.IsCard(),
+						lucide.CreditCard(Class("size-5 text-slate-600 dark:text-gray-400")),
+					),
+					g.If(defaultPM.IsBankAccount(),
+						lucide.Building2(Class("size-5 text-slate-600 dark:text-gray-400")),
+					),
+				),
+				Div(
+					Class("flex-1"),
+					Div(
+						Class("flex items-center gap-2"),
+						P(Class("font-medium text-slate-900 dark:text-white"), g.Text(defaultPM.DisplayName())),
+						Span(
+							Class("inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200"),
+							g.Text("Default"),
+						),
+						g.If(defaultPM.IsExpired(),
+							Span(
+								Class("inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200"),
+								g.Text("Expired"),
+							),
+						),
+						g.If(defaultPM.WillExpireSoon(30) && !defaultPM.IsExpired(),
+							Span(
+								Class("inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"),
+								g.Text("Expiring Soon"),
+							),
+						),
+					),
+					P(Class("text-sm text-slate-600 dark:text-gray-400 mt-1"),
+						g.If(defaultPM.IsCard(),
+							g.Textf("Expires %02d/%d", defaultPM.CardExpMonth, defaultPM.CardExpYear),
+						),
+						g.If(defaultPM.IsBankAccount() && defaultPM.BankAccountType != "",
+							g.Textf("%s account", defaultPM.BankAccountType),
+						),
+					),
+				),
+			),
+		),
+
+		// Additional payment methods count
+		g.If(len(paymentMethods) > 1,
+			Div(
+				Class("text-sm text-slate-600 dark:text-gray-400"),
+				g.Textf("+%d more payment method", len(paymentMethods)-1),
+				g.If(len(paymentMethods) > 2, g.Text("s")),
 			),
 		),
 	)

@@ -556,7 +556,7 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 		a.config.SessionCookie.Name = a.config.SessionCookieName
 	}
 
-	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA(), a.appService, &a.config.SessionCookie, a.serviceRegistry, a.config.BaseURL)
+	h := handlers.NewAuthHandler(a.authService, a.rateLimitService, a.deviceService, a.securityService, a.auditService, a.repo.TwoFA(), a.appService, &a.config.SessionCookie, a.serviceRegistry, basePath)
 	audH := handlers.NewAuditHandler(a.auditService)
 	appH := handlers.NewAppHandler(a.appService, a.rateLimitService, a.sessionService, a.rbacService, a.repo.UserRole(), a.repo.Role(), a.repo.Policy(), a.config.RBACEnforce)
 
@@ -1002,7 +1002,6 @@ func (a *Auth) resolveDatabase() error {
 		}
 
 		a.db = db
-		fmt.Printf("[AuthSome] Resolved database from Forge DatabaseManager: %s\n", dbName)
 		return nil
 	}
 
@@ -1030,7 +1029,6 @@ func (a *Auth) resolveDatabase() error {
 		}
 
 		a.db = db
-		fmt.Println("[AuthSome] ✅ Successfully resolved database from Forge DI container")
 		return nil
 	}
 
