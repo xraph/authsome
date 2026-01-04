@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/uptrace/bun"
 )
 
 // SCIM 2.0 Schema URNs (RFC 7643)
@@ -385,6 +386,7 @@ type ProvisioningLog struct {
 // AttributeMapping represents custom attribute mappings per organization
 // Updated for 3-tier architecture: App → Environment → Organization
 type AttributeMapping struct {
+	bun.BaseModel  `bun:"table:attribute_mappings,alias:am"`
 	ID             xid.ID                 `bun:"id,pk,type:varchar(20)"`
 	AppID          xid.ID                 `bun:"app_id,type:varchar(20),notnull"`                                    // Platform app
 	EnvironmentID  xid.ID                 `bun:"environment_id,type:varchar(20),notnull"`                            // Target environment
@@ -398,6 +400,7 @@ type AttributeMapping struct {
 // GroupMapping represents SCIM group to user-created organization team/role mapping
 // Updated for 3-tier architecture: App → Environment → Organization
 type GroupMapping struct {
+	bun.BaseModel  `bun:"table:group_mappings,alias:gm"`
 	ID             xid.ID    `bun:"id,pk,type:varchar(20)"`
 	AppID          xid.ID    `bun:"app_id,type:varchar(20),notnull"`          // Platform app
 	EnvironmentID  xid.ID    `bun:"environment_id,type:varchar(20),notnull"`  // Target environment

@@ -2,7 +2,6 @@ package magiclink
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -105,12 +104,12 @@ func (s *Service) Send(ctx context.Context, appID xid.ID, email, ip, ua string) 
 
 // VerifyResult holds the result of magic link verification
 type VerifyResult struct {
-	Email     string      // Email from magic link
-	User      *user.User  // Nil for new users, populated for existing users
-	IsNewUser bool        // True if this is a new user signup
-	AppID     xid.ID      // App ID for context
-	EnvID     xid.ID      // Environment ID for context
-	OrgID     *xid.ID     // Optional organization ID
+	Email     string     // Email from magic link
+	User      *user.User // Nil for new users, populated for existing users
+	IsNewUser bool       // True if this is a new user signup
+	AppID     xid.ID     // App ID for context
+	EnvID     xid.ID     // Environment ID for context
+	OrgID     *xid.ID    // Optional organization ID
 }
 
 func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, token string, remember bool, ip, ua string) (*VerifyResult, error) {
