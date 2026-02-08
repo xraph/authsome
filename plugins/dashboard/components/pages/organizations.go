@@ -37,7 +37,7 @@ func OrganizationsPage(data OrganizationsData, appIDStr string) g.Node {
 				),
 			),
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/organizations/create", appIDStr)),
+				Href(fmt.Sprintf("/app/%s/organizations/create", appIDStr)),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 active:bg-violet-800 transition-colors"),
 				lucide.Plus(Class("h-4 w-4")),
 				g.Text("Create Organization"),
@@ -102,7 +102,7 @@ func organizationTableRow(org *organization.Organization, appIDStr string) g.Nod
 		Td(
 			Class("px-4 py-3"),
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/organizations/%s", appIDStr, org.ID.String())),
+				Href(fmt.Sprintf("/app/%s/organizations/%s", appIDStr, org.ID.String())),
 				Class("font-medium text-slate-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400"),
 				g.Text(org.Name),
 			),
@@ -123,13 +123,13 @@ func organizationTableRow(org *organization.Organization, appIDStr string) g.Nod
 			Div(
 				Class("flex items-center justify-end gap-2"),
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/organizations/%s", appIDStr, org.ID.String())),
+					Href(fmt.Sprintf("/app/%s/organizations/%s", appIDStr, org.ID.String())),
 					Class("inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors"),
 					lucide.Eye(Class("h-3.5 w-3.5")),
 					g.Text("View"),
 				),
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/organizations/%s/edit", appIDStr, org.ID.String())),
+					Href(fmt.Sprintf("/app/%s/organizations/%s/edit", appIDStr, org.ID.String())),
 					Class("inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors"),
 					lucide.Pencil(Class("h-3.5 w-3.5")),
 					g.Text("Edit"),
@@ -154,7 +154,7 @@ func emptyOrganizationsState(appIDStr string) g.Node {
 				g.Text("Get started by creating your first organization."),
 			),
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/organizations/create", appIDStr)),
+				Href(fmt.Sprintf("/app/%s/organizations/create", appIDStr)),
 				Class("mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 active:bg-violet-800 transition-colors"),
 				lucide.Plus(Class("h-4 w-4")),
 				g.Text("Create Organization"),
@@ -179,7 +179,7 @@ func OrganizationDetailPage(data OrganizationDetailData, appIDStr string) g.Node
 			Class("flex items-center justify-between"),
 			Div(
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/organizations", appIDStr)),
+					Href(fmt.Sprintf("/app/%s/organizations", appIDStr)),
 					Class("text-sm text-slate-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400"),
 					g.Text("← Back to Organizations"),
 				),
@@ -198,7 +198,7 @@ func OrganizationDetailPage(data OrganizationDetailData, appIDStr string) g.Node
 			Div(
 				Class("flex items-center gap-2"),
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/organizations/%s/edit", appIDStr, data.Organization.ID.String())),
+					Href(fmt.Sprintf("/app/%s/organizations/%s/edit", appIDStr, data.Organization.ID.String())),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors"),
 					lucide.Pencil(Class("h-4 w-4")),
 					g.Text("Edit"),
@@ -239,7 +239,7 @@ func OrganizationCreatePage(appIDStr, csrfToken string) g.Node {
 		Class("space-y-6"),
 		Div(
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/organizations", appIDStr)),
+				Href(fmt.Sprintf("/app/%s/organizations", appIDStr)),
 				Class("text-sm text-slate-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400"),
 				g.Text("← Back to Organizations"),
 			),
@@ -248,7 +248,7 @@ func OrganizationCreatePage(appIDStr, csrfToken string) g.Node {
 				g.Text("Create Organization"),
 			),
 		),
-		organizationForm(fmt.Sprintf("/dashboard/app/%s/organizations/create", appIDStr), appIDStr, nil, csrfToken),
+		organizationForm(fmt.Sprintf("/app/%s/organizations/create", appIDStr), appIDStr, nil, csrfToken),
 	)
 }
 
@@ -263,7 +263,7 @@ func OrganizationEditPage(data OrganizationEditData, appIDStr, csrfToken string)
 		Class("space-y-6"),
 		Div(
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/organizations/%s", appIDStr, data.Organization.ID.String())),
+				Href(fmt.Sprintf("/app/%s/organizations/%s", appIDStr, data.Organization.ID.String())),
 				Class("text-sm text-slate-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400"),
 				g.Text("← Back to Organization"),
 			),
@@ -272,7 +272,7 @@ func OrganizationEditPage(data OrganizationEditData, appIDStr, csrfToken string)
 				g.Text("Edit Organization"),
 			),
 		),
-		organizationForm(fmt.Sprintf("/dashboard/app/%s/organizations/%s/edit", appIDStr, data.Organization.ID.String()), appIDStr, data.Organization, csrfToken),
+		organizationForm(fmt.Sprintf("/app/%s/organizations/%s/edit", appIDStr, data.Organization.ID.String()), appIDStr, data.Organization, csrfToken),
 	)
 }
 
@@ -341,9 +341,9 @@ func organizationForm(action string, appIDStr string, org *organization.Organiza
 			A(
 				Href(func() string {
 					if org != nil {
-						return fmt.Sprintf("/dashboard/app/%s/organizations/%s", appIDStr, org.ID.String())
+						return fmt.Sprintf("/app/%s/organizations/%s", appIDStr, org.ID.String())
 					}
-					return fmt.Sprintf("/dashboard/app/%s/organizations", appIDStr)
+					return fmt.Sprintf("/app/%s/organizations", appIDStr)
 				}()),
 				Class("rounded-lg border border-slate-200 dark:border-gray-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors"),
 				g.Text("Cancel"),
@@ -367,7 +367,7 @@ func organizationsPagination(page, totalPages int, appIDStr string) g.Node {
 		return g.Text("")
 	}
 
-	baseURL := fmt.Sprintf("/dashboard/app/%s/organizations", appIDStr)
+	baseURL := fmt.Sprintf("/app/%s/organizations", appIDStr)
 
 	var pages []g.Node
 	for i := 1; i <= totalPages; i++ {

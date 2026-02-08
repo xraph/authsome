@@ -1,8 +1,13 @@
 package pages
 
 import (
+	"net/http"
+
 	"github.com/delaneyj/gomponents-iconify/iconify/tabler"
 	lucide "github.com/eduardolat/gomponents-lucide"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/internal/crypto"
 	"github.com/xraph/authsome/plugins/dashboard/components/pages"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/input"
@@ -15,15 +20,15 @@ import (
 // ModernHomePage - Simple handler returning content only
 func (p *PagesManager) LoginPage(ctx *router.PageContext) (g.Node, error) {
 
-	// Check if already authenticated (check session cookie directly since no auth middleware)
-	if user := p.checkExistingPageSession(ctx); user != nil {
-		// Already logged in, redirect to dashboard
-		redirect := ctx.Query("redirect")
-		if redirect == "" {
-			redirect = p.baseUIPath
-		}
-		// return ctx.Redirect(http.StatusFound, redirect)
-	}
+	// // Check if already authenticated (check session cookie directly since no auth middleware)
+	// if user := p.checkExistingPageSession(ctx); user != nil {
+	// 	// Already logged in, redirect to dashboard
+	// 	redirect := ctx.Query("redirect")
+	// 	if redirect == "" {
+	// 		redirect = p.baseUIPath
+	// 	}
+	// 	// return ctx.Redirect(http.StatusFound, redirect)
+	// }
 
 	redirect := ctx.Query("redirect")
 	errorParam := ctx.Query("error")
@@ -56,6 +61,104 @@ func (p *PagesManager) LoginPage(ctx *router.PageContext) (g.Node, error) {
 		},
 	}
 
+	return p.loginPageContent(loginData), nil
+}
+
+// HandleLogin processes the login form submission
+func (p *PagesManager) HandleLogin(ctx *router.PageContext) (g.Node, error) {
+	// Parse form data
+	if err := ctx.Request.ParseForm(); err != nil {
+		return p.renderLoginError(ctx, "Invalid form data", ctx.Query("redirect"))
+	}
+
+	email := ctx.Request.FormValue("email")
+	password := ctx.Request.FormValue("password")
+	redirect := ctx.Request.FormValue("redirect")
+	csrfToken := ctx.Request.FormValue("csrf_token")
+
+	// CSRF validation
+	if csrfToken == "" {
+		return p.renderLoginError(ctx, "Invalid CSRF token", redirect)
+	}
+
+	// Validate credentials
+	if email == "" || password == "" {
+		return p.renderLoginError(ctx, "Email and password are required", redirect)
+	}
+
+	// Get platform app context
+	goCtx := ctx.Request.Context()
+	platformApp, err := p.services.AppService().GetPlatformApp(goCtx)
+	if err != nil {
+		return p.renderLoginError(ctx, "System configuration error. Please contact administrator.", redirect)
+	}
+
+	goCtx = contexts.SetAppID(goCtx, platformApp.ID)
+
+	// Find user by email in platform app context
+	user, err := p.services.UserService().FindByAppAndEmail(goCtx, platformApp.ID, email)
+	if err != nil || user == nil {
+		return p.renderLoginError(ctx, "Invalid email or password", redirect)
+	}
+
+	// Verify password
+	passwordValid := crypto.CheckPassword(password, user.PasswordHash)
+	if !passwordValid {
+		return p.renderLoginError(ctx, "Invalid email or password", redirect)
+	}
+
+	// Create session
+	sess, err := p.services.SessionService().Create(goCtx, &session.CreateSessionRequest{
+		UserID:    user.ID,
+		IPAddress: ctx.Request.RemoteAddr,
+		UserAgent: ctx.Request.UserAgent(),
+		Remember:  false,
+		AppID:     platformApp.ID,
+	})
+	if err != nil {
+		return p.renderLoginError(ctx, "Failed to create session", redirect)
+	}
+
+	// Set session cookie
+	cookie := &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sess.Token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   ctx.Request.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(sess.ExpiresAt.Sub(sess.CreatedAt).Seconds()),
+	}
+	http.SetCookie(ctx.ResponseWriter, cookie)
+
+	// Redirect to dashboard or specified redirect URL
+	if redirect == "" {
+		redirect = p.baseUIPath
+	}
+	ctx.SetHeader("Location", redirect)
+	ctx.ResponseWriter.WriteHeader(http.StatusFound)
+	return nil, nil
+}
+
+// renderLoginError renders the login page with an error message
+func (p *PagesManager) renderLoginError(ctx *router.PageContext, message string, redirect string) (g.Node, error) {
+	loginData := pages.LoginPageData{
+		Title:     "Login",
+		CSRFToken: p.generateCSRFToken(),
+		BasePath:  p.baseUIPath,
+		Error:     message,
+		Data: pages.LoginData{
+			Redirect:   redirect,
+			ShowSignup: true,
+		},
+	}
+
+	// Re-render login page with error
+	return p.loginPageContent(loginData), nil
+}
+
+// loginPageContent returns the login page content (extracted for reuse)
+func (p *PagesManager) loginPageContent(loginData pages.LoginPageData) g.Node {
 	return primitives.Container(
 		primitives.Container(
 			primitives.Box(
@@ -115,7 +218,7 @@ func (p *PagesManager) LoginPage(ctx *router.PageContext) (g.Node, error) {
 										),
 										g.Text("Don't have an account? "),
 										A(
-											Href(loginData.BasePath+"/dashboard/signup"),
+											Href(p.baseUIPath+"/auth/signup"),
 											Class("font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"),
 											g.If(loginData.Data.IsFirstUser,
 												g.Text("Create admin account"),
@@ -137,32 +240,14 @@ func (p *PagesManager) LoginPage(ctx *router.PageContext) (g.Node, error) {
 					),
 				),
 			),
-
-			// // Actions
-			// primitives.HStack("4",
-			// 	button.Primary(
-			// 		g.Group([]g.Node{
-			// 			icons.ChevronRight(icons.WithSize(16)),
-			// 			g.Text("Get Started"),
-			// 		}),
-			// 		button.WithSize(forgeui.SizeLG),
-			// 	),
-			// 	button.Secondary(
-			// 		g.Group([]g.Node{
-			// 			icons.Book(icons.WithSize(16)),
-			// 			g.Text("Documentation"),
-			// 		}),
-			// 		button.WithSize(forgeui.SizeLG),
-			// 	),
-			// ),
 		),
-	), nil
+	)
 }
 
 func (p *PagesManager) loginForm(data pages.LoginPageData) g.Node {
 	return FormEl(
 		Class("mt-8 space-y-6"),
-		Action(data.BasePath+"/dashboard/login"),
+		Action(data.BasePath+"/auth/login"),
 		Method("POST"),
 		g.Attr("x-data", "{ loading: false }"),
 		g.Attr("@submit", "loading = true"),

@@ -2,6 +2,7 @@ package multisession
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
@@ -20,12 +21,13 @@ import (
 
 // Plugin wires the multi-session service and registers routes
 type Plugin struct {
-	db                 *bun.DB
-	service            *Service
-	logger             forge.Logger
-	config             Config
-	defaultConfig      Config
-	dashboardExtension *DashboardExtension
+	db                     *bun.DB
+	service                *Service
+	logger                 forge.Logger
+	config                 Config
+	defaultConfig          Config
+	dashboardExtension     *DashboardExtension
+	dashboardExtensionOnce sync.Once
 }
 
 // Config holds the multisession plugin configuration
@@ -151,8 +153,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		devSvc,
 	)
 
-	// Initialize dashboard extension
-	p.dashboardExtension = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	p.logger.Info("multisession plugin initialized",
 		forge.F("max_sessions_per_user", p.config.MaxSessionsPerUser),
@@ -282,6 +283,10 @@ func (p *Plugin) GetAuthService() *auth.Service {
 
 // DashboardExtension implements the PluginWithDashboardExtension interface
 // This allows the multisession plugin to extend the dashboard with custom screens
+// Uses lazy initialization to ensure plugin is fully initialized before creating extension
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtensionOnce.Do(func() {
+		p.dashboardExtension = NewDashboardExtension(p)
+	})
 	return p.dashboardExtension
 }

@@ -13,21 +13,14 @@ export class ApikeyPlugin implements ClientPlugin {
   }
 
   async createAPIKey(request: types.CreateAPIKeyRequest): Promise<types.CreateAPIKeyResponse> {
-    const path = '/api-keys/createapikey';
+    const path = '/api-keys';
     return this.client.request<types.CreateAPIKeyResponse>('POST', path, {
       body: request,
     });
   }
 
-  async rotateAPIKey(params: { id: string }, request: types.RotateAPIKeyRequest): Promise<types.RotateAPIKeyResponse> {
-    const path = `/api-keys/${params.id}/rotate`;
-    return this.client.request<types.RotateAPIKeyResponse>('POST', path, {
-      body: request,
-    });
-  }
-
   async listAPIKeys(request?: types.ListAPIKeysRequest): Promise<types.ListAPIKeysResponse> {
-    const path = '/api-keys/listapikeys';
+    const path = '/api-keys';
     return this.client.request<types.ListAPIKeysResponse>('GET', path, {
       query: this.client.toQueryParams(request),
     });
@@ -51,6 +44,13 @@ export class ApikeyPlugin implements ClientPlugin {
     const path = `/api-keys/${params.id}`;
     return this.client.request<types.MessageResponse>('DELETE', path, {
       query: this.client.toQueryParams(request),
+    });
+  }
+
+  async rotateAPIKey(params: { id: string }, request: types.RotateAPIKeyRequest): Promise<types.RotateAPIKeyResponse> {
+    const path = `/api-keys/${params.id}/rotate`;
+    return this.client.request<types.RotateAPIKeyResponse>('POST', path, {
+      body: request,
     });
   }
 

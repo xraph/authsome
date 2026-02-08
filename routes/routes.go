@@ -328,6 +328,87 @@ func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandle
 		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
 		forge.WithTags("Audit"),
 	)
+
+	// Aggregation endpoints
+	grp.GET("/audit/aggregations", h.GetAggregations,
+		forge.WithName("audit.aggregations.all"),
+		forge.WithSummary("Get all aggregations"),
+		forge.WithDescription("Retrieve all distinct values with counts in one call (actions, sources, resources, users, IPs, apps, organizations)"),
+		forge.WithResponseSchema(200, "Aggregations retrieved", AggregationsResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/actions", h.GetDistinctActions,
+		forge.WithName("audit.aggregations.actions"),
+		forge.WithSummary("Get distinct actions"),
+		forge.WithDescription("Retrieve distinct action values with counts for filter UIs"),
+		forge.WithResponseSchema(200, "Distinct actions retrieved", ActionsAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/sources", h.GetDistinctSources,
+		forge.WithName("audit.aggregations.sources"),
+		forge.WithSummary("Get distinct sources"),
+		forge.WithDescription("Retrieve distinct source values with counts"),
+		forge.WithResponseSchema(200, "Distinct sources retrieved", SourcesAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/resources", h.GetDistinctResources,
+		forge.WithName("audit.aggregations.resources"),
+		forge.WithSummary("Get distinct resources"),
+		forge.WithDescription("Retrieve distinct resource values with counts"),
+		forge.WithResponseSchema(200, "Distinct resources retrieved", ResourcesAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/users", h.GetDistinctUsers,
+		forge.WithName("audit.aggregations.users"),
+		forge.WithSummary("Get distinct users"),
+		forge.WithDescription("Retrieve distinct user values with counts"),
+		forge.WithResponseSchema(200, "Distinct users retrieved", UsersAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/ips", h.GetDistinctIPs,
+		forge.WithName("audit.aggregations.ips"),
+		forge.WithSummary("Get distinct IP addresses"),
+		forge.WithDescription("Retrieve distinct IP address values with counts"),
+		forge.WithResponseSchema(200, "Distinct IPs retrieved", IPsAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/apps", h.GetDistinctApps,
+		forge.WithName("audit.aggregations.apps"),
+		forge.WithSummary("Get distinct apps"),
+		forge.WithDescription("Retrieve distinct app values with counts"),
+		forge.WithResponseSchema(200, "Distinct apps retrieved", AppsAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
+
+	grp.GET("/audit/organizations", h.GetDistinctOrganizations,
+		forge.WithName("audit.aggregations.organizations"),
+		forge.WithSummary("Get distinct organizations"),
+		forge.WithDescription("Retrieve distinct organization values with counts"),
+		forge.WithResponseSchema(200, "Distinct organizations retrieved", OrganizationsAggregationResponse{}),
+		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
+		forge.WithResponseSchema(501, "Audit service not available", ErrorResponse{}),
+		forge.WithTags("Audit", "Aggregations"),
+	)
 }
 
 // AuditEventsResponse represents a paginated list of audit events
@@ -339,6 +420,16 @@ type AuditEventsResponse struct {
 	TotalPages int         `json:"total_pages"`
 }
 
+// Aggregation response types
+type AggregationsResponse struct{}
+type ActionsAggregationResponse struct{}
+type SourcesAggregationResponse struct{}
+type ResourcesAggregationResponse struct{}
+type UsersAggregationResponse struct{}
+type IPsAggregationResponse struct{}
+type AppsAggregationResponse struct{}
+type OrganizationsAggregationResponse struct{}
+
 // RegisterApp registers app (platform tenant) routes under a base path
 // This is used when multitenancy plugin is NOT enabled
 func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, authMiddleware forge.Middleware) {
@@ -349,27 +440,27 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 		org.Use(authMiddleware)
 	}
 
-	// Organizations
-	org.POST("/", h.CreateOrganization,
+	// Apps
+	org.POST("/", h.CreateApp,
 		forge.WithName("apps.create"),
 		forge.WithSummary("Create app"),
-		forge.WithDescription("Create a new organization"),
+		forge.WithDescription("Create a new app"),
 		forge.WithResponseSchema(200, "App created", AppResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps"),
 		forge.WithValidation(true),
 	)
 
-	org.GET("/", h.GetOrganizations,
+	org.GET("/", h.GetApps,
 		forge.WithName("apps.list"),
 		forge.WithSummary("List apps"),
-		forge.WithDescription("List all organizations accessible to the user"),
+		forge.WithDescription("List all apps accessible to the user"),
 		forge.WithResponseSchema(200, "Organizations retrieved", AppsResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 		forge.WithTags("Apps"),
 	)
 
-	org.POST("/update", h.UpdateOrganization,
+	org.POST("/update", h.UpdateApp,
 		forge.WithName("apps.update"),
 		forge.WithSummary("Update app"),
 		forge.WithDescription("Update app details"),
@@ -379,10 +470,10 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 		forge.WithValidation(true),
 	)
 
-	org.POST("/delete", h.DeleteOrganization,
+	org.POST("/delete", h.DeleteApp,
 		forge.WithName("apps.delete"),
 		forge.WithSummary("Delete app"),
-		forge.WithDescription("Delete an organization"),
+		forge.WithDescription("Delete an app"),
 		forge.WithResponseSchema(200, "App deleted", StatusResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps"),
@@ -392,7 +483,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.POST("/members", h.CreateMember,
 		forge.WithName("apps.members.create"),
 		forge.WithSummary("Add app member"),
-		forge.WithDescription("Add a new member to the organization"),
+		forge.WithDescription("Add a new member to the app"),
 		forge.WithResponseSchema(200, "Member added", MemberResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "Members"),
@@ -402,7 +493,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.GET("/members", h.GetMembers,
 		forge.WithName("apps.members.list"),
 		forge.WithSummary("List app members"),
-		forge.WithDescription("List all members of the organization"),
+		forge.WithDescription("List all members of the app"),
 		forge.WithResponseSchema(200, "Members retrieved", MembersResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 		forge.WithTags("Apps", "Members"),
@@ -421,7 +512,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.POST("/members/delete", h.DeleteMember,
 		forge.WithName("apps.members.delete"),
 		forge.WithSummary("Remove member"),
-		forge.WithDescription("Remove a member from the organization"),
+		forge.WithDescription("Remove a member from the app"),
 		forge.WithResponseSchema(200, "Member removed", StatusResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "Members"),
@@ -431,7 +522,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.POST("/teams", h.CreateTeam,
 		forge.WithName("apps.teams.create"),
 		forge.WithSummary("Create team"),
-		forge.WithDescription("Create a new team within the organization"),
+		forge.WithDescription("Create a new team within the app"),
 		forge.WithResponseSchema(200, "Team created", TeamResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "Teams"),
@@ -441,7 +532,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.GET("/teams", h.GetTeams,
 		forge.WithName("apps.teams.list"),
 		forge.WithSummary("List teams"),
-		forge.WithDescription("List all teams in the organization"),
+		forge.WithDescription("List all teams in the app"),
 		forge.WithResponseSchema(200, "Teams retrieved", TeamsResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 		forge.WithTags("Apps", "Teams"),
@@ -460,7 +551,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.POST("/teams/delete", h.DeleteTeam,
 		forge.WithName("apps.teams.delete"),
 		forge.WithSummary("Delete team"),
-		forge.WithDescription("Delete a team from the organization"),
+		forge.WithDescription("Delete a team from the app"),
 		forge.WithResponseSchema(200, "Team deleted", StatusResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "Teams"),
@@ -499,15 +590,15 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	org.POST("/invitations", h.CreateInvitation,
 		forge.WithName("apps.invitations.create"),
 		forge.WithSummary("Create invitation"),
-		forge.WithDescription("Invite a user to join the organization"),
+		forge.WithDescription("Invite a user to join the app"),
 		forge.WithResponseSchema(200, "Invitation created", InvitationResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "Invitations"),
 		forge.WithValidation(true),
 	)
 
-	// Organization by ID endpoints (registered after specific paths to avoid conflicts)
-	org.GET("/{id}", h.GetOrganizationByID,
+	// App by ID endpoints (registered after specific paths to avoid conflicts)
+	org.GET("/{appId}", h.GetAppByID,
 		forge.WithName("apps.get"),
 		forge.WithSummary("Get app by ID"),
 		forge.WithDescription("Retrieve a specific app by ID"),
@@ -516,7 +607,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 		forge.WithTags("Apps"),
 	)
 
-	org.POST("/{id}/update", h.UpdateOrganizationByID,
+	org.POST("/{appId}/update", h.UpdateAppByID,
 		forge.WithName("apps.update.byid"),
 		forge.WithSummary("Update app by ID"),
 		forge.WithDescription("Update a specific app by ID"),
@@ -527,7 +618,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 		forge.WithValidation(true),
 	)
 
-	org.POST("/{id}/delete", h.DeleteOrganizationByID,
+	org.POST("/{appId}/delete", h.DeleteAppByID,
 		forge.WithName("apps.delete.byid"),
 		forge.WithSummary("Delete app by ID"),
 		forge.WithDescription("Delete a specific app by ID"),
@@ -538,7 +629,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	)
 
 	// Cookie configuration endpoints
-	org.GET("/{id}/cookie-config", h.GetAppCookieConfig,
+	org.GET("/{appId}/cookie-config", h.GetAppCookieConfig,
 		forge.WithName("apps.cookie_config.get"),
 		forge.WithSummary("Get app cookie configuration"),
 		forge.WithDescription("Retrieve the cookie configuration for a specific app (merged with global defaults)"),
@@ -548,7 +639,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 		forge.WithTags("Apps", "Configuration"),
 	)
 
-	org.PUT("/{id}/cookie-config", h.UpdateAppCookieConfig,
+	org.PUT("/{appId}/cookie-config", h.UpdateAppCookieConfig,
 		forge.WithName("apps.cookie_config.update"),
 		forge.WithSummary("Update app cookie configuration"),
 		forge.WithDescription("Set or update the cookie configuration for a specific app"),
@@ -560,7 +651,7 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 		forge.WithValidation(true),
 	)
 
-	org.DELETE("/{id}/cookie-config", h.DeleteAppCookieConfig,
+	org.DELETE("/{appId}/cookie-config", h.DeleteAppCookieConfig,
 		forge.WithName("apps.cookie_config.delete"),
 		forge.WithSummary("Delete app cookie configuration"),
 		forge.WithDescription("Remove app-specific cookie configuration, reverting to global defaults"),
@@ -595,7 +686,7 @@ func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	router.POST("/policies", h.CreatePolicy,
 		forge.WithName("apps.policies.create"),
 		forge.WithSummary("Create policy"),
-		forge.WithDescription("Create a new RBAC policy for the organization"),
+		forge.WithDescription("Create a new RBAC policy for the app"),
 		forge.WithResponseSchema(200, "Policy created", PolicyResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "RBAC", "Policies"),
@@ -605,7 +696,7 @@ func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	router.GET("/policies", h.GetPolicies,
 		forge.WithName("apps.policies.list"),
 		forge.WithSummary("List policies"),
-		forge.WithDescription("List all RBAC policies for the organization"),
+		forge.WithDescription("List all RBAC policies for the app"),
 		forge.WithResponseSchema(200, "Policies retrieved", PoliciesResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 		forge.WithTags("Apps", "RBAC", "Policies"),
@@ -634,7 +725,7 @@ func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	router.POST("/roles", h.CreateRole,
 		forge.WithName("apps.roles.create"),
 		forge.WithSummary("Create role"),
-		forge.WithDescription("Create a new RBAC role for the organization"),
+		forge.WithDescription("Create a new RBAC role for the app"),
 		forge.WithResponseSchema(200, "Role created", RoleResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Apps", "RBAC", "Roles"),
@@ -644,7 +735,7 @@ func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	router.GET("/roles", h.GetRoles,
 		forge.WithName("apps.roles.list"),
 		forge.WithSummary("List roles"),
-		forge.WithDescription("List all RBAC roles for the organization"),
+		forge.WithDescription("List all RBAC roles for the app"),
 		forge.WithResponseSchema(200, "Roles retrieved", RolesResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 		forge.WithTags("Apps", "RBAC", "Roles"),
@@ -673,7 +764,7 @@ func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	router.GET("/user_roles", h.GetUserRoles,
 		forge.WithName("apps.user_roles.list"),
 		forge.WithSummary("List user roles"),
-		forge.WithDescription("List all roles assigned to users in the organization"),
+		forge.WithDescription("List all roles assigned to users in the app"),
 		forge.WithResponseSchema(200, "User roles retrieved", UserRolesResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 		forge.WithTags("Apps", "RBAC", "Roles"),

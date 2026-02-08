@@ -4,9 +4,12 @@ import (
 	"net/http"
 	"strings"
 
+	g "maragu.dev/gomponents"
+
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/router"
 )
 
 // parseXID parses an xid string
@@ -15,57 +18,52 @@ func parseXID(s string) (xid.ID, error) {
 }
 
 // HandleCreateProvider creates a new social provider configuration
-func (e *DashboardExtension) HandleCreateProvider(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleCreateProvider(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	envID, err := e.getCurrentEnvironmentID(c, currentApp.ID)
+	envID, err := e.getCurrentEnvironmentID(ctx, currentApp.ID)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid environment context")
+		return nil, errs.BadRequest("Invalid environment context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
-	redirectURL := basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/social"
+	basePath := e.getBasePath()
+	reqCtx := ctx.Request.Context()
+	redirectURL := basePath + "/app/" + currentApp.ID.String() + "/social"
 
 	// Parse form values
-	providerName := c.FormValue("provider_name")
-	clientID := c.FormValue("client_id")
-	clientSecret := c.FormValue("client_secret")
-	customRedirectURL := c.FormValue("redirect_url")
-	scopesStr := c.FormValue("scopes")
-	displayName := c.FormValue("display_name")
-	isEnabled := c.FormValue("is_enabled") == "true"
+	providerName := ctx.Request.FormValue("provider_name")
+	clientID := ctx.Request.FormValue("client_id")
+	clientSecret := ctx.Request.FormValue("client_secret")
+	customRedirectURL := ctx.Request.FormValue("redirect_url")
+	scopesStr := ctx.Request.FormValue("scopes")
+	displayName := ctx.Request.FormValue("display_name")
+	isEnabled := ctx.Request.FormValue("is_enabled") == "true"
 
 	// Validate required fields
 	if providerName == "" || clientID == "" || clientSecret == "" {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Missing+required+fields")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Missing+required+fields", http.StatusFound)
+		return nil, nil
 	}
 
 	// Validate provider name
 	if !schema.IsValidProvider(providerName) {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Invalid+provider+name")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Invalid+provider+name", http.StatusFound)
+		return nil, nil
 	}
 
 	// Check if provider already exists for this environment
-	exists, err := e.configRepo.ExistsByProvider(ctx, currentApp.ID, envID, providerName)
+	exists, err := e.configRepo.ExistsByProvider(reqCtx, currentApp.ID, envID, providerName)
 	if err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+check+existing+provider")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+check+existing+provider", http.StatusFound)
+		return nil, nil
 	}
 	if exists {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Provider+already+configured")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+already+configured", http.StatusFound)
+		return nil, nil
 	}
 
 	// Parse scopes
@@ -87,8 +85,9 @@ func (e *DashboardExtension) HandleCreateProvider(c forge.Context) error {
 		DisplayName:   displayName,
 	}
 
-	if err := e.configRepo.Create(ctx, config); err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+create+provider")
+	if err := e.configRepo.Create(reqCtx, config); err != nil {
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+create+provider", http.StatusFound)
+		return nil, nil
 	}
 
 	// Invalidate cache for this environment
@@ -96,52 +95,46 @@ func (e *DashboardExtension) HandleCreateProvider(c forge.Context) error {
 		e.plugin.service.InvalidateEnvironmentCache(currentApp.ID, envID)
 	}
 
-	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+created+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+created+successfully", http.StatusFound)
+	return nil, nil
 }
 
 // HandleUpdateProvider updates an existing social provider configuration
-func (e *DashboardExtension) HandleUpdateProvider(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	configID, err := parseXID(c.Param("id"))
+	configID, err := parseXID(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid provider ID")
+		return nil, errs.BadRequest("Invalid provider ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
-	redirectURL := basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/social"
+	basePath := e.getBasePath()
+	reqCtx := ctx.Request.Context()
+	redirectURL := basePath + "/app/" + currentApp.ID.String() + "/social"
 
 	// Get existing config
-	config, err := e.configRepo.FindByID(ctx, configID)
+	config, err := e.configRepo.FindByID(reqCtx, configID)
 	if err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Provider+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+not+found", http.StatusFound)
+		return nil, nil
 	}
 
 	// Parse form values
-	clientID := c.FormValue("client_id")
-	clientSecret := c.FormValue("client_secret")
-	customRedirectURL := c.FormValue("redirect_url")
-	scopesStr := c.FormValue("scopes")
-	displayName := c.FormValue("display_name")
-	isEnabled := c.FormValue("is_enabled") == "true"
+	clientID := ctx.Request.FormValue("client_id")
+	clientSecret := ctx.Request.FormValue("client_secret")
+	customRedirectURL := ctx.Request.FormValue("redirect_url")
+	scopesStr := ctx.Request.FormValue("scopes")
+	displayName := ctx.Request.FormValue("display_name")
+	isEnabled := ctx.Request.FormValue("is_enabled") == "true"
 
 	// Validate required fields
 	if clientID == "" {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Client+ID+is+required")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Client+ID+is+required", http.StatusFound)
+		return nil, nil
 	}
 
 	// Update config fields
@@ -163,8 +156,9 @@ func (e *DashboardExtension) HandleUpdateProvider(c forge.Context) error {
 		config.Scopes = nil
 	}
 
-	if err := e.configRepo.Update(ctx, config); err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+update+provider")
+	if err := e.configRepo.Update(reqCtx, config); err != nil {
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+update+provider", http.StatusFound)
+		return nil, nil
 	}
 
 	// Invalidate cache for this environment
@@ -172,45 +166,39 @@ func (e *DashboardExtension) HandleUpdateProvider(c forge.Context) error {
 		e.plugin.service.InvalidateEnvironmentCache(config.AppID, config.EnvironmentID)
 	}
 
-	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+updated+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+updated+successfully", http.StatusFound)
+	return nil, nil
 }
 
 // HandleToggleProvider toggles a social provider's enabled status
-func (e *DashboardExtension) HandleToggleProvider(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleToggleProvider(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	configID, err := parseXID(c.Param("id"))
+	configID, err := parseXID(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid provider ID")
+		return nil, errs.BadRequest("Invalid provider ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
-	redirectURL := basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/social"
+	basePath := e.getBasePath()
+	reqCtx := ctx.Request.Context()
+	redirectURL := basePath + "/app/" + currentApp.ID.String() + "/social"
 
 	// Get existing config to toggle
-	config, err := e.configRepo.FindByID(ctx, configID)
+	config, err := e.configRepo.FindByID(reqCtx, configID)
 	if err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Provider+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+not+found", http.StatusFound)
+		return nil, nil
 	}
 
 	// Toggle enabled status
 	newEnabled := !config.IsEnabled
-	if err := e.configRepo.SetEnabled(ctx, configID, newEnabled); err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+toggle+provider")
+	if err := e.configRepo.SetEnabled(reqCtx, configID, newEnabled); err != nil {
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+toggle+provider", http.StatusFound)
+		return nil, nil
 	}
 
 	// Invalidate cache for this environment
@@ -223,44 +211,38 @@ func (e *DashboardExtension) HandleToggleProvider(c forge.Context) error {
 		status = "disabled"
 	}
 
-	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+"+status+"+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+"+status+"+successfully", http.StatusFound)
+	return nil, nil
 }
 
 // HandleDeleteProvider deletes a social provider configuration
-func (e *DashboardExtension) HandleDeleteProvider(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleDeleteProvider(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	configID, err := parseXID(c.Param("id"))
+	configID, err := parseXID(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid provider ID")
+		return nil, errs.BadRequest("Invalid provider ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
-	redirectURL := basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/social"
+	basePath := e.getBasePath()
+	reqCtx := ctx.Request.Context()
+	redirectURL := basePath + "/app/" + currentApp.ID.String() + "/social"
 
 	// Get existing config to retrieve environment ID for cache invalidation
-	config, err := e.configRepo.FindByID(ctx, configID)
+	config, err := e.configRepo.FindByID(reqCtx, configID)
 	if err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Provider+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+not+found", http.StatusFound)
+		return nil, nil
 	}
 
 	// Delete the config (soft delete)
-	if err := e.configRepo.Delete(ctx, configID); err != nil {
-		return c.Redirect(http.StatusFound, redirectURL+"?error=Failed+to+delete+provider")
+	if err := e.configRepo.Delete(reqCtx, configID); err != nil {
+		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+delete+provider", http.StatusFound)
+		return nil, nil
 	}
 
 	// Invalidate cache for this environment
@@ -268,5 +250,6 @@ func (e *DashboardExtension) HandleDeleteProvider(c forge.Context) error {
 		e.plugin.service.InvalidateEnvironmentCache(config.AppID, config.EnvironmentID)
 	}
 
-	return c.Redirect(http.StatusFound, redirectURL+"?success=Provider+deleted+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+deleted+successfully", http.StatusFound)
+	return nil, nil
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/xraph/authsome/plugins/subscription/service"
 	"github.com/xraph/forge"
+	"github.com/xraph/vessel"
 )
 
 // Service name constants for DI container registration
@@ -30,6 +31,11 @@ const (
 
 // ResolveSubscriptionPlugin resolves the subscription plugin from the container
 func ResolveSubscriptionPlugin(container forge.Container) (*Plugin, error) {
+	plugin, err := vessel.InjectType[*Plugin](container)
+	if plugin != nil {
+		return plugin, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNamePlugin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve subscription plugin: %w", err)
@@ -43,6 +49,11 @@ func ResolveSubscriptionPlugin(container forge.Container) (*Plugin, error) {
 
 // ResolvePlanService resolves the plan service from the container
 func ResolvePlanService(container forge.Container) (*service.PlanService, error) {
+	svc, err := vessel.InjectType[*service.PlanService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNamePlanService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve plan service: %w", err)
@@ -56,6 +67,11 @@ func ResolvePlanService(container forge.Container) (*service.PlanService, error)
 
 // ResolveSubscriptionService resolves the subscription service from the container
 func ResolveSubscriptionService(container forge.Container) (*service.SubscriptionService, error) {
+	svc, err := vessel.InjectType[*service.SubscriptionService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameSubService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve subscription service: %w", err)
@@ -69,6 +85,11 @@ func ResolveSubscriptionService(container forge.Container) (*service.Subscriptio
 
 // ResolveAddOnService resolves the add-on service from the container
 func ResolveAddOnService(container forge.Container) (*service.AddOnService, error) {
+	svc, err := vessel.InjectType[*service.AddOnService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameAddOnService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve add-on service: %w", err)
@@ -82,6 +103,11 @@ func ResolveAddOnService(container forge.Container) (*service.AddOnService, erro
 
 // ResolveInvoiceService resolves the invoice service from the container
 func ResolveInvoiceService(container forge.Container) (*service.InvoiceService, error) {
+	svc, err := vessel.InjectType[*service.InvoiceService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameInvoiceService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve invoice service: %w", err)
@@ -95,6 +121,11 @@ func ResolveInvoiceService(container forge.Container) (*service.InvoiceService, 
 
 // ResolveUsageService resolves the usage service from the container
 func ResolveUsageService(container forge.Container) (*service.UsageService, error) {
+	svc, err := vessel.InjectType[*service.UsageService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameUsageService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve usage service: %w", err)
@@ -108,6 +139,11 @@ func ResolveUsageService(container forge.Container) (*service.UsageService, erro
 
 // ResolvePaymentService resolves the payment service from the container
 func ResolvePaymentService(container forge.Container) (*service.PaymentService, error) {
+	svc, err := vessel.InjectType[*service.PaymentService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNamePaymentService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve payment service: %w", err)
@@ -121,6 +157,11 @@ func ResolvePaymentService(container forge.Container) (*service.PaymentService, 
 
 // ResolveCustomerService resolves the customer service from the container
 func ResolveCustomerService(container forge.Container) (*service.CustomerService, error) {
+	svc, err := vessel.InjectType[*service.CustomerService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameCustomerService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve customer service: %w", err)
@@ -134,6 +175,11 @@ func ResolveCustomerService(container forge.Container) (*service.CustomerService
 
 // ResolveEnforcementService resolves the enforcement service from the container
 func ResolveEnforcementService(container forge.Container) (*service.EnforcementService, error) {
+	svc, err := vessel.InjectType[*service.EnforcementService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameEnforcementService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve enforcement service: %w", err)
@@ -147,6 +193,11 @@ func ResolveEnforcementService(container forge.Container) (*service.EnforcementS
 
 // ResolveSubscriptionHookRegistry resolves the subscription hook registry from the container
 func ResolveSubscriptionHookRegistry(container forge.Container) (*SubscriptionHookRegistry, error) {
+	registry, err := vessel.InjectType[*SubscriptionHookRegistry](container)
+	if registry != nil {
+		return registry, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameHookRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve subscription hook registry: %w", err)
@@ -160,6 +211,11 @@ func ResolveSubscriptionHookRegistry(container forge.Container) (*SubscriptionHo
 
 // ResolveFeatureService resolves the feature service from the container
 func ResolveFeatureService(container forge.Container) (*service.FeatureService, error) {
+	svc, err := vessel.InjectType[*service.FeatureService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameFeatureService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve feature service: %w", err)
@@ -173,6 +229,11 @@ func ResolveFeatureService(container forge.Container) (*service.FeatureService, 
 
 // ResolveFeatureUsageService resolves the feature usage service from the container
 func ResolveFeatureUsageService(container forge.Container) (*service.FeatureUsageService, error) {
+	svc, err := vessel.InjectType[*service.FeatureUsageService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameFeatureUsageService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve feature usage service: %w", err)
@@ -186,6 +247,11 @@ func ResolveFeatureUsageService(container forge.Container) (*service.FeatureUsag
 
 // ResolveAlertService resolves the alert service from the container
 func ResolveAlertService(container forge.Container) (*service.AlertService, error) {
+	svc, err := vessel.InjectType[*service.AlertService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameAlertService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve alert service: %w", err)
@@ -199,6 +265,11 @@ func ResolveAlertService(container forge.Container) (*service.AlertService, erro
 
 // ResolveAnalyticsService resolves the analytics service from the container
 func ResolveAnalyticsService(container forge.Container) (*service.AnalyticsService, error) {
+	svc, err := vessel.InjectType[*service.AnalyticsService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameAnalyticsService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve analytics service: %w", err)
@@ -212,6 +283,11 @@ func ResolveAnalyticsService(container forge.Container) (*service.AnalyticsServi
 
 // ResolveCouponService resolves the coupon service from the container
 func ResolveCouponService(container forge.Container) (*service.CouponService, error) {
+	svc, err := vessel.InjectType[*service.CouponService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameCouponService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve coupon service: %w", err)
@@ -225,6 +301,11 @@ func ResolveCouponService(container forge.Container) (*service.CouponService, er
 
 // ResolveCurrencyService resolves the currency service from the container
 func ResolveCurrencyService(container forge.Container) (*service.CurrencyService, error) {
+	svc, err := vessel.InjectType[*service.CurrencyService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameCurrencyService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve currency service: %w", err)
@@ -238,6 +319,11 @@ func ResolveCurrencyService(container forge.Container) (*service.CurrencyService
 
 // ResolveTaxService resolves the tax service from the container
 func ResolveTaxService(container forge.Container) (*service.TaxService, error) {
+	svc, err := vessel.InjectType[*service.TaxService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameTaxService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve tax service: %w", err)
@@ -250,79 +336,114 @@ func ResolveTaxService(container forge.Container) (*service.TaxService, error) {
 }
 
 // RegisterServices registers all subscription services in the DI container
+// Uses vessel.ProvideConstructor for type-safe, constructor-based dependency injection
 func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register plugin itself
-	forge.RegisterSingleton(container, ServiceNamePlugin, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*Plugin, error) {
 		return p, nil
-	})
+	}, vessel.WithAliases(ServiceNamePlugin)); err != nil {
+		return fmt.Errorf("failed to register subscription plugin: %w", err)
+	}
 
 	// Register core services
-	forge.RegisterSingleton(container, ServiceNamePlanService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.PlanService, error) {
 		return p.planSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNamePlanService)); err != nil {
+		return fmt.Errorf("failed to register plan service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameSubService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.SubscriptionService, error) {
 		return p.subscriptionSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameSubService)); err != nil {
+		return fmt.Errorf("failed to register subscription service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameAddOnService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.AddOnService, error) {
 		return p.addOnSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameAddOnService)); err != nil {
+		return fmt.Errorf("failed to register add-on service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameInvoiceService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.InvoiceService, error) {
 		return p.invoiceSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameInvoiceService)); err != nil {
+		return fmt.Errorf("failed to register invoice service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameUsageService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.UsageService, error) {
 		return p.usageSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameUsageService)); err != nil {
+		return fmt.Errorf("failed to register usage service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNamePaymentService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.PaymentService, error) {
 		return p.paymentSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNamePaymentService)); err != nil {
+		return fmt.Errorf("failed to register payment service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameCustomerService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.CustomerService, error) {
 		return p.customerSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameCustomerService)); err != nil {
+		return fmt.Errorf("failed to register customer service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameEnforcementService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.EnforcementService, error) {
 		return p.enforcementSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameEnforcementService)); err != nil {
+		return fmt.Errorf("failed to register enforcement service: %w", err)
+	}
 
 	// Register feature services
-	forge.RegisterSingleton(container, ServiceNameFeatureService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.FeatureService, error) {
 		return p.featureSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameFeatureService)); err != nil {
+		return fmt.Errorf("failed to register feature service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameFeatureUsageService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.FeatureUsageService, error) {
 		return p.featureUsageSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameFeatureUsageService)); err != nil {
+		return fmt.Errorf("failed to register feature usage service: %w", err)
+	}
 
 	// Register additional services
-	forge.RegisterSingleton(container, ServiceNameAlertService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.AlertService, error) {
 		return p.alertSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameAlertService)); err != nil {
+		return fmt.Errorf("failed to register alert service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameAnalyticsService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.AnalyticsService, error) {
 		return p.analyticsSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameAnalyticsService)); err != nil {
+		return fmt.Errorf("failed to register analytics service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameCouponService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.CouponService, error) {
 		return p.couponSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameCouponService)); err != nil {
+		return fmt.Errorf("failed to register coupon service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameCurrencyService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.CurrencyService, error) {
 		return p.currencySvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameCurrencyService)); err != nil {
+		return fmt.Errorf("failed to register currency service: %w", err)
+	}
 
-	forge.RegisterSingleton(container, ServiceNameTaxService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*service.TaxService, error) {
 		return p.taxSvc, nil
-	})
+	}, vessel.WithAliases(ServiceNameTaxService)); err != nil {
+		return fmt.Errorf("failed to register tax service: %w", err)
+	}
 
 	// Register hook registry
-	forge.RegisterSingleton(container, ServiceNameHookRegistry, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*SubscriptionHookRegistry, error) {
 		return p.subHookRegistry, nil
-	})
+	}, vessel.WithAliases(ServiceNameHookRegistry)); err != nil {
+		return fmt.Errorf("failed to register hook registry: %w", err)
+	}
 
 	return nil
 }

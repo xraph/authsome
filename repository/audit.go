@@ -125,6 +125,10 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		q = q.Where("ip_address = ?", *filter.IPAddress)
 	}
 
+	if filter.Source != nil {
+		q = q.Where("source = ?", string(*filter.Source))
+	}
+
 	// ========== Multiple Value Filters (IN clauses) ==========
 	if len(filter.AppIDs) > 0 {
 		appIDStrs := make([]string, len(filter.AppIDs))
@@ -162,6 +166,14 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		q = q.Where("ip_address IN (?)", bun.In(filter.IPAddresses))
 	}
 
+	if len(filter.Sources) > 0 {
+		sourceStrs := make([]string, len(filter.Sources))
+		for i, source := range filter.Sources {
+			sourceStrs[i] = string(source)
+		}
+		q = q.Where("source IN (?)", bun.In(sourceStrs))
+	}
+
 	// ========== Pattern Matching (ILIKE) ==========
 	if filter.ActionPattern != nil && *filter.ActionPattern != "" {
 		q = q.Where("action ILIKE ?", *filter.ActionPattern)
@@ -189,6 +201,98 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 
 	if filter.Until != nil {
 		q = q.Where("created_at <= ?", *filter.Until)
+	}
+
+	// ========== Exclusion Filters ==========
+	// Exclude source (single)
+	if filter.ExcludeSource != nil {
+		q = q.Where("source != ?", string(*filter.ExcludeSource))
+	}
+
+	// Exclude sources (multiple)
+	if len(filter.ExcludeSources) > 0 {
+		sourceStrs := make([]string, len(filter.ExcludeSources))
+		for i, source := range filter.ExcludeSources {
+			sourceStrs[i] = string(source)
+		}
+		q = q.Where("source NOT IN (?)", bun.In(sourceStrs))
+	}
+
+	// Exclude action (single)
+	if filter.ExcludeAction != nil {
+		q = q.Where("action != ?", *filter.ExcludeAction)
+	}
+
+	// Exclude actions (multiple)
+	if len(filter.ExcludeActions) > 0 {
+		q = q.Where("action NOT IN (?)", bun.In(filter.ExcludeActions))
+	}
+
+	// Exclude resource (single)
+	if filter.ExcludeResource != nil {
+		q = q.Where("resource != ?", *filter.ExcludeResource)
+	}
+
+	// Exclude resources (multiple)
+	if len(filter.ExcludeResources) > 0 {
+		q = q.Where("resource NOT IN (?)", bun.In(filter.ExcludeResources))
+	}
+
+	// Exclude user (single)
+	if filter.ExcludeUserID != nil {
+		q = q.Where("user_id != ?", filter.ExcludeUserID.String())
+	}
+
+	// Exclude users (multiple)
+	if len(filter.ExcludeUserIDs) > 0 {
+		userIDStrs := make([]string, len(filter.ExcludeUserIDs))
+		for i, id := range filter.ExcludeUserIDs {
+			userIDStrs[i] = id.String()
+		}
+		q = q.Where("user_id NOT IN (?)", bun.In(userIDStrs))
+	}
+
+	// Exclude IP address (single)
+	if filter.ExcludeIPAddress != nil {
+		q = q.Where("ip_address != ?", *filter.ExcludeIPAddress)
+	}
+
+	// Exclude IP addresses (multiple)
+	if len(filter.ExcludeIPAddresses) > 0 {
+		q = q.Where("ip_address NOT IN (?)", bun.In(filter.ExcludeIPAddresses))
+	}
+
+	// Exclude app (single)
+	if filter.ExcludeAppID != nil {
+		q = q.Where("app_id != ?", filter.ExcludeAppID.String())
+	}
+
+	// Exclude apps (multiple)
+	if len(filter.ExcludeAppIDs) > 0 {
+		appIDStrs := make([]string, len(filter.ExcludeAppIDs))
+		for i, id := range filter.ExcludeAppIDs {
+			appIDStrs[i] = id.String()
+		}
+		q = q.Where("app_id NOT IN (?)", bun.In(appIDStrs))
+	}
+
+	// Exclude organization (single)
+	if filter.ExcludeOrganizationID != nil {
+		q = q.Where("organization_id != ?", filter.ExcludeOrganizationID.String())
+	}
+
+	// Exclude organizations (multiple)
+	if len(filter.ExcludeOrganizationIDs) > 0 {
+		orgIDStrs := make([]string, len(filter.ExcludeOrganizationIDs))
+		for i, id := range filter.ExcludeOrganizationIDs {
+			orgIDStrs[i] = id.String()
+		}
+		q = q.Where("organization_id NOT IN (?)", bun.In(orgIDStrs))
+	}
+
+	// Exclude environment (single)
+	if filter.ExcludeEnvironmentID != nil {
+		q = q.Where("environment_id != ?", filter.ExcludeEnvironmentID.String())
 	}
 
 	return q
@@ -509,6 +613,11 @@ func (r *AuditRepository) applyDeleteFilters(q *bun.DeleteQuery, filter *audit.D
 		q = q.Where("resource = ?", *filter.Resource)
 	}
 
+	// ========== Source Filtering ==========
+	if filter.Source != nil {
+		q = q.Where("source = ?", string(*filter.Source))
+	}
+
 	// ========== Metadata Filtering ==========
 	if len(filter.MetadataFilters) > 0 {
 		for _, mf := range filter.MetadataFilters {
@@ -531,6 +640,27 @@ func (r *AuditRepository) applyDeleteFilters(q *bun.DeleteQuery, filter *audit.D
 				}
 			}
 		}
+	}
+
+	// ========== Exclusion Filters ==========
+	// Exclude action (single)
+	if filter.ExcludeAction != nil {
+		q = q.Where("action != ?", *filter.ExcludeAction)
+	}
+
+	// Exclude actions (multiple)
+	if len(filter.ExcludeActions) > 0 {
+		q = q.Where("action NOT IN (?)", bun.In(filter.ExcludeActions))
+	}
+
+	// Exclude resource (single)
+	if filter.ExcludeResource != nil {
+		q = q.Where("resource != ?", *filter.ExcludeResource)
+	}
+
+	// Exclude resources (multiple)
+	if len(filter.ExcludeResources) > 0 {
+		q = q.Where("resource NOT IN (?)", bun.In(filter.ExcludeResources))
 	}
 
 	return q
@@ -726,6 +856,19 @@ func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *aud
 		q = q.Where("resource = ?", *filter.Resource)
 	}
 
+	// ========== Source Filtering ==========
+	if filter.Source != nil {
+		q = q.Where("source = ?", string(*filter.Source))
+	}
+
+	if len(filter.Sources) > 0 {
+		sourceStrs := make([]string, len(filter.Sources))
+		for i, source := range filter.Sources {
+			sourceStrs[i] = string(source)
+		}
+		q = q.Where("source IN (?)", bun.In(sourceStrs))
+	}
+
 	// ========== Time Range Filters ==========
 	if filter.Since != nil {
 		q = q.Where("created_at >= ?", *filter.Since)
@@ -738,6 +881,55 @@ func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *aud
 	// ========== Metadata Filtering ==========
 	if len(filter.MetadataFilters) > 0 {
 		q = r.applyMetadataFilters(q, filter.MetadataFilters)
+	}
+
+	// ========== Exclusion Filters ==========
+	// Exclude source (single)
+	if filter.ExcludeSource != nil {
+		q = q.Where("source != ?", string(*filter.ExcludeSource))
+	}
+
+	// Exclude sources (multiple)
+	if len(filter.ExcludeSources) > 0 {
+		sourceStrs := make([]string, len(filter.ExcludeSources))
+		for i, source := range filter.ExcludeSources {
+			sourceStrs[i] = string(source)
+		}
+		q = q.Where("source NOT IN (?)", bun.In(sourceStrs))
+	}
+
+	// Exclude action (single)
+	if filter.ExcludeAction != nil {
+		q = q.Where("action != ?", *filter.ExcludeAction)
+	}
+
+	// Exclude actions (multiple)
+	if len(filter.ExcludeActions) > 0 {
+		q = q.Where("action NOT IN (?)", bun.In(filter.ExcludeActions))
+	}
+
+	// Exclude resource (single)
+	if filter.ExcludeResource != nil {
+		q = q.Where("resource != ?", *filter.ExcludeResource)
+	}
+
+	// Exclude resources (multiple)
+	if len(filter.ExcludeResources) > 0 {
+		q = q.Where("resource NOT IN (?)", bun.In(filter.ExcludeResources))
+	}
+
+	// Exclude user (single)
+	if filter.ExcludeUserID != nil {
+		q = q.Where("user_id != ?", filter.ExcludeUserID.String())
+	}
+
+	// Exclude users (multiple)
+	if len(filter.ExcludeUserIDs) > 0 {
+		userIDStrs := make([]string, len(filter.ExcludeUserIDs))
+		for i, id := range filter.ExcludeUserIDs {
+			userIDStrs[i] = id.String()
+		}
+		q = q.Where("user_id NOT IN (?)", bun.In(userIDStrs))
 	}
 
 	return q
@@ -1121,4 +1313,282 @@ func (r *AuditRepository) GetStatisticsByResourceAndAction(ctx context.Context, 
 	}
 
 	return stats, nil
+}
+
+// =============================================================================
+// AGGREGATION OPERATIONS
+// =============================================================================
+
+// GetDistinctActions returns distinct action values with counts
+func (r *AuditRepository) GetDistinctActions(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"action"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("action").
+		ColumnExpr("COUNT(*) as count").
+		Group("action").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert to DistinctValue
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// GetDistinctSources returns distinct source values with counts
+func (r *AuditRepository) GetDistinctSources(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"source"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("source").
+		ColumnExpr("COUNT(*) as count").
+		Group("source").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// GetDistinctResources returns distinct resource values with counts
+func (r *AuditRepository) GetDistinctResources(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"resource"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("resource").
+		ColumnExpr("COUNT(*) as count").
+		Where("resource IS NOT NULL AND resource != ''").
+		Group("resource").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// GetDistinctUsers returns distinct user values with counts
+func (r *AuditRepository) GetDistinctUsers(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"user_id"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("user_id").
+		ColumnExpr("COUNT(*) as count").
+		Where("user_id IS NOT NULL").
+		Group("user_id").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// GetDistinctIPs returns distinct IP address values with counts
+func (r *AuditRepository) GetDistinctIPs(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"ip_address"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("ip_address").
+		ColumnExpr("COUNT(*) as count").
+		Where("ip_address IS NOT NULL AND ip_address != ''").
+		Group("ip_address").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// GetDistinctApps returns distinct app values with counts
+func (r *AuditRepository) GetDistinctApps(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"app_id"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("app_id").
+		ColumnExpr("COUNT(*) as count").
+		Group("app_id").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// GetDistinctOrganizations returns distinct organization values with counts
+func (r *AuditRepository) GetDistinctOrganizations(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	type result struct {
+		Value string `bun:"organization_id"`
+		Count int64  `bun:"count"`
+	}
+
+	var results []result
+	q := r.db.NewSelect().
+		Model((*schema.AuditEvent)(nil)).
+		Column("organization_id").
+		ColumnExpr("COUNT(*) as count").
+		Where("organization_id IS NOT NULL").
+		Group("organization_id").
+		Order("count DESC")
+
+	q = r.applyAggregationFilters(q, filter)
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+
+	if err := q.Scan(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	values := make([]audit.DistinctValue, len(results))
+	for i, res := range results {
+		values[i] = audit.DistinctValue{
+			Value: res.Value,
+			Count: res.Count,
+		}
+	}
+	return values, nil
+}
+
+// applyAggregationFilters applies common filters to aggregation queries
+func (r *AuditRepository) applyAggregationFilters(q *bun.SelectQuery, filter *audit.AggregationFilter) *bun.SelectQuery {
+	if filter == nil {
+		return q
+	}
+
+	if filter.AppID != nil {
+		q = q.Where("app_id = ?", filter.AppID.String())
+	}
+	if filter.OrganizationID != nil {
+		q = q.Where("organization_id = ?", filter.OrganizationID.String())
+	}
+	if filter.EnvironmentID != nil {
+		q = q.Where("environment_id = ?", filter.EnvironmentID.String())
+	}
+	if filter.Since != nil {
+		q = q.Where("created_at >= ?", *filter.Since)
+	}
+	if filter.Until != nil {
+		q = q.Where("created_at <= ?", *filter.Until)
+	}
+	return q
 }

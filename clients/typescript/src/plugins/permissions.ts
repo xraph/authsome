@@ -13,19 +13,19 @@ export class PermissionsPlugin implements ClientPlugin {
   }
 
   async migrateAll(request: types.MigrateAllRequest): Promise<types.ErrorResponse> {
-    const path = '/api/permissions/migrate/all';
+    const path = '/permissions/migrate/all';
     return this.client.request<types.ErrorResponse>('POST', path, {
       body: request,
     });
   }
 
   async migrateRoles(): Promise<types.ErrorResponse> {
-    const path = '/api/permissions/migrate/roles';
+    const path = '/permissions/migrate/roles';
     return this.client.request<types.ErrorResponse>('POST', path);
   }
 
   async previewConversion(request: types.PreviewConversionRequest): Promise<types.ErrorResponse> {
-    const path = '/api/permissions/migrate/preview';
+    const path = '/permissions/migrate/preview';
     return this.client.request<types.ErrorResponse>('POST', path, {
       body: request,
     });

@@ -1,183 +1,172 @@
 plugin_id: organization
 version: 1.0.0
-base_path: /organizations
 routes:
-    - name: CreateOrganization
-      description: CreateOrganization handles organization creation
-      method: POST
-      path: /createorganization
-      response_type: Organization
-    - name: UpdateOrganization
-      description: UpdateOrganization handles organization updates
-      method: PATCH
-      path: /:id
-      response_type: Organization
-    - name: DeleteOrganization
-      description: DeleteOrganization handles organization deletion
-      method: DELETE
-      path: /:id
-    - name: InviteMember
-      description: InviteMember handles member invitation
-      method: POST
-      path: /invite
-    - name: RemoveMember
-      description: RemoveMember handles member removal
-      method: DELETE
-      path: /:memberId
-    - name: CreateTeam
-      description: CreateTeam handles team creation
-      method: POST
-      path: /createteam
-    - name: UpdateTeam
-      description: UpdateTeam handles team updates
-      method: PATCH
-      path: /:teamId
-    - name: DeleteTeam
-      description: DeleteTeam handles team deletion
-      method: DELETE
-      path: /:teamId
     - name: CreateOrganization
       description: CreateOrganization handles organization creation requests
       method: POST
-      path: /createorganization
+      path: /organizations
       response_type: Organization
     - name: GetOrganization
       description: GetOrganization handles get organization requests
       method: GET
-      path: /:id
+      path: /organizations/:id
       response_type: Organization
     - name: ListOrganizations
       description: ListOrganizations handles list organizations requests (user's organizations)
       method: GET
-      path: /listorganizations
+      path: /organizations
       response_type: Organization
     - name: UpdateOrganization
       description: UpdateOrganization handles organization update requests
       method: PATCH
-      path: /:id
+      path: /organizations/:id
       response_type: Organization
     - name: DeleteOrganization
       description: DeleteOrganization handles organization deletion requests
       method: DELETE
-      path: /:id
+      path: /organizations/:id
     - name: GetOrganizationBySlug
       description: GetOrganizationBySlug handles get organization by slug requests
       method: GET
-      path: /slug/:slug
+      path: /organizations/slug/:slug
       response_type: Organization
     - name: ListMembers
       description: ListMembers handles list organization members requests
       method: GET
-      path: /listmembers
+      path: /organizations/:id/members
     - name: InviteMember
       description: InviteMember handles member invitation requests
       method: POST
-      path: /invite
+      path: /organizations/:id/members/invite
     - name: UpdateMember
       description: UpdateMember handles member update requests
       method: PATCH
-      path: /:memberId
+      path: /organizations/:id/members/:memberId
     - name: RemoveMember
       description: RemoveMember handles member removal requests
       method: DELETE
-      path: /:memberId
+      path: /organizations/:id/members/:memberId
     - name: AcceptInvitation
       description: AcceptInvitation handles invitation acceptance requests
       method: POST
-      path: /:token/accept
+      path: /organization-invitations/:token/accept
     - name: DeclineInvitation
       description: DeclineInvitation handles invitation decline requests
       method: POST
-      path: /:token/decline
+      path: /organization-invitations/:token/decline
       response_type: StatusResponse
     - name: ListTeams
       description: ListTeams handles list teams requests
       method: GET
-      path: /listteams
+      path: /organizations/:id/teams
     - name: CreateTeam
       description: CreateTeam handles team creation requests
       method: POST
-      path: /createteam
+      path: /organizations/:id/teams
     - name: UpdateTeam
       description: UpdateTeam handles team update requests
       method: PATCH
-      path: /:teamId
+      path: /organizations/:id/teams/:teamId
     - name: DeleteTeam
       description: DeleteTeam handles team deletion requests
       method: DELETE
-      path: /:teamId
+      path: /organizations/:id/teams/:teamId
 types:
-    - name: InvitationResponse
+    - name: GetMembersInput
       fields:
-        invitation: '*organization.Invitation!'
-        message: string!
-    - name: TeamsResponse
+        appId: string!
+        limit: int!
+        orgId: string!
+        page: int!
+        search: string!
+    - name: CancelInvitationResult
       fields:
-        teams: '[]*organization.Team!'
-        total: int!
-    - name: MockService
+        success: bool!
+    - name: CreateOrganizationHandlerRequest
+      fields: {}
+    - name: GetOrganizationResult
       fields:
-        "": error
-    - name: Plugin
+        organization: OrganizationDetailDTO!
+        stats: OrgDetailStatsDTO!
+        userRole: string!
+    - name: DeleteOrganizationResult
       fields:
-        "": '*rbac.Service'
-    - name: OrganizationHandler
-      fields:
-        "": '*Plugin'
-    - name: GetOrganizationRequest
-      fields:
-        "": string
-    - name: UpdateMemberHandlerRequest
-      fields:
-        "": string
-    - name: RemoveMemberRequest
+        success: bool!
+    - name: GetOrganizationBySlugRequest
       fields:
         "": string
     - name: AcceptInvitationRequest
       fields:
         token: string!
-    - name: DeclineInvitationRequest
+    - name: UpdateMemberRoleInput
       fields:
-        token: string!
-    - name: CreateTeamHandlerRequest
+        appId: string!
+        memberId: string!
+        orgId: string!
+        role: string!
+    - name: RemoveMemberInput
       fields:
-        "": string
-    - name: CreateOrganizationHandlerRequest
-      fields: {}
-    - name: InviteMemberHandlerRequest
+        appId: string!
+        memberId: string!
+        orgId: string!
+    - name: RemoveMemberResult
       fields:
-        "": string
-    - name: UpdateTeamHandlerRequest
+        success: bool!
+    - name: GetInvitationsInput
       fields:
-        "": string
-    - name: MockOrganizationUIExtension
+        appId: string!
+        limit: int!
+        orgId: string!
+        page: int!
+        status: string!
+    - name: CreateRoleTemplateInput
       fields:
-        "": '[]ui.OrganizationAction'
-    - name: AddCustomPermission_req
-      fields:
-        category: string!
+        appId: string!
         description: string!
         name: string!
-    - name: GetOrganizationBySlugRequest
+        permissions: '[]string!'
+    - name: UpdateRoleTemplateResult
       fields:
-        "": string
-    - name: ListMembersRequest
+        template: RoleTemplateDTO!
+    - name: GetRoleTemplatesInput
       fields:
-        "": string
-    - name: ListTeamsRequest
+        appId: string!
+    - name: GetRoleTemplateInput
       fields:
-        "": string
-    - name: DeleteTeamRequest
+        appId: string!
+        templateId: string!
+    - name: GetMembersResult
       fields:
-        "": string
-    - name: MembersResponse
+        canManage: bool!
+        data: '[]MemberDTO!'
+        pagination: PaginationInfo!
+    - name: InviteMemberResult
       fields:
-        members: '[]*organization.Member!'
-        total: int!
-    - name: OrganizationUIRegistry
+        invitation: InvitationDTO!
+    - name: GetSettingsInput
       fields:
-        "": sync.RWMutex
-    - name: DashboardExtension
+        appId: string!
+    - name: WidgetDataDTO
+      fields:
+        content: string!
+        icon: string!
+        id: string!
+        order: int!
+        requireAdmin: bool!
+        size: int!
+        title: string!
+    - name: GetOrganizationsInput
+      fields:
+        appId: string!
+        limit: int!
+        page: int!
+        search: string!
+    - name: GetTeamsResult
+      fields:
+        canManage: bool!
+        data: '[]TeamDTO!'
+        pagination: PaginationInfo!
+    - name: GetOrganizationRequest
       fields:
         "": string
     - name: ListOrganizationsRequest
@@ -186,6 +175,303 @@ types:
     - name: UpdateOrganizationHandlerRequest
       fields:
         "": string
+    - name: ListMembersRequest
+      fields:
+        "": int
+    - name: ListTeamsRequest
+      fields:
+        "": int
+    - name: CancelInvitationInput
+      fields:
+        appId: string!
+        inviteId: string!
+        orgId: string!
+    - name: OrganizationDetailDTO
+      fields:
+        createdAt: time.Time!
+        id: string!
+        logo: string!
+        metadata: '!'
+        name: string!
+        slug: string!
+        updatedAt: time.Time!
+    - name: GetRoleTemplatesResult
+      fields:
+        templates: '[]RoleTemplateDTO!'
+    - name: GetRoleTemplateResult
+      fields:
+        template: RoleTemplateDTO!
+    - name: CreateTeamHandlerRequest
+      fields:
+        "": string
+    - name: MockService
+      fields:
+        "": sync.RWMutex
+    - name: OrganizationUIRegistry
+      fields:
+        "": ""
+    - name: UpdateSettingsResult
+      fields:
+        success: bool!
+    - name: InvitationDTO
+      fields:
+        createdAt: time.Time!
+        email: string!
+        expiresAt: time.Time!
+        id: string!
+        invitedBy: string!
+        inviterName: string!
+        role: string!
+        status: string!
+    - name: UpdateRoleTemplateInput
+      fields:
+        appId: string!
+        description: string!
+        name: string!
+        permissions: '[]string!'
+        templateId: string!
+    - name: OrganizationHandler
+      fields:
+        "": '*Plugin'
+    - name: UpdateTeamHandlerRequest
+      fields:
+        "": string
+    - name: InvitationResponse
+      fields:
+        invitation: '*organization.Invitation!'
+        message: string!
+    - name: DeleteTeamInput
+      fields:
+        appId: string!
+        orgId: string!
+        teamId: string!
+    - name: MemberDTO
+      fields:
+        id: string!
+        joinedAt: time.Time!
+        role: string!
+        status: string!
+        userEmail: string!
+        userId: string!
+        userName: string!
+    - name: TabDataDTO
+      fields:
+        icon: string!
+        id: string!
+        label: string!
+        order: int!
+        path: string!
+        requireAdmin: bool!
+    - name: DeleteRoleTemplateInput
+      fields:
+        appId: string!
+        templateId: string!
+    - name: CreateOrganizationInput
+      fields:
+        appId: string!
+        logo: string!
+        metadata: '!'
+        name: string!
+        slug: string!
+    - name: UpdateTeamInput
+      fields:
+        appId: string!
+        description: string!
+        metadata: '!'
+        name: string!
+        orgId: string!
+        teamId: string!
+    - name: UpdateTeamResult
+      fields:
+        team: TeamDTO!
+    - name: GetInvitationsResult
+      fields:
+        data: '[]InvitationDTO!'
+        pagination: PaginationInfo!
+    - name: TeamDTO
+      fields:
+        createdAt: time.Time!
+        description: string!
+        id: string!
+        memberCount: int64!
+        metadata: '!'
+        name: string!
+    - name: QuickLinkDataDTO
+      fields:
+        description: string!
+        icon: string!
+        id: string!
+        order: int!
+        requireAdmin: bool!
+        title: string!
+        url: string!
     - name: DeleteOrganizationRequest
       fields:
         "": string
+    - name: RemoveMemberRequest
+      fields:
+        "": string
+    - name: CreateRoleTemplateResult
+      fields:
+        template: RoleTemplateDTO!
+    - name: OrganizationSettingsDTO
+      fields:
+        allowMultipleMemberships: bool!
+        allowUserCreation: bool!
+        defaultRole: string!
+        enabled: bool!
+        invitationExpiryDays: int!
+        maxMembersPerOrg: int!
+        maxOrgsPerUser: int!
+        maxTeamsPerOrg: int!
+        requireInvitation: bool!
+    - name: UpdateSettingsInput
+      fields:
+        appId: string!
+        settings: OrganizationSettingsDTO!
+    - name: PaginationInfo
+      fields:
+        currentPage: int!
+        pageSize: int!
+        totalItems: int64!
+        totalPages: int!
+    - name: RoleTemplateDTO
+      fields:
+        createdAt: time.Time!
+        description: string!
+        id: string!
+        name: string!
+        permissions: '[]string!'
+        updatedAt: time.Time!
+    - name: CreateTeamInput
+      fields:
+        appId: string!
+        description: string!
+        metadata: '!'
+        name: string!
+        orgId: string!
+    - name: BridgeAppInput
+      fields:
+        appId: string!
+    - name: GetOrganizationsResult
+      fields:
+        data: '[]OrganizationSummaryDTO!'
+        pagination: PaginationInfo!
+        stats: OrganizationStatsDTO!
+    - name: GetExtensionDataInput
+      fields:
+        appId: string!
+        orgId: string!
+    - name: OrganizationSummaryDTO
+      fields:
+        createdAt: time.Time!
+        id: string!
+        logo: string!
+        memberCount: int64!
+        name: string!
+        slug: string!
+        teamCount: int64!
+        userRole: string!
+    - name: ActionDataDTO
+      fields:
+        action: string!
+        icon: string!
+        id: string!
+        label: string!
+        order: int!
+        requireAdmin: bool!
+        style: string!
+    - name: DeleteRoleTemplateResult
+      fields:
+        success: bool!
+    - name: MockOrganizationUIExtension
+      fields:
+        "": '[]ui.OrganizationQuickLink'
+    - name: UpdateOrganizationInput
+      fields:
+        appId: string!
+        logo: string!
+        metadata: '!'
+        name: string!
+        orgId: string!
+    - name: DashboardExtension
+      fields:
+        "": string
+    - name: InviteMemberHandlerRequest
+      fields:
+        "": string
+    - name: MembersResponse
+      fields:
+        members: '[]*organization.Member!'
+        total: int!
+    - name: GetOrganizationInput
+      fields:
+        appId: string!
+        orgId: string!
+    - name: GetExtensionDataResult
+      fields:
+        actions: '[]ActionDataDTO!'
+        quickLinks: '[]QuickLinkDataDTO!'
+        tabs: '[]TabDataDTO!'
+        widgets: '[]WidgetDataDTO!'
+    - name: OrgDetailStatsDTO
+      fields:
+        invitationCount: int64!
+        memberCount: int64!
+        teamCount: int64!
+    - name: TeamsResponse
+      fields:
+        teams: '[]*organization.Team!'
+        total: int!
+    - name: Plugin
+      fields:
+        "": '*DashboardExtension'
+    - name: DeleteOrganizationInput
+      fields:
+        appId: string!
+        orgId: string!
+    - name: InviteMemberInput
+      fields:
+        appId: string!
+        email: string!
+        orgId: string!
+        role: string!
+    - name: GetTeamsInput
+      fields:
+        appId: string!
+        limit: int!
+        orgId: string!
+        page: int!
+        search: string!
+    - name: OrganizationStatsDTO
+      fields:
+        totalMembers: int64!
+        totalOrganizations: int64!
+        totalTeams: int64!
+    - name: UpdateMemberHandlerRequest
+      fields:
+        "": string
+    - name: DeleteTeamRequest
+      fields:
+        "": string
+    - name: CreateTeamResult
+      fields:
+        team: TeamDTO!
+    - name: UpdateOrganizationResult
+      fields:
+        organization: OrganizationDetailDTO!
+    - name: CreateOrganizationResult
+      fields:
+        organization: OrganizationDetailDTO!
+    - name: UpdateMemberRoleResult
+      fields:
+        member: MemberDTO!
+    - name: DeleteTeamResult
+      fields:
+        success: bool!
+    - name: DeclineInvitationRequest
+      fields:
+        token: string!
+    - name: GetSettingsResult
+      fields:
+        settings: OrganizationSettingsDTO!

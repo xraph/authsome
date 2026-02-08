@@ -69,12 +69,12 @@ impl TwofaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct StatusResponse {
-        #[serde(rename = "trusted")]
-        pub trusted: bool,
         #[serde(rename = "enabled")]
         pub enabled: bool,
         #[serde(rename = "method")]
         pub method: String,
+        #[serde(rename = "trusted")]
+        pub trusted: bool,
     }
 
     /// Status returns whether 2FA is enabled and whether the device is trusted

@@ -1,11 +1,15 @@
 package dashboard
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"sync"
 
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/ui"
+	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/bridge"
 	g "maragu.dev/gomponents"
 	"maragu.dev/gomponents/html"
 )
@@ -14,7 +18,8 @@ import (
 type ExtensionRegistry struct {
 	mu         sync.RWMutex
 	extensions map[string]ui.DashboardExtension
-	handler    *Handler // Reference to handler for rendering helpers
+	handler    *Handler       // Reference to handler for rendering helpers
+	bridge     *bridge.Bridge // Bridge reference for function registration
 }
 
 // NewExtensionRegistry creates a new extension registry
@@ -77,10 +82,11 @@ func (r *ExtensionRegistry) GetNavigationItems(position ui.NavigationPosition, e
 				continue
 			}
 
-			// Check if required plugin is enabled
-			if item.RequiresPlugin != "" && !enabledPlugins[item.RequiresPlugin] {
-				continue
-			}
+			// // Check if required plugin is enabled
+			// if item.RequiresPlugin != "" && !enabledPlugins[item.RequiresPlugin] {
+			// 	fmt.Println("Navigation item: =>>> ", item.Label, item.RequiresPlugin, position)
+			// 	continue
+			// }
 
 			items = append(items, item)
 		}
@@ -232,6 +238,61 @@ func (r *ExtensionRegistry) GetHandler() *Handler {
 // SetHandler sets the handler instance (called by dashboard plugin during init)
 func (r *ExtensionRegistry) SetHandler(h *Handler) {
 	r.handler = h
+}
+
+// SetBridge provides the bridge instance for registering extension functions
+func (r *ExtensionRegistry) SetBridge(b *bridge.Bridge) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.bridge = b
+}
+
+// RegisterBridgeFunctions registers all bridge functions from an extension
+func (r *ExtensionRegistry) RegisterBridgeFunctions(ext ui.DashboardExtension, log forge.Logger) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.bridge == nil {
+		return errors.New("bridge not initialized")
+	}
+
+	functions := ext.BridgeFunctions()
+	extensionID := ext.ExtensionID()
+
+	for _, fn := range functions {
+		// Namespace function with extension ID: "cms.getEntries"
+		fullName := extensionID + "." + fn.Name
+
+		// Register with bridge (without options for now)
+		// Note: Options support will be added in a future iteration
+		// Extensions can apply middleware/auth at the handler level if needed
+		if err := r.bridge.Register(fullName, fn.Handler); err != nil {
+			log.Error("failed to register bridge function",
+				forge.F("function", fullName),
+				forge.F("error", err.Error()))
+			return fmt.Errorf("failed to register bridge function %s: %w", fullName, err)
+		}
+
+		if fn.Description != "" {
+			log.Debug("registered bridge function",
+				forge.F("extension", extensionID),
+				forge.F("function", fullName),
+				forge.F("description", fn.Description))
+		} else {
+			log.Debug("registered bridge function",
+				forge.F("extension", extensionID),
+				forge.F("function", fullName))
+		}
+
+		// Log warning if options were provided (not yet supported)
+		if len(fn.Options) > 0 {
+			log.Warn("bridge function options not yet supported, ignoring",
+				forge.F("function", fullName),
+				forge.F("options_count", len(fn.Options)))
+		}
+	}
+
+	return nil
 }
 
 var (

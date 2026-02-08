@@ -38,10 +38,10 @@ func Login(data LoginPageData) g.Node {
 				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
 
 				// Compiled Tailwind CSS + Preline UI styles
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
+				Link(Rel("stylesheet"), Href(data.BasePath+"static/css/dashboard.css")),
 
 				// Bundled JavaScript (Preline + custom components)
-				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
+				Script(Src(data.BasePath+"static/js/bundle.js")),
 
 				// Alpine.js - Load LAST
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
@@ -110,7 +110,7 @@ func Login(data LoginPageData) g.Node {
 									),
 									g.Text("Don't have an account? "),
 									A(
-										Href(data.BasePath+"/dashboard/signup"),
+										Href(data.BasePath+"signup"),
 										Class("font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"),
 										g.If(data.Data.IsFirstUser,
 											g.Text("Create admin account"),
@@ -161,7 +161,7 @@ func themeToggleButton() g.Node {
 func loginForm(data LoginPageData) g.Node {
 	return FormEl(
 		Class("mt-8 space-y-6"),
-		Action(data.BasePath+"/dashboard/login"),
+		Action(data.BasePath+"login"),
 		Method("POST"),
 		g.Attr("x-data", "{ loading: false }"),
 		g.Attr("@submit", "loading = true"),

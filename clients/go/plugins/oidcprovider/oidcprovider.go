@@ -43,7 +43,7 @@ func (p *Plugin) RegisterClient(ctx context.Context, req *authsome.RegisterClien
 
 // ListClients ListClients lists all OAuth clients for the current app/env/org
 func (p *Plugin) ListClients(ctx context.Context) (*authsome.ListClientsResponse, error) {
-	path := "/oauth2/listclients"
+	path := "/oauth2/clients"
 	var result authsome.ListClientsResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -54,7 +54,7 @@ func (p *Plugin) ListClients(ctx context.Context) (*authsome.ListClientsResponse
 
 // GetClient GetClient retrieves detailed information about an OAuth client
 func (p *Plugin) GetClient(ctx context.Context, clientId string) (*authsome.GetClientResponse, error) {
-	path := "/oauth2/:clientId"
+	path := "/oauth2/clients/:clientId"
 	var result authsome.GetClientResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -65,7 +65,7 @@ func (p *Plugin) GetClient(ctx context.Context, clientId string) (*authsome.GetC
 
 // UpdateClient UpdateClient updates an existing OAuth client
 func (p *Plugin) UpdateClient(ctx context.Context, req *authsome.UpdateClientRequest, clientId string) (*authsome.UpdateClientResponse, error) {
-	path := "/oauth2/:clientId"
+	path := "/oauth2/clients/:clientId"
 	var result authsome.UpdateClientResponse
 	err := p.client.Request(ctx, "PUT", path, req, &result, false)
 	if err != nil {
@@ -76,7 +76,7 @@ func (p *Plugin) UpdateClient(ctx context.Context, req *authsome.UpdateClientReq
 
 // DeleteClient DeleteClient deletes an OAuth client
 func (p *Plugin) DeleteClient(ctx context.Context, clientId string) error {
-	path := "/oauth2/:clientId"
+	path := "/oauth2/clients/:clientId"
 	err := p.client.Request(ctx, "DELETE", path, nil, nil, false)
 	return err
 }
@@ -155,5 +155,49 @@ func (p *Plugin) RevokeToken(ctx context.Context, req *authsome.RevokeTokenReque
 	path := "/oauth2/revoke"
 	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
+}
+
+// DeviceAuthorize DeviceAuthorize initiates the device authorization flow
+func (p *Plugin) DeviceAuthorize(ctx context.Context, req *authsome.DeviceAuthorizeRequest) (*authsome.DeviceAuthorizeResponse, error) {
+	path := "/oauth2/device_authorization"
+	var result authsome.DeviceAuthorizeResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeviceCodeEntry DeviceCodeEntry shows the device code entry form
+func (p *Plugin) DeviceCodeEntry(ctx context.Context) (*authsome.DeviceCodeEntryResponse, error) {
+	path := "/oauth2/device"
+	var result authsome.DeviceCodeEntryResponse
+	err := p.client.Request(ctx, "GET", path, nil, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeviceVerify DeviceVerify verifies the user code and shows the consent screen
+func (p *Plugin) DeviceVerify(ctx context.Context, req *authsome.DeviceVerifyRequest) (*authsome.DeviceVerifyResponse, error) {
+	path := "/oauth2/device/verify"
+	var result authsome.DeviceVerifyResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeviceAuthorizeDecision DeviceAuthorizeDecision handles the user's authorization decision
+func (p *Plugin) DeviceAuthorizeDecision(ctx context.Context, req *authsome.DeviceAuthorizeDecisionRequest) (*authsome.DeviceAuthorizeDecisionResponse, error) {
+	path := "/oauth2/device/authorize"
+	var result authsome.DeviceAuthorizeDecisionResponse
+	err := p.client.Request(ctx, "POST", path, req, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 

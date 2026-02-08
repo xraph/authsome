@@ -49,53 +49,110 @@ auth:
 
 ## API Reference
 
-### Content Types
+The CMS plugin provides two types of endpoints:
 
-#### List Content Types
+### 1. API Endpoints (JSON) - For Programmatic Access
+
+**Base URL:** `/api/identity/cms/*`
+
+These endpoints return JSON data and are designed for external/programmatic access.
+
+**Authentication:**
+- Bearer token authentication required
+- API key authentication supported
+
+**Required Headers:**
 ```
-GET /api/cms/types
+X-App-ID: {your-app-id}
+X-Environment-ID: {your-environment-id}
+Authorization: Bearer {your-token}
 ```
 
-Query Parameters:
+### 2. UI Endpoints (HTML) - For Dashboard Only
+
+**Base URL:** `/api/identity/ui/app/{appID}/cms/*`
+
+These endpoints return HTML pages for the AuthSome dashboard interface. They are **not** intended for programmatic access.
+
+---
+
+## Content Type Endpoints
+
+### List Content Types
+```http
+GET /api/identity/cms/types
+```
+
+**Query Parameters:**
 - `search` - Search by name or slug
 - `page` - Page number (default: 1)
 - `pageSize` - Items per page (default: 20)
 
-#### Create Content Type
-```
-POST /api/cms/types
+**Example Request:**
+```bash
+curl -X GET "http://localhost:4000/api/identity/cms/types?page=1&pageSize=20" \
+  -H "X-App-ID: d5a0ktoh1fg1tihi9c4g" \
+  -H "X-Environment-ID: production" \
+  -H "Authorization: Bearer your-token-here"
 ```
 
-Request Body:
+**Example Response:**
 ```json
 {
-  "name": "Blog Posts",
-  "slug": "blog-posts",
+  "contentTypes": [
+    {
+      "id": "ck1234567890",
+      "name": "blog-posts",
+      "title": "Blog Posts",
+      "description": "Blog post content",
+      "icon": "📝",
+      "fieldCount": 5,
+      "entryCount": 42
+    }
+  ],
+  "totalItems": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+### Create Content Type
+```http
+POST /api/identity/cms/types
+```
+
+**Request Body:**
+```json
+{
+  "name": "blog-posts",
+  "title": "Blog Posts",
   "description": "Blog post content",
   "icon": "📝"
 }
 ```
 
-#### Get Content Type
-```
-GET /api/cms/types/:slug
-```
-
-#### Update Content Type
-```
-PUT /api/cms/types/:slug
+### Get Content Type
+```http
+GET /api/identity/cms/types/{slug}
 ```
 
-#### Delete Content Type
-```
-DELETE /api/cms/types/:slug
+### Update Content Type
+```http
+PUT /api/identity/cms/types/{slug}
 ```
 
-### Content Fields
-
-#### Add Field
+### Delete Content Type
+```http
+DELETE /api/identity/cms/types/{slug}
 ```
-POST /api/cms/types/:slug/fields
+
+---
+
+## Content Field Endpoints
+
+### Add Field to Content Type
+```http
+POST /api/identity/cms/types/{slug}/fields
 ```
 
 Request Body:
@@ -114,42 +171,102 @@ Request Body:
 }
 ```
 
-#### Update Field
-```
-PUT /api/cms/types/:slug/fields/:fieldSlug
-```
-
-#### Delete Field
-```
-DELETE /api/cms/types/:slug/fields/:fieldSlug
+### Update Field
+```http
+PUT /api/identity/cms/types/{slug}/fields/{fieldSlug}
 ```
 
-#### Reorder Fields
-```
-POST /api/cms/types/:slug/fields/reorder
-```
-
-### Content Entries
-
-#### List Entries
-```
-GET /api/cms/:typeSlug/entries
+### Delete Field
+```http
+DELETE /api/identity/cms/types/{slug}/fields/{fieldSlug}
 ```
 
-Query Parameters:
-- `search` - Full-text search
-- `status` - Filter by status (draft, published, archived, scheduled)
-- `page` - Page number
-- `pageSize` - Items per page
-- `sort` - Sort field (prefix with `-` for descending)
-- `filter[field]` - Filter by field value
-
-#### Create Entry
-```
-POST /api/cms/:typeSlug/entries
+### Reorder Fields
+```http
+POST /api/identity/cms/types/{slug}/fields/reorder
 ```
 
-Request Body:
+**Request Body:**
+```json
+{
+  "fieldOrder": ["field1", "field2", "field3"]
+}
+```
+
+---
+
+## Content Entry Endpoints
+
+All content entry endpoints follow the pattern: `/api/identity/cms/{type}/*`
+
+### List Entries
+```http
+GET /api/identity/cms/{typeSlug}
+```
+
+**Query Parameters:**
+- `search` - Full-text search across content fields
+- `status` - Filter by status: `draft`, `published`, `archived`, `scheduled`
+- `page` - Page number (default: 1)
+- `pageSize` - Items per page (default: 20, max: 100)
+- `sort` - Sort field(s), prefix with `-` for descending (e.g., `-createdAt`)
+- `filter[field]` - Filter by field value using operators
+
+**Filter Syntax:**
+- `filter[_meta.status]=eq.published` - Exact match
+- `filter[title]=like.%hello%` - Pattern match
+- `filter[age]=gt.18` - Greater than
+- `filter[price]=lte.100` - Less than or equal
+- `filter[category]=in.tech,science` - In array
+
+**Available Operators:**
+- `eq` - Equal
+- `ne` - Not equal
+- `gt` - Greater than
+- `gte` - Greater than or equal
+- `lt` - Less than
+- `lte` - Less than or equal
+- `like` - Pattern match (use `%` as wildcard)
+- `ilike` - Case-insensitive pattern match
+- `in` - In array (comma-separated values)
+
+**Example: List Published Blog Posts**
+```bash
+curl -X GET "http://localhost:4000/api/identity/cms/blog-posts?filter[_meta.status]=eq.published&page=1&pageSize=10&sort=-createdAt" \
+  -H "X-App-ID: d5a0ktoh1fg1tihi9c4g" \
+  -H "X-Environment-ID: production" \
+  -H "Authorization: Bearer your-token-here"
+```
+
+**Example Response:**
+```json
+{
+  "entries": [
+    {
+      "id": "ck1234567890",
+      "data": {
+        "title": "My First Post",
+        "content": "Hello, world!",
+        "author": "John Doe"
+      },
+      "status": "published",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-15T10:30:00Z",
+      "publishedAt": "2024-01-15T12:00:00Z"
+    }
+  ],
+  "totalItems": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+### Create Entry
+```http
+POST /api/identity/cms/{typeSlug}
+```
+
+**Request Body:**
 ```json
 {
   "data": {
@@ -161,34 +278,119 @@ Request Body:
 }
 ```
 
-#### Get Entry
-```
-GET /api/cms/:typeSlug/entries/:entryId
-```
-
-#### Update Entry
-```
-PUT /api/cms/:typeSlug/entries/:entryId
-```
-
-#### Delete Entry
-```
-DELETE /api/cms/:typeSlug/entries/:entryId
-```
-
-#### Publish Entry
-```
-POST /api/cms/:typeSlug/entries/:entryId/publish
+**Example:**
+```bash
+curl -X POST "http://localhost:4000/api/identity/cms/blog-posts" \
+  -H "X-App-ID: d5a0ktoh1fg1tihi9c4g" \
+  -H "X-Environment-ID: production" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "title": "My First Post",
+      "content": "Hello, world!"
+    },
+    "status": "draft"
+  }'
 ```
 
-#### Unpublish Entry
-```
-POST /api/cms/:typeSlug/entries/:entryId/unpublish
+### Get Entry
+```http
+GET /api/identity/cms/{typeSlug}/{entryId}
 ```
 
-#### Archive Entry
+**Example:**
+```bash
+curl -X GET "http://localhost:4000/api/identity/cms/blog-posts/ck1234567890" \
+  -H "X-App-ID: d5a0ktoh1fg1tihi9c4g" \
+  -H "X-Environment-ID: production" \
+  -H "Authorization: Bearer your-token-here"
 ```
-POST /api/cms/:typeSlug/entries/:entryId/archive
+
+### Update Entry
+```http
+PUT /api/identity/cms/{typeSlug}/{entryId}
+```
+
+**Request Body:**
+```json
+{
+  "data": {
+    "title": "Updated Title",
+    "content": "Updated content"
+  }
+}
+```
+
+### Delete Entry
+```http
+DELETE /api/identity/cms/{typeSlug}/{entryId}
+```
+
+### Publish Entry
+```http
+POST /api/identity/cms/{typeSlug}/{entryId}/publish
+```
+
+**Optional Request Body:**
+```json
+{
+  "publishAt": "2024-01-20T12:00:00Z"
+}
+```
+
+### Unpublish Entry
+```http
+POST /api/identity/cms/{typeSlug}/{entryId}/unpublish
+```
+
+### Archive Entry
+```http
+POST /api/identity/cms/{typeSlug}/{entryId}/archive
+```
+
+### Advanced Query
+```http
+POST /api/identity/cms/{typeSlug}/query
+```
+
+**Request Body:**
+```json
+{
+  "filter": {
+    "_meta.status": { "$eq": "published" },
+    "title": { "$ilike": "%hello%" },
+    "age": { "$gte": 18 }
+  },
+  "sort": ["-createdAt", "title"],
+  "page": 1,
+  "pageSize": 10,
+  "populate": ["author", "category"]
+}
+```
+
+### Bulk Operations
+
+**Bulk Publish:**
+```http
+POST /api/identity/cms/{typeSlug}/bulk/publish
+```
+
+**Request Body:**
+```json
+{
+  "ids": ["ck001", "ck002", "ck003"]
+}
+```
+
+**Bulk Unpublish:**
+```http
+POST /api/identity/cms/{typeSlug}/bulk/unpublish
+```
+
+**Bulk Delete:**
+```http
+POST /api/identity/cms/{typeSlug}/bulk/delete
 ```
 
 ### Revisions

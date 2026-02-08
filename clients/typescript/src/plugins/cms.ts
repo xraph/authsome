@@ -12,137 +12,137 @@ export class CmsPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async listEntries(): Promise<void> {
-    const path = '/cms/listentries';
+  async listEntries(params: { typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}`;
     return this.client.request<void>('GET', path);
   }
 
-  async createEntry(request: types.CreateEntryRequest): Promise<void> {
-    const path = '/cms/createentry';
+  async createEntry(params: { typeSlug: string }, request: types.CreateEntryRequest): Promise<void> {
+    const path = `/cms/${params.typeSlug}`;
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getEntry(): Promise<void> {
-    const path = '/cms/getentry';
+  async getEntry(params: { typeSlug: string; entryId: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}`;
     return this.client.request<void>('GET', path);
   }
 
-  async updateEntry(request: types.UpdateEntryRequest): Promise<void> {
-    const path = '/cms/updateentry';
+  async updateEntry(params: { typeSlug: string; entryId: string }, request: types.UpdateEntryRequest): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}`;
     return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
 
-  async deleteEntry(): Promise<void> {
-    const path = '/cms/deleteentry';
+  async deleteEntry(params: { typeSlug: string; entryId: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}`;
     return this.client.request<void>('DELETE', path);
   }
 
-  async publishEntry(request: types.PublishEntryRequest): Promise<void> {
-    const path = '/cms/publish';
+  async publishEntry(params: { typeSlug: string; entryId: string }, request: types.PublishEntryRequest): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/publish`;
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async unpublishEntry(): Promise<void> {
-    const path = '/cms/unpublish';
+  async unpublishEntry(params: { typeSlug: string; entryId: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/unpublish`;
     return this.client.request<void>('POST', path);
   }
 
-  async archiveEntry(): Promise<void> {
-    const path = '/cms/archive';
+  async archiveEntry(params: { typeSlug: string; entryId: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/archive`;
     return this.client.request<void>('POST', path);
   }
 
-  async queryEntries(): Promise<void> {
-    const path = '/cms/query';
+  async queryEntries(params: { typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/query`;
     return this.client.request<void>('POST', path);
   }
 
-  async bulkPublish(): Promise<void> {
-    const path = '/cms/publish';
+  async bulkPublish(params: { typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/bulk/publish`;
     return this.client.request<void>('POST', path);
   }
 
-  async bulkUnpublish(): Promise<void> {
-    const path = '/cms/unpublish';
+  async bulkUnpublish(params: { typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/bulk/unpublish`;
     return this.client.request<void>('POST', path);
   }
 
-  async bulkDelete(): Promise<void> {
-    const path = '/cms/delete';
+  async bulkDelete(params: { typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/bulk/delete`;
     return this.client.request<void>('POST', path);
   }
 
-  async getEntryStats(): Promise<void> {
-    const path = '/cms/stats';
+  async getEntryStats(params: { typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/stats`;
     return this.client.request<void>('GET', path);
   }
 
   async listContentTypes(): Promise<void> {
-    const path = '/cms/listcontenttypes';
+    const path = '/cms/types';
     return this.client.request<void>('GET', path);
   }
 
   async createContentType(request: types.CreateContentTypeRequest): Promise<void> {
-    const path = '/cms/createcontenttype';
+    const path = '/cms/types';
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
   async getContentType(params: { slug: string }): Promise<void> {
-    const path = `/cms/${params.slug}`;
+    const path = `/cms/types/${params.slug}`;
     return this.client.request<void>('GET', path);
   }
 
   async updateContentType(params: { slug: string }, request: types.UpdateContentTypeRequest): Promise<void> {
-    const path = `/cms/${params.slug}`;
+    const path = `/cms/types/${params.slug}`;
     return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
 
   async deleteContentType(params: { slug: string }): Promise<void> {
-    const path = `/cms/${params.slug}`;
+    const path = `/cms/types/${params.slug}`;
     return this.client.request<void>('DELETE', path);
   }
 
-  async listFields(): Promise<void> {
-    const path = '/cms/listfields';
+  async listFields(params: { slug: string }): Promise<void> {
+    const path = `/cms/types/${params.slug}/fields`;
     return this.client.request<void>('GET', path);
   }
 
-  async addField(request: types.CreateFieldRequest): Promise<void> {
-    const path = '/cms/addfield';
+  async addField(params: { slug: string }, request: types.CreateFieldRequest): Promise<void> {
+    const path = `/cms/types/${params.slug}/fields`;
     return this.client.request<void>('POST', path, {
       body: request,
     });
   }
 
-  async getField(params: { fieldSlug: string }): Promise<void> {
-    const path = `/cms/${params.fieldSlug}`;
+  async getField(params: { slug: string; fieldSlug: string }): Promise<void> {
+    const path = `/cms/types/${params.slug}/fields/${params.fieldSlug}`;
     return this.client.request<void>('GET', path);
   }
 
-  async updateField(params: { fieldSlug: string }, request: types.UpdateFieldRequest): Promise<void> {
-    const path = `/cms/${params.fieldSlug}`;
+  async updateField(params: { slug: string; fieldSlug: string }, request: types.UpdateFieldRequest): Promise<void> {
+    const path = `/cms/types/${params.slug}/fields/${params.fieldSlug}`;
     return this.client.request<void>('PUT', path, {
       body: request,
     });
   }
 
-  async deleteField(params: { fieldSlug: string }): Promise<void> {
-    const path = `/cms/${params.fieldSlug}`;
+  async deleteField(params: { slug: string; fieldSlug: string }): Promise<void> {
+    const path = `/cms/types/${params.slug}/fields/${params.fieldSlug}`;
     return this.client.request<void>('DELETE', path);
   }
 
-  async reorderFields(request: types.ReorderFieldsRequest): Promise<void> {
-    const path = '/cms/reorder';
+  async reorderFields(params: { slug: string }, request: types.ReorderFieldsRequest): Promise<void> {
+    const path = `/cms/types/${params.slug}/fields/reorder`;
     return this.client.request<void>('POST', path, {
       body: request,
     });
@@ -153,23 +153,23 @@ export class CmsPlugin implements ClientPlugin {
     return this.client.request<void>('GET', path);
   }
 
-  async listRevisions(): Promise<void> {
-    const path = '/cms/listrevisions';
+  async listRevisions(params: { typeSlug: string; entryId: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/revisions`;
     return this.client.request<void>('GET', path);
   }
 
-  async getRevision(params: { version: number }): Promise<void> {
-    const path = `/cms/${params.version}`;
+  async getRevision(params: { typeSlug: string; entryId: string; version: number }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/revisions/${params.version}`;
     return this.client.request<void>('GET', path);
   }
 
-  async restoreRevision(params: { version: number }): Promise<void> {
-    const path = `/cms/${params.version}/restore`;
+  async restoreRevision(params: { entryId: string; version: number; typeSlug: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/revisions/${params.version}/restore`;
     return this.client.request<void>('POST', path);
   }
 
-  async compareRevisions(): Promise<void> {
-    const path = '/cms/compare';
+  async compareRevisions(params: { typeSlug: string; entryId: string }): Promise<void> {
+    const path = `/cms/${params.typeSlug}/${params.entryId}/revisions/compare`;
     return this.client.request<void>('GET', path);
   }
 

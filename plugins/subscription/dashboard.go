@@ -3,7 +3,6 @@ package subscription
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -12,28 +11,25 @@ import (
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/dashboard"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // DashboardExtension implements ui.DashboardExtension for the subscription plugin
 type DashboardExtension struct {
-	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
-	basePath string
+	plugin     *Plugin
+	baseUIPath string
 }
 
 // NewDashboardExtension creates a new dashboard extension
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
-	return &DashboardExtension{plugin: plugin}
-}
-
-// SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
+	return &DashboardExtension{
+		plugin:     plugin,
+		baseUIPath: "/api/identity/ui",
+	}
 }
 
 // ExtensionID returns the unique identifier for this extension
@@ -52,9 +48,9 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 			Order:    50,
 			URLBuilder: func(basePath string, currentApp *app.App) string {
 				if currentApp == nil {
-					return basePath + "/dashboard/billing"
+					return basePath + "/billing"
 				}
-				return basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing"
+				return basePath + "/app/" + currentApp.ID.String() + "/billing"
 			},
 			ActiveChecker: func(activePage string) bool {
 				return activePage == "billing" || activePage == "plans" || activePage == "subscriptions" ||
@@ -72,23 +68,25 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Subscription Overview
 		{
-			Method:      "GET",
-			Path:        "/billing",
-			Handler:     e.ServeBillingOverviewPage,
-			Name:        "subscription.billing.overview",
-			Summary:     "Subscription Overview",
-			Description: "View billing overview and summary",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing",
+			Handler:      e.ServeBillingOverviewPage,
+			Name:         "subscription.billing.overview",
+			Summary:      "Subscription Overview",
+			Description:  "View billing overview and summary",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		// Plans
 		{
-			Method:      "GET",
-			Path:        "/billing/plans",
-			Handler:     e.ServePlansListPage,
-			Name:        "subscription.plans.list",
-			Summary:     "List Plans",
-			Description: "View all subscription plans",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/plans",
+			Handler:      e.ServePlansListPage,
+			Name:         "subscription.plans.list",
+			Summary:      "List Plans",
+			Description:  "View all subscription plans",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
@@ -111,13 +109,14 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/plans/:id",
-			Handler:     e.ServePlanDetailPage,
-			Name:        "subscription.plans.detail",
-			Summary:     "Plan Details",
-			Description: "View plan details",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/plans/:id",
+			Handler:      e.ServePlanDetailPage,
+			Name:         "subscription.plans.detail",
+			Summary:      "Plan Details",
+			Description:  "View plan details",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
@@ -191,22 +190,24 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Subscriptions
 		{
-			Method:      "GET",
-			Path:        "/billing/subscriptions",
-			Handler:     e.ServeSubscriptionsListPage,
-			Name:        "subscription.subscriptions.list",
-			Summary:     "List Subscriptions",
-			Description: "View all subscriptions",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/subscriptions",
+			Handler:      e.ServeSubscriptionsListPage,
+			Name:         "subscription.subscriptions.list",
+			Summary:      "List Subscriptions",
+			Description:  "View all subscriptions",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/subscriptions/:id",
-			Handler:     e.ServeSubscriptionDetailPage,
-			Name:        "subscription.subscriptions.detail",
-			Summary:     "Subscription Details",
-			Description: "View subscription details",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/subscriptions/:id",
+			Handler:      e.ServeSubscriptionDetailPage,
+			Name:         "subscription.subscriptions.detail",
+			Summary:      "Subscription Details",
+			Description:  "View subscription details",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "POST",
@@ -220,13 +221,14 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Add-ons
 		{
-			Method:      "GET",
-			Path:        "/billing/addons",
-			Handler:     e.ServeAddOnsListPage,
-			Name:        "subscription.addons.list",
-			Summary:     "List Add-ons",
-			Description: "View all add-ons",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/addons",
+			Handler:      e.ServeAddOnsListPage,
+			Name:         "subscription.addons.list",
+			Summary:      "List Add-ons",
+			Description:  "View all add-ons",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
@@ -249,32 +251,35 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/addons/:id",
-			Handler:     e.ServeAddOnDetailPage,
-			Name:        "subscription.addons.detail",
-			Summary:     "Add-on Details",
-			Description: "View add-on details",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/addons/:id",
+			Handler:      e.ServeAddOnDetailPage,
+			Name:         "subscription.addons.detail",
+			Summary:      "Add-on Details",
+			Description:  "View add-on details",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		// Invoices
 		{
-			Method:      "GET",
-			Path:        "/billing/invoices",
-			Handler:     e.ServeInvoicesListPage,
-			Name:        "subscription.invoices.list",
-			Summary:     "List Invoices",
-			Description: "View all invoices",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/invoices",
+			Handler:      e.ServeInvoicesListPage,
+			Name:         "subscription.invoices.list",
+			Summary:      "List Invoices",
+			Description:  "View all invoices",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/invoices/:id",
-			Handler:     e.ServeInvoiceDetailPage,
-			Name:        "subscription.invoices.detail",
-			Summary:     "Invoice Details",
-			Description: "View invoice details",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/invoices/:id",
+			Handler:      e.ServeInvoiceDetailPage,
+			Name:         "subscription.invoices.detail",
+			Summary:      "Invoice Details",
+			Description:  "View invoice details",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "POST",
@@ -284,7 +289,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			Summary:      "Sync Invoices",
 			Description:  "Sync invoices from Stripe",
 			RequireAuth:  true,
-			RequireAdmin: false,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "POST",
@@ -298,22 +303,24 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Payment Methods
 		{
-			Method:      "GET",
-			Path:        "/billing/payment-methods",
-			Handler:     e.ServePaymentMethodsPage,
-			Name:        "subscription.payment_methods.page",
-			Summary:     "Payment Methods",
-			Description: "Manage payment methods",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/payment-methods",
+			Handler:      e.ServePaymentMethodsPage,
+			Name:         "subscription.payment_methods.page",
+			Summary:      "Payment Methods",
+			Description:  "Manage payment methods",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/payment-methods/add",
-			Handler:     e.ServeAddPaymentMethodPage,
-			Name:        "subscription.payment_methods.add_page",
-			Summary:     "Add Payment Method",
-			Description: "Add a new payment method",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/payment-methods/add",
+			Handler:      e.ServeAddPaymentMethodPage,
+			Name:         "subscription.payment_methods.add_page",
+			Summary:      "Add Payment Method",
+			Description:  "Add a new payment method",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "POST",
@@ -337,23 +344,25 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Usage
 		{
-			Method:      "GET",
-			Path:        "/billing/usage",
-			Handler:     e.ServeUsageDashboardPage,
-			Name:        "subscription.usage.dashboard",
-			Summary:     "Usage Dashboard",
-			Description: "View usage metrics and reports",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/usage",
+			Handler:      e.ServeUsageDashboardPage,
+			Name:         "subscription.usage.dashboard",
+			Summary:      "Usage Dashboard",
+			Description:  "View usage metrics and reports",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		// Coupons
 		{
-			Method:      "GET",
-			Path:        "/billing/coupons",
-			Handler:     e.ServeCouponsListPage,
-			Name:        "subscription.coupons.list",
-			Summary:     "List Coupons",
-			Description: "View all coupons and discounts",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/coupons",
+			Handler:      e.ServeCouponsListPage,
+			Name:         "subscription.coupons.list",
+			Summary:      "List Coupons",
+			Description:  "View all coupons and discounts",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
@@ -377,23 +386,25 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Analytics
 		{
-			Method:      "GET",
-			Path:        "/billing/analytics",
-			Handler:     e.ServeAnalyticsDashboardPage,
-			Name:        "subscription.analytics.dashboard",
-			Summary:     "Billing Analytics",
-			Description: "View billing analytics and metrics",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/analytics",
+			Handler:      e.ServeAnalyticsDashboardPage,
+			Name:         "subscription.analytics.dashboard",
+			Summary:      "Billing Analytics",
+			Description:  "View billing analytics and metrics",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		// Alerts
 		{
-			Method:      "GET",
-			Path:        "/billing/alerts",
-			Handler:     e.ServeAlertsListPage,
-			Name:        "subscription.alerts.list",
-			Summary:     "Usage Alerts",
-			Description: "View and manage usage alerts",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/alerts",
+			Handler:      e.ServeAlertsListPage,
+			Name:         "subscription.alerts.list",
+			Summary:      "Usage Alerts",
+			Description:  "View and manage usage alerts",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		// Settings
 		{
@@ -408,13 +419,14 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Features
 		{
-			Method:      "GET",
-			Path:        "/billing/features",
-			Handler:     e.ServeFeaturesListPage,
-			Name:        "subscription.features.list",
-			Summary:     "List Features",
-			Description: "View all feature definitions",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/features",
+			Handler:      e.ServeFeaturesListPage,
+			Name:         "subscription.features.list",
+			Summary:      "List Features",
+			Description:  "View all feature definitions",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
@@ -437,22 +449,24 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/features/usage",
-			Handler:     e.ServeFeatureUsagePage,
-			Name:        "subscription.features.usage",
-			Summary:     "Feature Usage",
-			Description: "Monitor feature usage across organizations",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/features/usage",
+			Handler:      e.ServeFeatureUsagePage,
+			Name:         "subscription.features.usage",
+			Summary:      "Feature Usage",
+			Description:  "Monitor feature usage across organizations",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
-			Method:      "GET",
-			Path:        "/billing/features/:featureId",
-			Handler:     e.ServeFeatureDetailPage,
-			Name:        "subscription.features.detail",
-			Summary:     "Feature Details",
-			Description: "View feature details",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/features/:featureId",
+			Handler:      e.ServeFeatureDetailPage,
+			Name:         "subscription.features.detail",
+			Summary:      "Feature Details",
+			Description:  "View feature details",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
@@ -547,13 +561,14 @@ func (e *DashboardExtension) Routes() []ui.Route {
 		},
 		// Plan Features Management
 		{
-			Method:      "GET",
-			Path:        "/billing/plans/:id/features",
-			Handler:     e.ServePlanFeaturesPage,
-			Name:        "subscription.plans.features",
-			Summary:     "Plan Features",
-			Description: "Manage features linked to a plan",
-			RequireAuth: true,
+			Method:       "GET",
+			Path:         "/billing/plans/:id/features",
+			Handler:      e.ServePlanFeaturesPage,
+			Name:         "subscription.plans.features",
+			Summary:      "Plan Features",
+			Description:  "Manage features linked to a plan",
+			RequireAuth:  true,
+			RequireAdmin: true,
 		},
 		{
 			Method:       "POST",
@@ -598,7 +613,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
 			ID:            "subscription-settings",
-			Label:         "Billing & Subscription",
+			Label:         "Subscription",
 			Description:   "Configure subscription and billing settings",
 			Icon:          lucide.CreditCard(Class("h-5 w-5")),
 			Category:      "general",
@@ -636,20 +651,26 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
+// BridgeFunctions returns bridge functions for the subscription plugin
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	// No bridge functions for this plugin yet
+	return nil
+}
+
 // Helper methods
 
 // getUserFromContext extracts the current user from the request context
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	ctx := c.Request().Context()
-	if u, ok := ctx.Value("user").(*user.User); ok {
+func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
+	reqCtx := ctx.Request.Context()
+	if u, ok := reqCtx.Value("user").(*user.User); ok {
 		return u
 	}
 	return nil
 }
 
 // extractAppFromURL extracts the app from the URL parameter
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	appIDStr := c.Param("appId")
+func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
+	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
 		return nil, fmt.Errorf("app ID is required")
 	}
@@ -665,15 +686,12 @@ func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error
 
 // getBasePath returns the dashboard base path
 func (e *DashboardExtension) getBasePath() string {
-	if e.registry != nil && e.registry.GetHandler() != nil {
-		return e.registry.GetHandler().GetBasePath()
-	}
-	return ""
+	return e.baseUIPath
 }
 
 // queryIntDefault gets an integer query parameter with a default value
-func queryIntDefault(c forge.Context, name string, defaultValue int) int {
-	str := c.QueryDefault(name, "")
+func queryIntDefault(ctx *router.PageContext, name string, defaultValue int) int {
+	str := ctx.QueryDefault(name, "")
 	if str == "" {
 		return defaultValue
 	}
@@ -694,7 +712,7 @@ func formatMoney(cents int64, currency string) string {
 
 // formatPercent formats a decimal as percentage
 func formatPercent(value float64) string {
-	return fmt.Sprintf("%.1f%%", value*100)
+	return fmt.Sprintf("%.2f%%", value*100)
 }
 
 // Widget renderers
@@ -865,7 +883,7 @@ func (e *DashboardExtension) renderBillingNav(currentApp *app.App, basePath, act
 		}
 
 		navItems = append(navItems, A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+item.path),
+			Href(basePath+"/app/"+currentApp.ID.String()+item.path),
 			Class(classes),
 			item.icon,
 			g.Text(item.label),
@@ -882,9 +900,9 @@ func (e *DashboardExtension) renderBillingNav(currentApp *app.App, basePath, act
 
 func (e *DashboardExtension) planStatusBadge(plan *core.Plan) g.Node {
 	if plan.IsActive {
-		return e.statusBadge("active")
+		return nil
 	}
-	return e.statusBadge("inactive")
+	return nil
 }
 
 // planSyncStatusBadge returns a badge indicating whether the plan is synced to the payment provider
@@ -911,142 +929,151 @@ func (e *DashboardExtension) invoiceStatusBadge(inv *core.Invoice) g.Node {
 	return e.statusBadge(string(inv.Status))
 }
 
-// Settings Page
-func (e *DashboardExtension) ServeSettingsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+// ServeSettingsPage renders the subscription settings page
+func (e *DashboardExtension) ServeSettingsPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 
 	content := Div(
 		Class("space-y-6"),
-		H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
-			g.Text("Billing Settings")),
-		P(Class("text-slate-600 dark:text-gray-400"),
-			g.Text("Configure subscription and billing behavior for your application")),
+
+		// Page header
+		Div(
+			Class("mb-6"),
+			H1(Class("text-2xl font-bold"), g.Text("Subscription Settings")),
+			P(Class("text-sm text-muted-foreground"), g.Text("Configure subscription and billing behavior for your application")),
+		),
 
 		// Settings form
 		Div(
-			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
+			Class("rounded-lg border bg-card p-6"),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/billing/update"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/settings/billing/update"),
 				Class("space-y-6"),
 
 				// Require subscription
 				Div(
-					Class("flex items-start"),
+					Class("flex items-center justify-between py-3 border-b"),
 					Div(
-						Class("flex h-5 items-center"),
+						Class("space-y-1"),
+						Label(
+							For("require_subscription"),
+							Class("text-sm font-medium"),
+							g.Text("Require subscription for organizations"),
+						),
+						P(Class("text-xs text-muted-foreground"),
+							g.Text("Organizations must have an active subscription to access features")),
+					),
+					Label(
+						Class("relative inline-flex items-center cursor-pointer"),
 						Input(
 							Type("checkbox"),
 							Name("require_subscription"),
 							ID("require_subscription"),
-							Class("h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"),
+							Class("sr-only peer"),
 							g.If(e.plugin.config.RequireSubscription, g.Attr("checked", "")),
 						),
-					),
-					Div(
-						Class("ml-3"),
-						Label(
-							For("require_subscription"),
-							Class("text-sm font-medium text-slate-900 dark:text-white"),
-							g.Text("Require subscription for organizations"),
+						Div(
+							Class("w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"),
 						),
-						P(Class("text-sm text-slate-500 dark:text-gray-400"),
-							g.Text("Organizations must have an active subscription to access features")),
 					),
 				),
 
 				// Default trial days
 				Div(
+					Class("space-y-2 py-3 border-b"),
 					Label(
 						For("trial_days"),
-						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+						Class("text-sm font-medium"),
 						g.Text("Default Trial Days"),
 					),
-					Input(
-						Type("number"),
-						Name("trial_days"),
-						ID("trial_days"),
-						Value(fmt.Sprintf("%d", e.plugin.config.DefaultTrialDays)),
-						Min("0"),
-						Max("90"),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+					Div(
+						Class("flex items-center gap-3"),
+						Input(
+							Type("number"),
+							Name("trial_days"),
+							ID("trial_days"),
+							Value(fmt.Sprintf("%d", e.plugin.config.DefaultTrialDays)),
+							Min("0"),
+							Max("90"),
+							Class("flex h-10 w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"),
+						),
+						Span(Class("text-sm text-muted-foreground"), g.Text("days")),
 					),
-					P(Class("mt-1 text-sm text-slate-500 dark:text-gray-400"),
+					P(Class("text-xs text-muted-foreground"),
 						g.Text("Number of days for trial period on new subscriptions")),
 				),
 
 				// Grace period days
 				Div(
+					Class("space-y-2 py-3 border-b"),
 					Label(
 						For("grace_days"),
-						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
+						Class("text-sm font-medium"),
 						g.Text("Grace Period Days"),
 					),
-					Input(
-						Type("number"),
-						Name("grace_days"),
-						ID("grace_days"),
-						Value(fmt.Sprintf("%d", e.plugin.config.GracePeriodDays)),
-						Min("0"),
-						Max("30"),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
+					Div(
+						Class("flex items-center gap-3"),
+						Input(
+							Type("number"),
+							Name("grace_days"),
+							ID("grace_days"),
+							Value(fmt.Sprintf("%d", e.plugin.config.GracePeriodDays)),
+							Min("0"),
+							Max("30"),
+							Class("flex h-10 w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"),
+						),
+						Span(Class("text-sm text-muted-foreground"), g.Text("days")),
 					),
-					P(Class("mt-1 text-sm text-slate-500 dark:text-gray-400"),
+					P(Class("text-xs text-muted-foreground"),
 						g.Text("Days after payment failure before subscription is canceled")),
 				),
 
 				// Stripe configuration status
 				Div(
-					Class("rounded-lg border p-4 "+func() string {
+					Class("py-3"),
+					func() g.Node {
 						if e.plugin.config.IsStripeConfigured() {
-							return "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-						}
-						return "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20"
-					}()),
-					Div(
-						Class("flex items-center gap-3"),
-						g.If(e.plugin.config.IsStripeConfigured(),
-							lucide.CircleCheck(Class("h-5 w-5 text-green-600 dark:text-green-400")),
-						),
-						g.If(!e.plugin.config.IsStripeConfigured(),
-							lucide.CircleAlert(Class("h-5 w-5 text-yellow-600 dark:text-yellow-400")),
-						),
-						Div(
-							Div(Class("font-medium text-slate-900 dark:text-white"),
-								g.Text("Stripe Integration")),
-							Div(Class("text-sm text-slate-600 dark:text-gray-400"),
-								g.If(e.plugin.config.IsStripeConfigured(),
-									g.Text("Stripe is configured and ready to process payments"),
+							return Div(
+								Class("rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 p-4"),
+								Div(
+									Class("flex items-center gap-3"),
+									lucide.CircleCheck(Class("h-5 w-5 text-emerald-600 dark:text-emerald-400")),
+									Div(
+										Div(Class("font-medium"), g.Text("Stripe Integration")),
+										Div(Class("text-sm text-muted-foreground"),
+											g.Text("Stripe is configured and ready to process payments")),
+									),
 								),
-								g.If(!e.plugin.config.IsStripeConfigured(),
-									g.Text("Configure Stripe API keys in environment variables"),
+							)
+						}
+						return Div(
+							Class("rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-4"),
+							Div(
+								Class("flex items-center gap-3"),
+								lucide.CircleAlert(Class("h-5 w-5 text-amber-600 dark:text-amber-400")),
+								Div(
+									Div(Class("font-medium"), g.Text("Stripe Integration")),
+									Div(Class("text-sm text-muted-foreground"),
+										g.Text("Configure Stripe API keys in environment variables")),
 								),
 							),
-						),
-					),
+						)
+					}(),
 				),
 
 				// Submit button
 				Div(
-					Class("flex justify-end"),
+					Class("flex justify-end pt-4"),
 					Button(
 						Type("submit"),
-						Class("rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"),
+						Class("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"),
+						lucide.Save(Class("size-4 mr-2")),
 						g.Text("Save Settings"),
 					),
 				),
@@ -1054,10 +1081,5 @@ func (e *DashboardExtension) ServeSettingsPage(c forge.Context) error {
 		),
 	)
 
-	// Suppress unused variable warnings
-	_ = currentUser
-	_ = basePath
-	_ = currentApp
-
-	return handler.RenderSettingsPage(c, "subscription-settings", content)
+	return content, nil
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 )
 
@@ -49,13 +50,13 @@ type NavigationItem struct {
 type Route struct {
 	// Method is the HTTP method (GET, POST, etc.)
 	Method string
-	// Path is the route path (relative to /dashboard/app/:appId/)
-	// Example: "/multisession" becomes "/dashboard/app/:appId/multisession"
+	// Path is the route path (relative to /app/:appId/)
+	// Example: "/multisession" becomes "/app/:appId/multisession"
 	Path string
-	// Handler is the route handler function
-	// Should be: func(c forge.Context) error
-	// Use PageRenderer helper to render with dashboard layout
-	Handler interface{}
+	// Handler is the ForgeUI page handler function
+	// Signature: func(ctx *router.PageContext) (g.Node, error)
+	// The layout is applied automatically by ForgeUI based on route configuration
+	Handler func(ctx *router.PageContext) (g.Node, error)
 	// Name is the route name for identification
 	Name string
 	// Summary is a short description for OpenAPI
@@ -68,15 +69,7 @@ type Route struct {
 	RequireAuth bool
 	// RequireAdmin indicates if the route requires admin privileges
 	RequireAdmin bool
-	// PageRenderer is an optional helper that renders the page content
-	// The dashboard will wrap this in the layout automatically
-	PageRenderer PageRenderer
 }
-
-// PageRenderer is a function that renders page content for an extension
-// It receives helpers for building PageData and returns the content node
-// The dashboard automatically wraps this in the layout (header, nav, footer)
-type PageRenderer func(helpers PageHelpers) (g.Node, error)
 
 // SettingsSection represents a section in the settings page
 // Deprecated: Use SettingsPage instead for full-page settings
@@ -133,6 +126,25 @@ type DashboardWidget struct {
 	Renderer func(basePath string, currentApp *app.App) g.Node
 }
 
+// BridgeFunction represents a bridge function that extensions can register
+// Bridge functions are callable from the frontend using $bridge.call('extensionID.functionName', params)
+type BridgeFunction struct {
+	// Name is the function name (will be prefixed with extensionID, e.g., "cms.getEntries")
+	Name string
+
+	// Handler is the function that handles the bridge call
+	// Signature: func(ctx bridge.Context, input T) (output U, error)
+	// The handler receives typed input and returns typed output with error handling
+	Handler interface{}
+
+	// Description for documentation/debugging
+	Description string
+
+	// Options for bridge registration (auth requirements, rate limiting, etc.)
+	// Use bridge.RequireAuth(), bridge.RequireRoles("admin"), etc.
+	Options []interface{} // Will be bridge.Option from forgeui/bridge
+}
+
 // DashboardExtension is the interface that plugins implement to extend the dashboard
 type DashboardExtension interface {
 	// ExtensionID returns a unique identifier for this extension
@@ -156,28 +168,9 @@ type DashboardExtension interface {
 	// DashboardWidgets returns widgets to show on the main dashboard
 	// These appear as cards on the dashboard home page
 	DashboardWidgets() []DashboardWidget
-}
 
-// PageHelpers provides helper functions for extension page renderers
-type PageHelpers interface {
-	// GetCurrentUser returns the currently authenticated user
-	GetCurrentUser() interface{}
-
-	// GetCurrentApp returns the current app from URL context
-	GetCurrentApp() interface{}
-
-	// GetUserApps returns all apps the current user has access to
-	GetUserApps() []interface{}
-
-	// GetBasePath returns the dashboard base path
-	GetBasePath() string
-
-	// GetEnabledPlugins returns map of enabled plugin IDs
-	GetEnabledPlugins() map[string]bool
-
-	// SetTitle sets the page title
-	SetTitle(title string)
-
-	// SetActivePage sets the active page identifier for navigation highlighting
-	SetActivePage(page string)
+	// BridgeFunctions returns bridge functions to register
+	// Functions are automatically namespaced with extension ID (e.g., "cms.getContentTypes")
+	// Frontend can call these using: await $bridge.call('cms.getContentTypes', { appId: 'xxx' })
+	BridgeFunctions() []BridgeFunction
 }

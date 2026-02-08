@@ -286,6 +286,7 @@ func (b *PermissionBuilder) Dashboard() *DashboardPermissions {
 
 // CanAccess checks if user can access the dashboard
 func (d *DashboardPermissions) CanAccess() bool {
+	fmt.Println("CanAccess", d.Can("dashboard.view", "dashboard"), d.IsAdmin(), d.IsSuperAdmin())
 	return d.Can("dashboard.view", "dashboard") || d.IsAdmin() || d.IsSuperAdmin()
 }
 

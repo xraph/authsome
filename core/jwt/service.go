@@ -99,7 +99,7 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, "jwt_key.create", "key:"+keyID, "", "", fmt.Sprintf(`{"key_id":"%s","algorithm":"%s"}`, keyID, req.Algorithm))
+		s.auditSvc.Log(ctx, &userID, string(audit.ActionJWTKeyCreated), "key:"+keyID, "", "", fmt.Sprintf(`{"key_id":"%s","algorithm":"%s"}`, keyID, req.Algorithm))
 	}
 
 	return jwtKey, nil

@@ -19,27 +19,27 @@ impl MultisessionPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct ListRequest {
-        #[serde(rename = "active")]
-        pub active: *bool,
-        #[serde(rename = "createdFrom")]
-        pub created_from: *string,
-        #[serde(rename = "offset")]
-        pub offset: i32,
-        #[serde(rename = "sortOrder")]
-        pub sort_order: *string,
-        #[serde(rename = "createdTo")]
-        pub created_to: *string,
-        #[serde(rename = "ipAddress")]
-        pub ip_address: *string,
         #[serde(rename = "limit")]
         pub limit: i32,
         #[serde(rename = "sortBy")]
         pub sort_by: *string,
         #[serde(rename = "userAgent")]
         pub user_agent: *string,
+        #[serde(rename = "createdFrom")]
+        pub created_from: *string,
+        #[serde(rename = "ipAddress")]
+        pub ip_address: *string,
+        #[serde(rename = "offset")]
+        pub offset: i32,
+        #[serde(rename = "sortOrder")]
+        pub sort_order: *string,
+        #[serde(rename = "active")]
+        pub active: *bool,
+        #[serde(rename = "createdTo")]
+        pub created_to: *string,
     }
 
-    /// List returns sessions for the current user based on cookie with optional filtering
+    /// List returns sessions for the current user with optional filtering
     pub async fn list(
         &self,
         _request: ListRequest,
@@ -97,10 +97,10 @@ impl MultisessionPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetByIDResponse {
-        #[serde(rename = "session")]
-        pub session: *session.Session,
         #[serde(rename = "token")]
         pub token: String,
+        #[serde(rename = "session")]
+        pub session: *session.Session,
     }
 
     /// GetByID returns details about a specific session by ID
@@ -168,10 +168,6 @@ impl MultisessionPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetStatsResponse {
-        #[serde(rename = "totalSessions")]
-        pub total_sessions: i32,
-        #[serde(rename = "activeSessions")]
-        pub active_sessions: i32,
         #[serde(rename = "deviceCount")]
         pub device_count: i32,
         #[serde(rename = "locationCount")]
@@ -180,6 +176,10 @@ impl MultisessionPlugin {{
         pub newest_session: *string,
         #[serde(rename = "oldestSession")]
         pub oldest_session: *string,
+        #[serde(rename = "totalSessions")]
+        pub total_sessions: i32,
+        #[serde(rename = "activeSessions")]
+        pub active_sessions: i32,
     }
 
     /// GetStats returns aggregated session statistics for the current user

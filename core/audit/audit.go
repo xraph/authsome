@@ -15,18 +15,19 @@ import (
 // Event represents an audit trail record DTO
 // This is separate from schema.AuditEvent to maintain proper separation of concerns
 type Event struct {
-	ID             xid.ID    `json:"id"`
-	AppID          xid.ID    `json:"appId"`
-	OrganizationID *xid.ID   `json:"organizationId,omitempty"`
-	EnvironmentID  *xid.ID   `json:"environmentId,omitempty"`
-	UserID         *xid.ID   `json:"userId,omitempty"`
-	Action         string    `json:"action"`
-	Resource       string    `json:"resource"`
-	IPAddress      string    `json:"ipAddress,omitempty"`
-	UserAgent      string    `json:"userAgent,omitempty"`
-	Metadata       string    `json:"metadata,omitempty"` // JSON string or plain text
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             xid.ID      `json:"id"`
+	AppID          xid.ID      `json:"appId"`
+	OrganizationID *xid.ID     `json:"organizationId,omitempty"`
+	EnvironmentID  *xid.ID     `json:"environmentId,omitempty"`
+	UserID         *xid.ID     `json:"userId,omitempty"`
+	Action         string      `json:"action"`
+	Resource       string      `json:"resource"`
+	Source         AuditSource `json:"source"`
+	IPAddress      string      `json:"ipAddress,omitempty"`
+	UserAgent      string      `json:"userAgent,omitempty"`
+	Metadata       string      `json:"metadata,omitempty"` // JSON string or plain text
+	CreatedAt      time.Time   `json:"createdAt"`
+	UpdatedAt      time.Time   `json:"updatedAt"`
 }
 
 // ToSchema converts the Event DTO to a schema.AuditEvent model
@@ -51,6 +52,7 @@ func (e *Event) ToSchema() *schema.AuditEvent {
 		UserID:         e.UserID,
 		Action:         e.Action,
 		Resource:       e.Resource,
+		Source:         string(e.Source),
 		IPAddress:      e.IPAddress,
 		UserAgent:      e.UserAgent,
 		Metadata:       e.Metadata,
@@ -71,6 +73,7 @@ func FromSchemaEvent(ae *schema.AuditEvent) *Event {
 		UserID:         ae.UserID,
 		Action:         ae.Action,
 		Resource:       ae.Resource,
+		Source:         AuditSource(ae.Source),
 		IPAddress:      ae.IPAddress,
 		UserAgent:      ae.UserAgent,
 		Metadata:       ae.Metadata,
@@ -94,15 +97,16 @@ func FromSchemaEvents(events []*schema.AuditEvent) []*Event {
 
 // CreateEventRequest represents a request to create an audit event
 type CreateEventRequest struct {
-	AppID          xid.ID  `json:"appId,omitempty"`          // Optional - will be read from context if not provided
-	OrganizationID *xid.ID `json:"organizationId,omitempty"` // Optional - user-created organization
-	EnvironmentID  *xid.ID `json:"environmentId,omitempty"`  // Optional - will be read from context if not provided
-	UserID         *xid.ID `json:"userId,omitempty"`
-	Action         string  `json:"action" validate:"required"`
-	Resource       string  `json:"resource" validate:"required"`
-	IPAddress      string  `json:"ipAddress,omitempty"`
-	UserAgent      string  `json:"userAgent,omitempty"`
-	Metadata       string  `json:"metadata,omitempty"`
+	AppID          xid.ID       `json:"appId,omitempty"`          // Optional - will be read from context if not provided
+	OrganizationID *xid.ID      `json:"organizationId,omitempty"` // Optional - user-created organization
+	EnvironmentID  *xid.ID      `json:"environmentId,omitempty"`  // Optional - will be read from context if not provided
+	UserID         *xid.ID      `json:"userId,omitempty"`
+	Action         string       `json:"action" validate:"required"`
+	Resource       string       `json:"resource" validate:"required"`
+	Source         *AuditSource `json:"source,omitempty"` // Optional - defaults to 'application' if not provided
+	IPAddress      string       `json:"ipAddress,omitempty"`
+	UserAgent      string       `json:"userAgent,omitempty"`
+	Metadata       string       `json:"metadata,omitempty"`
 }
 
 // CreateEventResponse represents the response after creating an audit event

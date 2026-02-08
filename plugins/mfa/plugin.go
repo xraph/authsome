@@ -166,12 +166,12 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		if adapter, exists := svcRegistry.Get("notification.adapter"); exists {
 			if typedAdapter, ok := adapter.(*notificationPlugin.Adapter); ok {
 				p.notifAdapter = typedAdapter
-				p.logger.Info("retrieved notification adapter from service registry")
+				p.logger.Debug("retrieved notification adapter from service registry")
 			} else {
 				p.logger.Warn("notification adapter type assertion failed")
 			}
 		} else {
-			p.logger.Info("notification adapter not available in service registry (graceful degradation)")
+			p.logger.Debug("notification adapter not available in service registry (graceful degradation)")
 		}
 	}
 
@@ -191,7 +191,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	p.service = NewService(mfaRepo, p.adapterRegistry, p.notifAdapter, p.config)
 
 	p.logger.Info("plugin initialized successfully")
-	p.logger.Info("registered factor adapters", forge.F("count", len(p.adapterRegistry.List())))
+	p.logger.Debug("registered factor adapters", forge.F("count", len(p.adapterRegistry.List())))
 
 	return nil
 }

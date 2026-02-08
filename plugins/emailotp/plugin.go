@@ -161,12 +161,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		if adapter, exists := serviceRegistry.Get("notification.adapter"); exists {
 			if typedAdapter, ok := adapter.(*notificationPlugin.Adapter); ok {
 				p.notifAdapter = typedAdapter
-				p.logger.Info("retrieved notification adapter from service registry")
+				p.logger.Debug("retrieved notification adapter from service registry")
 			} else {
 				p.logger.Warn("notification adapter type assertion failed")
 			}
 		} else {
-			p.logger.Info("notification adapter not available in service registry (graceful degradation)")
+			p.logger.Debug("notification adapter not available in service registry (graceful degradation)")
 		}
 	}
 

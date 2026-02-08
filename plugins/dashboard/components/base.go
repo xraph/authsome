@@ -57,17 +57,17 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
 
 				// Compiled Tailwind CSS + Preline UI styles
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
+				Link(Rel("stylesheet"), Href(data.BasePath+"/static/css/dashboard.css")),
 
 				// Alpine.js x-cloak style
 				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
 
 				// Load Pines Components and Dashboard JS BEFORE Alpine.js
-				Script(Src(data.BasePath+"/dashboard/static/js/pines-components.js")),
-				Script(Src(data.BasePath+"/dashboard/static/js/dashboard.js")),
+				Script(Src(data.BasePath+"/static/js/pines-components.js")),
+				Script(Src(data.BasePath+"/static/js/dashboard.js")),
 
 				// Bundled JavaScript (Preline UI) - loads before Alpine.js
-				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
+				Script(Src(data.BasePath+"/static/js/bundle.js")),
 
 				// Alpine.js - Load LAST (components must be defined before Alpine initializes)
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
@@ -132,17 +132,17 @@ func EmptyLayout(data PageData, content g.Node) g.Node {
 				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
 
 				// Compiled Tailwind CSS + Preline UI styles
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
+				Link(Rel("stylesheet"), Href(data.BasePath+"/static/css/dashboard.css")),
 
 				// Alpine.js x-cloak style
 				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
 
 				// Load Pines Components and Dashboard JS BEFORE Alpine.js
-				Script(Src(data.BasePath+"/dashboard/static/js/pines-components.js")),
-				Script(Src(data.BasePath+"/dashboard/static/js/dashboard.js")),
+				Script(Src(data.BasePath+"/static/js/pines-components.js")),
+				Script(Src(data.BasePath+"/static/js/dashboard.js")),
 
 				// Bundled JavaScript (Preline UI) - loads before Alpine.js
-				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
+				Script(Src(data.BasePath+"/static/js/bundle.js")),
 
 				// Alpine.js - Load LAST (components must be defined before Alpine initializes)
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),

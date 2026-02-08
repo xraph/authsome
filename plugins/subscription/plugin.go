@@ -5,6 +5,7 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
@@ -71,8 +72,9 @@ type Plugin struct {
 	hookRegistry    *hooks.HookRegistry
 	subHookRegistry *SubscriptionHookRegistry
 
-	// Dashboard extension
-	dashboardExt *DashboardExtension
+	// Dashboard extension (lazy initialized)
+	dashboardExt     *DashboardExtension
+	dashboardExtOnce sync.Once
 
 	// Organization service for enforcement
 	orgService *organization.Service
@@ -269,7 +271,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 			// Fall back to mock provider
 			p.provider = mock.NewMockProvider()
 		} else {
-			p.logger.Info("Stripe provider initialized")
+			p.logger.Debug("Stripe provider initialized")
 		}
 	} else {
 		// Use mock provider for development
@@ -326,8 +328,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	p.publicHandlers = handlers.NewPublicHandlers(p.featureSvc, p.planSvc)
 	p.paymentHandlers = handlers.NewPaymentHandlers(p.paymentSvc, p.customerSvc)
 
-	// Initialize dashboard extension
-	p.dashboardExt = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	// Register services in Forge DI container if available
 	if container := forgeApp.Container(); container != nil {
@@ -770,6 +771,9 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 
 // DashboardExtension returns the dashboard extension
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtOnce.Do(func() {
+		p.dashboardExt = NewDashboardExtension(p)
+	})
 	return p.dashboardExt
 }
 

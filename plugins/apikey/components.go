@@ -2,6 +2,7 @@ package apikey
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -9,21 +10,15 @@ import (
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // renderAPIKeysListContent renders the main API keys management page content
-func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentApp *app.App, currentUser *user.User) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderAPIKeysListContent(req *http.Request, currentApp *app.App, currentUser *user.User) g.Node {
+	ctx := req.Context()
 
-	// Get base path from handler
-	handler := e.registry.GetHandler()
-	basePath := ""
-	if handler != nil {
-		basePath = handler.GetBasePath()
-	}
+	basePath := e.getBasePath()
 
 	// Fetch API keys for the app
 	filter := &apikey.ListAPIKeysFilter{
@@ -41,9 +36,12 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 
 	keys := keysResp.Data
 
+	appIDStr := currentApp.ID.String()
+
 	return Div(
-		Class("space-y-6"),
-		g.Attr("x-data", `{
+		Class("space-y-2"),
+		g.Attr("x-data", fmt.Sprintf(`{
+			appId: '%s',
 			showCreateModal: false,
 			showViewKeyModal: false,
 			showRevokeModal: false,
@@ -51,6 +49,7 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 			revokeKeyID: '',
 			revokeKeyName: '',
 			copied: false,
+			creating: false,
 			selectedKeyType: 'rk',
 			selectedScopes: [],
 			openRevokeModal(id, name) {
@@ -70,50 +69,65 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 				return this.selectedScopes.includes(scope);
 			},
 			async createAPIKey(event) {
-				const formData = new FormData(event.target);
-				const response = await fetch(event.target.action, {
-					method: 'POST',
-					body: formData
-				});
-				const result = await response.json();
-				if (result.success) {
-					this.newAPIKey = result.key;
-					this.showCreateModal = false;
-					this.showViewKeyModal = true;
-				} else {
-					alert('Error: ' + (result.error || 'Failed to create API key'));
+				if (this.creating) return;
+				this.creating = true;
+				try {
+					const formData = new FormData(event.target);
+					const result = await $bridge.call('createAPIKey', {
+						appId: this.appId,
+						name: formData.get('name'),
+						keyType: formData.get('key_type') || 'rk',
+						scopes: formData.get('scopes') || '',
+						rateLimit: parseInt(formData.get('rate_limit') || '1000'),
+						expiresIn: parseInt(formData.get('expires_in') || '0'),
+						description: formData.get('description') || ''
+					});
+					if (result.success) {
+						this.newAPIKey = result.key;
+						this.showCreateModal = false;
+						this.showViewKeyModal = true;
+					} else {
+						alert('Error: ' + (result.error || 'Failed to create API key'));
+					}
+				} catch (err) {
+					alert('Error: ' + (err.message || 'Failed to create API key'));
+				} finally {
+					this.creating = false;
 				}
 			},
 			async rotateAPIKey(keyId) {
 				if (!confirm('Are you sure you want to rotate this key? The old key will stop working immediately.')) {
 					return;
 				}
-				const basePath = window.location.pathname.split('/dashboard/')[0];
-				const appId = window.location.pathname.split('/app/')[1].split('/')[0];
-				const url = basePath + '/dashboard/app/' + appId + '/settings/api-keys/rotate/' + keyId;
-				
-				const response = await fetch(url, { method: 'POST' });
-				const result = await response.json();
-				
-				if (result.success) {
-					this.newAPIKey = result.key;
-					this.showViewKeyModal = true;
-				} else {
-					alert('Error: ' + (result.error || 'Failed to rotate API key'));
+				try {
+					const result = await $bridge.call('rotateAPIKey', {
+						appId: this.appId,
+						keyId: keyId
+					});
+					if (result.success) {
+						this.newAPIKey = result.key;
+						this.showViewKeyModal = true;
+					} else {
+						alert('Error: ' + (result.error || 'Failed to rotate API key'));
+					}
+				} catch (err) {
+					alert('Error: ' + (err.message || 'Failed to rotate API key'));
 				}
 			},
 			async revokeAPIKey(event) {
-				const formData = new FormData(event.target);
-				const response = await fetch(event.target.action, {
-					method: 'POST',
-					body: formData
-				});
-				const result = await response.json();
-				if (result.success) {
-					this.showRevokeModal = false;
-					window.location.reload();
-				} else {
-					alert('Error: ' + (result.error || 'Failed to revoke API key'));
+				try {
+					const result = await $bridge.call('revokeAPIKey', {
+						appId: this.appId,
+						keyId: this.revokeKeyID
+					});
+					if (result.success) {
+						this.showRevokeModal = false;
+						window.location.reload();
+					} else {
+						alert('Error: ' + (result.error || 'Failed to revoke API key'));
+					}
+				} catch (err) {
+					alert('Error: ' + (err.message || 'Failed to revoke API key'));
 				}
 			},
 			copyToClipboard(text) {
@@ -122,7 +136,7 @@ func (e *DashboardExtension) renderAPIKeysListContent(c forge.Context, currentAp
 					setTimeout(() => { this.copied = false; }, 2000);
 				});
 			}
-		}`),
+		}`, appIDStr)),
 
 		// Page header
 		Div(
@@ -529,7 +543,7 @@ func (e *DashboardExtension) renderEmptyState() g.Node {
 
 // renderCreateModal renders the create API key modal using Alpine.js/Pines dialog pattern
 func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath string) g.Node {
-	actionURL := fmt.Sprintf("%s/dashboard/app/%s/settings/api-keys/create", basePath, currentApp.ID.String())
+	actionURL := fmt.Sprintf("%s/app/%s/settings/api-keys/create", basePath, currentApp.ID.String())
 
 	return Div(
 		g.Attr("x-show", "showCreateModal"),
@@ -905,7 +919,7 @@ func (e *DashboardExtension) renderViewKeyModal() g.Node {
 
 // renderRevokeModal renders the confirmation modal for revoking an API key using Alpine.js/Pines dialog pattern
 func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath string) g.Node {
-	actionURL := fmt.Sprintf("%s/dashboard/app/%s/settings/api-keys/revoke", basePath, currentApp.ID.String())
+	actionURL := fmt.Sprintf("%s/app/%s/settings/api-keys/revoke", basePath, currentApp.ID.String())
 
 	return Div(
 		g.Attr("x-show", "showRevokeModal"),
@@ -1024,18 +1038,13 @@ func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath str
 }
 
 // renderConfigContent renders the configuration page content
-func (e *DashboardExtension) renderConfigContent(c forge.Context, currentApp *app.App) g.Node {
-	// Get base path from handler
-	handler := e.registry.GetHandler()
-	basePath := ""
-	if handler != nil {
-		basePath = handler.GetBasePath()
-	}
+func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
+	basePath := e.getBasePath()
 
-	actionURL := fmt.Sprintf("%s/dashboard/app/%s/settings/api-keys-config/update", basePath, currentApp.ID.String())
+	actionURL := fmt.Sprintf("%s/app/%s/settings/api-keys-config/update", basePath, currentApp.ID.String())
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 		g.Attr("x-data", `{
 			async saveConfig(event) {
 				const formData = new FormData(event.target);
@@ -1066,7 +1075,7 @@ func (e *DashboardExtension) renderConfigContent(c forge.Context, currentApp *ap
 			g.Attr("action", actionURL),
 			g.Attr("@submit.prevent", "saveConfig($event)"),
 
-			Div(Class("bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-6"),
+			Div(Class("bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-2"),
 				// Rate Limiting Section
 				Div(
 					H3(Class("text-lg font-semibold text-gray-900 dark:text-white mb-4"),
@@ -1186,18 +1195,13 @@ func (e *DashboardExtension) renderConfigContent(c forge.Context, currentApp *ap
 }
 
 // renderSecurityContent renders the security settings page content
-func (e *DashboardExtension) renderSecurityContent(c forge.Context, currentApp *app.App) g.Node {
-	// Get base path from handler
-	handler := e.registry.GetHandler()
-	basePath := ""
-	if handler != nil {
-		basePath = handler.GetBasePath()
-	}
+func (e *DashboardExtension) renderSecurityContent(currentApp *app.App) g.Node {
+	basePath := e.getBasePath()
 
-	actionURL := fmt.Sprintf("%s/dashboard/app/%s/settings/api-keys-security/update", basePath, currentApp.ID.String())
+	actionURL := fmt.Sprintf("%s/app/%s/settings/api-keys-security/update", basePath, currentApp.ID.String())
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 		g.Attr("x-data", `{
 			async saveSecurity(event) {
 				const formData = new FormData(event.target);
@@ -1228,7 +1232,7 @@ func (e *DashboardExtension) renderSecurityContent(c forge.Context, currentApp *
 			g.Attr("action", actionURL),
 			g.Attr("@submit.prevent", "saveSecurity($event)"),
 
-			Div(Class("bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-6"),
+			Div(Class("bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-2"),
 				// Authentication Methods
 				Div(
 					H3(Class("text-lg font-semibold text-gray-900 dark:text-white mb-4"),

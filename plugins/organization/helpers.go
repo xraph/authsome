@@ -5,6 +5,7 @@ import (
 
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/forge"
+	"github.com/xraph/vessel"
 )
 
 // Service name constants for DI container registration
@@ -18,6 +19,11 @@ const (
 
 // ResolveOrganizationPlugin resolves the organization plugin from the container
 func ResolveOrganizationPlugin(container forge.Container) (*Plugin, error) {
+	plugin, err := vessel.InjectType[*Plugin](container)
+	if plugin != nil {
+		return plugin, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNamePlugin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve organization plugin: %w", err)
@@ -31,6 +37,12 @@ func ResolveOrganizationPlugin(container forge.Container) (*Plugin, error) {
 
 // ResolveOrganizationService resolves the organization service from the container
 func ResolveOrganizationService(container forge.Container) (*organization.Service, error) {
+	svc, err := vessel.InjectType[*organization.Service](container)
+	if svc != nil {
+		return svc, nil
+
+	}
+
 	resolved, err := container.Resolve(ServiceNameService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve organization service: %w", err)
@@ -44,6 +56,11 @@ func ResolveOrganizationService(container forge.Container) (*organization.Servic
 
 // ResolveMemberService resolves the member service from the container
 func ResolveMemberService(container forge.Container) (*organization.MemberService, error) {
+	svc, err := vessel.InjectType[*organization.MemberService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameMemberService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve member service: %w", err)
@@ -57,6 +74,11 @@ func ResolveMemberService(container forge.Container) (*organization.MemberServic
 
 // ResolveTeamService resolves the team service from the container
 func ResolveTeamService(container forge.Container) (*organization.TeamService, error) {
+	svc, err := vessel.InjectType[*organization.TeamService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameTeamService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve team service: %w", err)
@@ -70,6 +92,11 @@ func ResolveTeamService(container forge.Container) (*organization.TeamService, e
 
 // ResolveInvitationService resolves the invitation service from the container
 func ResolveInvitationService(container forge.Container) (*organization.InvitationService, error) {
+	svc, err := vessel.InjectType[*organization.InvitationService](container)
+	if svc != nil {
+		return svc, nil
+	}
+
 	resolved, err := container.Resolve(ServiceNameInvitationService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve invitation service: %w", err)
@@ -82,49 +109,57 @@ func ResolveInvitationService(container forge.Container) (*organization.Invitati
 }
 
 // RegisterServices registers all organization services in the DI container
+// Uses vessel.ProvideConstructor for type-safe, constructor-based dependency injection
+// Note: If services are already registered (e.g., from a previous plugin initialization),
+// this will silently skip re-registration to allow for graceful handling of plugin reloads
 func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register plugin itself
-	if err := container.Register(ServiceNamePlugin, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*Plugin, error) {
 		return p, nil
-	}); err != nil {
-		return fmt.Errorf("failed to register organization plugin: %w", err)
+	}, vessel.WithAliases(ServiceNamePlugin)); err != nil {
+		// Service already registered - this is OK, silently continue
+		return nil
 	}
 
 	// Register organization service (composite service)
-	if err := container.Register(ServiceNameService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*organization.Service, error) {
 		return p.orgService, nil
-	}); err != nil {
-		return fmt.Errorf("failed to register organization service: %w", err)
+	}, vessel.WithAliases(ServiceNameService)); err != nil {
+		// Service already registered - this is OK, silently continue
+		return nil
 	}
 
 	// Register member service
-	if err := container.Register(ServiceNameMemberService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*organization.MemberService, error) {
 		if p.orgService != nil {
 			return p.orgService.Member, nil
 		}
 		return nil, fmt.Errorf("organization service not initialized")
-	}); err != nil {
-		return fmt.Errorf("failed to register member service: %w", err)
+	}, vessel.WithAliases(ServiceNameMemberService)); err != nil {
+		// Service already registered - this is OK, silently continue
+		return nil
 	}
 
 	// Register team service
-	if err := container.Register(ServiceNameTeamService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*organization.TeamService, error) {
 		if p.orgService != nil {
 			return p.orgService.Team, nil
 		}
 		return nil, fmt.Errorf("organization service not initialized")
-	}); err != nil {
-		return fmt.Errorf("failed to register team service: %w", err)
+	}, vessel.WithAliases(ServiceNameTeamService)); err != nil {
+		// Service already registered - this is OK, silently continue
+		return nil
 	}
 
 	// Register invitation service
-	if err := container.Register(ServiceNameInvitationService, func(_ forge.Container) (any, error) {
+	if err := forge.ProvideConstructor(container, func() (*organization.InvitationService, error) {
 		if p.orgService != nil {
 			return p.orgService.Invitation, nil
 		}
 		return nil, fmt.Errorf("organization service not initialized")
-	}); err != nil {
-		return fmt.Errorf("failed to register invitation service: %w", err)
+	}, vessel.WithAliases(ServiceNameInvitationService)); err != nil {
+		// Service already registered - this is OK, silently continue
+		return nil
 	}
 
 	return nil

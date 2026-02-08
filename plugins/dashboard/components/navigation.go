@@ -98,7 +98,7 @@ func DashboardFooter(data PageData) g.Node {
 
 func Logo(basePath string, currentApp *app.App) g.Node {
 	// Logo always links to dashboard index (app list or redirect)
-	logoURL := basePath + "/dashboard/"
+	logoURL := basePath + "/"
 
 	return A(
 		Href(logoURL),
@@ -117,16 +117,16 @@ func DesktopNavigation(data PageData) g.Node {
 
 	if data.CurrentApp != nil {
 		appIDStr := data.CurrentApp.ID.String()
-		dashURL = data.BasePath + "/dashboard/app/" + appIDStr + "/"
-		usersURL = data.BasePath + "/dashboard/app/" + appIDStr + "/users"
-		// organizationsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/organizations"
-		environmentsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/environments"
-		sessionsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/sessions"
-		pluginsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/plugins"
-		settingsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/settings"
+		dashURL = data.BasePath + "/app/" + appIDStr + "/"
+		usersURL = data.BasePath + "/app/" + appIDStr + "/users"
+		// organizationsURL = data.BasePath + "/app/" + appIDStr + "/organizations"
+		environmentsURL = data.BasePath + "/app/" + appIDStr + "/environments"
+		sessionsURL = data.BasePath + "/app/" + appIDStr + "/sessions"
+		pluginsURL = data.BasePath + "/app/" + appIDStr + "/plugins"
+		settingsURL = data.BasePath + "/app/" + appIDStr + "/settings"
 	} else {
 		// Fallback to index if no app context (shouldn't happen in app-scoped pages)
-		dashURL = data.BasePath + "/dashboard/"
+		dashURL = data.BasePath + "/"
 		usersURL = dashURL
 		// organizationsURL = dashURL
 		environmentsURL = dashURL
@@ -169,17 +169,17 @@ func MobileNavigation(data PageData) g.Node {
 
 	if data.CurrentApp != nil {
 		appIDStr := data.CurrentApp.ID.String()
-		dashURL = data.BasePath + "/dashboard/app/" + appIDStr + "/"
-		usersURL = data.BasePath + "/dashboard/app/" + appIDStr + "/users"
-		organizationsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/organizations"
-		environmentsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/environments"
-		appsManagementURL = data.BasePath + "/dashboard/app/" + appIDStr + "/apps-management"
-		sessionsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/sessions"
-		pluginsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/plugins"
-		settingsURL = data.BasePath + "/dashboard/app/" + appIDStr + "/settings"
+		dashURL = data.BasePath + "/app/" + appIDStr + "/"
+		usersURL = data.BasePath + "/app/" + appIDStr + "/users"
+		organizationsURL = data.BasePath + "/app/" + appIDStr + "/organizations"
+		environmentsURL = data.BasePath + "/app/" + appIDStr + "/environments"
+		appsManagementURL = data.BasePath + "/app/" + appIDStr + "/apps-management"
+		sessionsURL = data.BasePath + "/app/" + appIDStr + "/sessions"
+		pluginsURL = data.BasePath + "/app/" + appIDStr + "/plugins"
+		settingsURL = data.BasePath + "/app/" + appIDStr + "/settings"
 	} else {
 		// Fallback to index if no app context
-		dashURL = data.BasePath + "/dashboard/"
+		dashURL = data.BasePath + "/"
 		usersURL = dashURL
 		organizationsURL = dashURL
 		environmentsURL = dashURL
@@ -270,7 +270,7 @@ func appSwitcherDropdown(data PageData) g.Node {
 }
 
 func appSwitcherLink(app *app.App, basePath string, isActive bool) g.Node {
-	href := basePath + "/dashboard/app/" + app.ID.String() + "/"
+	href := basePath + "/app/" + app.ID.String() + "/"
 
 	activeClass := ""
 	if isActive {
@@ -368,7 +368,7 @@ func environmentSwitcherLink(env *environment.Environment, basePath string, appI
 		Form(
 			ID(formID),
 			Method("POST"),
-			Action(basePath+"/dashboard/app/"+appIDStr+"/environment/switch"),
+			Action(basePath+"/app/"+appIDStr+"/environment/switch"),
 			Class("hidden"),
 			Input(Type("hidden"), Name("env_id"), Value(env.ID.String())),
 		),
@@ -493,7 +493,7 @@ func userDropdownMenu(data PageData) g.Node {
 				),
 				A(
 					g.Attr("role", "menuitem"),
-					Href(data.BasePath+"/dashboard/users/"+userID),
+					Href(data.BasePath+"/users/"+userID),
 					Class("group flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400"),
 					userCircleIconSmall(),
 					Span(Class("grow"), g.Text("My Profile")),
@@ -503,7 +503,7 @@ func userDropdownMenu(data PageData) g.Node {
 				Class("space-y-1 p-2.5"),
 				A(
 					g.Attr("role", "menuitem"),
-					Href(data.BasePath+"/dashboard/logout"),
+					Href(data.BasePath+"/logout"),
 					Class("group flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400"),
 					lockIcon(),
 					Span(Class("grow"), g.Text("Sign out")),

@@ -1,39 +1,10 @@
 plugin_id: apikey
 version: 1.0.0
-base_path: /api-keys
 routes:
-    - name: CreateAPIKey
-      description: CreateAPIKey handles API key creation
-      method: POST
-      path: /createapikey
-      request:
-        allowed_ips: '[]string!'
-        description: string!
-        metadata: '!'
-        name: string!
-        permissions: '!'
-        rate_limit: int!
-        scopes: '[]string!'
-      response:
-        api_key: '*apikey.APIKey!'
-        message: string!
-      request_type: CreateAPIKeyRequest
-      response_type: CreateAPIKeyResponse
-    - name: RotateAPIKey
-      description: RotateAPIKey handles API key rotation
-      method: POST
-      path: /:id/rotate
-      request:
-        "": string
-      response:
-        api_key: '*apikey.APIKey!'
-        message: string!
-      request_type: RotateAPIKeyRequest
-      response_type: RotateAPIKeyResponse
     - name: CreateAPIKey
       description: CreateAPIKey handles POST /api-keys
       method: POST
-      path: /createapikey
+      path: /api-keys
       request:
         allowed_ips: '[]string!'
         description: string!
@@ -50,7 +21,7 @@ routes:
     - name: ListAPIKeys
       description: ListAPIKeys handles GET /api-keys
       method: GET
-      path: /listapikeys
+      path: /api-keys
       request:
         "": '*bool'
       request_type: ListAPIKeysRequest
@@ -58,7 +29,7 @@ routes:
     - name: GetAPIKey
       description: GetAPIKey handles GET /api-keys/:id
       method: GET
-      path: /:id
+      path: /api-keys/:id
       request:
         "": string
       request_type: GetAPIKeyRequest
@@ -66,7 +37,7 @@ routes:
     - name: UpdateAPIKey
       description: UpdateAPIKey handles PATCH /api-keys/:id
       method: PUT
-      path: /:id
+      path: /api-keys/:id
       request:
         "": string
         allowed_ips: '[]string!'
@@ -81,7 +52,7 @@ routes:
     - name: DeleteAPIKey
       description: DeleteAPIKey handles DELETE /api-keys/:id
       method: DELETE
-      path: /:id
+      path: /api-keys/:id
       request:
         "": string
       request_type: DeleteAPIKeyRequest
@@ -89,7 +60,7 @@ routes:
     - name: RotateAPIKey
       description: RotateAPIKey handles POST /api-keys/:id/rotate
       method: POST
-      path: /:id/rotate
+      path: /api-keys/:id/rotate
       request:
         "": string
       response:
@@ -100,33 +71,84 @@ routes:
     - name: VerifyAPIKey
       description: VerifyAPIKey handles POST /api-keys/verify
       method: POST
-      path: /verify
+      path: /api-keys/verify
       request:
         key: string!
       request_type: VerifyAPIKeyRequest
       response_type: VerifyAPIKeyResponse
 types:
+    - name: Plugin
+      fields:
+        "": Config
+    - name: RateLimitConfig
+      fields:
+        enabled: bool!
+        window: time.Duration!
+    - name: AutoCleanupConfig
+      fields:
+        enabled: bool!
+        interval: time.Duration!
+    - name: Handler
+      fields:
+        "": Config
+    - name: ListAPIKeysRequest
+      fields:
+        "": '*bool'
+    - name: GetEffectivePermissionsRequest
+      fields:
+        "": string
     - name: CreateAPIKeyResponse
       fields:
         api_key: '*apikey.APIKey!'
         message: string!
+    - name: RolesResponse
+      fields:
+        roles: '[]*apikey.Role!'
+    - name: Middleware
+      fields:
+        "": Config
+    - name: ScopeDefinition
+      fields:
+        "": string
     - name: IPWhitelistConfig
       fields:
         enabled: bool!
         strict_mode: bool!
+    - name: UpdateAPIKeyRequest
+      fields:
+        "": string
+        allowed_ips: '[]string!'
+        description: '*string!'
+        metadata: '!'
+        name: '*string!'
+        permissions: '!'
+        rate_limit: '*int!'
+        scopes: '[]string!'
     - name: RotateAPIKeyRequest
       fields:
         "": string
-    - name: GetEffectivePermissionsRequest
+    - name: DashboardExtension
+      fields:
+        "": string
+    - name: KeyStats
+      fields:
+        "": string
+    - name: GetAPIKeyRequest
+      fields:
+        "": string
+    - name: DeleteAPIKeyRequest
+      fields:
+        "": string
+    - name: VerifyAPIKeyRequest
+      fields:
+        key: string!
+    - name: UnassignRoleRequest
       fields:
         "": string
     - name: RotateAPIKeyResponse
       fields:
         api_key: '*apikey.APIKey!'
         message: string!
-    - name: Middleware
-      fields:
-        "": Config
     - name: Config
       fields:
         allow_query_param: bool!
@@ -150,9 +172,6 @@ types:
         notify_on_rate_limit: bool!
         notify_on_rotated: bool!
         webhook_urls: '[]string!'
-    - name: Handler
-      fields:
-        "": '*apikey.Service'
     - name: CreateAPIKeyRequest
       fields:
         allowed_ips: '[]string!'
@@ -162,54 +181,6 @@ types:
         permissions: '!'
         rate_limit: int!
         scopes: '[]string!'
-    - name: UpdateAPIKeyRequest
-      fields:
-        "": string
-        allowed_ips: '[]string!'
-        description: '*string!'
-        metadata: '!'
-        name: '*string!'
-        permissions: '!'
-        rate_limit: '*int!'
-        scopes: '[]string!'
-    - name: DeleteAPIKeyRequest
-      fields:
-        "": string
-    - name: RolesResponse
-      fields:
-        roles: '[]*apikey.Role!'
-    - name: Plugin
-      fields:
-        "": '*apikey.Service'
-    - name: ScopeDefinition
-      fields:
-        "": string
-    - name: DashboardExtension
-      fields:
-        "": '*dashboard.ExtensionRegistry'
-    - name: VerifyAPIKeyRequest
-      fields:
-        key: string!
-    - name: UnassignRoleRequest
-      fields:
-        "": string
-    - name: RateLimitConfig
-      fields:
-        enabled: bool!
-        window: time.Duration!
-    - name: AutoCleanupConfig
-      fields:
-        enabled: bool!
-        interval: time.Duration!
-    - name: KeyStats
-      fields:
-        "": int
-    - name: ListAPIKeysRequest
-      fields:
-        "": '*bool'
-    - name: GetAPIKeyRequest
-      fields:
-        "": string
     - name: AssignRoleRequest
       fields:
         "": string

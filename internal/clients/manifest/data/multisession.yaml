@@ -1,11 +1,10 @@
 plugin_id: multisession
 version: 1.0.0
-base_path: /multi-session
 routes:
     - name: List
-      description: List returns sessions for the current user based on cookie with optional filtering
+      description: List returns sessions for the current user with optional filtering
       method: GET
-      path: /list
+      path: /multi-session/list
       request:
         active: '*bool!'
         createdFrom: '*string!'
@@ -21,7 +20,7 @@ routes:
     - name: SetActive
       description: SetActive switches the current session cookie to the provided session id
       method: POST
-      path: /set-active
+      path: /multi-session/set-active
       request:
         id: string!
       response:
@@ -32,12 +31,12 @@ routes:
     - name: Delete
       description: Delete revokes a session by id for the current user
       method: POST
-      path: /delete/{id}
+      path: /multi-session/delete/{id}
       response_type: StatusResponse
     - name: GetCurrent
       description: GetCurrent returns details about the currently active session
       method: GET
-      path: /current
+      path: /multi-session/current
       response:
         session: '*session.Session!'
         token: string!
@@ -45,7 +44,7 @@ routes:
     - name: GetByID
       description: GetByID returns details about a specific session by ID
       method: GET
-      path: /{id}
+      path: /multi-session/{id}
       response:
         session: '*session.Session!'
         token: string!
@@ -53,7 +52,7 @@ routes:
     - name: RevokeAll
       description: RevokeAll revokes all sessions for the current user
       method: POST
-      path: /revoke-all
+      path: /multi-session/revoke-all
       request:
         includeCurrentSession: bool!
       response:
@@ -64,7 +63,7 @@ routes:
     - name: RevokeOthers
       description: RevokeOthers revokes all sessions except the current one
       method: POST
-      path: /revoke-others
+      path: /multi-session/revoke-others
       response:
         revokedCount: int!
         status: string!
@@ -72,7 +71,7 @@ routes:
     - name: Refresh
       description: Refresh extends the current session's expiry time
       method: POST
-      path: /refresh
+      path: /multi-session/refresh
       response:
         session: '*session.Session!'
         token: string!
@@ -80,7 +79,7 @@ routes:
     - name: GetStats
       description: GetStats returns aggregated session statistics for the current user
       method: GET
-      path: /stats
+      path: /multi-session/stats
       response:
         activeSessions: int!
         deviceCount: int!
@@ -90,30 +89,40 @@ routes:
         totalSessions: int!
       response_type: SessionStatsResponse
 types:
-    - name: SetActiveRequest
+    - name: RevokeAllUserSessionsResult
       fields:
+        message: string!
+        revokedCount: int!
+        success: bool!
+    - name: PaginationInfoDTO
+      fields:
+        currentPage: int!
+        pageSize: int!
+        totalItems: int64!
+        totalPages: int!
+    - name: GetSettingsResult
+      fields:
+        settings: SettingsDTO!
+    - name: SessionDTO
+      fields:
+        browser: string!
+        browserVersion: string!
+        createdAt: time.Time!
+        deviceInfo: string!
+        deviceType: string!
+        expiresAt: time.Time!
+        expiresIn: string!
         id: string!
-    - name: MultiSessionErrorResponse
-      fields:
-        error: string!
-    - name: SessionStatsResponse
-      fields:
-        activeSessions: int!
-        deviceCount: int!
-        locationCount: int!
-        newestSession: '*string!'
-        oldestSession: '*string!'
-        totalSessions: int!
-    - name: Plugin
-      fields:
-        "": '*Service'
-    - name: SessionTokenResponse
-      fields:
-        session: '*session.Session!'
-        token: string!
-    - name: Service
-      fields:
-        "": session.ServiceInterface
+        ipAddress: string!
+        isActive: bool!
+        isExpiring: bool!
+        lastUsed: string!
+        os: string!
+        osVersion: string!
+        status: string!
+        userAgent: string!
+        userEmail: string!
+        userId: string!
     - name: ListSessionsRequest
       fields:
         active: '*bool!'
@@ -127,17 +136,137 @@ types:
         userAgent: '*string!'
     - name: SessionStats
       fields:
-        "": int
-    - name: RevokeResponse
+        "": '*session.Session'
+    - name: GetSessionStatsInput
       fields:
-        revokedCount: int!
+        appId: string!
+    - name: GetUserSessionsInput
+      fields:
+        appId: string!
+        page: int!
+        pageSize: int!
+        userId: string!
+    - name: UpdateSettingsInput
+      fields:
+        allowCrossPlatform: '*bool!'
+        appId: string!
+        enableDeviceTracking: '*bool!'
+        maxSessionsPerUser: int!
+        sessionExpiryHours: int!
+    - name: SessionDetailDTO
+      fields:
+        appId: string!
+        browser: string!
+        browserVersion: string!
+        createdAt: time.Time!
+        createdAtFormatted: string!
+        deviceInfo: string!
+        deviceType: string!
+        environmentId: string!
+        expiresAt: time.Time!
+        expiresAtFormatted: string!
+        id: string!
+        ipAddress: string!
+        isActive: bool!
+        isExpiring: bool!
+        lastRefreshedAt: '*time.Time!'
+        lastRefreshedFormatted: string!
+        organizationId: string!
+        os: string!
+        osVersion: string!
         status: string!
+        updatedAt: time.Time!
+        updatedAtFormatted: string!
+        userAgent: string!
+        userEmail: string!
+        userId: string!
+    - name: DashboardExtension
+      fields:
+        "": string
+    - name: SessionTokenResponse
+      fields:
+        session: '*session.Session!'
+        token: string!
+    - name: RevokeAllUserSessionsInput
+      fields:
+        appId: string!
+        userId: string!
+    - name: Handler
+      fields:
+        "": '*Service'
     - name: RevokeAllRequest
       fields:
         includeCurrentSession: bool!
     - name: mockSessionService
       fields:
         "": '*bun.DB'
+    - name: MultiSessionErrorResponse
+      fields:
+        error: string!
+    - name: RevokeSessionInput
+      fields:
+        appId: string!
+        sessionId: string!
+    - name: GetUserSessionsResult
+      fields:
+        activeCount: int!
+        pagination: PaginationInfoDTO!
+        sessions: '[]SessionDTO!'
+        totalCount: int!
+        userId: string!
+    - name: GetSettingsInput
+      fields:
+        appId: string!
+    - name: sessionStats
+      fields:
+        "": int
+    - name: SetActiveRequest
+      fields:
+        id: string!
+    - name: GetSessionsInput
+      fields:
+        appId: string!
+        device: string!
+        page: int!
+        pageSize: int!
+        search: string!
+        status: string!
+        userId: string!
+    - name: GetSessionsResult
+      fields:
+        pagination: PaginationInfoDTO!
+        sessions: '[]SessionDTO!'
+        stats: SessionStatsDTO!
+    - name: GetSessionInput
+      fields:
+        appId: string!
+        sessionId: string!
+    - name: GetSessionStatsResult
+      fields:
+        stats: SessionStatsDTO!
+    - name: SettingsDTO
+      fields:
+        allowCrossPlatform: bool!
+        enableDeviceTracking: bool!
+        maxSessionsPerUser: int!
+        sessionExpiryHours: int!
+    - name: RevokeResponse
+      fields:
+        revokedCount: int!
+        status: string!
+    - name: GetSessionResult
+      fields:
+        session: SessionDetailDTO!
+    - name: SessionStatsDTO
+      fields:
+        activeCount: int!
+        desktopCount: int!
+        expiredCount: int!
+        expiringCount: int!
+        mobileCount: int!
+        tabletCount: int!
+        totalSessions: int64!
+        uniqueUsers: int!
     - name: DeviceInfo
       fields:
         "": bool
@@ -147,12 +276,26 @@ types:
         enableDeviceTracking: bool!
         maxSessionsPerUser: int!
         sessionExpiryHours: int!
-    - name: DashboardExtension
+    - name: Service
       fields:
-        "": '*dashboard.ExtensionRegistry'
-    - name: sessionStats
+        "": '*auth.Service'
+    - name: UpdateSettingsResult
       fields:
-        "": int
-    - name: Handler
+        message: string!
+        settings: SettingsDTO!
+        success: bool!
+    - name: SessionStatsResponse
       fields:
-        "": '*Service'
+        activeSessions: int!
+        deviceCount: int!
+        locationCount: int!
+        newestSession: '*string!'
+        oldestSession: '*string!'
+        totalSessions: int!
+    - name: Plugin
+      fields:
+        "": '*DashboardExtension'
+    - name: RevokeSessionResult
+      fields:
+        message: string!
+        success: bool!

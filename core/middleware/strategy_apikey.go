@@ -56,12 +56,22 @@ func (s *APIKeyStrategy) Extract(c forge.Context) (interface{}, bool) {
 		}
 
 		// Bearer pk_test_xxx (if starts with pk_/sk_/rk_)
+		// IMPORTANT: Only extract if it's actually an API key, not a JWT
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
+			token = strings.TrimSpace(token)
+			
+			// Only accept if it starts with known API key prefixes
 			if strings.HasPrefix(token, "pk_") ||
 				strings.HasPrefix(token, "sk_") ||
 				strings.HasPrefix(token, "rk_") {
 				return token, true
+			}
+			
+			// Skip JWTs (3 parts separated by dots)
+			// Let the JWT strategy handle them
+			if strings.Count(token, ".") == 2 {
+				return nil, false
 			}
 		}
 	}
@@ -69,7 +79,12 @@ func (s *APIKeyStrategy) Extract(c forge.Context) (interface{}, bool) {
 	// Method 2: Additional headers (X-API-Key, etc.)
 	for _, header := range s.additionalHeaders {
 		if apiKey := c.Request().Header.Get(header); apiKey != "" {
-			return apiKey, true
+			// Make sure it's an API key, not a JWT
+			if strings.HasPrefix(apiKey, "pk_") ||
+				strings.HasPrefix(apiKey, "sk_") ||
+				strings.HasPrefix(apiKey, "rk_") {
+				return apiKey, true
+			}
 		}
 	}
 

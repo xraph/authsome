@@ -34,15 +34,15 @@ type SCIMUser struct {
 	UserName          string    `json:"userName"`
 	Name              *SCIMName `json:"name,omitempty"`
 	DisplayName       string    `json:"displayName,omitempty"`
-	NickName          string `json:"nickName,omitempty"`
-	ProfileURL        string `json:"profileUrl,omitempty"`
-	Title             string `json:"title,omitempty"`
-	UserType          string `json:"userType,omitempty"`
-	PreferredLanguage string `json:"preferredLanguage,omitempty"`
-	Locale            string `json:"locale,omitempty"`
-	Timezone          string `json:"timezone,omitempty"`
-	Active            bool   `json:"active"`
-	Password          string `json:"password,omitempty"`
+	NickName          string    `json:"nickName,omitempty"`
+	ProfileURL        string    `json:"profileUrl,omitempty"`
+	Title             string    `json:"title,omitempty"`
+	UserType          string    `json:"userType,omitempty"`
+	PreferredLanguage string    `json:"preferredLanguage,omitempty"`
+	Locale            string    `json:"locale,omitempty"`
+	Timezone          string    `json:"timezone,omitempty"`
+	Active            bool      `json:"active"`
+	Password          string    `json:"password,omitempty"`
 
 	// Multi-valued attributes
 	Emails           []Email           `json:"emails,omitempty"`

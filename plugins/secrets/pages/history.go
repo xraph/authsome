@@ -19,7 +19,7 @@ func VersionHistoryPage(
 	versions []*core.SecretVersionDTO,
 	pag *pagination.Pagination,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Build pagination node only if needed
 	var pagNode g.Node
@@ -28,7 +28,7 @@ func VersionHistoryPage(
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Header with breadcrumb
 		Div(
@@ -118,7 +118,7 @@ func versionTimeline(
 	secret *core.SecretDTO,
 	versions []*core.SecretVersionDTO,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	if len(versions) == 0 {
 		return Div(

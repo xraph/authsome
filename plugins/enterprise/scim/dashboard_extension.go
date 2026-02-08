@@ -2,7 +2,6 @@ package scim
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -10,9 +9,9 @@ import (
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/authsome/plugins/dashboard/components"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/plugins/enterprise/scim/pages"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -20,18 +19,16 @@ import (
 // DashboardExtension implements the ui.DashboardExtension interface
 // This allows the SCIM plugin to add its own screens to the dashboard
 type DashboardExtension struct {
-	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
+	plugin     *Plugin
+	baseUIPath string
 }
 
 // NewDashboardExtension creates a new dashboard extension for SCIM
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
-	return &DashboardExtension{plugin: plugin}
-}
-
-// SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
+	return &DashboardExtension{
+		plugin:     plugin,
+		baseUIPath: "/api/identity/ui", // Default base UI path
+	}
 }
 
 // ExtensionID returns the unique identifier for this extension
@@ -50,9 +47,9 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 			Order:    60,
 			URLBuilder: func(basePath string, currentApp *app.App) string {
 				if currentApp == nil {
-					return basePath + "/dashboard/scim"
+					return basePath + "/scim"
 				}
-				return basePath + "/dashboard/app/" + currentApp.ID.String() + "/scim"
+				return basePath + "/app/" + currentApp.ID.String() + "/scim"
 			},
 			ActiveChecker: func(activePage string) bool {
 				return strings.HasPrefix(activePage, "scim")
@@ -63,161 +60,39 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 }
 
 // Routes returns routes to register under /dashboard/app/:appId/
+// Note: All SCIM routes use /scim/ prefix (not /settings/scim-*) to ensure
+// they get the dashboard layout instead of settings layout
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
-		// Main SCIM Dashboard
+		// Main SCIM Dashboard (Overview)
 		{
 			Method:       "GET",
 			Path:         "/scim",
-			Handler:      e.ServeSCIMDashboard,
-			Name:         "dashboard.scim.overview",
+			Handler:      e.ServeSCIMOverviewPage,
+			Name:         "scim.dashboard.overview",
 			Summary:      "SCIM provisioning dashboard",
 			Description:  "View SCIM provisioning status and overview",
 			Tags:         []string{"Dashboard", "SCIM"},
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
-		// Sync Status Page
+		// Providers Management
 		{
 			Method:       "GET",
-			Path:         "/scim/status",
-			Handler:      e.ServeSyncStatusPage,
-			Name:         "dashboard.scim.status",
-			Summary:      "Real-time sync status",
-			Description:  "View real-time SCIM synchronization status",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		// Token Management Routes
-		{
-			Method:       "GET",
-			Path:         "/settings/scim-tokens",
-			Handler:      e.ServeTokensListPage,
-			Name:         "dashboard.settings.scim-tokens",
-			Summary:      "SCIM tokens management",
-			Description:  "Manage SCIM bearer tokens for IdP authentication",
-			Tags:         []string{"Dashboard", "Settings", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-tokens/create",
-			Handler:      e.HandleCreateToken,
-			Name:         "dashboard.settings.scim-tokens.create",
-			Summary:      "Create SCIM token",
-			Description:  "Create a new SCIM provisioning token",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-tokens/:id/rotate",
-			Handler:      e.HandleRotateToken,
-			Name:         "dashboard.settings.scim-tokens.rotate",
-			Summary:      "Rotate SCIM token",
-			Description:  "Rotate an existing SCIM token",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-tokens/:id/revoke",
-			Handler:      e.HandleRevokeToken,
-			Name:         "dashboard.settings.scim-tokens.revoke",
-			Summary:      "Revoke SCIM token",
-			Description:  "Revoke a SCIM token",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-tokens/:id/test",
-			Handler:      e.HandleTestConnection,
-			Name:         "dashboard.settings.scim-tokens.test",
-			Summary:      "Test SCIM connection",
-			Description:  "Test SCIM endpoint connectivity",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		// Configuration Routes
-		{
-			Method:       "GET",
-			Path:         "/settings/scim-config",
-			Handler:      e.ServeConfigPage,
-			Name:         "dashboard.settings.scim-config",
-			Summary:      "SCIM configuration",
-			Description:  "Configure SCIM provisioning settings",
-			Tags:         []string{"Dashboard", "Settings", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-config/user-provisioning",
-			Handler:      e.HandleUpdateUserProvisioning,
-			Name:         "dashboard.settings.scim-config.user-provisioning",
-			Summary:      "Update user provisioning settings",
-			Description:  "Update SCIM user provisioning configuration",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-config/group-sync",
-			Handler:      e.HandleUpdateGroupSync,
-			Name:         "dashboard.settings.scim-config.group-sync",
-			Summary:      "Update group sync settings",
-			Description:  "Update SCIM group synchronization configuration",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-config/attribute-mapping",
-			Handler:      e.HandleUpdateAttributeMapping,
-			Name:         "dashboard.settings.scim-config.attribute-mapping",
-			Summary:      "Update attribute mapping",
-			Description:  "Configure SCIM attribute mappings",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-config/security",
-			Handler:      e.HandleUpdateSecurity,
-			Name:         "dashboard.settings.scim-config.security",
-			Summary:      "Update security settings",
-			Description:  "Update SCIM security and rate limit settings",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		// Provider Management Routes
-		{
-			Method:       "GET",
-			Path:         "/settings/scim-providers",
-			Handler:      e.ServeProvidersListPage,
-			Name:         "dashboard.settings.scim-providers",
-			Summary:      "SCIM providers",
+			Path:         "/scim/providers",
+			Handler:      e.ServeProvidersPage,
+			Name:         "scim.dashboard.providers",
+			Summary:      "SCIM providers list",
 			Description:  "Manage SCIM identity providers",
-			Tags:         []string{"Dashboard", "Settings", "SCIM"},
+			Tags:         []string{"Dashboard", "SCIM"},
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
 		{
 			Method:       "GET",
-			Path:         "/settings/scim-providers/add",
-			Handler:      e.ServeProviderAddPage,
-			Name:         "dashboard.settings.scim-providers.add",
+			Path:         "/scim/providers/add",
+			Handler:      e.ServeAddProviderPage,
+			Name:         "scim.dashboard.providers.add",
 			Summary:      "Add SCIM provider",
 			Description:  "Add a new SCIM provider",
 			Tags:         []string{"Dashboard", "SCIM"},
@@ -225,112 +100,48 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAdmin: true,
 		},
 		{
-			Method:       "POST",
-			Path:         "/settings/scim-providers/add",
-			Handler:      e.HandleAddProvider,
-			Name:         "dashboard.settings.scim-providers.add.submit",
-			Summary:      "Submit add provider",
-			Description:  "Process add provider form",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
 			Method:       "GET",
-			Path:         "/settings/scim-providers/:id",
-			Handler:      e.ServeProviderDetailPage,
-			Name:         "dashboard.settings.scim-providers.detail",
+			Path:         "/scim/providers/:providerId",
+			Handler:      e.ServeProviderDetailPageV2,
+			Name:         "scim.dashboard.providers.detail",
 			Summary:      "Provider details",
 			Description:  "View SCIM provider details",
 			Tags:         []string{"Dashboard", "SCIM"},
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-providers/:id/update",
-			Handler:      e.HandleUpdateProvider,
-			Name:         "dashboard.settings.scim-providers.update",
-			Summary:      "Update provider",
-			Description:  "Update SCIM provider settings",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-providers/:id/sync",
-			Handler:      e.HandleManualSync,
-			Name:         "dashboard.settings.scim-providers.sync",
-			Summary:      "Trigger manual sync",
-			Description:  "Manually trigger SCIM synchronization",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-providers/:id/test",
-			Handler:      e.HandleTestProvider,
-			Name:         "dashboard.settings.scim-providers.test",
-			Summary:      "Test provider connection",
-			Description:  "Test SCIM provider connectivity",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "POST",
-			Path:         "/settings/scim-providers/:id/remove",
-			Handler:      e.HandleRemoveProvider,
-			Name:         "dashboard.settings.scim-providers.remove",
-			Summary:      "Remove provider",
-			Description:  "Remove SCIM provider",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		// Monitoring Routes
+		// Tokens Management
 		{
 			Method:       "GET",
-			Path:         "/settings/scim-monitoring",
-			Handler:      e.ServeMonitoringPage,
-			Name:         "dashboard.settings.scim-monitoring",
-			Summary:      "SCIM monitoring",
-			Description:  "Monitor SCIM synchronization and events",
-			Tags:         []string{"Dashboard", "Settings", "SCIM"},
+			Path:         "/scim/tokens",
+			Handler:      e.ServeTokensPage,
+			Name:         "scim.dashboard.tokens",
+			Summary:      "SCIM tokens management",
+			Description:  "Manage SCIM bearer tokens for IdP authentication",
+			Tags:         []string{"Dashboard", "SCIM"},
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Logs/Monitoring
 		{
 			Method:       "GET",
-			Path:         "/settings/scim-monitoring/logs",
-			Handler:      e.ServeLogsPage,
-			Name:         "dashboard.settings.scim-monitoring.logs",
+			Path:         "/scim/logs",
+			Handler:      e.ServeLogsPageV2,
+			Name:         "scim.dashboard.logs",
 			Summary:      "SCIM event logs",
 			Description:  "View SCIM provisioning event logs",
 			Tags:         []string{"Dashboard", "SCIM"},
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
+		// Configuration
 		{
 			Method:       "GET",
-			Path:         "/settings/scim-monitoring/stats",
-			Handler:      e.ServeStatsPage,
-			Name:         "dashboard.settings.scim-monitoring.stats",
-			Summary:      "SCIM statistics",
-			Description:  "View SCIM analytics and metrics",
-			Tags:         []string{"Dashboard", "SCIM"},
-			RequireAuth:  true,
-			RequireAdmin: true,
-		},
-		{
-			Method:       "GET",
-			Path:         "/settings/scim-monitoring/export",
-			Handler:      e.HandleExportLogs,
-			Name:         "dashboard.settings.scim-monitoring.export",
-			Summary:      "Export logs",
-			Description:  "Export SCIM logs as CSV/JSON",
+			Path:         "/scim/config",
+			Handler:      e.ServeConfigPageV2,
+			Name:         "scim.dashboard.config",
+			Summary:      "SCIM configuration",
+			Description:  "Configure SCIM provisioning settings",
 			Tags:         []string{"Dashboard", "SCIM"},
 			RequireAuth:  true,
 			RequireAdmin: true,
@@ -343,54 +154,153 @@ func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{} // Using SettingsPages instead
 }
 
-// SettingsPages returns full settings pages for the sidebar layout
+// SettingsPages returns settings pages
+// Note: SCIM is a main navigation item (not a settings page), so we return nil here
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
-	return []ui.SettingsPage{
-		{
-			ID:            "scim-tokens",
-			Label:         "SCIM Tokens",
-			Description:   "Manage bearer tokens for IdP authentication",
-			Icon:          lucide.Key(Class("h-5 w-5")),
-			Category:      "security",
-			Order:         30,
-			Path:          "scim-tokens",
-			RequirePlugin: "scim",
-			RequireAdmin:  true,
-		},
-		{
-			ID:            "scim-config",
-			Label:         "SCIM Configuration",
-			Description:   "Configure user provisioning and group sync",
-			Icon:          lucide.Settings(Class("h-5 w-5")),
-			Category:      "integrations",
-			Order:         20,
-			Path:          "scim-config",
-			RequirePlugin: "scim",
-			RequireAdmin:  true,
-		},
-		{
-			ID:            "scim-providers",
-			Label:         "SCIM Providers",
-			Description:   "Manage identity provider connections",
-			Icon:          lucide.Cloud(Class("h-5 w-5")),
-			Category:      "integrations",
-			Order:         21,
-			Path:          "scim-providers",
-			RequirePlugin: "scim",
-			RequireAdmin:  true,
-		},
-		{
-			ID:            "scim-monitoring",
-			Label:         "SCIM Monitoring",
-			Description:   "View sync logs and analytics",
-			Icon:          lucide.Activity(Class("h-5 w-5")),
-			Category:      "advanced",
-			Order:         10,
-			Path:          "scim-monitoring",
-			RequirePlugin: "scim",
-			RequireAdmin:  true,
-		},
+	return nil
+}
+
+// =============================================================================
+// V2 Page Handlers (using Alpine.js and ForgeUI components)
+// =============================================================================
+
+// ServeSCIMOverviewPage serves the SCIM overview page using v2 Alpine.js components
+func (e *DashboardExtension) ServeSCIMOverviewPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		// Try to get from page context
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
 	}
+
+	return pages.SCIMOverviewPage(currentApp, e.getBasePath()), nil
+}
+
+// ServeProvidersPage serves the SCIM providers list page
+func (e *DashboardExtension) ServeProvidersPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
+	}
+
+	return pages.ProvidersListPage(currentApp, e.getBasePath()), nil
+}
+
+// ServeAddProviderPage serves the add provider form page
+func (e *DashboardExtension) ServeAddProviderPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
+	}
+
+	return pages.AddProviderPage(currentApp, e.getBasePath()), nil
+}
+
+// ServeProviderDetailPageV2 serves the provider detail page
+func (e *DashboardExtension) ServeProviderDetailPageV2(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
+	}
+
+	// TODO: Create provider detail page
+	// For now, redirect to providers list
+	return pages.ProvidersListPage(currentApp, e.getBasePath()), nil
+}
+
+// ServeTokensPage serves the SCIM tokens management page
+func (e *DashboardExtension) ServeTokensPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
+	}
+
+	return pages.TokensListPage(currentApp, e.getBasePath()), nil
+}
+
+// ServeLogsPageV2 serves the SCIM event logs page
+func (e *DashboardExtension) ServeLogsPageV2(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
+	}
+
+	return pages.LogsPage(currentApp, e.getBasePath()), nil
+}
+
+// ServeConfigPageV2 serves the SCIM configuration page
+func (e *DashboardExtension) ServeConfigPageV2(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		if appVal, exists := ctx.Get("currentApp"); exists && appVal != nil {
+			if a, ok := appVal.(*app.App); ok {
+				currentApp = a
+			}
+		}
+		if currentApp == nil {
+			return nil, errs.BadRequest("Invalid app context")
+		}
+	}
+
+	// TODO: Create config page with Alpine.js
+	// For now, use placeholder
+	appID := currentApp.ID.String()
+	appBase := e.getBasePath() + "/app/" + appID
+
+	return Div(
+		Class("space-y-6"),
+		Div(
+			H1(Class("text-2xl font-bold"), g.Text("SCIM Configuration")),
+			P(Class("text-muted-foreground"), g.Text("Configure SCIM provisioning settings")),
+		),
+		Div(
+			Class("p-8 text-center text-muted-foreground"),
+			g.Text("Configuration page coming soon. Use the "),
+			A(Href(appBase+"/scim"), Class("text-primary hover:underline"), g.Text("Overview")),
+			g.Text(" page for now."),
+		),
+	), nil
 }
 
 // DashboardWidgets returns widgets to show on the main dashboard
@@ -419,32 +329,38 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
+// BridgeFunctions returns bridge functions for the SCIM plugin
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	return e.getBridgeFunctions()
+}
+
 // Helper methods
 
 // getUserFromContext extracts the current user from the request context
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil
+func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
+	// Extract user from context directly
+	if userVal := ctx.Request.Context().Value("user"); userVal != nil {
+		if u, ok := userVal.(*user.User); ok {
+			return u
+		}
 	}
-	return handler.GetUserFromContext(c)
+	return nil
 }
 
 // extractAppFromURL extracts the app from the URL parameter
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil, fmt.Errorf("handler not available")
+func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
+	// Extract app from context
+	if appVal := ctx.Request.Context().Value("app"); appVal != nil {
+		if a, ok := appVal.(*app.App); ok {
+			return a, nil
+		}
 	}
-	return handler.GetCurrentApp(c)
+	return nil, fmt.Errorf("app not found in context")
 }
 
 // getBasePath returns the dashboard base path
 func (e *DashboardExtension) getBasePath() string {
-	if e.registry != nil && e.registry.GetHandler() != nil {
-		return e.registry.GetHandler().GetBasePath()
-	}
-	return ""
+	return e.baseUIPath
 }
 
 // detectMode determines if we're in app or organization mode
@@ -460,9 +376,9 @@ func (e *DashboardExtension) detectMode() string {
 }
 
 // getOrgFromContext tries to extract organization ID from context or URL
-func (e *DashboardExtension) getOrgFromContext(c forge.Context) (*xid.ID, error) {
+func (e *DashboardExtension) getOrgFromContext(ctx *router.PageContext) (*xid.ID, error) {
 	// Try to get from URL parameter first
-	orgIDStr := c.Param("orgId")
+	orgIDStr := ctx.Param("orgId")
 	if orgIDStr != "" {
 		orgID, err := xid.FromString(orgIDStr)
 		if err != nil {
@@ -472,7 +388,7 @@ func (e *DashboardExtension) getOrgFromContext(c forge.Context) (*xid.ID, error)
 	}
 
 	// Try to get from query parameter
-	orgIDStr = c.Query("orgId")
+	orgIDStr = ctx.Request.URL.Query().Get("orgId")
 	if orgIDStr != "" {
 		orgID, err := xid.FromString(orgIDStr)
 		if err != nil {
@@ -491,31 +407,29 @@ func (e *DashboardExtension) getOrgFromContext(c forge.Context) (*xid.ID, error)
 
 // Main Dashboard Handlers
 
-func (e *DashboardExtension) ServeSCIMDashboard(c forge.Context) error {
+func (e *DashboardExtension) ServeSCIMDashboard(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+
 	// Get current app and user
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid app context",
-		})
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	currentUser := e.getUserFromContext(c)
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return nil, errs.Unauthorized()
 	}
 
 	// Get organization ID if in org mode
-	orgID, _ := e.getOrgFromContext(c)
+	orgID, _ := e.getOrgFromContext(ctx)
 
 	// Fetch dashboard stats
 	var stats *DashboardStats
 	if orgID != nil {
-		stats, err = e.plugin.service.GetDashboardStats(c.Request().Context(), currentApp.ID, orgID)
+		stats, err = e.plugin.service.GetDashboardStats(reqCtx, currentApp.ID, orgID)
 	} else {
-		stats, err = e.plugin.service.GetDashboardStats(c.Request().Context(), currentApp.ID, nil)
+		stats, err = e.plugin.service.GetDashboardStats(reqCtx, currentApp.ID, nil)
 	}
 	if err != nil {
 		stats = &DashboardStats{
@@ -530,9 +444,9 @@ func (e *DashboardExtension) ServeSCIMDashboard(c forge.Context) error {
 	// Fetch sync status
 	var syncStatus *SyncStatus
 	if orgID != nil {
-		syncStatus, err = e.plugin.service.GetSyncStatus(c.Request().Context(), currentApp.ID, orgID)
+		syncStatus, err = e.plugin.service.GetSyncStatus(reqCtx, currentApp.ID, orgID)
 	} else {
-		syncStatus, err = e.plugin.service.GetSyncStatus(c.Request().Context(), currentApp.ID, nil)
+		syncStatus, err = e.plugin.service.GetSyncStatus(reqCtx, currentApp.ID, nil)
 	}
 	if err != nil {
 		syncStatus = &SyncStatus{
@@ -546,9 +460,9 @@ func (e *DashboardExtension) ServeSCIMDashboard(c forge.Context) error {
 	// Fetch recent activity
 	var recentActivity []*SCIMSyncEvent
 	if orgID != nil {
-		recentActivity, err = e.plugin.service.GetRecentActivity(c.Request().Context(), currentApp.ID, orgID, 5)
+		recentActivity, err = e.plugin.service.GetRecentActivity(reqCtx, currentApp.ID, orgID, 5)
 	} else {
-		recentActivity, err = e.plugin.service.GetRecentActivity(c.Request().Context(), currentApp.ID, nil, 5)
+		recentActivity, err = e.plugin.service.GetRecentActivity(reqCtx, currentApp.ID, nil, 5)
 	}
 	if err != nil {
 		recentActivity = []*SCIMSyncEvent{}
@@ -557,9 +471,9 @@ func (e *DashboardExtension) ServeSCIMDashboard(c forge.Context) error {
 	// Fetch failed operations
 	var failedOps []*SCIMSyncEvent
 	if orgID != nil {
-		failedOps, err = e.plugin.service.GetFailedEvents(c.Request().Context(), currentApp.ID, orgID, 5)
+		failedOps, err = e.plugin.service.GetFailedEvents(reqCtx, currentApp.ID, orgID, 5)
 	} else {
-		failedOps, err = e.plugin.service.GetFailedEvents(c.Request().Context(), currentApp.ID, nil, 5)
+		failedOps, err = e.plugin.service.GetFailedEvents(reqCtx, currentApp.ID, nil, 5)
 	}
 	if err != nil {
 		failedOps = []*SCIMSyncEvent{}
@@ -570,63 +484,44 @@ func (e *DashboardExtension) ServeSCIMDashboard(c forge.Context) error {
 	// Render the dashboard with proper layout
 	content := e.renderDashboardPage(basePath, currentApp, stats, syncStatus, recentActivity, failedOps)
 
-	// Use dashboard handler's RenderWithLayout for proper sidebar layout
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		// Fallback to direct rendering if handler not available
-		c.SetHeader("Content-Type", "text/html; charset=utf-8")
-		c.Response().WriteHeader(http.StatusOK)
-		return content.Render(c.Response())
-	}
-
-	return handler.RenderWithLayout(c, e.buildPageData(c, currentUser, currentApp, "scim", "SCIM Provisioning"), content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
-func (e *DashboardExtension) ServeSyncStatusPage(c forge.Context) error {
+func (e *DashboardExtension) ServeSyncStatusPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+
 	// Get current app
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid app context",
-		})
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	currentUser := e.getUserFromContext(c)
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return nil, errs.Unauthorized()
 	}
 
 	// Get organization ID if in org mode
-	orgID, _ := e.getOrgFromContext(c)
+	orgID, _ := e.getOrgFromContext(ctx)
 
 	// Fetch sync status
 	var syncStatus *SyncStatus
 	if orgID != nil {
-		syncStatus, err = e.plugin.service.GetSyncStatus(c.Request().Context(), currentApp.ID, orgID)
+		syncStatus, err = e.plugin.service.GetSyncStatus(reqCtx, currentApp.ID, orgID)
 	} else {
-		syncStatus, err = e.plugin.service.GetSyncStatus(c.Request().Context(), currentApp.ID, nil)
+		syncStatus, err = e.plugin.service.GetSyncStatus(reqCtx, currentApp.ID, nil)
 	}
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch sync status",
-		})
+		return nil, errs.InternalServerError("Failed to fetch sync status", err)
 	}
 
 	basePath := e.getBasePath()
 
 	content := e.renderSyncStatusPage(basePath, currentApp, syncStatus)
 
-	// Use dashboard handler's RenderWithLayout
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		c.SetHeader("Content-Type", "text/html; charset=utf-8")
-		c.Response().WriteHeader(http.StatusOK)
-		return content.Render(c.Response())
-	}
-
-	return handler.RenderWithLayout(c, e.buildPageData(c, currentUser, currentApp, "scim", "Sync Status"), content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // Dashboard page renderer
@@ -833,28 +728,7 @@ func (e *DashboardExtension) renderEventRow(event *SCIMSyncEvent) g.Node {
 	)
 }
 
-// buildPageData builds common PageData for SCIM pages
-func (e *DashboardExtension) buildPageData(c forge.Context, currentUser *user.User, currentApp *app.App, activePage, title string) components.PageData {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return components.PageData{
-			Title:      title,
-			User:       currentUser,
-			ActivePage: activePage,
-			BasePath:   e.getBasePath(),
-			CurrentApp: currentApp,
-		}
-	}
-
-	// Let the handler populate the page data with all required context
-	return components.PageData{
-		Title:      title,
-		User:       currentUser,
-		ActivePage: activePage,
-		BasePath:   e.getBasePath(),
-		CurrentApp: currentApp,
-	}
-}
+// buildPageData is removed - PageData no longer used in ForgeUI v2
 
 // RenderSCIMStatusWidget renders the SCIM status widget for the dashboard
 func (e *DashboardExtension) RenderSCIMStatusWidget(basePath string, currentApp *app.App) g.Node {

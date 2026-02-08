@@ -7,6 +7,11 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/plugins/cms/core"
+	"github.com/xraph/forgeui"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/checkbox"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/textarea"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -25,9 +30,9 @@ func ContentTypeDetailPage(
 	allContentTypes []*core.ContentTypeSummaryDTO,
 	allComponentSchemas []*core.ComponentSchemaSummaryDTO,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Name
-	apiBase := basePath + "/cms/" + contentType.Name
+	apiBase := strings.ReplaceAll(basePath, "/ui", "") + "/cms/" + contentType.Name
 
 	// Build icon node
 	var iconNode g.Node
@@ -53,7 +58,7 @@ func ContentTypeDetailPage(
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 		g.Attr("x-data", `{ activeTab: 'fields' }`),
 
 		// Breadcrumbs
@@ -190,6 +195,7 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentT
 
 	return Div(
 		g.Attr("x-data", "{ drawerOpen: false }"),
+		g.Attr("@close-drawer.window", "drawerOpen = false"),
 		Class("relative"),
 
 		// Main content
@@ -197,12 +203,16 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentT
 			"Fields",
 			[]g.Node{
 				// Trigger button for drawer
-				Button(
-					Type("button"),
-					g.Attr("@click", "drawerOpen = true"),
-					Class("inline-flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
-					lucide.Plus(Class("size-4")),
-					g.Text("Add Field"),
+				button.Button(
+					g.Group([]g.Node{
+						lucide.Plus(Class("size-4")),
+						g.Text("Add Field"),
+					}),
+					button.WithVariant(forgeui.VariantOutline),
+					button.WithAttrs(
+						Type("button"),
+						g.Attr("@click", "drawerOpen = true"),
+					),
 				),
 			},
 			g.If(len(contentType.Fields) == 0, func() g.Node {
@@ -217,91 +227,87 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentT
 						Class("mt-2 text-sm text-slate-500 dark:text-gray-400"),
 						g.Text("Add fields to define the structure of your content entries."),
 					),
-					Button(
-						Type("button"),
-						g.Attr("@click", "drawerOpen = true"),
-						Class("mt-4 inline-flex items-center gap-2 py-2 px-4 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
-						lucide.Plus(Class("size-4")),
-						g.Text("Add Field"),
+					button.Button(
+						g.Group([]g.Node{
+							lucide.Plus(Class("size-4")),
+							g.Text("Add Field"),
+						}),
+						button.WithVariant(forgeui.VariantDefault),
+						button.WithClass("mt-4"),
+						button.WithAttrs(
+							Type("button"),
+							g.Attr("@click", "drawerOpen = true"),
+						),
 					),
 				)
 			}()),
 
 			g.If(len(contentType.Fields) > 0, func() g.Node {
-				return fieldsTable(typeBase, contentType.Fields, "")
+				return fieldsTable(typeBase, contentType.Fields, contentType.AppID, contentType.Name)
 			}()),
 		),
 
-		// Preline-style Offcanvas/Drawer
-		Div(
+		// Sheet/Drawer - slides from right
+		g.El("div",
 			g.Attr("x-show", "drawerOpen"),
 			g.Attr("x-cloak", ""),
-			Class("fixed inset-0 z-80"),
+			Class("fixed inset-0 z-50"),
 			g.Attr("role", "dialog"),
 			g.Attr("aria-modal", "true"),
 
 			// Backdrop overlay
-			Div(
+			g.El("div",
 				g.Attr("x-show", "drawerOpen"),
-				g.Attr("x-transition:enter", "transition ease-out duration-300"),
+				g.Attr("x-transition:enter", "transition-opacity ease-out duration-300"),
 				g.Attr("x-transition:enter-start", "opacity-0"),
 				g.Attr("x-transition:enter-end", "opacity-100"),
-				g.Attr("x-transition:leave", "transition ease-in duration-200"),
+				g.Attr("x-transition:leave", "transition-opacity ease-in duration-200"),
 				g.Attr("x-transition:leave-start", "opacity-100"),
 				g.Attr("x-transition:leave-end", "opacity-0"),
 				g.Attr("@click", "drawerOpen = false"),
-				Class("fixed inset-0 bg-gray-900/50 dark:bg-neutral-900/80"),
+				Class("fixed inset-0 bg-black/50 backdrop-blur-sm"),
 			),
 
-			// Drawer panel
-			Div(
+			// Sheet panel - using grid for reliable layout
+			g.El("div",
 				g.Attr("x-show", "drawerOpen"),
-				g.Attr("x-transition:enter", "transition ease-out duration-300"),
+				g.Attr("x-transition:enter", "transform transition ease-out duration-300"),
 				g.Attr("x-transition:enter-start", "translate-x-full"),
 				g.Attr("x-transition:enter-end", "translate-x-0"),
-				g.Attr("x-transition:leave", "transition ease-in duration-200"),
+				g.Attr("x-transition:leave", "transform transition ease-in duration-200"),
 				g.Attr("x-transition:leave-start", "translate-x-0"),
 				g.Attr("x-transition:leave-end", "translate-x-full"),
-				Class("fixed top-0 end-0 h-full w-full max-w-md bg-white border-s border-gray-200 dark:bg-neutral-900 dark:border-neutral-700 flex flex-col"),
+				Class("fixed top-0 right-0 bottom-0 w-full max-w-md bg-background border-l border-border shadow-xl flex flex-col"),
 
 				// Header
-				Div(
-					Class("flex justify-between items-center py-3 px-4 border-b border-gray-200 dark:border-neutral-700"),
-					H3(
-						Class("font-semibold text-gray-800 dark:text-neutral-200"),
-						g.Text("Add Field"),
+				g.El("div",
+					Class("flex items-center justify-between px-6 py-4 border-b border-border shrink-0"),
+					g.El("div",
+						g.El("h2",
+							Class("text-lg font-semibold text-foreground"),
+							g.Text("Add Field"),
+						),
+						g.El("p",
+							Class("text-sm text-muted-foreground mt-0.5"),
+							g.Text("Configure a new field for this content type"),
+						),
 					),
-					Button(
-						Type("button"),
-						g.Attr("@click", "drawerOpen = false"),
-						Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400 dark:focus:bg-neutral-600"),
-						Span(Class("sr-only"), g.Text("Close")),
-						lucide.X(Class("shrink-0 size-4")),
+					button.Button(
+						lucide.X(Class("h-4 w-4")),
+						button.WithVariant(forgeui.VariantGhost),
+						button.WithSize(forgeui.SizeIcon),
+						button.WithClass("rounded-full hover:bg-accent"),
+						button.WithAttrs(
+							Type("button"),
+							g.Attr("@click", "drawerOpen = false"),
+						),
 					),
 				),
 
-				// Form body
-				Div(
-					Class("flex-1 overflow-y-auto p-4"),
+				// Scrollable body - buttons are now inside the form
+				g.El("div",
+					Class("flex-1 overflow-y-auto p-6"),
 					addFieldForm(typeBase, contentType, allContentTypes, allComponentSchemas),
-				),
-
-				// Footer
-				Div(
-					Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t border-gray-200 dark:border-neutral-700"),
-					Button(
-						Type("button"),
-						g.Attr("@click", "drawerOpen = false"),
-						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"),
-						g.Text("Cancel"),
-					),
-					Button(
-						Type("submit"),
-						g.Attr("form", "add-field-form"),
-						Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700"),
-						lucide.Plus(Class("shrink-0 size-4")),
-						g.Text("Add Field"),
-					),
 				),
 			),
 		),
@@ -330,56 +336,55 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 
 	return FormEl(
 		ID("add-field-form"),
-		Method("POST"),
-		Action(typeBase+"/fields"),
+		g.Attr("@submit.prevent", "submitAddField($event)"),
 		Class("space-y-5"),
-		g.Attr("x-data", drawerFieldFormAlpineData()),
+		g.Attr("x-data", drawerFieldFormAlpineData(contentType.AppID, contentType.Name)),
 
 		// Name field with auto-slug
 		Div(
 			Label(
-				For("field-name"),
-				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+				Class("block mb-2 text-sm font-medium"),
 				g.Text("Name"),
 				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
-			Input(
-				Type("text"),
-				ID("field-name"),
-				Name("name"),
-				Required(),
-				Placeholder("e.g., Title, Content, Author"),
-				g.Attr("x-model", "name"),
-				g.Attr("@input", "updateSlug()"),
-				Class("py-2.5 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500 dark:focus:ring-violet-600"),
+			input.Input(
+				input.WithType("text"),
+				input.WithID("field-name"),
+				input.WithName("name"),
+				input.WithPlaceholder("e.g., Title, Content, Author"),
+				input.WithAttrs(
+					Required(),
+					g.Attr("x-model", "name"),
+					g.Attr("@input", "updateSlug()"),
+				),
 			),
 		),
 
 		// Slug field
 		Div(
 			Label(
-				For("field-slug"),
-				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
-				g.Text("Name"),
+				Class("block mb-2 text-sm font-medium"),
+				g.Text("Slug"),
 				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
-			Input(
-				Type("text"),
-				ID("field-slug"),
-				Name("slug"),
-				Required(),
-				Placeholder("e.g., title, content, author"),
-				g.Attr("x-model", "slug"),
-				g.Attr("@input", "slugEdited = true"),
-				Class("py-2.5 px-3 block w-full border-gray-200 rounded-lg text-sm font-mono focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500 dark:focus:ring-violet-600"),
+			input.Input(
+				input.WithType("text"),
+				input.WithID("field-slug"),
+				input.WithName("slug"),
+				input.WithPlaceholder("e.g., title, content, author"),
+				input.WithClass("font-mono"),
+				input.WithAttrs(
+					Required(),
+					g.Attr("x-model", "slug"),
+					g.Attr("@input", "slugEdited = true"),
+				),
 			),
 		),
 
 		// Type field with categories
 		Div(
 			Label(
-				For("field-type"),
-				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+				Class("block mb-2 text-sm font-medium"),
 				g.Text("Type"),
 				Span(Class("text-red-500 ms-1"), g.Text("*")),
 			),
@@ -388,7 +393,7 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 				Name("type"),
 				Required(),
 				g.Attr("x-model", "fieldType"),
-				Class("py-2.5 px-3 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:focus:ring-violet-600"),
+				Class("py-2.5 px-3 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500 dark:focus:ring-neutral-600"),
 				Option(Value(""), g.Text("Select a field type...")),
 				g.Group(func() []g.Node {
 					categories := []string{"text", "number", "date", "selection", "relation", "media", "nested", "advanced"}
@@ -417,82 +422,161 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 		// Description field
 		Div(
 			Label(
-				For("field-description"),
-				Class("block mb-2 text-sm font-medium text-gray-800 dark:text-neutral-200"),
+				Class("block mb-2 text-sm font-medium"),
 				g.Text("Description"),
 			),
-			Textarea(
-				ID("field-description"),
-				Name("description"),
-				Rows("2"),
-				Placeholder("Help text for editors..."),
-				Class("py-2.5 px-3 block w-full border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:placeholder-neutral-500 dark:focus:ring-violet-600 resize-none"),
+			textarea.Textarea(
+				textarea.WithID("field-description"),
+				textarea.WithName("description"),
+				textarea.WithPlaceholder("Help text for editors..."),
+				textarea.WithClass("resize-none"),
+				textarea.WithAttrs(Rows("2")),
 			),
 		),
 
 		// Type-specific options section
-		g.Raw(fmt.Sprintf(`<div x-show="fieldType !== ''" x-transition class="border-t border-gray-200 dark:border-neutral-700 pt-4 space-y-4">
-			<p class="text-sm font-medium text-gray-800 dark:text-neutral-200">Field Configuration</p>
-			
-			<!-- Text type options -->
-			<div x-show="isTextType()" class="space-y-3">
-				<div class="grid grid-cols-2 gap-3">
-					<div>
-						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Min Length</label>
-						<input type="number" name="options.minLength" min="0" placeholder="0" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-					</div>
-					<div>
-						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Max Length</label>
-						<input type="number" name="options.maxLength" min="0" placeholder="255" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-					</div>
-				</div>
-				<div>
-					<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Regex Pattern</label>
-					<input type="text" name="options.regex" placeholder="e.g., ^[A-Za-z]+$" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-				</div>
-			</div>
-			
-			<!-- Number type options -->
-			<div x-show="isNumberType()" class="space-y-3">
-				<div class="grid grid-cols-3 gap-3">
-					<div>
-						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Min</label>
-						<input type="number" name="options.min" placeholder="0" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-					</div>
-					<div>
-						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Max</label>
-						<input type="number" name="options.max" placeholder="100" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-					</div>
-					<div>
-						<label class="block mb-1 text-xs font-medium text-gray-600 dark:text-neutral-400">Step</label>
-						<input type="number" name="options.step" min="0" step="any" placeholder="1" class="py-2 px-3 block w-full border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-					</div>
-				</div>
-			</div>
-			
-			<!-- Selection/Enum type options -->
-			<div x-show="isSelectionType()" class="space-y-3">
-				<div class="flex items-center justify-between">
-					<label class="text-xs font-medium text-gray-600 dark:text-neutral-400">Options</label>
-					<span class="text-xs text-gray-400" x-text="enumOptions.length + ' option(s)'"></span>
-				</div>
-				<div class="space-y-2 max-h-48 overflow-y-auto">
-					<template x-for="(opt, idx) in enumOptions" :key="idx">
-						<div class="flex gap-2 items-center">
-							<input type="text" x-model="opt.label" :name="'options.enum[' + idx + '].label'" placeholder="Label" class="flex-1 py-2 px-3 border-gray-200 rounded-lg text-sm dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-							<input type="text" x-model="opt.value" :name="'options.enum[' + idx + '].value'" placeholder="Value" @input="if (!opt.value && opt.label) opt.value = opt.label.toLowerCase().replace(/\s+/g, '_')" class="flex-1 py-2 px-3 border-gray-200 rounded-lg text-sm font-mono dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300">
-							<button type="button" @click="removeOption(idx)" :disabled="enumOptions.length <= 1" class="p-2 text-gray-400 hover:text-red-500 disabled:opacity-30">
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-							</button>
-						</div>
-					</template>
-				</div>
-				<button type="button" @click="addOption()" class="w-full py-2 border-2 border-dashed border-gray-300 dark:border-neutral-600 rounded-lg text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 flex items-center justify-center gap-2">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-					Add Option
-				</button>
-			</div>
-			
+		Div(
+			g.Attr("x-show", "fieldType !== ''"),
+			g.Attr("x-transition", ""),
+			Class("border-t border-gray-200 dark:border-neutral-700 pt-4 space-y-4"),
+
+			P(Class("text-sm font-medium"), g.Text("Field Configuration")),
+
+			// Text type options
+			Div(
+				g.Attr("x-show", "isTextType()"),
+				Class("space-y-3"),
+				Div(
+					Class("grid grid-cols-2 gap-3"),
+					Div(
+						Label(Class("block mb-1 text-xs font-medium text-muted-foreground"), g.Text("Min Length")),
+						input.Input(
+							input.WithType("number"),
+							input.WithName("options.minLength"),
+							input.WithPlaceholder("0"),
+							input.WithAttrs(g.Attr("min", "0")),
+						),
+					),
+					Div(
+						Label(Class("block mb-1 text-xs font-medium text-muted-foreground"), g.Text("Max Length")),
+						input.Input(
+							input.WithType("number"),
+							input.WithName("options.maxLength"),
+							input.WithPlaceholder("255"),
+							input.WithAttrs(g.Attr("min", "0")),
+						),
+					),
+				),
+				Div(
+					Label(Class("block mb-1 text-xs font-medium text-muted-foreground"), g.Text("Regex Pattern")),
+					input.Input(
+						input.WithType("text"),
+						input.WithName("options.regex"),
+						input.WithPlaceholder("e.g., ^[A-Za-z]+$"),
+						input.WithClass("font-mono"),
+					),
+				),
+			),
+
+			// Number type options
+			Div(
+				g.Attr("x-show", "isNumberType()"),
+				Class("space-y-3"),
+				Div(
+					Class("grid grid-cols-3 gap-3"),
+					Div(
+						Label(Class("block mb-1 text-xs font-medium text-muted-foreground"), g.Text("Min")),
+						input.Input(
+							input.WithType("number"),
+							input.WithName("options.min"),
+							input.WithPlaceholder("0"),
+						),
+					),
+					Div(
+						Label(Class("block mb-1 text-xs font-medium text-muted-foreground"), g.Text("Max")),
+						input.Input(
+							input.WithType("number"),
+							input.WithName("options.max"),
+							input.WithPlaceholder("100"),
+						),
+					),
+					Div(
+						Label(Class("block mb-1 text-xs font-medium text-muted-foreground"), g.Text("Step")),
+						input.Input(
+							input.WithType("number"),
+							input.WithName("options.step"),
+							input.WithPlaceholder("1"),
+							input.WithAttrs(g.Attr("min", "0"), g.Attr("step", "any")),
+						),
+					),
+				),
+			),
+
+			// Selection/Enum type options
+			Div(
+				g.Attr("x-show", "isSelectionType()"),
+				Class("space-y-3"),
+				Div(
+					Class("flex items-center justify-between"),
+					Label(Class("text-xs font-medium text-muted-foreground"), g.Text("Options")),
+					Span(Class("text-xs text-gray-400"), g.Attr("x-text", "enumOptions.length + ' option(s)'")),
+				),
+				Div(
+					Class("space-y-2 max-h-48 overflow-y-auto"),
+					g.El("template",
+						g.Attr("x-for", "(opt, idx) in enumOptions"),
+						g.Attr(":key", "idx"),
+						Div(
+							Class("flex gap-2 items-center"),
+							input.Input(
+								input.WithType("text"),
+								input.WithPlaceholder("Label"),
+								input.WithClass("flex-1"),
+								input.WithAttrs(
+									g.Attr("x-model", "opt.label"),
+									g.Attr(":name", "'options.enum[' + idx + '].label'"),
+								),
+							),
+							input.Input(
+								input.WithType("text"),
+								input.WithPlaceholder("Value"),
+								input.WithClass("flex-1 font-mono"),
+								input.WithAttrs(
+									g.Attr("x-model", "opt.value"),
+									g.Attr(":name", "'options.enum[' + idx + '].value'"),
+									g.Attr("@input", "if (!opt.value && opt.label) opt.value = opt.label.toLowerCase().replace(/\\s+/g, '_')"),
+								),
+							),
+							button.Button(
+								lucide.X(Class("size-4")),
+								button.WithVariant(forgeui.VariantGhost),
+								button.WithSize(forgeui.SizeIcon),
+								button.WithClass("text-gray-400 hover:text-red-500"),
+								button.WithAttrs(
+									Type("button"),
+									g.Attr("@click", "removeOption(idx)"),
+									g.Attr(":disabled", "enumOptions.length <= 1"),
+								),
+							),
+						),
+					),
+				),
+				button.Button(
+					g.Group([]g.Node{
+						lucide.Plus(Class("size-4")),
+						g.Text("Add Option"),
+					}),
+					button.WithVariant(forgeui.VariantOutline),
+					button.WithClass("w-full border-dashed hover:border-primary hover:text-primary"),
+					button.WithAttrs(
+						Type("button"),
+						g.Attr("@click", "addOption()"),
+					),
+				),
+			),
+
+			// Relation, Media, and other type-specific options (keeping as raw HTML for complex structures)
+			g.Raw(fmt.Sprintf(`
 			<!-- Relation type options -->
 			<div x-show="fieldType === 'relation'" class="space-y-3">
 				<div>
@@ -707,28 +791,73 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 				</div>
 			</div>
 		</div>`, contentTypeOptionsHTML, componentSchemaOptionsHTML, componentSchemaOptionsHTML)),
+		),
 
-		// Validation options section
+		// Validation options section - collapsible
 		Div(
-			Class("border-t border-gray-200 dark:border-neutral-700 pt-4"),
-			P(
-				Class("mb-3 text-sm font-medium text-gray-800 dark:text-neutral-200"),
-				g.Text("Validation & Options"),
+			Class("mt-6 pt-6 border-t border-border"),
+			g.Attr("x-data", "{ optionsOpen: false }"),
+			// Collapsible header
+			Button(
+				Type("button"),
+				g.Attr("@click", "optionsOpen = !optionsOpen"),
+				Class("w-full flex items-center justify-between py-2 text-left"),
+				Div(
+					Class("flex items-center gap-2"),
+					lucide.Settings2(Class("h-4 w-4 text-muted-foreground")),
+					Span(
+						Class("text-sm font-semibold text-foreground"),
+						g.Text("Validation & Options"),
+					),
+				),
+				g.El("svg",
+					Class("h-4 w-4 text-muted-foreground transition-transform duration-200"),
+					g.Attr(":class", "optionsOpen ? 'rotate-180' : ''"),
+					g.Attr("xmlns", "http://www.w3.org/2000/svg"),
+					g.Attr("viewBox", "0 0 24 24"),
+					g.Attr("fill", "none"),
+					g.Attr("stroke", "currentColor"),
+					g.Attr("stroke-width", "2"),
+					g.El("path", g.Attr("d", "m6 9 6 6 6-6")),
+				),
 			),
+			// Collapsible content
 			Div(
-				Class("space-y-3"),
-				prelineCheckbox("required", "Required", "This field must have a value"),
-				prelineCheckbox("unique", "Unique", "Values must be unique across entries"),
-				prelineCheckbox("indexed", "Indexed", "Enable fast searching on this field"),
-				prelineCheckbox("localized", "Localized", "Support multiple language versions"),
+				g.Attr("x-show", "optionsOpen"),
+				g.Attr("x-collapse", ""),
+				Class("space-y-1 mt-3"),
+				forgeUICheckboxOption("required", "Required", "This field must have a value", lucide.Asterisk(Class("size-3.5 text-muted-foreground"))),
+				forgeUICheckboxOption("unique", "Unique", "Values must be unique across entries", lucide.Fingerprint(Class("size-3.5 text-muted-foreground"))),
+				forgeUICheckboxOption("indexed", "Indexed", "Enable fast searching on this field", lucide.Search(Class("size-3.5 text-muted-foreground"))),
+				forgeUICheckboxOption("localized", "Localized", "Support multiple language versions", lucide.Globe(Class("size-3.5 text-muted-foreground"))),
+			),
+		),
+
+		// Form action buttons - inside form for reliable rendering
+		Div(
+			Class("mt-8 pt-6 border-t border-border sticky bottom-0 bg-background pb-4"),
+			Div(
+				Class("flex gap-3"),
+				Button(
+					Type("button"),
+					g.Attr("@click", "$dispatch('close-drawer')"),
+					Class("flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"),
+					g.Text("Cancel"),
+				),
+				Button(
+					Type("submit"),
+					Class("flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2"),
+					lucide.Plus(Class("h-4 w-4")),
+					g.Text("Add Field"),
+				),
 			),
 		),
 	)
 }
 
 // drawerFieldFormAlpineData returns the Alpine.js data for the drawer field form
-func drawerFieldFormAlpineData() string {
-	return `{
+func drawerFieldFormAlpineData(appID, typeName string) string {
+	return fmt.Sprintf(`{
 		name: '',
 		slug: '',
 		fieldType: '',
@@ -737,6 +866,7 @@ func drawerFieldFormAlpineData() string {
 		slugEdited: false,
 		enumOptions: [{label: '', value: ''}],
 		oneOfSchemas: [{key: '', label: '', componentRef: ''}],
+		loading: false,
 		
 		// Conditional visibility
 		hasCondition: false,
@@ -780,31 +910,122 @@ func drawerFieldFormAlpineData() string {
 		},
 		isNestedType() {
 			return ['object', 'array'].includes(this.fieldType);
+		},
+		async submitAddField(event) {
+			const formData = new FormData(event.target);
+			const data = Object.fromEntries(formData.entries());
+			
+			// Numeric option keys that need to be converted from string to number
+			const numericOptionKeys = ['minLength', 'maxLength', 'min', 'max', 'step', 'precision', 'decimalPlaces', 'minItems', 'maxItems'];
+			
+			// Build options object from form data
+			const options = {};
+			for (const [key, value] of formData.entries()) {
+				if (key.startsWith('options.')) {
+					const optKey = key.replace('options.', '');
+					// Skip empty values
+					if (value === '' || value === null || value === undefined) {
+						continue;
+					}
+					// Convert numeric options to numbers
+					if (numericOptionKeys.includes(optKey)) {
+						const numVal = parseFloat(value);
+						if (!isNaN(numVal)) {
+							options[optKey] = numVal;
+						}
+					} else {
+						options[optKey] = value;
+					}
+				}
+			}
+			
+			// Handle enum options if present
+			if (data.fieldType === 'select' || data.fieldType === 'multiSelect' || data.fieldType === 'enumeration') {
+				options.enum = this.enumOptions;
+			}
+			
+			this.loading = true;
+			try {
+				await $bridge.call('cms.addField', {
+					appId: '%s',
+					typeName: '%s',
+					title: data.name,
+					name: data.slug,
+					type: data.type,
+					description: data.description || '',
+					required: formData.has('required'),
+					unique: formData.has('unique'),
+					indexed: formData.has('indexed'),
+					localized: formData.has('localized'),
+					options: options
+				});
+				// Dispatch toast event for success notification
+				window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'success', message: 'Field added successfully' } }));
+				window.location.reload();
+			} catch (err) {
+				const errorMsg = err.error?.message || err.message || 'Failed to add field';
+				// Dispatch toast event for error notification
+				window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'error', message: errorMsg } }));
+				this.loading = false;
+			}
 		}
-	}`
+	}`, appID, typeName)
 }
 
-// prelineCheckbox creates a Preline-style checkbox for the drawer form
-func prelineCheckbox(name, label, description string) g.Node {
+// prelineCheckbox creates a checkbox with label and description using ForgeUI
+func prelineCheckbox(name, labelText, description string) g.Node {
 	checkboxID := "field-option-" + name
 	return Div(
-		Class("flex"),
-		Input(
-			Type("checkbox"),
-			ID(checkboxID),
-			Name(name),
-			Value("true"),
-			Class("shrink-0 mt-0.5 border-gray-200 rounded text-violet-600 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:checked:bg-violet-500 dark:checked:border-violet-500 dark:focus:ring-offset-neutral-800"),
+		Class("flex gap-3"),
+		checkbox.Checkbox(
+			checkbox.WithID(checkboxID),
+			checkbox.WithName(name),
+			checkbox.WithValue("true"),
 		),
-		Label(
-			For(checkboxID),
-			Class("ms-3"),
-			Span(
-				Class("block text-sm font-medium text-gray-800 dark:text-neutral-200"),
-				g.Text(label),
+		Div(
+			Class("flex-1"),
+			Label(
+				Class("cursor-pointer"),
+				g.Attr("for", checkboxID),
+				Div(
+					Class("text-sm font-medium"),
+					g.Text(labelText),
+				),
+				Div(
+					Class("text-xs text-muted-foreground"),
+					g.Text(description),
+				),
 			),
-			Span(
-				Class("block text-xs text-gray-500 dark:text-neutral-500"),
+		),
+	)
+}
+
+// forgeUICheckboxOption creates a styled checkbox option with icon
+func forgeUICheckboxOption(name, labelText, description string, iconNode g.Node) g.Node {
+	checkboxID := "field-option-" + name
+	return Label(
+		g.Attr("for", checkboxID),
+		Class("flex items-start gap-3 p-3 rounded-lg border border-transparent hover:bg-accent/50 cursor-pointer transition-colors has-[:checked]:bg-accent has-[:checked]:border-border"),
+		Div(
+			Class("pt-0.5"),
+			checkbox.Checkbox(
+				checkbox.WithID(checkboxID),
+				checkbox.WithName(name),
+				checkbox.WithValue("true"),
+			),
+		),
+		Div(
+			Class("flex-1 min-w-0"),
+			Div(
+				Class("flex items-center gap-2"),
+				iconNode,
+				Span(
+					Class("text-sm font-medium text-foreground"),
+					g.Text(labelText),
+				),
+			),
+			P(
+				Class("text-xs text-muted-foreground mt-0.5"),
 				g.Text(description),
 			),
 		),
@@ -812,10 +1033,10 @@ func prelineCheckbox(name, label, description string) g.Node {
 }
 
 // fieldsTable renders the fields as a table
-func fieldsTable(typeBase string, fields []*core.ContentFieldDTO, _ string) g.Node {
+func fieldsTable(typeBase string, fields []*core.ContentFieldDTO, appID string, typeName string) g.Node {
 	rows := make([]g.Node, len(fields))
 	for i, field := range fields {
-		rows[i] = fieldRow(typeBase, field)
+		rows[i] = fieldRow(typeBase, field, appID, typeName)
 	}
 
 	return DataTable(
@@ -825,7 +1046,7 @@ func fieldsTable(typeBase string, fields []*core.ContentFieldDTO, _ string) g.No
 }
 
 // fieldRow renders a single field row
-func fieldRow(typeBase string, field *core.ContentFieldDTO) g.Node {
+func fieldRow(typeBase string, field *core.ContentFieldDTO, appID string, typeName string) g.Node {
 	return TableRow(
 		// Field name and slug
 		TableCell(Div(
@@ -867,118 +1088,40 @@ func fieldRow(typeBase string, field *core.ContentFieldDTO) g.Node {
 		TableCell(Div(
 			Class("flex items-center justify-end gap-1"),
 			// Delete modal component (now contains both button and modal)
-			deleteFieldModal("delete-field-"+field.Name, typeBase, field),
+			deleteFieldModal(appID, typeName, field),
 		)),
 	)
 }
 
-// deleteFieldModal renders a Preline-style confirmation modal for deleting a field
-func deleteFieldModal(modalID, typeBase string, field *core.ContentFieldDTO) g.Node {
-	alpineID := "deleteModal_" + field.Name
-	return Div(
-		g.Attr("x-data", fmt.Sprintf("{ %s: false }", alpineID)),
-
-		// Delete button that opens modal
-		Button(
-			Type("button"),
-			g.Attr("@click", fmt.Sprintf("%s = true", alpineID)),
-			Class("inline-flex items-center justify-center size-8 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"),
-			g.Attr("title", "Delete Field"),
-			lucide.Trash2(Class("size-4")),
-		),
-
-		// Modal
-		Div(
-			g.Attr("x-show", alpineID),
-			g.Attr("x-cloak", ""),
-			Class("fixed inset-0 z-80 overflow-y-auto"),
-			g.Attr("role", "dialog"),
-			g.Attr("aria-modal", "true"),
-
-			// Backdrop
-			Div(
-				g.Attr("x-show", alpineID),
-				g.Attr("x-transition:enter", "ease-out duration-200"),
-				g.Attr("x-transition:enter-start", "opacity-0"),
-				g.Attr("x-transition:enter-end", "opacity-100"),
-				g.Attr("x-transition:leave", "ease-in duration-100"),
-				g.Attr("x-transition:leave-start", "opacity-100"),
-				g.Attr("x-transition:leave-end", "opacity-0"),
-				Class("fixed inset-0 bg-gray-900/50 dark:bg-neutral-900/80"),
-				g.Attr("@click", fmt.Sprintf("%s = false", alpineID)),
-			),
-
-			// Modal content
-			Div(
-				Class("flex min-h-full items-center justify-center p-4"),
-				Div(
-					g.Attr("x-show", alpineID),
-					g.Attr("x-transition:enter", "ease-out duration-200"),
-					g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
-					g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
-					g.Attr("x-transition:leave", "ease-in duration-100"),
-					g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
-					g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
-					Class("relative w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl dark:bg-neutral-800"),
-
-					// Header
-					Div(
-						Class("flex items-center justify-between py-3 px-4 border-b border-gray-200 dark:border-neutral-700"),
-						H3(
-							Class("font-semibold text-gray-800 dark:text-neutral-200"),
-							g.Text("Delete Field"),
-						),
-						Button(
-							Type("button"),
-							g.Attr("@click", fmt.Sprintf("%s = false", alpineID)),
-							Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400"),
-							lucide.X(Class("shrink-0 size-4")),
-						),
-					),
-
-					// Body
-					Div(
-						Class("p-4 text-center"),
-						Div(
-							Class("mx-auto flex items-center justify-center size-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4"),
-							lucide.TriangleAlert(Class("size-6 text-red-600 dark:text-red-500")),
-						),
-						P(
-							Class("text-gray-800 dark:text-neutral-200"),
-							g.Text("Are you sure you want to delete "),
-							Strong(g.Text(field.Name)),
-							g.Text("?"),
-						),
-						P(
-							Class("mt-2 text-sm text-gray-500 dark:text-neutral-500"),
-							g.Text("This action cannot be undone."),
-						),
-					),
-
-					// Footer
-					Div(
-						Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t border-gray-200 dark:border-neutral-700"),
-						Button(
-							Type("button"),
-							g.Attr("@click", fmt.Sprintf("%s = false", alpineID)),
-							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"),
-							g.Text("Cancel"),
-						),
-						FormEl(
-							Method("POST"),
-							Action(typeBase+"/fields/"+field.Name+"/delete"),
-							Class("inline"),
-							Button(
-								Type("submit"),
-								Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700"),
-								lucide.Trash2(Class("shrink-0 size-4")),
-								g.Text("Delete"),
-							),
-						),
-					),
-				),
-			),
-		),
+// deleteFieldModal renders a ForgeUI confirmDialog-based delete button for a field
+func deleteFieldModal(appID string, typeName string, field *core.ContentFieldDTO) g.Node {
+	return Button(
+		Type("button"),
+		g.Attr("@click", fmt.Sprintf(`
+			$root.confirmDialog.confirm({
+				title: 'Delete Field',
+				message: 'Are you sure you want to delete "%s"? This will delete all data in this field. This action cannot be undone.',
+				confirmText: 'Delete Field',
+				cancelText: 'Cancel',
+				onConfirm: async () => {
+					try {
+						await $bridge.call('cms.deleteField', {
+							appId: '%s',
+							typeName: '%s',
+							fieldName: '%s'
+						});
+						$root.notification.success('Field deleted');
+						window.location.reload();
+					} catch (err) {
+						const errorMsg = err.error?.message || err.message || 'Failed to delete field';
+						$root.notification.error(errorMsg);
+					}
+				}
+			})
+		`, field.Title, appID, typeName, field.Name)),
+		Class("inline-flex items-center justify-center size-8 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"),
+		g.Attr("title", "Delete Field"),
+		lucide.Trash2(Class("size-4")),
 	)
 }
 
@@ -1023,7 +1166,7 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 	settings := contentType.Settings
 
 	return Div(
-		Class("space-y-6 mt-6"),
+		Class("space-y-2 mt-6"),
 
 		// General Settings Card
 		CardWithHeader("General Settings", nil,
@@ -1335,115 +1478,37 @@ func featureToggle(name, label, description string, checked bool) g.Node {
 	)
 }
 
-// deleteContentTypeModal renders a Preline-style delete confirmation modal
+// deleteContentTypeModal renders a ForgeUI confirmDialog-based delete button
 func deleteContentTypeModal(typeBase string, contentType *core.ContentTypeDTO) g.Node {
-	return Div(
-		g.Attr("x-data", "{ deleteTypeModal: false }"),
+	// Get the redirect path by removing /types/{typeName} from typeBase
+	redirectPath := typeBase[:len(typeBase)-len("/types/"+contentType.Name)]
 
-		// Delete button that opens modal
-		Button(
-			Type("button"),
-			g.Attr("@click", "deleteTypeModal = true"),
-			Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700"),
-			lucide.Trash2(Class("shrink-0 size-4")),
-			g.Text("Delete"),
-		),
-
-		// Modal
-		Div(
-			g.Attr("x-show", "deleteTypeModal"),
-			g.Attr("x-cloak", ""),
-			Class("fixed inset-0 z-80 overflow-y-auto"),
-			g.Attr("role", "dialog"),
-			g.Attr("aria-modal", "true"),
-
-			// Backdrop
-			Div(
-				g.Attr("x-show", "deleteTypeModal"),
-				g.Attr("x-transition:enter", "ease-out duration-200"),
-				g.Attr("x-transition:enter-start", "opacity-0"),
-				g.Attr("x-transition:enter-end", "opacity-100"),
-				g.Attr("x-transition:leave", "ease-in duration-100"),
-				g.Attr("x-transition:leave-start", "opacity-100"),
-				g.Attr("x-transition:leave-end", "opacity-0"),
-				Class("fixed inset-0 bg-gray-900/50 dark:bg-neutral-900/80"),
-				g.Attr("@click", "deleteTypeModal = false"),
-			),
-
-			// Modal content
-			Div(
-				Class("flex min-h-full items-center justify-center p-4"),
-				Div(
-					g.Attr("x-show", "deleteTypeModal"),
-					g.Attr("x-transition:enter", "ease-out duration-200"),
-					g.Attr("x-transition:enter-start", "opacity-0 scale-95"),
-					g.Attr("x-transition:enter-end", "opacity-100 scale-100"),
-					g.Attr("x-transition:leave", "ease-in duration-100"),
-					g.Attr("x-transition:leave-start", "opacity-100 scale-100"),
-					g.Attr("x-transition:leave-end", "opacity-0 scale-95"),
-					Class("relative w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl dark:bg-neutral-800"),
-
-					// Header
-					Div(
-						Class("flex items-center justify-between py-3 px-4 border-b border-gray-200 dark:border-neutral-700"),
-						H3(
-							Class("font-semibold text-red-600 dark:text-red-500"),
-							g.Text("Delete Content Type"),
-						),
-						Button(
-							Type("button"),
-							g.Attr("@click", "deleteTypeModal = false"),
-							Class("size-8 inline-flex justify-center items-center gap-x-2 rounded-full border border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus:bg-gray-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-400"),
-							lucide.X(Class("shrink-0 size-4")),
-						),
-					),
-
-					// Body
-					Div(
-						Class("p-4"),
-						Div(
-							Class("text-center"),
-							Div(
-								Class("mx-auto flex items-center justify-center size-16 rounded-full bg-red-100 dark:bg-red-900/30 mb-4"),
-								lucide.TriangleAlert(Class("size-8 text-red-600 dark:text-red-500")),
-							),
-							P(
-								Class("text-lg font-medium text-gray-800 dark:text-neutral-200"),
-								g.Text("Delete \""),
-								g.Text(contentType.Name),
-								g.Text("\"?"),
-							),
-							P(
-								Class("mt-2 text-sm text-gray-500 dark:text-neutral-500"),
-								g.Text("This will permanently delete all entries, fields, and revisions."),
-							),
-						),
-					),
-
-					// Footer
-					Div(
-						Class("flex justify-end items-center gap-x-2 py-3 px-4 border-t border-gray-200 dark:border-neutral-700"),
-						Button(
-							Type("button"),
-							g.Attr("@click", "deleteTypeModal = false"),
-							Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"),
-							g.Text("Cancel"),
-						),
-						FormEl(
-							Method("POST"),
-							Action(typeBase+"/delete"),
-							Class("inline"),
-							Button(
-								Type("submit"),
-								Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700"),
-								lucide.Trash2(Class("shrink-0 size-4")),
-								g.Text("Delete Forever"),
-							),
-						),
-					),
-				),
-			),
-		),
+	return Button(
+		Type("button"),
+		g.Attr("@click", fmt.Sprintf(`
+			$root.confirmDialog.confirm({
+				title: 'Delete Content Type',
+				message: 'This will permanently delete "%s" and all its entries, fields, and revisions. This action cannot be undone.',
+				confirmText: 'Delete Forever',
+				cancelText: 'Cancel',
+				onConfirm: async () => {
+				try {
+					await $bridge.call('cms.deleteContentType', {
+						appId: '%s',
+						name: '%s'
+					});
+					$root.notification.success('Content type deleted');
+					window.location.href = '%s';
+				} catch (err) {
+					const errorMsg = err.error?.message || err.message || 'Failed to delete content type';
+					$root.notification.error(errorMsg);
+				}
+				}
+			})
+		`, contentType.Title, contentType.AppID, contentType.Name, redirectPath)),
+		Class("py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:bg-red-700 transition-colors"),
+		lucide.Trash2(Class("shrink-0 size-4")),
+		g.Text("Delete"),
 	)
 }
 
@@ -1454,7 +1519,7 @@ func deleteContentTypeModal(typeBase string, contentType *core.ContentTypeDTO) g
 // apiSection renders the API documentation section
 func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 	return Div(
-		Class("space-y-6 mt-6"),
+		Class("space-y-2 mt-6"),
 
 		// Quick Reference Card
 		CardWithHeader("API Endpoints", []g.Node{
@@ -2279,7 +2344,7 @@ func fieldFormPage(
 	err string,
 	isEdit bool,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Name
 
 	// Get all field types
@@ -2307,7 +2372,7 @@ func fieldFormPage(
 	}
 
 	return Div(
-		Class("space-y-6 max-w-4xl mx-auto"),
+		Class("space-y-2 max-w-4xl mx-auto"),
 
 		// Breadcrumbs
 		Breadcrumbs(

@@ -1,238 +1,190 @@
 plugin_id: cms
 version: 1.0.0
-base_path: /cms
 routes:
     - name: ListEntries
       description: |-
         ListEntries lists entries for a content type
         GET /cms/:type
       method: GET
-      path: /listentries
+      path: /cms/:typeSlug
     - name: CreateEntry
       description: |-
         CreateEntry creates a new content entry
         POST /cms/:type
       method: POST
-      path: /createentry
+      path: /cms/:typeSlug
       request_type: core.CreateEntryRequest
     - name: GetEntry
       description: |-
         GetEntry retrieves a content entry by ID
         GET /cms/:type/:id
       method: GET
-      path: /getentry
+      path: /cms/:typeSlug/:entryId
     - name: UpdateEntry
       description: |-
         UpdateEntry updates a content entry
         PUT /cms/:type/:id
       method: PUT
-      path: /updateentry
+      path: /cms/:typeSlug/:entryId
       request_type: core.UpdateEntryRequest
     - name: DeleteEntry
       description: |-
         DeleteEntry deletes a content entry
         DELETE /cms/:type/:id
       method: DELETE
-      path: /deleteentry
+      path: /cms/:typeSlug/:entryId
     - name: PublishEntry
       description: |-
         PublishEntry publishes a content entry
         POST /cms/:type/:id/publish
       method: POST
-      path: /publish
+      path: /cms/:typeSlug/:entryId/publish
       request_type: core.PublishEntryRequest
     - name: UnpublishEntry
       description: |-
         UnpublishEntry unpublishes a content entry
         POST /cms/:type/:id/unpublish
       method: POST
-      path: /unpublish
+      path: /cms/:typeSlug/:entryId/unpublish
     - name: ArchiveEntry
       description: |-
         ArchiveEntry archives a content entry
         POST /cms/:type/:id/archive
       method: POST
-      path: /archive
+      path: /cms/:typeSlug/:entryId/archive
     - name: QueryEntries
       description: |-
         QueryEntries performs an advanced query on entries
         POST /cms/:type/query
       method: POST
-      path: /query
+      path: /cms/:typeSlug/query
     - name: BulkPublish
       description: |-
         BulkPublish publishes multiple entries
         POST /cms/:type/bulk/publish
       method: POST
-      path: /publish
+      path: /cms/:typeSlug/bulk/publish
     - name: BulkUnpublish
       description: |-
         BulkUnpublish unpublishes multiple entries
         POST /cms/:type/bulk/unpublish
       method: POST
-      path: /unpublish
+      path: /cms/:typeSlug/bulk/unpublish
     - name: BulkDelete
       description: |-
         BulkDelete deletes multiple entries
         POST /cms/:type/bulk/delete
       method: POST
-      path: /delete
+      path: /cms/:typeSlug/bulk/delete
     - name: GetEntryStats
       description: |-
         GetEntryStats returns statistics for entries
         GET /cms/:type/stats
       method: GET
-      path: /stats
+      path: /cms/:typeSlug/stats
     - name: ListContentTypes
       description: |-
         ListContentTypes lists all content types
         GET /cms/types
       method: GET
-      path: /listcontenttypes
+      path: /cms/types
     - name: CreateContentType
       description: |-
         CreateContentType creates a new content type
         POST /cms/types
       method: POST
-      path: /createcontenttype
+      path: /cms/types
       request_type: core.CreateContentTypeRequest
     - name: GetContentType
       description: |-
         GetContentType retrieves a content type by slug
         GET /cms/types/:slug
       method: GET
-      path: /:slug
+      path: /cms/types/:slug
     - name: UpdateContentType
       description: |-
         UpdateContentType updates a content type
         PUT /cms/types/:slug
       method: PUT
-      path: /:slug
+      path: /cms/types/:slug
       request_type: core.UpdateContentTypeRequest
     - name: DeleteContentType
       description: |-
         DeleteContentType deletes a content type
         DELETE /cms/types/:slug
       method: DELETE
-      path: /:slug
+      path: /cms/types/:slug
     - name: ListFields
       description: |-
         ListFields lists all fields for a content type
         GET /cms/types/:slug/fields
       method: GET
-      path: /listfields
+      path: /cms/types/:slug/fields
     - name: AddField
       description: |-
         AddField adds a new field to a content type
         POST /cms/types/:slug/fields
       method: POST
-      path: /addfield
+      path: /cms/types/:slug/fields
       request_type: core.CreateFieldRequest
     - name: GetField
       description: |-
         GetField retrieves a field by slug
         GET /cms/types/:slug/fields/:fieldSlug
       method: GET
-      path: /:fieldSlug
+      path: /cms/types/:slug/fields/:fieldSlug
     - name: UpdateField
       description: |-
         UpdateField updates a field
         PUT /cms/types/:slug/fields/:fieldSlug
       method: PUT
-      path: /:fieldSlug
+      path: /cms/types/:slug/fields/:fieldSlug
       request_type: core.UpdateFieldRequest
     - name: DeleteField
       description: |-
         DeleteField deletes a field
         DELETE /cms/types/:slug/fields/:fieldSlug
       method: DELETE
-      path: /:fieldSlug
+      path: /cms/types/:slug/fields/:fieldSlug
     - name: ReorderFields
       description: |-
         ReorderFields reorders fields in a content type
         POST /cms/types/:slug/fields/reorder
       method: POST
-      path: /reorder
+      path: /cms/types/:slug/fields/reorder
       request_type: core.ReorderFieldsRequest
     - name: GetFieldTypes
       description: |-
         GetFieldTypes returns all available field types
         GET /cms/field-types
       method: GET
-      path: /field-types
+      path: /cms/field-types
     - name: ListRevisions
       description: |-
         ListRevisions lists revisions for an entry
         GET /cms/:type/:id/revisions
       method: GET
-      path: /listrevisions
+      path: /cms/:typeSlug/:entryId/revisions
     - name: GetRevision
       description: |-
         GetRevision retrieves a specific revision
         GET /cms/:type/:id/revisions/:version
       method: GET
-      path: /:version
+      path: /cms/:typeSlug/:entryId/revisions/:version
     - name: RestoreRevision
       description: |-
         RestoreRevision restores an entry to a specific revision
         POST /cms/:type/:id/revisions/:version/restore
       method: POST
-      path: /:version/restore
+      path: /cms/:typeSlug/:entryId/revisions/:version/restore
     - name: CompareRevisions
       description: |-
         CompareRevisions compares two revisions
         GET /cms/:type/:id/revisions/compare?from=:v1&to=:v2
       method: GET
-      path: /compare
+      path: /cms/:typeSlug/:entryId/revisions/compare
 types:
-    - name: UpdateEntryRequest
-      fields:
-        "": string
-    - name: GetRevisionRequest
-      fields:
-        "": string
-    - name: BulkRequest
-      fields:
-        ids: '[]string!'
-    - name: GetEntryStatsRequest
-      fields:
-        "": string
-    - name: CompareRevisionsRequest
-      fields:
-        "": string
-    - name: DeleteEntryRequest
-      fields:
-        "": string
-    - name: SuccessResponse
-      fields:
-        data: '!'
-        message: string!
-    - name: RevisionHandler
-      fields:
-        "": '*service.ContentTypeService'
-    - name: CloneContentTypeRequest
-      fields:
-        "": string
-    - name: UpdateFieldRequest
-      fields:
-        "": string
-    - name: ListEntriesRequest
-      fields:
-        "": int
-    - name: GetEntryRequest
-      fields:
-        "": string
-    - name: BulkUnpublishRequest
-      fields:
-        "": string
-        ids: '[]string!'
-    - name: DeleteContentTypeRequest
-      fields:
-        "": string
-    - name: UnpublishContentTypeRequest
-      fields:
-        "": string
-    - name: ValidateContentTypeRequest
+    - name: RestoreRevisionRequest
       fields:
         "": string
     - name: AddFieldRequest
@@ -241,61 +193,108 @@ types:
     - name: DeleteFieldRequest
       fields:
         "": string
-    - name: PublishEntryRequest
-      fields:
-        "": string
-    - name: UnpublishEntryRequest
-      fields:
-        "": string
-    - name: ListContentTypesRequest
-      fields:
-        "": int
-    - name: QueryEntriesRequest
-      fields:
-        "": string
-    - name: ContentEntryHandler
-      fields:
-        "": '*service.ContentEntryService'
-    - name: UpdateContentTypeRequest
+    - name: ListEntriesRequest
       fields:
         "": string
     - name: ArchiveEntryRequest
+      fields:
+        "": string
+    - name: RestoreEntryRequest
+      fields:
+        "": string
+    - name: GetEntryStatsRequest
+      fields:
+        "": string
+    - name: BulkRequest
+      fields:
+        ids: '[]string!'
+    - name: ListContentTypesRequest
+      fields:
+        "": int
+    - name: PublishContentTypeRequest
+      fields:
+        "": string
+    - name: UnpublishContentTypeRequest
       fields:
         "": string
     - name: BulkPublishRequest
       fields:
         "": string
         ids: '[]string!'
+    - name: CreateEntryRequest
+      fields:
+        "": string
+    - name: BulkUnpublishRequest
+      fields:
+        "": string
+        ids: '[]string!'
     - name: ListRevisionsRequest
       fields:
-        "": string
-    - name: GetContentTypeRequest
+        "": int
+    - name: ContentTypeHandler
+      fields:
+        "": '*service.ContentFieldService'
+    - name: ErrorResponse
+      fields:
+        code: string!
+        details: '!'
+        error: string!
+    - name: SuccessResponse
+      fields:
+        data: '!'
+        message: string!
+    - name: ValidateContentTypeRequest
       fields:
         "": string
-    - name: PublishContentTypeRequest
+    - name: PublishEntryRequest
       fields:
         "": string
-    - name: CreateEntryRequest
+    - name: CompareRevisionsRequest
+      fields:
+        "": string
+    - name: ContentEntryHandler
+      fields:
+        "": '*service.ContentTypeService'
+    - name: UpdateFieldRequest
       fields:
         "": string
     - name: BulkDeleteRequest
       fields:
         "": string
         ids: '[]string!'
-    - name: ErrorResponse
+    - name: RevisionHandler
       fields:
-        code: string!
-        details: '!'
-        error: string!
+        "": '*service.ContentTypeService'
+    - name: GetContentTypeRequest
+      fields:
+        "": string
+    - name: CloneContentTypeRequest
+      fields:
+        "": string
     - name: ReorderFieldsRequest
       fields:
         "": string
-    - name: RestoreEntryRequest
+    - name: QueryEntriesRequest
       fields:
         "": string
-    - name: RestoreRevisionRequest
+    - name: DeleteContentTypeRequest
       fields:
         "": string
-    - name: ContentTypeHandler
+    - name: DeleteEntryRequest
       fields:
-        "": '*service.ContentFieldService'
+        "": string
+    - name: UnpublishEntryRequest
+      fields:
+        "": string
+    - name: GetRevisionRequest
+      fields:
+        "": string
+    - name: UpdateContentTypeRequest
+      fields:
+        "": string
+    - name: GetEntryRequest
+      fields:
+        "": string
+    - name: UpdateEntryRequest
+      fields:
+        "": string

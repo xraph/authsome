@@ -52,24 +52,24 @@ export class IdverificationPlugin implements ClientPlugin {
   }
 
   async adminBlockUser(params: { userId: string }, request: types.AdminBlockUser_req): Promise<types.IDVerificationStatusResponse> {
-    const path = `/verification/users/${params.userId}/block`;
+    const path = `/verification/admin/users/${params.userId}/block`;
     return this.client.request<types.IDVerificationStatusResponse>('POST', path, {
       body: request,
     });
   }
 
   async adminUnblockUser(params: { userId: string }): Promise<types.IDVerificationStatusResponse> {
-    const path = `/verification/users/${params.userId}/unblock`;
+    const path = `/verification/admin/users/${params.userId}/unblock`;
     return this.client.request<types.IDVerificationStatusResponse>('POST', path);
   }
 
   async adminGetUserVerificationStatus(params: { userId: string }): Promise<types.IDVerificationStatusResponse> {
-    const path = `/verification/users/${params.userId}/status`;
+    const path = `/verification/admin/users/${params.userId}/status`;
     return this.client.request<types.IDVerificationStatusResponse>('GET', path);
   }
 
   async adminGetUserVerifications(params: { userId: string }): Promise<types.IDVerificationListResponse> {
-    const path = `/verification/users/${params.userId}/verifications`;
+    const path = `/verification/admin/users/${params.userId}/verifications`;
     return this.client.request<types.IDVerificationListResponse>('GET', path);
   }
 

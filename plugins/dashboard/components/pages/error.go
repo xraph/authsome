@@ -24,7 +24,7 @@ func ErrorPage(errorMessage string, basePath string) g.Node {
 			Div(
 				Class("mt-6"),
 				A(
-					Href(basePath+"/dashboard/"),
+					Href(basePath+"/"),
 					Class("inline-flex items-center rounded-md bg-primary-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"),
 					lucide.House(Class("mr-2 h-5 w-5")),
 					g.Text("Go back to dashboard"),

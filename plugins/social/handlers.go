@@ -1,6 +1,7 @@
 package social
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/rs/xid"
@@ -177,7 +178,6 @@ func (h *Handler) Callback(c forge.Context) error {
 
 	var req CallbackRequest
 	if err := c.BindRequest(&req); err != nil {
-
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid callback parameters"))
 	}
 
@@ -197,7 +197,7 @@ func (h *Handler) Callback(c forge.Context) error {
 
 	result, err := h.service.HandleCallback(ctx, req.Provider, req.State, req.Code)
 	if err != nil {
-
+		fmt.Println("Error -------------------------- : ", err, req.Provider, req.State, req.Code)
 		return handleError(c, err, "CALLBACK_FAILED", "Failed to handle OAuth callback", http.StatusUnauthorized)
 	}
 

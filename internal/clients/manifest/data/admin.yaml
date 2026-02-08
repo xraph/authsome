@@ -1,74 +1,74 @@
 plugin_id: admin
 version: 1.0.0
-base_path: /admin
 routes:
     - name: CreateUser
       description: CreateUser handles POST /admin/users
       method: POST
-      path: /users
+      path: /admin/users
     - name: ListUsers
       description: ListUsers handles GET /admin/users
       method: GET
-      path: /users
+      path: /admin/users
     - name: DeleteUser
       description: DeleteUser handles DELETE /admin/users/:id
       method: DELETE
-      path: /users/:id
+      path: /admin/users/:id
       response_type: MessageResponse
     - name: BanUser
       description: BanUser handles POST /admin/users/:id/ban
       method: POST
-      path: /users/:id/ban
+      path: /admin/users/:id/ban
       response_type: MessageResponse
     - name: UnbanUser
       description: UnbanUser handles POST /admin/users/:id/unban
       method: POST
-      path: /users/:id/unban
+      path: /admin/users/:id/unban
       response_type: MessageResponse
     - name: ImpersonateUser
       description: ImpersonateUser handles POST /admin/users/:id/impersonate
       method: POST
-      path: /users/:id/impersonate
+      path: /admin/users/:id/impersonate
     - name: SetUserRole
       description: SetUserRole handles POST /admin/users/:id/role
       method: POST
-      path: /users/:id/role
+      path: /admin/users/:id/role
       response_type: MessageResponse
     - name: ListSessions
       description: ListSessions handles GET /admin/sessions
       method: GET
-      path: /sessions
+      path: /admin/sessions
     - name: RevokeSession
       description: RevokeSession handles DELETE /admin/sessions/:id
       method: DELETE
-      path: /sessions/:id
+      path: /admin/sessions/:id
       response_type: MessageResponse
     - name: GetStats
       description: GetStats handles GET /admin/stats
       method: GET
-      path: /stats
+      path: /admin/stats
     - name: GetAuditLogs
       description: GetAuditLogs handles GET /admin/audit
       method: GET
-      path: /audit-logs
+      path: /admin/audit-logs
 types:
-    - name: ImpersonateUserRequestDTO
+    - name: ListSessionsResponse
       fields:
-        "": string
-        duration: time.Duration!
+        limit: int!
+        page: int!
+        sessions: '[]*session.Session!'
+        total: int!
+        total_pages: int!
     - name: Handler
       fields:
         "": '*Service'
-    - name: ListUsersRequestDTO
-      fields:
-        "": string
-    - name: DeleteUserRequestDTO
-      fields:
-        "": string
     - name: BanUserRequestDTO
       fields:
         "": string
         expires_at: '*time.Time!'
+        reason: string!
+    - name: UnbanUserRequestDTO
+      fields:
+        "": string
         reason: string!
     - name: SetUserRoleRequestDTO
       fields:
@@ -77,13 +77,9 @@ types:
     - name: RevokeSessionRequestDTO
       fields:
         "": string
-    - name: Config
+    - name: GetStatsRequestDTO
       fields:
-        allow_impersonation: bool!
-        allow_user_creation: bool!
-        allow_user_deletion: bool!
-        max_impersonation_duration: time.Duration!
-        required_role: string!
+        "": string
     - name: ListUsersRequest
       fields:
         '-': xid.ID!
@@ -102,25 +98,33 @@ types:
         reason: string!
         user_id: xid.ID!
         user_organization_id: '*xid.ID!'
+    - name: CreateUserRequestDTO
+      fields:
+        email: string!
+        email_verified: bool!
+        metadata: '!'
+        name: string!
+        password: string!
+        role: string!
+        username: string!
+    - name: ListUsersRequestDTO
+      fields:
+        "": string
+    - name: GetAuditLogsRequestDTO
+      fields:
+        "": int
+    - name: Config
+      fields:
+        allow_impersonation: bool!
+        allow_user_creation: bool!
+        allow_user_deletion: bool!
+        max_impersonation_duration: time.Duration!
+        required_role: string!
     - name: UnbanUserRequest
       fields:
         '-': xid.ID!
         app_id: xid.ID!
         reason: string!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
-    - name: ImpersonateUserRequest
-      fields:
-        '-': string!
-        app_id: xid.ID!
-        duration: time.Duration!
-        user_id: xid.ID!
-        user_organization_id: '*xid.ID!'
-    - name: SetUserRoleRequest
-      fields:
-        '-': xid.ID!
-        app_id: xid.ID!
-        role: string!
         user_id: xid.ID!
         user_organization_id: '*xid.ID!'
     - name: ListSessionsRequest
@@ -139,22 +143,33 @@ types:
         timestamp: string!
         total_sessions: int!
         total_users: int!
+    - name: DeleteUserRequestDTO
+      fields:
+        "": string
+    - name: ImpersonateUserRequestDTO
+      fields:
+        "": string
+        duration: time.Duration!
+    - name: ImpersonateUserRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        duration: time.Duration!
+        user_id: xid.ID!
+        user_organization_id: '*xid.ID!'
+    - name: SetUserRoleRequest
+      fields:
+        '-': xid.ID!
+        app_id: xid.ID!
+        role: string!
+        user_id: xid.ID!
+        user_organization_id: '*xid.ID!'
+    - name: ListSessionsRequestDTO
+      fields:
+        "": string
     - name: Plugin
       fields:
         "": '*Handler'
-    - name: CreateUserRequestDTO
-      fields:
-        email: string!
-        email_verified: bool!
-        metadata: '!'
-        name: string!
-        password: string!
-        role: string!
-        username: string!
-    - name: UnbanUserRequestDTO
-      fields:
-        "": string
-        reason: string!
     - name: Service
       fields:
         "": Config
@@ -177,19 +192,3 @@ types:
         total: int!
         total_pages: int!
         users: '[]*user.User!'
-    - name: ListSessionsResponse
-      fields:
-        limit: int!
-        page: int!
-        sessions: '[]*session.Session!'
-        total: int!
-        total_pages: int!
-    - name: GetStatsRequestDTO
-      fields:
-        "": string
-    - name: ListSessionsRequestDTO
-      fields:
-        "": string
-    - name: GetAuditLogsRequestDTO
-      fields:
-        "": int

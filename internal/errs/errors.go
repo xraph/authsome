@@ -139,6 +139,7 @@ const (
 	CodeCacheError     = "CACHE_ERROR"
 	CodeConfigError    = "CONFIG_ERROR"
 	CodeBadRequest     = "BAD_REQUEST"
+	CodeForbidden      = "FORBIDDEN"
 	CodeNotFound       = "NOT_FOUND"
 	CodeUnauthorized   = "UNAUTHORIZED"
 	CodeConflict       = "CONFLICT"
@@ -229,9 +230,14 @@ func (e *AuthsomeError) WithError(err error) *AuthsomeError {
 // ToHTTPError converts AuthsomeError to forge HTTPError for handler responses.
 func (e *AuthsomeError) ToHTTPError() *forgeerrors.HTTPError {
 	return &forgeerrors.HTTPError{
-		Code:    e.HTTPStatus,
-		Message: e.Message,
-		Err:     e.Err,
+		ForgeError: forgeerrors.ForgeError{
+			Code:      e.Code,
+			Message:   e.Message,
+			Err:       e.Err,
+			Timestamp: e.Timestamp,
+			Ctx:       e.Context,
+		},
+		HttpStatusCode: e.HTTPStatus,
 	}
 }
 
@@ -240,9 +246,9 @@ func (e *AuthsomeError) ToForgeError() *forgeerrors.ForgeError {
 	return &forgeerrors.ForgeError{
 		Code:      e.Code,
 		Message:   e.Message,
-		Cause:     e.Err,
+		Err:       e.Err,
 		Timestamp: e.Timestamp,
-		Context:   e.Context,
+		Ctx:       e.Context,
 	}
 }
 
@@ -286,7 +292,7 @@ func InvalidCredentialsWithAttempts(attemptsRemaining int) *AuthsomeError {
 	if attemptsRemaining <= 0 {
 		return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized)
 	}
-	
+
 	return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized).
 		WithContext("attemptsRemaining", attemptsRemaining).
 		WithContext("warning", fmt.Sprintf("Account will be locked after %d more failed attempt(s)", attemptsRemaining))
@@ -308,7 +314,7 @@ func AccountLockedWithTime(reason string, lockedUntil time.Time) *AuthsomeError 
 	if minutesLeft < 0 {
 		minutesLeft = 0
 	}
-	
+
 	return New(CodeAccountLocked, "Account is locked", http.StatusForbidden).
 		WithContext("reason", reason).
 		WithContext("lockedUntil", lockedUntil.Format(time.RFC3339)).
@@ -774,6 +780,10 @@ func BadRequest(msg string) *AuthsomeError {
 	return New(CodeBadRequest, msg, http.StatusBadRequest)
 }
 
+func Forbidden(msg string) *AuthsomeError {
+	return New(CodeForbidden, msg, http.StatusForbidden)
+}
+
 func InternalServerError(msg string, err error) *AuthsomeError {
 	return Wrap(err, CodeInternalError, msg, http.StatusInternalServerError)
 }
@@ -821,7 +831,7 @@ func GetHTTPStatus(err error) int {
 
 	var httpErr *forgeerrors.HTTPError
 	if errors.As(err, &httpErr) {
-		return httpErr.Code
+		return httpErr.StatusCode()
 	}
 
 	return http.StatusInternalServerError

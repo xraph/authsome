@@ -2,38 +2,29 @@ package subscription
 
 import (
 	"fmt"
-	"net/http"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
-	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // ServePaymentMethodsPage renders the payment methods management page
-func (e *DashboardExtension) ServePaymentMethodsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServePaymentMethodsPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Get payment methods for this organization
-	paymentMethods, err := e.plugin.paymentSvc.ListPaymentMethods(ctx, currentApp.ID)
+	paymentMethods, err := e.plugin.paymentSvc.ListPaymentMethods(reqCtx, currentApp.ID)
 	if err != nil {
 		paymentMethods = []*core.PaymentMethod{}
 	}
@@ -46,7 +37,7 @@ func (e *DashboardExtension) ServePaymentMethodsPage(c forge.Context) error {
 			Class("flex items-center justify-between"),
 			Div(
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing"),
 					Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white mb-4"),
 					lucide.ArrowLeft(Class("size-4")),
 					g.Text("Back to Billing"),
@@ -55,7 +46,7 @@ func (e *DashboardExtension) ServePaymentMethodsPage(c forge.Context) error {
 				P(Class("text-slate-600 dark:text-gray-400 mt-2"), g.Text("Manage your payment methods for subscription billing")),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/payment-methods/add"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/payment-methods/add"),
 				Class("inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Add Payment Method"),
@@ -78,47 +69,32 @@ func (e *DashboardExtension) ServePaymentMethodsPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Payment Methods",
-		User:       currentUser,
-		ActivePage: "payment-methods",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeAddPaymentMethodPage renders the add payment method page with Stripe Elements
-func (e *DashboardExtension) ServeAddPaymentMethodPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeAddPaymentMethodPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Create setup intent
-	setupIntent, err := e.plugin.paymentSvc.CreateSetupIntent(ctx, currentApp.ID)
+	setupIntent, err := e.plugin.paymentSvc.CreateSetupIntent(reqCtx, currentApp.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create setup intent: "+err.Error())
+		return nil, errs.InternalServerError("Failed to create setup intent: "+err.Error(), err)
 	}
 
 	// Get Stripe publishable key from config
 	publishableKey := e.plugin.config.StripeConfig.PublishableKey
 	if publishableKey == "" {
-		return c.String(http.StatusInternalServerError, "Stripe not configured")
+		return nil, errs.InternalServerError("Stripe not configured", nil)
 	}
 
 	content := Div(
@@ -126,7 +102,7 @@ func (e *DashboardExtension) ServeAddPaymentMethodPage(c forge.Context) error {
 
 		// Header with back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/payment-methods"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/payment-methods"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Payment Methods"),
@@ -153,15 +129,8 @@ func (e *DashboardExtension) ServeAddPaymentMethodPage(c forge.Context) error {
 		renderStripeElementsForm(setupIntent.ClientSecret, publishableKey, basePath, currentApp.ID.String()),
 	)
 
-	pageData := components.PageData{
-		Title:      "Add Payment Method",
-		User:       currentUser,
-		ActivePage: "payment-methods",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // renderEmptyPaymentMethodsState renders the empty state for payment methods
@@ -176,7 +145,7 @@ func renderEmptyPaymentMethodsState(basePath string, appID string) g.Node {
 				g.Text("Add a payment method to enable automatic billing for your subscriptions."),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+appID+"/billing/payment-methods/add"),
+				Href(basePath+"/app/"+appID+"/billing/payment-methods/add"),
 				Class("inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Add Payment Method"),
@@ -245,7 +214,7 @@ func renderPaymentMethodCard(pm *core.PaymentMethod, basePath string, appID stri
 				g.If(!pm.IsDefault,
 					Button(
 						Type("button"),
-						g.Attr("hx-post", basePath+"/dashboard/app/"+appID+"/billing/payment-methods/set-default/"+pm.ID.String()),
+						g.Attr("hx-post", basePath+"/app/"+appID+"/billing/payment-methods/set-default/"+pm.ID.String()),
 						g.Attr("hx-target", "#payment-methods-list"),
 						g.Attr("hx-swap", "outerHTML"),
 						Class("px-3 py-1.5 text-sm font-medium text-violet-600 hover:text-violet-700 hover:bg-violet-50 rounded-md transition-colors dark:text-violet-400 dark:hover:bg-violet-950"),
@@ -255,7 +224,7 @@ func renderPaymentMethodCard(pm *core.PaymentMethod, basePath string, appID stri
 				g.If(!pm.IsDefault,
 					Button(
 						Type("button"),
-						g.Attr("hx-delete", basePath+"/dashboard/app/"+appID+"/billing/payment-methods/"+pm.ID.String()),
+						g.Attr("hx-delete", basePath+"/app/"+appID+"/billing/payment-methods/"+pm.ID.String()),
 						g.Attr("hx-confirm", "Are you sure you want to remove this payment method?"),
 						g.Attr("hx-target", "#payment-methods-list"),
 						g.Attr("hx-swap", "outerHTML"),
@@ -366,7 +335,7 @@ form.addEventListener('submit', async (e) => {
     const {error, setupIntent} = await stripe.confirmSetup({
         elements,
         confirmParams: {
-            return_url: window.location.origin + '%s/dashboard/app/%s/billing/payment-methods',
+            return_url: window.location.origin + '%s/app/%s/billing/payment-methods',
         },
         redirect: 'if_required'
     });
@@ -394,7 +363,7 @@ form.addEventListener('submit', async (e) => {
             });
             
             if (response.ok) {
-                window.location.href = '%s/dashboard/app/%s/billing/payment-methods';
+                window.location.href = '%s/app/%s/billing/payment-methods';
             } else {
                 const data = await response.json();
                 errorMessage.textContent = data.message || 'Failed to add payment method';
@@ -416,4 +385,3 @@ form.addEventListener('submit', async (e) => {
 		),
 	)
 }
-

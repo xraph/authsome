@@ -38,75 +38,247 @@ type Service struct {
 
 ## Public API
 
-### Log Event
+### Log Event (Internal - System Source)
 ```go
-err := auditSvc.Log(ctx, &userID, "user.login", userID.String(), "192.168.1.1", "Mozilla/5.0...", `{"method": "password"}`)
+// Using action enum constants (type-safe)
+err := auditSvc.Log(ctx, &userID, string(audit.ActionAuthSignin), "user:"+userID.String(), "192.168.1.1", "Mozilla/5.0...", `{"method": "password"}`)
+
+// Source is automatically set to SourceSystem
 ```
 
-### Create Structured Event
+### Create Structured Event (External - Application Source)
 ```go
+// Using action enum constants
 req := &CreateEventRequest{
     UserID:    &userID,
-    Action:    "org.member.added",
-    Resource:  memberID.String(),
+    Action:    string(audit.ActionUserCreated),
+    Resource:  "user:"+userID.String(),
     IPAddress: "192.168.1.1",
     UserAgent: "Mozilla/5.0...",
-    Metadata:  map[string]any{"role": "admin", "invitedBy": inviterID.String()},
+    Metadata:  `{"role": "admin", "invitedBy": "..."}`,
+    // Source defaults to SourceApplication if not provided
 }
 event, err := auditSvc.Create(ctx, req)
+
+// Or explicitly set source
+source := audit.SourceSystem
+req.Source = &source
 ```
 
 ### Query Audit Log
 ```go
+// Filter by action
+action := string(audit.ActionAuthSignin)
 filter := &ListEventsFilter{
     UserID:    &userID,
-    Action:    "user.login",
-    StartTime: time.Now().AddDate(0, 0, -7),  // Last 7 days
+    Action:    &action,
+    Since:     timePtr(time.Now().AddDate(0, 0, -7)),  // Last 7 days
     Limit:     100,
 }
 response, err := auditSvc.List(ctx, filter)
 // Returns paginated events with total count
+
+// Filter by source (system vs application)
+source := audit.SourceSystem
+filter := &ListEventsFilter{
+    Source: &source,
+    Limit:  100,
+}
+response, err := auditSvc.List(ctx, filter)
 ```
+
+### Exclusion Filters
+
+All filterable fields support exclusion using the `Exclude` prefix. Exclusion filters allow you to filter out unwanted events, reducing noise and focusing on relevant audit data.
+
+#### Exclude Noisy Actions
+```go
+// Show all audits except routine operations
+filter := &audit.ListEventsFilter{
+    ExcludeActions: []string{
+        string(audit.ActionSessionChecked),
+        string(audit.ActionSessionRefreshed),
+        string(audit.ActionDashboardAccess),
+    },
+    Limit: 100,
+}
+response, err := auditSvc.List(ctx, filter)
+```
+
+#### Show Only Application Audits (Exclude System)
+```go
+// Exclude internal system audits, show only external API calls
+excludeSource := audit.SourceSystem
+filter := &audit.ListEventsFilter{
+    ExcludeSource: &excludeSource,
+    Limit: 100,
+}
+response, err := auditSvc.List(ctx, filter)
+```
+
+#### Exclude Test Users
+```go
+// Filter out test users from audit reports
+testUserIDs := []xid.ID{testUser1, testUser2, testUser3}
+filter := &audit.ListEventsFilter{
+    ExcludeUserIDs: testUserIDs,
+    Limit: 100,
+}
+response, err := auditSvc.List(ctx, filter)
+```
+
+#### Combine Inclusions and Exclusions
+```go
+// Show auth actions, but exclude failed attempts
+authActions := []string{
+    string(audit.ActionAuthSignin),
+    string(audit.ActionAuthSignup),
+}
+excludeActions := []string{
+    string(audit.ActionAuthSigninFailed),
+}
+
+filter := &audit.ListEventsFilter{
+    Actions: authActions,           // Include these actions
+    ExcludeActions: excludeActions, // But exclude these
+    Limit: 100,
+}
+response, err := auditSvc.List(ctx, filter)
+// SQL generated: WHERE action IN (signin, signup) AND action NOT IN (signin.failed)
+```
+
+#### Available Exclusion Filters
+
+**ListEventsFilter** supports:
+- `ExcludeSource` / `ExcludeSources` - Exclude audit sources
+- `ExcludeAction` / `ExcludeActions` - Exclude specific actions
+- `ExcludeResource` / `ExcludeResources` - Exclude resources
+- `ExcludeUserID` / `ExcludeUserIDs` - Exclude users
+- `ExcludeIPAddress` / `ExcludeIPAddresses` - Exclude IP addresses
+- `ExcludeAppID` / `ExcludeAppIDs` - Exclude apps
+- `ExcludeOrganizationID` / `ExcludeOrganizationIDs` - Exclude organizations
+- `ExcludeEnvironmentID` - Exclude environment
+
+**StatisticsFilter** supports:
+- `ExcludeSource` / `ExcludeSources`
+- `ExcludeAction` / `ExcludeActions`
+- `ExcludeResource` / `ExcludeResources`
+- `ExcludeUserID` / `ExcludeUserIDs`
+
+**DeleteFilter** supports:
+- `ExcludeAction` / `ExcludeActions`
+- `ExcludeResource` / `ExcludeResources`
+
+#### Filter Logic
+
+When both include and exclude filters are present for the same field:
+```sql
+WHERE field IN (included_values) AND field NOT IN (excluded_values)
+```
+
+When only exclude filters are present:
+```sql
+WHERE field NOT IN (excluded_values)
+```
+
+#### Use Cases
+
+1. **Noise Reduction**: Filter out routine events like session checks
+2. **Security Focus**: Exclude routine operations to focus on security events
+3. **Testing**: Exclude test data from production reports
+4. **Analytics**: Better aggregate statistics by excluding irrelevant data
+5. **Source Filtering**: Show only application audits (exclude system audits)
+6. **Compliance**: Exclude non-security events for compliance reports
 
 ### Get Single Event
 ```go
 event, err := auditSvc.Get(ctx, eventID)
 ```
 
-## Standard Actions
+## Action Enums
 
-### Authentication
-- `user.login` - User logged in
-- `user.logout` - User logged out
-- `user.signup` - New user registered
-- `user.password.changed` - Password changed
-- `user.password.reset` - Password reset
-- `user.email.verified` - Email verified
+AuthSome uses type-safe action enums with hierarchical dot-notation naming. All audit actions are defined in `core/audit/actions.go`.
 
-### Authorization
-- `role.assigned` - Role assigned to user
-- `role.revoked` - Role revoked from user
-- `permission.granted` - Permission granted
-- `permission.revoked` - Permission revoked
+### Authentication Actions
+- `ActionAuthSignup` = "auth.signup" - User signup
+- `ActionAuthSignin` = "auth.signin" - User signin  
+- `ActionAuthSigninFailed` = "auth.signin.failed" - Failed signin attempt
+- `ActionAuthSigninTwoFARequired` = "auth.signin.twofa_required" - 2FA required
+- `ActionAuthSignout` = "auth.signout" - User signout
 
-### Organization
-- `org.created` - Organization created
-- `org.updated` - Organization updated
-- `org.deleted` - Organization deleted
-- `org.member.added` - Member added
-- `org.member.removed` - Member removed
-- `org.member.role.changed` - Member role changed
+### Session Actions
+- `ActionSessionCreated` = "session.created" - Session created
+- `ActionSessionRefreshed` = "session.refreshed" - Session refreshed
+- `ActionSessionChecked` = "session.checked" - Session validated
+- `ActionSessionRevoked` = "session.revoked" - Session revoked
 
-### API Keys
-- `apikey.created` - API key created
-- `apikey.used` - API key used
-- `apikey.revoked` - API key revoked
-- `apikey.rotated` - API key rotated
+### User Actions
+- `ActionUserCreated` = "user.created" - User created
+- `ActionUserUpdated` = "user.updated" - User updated
+- `ActionUserDeleted` = "user.deleted" - User deleted
+- `ActionUserBanned` = "user.banned" - User banned
+- `ActionUserUnbanned` = "user.unbanned" - User unbanned
 
-### Session
-- `session.created` - Session created
-- `session.refreshed` - Session refreshed
-- `session.revoked` - Session revoked
+### Password Actions
+- `ActionPasswordResetRequested` = "password.reset.requested" - Password reset requested
+- `ActionPasswordResetCompleted` = "password.reset.completed" - Password reset completed
+- `ActionPasswordChanged` = "password.changed" - Password changed
+
+### Email Actions
+- `ActionEmailVerified` = "email.verified" - Email verified
+- `ActionEmailChangeRequested` = "email.change.requested" - Email change requested
+- `ActionEmailChangeConfirmed` = "email.change.confirmed" - Email change confirmed
+
+### API Key Actions
+- `ActionAPIKeyCreated` = "apikey.created" - API key created
+- `ActionAPIKeyUpdated` = "apikey.updated" - API key updated
+- `ActionAPIKeyDeleted` = "apikey.deleted" - API key deleted
+- `ActionAPIKeyRotated` = "apikey.rotated` - API key rotated
+- `ActionAPIKeyRoleAssigned` = "apikey.role.assigned" - Role assigned to API key
+- `ActionAPIKeyRoleUnassigned` = "apikey.role.unassigned" - Role removed from API key
+
+### Device Actions
+- `ActionDevicesListed` = "device.listed" - Devices listed
+- `ActionDeviceRevoked` = "device.revoked" - Device revoked
+
+### Plugin Actions (examples)
+- `ActionMagicLinkSent` = "magiclink.sent" - Magic link sent
+- `ActionPasskeyRegistered` = "passkey.registered" - Passkey registered
+- `ActionSocialSigninInitiated` = "social.signin.initiated" - Social signin initiated
+- `ActionUsernameSignupSuccess` = "username.signup.success" - Username signup success
+
+See `core/audit/actions.go` for the complete list of 80+ action constants.
+
+## Audit Source Field
+
+All audit events have a `Source` field that categorizes the origin:
+
+### Source Types
+- `SourceSystem` = "system" - Internal authsome core (handlers, services, plugins)
+- `SourceApplication` = "application" - External API calls via audit endpoints
+- `SourcePlugin` = "plugin" - Reserved for future plugin-specific categorization
+
+### Auto-Assignment
+- `Log()` method: Automatically sets `Source = SourceSystem`
+- `Create()` method: Defaults to `Source = SourceApplication` if not provided
+- Can be explicitly overridden in `CreateEventRequest`
+
+### Filtering by Source
+```go
+// List only system-generated audits
+filter := &audit.ListEventsFilter{
+    Source: &audit.SourceSystem,
+}
+events, _ := auditSvc.List(ctx, filter)
+
+// List multiple sources
+filter := &audit.ListEventsFilter{
+    Sources: []audit.AuditSource{
+        audit.SourceSystem,
+        audit.SourceApplication,
+    },
+}
+```
 
 ## Dependencies
 
@@ -234,6 +406,201 @@ func TestService_Create(t *testing.T) {
 - **SOC 2**: Comprehensive security event logging
 - **HIPAA**: PHI access tracking
 - **PCI DSS**: Administrative action logging
+
+## Aggregation Endpoints
+
+Get distinct values with counts for building filter UIs and analytics.
+
+### Get All Aggregations
+
+Retrieve all distinct values in one call for optimal performance.
+
+```
+GET /audit/aggregations?organization_id=X&limit=50
+```
+
+**Query Parameters:**
+- `app_id` - Filter by specific app
+- `organization_id` - Filter by organization
+- `environment_id` - Filter by environment
+- `since` - Filter from date (RFC3339 format)
+- `until` - Filter to date (RFC3339 format)
+- `limit` - Max results per field (default: 100, applied to each field)
+
+**Response:**
+```json
+{
+  "actions": [
+    {"value": "auth.signin", "count": 1234},
+    {"value": "auth.signup", "count": 567},
+    {"value": "user.updated", "count": 234}
+  ],
+  "sources": [
+    {"value": "system", "count": 2000},
+    {"value": "application", "count": 800}
+  ],
+  "resources": [
+    {"value": "user:123", "count": 50},
+    {"value": "user:456", "count": 30}
+  ],
+  "users": [
+    {"value": "user_abc123", "count": 100}
+  ],
+  "ipAddresses": [
+    {"value": "192.168.1.1", "count": 25},
+    {"value": "10.0.0.1", "count": 15}
+  ],
+  "apps": [
+    {"value": "app_xyz789", "count": 500}
+  ],
+  "organizations": [
+    {"value": "org_def456", "count": 1000}
+  ]
+}
+```
+
+### Individual Field Endpoints
+
+When you only need aggregations for specific fields, use individual endpoints:
+
+#### Get Distinct Actions
+```
+GET /audit/actions?organization_id=org123&since=2024-01-01T00:00:00Z
+```
+
+Response:
+```json
+{
+  "actions": [
+    {"value": "auth.signin", "count": 1234},
+    {"value": "auth.signup", "count": 567},
+    {"value": "user.updated", "count": 234}
+  ],
+  "total": 3
+}
+```
+
+#### Get Distinct Sources
+```
+GET /audit/sources?app_id=app123
+```
+
+Response:
+```json
+{
+  "sources": [
+    {"value": "system", "count": 2000},
+    {"value": "application", "count": 800},
+    {"value": "plugin", "count": 200}
+  ],
+  "total": 3
+}
+```
+
+#### Get Distinct Resources
+```
+GET /audit/resources?limit=20
+```
+
+#### Get Distinct Users
+```
+GET /audit/users?organization_id=org123
+```
+
+#### Get Distinct IP Addresses
+```
+GET /audit/ips?since=2024-01-01T00:00:00Z
+```
+
+#### Get Distinct Apps
+```
+GET /audit/apps
+```
+
+#### Get Distinct Organizations
+```
+GET /audit/organizations
+```
+
+### Usage Examples
+
+#### Building Dynamic Filter Dropdowns
+
+```go
+// Fetch aggregations for filter UI
+filter := &audit.AggregationFilter{
+    OrganizationID: &orgID,
+    Limit: 50,
+}
+
+aggs, err := auditSvc.GetAllAggregations(ctx, filter)
+if err != nil {
+    return err
+}
+
+// Populate UI dropdowns with actual values
+for _, action := range aggs.Actions {
+    fmt.Printf("Action: %s (%d occurrences)\n", action.Value, action.Count)
+}
+```
+
+#### Scoped to Specific Environment
+
+```go
+// Get actions for a specific environment only
+filter := &audit.AggregationFilter{
+    EnvironmentID: &envID,
+    Limit: 100,
+}
+
+actions, err := auditSvc.GetDistinctActions(ctx, filter)
+```
+
+#### Time-Based Aggregations
+
+```go
+// Get aggregations for the last 7 days
+since := time.Now().AddDate(0, 0, -7)
+filter := &audit.AggregationFilter{
+    Since: &since,
+    Limit: 100,
+}
+
+aggs, err := auditSvc.GetAllAggregations(ctx, filter)
+```
+
+### Use Cases
+
+1. **Dynamic Filter UIs** - Frontend can populate dropdowns with actual values from the database
+2. **Performance** - Single query returns all available filter options
+3. **Context-Aware** - Results automatically filtered by org/app/env scope
+4. **Usage Insights** - Counts show which values are most common
+5. **API Flexibility** - Both combined and individual endpoints available
+6. **Analytics** - Understand audit event distribution and patterns
+7. **Compliance** - Quick overview of what's being audited
+
+### Performance Considerations
+
+- Default limit of 100 per field prevents huge responses
+- Parallel goroutines for combined endpoint reduce latency
+- Database GROUP BY queries indexed on relevant fields (action, source, resource, user_id, ip_address, app_id, organization_id)
+- Caching recommended for high-traffic scenarios
+- Results ordered by count (descending) by default
+
+### API Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/audit/aggregations` | GET | Get all aggregations in one call |
+| `/audit/actions` | GET | Get distinct actions with counts |
+| `/audit/sources` | GET | Get distinct sources with counts |
+| `/audit/resources` | GET | Get distinct resources with counts |
+| `/audit/users` | GET | Get distinct users with counts |
+| `/audit/ips` | GET | Get distinct IP addresses with counts |
+| `/audit/apps` | GET | Get distinct apps with counts |
+| `/audit/organizations` | GET | Get distinct organizations with counts |
+
+All endpoints support the same query parameters: `app_id`, `organization_id`, `environment_id`, `since`, `until`, and `limit`.
 
 ## Configuration Example
 

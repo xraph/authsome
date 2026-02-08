@@ -19,64 +19,6 @@ impl ApikeyPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateAPIKeyRequest {
-        #[serde(rename = "description")]
-        pub description: String,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "name")]
-        pub name: String,
-        #[serde(rename = "permissions")]
-        pub permissions: ,
-        #[serde(rename = "rate_limit")]
-        pub rate_limit: i32,
-        #[serde(rename = "scopes")]
-        pub scopes: []string,
-        #[serde(rename = "allowed_ips")]
-        pub allowed_ips: []string,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct CreateAPIKeyResponse {
-        #[serde(rename = "api_key")]
-        pub api_key: *apikey.APIKey,
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
-    /// CreateAPIKey handles API key creation
-    pub async fn create_a_p_i_key(
-        &self,
-        _request: CreateAPIKeyRequest,
-    ) -> Result<CreateAPIKeyResponse> {{
-        // TODO: Implement plugin method
-        unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Serialize)]
-    pub struct RotateAPIKeyRequest {
-        #[serde(rename = "", skip_serializing_if = "Option::is_none")]
-        pub : Option<String>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct RotateAPIKeyResponse {
-        #[serde(rename = "api_key")]
-        pub api_key: *apikey.APIKey,
-        #[serde(rename = "message")]
-        pub message: String,
-    }
-
-    /// RotateAPIKey handles API key rotation
-    pub async fn rotate_a_p_i_key(
-        &self,
-        _request: RotateAPIKeyRequest,
-    ) -> Result<RotateAPIKeyResponse> {{
-        // TODO: Implement plugin method
-        unimplemented!("Plugin methods need client access")
-    }
-
-    #[derive(Debug, Serialize)]
-    pub struct CreateAPIKeyRequest {
         #[serde(rename = "allowed_ips")]
         pub allowed_ips: []string,
         #[serde(rename = "description")]
@@ -95,10 +37,10 @@ impl ApikeyPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct CreateAPIKeyResponse {
-        #[serde(rename = "message")]
-        pub message: String,
         #[serde(rename = "api_key")]
         pub api_key: *apikey.APIKey,
+        #[serde(rename = "message")]
+        pub message: String,
     }
 
     /// CreateAPIKey handles POST /api-keys
@@ -142,12 +84,6 @@ impl ApikeyPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdateAPIKeyRequest {
-        #[serde(rename = "permissions")]
-        pub permissions: ,
-        #[serde(rename = "rate_limit")]
-        pub rate_limit: *int,
-        #[serde(rename = "scopes")]
-        pub scopes: []string,
         #[serde(rename = "", skip_serializing_if = "Option::is_none")]
         pub : Option<String>,
         #[serde(rename = "allowed_ips")]
@@ -158,6 +94,12 @@ impl ApikeyPlugin {{
         pub metadata: ,
         #[serde(rename = "name")]
         pub name: *string,
+        #[serde(rename = "permissions")]
+        pub permissions: ,
+        #[serde(rename = "rate_limit")]
+        pub rate_limit: *int,
+        #[serde(rename = "scopes")]
+        pub scopes: []string,
     }
 
     /// UpdateAPIKey handles PATCH /api-keys/:id

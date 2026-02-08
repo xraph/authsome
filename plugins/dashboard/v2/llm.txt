@@ -30,7 +30,7 @@ auth:
   plugins:
     dashboard:
       enabled: true
-      path: "/dashboard"
+      path: "/ui"
       requireAdmin: true
 ```
 

@@ -141,7 +141,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 	providers, err := s.ensureProvidersLoaded(ctx, appID, envID)
 	if err != nil {
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "social_provider_load_failed",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionSocialProviderLoadFailed),
 				fmt.Sprintf("provider:%s app_id:%s env_id:%s error:%s", providerName, appID.String(), envID.String(), err.Error()),
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","app_id":"%s","env_id":"%s","error":"%s"}`, providerName, appID.String(), envID.String(), err.Error()))
@@ -153,7 +153,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 	if !ok {
 		// Audit: provider not found
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "social_provider_not_found",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionSocialProviderNotFound),
 				fmt.Sprintf("provider:%s app_id:%s env_id:%s", providerName, appID.String(), envID.String()),
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","app_id":"%s","env_id":"%s"}`, providerName, appID.String(), envID.String()))
@@ -180,7 +180,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 
 	// Audit: OAuth flow initiated
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "social_signin_initiated",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionSocialSigninInitiated),
 			fmt.Sprintf("provider:%s app_id:%s", providerName, appID.String()),
 			"", "",
 			fmt.Sprintf(`{"provider":"%s","app_id":"%s","scopes":%s}`,
@@ -210,7 +210,7 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 	provider, ok := providers[providerName]
 	if !ok {
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, &userID, "social_provider_not_found",
+			_ = s.audit.Log(ctx, &userID, string(audit.ActionSocialProviderNotFound),
 				fmt.Sprintf("provider:%s user_id:%s", providerName, userID.String()),
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","user_id":"%s","action":"link"}`, providerName, userID.String()))
@@ -235,7 +235,7 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 
 	// Audit: link flow initiated
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, &userID, "social_link_initiated",
+		_ = s.audit.Log(ctx, &userID, string(audit.ActionSocialLinkInitiated),
 			fmt.Sprintf("provider:%s user_id:%s", providerName, userID.String()),
 			"", "",
 			fmt.Sprintf(`{"provider":"%s","user_id":"%s","app_id":"%s"}`, providerName, userID.String(), appID.String()))
@@ -248,7 +248,7 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, code string) (*CallbackResult, error) {
 	// Audit: callback received
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "social_callback_received",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionSocialCallbackReceived),
 			fmt.Sprintf("provider:%s", providerName),
 			"", "",
 			fmt.Sprintf(`{"provider":"%s"}`, providerName))
@@ -262,7 +262,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 
 	if state.Provider != providerName {
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "social_state_provider_mismatch",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionSocialStateMismatch),
 				fmt.Sprintf("expected:%s got:%s", state.Provider, providerName),
 				"", "",
 				fmt.Sprintf(`{"expected":"%s","got":"%s"}`, state.Provider, providerName))
@@ -290,7 +290,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 	if err != nil {
 		// Audit: token exchange failed
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "social_token_exchange_failed",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionSocialTokenExchangeFailed),
 				fmt.Sprintf("provider:%s error:%s", providerName, err.Error()),
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","error":"%s"}`, providerName, err.Error()))
@@ -300,7 +300,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 
 	// Audit: token exchange success
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "social_token_exchange_success",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionSocialTokenExchangeSuccess),
 			fmt.Sprintf("provider:%s", providerName),
 			"", "",
 			fmt.Sprintf(`{"provider":"%s","app_id":"%s"}`, providerName, state.AppID.String()))
@@ -314,7 +314,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 
 	// Audit: user info fetched
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "social_userinfo_fetched",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionSocialUserInfoFetched),
 			fmt.Sprintf("provider:%s email:%s", providerName, userInfo.Email),
 			"", "",
 			fmt.Sprintf(`{"provider":"%s","email":"%s","verified":%t}`, providerName, userInfo.Email, userInfo.EmailVerified))
@@ -323,7 +323,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 	// Check email verification requirement
 	if s.config.RequireEmailVerified && !userInfo.EmailVerified {
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "social_email_not_verified",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionSocialEmailNotVerified),
 				fmt.Sprintf("provider:%s email:%s", providerName, userInfo.Email),
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","email":"%s"}`, providerName, userInfo.Email))
@@ -515,7 +515,7 @@ func (s *Service) verifyState(ctx context.Context, stateToken string) (*OAuthSta
 	if err != nil {
 		// Audit: invalid state
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "social_state_invalid",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionSocialStateInvalid),
 				fmt.Sprintf("state_token:%s error:%s", stateToken[:10]+"...", err.Error()),
 				"", "",
 				fmt.Sprintf(`{"error":"%s"}`, err.Error()))

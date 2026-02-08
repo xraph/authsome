@@ -258,19 +258,39 @@ func (i *Introspector) IntrospectRoutes(routesPath string) ([]RouteRegistration,
 	return registrations, nil
 }
 
-// parseRoutesFile parses route registration code
+// parseRoutesFile parses route registration code with router group detection
 func (i *Introspector) parseRoutesFile(filePath string) ([]RouteRegistration, error) {
 	node, err := parser.ParseFile(i.fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
 
+	// First pass: collect all router group declarations
+	groupMap := make(map[string]*RouterGroup)
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		// Look for assignment statements: grp := router.Group("/path")
+		if stmt, ok := n.(*ast.AssignStmt); ok {
+			if group := i.extractGroupDeclaration(stmt); group != nil {
+				groupMap[group.VarName] = group
+			}
+		}
+		return true
+	})
+
+	// Resolve full paths for all groups (handles nested groups)
+	for _, group := range groupMap {
+		visited := make(map[string]bool)
+		group.FullPath = i.resolveGroupPath(group, groupMap, visited)
+	}
+
+	// Second pass: extract route registrations with group context
 	var registrations []RouteRegistration
 
 	ast.Inspect(node, func(n ast.Node) bool {
 		// Look for app.POST("/path", handler) calls
 		if call, ok := n.(*ast.CallExpr); ok {
-			if reg := i.extractRouteRegistration(call); reg != nil {
+			if reg := i.extractRouteRegistrationWithGroups(call, groupMap); reg != nil {
 				registrations = append(registrations, *reg)
 			}
 		}
@@ -307,6 +327,12 @@ func (i *Introspector) parseSchemaAnnotation(call *ast.CallExpr) string {
 
 // extractRouteRegistration extracts route registration from a call expression
 func (i *Introspector) extractRouteRegistration(call *ast.CallExpr) *RouteRegistration {
+	return i.extractRouteRegistrationWithGroups(call, nil)
+}
+
+// extractRouteRegistrationWithGroups extracts route registration from a call expression
+// and prepends the group path if the receiver is a router group
+func (i *Introspector) extractRouteRegistrationWithGroups(call *ast.CallExpr, groupMap map[string]*RouterGroup) *RouteRegistration {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
 		return nil
@@ -332,6 +358,22 @@ func (i *Introspector) extractRouteRegistration(call *ast.CallExpr) *RouteRegist
 	}
 
 	path := strings.Trim(pathLit.Value, `"`)
+
+	// Check if receiver is a router group and prepend group path
+	receiverName := i.getReceiverName(sel)
+	if groupMap != nil && receiverName != "" {
+		if group, exists := groupMap[receiverName]; exists && group.FullPath != "" {
+			// Prepend the group's full path to the route path
+			groupPath := strings.TrimSuffix(group.FullPath, "/")
+			if path == "" {
+				path = groupPath
+			} else if !strings.HasPrefix(path, "/") {
+				path = groupPath + "/" + path
+			} else {
+				path = groupPath + path
+			}
+		}
+	}
 
 	// Extract handler name (second argument)
 	var handlerName string
@@ -752,4 +794,117 @@ type PluginInfo struct {
 	Name        string
 	Version     string
 	Description string
+}
+
+// RouterGroup represents a router group declaration for path prefix tracking
+type RouterGroup struct {
+	VarName   string // Variable name (e.g., "grp", "deviceGroup")
+	Path      string // Group path (e.g., "/oauth2", "/device")
+	ParentVar string // Parent variable name (e.g., "router", "grp")
+	FullPath  string // Full accumulated path (e.g., "/oauth2", "/oauth2/device")
+}
+
+// extractGroupDeclaration detects router group declarations from assignment statements
+// Pattern: grp := router.Group("/path") or deviceGroup := grp.Group("/device")
+func (i *Introspector) extractGroupDeclaration(stmt *ast.AssignStmt) *RouterGroup {
+	// Must have exactly one LHS variable
+	if len(stmt.Lhs) != 1 || len(stmt.Rhs) != 1 {
+		return nil
+	}
+
+	// Get variable name from LHS
+	varIdent, ok := stmt.Lhs[0].(*ast.Ident)
+	if !ok {
+		return nil
+	}
+
+	// Check RHS is a call expression
+	call, ok := stmt.Rhs[0].(*ast.CallExpr)
+	if !ok {
+		return nil
+	}
+
+	// Check it's a method call (selector expression)
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return nil
+	}
+
+	// Must be calling "Group" method
+	if sel.Sel.Name != "Group" {
+		return nil
+	}
+
+	// Get receiver name (e.g., "router" or "grp")
+	var parentVar string
+	switch x := sel.X.(type) {
+	case *ast.Ident:
+		parentVar = x.Name
+	default:
+		return nil
+	}
+
+	// Extract path from first argument
+	if len(call.Args) == 0 {
+		return nil
+	}
+
+	pathLit, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || pathLit.Kind != token.STRING {
+		return nil
+	}
+
+	path := strings.Trim(pathLit.Value, `"`)
+
+	return &RouterGroup{
+		VarName:   varIdent.Name,
+		Path:      path,
+		ParentVar: parentVar,
+		FullPath:  "", // Will be resolved later
+	}
+}
+
+// resolveGroupPath recursively builds the full path for a router group
+// by traversing parent groups
+func (i *Introspector) resolveGroupPath(group *RouterGroup, groupMap map[string]*RouterGroup, visited map[string]bool) string {
+	// Prevent infinite loops from circular references
+	if visited[group.VarName] {
+		return group.Path
+	}
+	visited[group.VarName] = true
+
+	// If parent is "router" or not in groupMap, this is a top-level group
+	parentGroup, hasParent := groupMap[group.ParentVar]
+	if !hasParent {
+		return group.Path
+	}
+
+	// Recursively get parent's full path
+	parentPath := i.resolveGroupPath(parentGroup, groupMap, visited)
+
+	// Combine paths, avoiding double slashes
+	if parentPath == "" {
+		return group.Path
+	}
+	if group.Path == "" {
+		return parentPath
+	}
+
+	// Remove trailing slash from parent and ensure child starts with /
+	parentPath = strings.TrimSuffix(parentPath, "/")
+	childPath := group.Path
+	if !strings.HasPrefix(childPath, "/") {
+		childPath = "/" + childPath
+	}
+
+	return parentPath + childPath
+}
+
+// getReceiverName extracts the receiver variable name from a selector expression
+// e.g., for grp.POST(), returns "grp"
+func (i *Introspector) getReceiverName(sel *ast.SelectorExpr) string {
+	if ident, ok := sel.X.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return ""
 }

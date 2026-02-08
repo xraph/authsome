@@ -32,7 +32,7 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // StartRecovery StartRecovery handles POST /recovery/start
 func (p *Plugin) StartRecovery(ctx context.Context, req *authsome.StartRecoveryRequest) (*authsome.StartRecoveryResponse, error) {
-	path := "/admin/recovery/start"
+	path := "/recovery/start"
 	var result authsome.StartRecoveryResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -43,7 +43,7 @@ func (p *Plugin) StartRecovery(ctx context.Context, req *authsome.StartRecoveryR
 
 // ContinueRecovery ContinueRecovery handles POST /recovery/continue
 func (p *Plugin) ContinueRecovery(ctx context.Context, req *authsome.ContinueRecoveryRequest) (*authsome.ContinueRecoveryResponse, error) {
-	path := "/admin/recovery/continue"
+	path := "/recovery/continue"
 	var result authsome.ContinueRecoveryResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -54,7 +54,7 @@ func (p *Plugin) ContinueRecovery(ctx context.Context, req *authsome.ContinueRec
 
 // CompleteRecovery CompleteRecovery handles POST /recovery/complete
 func (p *Plugin) CompleteRecovery(ctx context.Context, req *authsome.CompleteRecoveryRequest) (*authsome.CompleteRecoveryResponse, error) {
-	path := "/admin/recovery/complete"
+	path := "/recovery/complete"
 	var result authsome.CompleteRecoveryResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -65,7 +65,7 @@ func (p *Plugin) CompleteRecovery(ctx context.Context, req *authsome.CompleteRec
 
 // CancelRecovery CancelRecovery handles POST /recovery/cancel
 func (p *Plugin) CancelRecovery(ctx context.Context, req *authsome.CancelRecoveryRequest) (*authsome.CancelRecoveryResponse, error) {
-	path := "/admin/recovery/cancel"
+	path := "/recovery/cancel"
 	var result authsome.CancelRecoveryResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -76,7 +76,7 @@ func (p *Plugin) CancelRecovery(ctx context.Context, req *authsome.CancelRecover
 
 // GenerateRecoveryCodes GenerateRecoveryCodes handles POST /recovery-codes/generate
 func (p *Plugin) GenerateRecoveryCodes(ctx context.Context, req *authsome.GenerateRecoveryCodesRequest) (*authsome.GenerateRecoveryCodesResponse, error) {
-	path := "/admin/recovery-codes/generate"
+	path := "/recovery-codes/generate"
 	var result authsome.GenerateRecoveryCodesResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -87,7 +87,7 @@ func (p *Plugin) GenerateRecoveryCodes(ctx context.Context, req *authsome.Genera
 
 // VerifyRecoveryCode VerifyRecoveryCode handles POST /recovery-codes/verify
 func (p *Plugin) VerifyRecoveryCode(ctx context.Context, req *authsome.VerifyRecoveryCodeRequest) (*authsome.VerifyRecoveryCodeResponse, error) {
-	path := "/admin/recovery-codes/verify"
+	path := "/recovery-codes/verify"
 	var result authsome.VerifyRecoveryCodeResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -98,7 +98,7 @@ func (p *Plugin) VerifyRecoveryCode(ctx context.Context, req *authsome.VerifyRec
 
 // SetupSecurityQuestions SetupSecurityQuestions handles POST /security-questions/setup
 func (p *Plugin) SetupSecurityQuestions(ctx context.Context, req *authsome.SetupSecurityQuestionsRequest) (*authsome.SetupSecurityQuestionsResponse, error) {
-	path := "/admin/security-questions/setup"
+	path := "/security-questions/setup"
 	var result authsome.SetupSecurityQuestionsResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -109,7 +109,7 @@ func (p *Plugin) SetupSecurityQuestions(ctx context.Context, req *authsome.Setup
 
 // GetSecurityQuestions GetSecurityQuestions handles POST /security-questions/get
 func (p *Plugin) GetSecurityQuestions(ctx context.Context, req *authsome.GetSecurityQuestionsRequest) (*authsome.GetSecurityQuestionsResponse, error) {
-	path := "/admin/security-questions/get"
+	path := "/security-questions/get"
 	var result authsome.GetSecurityQuestionsResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -120,7 +120,7 @@ func (p *Plugin) GetSecurityQuestions(ctx context.Context, req *authsome.GetSecu
 
 // VerifySecurityAnswers VerifySecurityAnswers handles POST /security-questions/verify
 func (p *Plugin) VerifySecurityAnswers(ctx context.Context, req *authsome.VerifySecurityAnswersRequest) (*authsome.VerifySecurityAnswersResponse, error) {
-	path := "/admin/security-questions/verify"
+	path := "/security-questions/verify"
 	var result authsome.VerifySecurityAnswersResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -131,7 +131,7 @@ func (p *Plugin) VerifySecurityAnswers(ctx context.Context, req *authsome.Verify
 
 // AddTrustedContact AddTrustedContact handles POST /trusted-contacts/add
 func (p *Plugin) AddTrustedContact(ctx context.Context, req *authsome.AddTrustedContactRequest) (*authsome.AddTrustedContactResponse, error) {
-	path := "/admin/trusted-contacts/add"
+	path := "/trusted-contacts/add"
 	var result authsome.AddTrustedContactResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -142,7 +142,7 @@ func (p *Plugin) AddTrustedContact(ctx context.Context, req *authsome.AddTrusted
 
 // ListTrustedContacts ListTrustedContacts handles GET /trusted-contacts
 func (p *Plugin) ListTrustedContacts(ctx context.Context) (*authsome.ListTrustedContactsResponse, error) {
-	path := "/admin/trusted-contacts"
+	path := "/trusted-contacts"
 	var result authsome.ListTrustedContactsResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -153,7 +153,7 @@ func (p *Plugin) ListTrustedContacts(ctx context.Context) (*authsome.ListTrusted
 
 // VerifyTrustedContact VerifyTrustedContact handles POST /trusted-contacts/verify
 func (p *Plugin) VerifyTrustedContact(ctx context.Context, req *authsome.VerifyTrustedContactRequest) (*authsome.VerifyTrustedContactResponse, error) {
-	path := "/admin/trusted-contacts/verify"
+	path := "/trusted-contacts/verify"
 	var result authsome.VerifyTrustedContactResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -164,7 +164,7 @@ func (p *Plugin) VerifyTrustedContact(ctx context.Context, req *authsome.VerifyT
 
 // RequestTrustedContactVerification RequestTrustedContactVerification handles POST /trusted-contacts/request-verification
 func (p *Plugin) RequestTrustedContactVerification(ctx context.Context, req *authsome.RequestTrustedContactVerificationRequest) (*authsome.RequestTrustedContactVerificationResponse, error) {
-	path := "/admin/trusted-contacts/request-verification"
+	path := "/trusted-contacts/request-verification"
 	var result authsome.RequestTrustedContactVerificationResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -175,7 +175,7 @@ func (p *Plugin) RequestTrustedContactVerification(ctx context.Context, req *aut
 
 // RemoveTrustedContact RemoveTrustedContact handles DELETE /trusted-contacts/:id
 func (p *Plugin) RemoveTrustedContact(ctx context.Context, id xid.ID) (*authsome.RemoveTrustedContactResponse, error) {
-	path := "/admin/trusted-contacts/:id"
+	path := "/trusted-contacts/:id"
 	var result authsome.RemoveTrustedContactResponse
 	err := p.client.Request(ctx, "DELETE", path, nil, &result, false)
 	if err != nil {
@@ -186,7 +186,7 @@ func (p *Plugin) RemoveTrustedContact(ctx context.Context, id xid.ID) (*authsome
 
 // SendVerificationCode SendVerificationCode handles POST /verification/send
 func (p *Plugin) SendVerificationCode(ctx context.Context, req *authsome.SendVerificationCodeRequest) (*authsome.SendVerificationCodeResponse, error) {
-	path := "/admin/verification/send"
+	path := "/verification/send"
 	var result authsome.SendVerificationCodeResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -197,7 +197,7 @@ func (p *Plugin) SendVerificationCode(ctx context.Context, req *authsome.SendVer
 
 // VerifyCode VerifyCode handles POST /verification/verify
 func (p *Plugin) VerifyCode(ctx context.Context, req *authsome.VerifyCodeRequest) (*authsome.VerifyCodeResponse, error) {
-	path := "/admin/verification/verify"
+	path := "/verification/verify"
 	var result authsome.VerifyCodeResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -208,7 +208,7 @@ func (p *Plugin) VerifyCode(ctx context.Context, req *authsome.VerifyCodeRequest
 
 // ScheduleVideoSession ScheduleVideoSession handles POST /video/schedule
 func (p *Plugin) ScheduleVideoSession(ctx context.Context, req *authsome.ScheduleVideoSessionRequest) (*authsome.ScheduleVideoSessionResponse, error) {
-	path := "/admin/video/schedule"
+	path := "/video/schedule"
 	var result authsome.ScheduleVideoSessionResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -219,7 +219,7 @@ func (p *Plugin) ScheduleVideoSession(ctx context.Context, req *authsome.Schedul
 
 // StartVideoSession StartVideoSession handles POST /video/start
 func (p *Plugin) StartVideoSession(ctx context.Context, req *authsome.StartVideoSessionRequest) (*authsome.StartVideoSessionResponse, error) {
-	path := "/admin/video/start"
+	path := "/video/start"
 	var result authsome.StartVideoSessionResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -230,7 +230,7 @@ func (p *Plugin) StartVideoSession(ctx context.Context, req *authsome.StartVideo
 
 // CompleteVideoSession CompleteVideoSession handles POST /video/complete (admin)
 func (p *Plugin) CompleteVideoSession(ctx context.Context, req *authsome.CompleteVideoSessionRequest) (*authsome.CompleteVideoSessionResponse, error) {
-	path := "/admin/video/complete"
+	path := "/video/complete"
 	var result authsome.CompleteVideoSessionResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -241,7 +241,7 @@ func (p *Plugin) CompleteVideoSession(ctx context.Context, req *authsome.Complet
 
 // UploadDocument UploadDocument handles POST /documents/upload
 func (p *Plugin) UploadDocument(ctx context.Context, req *authsome.UploadDocumentRequest) (*authsome.UploadDocumentResponse, error) {
-	path := "/admin/documents/upload"
+	path := "/documents/upload"
 	var result authsome.UploadDocumentResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -252,7 +252,7 @@ func (p *Plugin) UploadDocument(ctx context.Context, req *authsome.UploadDocumen
 
 // GetDocumentVerification GetDocumentVerification handles GET /documents/:id
 func (p *Plugin) GetDocumentVerification(ctx context.Context, id xid.ID) (*authsome.GetDocumentVerificationResponse, error) {
-	path := "/admin/documents/:id"
+	path := "/documents/:id"
 	var result authsome.GetDocumentVerificationResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -263,7 +263,7 @@ func (p *Plugin) GetDocumentVerification(ctx context.Context, id xid.ID) (*auths
 
 // ReviewDocument ReviewDocument handles POST /documents/:id/review (admin)
 func (p *Plugin) ReviewDocument(ctx context.Context, req *authsome.ReviewDocumentRequest, id xid.ID) (*authsome.ReviewDocumentResponse, error) {
-	path := "/admin/documents/:id/review"
+	path := "/documents/:id/review"
 	var result authsome.ReviewDocumentResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -340,7 +340,7 @@ func (p *Plugin) UpdateRecoveryConfig(ctx context.Context, req *authsome.UpdateR
 
 // HealthCheck HealthCheck handles GET /health
 func (p *Plugin) HealthCheck(ctx context.Context) error {
-	path := "/admin/health"
+	path := "/health"
 	err := p.client.Request(ctx, "GET", path, nil, nil, false)
 	return err
 }

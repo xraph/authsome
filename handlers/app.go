@@ -45,8 +45,8 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// CreateOrganization creates a new organization
-func (h *AppHandler) CreateOrganization(c forge.Context) error {
+// CreateApp creates a new app
+func (h *AppHandler) CreateApp(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -68,8 +68,8 @@ func (h *AppHandler) CreateOrganization(c forge.Context) error {
 	return c.JSON(http.StatusCreated, org)
 }
 
-// GetOrganizations supports fetching a single org by id or slug, or listing
-func (h *AppHandler) GetOrganizations(c forge.Context) error {
+// GetApps supports fetching a single app by id or slug, or listing
+func (h *AppHandler) GetApps(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -126,8 +126,8 @@ func (h *AppHandler) GetOrganizations(c forge.Context) error {
 	return c.JSON(200, response)
 }
 
-// GetOrganizationByID fetches a single organization via path param
-func (h *AppHandler) GetOrganizationByID(c forge.Context) error {
+// GetAppByID fetches a single app via path param
+func (h *AppHandler) GetAppByID(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -135,7 +135,7 @@ func (h *AppHandler) GetOrganizationByID(c forge.Context) error {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
-	idStr := c.Param("id")
+	idStr := c.Param("appId")
 	if idStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_ID", "ID parameter is required", http.StatusBadRequest))
 	}
@@ -153,8 +153,8 @@ func (h *AppHandler) GetOrganizationByID(c forge.Context) error {
 	return c.JSON(200, org)
 }
 
-// UpdateOrganization updates an organization
-func (h *AppHandler) UpdateOrganization(c forge.Context) error {
+// UpdateApp updates an app
+func (h *AppHandler) UpdateApp(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -179,8 +179,8 @@ func (h *AppHandler) UpdateOrganization(c forge.Context) error {
 	return c.JSON(200, org)
 }
 
-// UpdateOrganizationByID updates an organization using path param id
-func (h *AppHandler) UpdateOrganizationByID(c forge.Context) error {
+// UpdateAppByID updates an app using path param appId
+func (h *AppHandler) UpdateAppByID(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -188,7 +188,7 @@ func (h *AppHandler) UpdateOrganizationByID(c forge.Context) error {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
-	idStr := c.Param("id")
+	idStr := c.Param("appId")
 	if idStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_ID", "ID parameter is required", http.StatusBadRequest))
 	}
@@ -210,8 +210,8 @@ func (h *AppHandler) UpdateOrganizationByID(c forge.Context) error {
 	return c.JSON(200, org)
 }
 
-// DeleteOrganization deletes an organization
-func (h *AppHandler) DeleteOrganization(c forge.Context) error {
+// DeleteApp deletes an app
+func (h *AppHandler) DeleteApp(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -234,8 +234,8 @@ func (h *AppHandler) DeleteOrganization(c forge.Context) error {
 	return c.JSON(200, &StatusResponse{Status: "deleted"})
 }
 
-// DeleteOrganizationByID deletes an organization using path param id
-func (h *AppHandler) DeleteOrganizationByID(c forge.Context) error {
+// DeleteAppByID deletes an app using path param appId
+func (h *AppHandler) DeleteAppByID(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
@@ -243,7 +243,7 @@ func (h *AppHandler) DeleteOrganizationByID(c forge.Context) error {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
-	idStr := c.Param("id")
+	idStr := c.Param("appId")
 	if idStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_ID", "ID parameter is required", http.StatusBadRequest))
 	}

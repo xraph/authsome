@@ -44,6 +44,15 @@ type Repository interface {
 
 	// Utility operations
 	GetOldestEvent(ctx context.Context, filter *ListEventsFilter) (*schema.AuditEvent, error)
+
+	// Aggregation operations for distinct values
+	GetDistinctActions(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
+	GetDistinctSources(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
+	GetDistinctResources(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
+	GetDistinctUsers(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
+	GetDistinctIPs(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
+	GetDistinctApps(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
+	GetDistinctOrganizations(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
 }
 
 // Service handles audit logging
@@ -106,6 +115,7 @@ func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip,
 		UserID:         userID,
 		Action:         action,
 		Resource:       resource,
+		Source:         SourceSystem, // Internal authsome calls are marked as system
 		IPAddress:      ip,
 		UserAgent:      ua,
 		Metadata:       metadata,
@@ -159,6 +169,16 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 		return nil, InvalidFilter("resource", "resource is required")
 	}
 
+	// Determine source - default to application if not provided
+	source := SourceApplication
+	if req.Source != nil {
+		// Validate the provided source
+		if !req.Source.IsValid() {
+			return nil, InvalidFilter("source", "invalid source value")
+		}
+		source = *req.Source
+	}
+
 	now := time.Now().UTC()
 	event := &Event{
 		ID:             xid.New(),
@@ -168,6 +188,7 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 		UserID:         req.UserID,
 		Action:         req.Action,
 		Resource:       req.Resource,
+		Source:         source,
 		IPAddress:      req.IPAddress,
 		UserAgent:      req.UserAgent,
 		Metadata:       req.Metadata,
@@ -215,6 +236,11 @@ func (s *Service) List(ctx context.Context, filter *ListEventsFilter) (*ListEven
 	// Validate time range
 	if filter.Since != nil && filter.Until != nil && filter.Since.After(*filter.Until) {
 		return nil, InvalidTimeRange("since must be before until")
+	}
+
+	// Validate exclusion filters
+	if err := filter.ValidateExclusionFilters(); err != nil {
+		return nil, err
 	}
 
 	// Set defaults
@@ -981,4 +1007,272 @@ func (s *Service) GetOldestEvent(ctx context.Context, filter *ListEventsFilter) 
 	}
 
 	return FromSchemaEvent(schemaEvent), nil
+}
+
+// =============================================================================
+// AGGREGATION OPERATIONS
+// =============================================================================
+
+// GetDistinctActions returns distinct action values with counts
+func (s *Service) GetDistinctActions(ctx context.Context, filter *AggregationFilter) (*ActionAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctActions(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_actions", err)
+	}
+
+	return &ActionAggregation{
+		Actions: values,
+		Total:   len(values),
+	}, nil
+}
+
+// GetDistinctSources returns distinct source values with counts
+func (s *Service) GetDistinctSources(ctx context.Context, filter *AggregationFilter) (*SourceAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctSources(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_sources", err)
+	}
+
+	return &SourceAggregation{
+		Sources: values,
+		Total:   len(values),
+	}, nil
+}
+
+// GetDistinctResources returns distinct resource values with counts
+func (s *Service) GetDistinctResources(ctx context.Context, filter *AggregationFilter) (*ResourceAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctResources(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_resources", err)
+	}
+
+	return &ResourceAggregation{
+		Resources: values,
+		Total:     len(values),
+	}, nil
+}
+
+// GetDistinctUsers returns distinct user values with counts
+func (s *Service) GetDistinctUsers(ctx context.Context, filter *AggregationFilter) (*UserAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctUsers(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_users", err)
+	}
+
+	return &UserAggregation{
+		Users: values,
+		Total: len(values),
+	}, nil
+}
+
+// GetDistinctIPs returns distinct IP address values with counts
+func (s *Service) GetDistinctIPs(ctx context.Context, filter *AggregationFilter) (*IPAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctIPs(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_ips", err)
+	}
+
+	return &IPAggregation{
+		IPAddresses: values,
+		Total:       len(values),
+	}, nil
+}
+
+// GetDistinctApps returns distinct app values with counts
+func (s *Service) GetDistinctApps(ctx context.Context, filter *AggregationFilter) (*AppAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctApps(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_apps", err)
+	}
+
+	return &AppAggregation{
+		Apps:  values,
+		Total: len(values),
+	}, nil
+}
+
+// GetDistinctOrganizations returns distinct organization values with counts
+func (s *Service) GetDistinctOrganizations(ctx context.Context, filter *AggregationFilter) (*OrgAggregation, error) {
+	// Set default limit
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	values, err := s.repo.GetDistinctOrganizations(ctx, filter)
+	if err != nil {
+		return nil, QueryFailed("get_distinct_organizations", err)
+	}
+
+	return &OrgAggregation{
+		Organizations: values,
+		Total:         len(values),
+	}, nil
+}
+
+// GetAllAggregations returns all aggregations in one call
+func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFilter) (*AllAggregations, error) {
+	// Set default limit for each field
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+
+	// Query all aggregations in parallel using error group for better error handling
+	type result struct {
+		actions  []DistinctValue
+		sources  []DistinctValue
+		resources []DistinctValue
+		users    []DistinctValue
+		ips      []DistinctValue
+		apps     []DistinctValue
+		orgs     []DistinctValue
+	}
+
+	var res result
+	var firstErr error
+
+	// Use channels to collect results
+	actionsCh := make(chan []DistinctValue, 1)
+	sourcesCh := make(chan []DistinctValue, 1)
+	resourcesCh := make(chan []DistinctValue, 1)
+	usersCh := make(chan []DistinctValue, 1)
+	ipsCh := make(chan []DistinctValue, 1)
+	appsCh := make(chan []DistinctValue, 1)
+	orgsCh := make(chan []DistinctValue, 1)
+	errCh := make(chan error, 7)
+
+	// Launch goroutines for parallel queries
+	go func() {
+		vals, err := s.repo.GetDistinctActions(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		actionsCh <- vals
+	}()
+
+	go func() {
+		vals, err := s.repo.GetDistinctSources(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		sourcesCh <- vals
+	}()
+
+	go func() {
+		vals, err := s.repo.GetDistinctResources(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resourcesCh <- vals
+	}()
+
+	go func() {
+		vals, err := s.repo.GetDistinctUsers(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		usersCh <- vals
+	}()
+
+	go func() {
+		vals, err := s.repo.GetDistinctIPs(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		ipsCh <- vals
+	}()
+
+	go func() {
+		vals, err := s.repo.GetDistinctApps(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		appsCh <- vals
+	}()
+
+	go func() {
+		vals, err := s.repo.GetDistinctOrganizations(ctx, filter)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		orgsCh <- vals
+	}()
+
+	// Collect results with timeout protection
+	completed := 0
+	for completed < 7 {
+		select {
+		case res.actions = <-actionsCh:
+			completed++
+		case res.sources = <-sourcesCh:
+			completed++
+		case res.resources = <-resourcesCh:
+			completed++
+		case res.users = <-usersCh:
+			completed++
+		case res.ips = <-ipsCh:
+			completed++
+		case res.apps = <-appsCh:
+			completed++
+		case res.orgs = <-orgsCh:
+			completed++
+		case err := <-errCh:
+			if firstErr == nil {
+				firstErr = err
+			}
+			completed++
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	if firstErr != nil {
+		return nil, QueryFailed("get_all_aggregations", firstErr)
+	}
+
+	return &AllAggregations{
+		Actions:       res.actions,
+		Sources:       res.sources,
+		Resources:     res.resources,
+		Users:         res.users,
+		IPAddresses:   res.ips,
+		Apps:          res.apps,
+		Organizations: res.orgs,
+	}, nil
 }

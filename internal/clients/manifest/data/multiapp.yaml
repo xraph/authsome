@@ -1,100 +1,99 @@
 plugin_id: multiapp
 version: 1.0.0
-base_path: /apps
 routes:
     - name: CreateApp
       description: CreateApp handles app creation requests
       method: POST
-      path: /createapp
+      path: /apps
       response_type: App
     - name: GetApp
       description: GetApp handles get app requests
       method: GET
-      path: /:appId
+      path: /apps/:appId
       response_type: App
     - name: UpdateApp
       description: UpdateApp handles app update requests
       method: PUT
-      path: /:appId
+      path: /apps/:appId
       response_type: App
     - name: DeleteApp
       description: DeleteApp handles app deletion requests
       method: DELETE
-      path: /:appId
+      path: /apps/:appId
       response_type: MultitenancyStatusResponse
     - name: ListApps
       description: ListApps handles list apps requests
       method: GET
-      path: /listapps
+      path: /apps
       response_type: AppsListResponse
     - name: RemoveMember
       description: RemoveMember handles removing a member from an organization
       method: DELETE
-      path: /:memberId
+      path: /apps/:appId/members/:memberId
       response_type: MultitenancyStatusResponse
     - name: ListMembers
       description: ListMembers handles listing app members
       method: GET
-      path: /listmembers
+      path: /apps/:appId/members
       response_type: MembersListResponse
     - name: InviteMember
       description: InviteMember handles inviting a member to an organization
       method: POST
-      path: /invite
+      path: /apps/:appId/members/invite
       request_type: app.InviteMemberRequest
       response_type: Invitation
     - name: UpdateMember
       description: UpdateMember handles updating a member in an organization
       method: PUT
-      path: /:memberId
+      path: /apps/:appId/members/:memberId
       request_type: app.UpdateMemberRequest
       response_type: Member
     - name: GetInvitation
       description: GetInvitation handles getting an invitation by token
       method: GET
-      path: /:token
+      path: /invitations/:token
       response_type: Invitation
     - name: AcceptInvitation
       description: AcceptInvitation handles accepting an invitation
       method: POST
-      path: /:token/accept
+      path: /invitations/:token/accept
       response_type: MultitenancyStatusResponse
     - name: DeclineInvitation
       description: DeclineInvitation handles declining an invitation
       method: POST
-      path: /:token/decline
+      path: /invitations/:token/decline
       response_type: MultitenancyStatusResponse
     - name: CreateTeam
       description: CreateTeam handles team creation requests
       method: POST
-      path: /createteam
+      path: /apps/:appId/teams
       request_type: app.CreateTeamRequest
       response_type: Team
     - name: GetTeam
       description: GetTeam handles team retrieval requests
       method: GET
-      path: /:teamId
+      path: /apps/:appId/teams/:teamId
       response_type: Team
     - name: UpdateTeam
       description: UpdateTeam handles team update requests
       method: PUT
-      path: /:teamId
+      path: /apps/:appId/teams/:teamId
       request_type: app.UpdateTeamRequest
       response_type: Team
     - name: DeleteTeam
       description: DeleteTeam handles team deletion requests
       method: DELETE
-      path: /:teamId
+      path: /apps/:appId/teams/:teamId
       response_type: MultitenancyStatusResponse
     - name: ListTeams
       description: ListTeams handles team listing requests
       method: GET
-      path: /listteams
+      path: /apps/:appId/teams
       response_type: TeamsListResponse
     - name: AddTeamMember
       description: AddTeamMember handles adding a member to a team
       method: POST
-      path: /:teamId/members
+      path: /apps/:appId/teams/:teamId/members
       request:
         member_id: xid.ID!
         role: string!
@@ -103,16 +102,39 @@ routes:
     - name: RemoveTeamMember
       description: RemoveTeamMember handles removing a member from a team
       method: DELETE
-      path: /:teamId/members/:memberId
+      path: /apps/:appId/teams/:teamId/members/:memberId
       response_type: MultitenancyStatusResponse
 types:
     - name: ListMembersRequest
       fields:
         "": int
+    - name: GetInvitationRequest
+      fields:
+        "": string
+    - name: UpdateTeamRequest
+      fields:
+        "": string
+        description: string!
+        name: string!
+    - name: DeleteTeamRequest
+      fields:
+        "": string
     - name: UpdateMemberRoleRequest
       fields:
         "": string
         role: string!
+    - name: UpdateMemberRequest
+      fields:
+        "": string
+        role: string!
+    - name: CreateTeamRequest
+      fields:
+        "": string
+        description: string!
+        name: string!
+    - name: AppHandler
+      fields:
+        "": '*coreapp.ServiceImpl'
     - name: TeamHandler
       fields:
         "": '*app.ServiceImpl'
@@ -120,17 +142,9 @@ types:
       fields:
         member_id: xid.ID!
         role: string!
-    - name: CreateAppRequest
-      fields: {}
-    - name: GetAppRequest
-      fields:
-        "": string
     - name: UpdateAppRequest
       fields:
         "": string
-    - name: ListAppsRequest
-      fields:
-        "": int
     - name: AddMemberRequest
       fields:
         "": string
@@ -139,34 +153,20 @@ types:
     - name: RemoveMemberRequest
       fields:
         "": string
-    - name: UpdateMemberRequest
-      fields:
-        "": string
-        role: string!
-    - name: GetInvitationRequest
-      fields:
-        "": string
-    - name: AcceptInvitationRequest
-      fields:
-        "": string
-    - name: DeclineInvitationRequest
-      fields:
-        "": string
-    - name: DeleteTeamRequest
-      fields:
-        "": string
-    - name: RemoveTeamMemberRequest
-      fields:
-        "": string
     - name: InviteMemberRequest
       fields:
         "": string
         email: string!
         role: string!
-    - name: MemberHandler
+    - name: AcceptInvitationRequest
       fields:
-        "": '*coreapp.ServiceImpl'
-    - name: DeleteAppRequest
+        "": string
+    - name: CreateAppRequest
+      fields: {}
+    - name: GetAppRequest
+      fields:
+        "": string
+    - name: DeclineInvitationRequest
       fields:
         "": string
     - name: GetTeamRequest
@@ -175,20 +175,19 @@ types:
     - name: ListTeamsRequest
       fields:
         "": int
-    - name: AppHandler
-      fields:
-        "": '*coreapp.ServiceImpl'
-    - name: CreateTeamRequest
-      fields:
-        "": string
-        description: string!
-        name: string!
-    - name: UpdateTeamRequest
-      fields:
-        "": string
-        description: string!
-        name: string!
     - name: AddTeamMemberRequest
       fields:
         "": string
         member_id: string!
+    - name: RemoveTeamMemberRequest
+      fields:
+        "": string
+    - name: MemberHandler
+      fields:
+        "": '*coreapp.ServiceImpl'
+    - name: DeleteAppRequest
+      fields:
+        "": string
+    - name: ListAppsRequest
+      fields:
+        "": int

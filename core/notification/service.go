@@ -192,7 +192,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, "notification_template.create", "template:"+template.ID.String(), "", "", fmt.Sprintf(`{"template_id":"%s","name":"%s"}`, template.ID, template.Name))
+		s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateCreated), "template:"+template.ID.String(), "", "", fmt.Sprintf(`{"template_id":"%s","name":"%s"}`, template.ID, template.Name))
 	}
 
 	return template, nil
@@ -232,7 +232,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemp
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, "notification_template.update", "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
+		s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateUpdated), "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
 	}
 
 	return nil
@@ -247,7 +247,7 @@ func (s *Service) DeleteTemplate(ctx context.Context, id xid.ID) error {
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, "notification_template.delete", "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
+		s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateDeleted), "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
 	}
 
 	return nil

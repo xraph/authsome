@@ -1,32 +1,32 @@
 package types
 
-import "errors"
+import "github.com/xraph/go-utils/errs"
 
 // Common errors
 var (
 	// User errors
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUserAlreadyExists  = errors.New("user already exists")
-	ErrEmailAlreadyExists = errors.New("email already exists")
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserNotFound       = errs.New("user not found")
+	ErrUserAlreadyExists  = errs.New("user already exists")
+	ErrEmailAlreadyExists = errs.New("email already exists")
+	ErrInvalidCredentials = errs.New("invalid credentials")
 
 	// Session errors
-	ErrSessionNotFound = errors.New("session not found")
-	ErrSessionExpired  = errors.New("session expired")
-	ErrInvalidSession  = errors.New("invalid session")
+	ErrSessionNotFound = errs.New("session not found")
+	ErrSessionExpired  = errs.New("session expired")
+	ErrInvalidSession  = errs.New("invalid session")
 
 	// Auth errors
-	ErrUnauthorized     = errors.New("unauthorized")
-	ErrForbidden        = errors.New("forbidden")
-	ErrEmailNotVerified = errors.New("email not verified")
+	ErrUnauthorized     = errs.New("unauthorized")
+	ErrForbidden        = errs.New("forbidden")
+	ErrEmailNotVerified = errs.New("email not verified")
 
 	// Organization errors
-	ErrOrganizationNotFound  = errors.New("organization not found")
-	ErrNotOrganizationMember = errors.New("not an organization member")
+	ErrOrganizationNotFound  = errs.New("organization not found")
+	ErrNotOrganizationMember = errs.New("not an organization member")
 
 	// Generic errors
-	ErrInvalidInput  = errors.New("invalid input")
-	ErrInternalError = errors.New("internal error")
+	ErrInvalidInput  = errs.New("invalid input")
+	ErrInternalError = errs.New("internal error")
 )
 
 // ValidationError represents a validation error

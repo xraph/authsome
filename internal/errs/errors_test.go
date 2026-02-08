@@ -208,7 +208,7 @@ func TestAuthsomeError_ToHTTPError(t *testing.T) {
 		t.Fatal("expected non-nil HTTPError")
 	}
 
-	if httpErr.Code != http.StatusNotFound {
+	if httpErr.StatusCode() != http.StatusNotFound {
 		t.Errorf("expected HTTP status %d, got %d", http.StatusNotFound, httpErr.Code)
 	}
 

@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"testing"
 
-	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/xraph/authsome/core/ui"

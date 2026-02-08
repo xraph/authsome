@@ -8,9 +8,15 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/alpine"
+	"github.com/xraph/forgeui/layout"
+	"github.com/xraph/forgeui/theme"
+	g "maragu.dev/gomponents"
+	"maragu.dev/gomponents/html"
 )
 
 const (
@@ -96,7 +102,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 			cookie, err := c.Request().Cookie(sessionCookieName)
 			if err != nil || cookie == nil || cookie.Value == "" {
 				// No session cookie, redirect to dashboard login
-				loginURL := p.basePath + "/dashboard/login?redirect=" + c.Request().URL.Path
+				loginURL := p.basePath + "/login?redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -113,7 +119,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					MaxAge:   -1,
 					HttpOnly: true,
 				})
-				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
+				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -126,7 +132,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					MaxAge:   -1,
 					HttpOnly: true,
 				})
-				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
+				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -140,10 +146,9 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					MaxAge:   -1,
 					HttpOnly: true,
 				})
-				loginURL := p.basePath + "/dashboard/login?error=session_expired&redirect=" + c.Request().URL.Path
+				loginURL := p.basePath + "/login?error=session_expired&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
-
 
 			// Set app context from session for user lookup
 			ctx := contexts.SetAppID(c.Request().Context(), sess.AppID)
@@ -164,7 +169,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					MaxAge:   -1,
 					HttpOnly: true,
 				})
-				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
+				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -177,10 +182,9 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					MaxAge:   -1,
 					HttpOnly: true,
 				})
-				loginURL := p.basePath + "/dashboard/login?error=invalid_session&redirect=" + c.Request().URL.Path
+				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
 				return c.Redirect(http.StatusFound, loginURL)
 			}
-
 
 			// Store user and session in context ONLY if all checks passed
 			// Reuse ctx that already has AppID set
@@ -212,12 +216,12 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 			// Get user from context (set by RequireAuth)
 			userVal := c.Request().Context().Value("user")
 			if userVal == nil {
-				return c.Redirect(http.StatusFound, p.basePath+"/dashboard/login?error=auth_required")
+				return c.Redirect(http.StatusFound, p.basePath+"/login?error=auth_required")
 			}
 
 			userObj, ok := userVal.(*user.User)
 			if !ok {
-				return c.Redirect(http.StatusFound, p.basePath+"/dashboard/login?error=invalid_session")
+				return c.Redirect(http.StatusFound, p.basePath+"/login?error=invalid_session")
 			}
 
 			// Use the fast permission checker
@@ -242,31 +246,11 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 			// Check if user can access dashboard
 			canAccess := p.permChecker.For(c.Request().Context(), userObj.ID).Dashboard().CanAccess()
 			if !canAccess {
-				c.SetHeader("Content-Type", "text/html; charset=utf-8")
-				return c.String(http.StatusForbidden, `
-					<!DOCTYPE html>
-					<html>
-					<head>
-						<title>Access Denied</title>
-						<meta charset="utf-8">
-						<meta name="viewport" content="width=device-width, initial-scale=1">
-						<style>
-							body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; text-align: center; }
-							.error-box { max-width: 500px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; border-radius: 8px; }
-							h1 { color: #dc2626; }
-							p { color: #6b7280; }
-							a { color: #2563eb; text-decoration: none; }
-						</style>
-					</head>
-					<body>
-						<div class="error-box">
-							<h1>Access Denied</h1>
-							<p>You don't have permission to access the dashboard. Please contact your administrator to request access.</p>
-							<p><a href="`+p.basePath+`/dashboard/login">← Back to Login</a></p>
-						</div>
-					</body>
-					</html>
-				`)
+				// Render ForgeUI forbidden page
+				loginURL := p.basePath + "/login"
+				forbiddenPage := p.pagesManager.ForbiddenPage(loginURL)
+				c.Response().WriteHeader(http.StatusForbidden)
+				return p.renderForgeUINode(c, forbiddenPage)
 			}
 
 			return next(c)
@@ -304,7 +288,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 				http.SetCookie(c.Response(), &http.Cookie{
 					Name:     csrfCookieName,
 					Value:    token,
-					Path:     "/dashboard",
+					Path:     "/ui",
 					HttpOnly: true,
 					Secure:   c.Request().TLS != nil,
 					SameSite: http.SameSiteStrictMode,
@@ -409,7 +393,7 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 							// Set AppID in the background context for the audit log
 							ctx = contexts.SetAppID(ctx, appID)
 
-							_ = p.auditSvc.Log(ctx, &userObj.ID, "dashboard.access", c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
+							_ = p.auditSvc.Log(ctx, &userObj.ID, string(audit.ActionDashboardAccess), c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
 						}()
 					}
 				}
@@ -491,7 +475,7 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 					http.SetCookie(c.Response(), &http.Cookie{
 						Name:     environmentCookieName,
 						Value:    envID.String(),
-						Path:     "/dashboard",
+						Path:     "/ui",
 						HttpOnly: true,                   // Prevent XSS attacks
 						Secure:   c.Request().TLS != nil, // Only send over HTTPS in production
 						SameSite: http.SameSiteLaxMode,   // CSRF protection
@@ -515,4 +499,83 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 			return next(c)
 		}
 	}
+}
+
+// renderForgeUINode renders a ForgeUI gomponent node with full HTML layout
+// This helper method is used in middleware to render ForgeUI components outside of page handlers
+// It includes all necessary styles (Tailwind CSS), theme support, and Alpine.js
+func (p *Plugin) renderForgeUINode(c forge.Context, content g.Node) error {
+	// Get light and dark themes from ForgeUI app
+	lightTheme := p.fuiApp.LightTheme()
+	darkTheme := p.fuiApp.DarkTheme()
+
+	// Create a complete HTML document with layout
+	page := layout.Build(
+		layout.Head(
+			layout.Meta("viewport", "width=device-width, initial-scale=1"),
+			layout.Charset("utf-8"),
+			html.TitleEl(g.Text("Access Denied - Dashboard")),
+
+			// Theme support
+			theme.HeadContent(*lightTheme, *darkTheme),
+			layout.Theme(lightTheme, darkTheme),
+
+			// Tailwind CSS (using CDN)
+			html.Script(
+				html.Src("https://cdn.tailwindcss.com"),
+			),
+			theme.TailwindConfigScript(),
+			theme.StyleTag(*lightTheme, *darkTheme),
+			html.StyleEl(g.Raw(`
+				@layer base {
+					* {
+						@apply border-border;
+					}
+				}
+			`)),
+
+			// Alpine.js cloak CSS
+			alpine.CloakCSS(),
+		),
+
+		layout.Body(
+			layout.Class("min-h-screen bg-background text-foreground antialiased"),
+
+			// Dark mode script (must run BEFORE Alpine initializes)
+			layout.DarkModeScript(),
+
+			// Alpine global store initialization
+			html.Script(
+				g.Raw(`
+					document.addEventListener('alpine:init', () => {
+						Alpine.store('darkMode', {
+							on: false,
+							init() {
+								this.on = document.documentElement.classList.contains('dark');
+								this.$watch('on', value => {
+									document.documentElement.classList.toggle('dark', value);
+									document.documentElement.setAttribute('data-theme', value ? 'dark' : 'light');
+									localStorage.setItem('theme', value ? 'dark' : 'light');
+								});
+							},
+							toggle() {
+								this.on = !this.on;
+							}
+						});
+					});
+				`),
+			),
+
+			// Page content
+			content,
+
+			// Alpine.js scripts
+			layout.Scripts(
+				alpine.Scripts(),
+			),
+		),
+	)
+
+	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+	return page.Render(c.Response())
 }

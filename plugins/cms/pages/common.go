@@ -8,6 +8,15 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
+
+	"github.com/xraph/forgeui"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/breadcrumb"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/emptystate"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/primitives"
 )
 
 // =============================================================================
@@ -16,181 +25,146 @@ import (
 
 // PageHeader renders a standard page header with title, description, and optional actions
 func PageHeader(title, description string, actions ...g.Node) g.Node {
-	return Div(
-		Class("flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6"),
-		Div(
-			H1(
-				Class("text-2xl font-bold text-slate-900 dark:text-white"),
-				g.Text(title),
-			),
-			g.If(description != "", func() g.Node {
-				return P(
-					Class("mt-1 text-sm text-slate-600 dark:text-gray-400"),
-					g.Text(description),
-				)
-			}()),
-		),
-		g.If(len(actions) > 0, func() g.Node {
-			return Div(
-				Class("flex items-center gap-2"),
-				g.Group(actions),
-			)
+	titleSection := primitives.VStack("gap-1",
+		H1(Class("text-2xl font-bold"), g.Text(title)),
+		g.If(description != "", func() g.Node {
+			return P(Class("text-sm text-muted-foreground"), g.Text(description))
 		}()),
 	)
+
+	if len(actions) > 0 {
+		return Div(
+			Class("flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6"),
+			titleSection,
+			primitives.HStack("gap-2", actions...),
+		)
+	}
+	return Div(Class("mb-6"), titleSection)
 }
 
 // PrimaryButton creates a primary action button
 func PrimaryButton(href, text string, icon g.Node) g.Node {
+	content := []g.Node{g.Text(text)}
+	if icon != nil {
+		content = []g.Node{icon, g.Text(text)}
+	}
 	return A(
 		Href(href),
-		Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"),
-		g.If(icon != nil, icon),
-		g.Text(text),
+		Class("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium font-semibold transition-all duration-200 outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md h-9 px-4 py-2"),
+		g.Group(content),
 	)
 }
 
 // SecondaryButton creates a secondary action button
 func SecondaryButton(href, text string, icon g.Node) g.Node {
+	content := []g.Node{g.Text(text)}
+	if icon != nil {
+		content = []g.Node{icon, g.Text(text)}
+	}
 	return A(
 		Href(href),
-		Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 transition-colors"),
-		g.If(icon != nil, icon),
-		g.Text(text),
+		Class("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium font-semibold transition-all duration-200 outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 h-9 px-4 py-2"),
+		g.Group(content),
 	)
 }
 
 // DangerButton creates a danger/delete action button
 func DangerButton(href, text string, icon g.Node) g.Node {
+	content := []g.Node{g.Text(text)}
+	if icon != nil {
+		content = []g.Node{icon, g.Text(text)}
+	}
 	return A(
 		Href(href),
-		Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"),
-		g.If(icon != nil, icon),
-		g.Text(text),
+		Class("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium font-semibold transition-all duration-200 outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md h-9 px-4 py-2"),
+		g.Group(content),
 	)
 }
 
 // Card creates a basic card container
 func Card(children ...g.Node) g.Node {
-	return Div(
-		Class("bg-white rounded-lg border border-slate-200 shadow-sm dark:bg-gray-900 dark:border-gray-800"),
-		g.Group(children),
-	)
+	return card.Card(children...)
 }
 
 // CardWithHeader creates a card with a header section
 func CardWithHeader(headerTitle string, headerActions []g.Node, body ...g.Node) g.Node {
-	return Card(
-		Div(
-			Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
-			H2(
-				Class("text-lg font-semibold text-slate-900 dark:text-white"),
-				g.Text(headerTitle),
+	headerContent := []g.Node{card.Title(headerTitle)}
+	if len(headerActions) > 0 {
+		headerContent = append(headerContent, 
+			Div(
+				g.Attr("data-slot", "card-action"),
+				primitives.HStack("gap-2", headerActions...),
 			),
-			g.If(len(headerActions) > 0, func() g.Node {
-				return Div(
-					Class("flex items-center gap-2"),
-					g.Group(headerActions),
-				)
-			}()),
-		),
-		Div(
-			Class("px-6 py-4"),
-			g.Group(body),
-		),
+		)
+	}
+	return card.Card(
+		card.Header(headerContent...),
+		card.Content(g.Group(body)),
 	)
 }
 
 // StatCard creates a statistics card
 func StatCard(title, value string, icon g.Node, colorClass string) g.Node {
-	return Div(
-		Class("rounded-lg border border-slate-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"),
-		Div(
-			Class("flex items-center justify-between"),
-			Div(
-				Div(Class("text-sm font-medium text-slate-600 dark:text-gray-400"), g.Text(title)),
-				Div(Class("text-2xl font-bold text-slate-900 dark:text-white mt-1"), g.Text(value)),
-			),
-			Div(
-				Class("rounded-full bg-slate-100 p-2 dark:bg-gray-800 "+colorClass),
-				icon,
+	return card.Card(
+		card.Content(
+			primitives.HStack("justify-between items-start",
+				primitives.VStack("gap-1",
+					Div(Class("text-sm font-medium text-muted-foreground"), g.Text(title)),
+					Div(Class("text-2xl font-bold"), g.Text(value)),
+				),
+				Div(Class("rounded-full bg-muted p-2 "+colorClass), icon),
 			),
 		),
 	)
 }
 
-// Badge creates a status badge
+// Badge creates a status badge with custom color classes
 func Badge(text, colorClass string) g.Node {
-	return Span(
-		Class("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium "+colorClass),
-		g.Text(text),
-	)
+	return badge.Badge(text, badge.WithClass(colorClass))
 }
 
 // StatusBadge creates a status-specific badge
 func StatusBadge(status string) g.Node {
 	switch status {
 	case "published":
-		return Badge("Published", "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400")
+		return badge.Badge("Published", badge.WithClass("bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-transparent"))
 	case "draft":
-		return Badge("Draft", "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400")
+		return badge.Badge("Draft", badge.WithClass("bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-transparent"))
 	case "archived":
-		return Badge("Archived", "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400")
+		return badge.Badge("Archived", badge.WithVariant(forgeui.VariantSecondary))
 	case "scheduled":
-		return Badge("Scheduled", "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400")
+		return badge.Badge("Scheduled", badge.WithClass("bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-transparent"))
 	default:
-		return Badge(status, "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400")
+		return badge.Badge(status, badge.WithVariant(forgeui.VariantOutline))
 	}
 }
 
 // EmptyState creates an empty state message
 func EmptyState(icon g.Node, title, description, actionText, actionHref string) g.Node {
-	return Div(
-		Class("flex flex-col items-center justify-center py-12 text-center"),
-		Div(
-			Class("rounded-full bg-slate-100 p-4 mb-4 dark:bg-gray-800"),
-			icon,
-		),
-		H3(
-			Class("text-lg font-medium text-slate-900 dark:text-white mb-1"),
-			g.Text(title),
-		),
-		P(
-			Class("text-sm text-slate-600 dark:text-gray-400 mb-4 max-w-sm"),
-			g.Text(description),
-		),
-		g.If(actionText != "" && actionHref != "", func() g.Node {
-			return PrimaryButton(actionHref, actionText, lucide.Plus(Class("size-4")))
-		}()),
-	)
+	opts := []emptystate.Option{
+		emptystate.WithIcon(icon),
+		emptystate.WithTitle(title),
+		emptystate.WithDescription(description),
+	}
+	if actionText != "" && actionHref != "" {
+		opts = append(opts, emptystate.WithAction(
+			PrimaryButton(actionHref, actionText, lucide.Plus(Class("size-4"))),
+		))
+	}
+	return emptystate.EmptyState(opts...)
 }
 
 // Breadcrumbs creates a breadcrumb navigation
 func Breadcrumbs(items ...BreadcrumbItem) g.Node {
-	nodes := make([]g.Node, 0)
+	children := make([]g.Node, len(items))
 	for i, item := range items {
-		if i > 0 {
-			nodes = append(nodes, Span(
-				Class("text-slate-400 dark:text-gray-600 mx-2"),
-				g.Text("/"),
-			))
-		}
-		if item.Href != "" {
-			nodes = append(nodes, A(
-				Href(item.Href),
-				Class("text-slate-600 hover:text-violet-600 dark:text-gray-400 dark:hover:text-violet-400 transition-colors"),
-				g.Text(item.Label),
-			))
+		if item.Href != "" && i < len(items)-1 {
+			children[i] = breadcrumb.Item(item.Href, g.Text(item.Label))
 		} else {
-			nodes = append(nodes, Span(
-				Class("text-slate-900 dark:text-white font-medium"),
-				g.Text(item.Label),
-			))
+			children[i] = breadcrumb.Page(g.Text(item.Label))
 		}
 	}
-	return Nav(
-		Class("flex items-center text-sm mb-4"),
-		g.Group(nodes),
-	)
+	return breadcrumb.Breadcrumb(children...)
 }
 
 // BreadcrumbItem represents a breadcrumb item
@@ -205,18 +179,13 @@ func SearchInput(placeholder, value, formAction string) g.Node {
 		Method("GET"),
 		Action(formAction),
 		Class("flex-1 min-w-[200px]"),
-		Div(
-			Class("relative"),
-			Div(
-				Class("absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none"),
-				lucide.Search(Class("size-4 text-slate-400")),
-			),
-			Input(
-				Type("text"),
-				Name("search"),
-				Value(value),
-				Placeholder(placeholder),
-				Class("block w-full pl-10 pr-4 py-2 text-sm border border-slate-300 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"),
+		input.InputGroup(nil,
+			input.InputLeftAddon(nil, lucide.Search(Class("size-4"))),
+			input.Input(
+				input.WithType("text"),
+				input.WithName("search"),
+				input.WithValue(value),
+				input.WithPlaceholder(placeholder),
 			),
 		),
 	)
@@ -271,13 +240,16 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 		return nil
 	}
 
+	const btnClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+	const activeClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 bg-primary text-primary-foreground"
+
 	pages := make([]g.Node, 0)
 
 	// Previous button
 	if currentPage > 1 {
 		pages = append(pages, A(
 			Href(fmt.Sprintf("%s?page=%d", baseURL, currentPage-1)),
-			Class("px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"),
+			Class(btnClass),
 			lucide.ChevronLeft(Class("size-4")),
 		))
 	}
@@ -286,18 +258,18 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	for i := 1; i <= totalPages; i++ {
 		if i == currentPage {
 			pages = append(pages, Span(
-				Class("px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg"),
+				Class(activeClass),
 				g.Text(fmt.Sprintf("%d", i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			pages = append(pages, A(
 				Href(fmt.Sprintf("%s?page=%d", baseURL, i)),
-				Class("px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"),
+				Class(btnClass),
 				g.Text(fmt.Sprintf("%d", i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			pages = append(pages, Span(
-				Class("px-2 text-slate-400"),
+				Class("px-2 text-muted-foreground"),
 				g.Text("..."),
 			))
 		}
@@ -307,75 +279,51 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	if currentPage < totalPages {
 		pages = append(pages, A(
 			Href(fmt.Sprintf("%s?page=%d", baseURL, currentPage+1)),
-			Class("px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"),
+			Class(btnClass),
 			lucide.ChevronRight(Class("size-4")),
 		))
 	}
 
-	return Div(
-		Class("flex items-center justify-center gap-2 mt-6"),
-		g.Group(pages),
-	)
+	return primitives.HStack("gap-2 justify-center mt-6", pages...)
 }
 
 // DataTable renders a data table
 func DataTable(headers []string, rows []g.Node) g.Node {
 	headerCells := make([]g.Node, len(headers))
 	for i, h := range headers {
-		headerCells[i] = Th(
-			Class("px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider"),
-			g.Text(h),
-		)
+		headerCells[i] = table.TableHeaderCell()(g.Text(h))
 	}
 
 	return Div(
 		Class("overflow-x-auto"),
-		Table(
-			Class("min-w-full divide-y divide-slate-200 dark:divide-gray-800"),
-			THead(
-				Class("bg-slate-50 dark:bg-gray-800/50"),
-				Tr(g.Group(headerCells)),
+		table.Table()(
+			table.TableHeader()(
+				table.TableRow()(headerCells...),
 			),
-			TBody(
-				Class("bg-white divide-y divide-slate-200 dark:bg-gray-900 dark:divide-gray-800"),
-				g.Group(rows),
-			),
+			table.TableBody()(g.Group(rows)),
 		),
 	)
 }
 
 // TableRow creates a table row
 func TableRow(cells ...g.Node) g.Node {
-	return Tr(
-		Class("hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors"),
-		g.Group(cells),
-	)
+	return table.TableRow()(cells...)
 }
 
 // TableCell creates a table cell
 func TableCell(content g.Node) g.Node {
-	return Td(
-		Class("px-4 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white"),
-		content,
-	)
+	return table.TableCell()(content)
 }
 
 // TableCellSecondary creates a secondary table cell with muted text
 func TableCellSecondary(content g.Node) g.Node {
-	return Td(
-		Class("px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-gray-400"),
-		content,
-	)
+	return table.TableCell(table.WithCellClass("text-muted-foreground"))(content)
 }
 
 // TableCellActions creates a table cell with action buttons
 func TableCellActions(actions ...g.Node) g.Node {
-	return Td(
-		Class("px-4 py-4 whitespace-nowrap text-right text-sm"),
-		Div(
-			Class("flex items-center justify-end gap-2"),
-			g.Group(actions),
-		),
+	return table.TableCell(table.WithAlign(table.AlignRight))(
+		primitives.HStack("gap-2 justify-end", actions...),
 	)
 }
 
@@ -384,7 +332,7 @@ func IconButton(href string, icon g.Node, title, colorClass string) g.Node {
 	return A(
 		Href(href),
 		Title(title),
-		Class("p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors "+colorClass),
+		Class("inline-flex items-center justify-center rounded-md outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:bg-accent hover:text-accent-foreground size-9 "+colorClass),
 		icon,
 	)
 }

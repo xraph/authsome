@@ -28,24 +28,9 @@ routes:
       request_type: SignInRequest
       response_type: TwoFARequiredResponse
 types:
-    - name: SignUpRequest
+    - name: Plugin
       fields:
-        password: string!
-        username: string!
-    - name: SignInRequest
-      fields:
-        password: string!
-        remember: bool!
-        username: string!
-    - name: SignUpResponse
-      fields:
-        message: string!
-        status: string!
-    - name: TwoFARequiredResponse
-      fields:
-        device_id: string!
-        require_twofa: bool!
-        user: '*user.User!'
+        "": '*repo.UsernameRepository'
     - name: Config
       fields:
         allowUsernameLogin: bool!
@@ -75,30 +60,45 @@ types:
         signinPerUser: RateLimitRule!
         signupPerIp: RateLimitRule!
         useRedis: bool!
-    - name: RateLimitRule
+    - name: SignUpRequest
       fields:
-        max: int!
-        window: time.Duration!
-    - name: AccountLockoutError
-      fields:
-        "": int
-    - name: Handler
-      fields:
-        "": '*repo.TwoFARepository'
-    - name: SignInResponse
-      fields:
-        session: '*session.Session!'
-        token: string!
-        user: '*user.User!'
+        password: string!
+        username: string!
     - name: AccountLockedResponse
       fields:
         code: string!
         locked_minutes: int!
         locked_until: time.Time!
         message: string!
-    - name: Plugin
+    - name: RateLimitRule
       fields:
-        "": forge.Logger
+        max: int!
+        window: time.Duration!
     - name: Service
       fields:
-        "": '*auth.Service'
+        "": Config
+    - name: AccountLockoutError
+      fields:
+        "": int
+    - name: Handler
+      fields:
+        "": '*repo.TwoFARepository'
+    - name: SignInRequest
+      fields:
+        password: string!
+        remember: bool!
+        username: string!
+    - name: SignUpResponse
+      fields:
+        message: string!
+        status: string!
+    - name: SignInResponse
+      fields:
+        session: '*session.Session!'
+        token: string!
+        user: '*user.User!'
+    - name: TwoFARequiredResponse
+      fields:
+        device_id: string!
+        require_twofa: bool!
+        user: '*user.User!'

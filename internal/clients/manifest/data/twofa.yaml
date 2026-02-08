@@ -36,19 +36,6 @@ routes:
         trusted: bool!
       response_type: TwoFAStatusResponse
 types:
-    - name: DisableRequest
-      fields:
-        user_id: string!
-    - name: SendOTPRequest
-      fields:
-        user_id: string!
-    - name: CodesResponse
-      fields:
-        codes: '[]string!'
-    - name: TwoFASendOTPResponse
-      fields:
-        code: string!
-        status: string!
     - name: VerifyRequest2FA
       fields:
         code: string!
@@ -59,18 +46,9 @@ types:
       fields:
         device_id: string!
         user_id: string!
-    - name: OTPSentResponse
+    - name: Plugin
       fields:
-        code: string!
-        status: string!
-    - name: TwoFAStatusResponse
-      fields:
-        enabled: bool!
-        method: string!
-        trusted: bool!
-    - name: TwoFAErrorResponse
-      fields:
-        error: string!
+        "": Config
     - name: TwoFAEnableResponse
       fields:
         status: string!
@@ -80,39 +58,34 @@ types:
         enabled: bool!
         method: string!
         trusted: bool!
-    - name: VerifyRequest
-      fields:
-        "": string
-    - name: EnableRequest2FA
-      fields:
-        method: string!
-        user_id: string!
-    - name: RegenerateCodesRequest
-      fields:
-        count: int!
-        user_id: string!
-    - name: EnableResponse
-      fields:
-        status: string!
-        totp_uri: string!
-    - name: TwoFABackupCodesResponse
-      fields:
-        codes: '[]string!'
     - name: Service
       fields:
         "": Config
-    - name: Status
-      fields:
-        "": bool
-    - name: TOTPSecret
+    - name: VerifyRequest
       fields:
         "": string
     - name: Handler
       fields:
         "": '*Service'
-    - name: Plugin
+    - name: EnableRequest2FA
       fields:
-        "": Config
+        method: string!
+        user_id: string!
+    - name: SendOTPRequest
+      fields:
+        user_id: string!
+    - name: CodesResponse
+      fields:
+        codes: '[]string!'
+    - name: TwoFAStatusResponse
+      fields:
+        enabled: bool!
+        method: string!
+        trusted: bool!
+    - name: EnableResponse
+      fields:
+        status: string!
+        totp_uri: string!
     - name: Config
       fields:
         backupCodeCount: int!
@@ -124,6 +97,33 @@ types:
         totpIssuer: string!
         totpPeriod: int!
         trustedDeviceDays: int!
+    - name: TwoFABackupCodesResponse
+      fields:
+        codes: '[]string!'
+    - name: RegenerateCodesRequest
+      fields:
+        count: int!
+        user_id: string!
+    - name: OTPSentResponse
+      fields:
+        code: string!
+        status: string!
+    - name: TwoFAErrorResponse
+      fields:
+        error: string!
+    - name: TwoFASendOTPResponse
+      fields:
+        code: string!
+        status: string!
+    - name: Status
+      fields:
+        "": bool
+    - name: TOTPSecret
+      fields:
+        "": string
+    - name: DisableRequest
+      fields:
+        user_id: string!
     - name: EnableRequest
       fields:
         "": string

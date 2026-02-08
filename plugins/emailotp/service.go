@@ -99,7 +99,7 @@ func (s *Service) SendOTP(ctx context.Context, appID xid.ID, email, ip, ua strin
 
 	// Audit: email OTP sent
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "emailotp_sent", "email:"+e, ip, ua, "")
+		_ = s.audit.Log(ctx, nil, string(audit.ActionEmailOTPSent), "email:"+e, ip, ua, "")
 	}
 
 	// Return OTP only if dev mode
@@ -134,7 +134,7 @@ func (s *Service) VerifyOTP(ctx context.Context, appID, envID xid.ID, orgID *xid
 	if rec.OTP != o {
 		_ = s.repo.IncrementAttempts(ctx, rec)
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "emailotp_verify_failed", "email:"+e, ip, ua, "")
+			_ = s.audit.Log(ctx, nil, string(audit.ActionEmailOTPVerifyFailed), "email:"+e, ip, ua, "")
 		}
 		return nil, errs.New("INVALID_OTP", "Invalid OTP code", 401)
 	}
@@ -170,7 +170,7 @@ func (s *Service) VerifyOTP(ctx context.Context, appID, envID xid.ID, orgID *xid
 
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "emailotp_verify_success", "email:"+e, ip, ua, "")
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionEmailOTPVerifySuccess), "email:"+e, ip, ua, "")
 	}
 
 	// Create session with app/environment context
@@ -189,7 +189,7 @@ func (s *Service) VerifyOTP(ctx context.Context, appID, envID xid.ID, orgID *xid
 
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "emailotp_login", "user:"+uid.String(), ip, ua, "")
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionEmailOTPLogin), "user:"+uid.String(), ip, ua, "")
 	}
 
 	return &responses.AuthResponse{

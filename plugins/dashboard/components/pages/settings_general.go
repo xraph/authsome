@@ -27,7 +27,7 @@ func GeneralSettingsPage(data GeneralSettingsPageData) g.Node {
 		components.SettingsSection("Dashboard Configuration", "",
 			FormEl(
 				Method("POST"),
-				Action(fmt.Sprintf("%s/dashboard/app/%s/settings/general", data.BasePath, data.AppID)),
+				Action(fmt.Sprintf("%s/app/%s/settings/general", data.BasePath, data.AppID)),
 				Class("space-y-6"),
 
 				Input(Type("hidden"), Name("csrf_token"), Value(data.CSRFToken)),

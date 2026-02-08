@@ -217,7 +217,7 @@ func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credent
 
 	// Audit log
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, &userID, "passkey_registered", "passkey:"+passkey.ID.String(), ip, ua, fmt.Sprintf("name=%s,type=%s", name, authenticatorType))
+		_ = s.audit.Log(ctx, &userID, string(audit.ActionPasskeyRegistered), "passkey:"+passkey.ID.String(), ip, ua, fmt.Sprintf("name=%s,type=%s", name, authenticatorType))
 	}
 
 	// Clean up challenge session if found
@@ -369,7 +369,7 @@ func (s *Service) FinishLogin(ctx context.Context, credentialResponse []byte, re
 	// Audit log
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "passkey_login", "user:"+uid.String(), ip, ua, fmt.Sprintf("passkey_id=%s", passkey.ID.String()))
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionPasskeyLogin), "user:"+uid.String(), ip, ua, fmt.Sprintf("passkey_id=%s", passkey.ID.String()))
 	}
 
 	return &LoginResponse{
@@ -498,7 +498,7 @@ func (s *Service) Delete(ctx context.Context, passkeyID xid.ID, ip, ua string) e
 
 	// Audit log
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, &passkey.UserID, "passkey_deleted", "passkey:"+passkeyID.String(), ip, ua, "")
+		_ = s.audit.Log(ctx, &passkey.UserID, string(audit.ActionPasskeyDeleted), "passkey:"+passkeyID.String(), ip, ua, "")
 	}
 
 	return nil

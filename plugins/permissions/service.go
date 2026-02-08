@@ -1043,7 +1043,7 @@ func (s *Service) WarmCache(ctx context.Context, appID, envID xid.ID, orgID *xid
 		compiledCount++
 	}
 
-	s.logger.Info("cache warming completed",
+	s.logger.Debug("cache warming completed",
 		forge.F("total_policies", len(policies)),
 		forge.F("compiled", compiledCount),
 		forge.F("failed", failedCount),
@@ -1086,7 +1086,7 @@ func (s *Service) WarmCacheForAllApps(ctx context.Context) error {
 		compiledCount++
 	}
 
-	s.logger.Info("global cache warming completed",
+	s.logger.Debug("global cache warming completed",
 		forge.F("total_policies", len(policies)),
 		forge.F("compiled", compiledCount),
 		forge.F("failed", failedCount),

@@ -34,6 +34,8 @@ impl SecretsPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateRequest {
+        #[serde(rename = "value")]
+        pub value: ,
         #[serde(rename = "valueType")]
         pub value_type: String,
         #[serde(rename = "description")]
@@ -44,8 +46,6 @@ impl SecretsPlugin {{
         pub path: String,
         #[serde(rename = "tags")]
         pub tags: []string,
-        #[serde(rename = "value")]
-        pub value: ,
     }
 
     /// Create handles POST /secrets
@@ -118,12 +118,12 @@ impl SecretsPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct DeleteResponse {
+        #[serde(rename = "success")]
+        pub success: bool,
         #[serde(rename = "data")]
         pub data: ,
         #[serde(rename = "message")]
         pub message: String,
-        #[serde(rename = "success")]
-        pub success: bool,
     }
 
     /// Delete handles DELETE /secrets/:id
@@ -170,10 +170,10 @@ impl SecretsPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RollbackRequest {
-        #[serde(rename = "reason")]
-        pub reason: String,
         #[serde(rename = "", skip_serializing_if = "Option::is_none")]
         pub : Option<String>,
+        #[serde(rename = "reason")]
+        pub reason: String,
     }
 
     /// Rollback handles POST /secrets/:id/rollback/:version

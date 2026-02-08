@@ -13,10 +13,9 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/ui"
-	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/authsome/plugins/dashboard/components"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/plugins/multisession/pages"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -24,18 +23,21 @@ import (
 // DashboardExtension implements the ui.DashboardExtension interface
 // This allows the multisession plugin to add its own screens to the dashboard
 type DashboardExtension struct {
-	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
+	plugin     *Plugin
+	baseUIPath string
 }
 
 // NewDashboardExtension creates a new dashboard extension for multisession
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
-	return &DashboardExtension{plugin: plugin}
+	return &DashboardExtension{
+		plugin:     plugin,
+		baseUIPath: "/api/identity/ui",
+	}
 }
 
-// SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
+// SetRegistry sets the extension registry reference (deprecated but kept for compatibility)
+func (e *DashboardExtension) SetRegistry(registry interface{}) {
+	// No longer needed - layout handled by ForgeUI
 }
 
 // ExtensionID returns the unique identifier for this extension
@@ -56,9 +58,9 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 			Order:    40,
 			URLBuilder: func(basePath string, currentApp *app.App) string {
 				if currentApp != nil {
-					return basePath + "/dashboard/app/" + currentApp.ID.String() + "/multisession"
+					return basePath + "/app/" + currentApp.ID.String() + "/multisession"
 				}
-				return basePath + "/dashboard/"
+				return basePath + ""
 			},
 			ActiveChecker: func(activePage string) bool {
 				return activePage == "multisession" || activePage == "session-detail"
@@ -68,7 +70,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns routes to register under /dashboard/app/:appId/
+// Routes returns routes to register under /app/:appId/
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		{
@@ -192,83 +194,89 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// Helper methods using dashboard handler
-
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil
-	}
-	return handler.GetUserFromContext(c)
+// BridgeFunctions returns bridge functions for the multisession plugin
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	return e.getBridgeFunctions()
 }
 
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil, forge.NewHTTPError(http.StatusInternalServerError, "handler not available")
+// Helper methods using dashboard handler
+
+func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) interface{} {
+	reqCtx := ctx.Request.Context()
+	if u, ok := reqCtx.Value("user").(interface{}); ok {
+		return u
+	}
+	return nil
+}
+
+func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
+	appIDStr := ctx.Param("appId")
+	if appIDStr == "" {
+		return nil, fmt.Errorf("app ID is required")
 	}
 
-	currentApp, err := handler.GetCurrentApp(c)
+	appID, err := xid.FromString(appIDStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid app ID format: %w", err)
 	}
 
-	return currentApp, nil
+	return &app.App{ID: appID}, nil
 }
 
 func (e *DashboardExtension) getBasePath() string {
-	if e.registry != nil && e.registry.GetHandler() != nil {
-		return e.registry.GetHandler().GetBasePath()
-	}
-	return "/api/auth"
+	return e.baseUIPath
 }
 
-// ServeMultiSessionPage renders the multi-session management page with dashboard layout
-func (e *DashboardExtension) ServeMultiSessionPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, "/api/auth/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+// ServeMultiSessionPage renders the multi-session management page using v2 pages
+func (e *DashboardExtension) ServeMultiSessionPage(ctx *router.PageContext) (g.Node, error) {
+	// Authentication is handled by route middleware (RequireAuth: true)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
+
+	// Use v2 pages package with bridge pattern
+	return pages.SessionsListPage(currentApp, basePath), nil
+}
+
+// ServeMultiSessionPageLegacy renders the multi-session management page with legacy layout
+// Deprecated: Use ServeMultiSessionPage with v2 pages instead
+func (e *DashboardExtension) ServeMultiSessionPageLegacy(ctx *router.PageContext) (g.Node, error) {
+
+	currentUser := e.getUserFromContext(ctx)
+	if currentUser == nil {
+		http.Redirect(ctx.ResponseWriter, ctx.Request, "/api/auth/login", http.StatusFound)
+		return nil, nil
+	}
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	basePath := e.getBasePath()
 
 	// Get filter parameters
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 25)
-	deviceFilter := c.Query("device")      // mobile, desktop, tablet
-	statusFilter := c.Query("status")      // active, expiring, expired
-	searchQuery := c.Query("search")       // user ID search
-	view := c.QueryDefault("view", "grid") // grid or list
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 25)
+	deviceFilter := ctx.Query("device")      // mobile, desktop, tablet
+	statusFilter := ctx.Query("status")      // active, expiring, expired
+	searchQuery := ctx.Query("search")       // user ID search
+	view := ctx.QueryDefault("view", "grid") // grid or list
 
-	pageData := components.PageData{
-		Title:      "Session Management",
-		User:       currentUser,
-		ActivePage: "multisession",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
+	content := e.renderPageContent(ctx, currentApp, basePath, page, pageSize, deviceFilter, statusFilter, searchQuery, view)
 
-	content := e.renderPageContent(c, currentApp, basePath, page, pageSize, deviceFilter, statusFilter, searchQuery, view)
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
 // renderPageContent renders the main content for the multisession page
-func (e *DashboardExtension) renderPageContent(c forge.Context, currentApp *app.App, basePath string, page, pageSize int, deviceFilter, statusFilter, searchQuery, view string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentApp *app.App, basePath string, page, pageSize int, deviceFilter, statusFilter, searchQuery, view string) g.Node {
+	reqCtx := ctx.Request.Context()
 
 	// Get all sessions for the app
-	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(ctx, &session.ListSessionsFilter{
+	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(reqCtx, &session.ListSessionsFilter{
 		AppID: currentApp.ID,
 		PaginationParams: pagination.PaginationParams{
 			Limit:  pageSize,
@@ -294,7 +302,7 @@ func (e *DashboardExtension) renderPageContent(c forge.Context, currentApp *app.
 	totalPages := int((totalSessions + int64(pageSize) - 1) / int64(pageSize))
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header with gradient accent
 		Div(
@@ -353,7 +361,7 @@ func (e *DashboardExtension) renderPageContent(c forge.Context, currentApp *app.
 				Div(
 					Class("flex items-center rounded-lg border border-slate-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-800"),
 					A(
-						Href(fmt.Sprintf("%s/dashboard/app/%s/multisession?view=grid&device=%s&status=%s&search=%s", basePath, currentApp.ID.String(), deviceFilter, statusFilter, searchQuery)),
+						Href(fmt.Sprintf("%s/app/%s/multisession?view=grid&device=%s&status=%s&search=%s", basePath, currentApp.ID.String(), deviceFilter, statusFilter, searchQuery)),
 						Class("rounded p-1.5 transition-colors "+func() string {
 							if view == "grid" {
 								return "bg-slate-100 text-slate-900 dark:bg-gray-700 dark:text-white"
@@ -363,7 +371,7 @@ func (e *DashboardExtension) renderPageContent(c forge.Context, currentApp *app.
 						lucide.LayoutGrid(Class("size-4")),
 					),
 					A(
-						Href(fmt.Sprintf("%s/dashboard/app/%s/multisession?view=list&device=%s&status=%s&search=%s", basePath, currentApp.ID.String(), deviceFilter, statusFilter, searchQuery)),
+						Href(fmt.Sprintf("%s/app/%s/multisession?view=list&device=%s&status=%s&search=%s", basePath, currentApp.ID.String(), deviceFilter, statusFilter, searchQuery)),
 						Class("rounded p-1.5 transition-colors "+func() string {
 							if view == "list" {
 								return "bg-slate-100 text-slate-900 dark:bg-gray-700 dark:text-white"
@@ -380,7 +388,7 @@ func (e *DashboardExtension) renderPageContent(c forge.Context, currentApp *app.
 					Select(
 						Name("device"),
 						Class("appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"),
-						g.Attr("onchange", fmt.Sprintf("window.location.href='%s/dashboard/app/%s/multisession?device='+this.value+'&status=%s&view=%s'", basePath, currentApp.ID.String(), statusFilter, view)),
+						g.Attr("onchange", fmt.Sprintf("window.location.href='%s/app/%s/multisession?device='+this.value+'&status=%s&view=%s'", basePath, currentApp.ID.String(), statusFilter, view)),
 						Option(Value(""), g.If(deviceFilter == "", g.Attr("selected", "")), g.Text("All Devices")),
 						Option(Value("desktop"), g.If(deviceFilter == "desktop", g.Attr("selected", "")), g.Text("Desktop")),
 						Option(Value("mobile"), g.If(deviceFilter == "mobile", g.Attr("selected", "")), g.Text("Mobile")),
@@ -572,7 +580,7 @@ func (e *DashboardExtension) renderFilterTab(label, value, current, view string,
 		badgeClasses += "bg-slate-200/50 text-slate-600 dark:bg-gray-700 dark:text-gray-400"
 	}
 
-	href := fmt.Sprintf("%s/dashboard/app/%s/multisession", basePath, currentApp.ID.String())
+	href := fmt.Sprintf("%s/app/%s/multisession", basePath, currentApp.ID.String())
 	queryParams := []string{}
 	if value != "" {
 		queryParams = append(queryParams, "status="+value)
@@ -691,7 +699,7 @@ func (e *DashboardExtension) renderSessionListRow(sess *session.Session, current
 			Div(
 				Class("flex items-center justify-end gap-2"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/session/"+sess.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/multisession/session/"+sess.ID.String()),
 					Class("rounded-lg p-2 text-slate-400 hover:bg-white hover:text-indigo-600 hover:shadow-sm dark:hover:bg-gray-800 dark:hover:text-indigo-400"),
 					g.Attr("title", "View Details"),
 					lucide.Eye(Class("size-4")),
@@ -699,7 +707,7 @@ func (e *DashboardExtension) renderSessionListRow(sess *session.Session, current
 				g.If(isActive,
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/revoke/"+sess.ID.String()),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/multisession/revoke/"+sess.ID.String()),
 						g.Attr("onsubmit", "return confirm('Revoke this session?')"),
 						Button(
 							Type("submit"),
@@ -830,7 +838,7 @@ func (e *DashboardExtension) renderSessionCard(sess *session.Session, currentApp
 			Div(
 				Class("flex items-center gap-2"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/session/"+sess.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/multisession/session/"+sess.ID.String()),
 					Class("rounded-lg p-2 text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-indigo-400"),
 					g.Attr("title", "View Details"),
 					lucide.Eye(Class("size-4")),
@@ -838,7 +846,7 @@ func (e *DashboardExtension) renderSessionCard(sess *session.Session, currentApp
 				g.If(isActive,
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/revoke/"+sess.ID.String()),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/multisession/revoke/"+sess.ID.String()),
 						g.Attr("onsubmit", "return confirm('Revoke this session?')"),
 						Button(
 							Type("submit"),
@@ -919,7 +927,7 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, curre
 	}
 
 	buildURL := func(page int) string {
-		url := fmt.Sprintf("%s/dashboard/app/%s/multisession?page=%d", basePath, currentApp.ID.String(), page)
+		url := fmt.Sprintf("%s/app/%s/multisession?page=%d", basePath, currentApp.ID.String(), page)
 		if deviceFilter != "" {
 			url += "&device=" + deviceFilter
 		}
@@ -982,51 +990,55 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, curre
 }
 
 // ServeSessionDetailPage renders detailed information about a single session
-func (e *DashboardExtension) ServeSessionDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+// ServeSessionDetailPage renders the session detail page using v2 pages
+func (e *DashboardExtension) ServeSessionDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// Authentication is handled by route middleware (RequireAuth: true)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	sessionIDStr := c.Param("sessionId")
+	sessionIDStr := ctx.Param("sessionId")
 	if sessionIDStr == "" {
-		return c.String(http.StatusBadRequest, "Session ID required")
+		return nil, errs.BadRequest("Session ID required")
+	}
+
+	basePath := e.getBasePath()
+
+	// Use v2 pages package with bridge pattern
+	return pages.SessionDetailPage(currentApp, sessionIDStr, basePath), nil
+}
+
+// ServeSessionDetailPageLegacy renders the session detail page with legacy layout
+// Deprecated: Use ServeSessionDetailPage with v2 pages instead
+func (e *DashboardExtension) ServeSessionDetailPageLegacy(ctx *router.PageContext) (g.Node, error) {
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	sessionIDStr := ctx.Param("sessionId")
+	if sessionIDStr == "" {
+		return nil, errs.BadRequest("Session ID required")
 	}
 
 	sessionID, err := xid.FromString(sessionIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid session ID")
+		return nil, errs.BadRequest("Invalid session ID")
 	}
 
-	ctx := c.Request().Context()
-	sess, err := e.plugin.service.sessionSvc.FindByID(ctx, sessionID)
+	reqCtx := ctx.Request.Context()
+	sess, err := e.plugin.service.sessionSvc.FindByID(reqCtx, sessionID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Session not found")
+		return nil, errs.NotFound("Session not found")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 
 	content := e.renderSessionDetailContent(sess, currentApp, basePath)
 
-	pageData := components.PageData{
-		Title:      "Session Details",
-		User:       currentUser,
-		ActivePage: "session-detail",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
 // renderSessionDetailContent renders the session detail page content
@@ -1052,13 +1064,13 @@ func (e *DashboardExtension) renderSessionDetailContent(sess *session.Session, c
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Breadcrumb and back button
 		Div(
 			Class("flex items-center gap-4"),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/multisession"),
 				Class("group inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 				lucide.ArrowLeft(Class("size-4 transition-transform group-hover:-translate-x-1")),
 				g.Text("Back to Sessions"),
@@ -1097,7 +1109,7 @@ func (e *DashboardExtension) renderSessionDetailContent(sess *session.Session, c
 					g.If(isActive,
 						Form(
 							Method("POST"),
-							Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/revoke/"+sess.ID.String()),
+							Action(basePath+"/app/"+currentApp.ID.String()+"/multisession/revoke/"+sess.ID.String()),
 							g.Attr("onsubmit", "return confirm('Are you sure you want to revoke this session? The user will be logged out.')"),
 							Button(
 								Type("submit"),
@@ -1172,7 +1184,7 @@ func (e *DashboardExtension) renderSessionDetailContent(sess *session.Session, c
 					Div(
 						Class("pt-2"),
 						A(
-							Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/user/"+sess.UserID.String()),
+							Href(basePath+"/app/"+currentApp.ID.String()+"/multisession/user/"+sess.UserID.String()),
 							Class("inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"),
 							g.Text("View all sessions for this user"),
 							lucide.ArrowRight(Class("size-4")),
@@ -1250,37 +1262,49 @@ func (e *DashboardExtension) renderDetailRow(label, value string, icon g.Node) g
 }
 
 // ServeUserSessionsPage renders all sessions for a specific user
-func (e *DashboardExtension) ServeUserSessionsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+// ServeUserSessionsPage renders the user sessions page using v2 pages
+func (e *DashboardExtension) ServeUserSessionsPage(ctx *router.PageContext) (g.Node, error) {
+	// Authentication is handled by route middleware (RequireAuth: true)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	userIDStr := c.Param("userId")
+	userIDStr := ctx.Param("userId")
 	if userIDStr == "" {
-		return c.String(http.StatusBadRequest, "User ID required")
+		return nil, errs.BadRequest("User ID required")
+	}
+
+	basePath := e.getBasePath()
+
+	// Use v2 pages package with bridge pattern
+	return pages.UserSessionsPage(currentApp, userIDStr, basePath), nil
+}
+
+// ServeUserSessionsPageLegacy renders the user sessions page with legacy layout
+// Deprecated: Use ServeUserSessionsPage with v2 pages instead
+func (e *DashboardExtension) ServeUserSessionsPageLegacy(ctx *router.PageContext) (g.Node, error) {
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	userIDStr := ctx.Param("userId")
+	if userIDStr == "" {
+		return nil, errs.BadRequest("User ID required")
 	}
 
 	userID, err := xid.FromString(userIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid user ID")
+		return nil, errs.BadRequest("Invalid user ID")
 	}
 
-	ctx := c.Request().Context()
-	basePath := handler.GetBasePath()
+	reqCtx := ctx.Request.Context()
+	basePath := e.getBasePath()
 
 	// Get all sessions for this user
-	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(ctx, &session.ListSessionsFilter{
+	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(reqCtx, &session.ListSessionsFilter{
 		UserID: &userID,
 		AppID:  currentApp.ID,
 		PaginationParams: pagination.PaginationParams{
@@ -1296,15 +1320,7 @@ func (e *DashboardExtension) ServeUserSessionsPage(c forge.Context) error {
 
 	content := e.renderUserSessionsContent(userID, sessions, currentApp, basePath)
 
-	pageData := components.PageData{
-		Title:      "User Sessions",
-		User:       currentUser,
-		ActivePage: "multisession",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
 // renderUserSessionsContent renders the user sessions page content
@@ -1317,13 +1333,13 @@ func (e *DashboardExtension) renderUserSessionsContent(userID xid.ID, sessions [
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Breadcrumb
 		Div(
 			Class("flex items-center gap-4"),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/multisession"),
 				Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 				lucide.ArrowLeft(Class("size-4")),
 				g.Text("Back to Sessions"),
@@ -1367,7 +1383,7 @@ func (e *DashboardExtension) renderUserSessionsContent(userID xid.ID, sessions [
 					g.If(activeCount > 0,
 						Form(
 							Method("POST"),
-							Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/revoke-all/"+userID.String()),
+							Action(basePath+"/app/"+currentApp.ID.String()+"/multisession/revoke-all/"+userID.String()),
 							g.Attr("onsubmit", "return confirm('Are you sure you want to revoke all sessions for this user? They will be logged out from all devices.')"),
 							Button(
 								Type("submit"),
@@ -1437,7 +1453,7 @@ func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *
 		Div(
 			Class("pt-4 border-t border-slate-200 dark:border-gray-700"),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/multisession"),
 				Class("inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"),
 				g.Text("Manage sessions"),
 				lucide.ArrowRight(Class("size-4")),
@@ -1449,49 +1465,51 @@ func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *
 // Action handlers
 
 // RevokeSession handles session revocation
-func (e *DashboardExtension) RevokeSession(c forge.Context) error {
-	sessionIDStr := c.Param("sessionId")
+func (e *DashboardExtension) RevokeSession(ctx *router.PageContext) (g.Node, error) {
+	sessionIDStr := ctx.Param("sessionId")
 	if sessionIDStr == "" {
-		return c.String(http.StatusBadRequest, "Session ID required")
+		return nil, errs.BadRequest("Session ID required")
 	}
 
 	sessionID, err := xid.FromString(sessionIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid session ID")
+		return nil, errs.BadRequest("Invalid session ID")
 	}
 
-	ctx := c.Request().Context()
-	if err := e.plugin.service.sessionSvc.RevokeByID(ctx, sessionID); err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to revoke session")
+	reqCtx := ctx.Request.Context()
+	if err := e.plugin.service.sessionSvc.RevokeByID(reqCtx, sessionID); err != nil {
+		return nil, fmt.Errorf("Failed to revoke session")
 	}
 
-	currentApp, _ := e.extractAppFromURL(c)
+	currentApp, _ := e.extractAppFromURL(ctx)
 	basePath := e.getBasePath()
 	if currentApp != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/multisession", http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/", http.StatusFound)
+	return nil, nil
 }
 
 // RevokeAllUserSessions handles revoking all sessions for a user
-func (e *DashboardExtension) RevokeAllUserSessions(c forge.Context) error {
-	userIDStr := c.Param("userId")
+func (e *DashboardExtension) RevokeAllUserSessions(ctx *router.PageContext) (g.Node, error) {
+	userIDStr := ctx.Param("userId")
 	if userIDStr == "" {
-		return c.String(http.StatusBadRequest, "User ID required")
+		return nil, errs.BadRequest("User ID required")
 	}
 
 	userID, err := xid.FromString(userIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid user ID")
+		return nil, errs.BadRequest("Invalid user ID")
 	}
 
-	ctx := c.Request().Context()
+	reqCtx := ctx.Request.Context()
 
-	currentApp, _ := e.extractAppFromURL(c)
+	currentApp, _ := e.extractAppFromURL(ctx)
 
 	// Get all user sessions
-	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(ctx, &session.ListSessionsFilter{
+	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(reqCtx, &session.ListSessionsFilter{
 		UserID: &userID,
 		AppID:  currentApp.ID,
 		PaginationParams: pagination.PaginationParams{
@@ -1501,44 +1519,52 @@ func (e *DashboardExtension) RevokeAllUserSessions(c forge.Context) error {
 	})
 
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to fetch user sessions")
+		return nil, fmt.Errorf("Failed to fetch user sessions")
 	}
 
 	// Revoke all sessions
 	if sessionsResp != nil {
 		for _, sess := range sessionsResp.Data {
-			_ = e.plugin.service.sessionSvc.RevokeByID(ctx, sess.ID)
+			_ = e.plugin.service.sessionSvc.RevokeByID(reqCtx, sess.ID)
 		}
 	}
 
 	basePath := e.getBasePath()
 	if currentApp != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/multisession", http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/", http.StatusFound)
+	return nil, nil
 }
 
 // ServeSettings renders the multisession settings page
-func (e *DashboardExtension) ServeSettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+// ServeSettings renders the settings page using v2 pages
+func (e *DashboardExtension) ServeSettings(ctx *router.PageContext) (g.Node, error) {
+	// Authentication is handled by route middleware (RequireAuth: true, RequireAdmin: true)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	content := e.renderSettingsContent(currentApp, handler.GetBasePath())
+	basePath := e.getBasePath()
 
-	return handler.RenderSettingsPage(c, "multisession", content)
+	// Use v2 pages package with bridge pattern
+	return pages.SettingsPage(currentApp, basePath), nil
+}
+
+// ServeSettingsLegacy renders the settings page with legacy layout
+// Deprecated: Use ServeSettings with v2 pages instead
+func (e *DashboardExtension) ServeSettingsLegacy(ctx *router.PageContext) (g.Node, error) {
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	content := e.renderSettingsContent(currentApp, e.getBasePath())
+	return content, nil
 }
 
 // renderSettingsContent renders the settings page content
@@ -1546,7 +1572,7 @@ func (e *DashboardExtension) renderSettingsContent(currentApp *app.App, basePath
 	cfg := e.plugin.config
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Header
 		Div(
@@ -1559,8 +1585,8 @@ func (e *DashboardExtension) renderSettingsContent(currentApp *app.App, basePath
 		// Settings form
 		Form(
 			Method("POST"),
-			Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/multisession/settings"),
-			Class("space-y-6"),
+			Action(basePath+"/app/"+currentApp.ID.String()+"/multisession/settings"),
+			Class("space-y-2"),
 
 			// Session Limits section
 			Div(
@@ -1717,12 +1743,12 @@ func (e *DashboardExtension) renderSettingsContent(currentApp *app.App, basePath
 }
 
 // SaveSettings handles saving multisession settings
-func (e *DashboardExtension) SaveSettings(c forge.Context) error {
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+func (e *DashboardExtension) SaveSettings(ctx *router.PageContext) (g.Node, error) {
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 
 	// Parse max sessions per user
 	maxSessions := 10
@@ -1750,19 +1776,21 @@ func (e *DashboardExtension) SaveSettings(c forge.Context) error {
 	e.plugin.config.EnableDeviceTracking = enableDeviceTracking
 	e.plugin.config.AllowCrossPlatform = allowCrossPlatform
 
-	currentApp, _ := e.extractAppFromURL(c)
+	currentApp, _ := e.extractAppFromURL(ctx)
 	basePath := e.getBasePath()
 	if currentApp != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/multisession?saved=true")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/multisession?saved=true", http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/settings/multisession?saved=true")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/settings/multisession?saved=true", http.StatusFound)
+	return nil, nil
 }
 
 // Helper functions
 
-func queryIntDefault(c forge.Context, name string, defaultValue int) int {
-	str := c.QueryDefault(name, "")
+func queryIntDefault(ctx *router.PageContext, name string, defaultValue int) int {
+	str := ctx.QueryDefault(name, "")
 	if str == "" {
 		return defaultValue
 	}

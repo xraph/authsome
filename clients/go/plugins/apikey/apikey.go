@@ -30,31 +30,9 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// CreateAPIKey CreateAPIKey handles API key creation
-func (p *Plugin) CreateAPIKey(ctx context.Context, req *authsome.CreateAPIKeyRequest) (*authsome.CreateAPIKeyResponse, error) {
-	path := "/api-keys/createapikey"
-	var result authsome.CreateAPIKeyResponse
-	err := p.client.Request(ctx, "POST", path, req, &result, false)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// RotateAPIKey RotateAPIKey handles API key rotation
-func (p *Plugin) RotateAPIKey(ctx context.Context, req *authsome.RotateAPIKeyRequest, id xid.ID) (*authsome.RotateAPIKeyResponse, error) {
-	path := "/api-keys/:id/rotate"
-	var result authsome.RotateAPIKeyResponse
-	err := p.client.Request(ctx, "POST", path, req, &result, false)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
 // CreateAPIKey CreateAPIKey handles POST /api-keys
 func (p *Plugin) CreateAPIKey(ctx context.Context, req *authsome.CreateAPIKeyRequest) (*authsome.CreateAPIKeyResponse, error) {
-	path := "/api-keys/createapikey"
+	path := "/api-keys"
 	var result authsome.CreateAPIKeyResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -65,7 +43,7 @@ func (p *Plugin) CreateAPIKey(ctx context.Context, req *authsome.CreateAPIKeyReq
 
 // ListAPIKeys ListAPIKeys handles GET /api-keys
 func (p *Plugin) ListAPIKeys(ctx context.Context, req *authsome.ListAPIKeysRequest) error {
-	path := "/api-keys/listapikeys"
+	path := "/api-keys"
 	err := p.client.Request(ctx, "GET", path, req, nil, false)
 	return err
 }

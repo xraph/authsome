@@ -12,32 +12,34 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/contexts"
+	env "github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/ui"
-	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/cms/core"
 	"github.com/xraph/authsome/plugins/cms/pages"
-	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/authsome/plugins/dashboard/components"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/bridge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // DashboardExtension implements ui.DashboardExtension for the CMS plugin
 type DashboardExtension struct {
-	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
+	plugin     *Plugin
+	baseUIPath string
 }
 
 // NewDashboardExtension creates a new dashboard extension
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
-	return &DashboardExtension{plugin: plugin}
+	return &DashboardExtension{
+		plugin:     plugin,
+		baseUIPath: "/api/identity/ui", // Default base path
+	}
 }
 
-// SetRegistry sets the extension registry reference
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
+// SetRegistry sets the extension registry reference (deprecated but kept for compatibility)
+func (e *DashboardExtension) SetRegistry(registry interface{}) {
+	// No longer needed - layout handled by ForgeUI
 }
 
 // ExtensionID returns the unique identifier for this extension
@@ -56,9 +58,9 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 			Order:    35, // After Users (20), before Secrets (60)
 			URLBuilder: func(basePath string, currentApp *app.App) string {
 				if currentApp == nil {
-					return basePath + "/dashboard/cms"
+					return basePath + "/cms"
 				}
-				return basePath + "/dashboard/app/" + currentApp.ID.String() + "/cms"
+				return basePath + "/app/" + currentApp.ID.String() + "/cms"
 			},
 			ActiveChecker: func(activePage string) bool {
 				return activePage == "cms" ||
@@ -420,22 +422,1086 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
+// BridgeFunctions returns bridge functions for CMS
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	return []ui.BridgeFunction{
+		// Content Type Operations
+		{
+			Name:        "getContentTypes",
+			Handler:     e.bridgeGetContentTypes,
+			Description: "Get list of content types for an app",
+		},
+		{
+			Name:        "getContentType",
+			Handler:     e.bridgeGetContentType,
+			Description: "Get a specific content type by name",
+		},
+		{
+			Name:        "createContentType",
+			Handler:     e.bridgeCreateContentType,
+			Description: "Create a new content type",
+		},
+		{
+			Name:        "updateContentType",
+			Handler:     e.bridgeUpdateContentType,
+			Description: "Update a content type",
+		},
+		{
+			Name:        "deleteContentType",
+			Handler:     e.bridgeDeleteContentType,
+			Description: "Delete a content type",
+		},
+		{
+			Name:        "getContentTypeStats",
+			Handler:     e.bridgeGetContentTypeStats,
+			Description: "Get statistics for content types",
+		},
+
+		// Field Operations
+		{
+			Name:        "listFields",
+			Handler:     e.bridgeListFields,
+			Description: "List all fields for a content type",
+		},
+		{
+			Name:        "addField",
+			Handler:     e.bridgeAddField,
+			Description: "Add a new field to a content type",
+		},
+		{
+			Name:        "updateField",
+			Handler:     e.bridgeUpdateField,
+			Description: "Update a field in a content type",
+		},
+		{
+			Name:        "deleteField",
+			Handler:     e.bridgeDeleteField,
+			Description: "Delete a field from a content type",
+		},
+		{
+			Name:        "reorderFields",
+			Handler:     e.bridgeReorderFields,
+			Description: "Reorder fields in a content type",
+		},
+		{
+			Name:        "getFieldTypes",
+			Handler:     e.bridgeGetFieldTypes,
+			Description: "Get all available field types",
+		},
+
+		// Entry Operations
+		{
+			Name:        "getEntries",
+			Handler:     e.bridgeGetEntries,
+			Description: "Get content entries for a type",
+		},
+		{
+			Name:        "getEntry",
+			Handler:     e.bridgeGetEntry,
+			Description: "Get a specific entry by ID",
+		},
+		{
+			Name:        "createEntry",
+			Handler:     e.bridgeCreateEntry,
+			Description: "Create a new content entry",
+		},
+		{
+			Name:        "updateEntry",
+			Handler:     e.bridgeUpdateEntry,
+			Description: "Update a content entry",
+		},
+		{
+			Name:        "deleteEntry",
+			Handler:     e.bridgeDeleteEntry,
+			Description: "Delete a content entry",
+		},
+		{
+			Name:        "publishEntry",
+			Handler:     e.bridgePublishEntry,
+			Description: "Publish a content entry",
+		},
+		{
+			Name:        "unpublishEntry",
+			Handler:     e.bridgeUnpublishEntry,
+			Description: "Unpublish a content entry",
+		},
+		{
+			Name:        "archiveEntry",
+			Handler:     e.bridgeArchiveEntry,
+			Description: "Archive a content entry",
+		},
+		{
+			Name:        "getEntryStats",
+			Handler:     e.bridgeGetEntryStats,
+			Description: "Get statistics for entries of a content type",
+		},
+
+		// Bulk Operations
+		{
+			Name:        "bulkPublish",
+			Handler:     e.bridgeBulkPublish,
+			Description: "Publish multiple entries",
+		},
+		{
+			Name:        "bulkUnpublish",
+			Handler:     e.bridgeBulkUnpublish,
+			Description: "Unpublish multiple entries",
+		},
+		{
+			Name:        "bulkDelete",
+			Handler:     e.bridgeBulkDelete,
+			Description: "Delete multiple entries",
+		},
+
+		// Component Schema Operations
+		{
+			Name:        "getComponentSchemas",
+			Handler:     e.bridgeGetComponentSchemas,
+			Description: "Get list of component schemas",
+		},
+		{
+			Name:        "getComponentSchema",
+			Handler:     e.bridgeGetComponentSchema,
+			Description: "Get a specific component schema by name",
+		},
+		{
+			Name:        "createComponentSchema",
+			Handler:     e.bridgeCreateComponentSchema,
+			Description: "Create a new component schema",
+		},
+		{
+			Name:        "updateComponentSchema",
+			Handler:     e.bridgeUpdateComponentSchema,
+			Description: "Update a component schema",
+		},
+		{
+			Name:        "deleteComponentSchema",
+			Handler:     e.bridgeDeleteComponentSchema,
+			Description: "Delete a component schema",
+		},
+
+		// Revision Operations
+		{
+			Name:        "listRevisions",
+			Handler:     e.bridgeListRevisions,
+			Description: "List revisions for an entry",
+		},
+		{
+			Name:        "getRevision",
+			Handler:     e.bridgeGetRevision,
+			Description: "Get a specific revision",
+		},
+		{
+			Name:        "restoreRevision",
+			Handler:     e.bridgeRestoreRevision,
+			Description: "Restore an entry to a specific revision",
+		},
+	}
+}
+
+// =============================================================================
+// Bridge Function Implementations
+// =============================================================================
+
+// buildContextFromBridge builds a Go context with app ID, env ID, and user ID from bridge context
+func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, appID string) (context.Context, error) {
+	// Parse and set app ID
+	id, err := xid.FromString(appID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid appId")
+	}
+	goCtx := contexts.SetAppID(context.Background(), id)
+
+	// Extract environment ID from request or cookie
+	envIDSet := false
+	if req := bridgeCtx.Request(); req != nil {
+		// Try to get envId from request parameter
+		if envIDStr := req.FormValue("envId"); envIDStr != "" {
+			if envID, err := xid.FromString(envIDStr); err == nil {
+				goCtx = contexts.SetEnvironmentID(goCtx, envID)
+				envIDSet = true
+			}
+		} else if envCookie, err := req.Cookie("authsome_env"); err == nil && envCookie.Value != "" {
+			// Fallback to cookie
+			if envID, err := xid.FromString(envCookie.Value); err == nil {
+				goCtx = contexts.SetEnvironmentID(goCtx, envID)
+				envIDSet = true
+			}
+		}
+	}
+
+	// If no environment specified, get the default environment for this app
+	if !envIDSet {
+		serviceRegistry := e.plugin.authInst.GetServiceRegistry()
+		if serviceRegistry != nil && serviceRegistry.HasEnvironmentService() {
+			envSvc := serviceRegistry.EnvironmentService()
+			if envSvc != nil {
+				// List environments for this app and get the first one (default)
+				filter := &env.ListEnvironmentsFilter{
+					AppID: id,
+				}
+				if envResp, err := envSvc.ListEnvironments(goCtx, filter); err == nil && envResp != nil && len(envResp.Data) > 0 {
+					// Look for production or default environment first
+					for _, environment := range envResp.Data {
+						if environment.Name == "production" || environment.Name == "default" {
+							goCtx = contexts.SetEnvironmentID(goCtx, environment.ID)
+							envIDSet = true
+							break
+						}
+					}
+					// If not found, use the first environment
+					if !envIDSet && len(envResp.Data) > 0 {
+						goCtx = contexts.SetEnvironmentID(goCtx, envResp.Data[0].ID)
+					}
+				}
+			}
+		}
+	}
+
+	// Extract user ID from bridge context (authenticated user)
+	if user := bridgeCtx.User(); user != nil {
+		userData := user.Data()
+		if userIDStr, ok := userData["id"].(string); ok {
+			if userID, err := xid.FromString(userIDStr); err == nil {
+				goCtx = contexts.SetUserID(goCtx, userID)
+			}
+		}
+	}
+
+	return goCtx, nil
+}
+
+// =============================================================================
+// Content Type Bridge Functions
+// =============================================================================
+
+type BridgeContentTypeInput struct {
+	AppID string `json:"appId" validate:"required"`
+	Name  string `json:"name,omitempty"`
+}
+
+type BridgeCreateContentTypeInput struct {
+	AppID       string `json:"appId" validate:"required"`
+	Title       string `json:"title" validate:"required"`
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+type BridgeUpdateContentTypeInput struct {
+	AppID       string                       `json:"appId" validate:"required"`
+	Name        string                       `json:"name" validate:"required"`
+	Title       string                       `json:"title,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Icon        string                       `json:"icon,omitempty"`
+	Settings    *core.ContentTypeSettingsDTO `json:"settings,omitempty"`
+}
+
+func (e *DashboardExtension) bridgeGetContentTypes(ctx bridge.Context, input BridgeContentTypeInput) (*core.ListContentTypesResponse, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.contentTypeSvc.List(goCtx, &core.ListContentTypesQuery{})
+}
+
+func (e *DashboardExtension) bridgeGetContentType(ctx bridge.Context, input BridgeContentTypeInput) (*core.ContentTypeDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.contentTypeSvc.GetByName(goCtx, input.Name)
+}
+
+func (e *DashboardExtension) bridgeCreateContentType(ctx bridge.Context, input BridgeCreateContentTypeInput) (*core.ContentTypeDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.contentTypeSvc.Create(goCtx, &core.CreateContentTypeRequest{
+		Title:       input.Title,
+		Name:        input.Name,
+		Description: input.Description,
+		Icon:        input.Icon,
+	})
+}
+
+func (e *DashboardExtension) bridgeUpdateContentType(ctx bridge.Context, input BridgeUpdateContentTypeInput) (*core.ContentTypeDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type to get its ID
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	return e.plugin.contentTypeSvc.Update(goCtx, contentTypeID, &core.UpdateContentTypeRequest{
+		Title:       input.Title,
+		Description: input.Description,
+		Icon:        input.Icon,
+		Settings:    input.Settings,
+	})
+}
+
+func (e *DashboardExtension) bridgeDeleteContentType(ctx bridge.Context, input BridgeContentTypeInput) (map[string]bool, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type to get its ID
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	err = e.plugin.contentTypeSvc.Delete(goCtx, contentTypeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]bool{"success": true}, nil
+}
+
+func (e *DashboardExtension) bridgeGetContentTypeStats(ctx bridge.Context, input BridgeContentTypeInput) (*core.CMSStatsDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.contentTypeSvc.GetStats(goCtx)
+}
+
+// =============================================================================
+// Field Bridge Functions
+// =============================================================================
+
+type BridgeFieldInput struct {
+	AppID     string `json:"appId" validate:"required"`
+	TypeName  string `json:"typeName" validate:"required"`
+	FieldName string `json:"fieldName,omitempty"`
+}
+
+type BridgeCreateFieldInput struct {
+	AppID       string                `json:"appId" validate:"required"`
+	TypeName    string                `json:"typeName" validate:"required"`
+	Title       string                `json:"title" validate:"required"`
+	Name        string                `json:"name" validate:"required"`
+	Type        string                `json:"type" validate:"required"`
+	Description string                `json:"description,omitempty"`
+	Required    bool                  `json:"required,omitempty"`
+	Unique      bool                  `json:"unique,omitempty"`
+	Indexed     bool                  `json:"indexed,omitempty"`
+	Localized   bool                  `json:"localized,omitempty"`
+	Options     *core.FieldOptionsDTO `json:"options,omitempty"`
+}
+
+type BridgeUpdateFieldInput struct {
+	AppID       string                `json:"appId" validate:"required"`
+	TypeName    string                `json:"typeName" validate:"required"`
+	FieldName   string                `json:"fieldName" validate:"required"`
+	Title       string                `json:"title,omitempty"`
+	Description string                `json:"description,omitempty"`
+	Required    *bool                 `json:"required,omitempty"`
+	Unique      *bool                 `json:"unique,omitempty"`
+	Indexed     *bool                 `json:"indexed,omitempty"`
+	Localized   *bool                 `json:"localized,omitempty"`
+	Options     *core.FieldOptionsDTO `json:"options,omitempty"`
+}
+
+type BridgeReorderFieldsInput struct {
+	AppID      string   `json:"appId" validate:"required"`
+	TypeName   string   `json:"typeName" validate:"required"`
+	FieldOrder []string `json:"fieldOrder" validate:"required"`
+}
+
+func (e *DashboardExtension) bridgeListFields(ctx bridge.Context, input BridgeFieldInput) (map[string]interface{}, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	fields, err := e.plugin.fieldSvc.List(goCtx, contentTypeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{"fields": fields}, nil
+}
+
+func (e *DashboardExtension) bridgeAddField(ctx bridge.Context, input BridgeCreateFieldInput) (*core.ContentFieldDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	return e.plugin.fieldSvc.Create(goCtx, contentTypeID, &core.CreateFieldRequest{
+		Title:       input.Title,
+		Name:        input.Name,
+		Type:        input.Type,
+		Description: input.Description,
+		Required:    input.Required,
+		Unique:      input.Unique,
+		Indexed:     input.Indexed,
+		Localized:   input.Localized,
+		Options:     input.Options,
+	})
+}
+
+func (e *DashboardExtension) bridgeUpdateField(ctx bridge.Context, input BridgeUpdateFieldInput) (*core.ContentFieldDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	return e.plugin.fieldSvc.UpdateByName(goCtx, contentTypeID, input.FieldName, &core.UpdateFieldRequest{
+		Title:       input.Title,
+		Description: input.Description,
+		Required:    input.Required,
+		Unique:      input.Unique,
+		Indexed:     input.Indexed,
+		Localized:   input.Localized,
+		Options:     input.Options,
+	})
+}
+
+func (e *DashboardExtension) bridgeDeleteField(ctx bridge.Context, input BridgeFieldInput) (map[string]bool, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	err = e.plugin.fieldSvc.DeleteByName(goCtx, contentTypeID, input.FieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]bool{"success": true}, nil
+}
+
+func (e *DashboardExtension) bridgeReorderFields(ctx bridge.Context, input BridgeReorderFieldsInput) (map[string]interface{}, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	// Get all fields to map names to IDs
+	fields, err := e.plugin.fieldSvc.List(goCtx, contentTypeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map of field names to IDs
+	fieldNameToID := make(map[string]string)
+	for _, field := range fields {
+		fieldNameToID[field.Name] = field.ID
+	}
+
+	// Convert field order strings to FieldOrderItem
+	fieldOrders := make([]core.FieldOrderItem, len(input.FieldOrder))
+	for i, fieldName := range input.FieldOrder {
+		fieldID, ok := fieldNameToID[fieldName]
+		if !ok {
+			return nil, errs.BadRequest("field not found: " + fieldName)
+		}
+		fieldOrders[i] = core.FieldOrderItem{
+			FieldID: fieldID,
+			Order:   i,
+		}
+	}
+
+	err = e.plugin.fieldSvc.Reorder(goCtx, contentTypeID, &core.ReorderFieldsRequest{
+		FieldOrders: fieldOrders,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{"message": "fields reordered", "success": true}, nil
+}
+
+func (e *DashboardExtension) bridgeGetFieldTypes(ctx bridge.Context, input map[string]interface{}) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"fieldTypes": core.GetAllFieldTypes(),
+	}, nil
+}
+
+// =============================================================================
+// Entry Bridge Functions
+// =============================================================================
+
+type BridgeEntryInput struct {
+	AppID    string `json:"appId" validate:"required"`
+	TypeName string `json:"typeName" validate:"required"`
+	EntryID  string `json:"entryId,omitempty"`
+}
+
+type BridgeEntriesQueryInput struct {
+	AppID     string                 `json:"appId" validate:"required"`
+	TypeName  string                 `json:"typeName" validate:"required"`
+	Page      int                    `json:"page"`
+	PageSize  int                    `json:"pageSize"`
+	Search    string                 `json:"search"`
+	Status    string                 `json:"status"`
+	SortBy    string                 `json:"sortBy"`
+	SortOrder string                 `json:"sortOrder"`
+	Filters   map[string]interface{} `json:"filters"`
+	Select    []string               `json:"select"`
+	Populate  []string               `json:"populate"`
+}
+
+type BridgeCreateEntryInput struct {
+	AppID    string                 `json:"appId" validate:"required"`
+	TypeName string                 `json:"typeName" validate:"required"`
+	Data     map[string]interface{} `json:"data" validate:"required"`
+	Status   string                 `json:"status,omitempty"`
+}
+
+type BridgeUpdateEntryInput struct {
+	AppID    string                 `json:"appId" validate:"required"`
+	TypeName string                 `json:"typeName" validate:"required"`
+	EntryID  string                 `json:"entryId" validate:"required"`
+	Data     map[string]interface{} `json:"data" validate:"required"`
+	Status   string                 `json:"status,omitempty"`
+}
+
+type BridgeBulkOperationInput struct {
+	AppID    string   `json:"appId" validate:"required"`
+	TypeName string   `json:"typeName" validate:"required"`
+	IDs      []string `json:"ids" validate:"required"`
+}
+
+func (e *DashboardExtension) bridgeGetEntries(ctx bridge.Context, input BridgeEntriesQueryInput) (*core.ListEntriesResponse, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set defaults
+	if input.Page == 0 {
+		input.Page = 1
+	}
+	if input.PageSize == 0 {
+		input.PageSize = 20
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	return e.plugin.entrySvc.List(goCtx, contentTypeID, &core.ListEntriesQuery{
+		Page:      input.Page,
+		PageSize:  input.PageSize,
+		Search:    input.Search,
+		Status:    input.Status,
+		SortBy:    input.SortBy,
+		SortOrder: input.SortOrder,
+		Filters:   input.Filters,
+		Select:    input.Select,
+		Populate:  input.Populate,
+	})
+}
+
+func (e *DashboardExtension) bridgeGetEntry(ctx bridge.Context, input BridgeEntryInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	return e.plugin.entrySvc.GetByID(goCtx, entryID)
+}
+
+func (e *DashboardExtension) bridgeCreateEntry(ctx bridge.Context, input BridgeCreateEntryInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Status == "" {
+		input.Status = "draft"
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	return e.plugin.entrySvc.Create(goCtx, contentTypeID, &core.CreateEntryRequest{
+		Data:   input.Data,
+		Status: input.Status,
+	})
+}
+
+func (e *DashboardExtension) bridgeUpdateEntry(ctx bridge.Context, input BridgeUpdateEntryInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	return e.plugin.entrySvc.Update(goCtx, entryID, &core.UpdateEntryRequest{
+		Data:   input.Data,
+		Status: input.Status,
+	})
+}
+
+func (e *DashboardExtension) bridgeDeleteEntry(ctx bridge.Context, input BridgeEntryInput) (map[string]bool, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	err = e.plugin.entrySvc.Delete(goCtx, entryID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]bool{"success": true}, nil
+}
+
+func (e *DashboardExtension) bridgePublishEntry(ctx bridge.Context, input BridgeEntryInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	return e.plugin.entrySvc.Publish(goCtx, entryID, &core.PublishEntryRequest{})
+}
+
+func (e *DashboardExtension) bridgeUnpublishEntry(ctx bridge.Context, input BridgeEntryInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	return e.plugin.entrySvc.Unpublish(goCtx, entryID)
+}
+
+func (e *DashboardExtension) bridgeArchiveEntry(ctx bridge.Context, input BridgeEntryInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	return e.plugin.entrySvc.Archive(goCtx, entryID)
+}
+
+func (e *DashboardExtension) bridgeGetEntryStats(ctx bridge.Context, input BridgeEntryInput) (*core.ContentTypeStatsDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get content type
+	contentType, err := e.plugin.contentTypeSvc.GetByName(goCtx, input.TypeName)
+	if err != nil {
+		return nil, err
+	}
+
+	contentTypeID, err := xid.FromString(contentType.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid content type ID")
+	}
+
+	return e.plugin.entrySvc.GetStats(goCtx, contentTypeID)
+}
+
+func (e *DashboardExtension) bridgeBulkPublish(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]interface{}, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]xid.ID, len(input.IDs))
+	for i, idStr := range input.IDs {
+		id, err := xid.FromString(idStr)
+		if err != nil {
+			return nil, errs.BadRequest("invalid entry ID: " + idStr)
+		}
+		ids[i] = id
+	}
+
+	err = e.plugin.entrySvc.BulkPublish(goCtx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"message": "entries published",
+		"count":   len(ids),
+		"success": true,
+	}, nil
+}
+
+func (e *DashboardExtension) bridgeBulkUnpublish(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]interface{}, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]xid.ID, len(input.IDs))
+	for i, idStr := range input.IDs {
+		id, err := xid.FromString(idStr)
+		if err != nil {
+			return nil, errs.BadRequest("invalid entry ID: " + idStr)
+		}
+		ids[i] = id
+	}
+
+	err = e.plugin.entrySvc.BulkUnpublish(goCtx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"message": "entries unpublished",
+		"count":   len(ids),
+		"success": true,
+	}, nil
+}
+
+func (e *DashboardExtension) bridgeBulkDelete(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]interface{}, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]xid.ID, len(input.IDs))
+	for i, idStr := range input.IDs {
+		id, err := xid.FromString(idStr)
+		if err != nil {
+			return nil, errs.BadRequest("invalid entry ID: " + idStr)
+		}
+		ids[i] = id
+	}
+
+	err = e.plugin.entrySvc.BulkDelete(goCtx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"message": "entries deleted",
+		"count":   len(ids),
+		"success": true,
+	}, nil
+}
+
+// =============================================================================
+// Component Schema Bridge Functions
+// =============================================================================
+
+type BridgeComponentSchemaInput struct {
+	AppID string `json:"appId" validate:"required"`
+	Name  string `json:"name,omitempty"`
+}
+
+type BridgeCreateComponentSchemaInput struct {
+	AppID       string                   `json:"appId" validate:"required"`
+	Title       string                   `json:"title" validate:"required"`
+	Name        string                   `json:"name" validate:"required"`
+	Description string                   `json:"description,omitempty"`
+	Icon        string                   `json:"icon,omitempty"`
+	Fields      []core.NestedFieldDefDTO `json:"fields,omitempty"`
+}
+
+type BridgeUpdateComponentSchemaInput struct {
+	AppID       string                   `json:"appId" validate:"required"`
+	Name        string                   `json:"name" validate:"required"`
+	Title       string                   `json:"title,omitempty"`
+	Description string                   `json:"description,omitempty"`
+	Icon        string                   `json:"icon,omitempty"`
+	Fields      []core.NestedFieldDefDTO `json:"fields,omitempty"`
+}
+
+func (e *DashboardExtension) bridgeGetComponentSchemas(ctx bridge.Context, input BridgeComponentSchemaInput) (*core.ListComponentSchemasResponse, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.componentSchemaSvc.List(goCtx, &core.ListComponentSchemasQuery{})
+}
+
+func (e *DashboardExtension) bridgeGetComponentSchema(ctx bridge.Context, input BridgeComponentSchemaInput) (*core.ComponentSchemaDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.componentSchemaSvc.GetByName(goCtx, input.Name)
+}
+
+func (e *DashboardExtension) bridgeCreateComponentSchema(ctx bridge.Context, input BridgeCreateComponentSchemaInput) (*core.ComponentSchemaDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.plugin.componentSchemaSvc.Create(goCtx, &core.CreateComponentSchemaRequest{
+		Title:       input.Title,
+		Name:        input.Name,
+		Description: input.Description,
+		Icon:        input.Icon,
+		Fields:      input.Fields,
+	})
+}
+
+func (e *DashboardExtension) bridgeUpdateComponentSchema(ctx bridge.Context, input BridgeUpdateComponentSchemaInput) (*core.ComponentSchemaDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get component schema
+	component, err := e.plugin.componentSchemaSvc.GetByName(goCtx, input.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	componentID, err := xid.FromString(component.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid component schema ID")
+	}
+
+	return e.plugin.componentSchemaSvc.Update(goCtx, componentID, &core.UpdateComponentSchemaRequest{
+		Title:       input.Title,
+		Description: input.Description,
+		Icon:        input.Icon,
+		Fields:      input.Fields,
+	})
+}
+
+func (e *DashboardExtension) bridgeDeleteComponentSchema(ctx bridge.Context, input BridgeComponentSchemaInput) (map[string]bool, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get component schema
+	component, err := e.plugin.componentSchemaSvc.GetByName(goCtx, input.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	componentID, err := xid.FromString(component.ID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid component schema ID")
+	}
+
+	err = e.plugin.componentSchemaSvc.Delete(goCtx, componentID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]bool{"success": true}, nil
+}
+
+// =============================================================================
+// Revision Bridge Functions
+// =============================================================================
+
+type BridgeRevisionInput struct {
+	AppID    string `json:"appId" validate:"required"`
+	EntryID  string `json:"entryId" validate:"required"`
+	Version  int    `json:"version,omitempty"`
+	Page     int    `json:"page,omitempty"`
+	PageSize int    `json:"pageSize,omitempty"`
+}
+
+func (e *DashboardExtension) bridgeListRevisions(ctx bridge.Context, input BridgeRevisionInput) (*core.PaginatedResponse[*core.RevisionDTO], error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	if input.Page == 0 {
+		input.Page = 1
+	}
+	if input.PageSize == 0 {
+		input.PageSize = 20
+	}
+
+	if e.plugin.revisionSvc == nil {
+		return nil, errs.BadRequest("revision service not available")
+	}
+
+	return e.plugin.revisionSvc.List(goCtx, entryID, &core.ListRevisionsQuery{
+		Page:     input.Page,
+		PageSize: input.PageSize,
+	})
+}
+
+func (e *DashboardExtension) bridgeGetRevision(ctx bridge.Context, input BridgeRevisionInput) (*core.RevisionDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	if e.plugin.revisionSvc == nil {
+		return nil, errs.BadRequest("revision service not available")
+	}
+
+	return e.plugin.revisionSvc.GetByVersion(goCtx, entryID, input.Version)
+}
+
+func (e *DashboardExtension) bridgeRestoreRevision(ctx bridge.Context, input BridgeRevisionInput) (*core.ContentEntryDTO, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	entryID, err := xid.FromString(input.EntryID)
+	if err != nil {
+		return nil, errs.BadRequest("invalid entryId")
+	}
+
+	if e.plugin.revisionSvc == nil {
+		return nil, errs.BadRequest("revision service not available")
+	}
+
+	// Get the revision data
+	revision, err := e.plugin.revisionSvc.GetByVersion(goCtx, entryID, input.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the entry with the revision data
+	return e.plugin.entrySvc.Update(goCtx, entryID, &core.UpdateEntryRequest{
+		Data: revision.Data,
+	})
+}
+
 // =============================================================================
 // Helper Methods
 // =============================================================================
 
-// getUserFromContext extracts the current user from the request context
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	ctx := c.Request().Context()
-	if u, ok := ctx.Value("user").(*user.User); ok {
-		return u
-	}
-	return nil
-}
-
 // extractAppFromURL extracts the app from the URL parameter
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	appIDStr := c.Param("appId")
+func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
+	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
 		return nil, fmt.Errorf("app ID is required")
 	}
@@ -450,47 +1516,44 @@ func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error
 
 // getBasePath returns the dashboard base path
 func (e *DashboardExtension) getBasePath() string {
-	if e.registry != nil && e.registry.GetHandler() != nil {
-		return e.registry.GetHandler().GetBasePath()
-	}
-	return ""
+	return e.baseUIPath
 }
 
 // injectContext injects app and environment IDs into context
-func (e *DashboardExtension) injectContext(c forge.Context) context.Context {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Context {
+	reqCtx := ctx.Request.Context()
 
 	// Get app ID from URL
 	var appID xid.ID
-	if appIDStr := c.Param("appId"); appIDStr != "" {
+	if appIDStr := ctx.Param("appId"); appIDStr != "" {
 		if id, err := xid.FromString(appIDStr); err == nil {
 			appID = id
-			ctx = contexts.SetAppID(ctx, appID)
+			reqCtx = contexts.SetAppID(reqCtx, appID)
 		}
 	}
 
 	// Get environment ID from header or context
-	if envIDStr := c.Request().Header.Get("X-Environment-ID"); envIDStr != "" {
+	if envIDStr := ctx.Request.Header.Get("X-Environment-ID"); envIDStr != "" {
 		if envID, err := xid.FromString(envIDStr); err == nil {
-			ctx = contexts.SetEnvironmentID(ctx, envID)
+			reqCtx = contexts.SetEnvironmentID(reqCtx, envID)
 		}
 	}
 
 	// Try to get from existing context
-	if envID, ok := contexts.GetEnvironmentID(c.Request().Context()); ok {
-		ctx = contexts.SetEnvironmentID(ctx, envID)
+	if envID, ok := contexts.GetEnvironmentID(ctx.Request.Context()); ok {
+		reqCtx = contexts.SetEnvironmentID(reqCtx, envID)
 	}
 
 	// If no environment ID yet, try to get default environment for the app
-	if _, ok := contexts.GetEnvironmentID(ctx); !ok && !appID.IsNil() {
+	if _, ok := contexts.GetEnvironmentID(reqCtx); !ok && !appID.IsNil() {
 		if envSvc := e.plugin.authInst.GetServiceRegistry().EnvironmentService(); envSvc != nil {
-			if defaultEnv, err := envSvc.GetDefaultEnvironment(ctx, appID); err == nil && defaultEnv != nil {
-				ctx = contexts.SetEnvironmentID(ctx, defaultEnv.ID)
+			if defaultEnv, err := envSvc.GetDefaultEnvironment(reqCtx, appID); err == nil && defaultEnv != nil {
+				reqCtx = contexts.SetEnvironmentID(reqCtx, defaultEnv.ID)
 			}
 		}
 	}
 
-	return ctx
+	return reqCtx
 }
 
 // =============================================================================
@@ -544,26 +1607,14 @@ func (e *DashboardExtension) renderCMSWidget(currentApp *app.App) g.Node {
 // CMS Settings Handler
 // =============================================================================
 
-func (e *DashboardExtension) ServeCMSSettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeCMSSettings(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
-
-	ctx := e.injectContext(c)
 
 	// Get content types for stats
-	result, err := e.plugin.contentTypeSvc.List(ctx, &core.ListContentTypesQuery{
+	result, err := e.plugin.contentTypeSvc.List(context.Background(), &core.ListContentTypesQuery{
 		PageSize: 100,
 	})
 	if err != nil {
@@ -571,18 +1622,17 @@ func (e *DashboardExtension) ServeCMSSettings(c forge.Context) error {
 	}
 
 	// Get stats
-	stats, _ := e.plugin.contentTypeSvc.GetStats(ctx)
+	stats, _ := e.plugin.contentTypeSvc.GetStats(context.Background())
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := e.renderCMSSettingsContent(currentApp, basePath, result.ContentTypes, stats)
 
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "cms-settings", content)
+	return content, nil
 }
 
 // renderCMSSettingsContent renders the CMS settings page content
 func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, basePath string, contentTypes []*core.ContentTypeSummaryDTO, stats *core.CMSStatsDTO) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Build stats display
 	var totalTypes, totalEntries int
@@ -592,7 +1642,7 @@ func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, baseP
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Header
 		Div(
@@ -740,80 +1790,41 @@ func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, baseP
 // CMS Overview Handler
 // =============================================================================
 
-func (e *DashboardExtension) ServeCMSOverview(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeCMSOverview(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
+	basePath := e.getBasePath()
 
-	// Get content types
-	result, err := e.plugin.contentTypeSvc.List(ctx, &core.ListContentTypesQuery{
-		PageSize: 100,
-	})
-	if err != nil {
-		result = &core.ListContentTypesResponse{ContentTypes: []*core.ContentTypeSummaryDTO{}}
-	}
+	// Use the dynamic version that fetches data via bridge functions
+	content := pages.CMSOverviewDynamic(currentApp, basePath)
 
-	// Get stats
-	stats, _ := e.plugin.contentTypeSvc.GetStats(ctx)
-
-	basePath := handler.GetBasePath()
-	content := pages.CMSOverviewPage(currentApp, basePath, result.ContentTypes, stats)
-
-	pageData := components.PageData{
-		Title:      "Content Management",
-		User:       currentUser,
-		ActivePage: "cms",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
 // =============================================================================
 // Content Types Handlers
 // =============================================================================
 
-func (e *DashboardExtension) ServeContentTypesList(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeContentTypesList(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
+	reqCtx := e.injectContext(ctx)
 
-	searchQuery := c.Query("search")
-	page, _ := strconv.Atoi(c.Query("page"))
+	searchQuery := ctx.Query("search")
+	page, _ := strconv.Atoi(ctx.Query("page"))
 	if page < 1 {
 		page = 1
 	}
 	pageSize := 20
 
 	// Get content types
-	result, err := e.plugin.contentTypeSvc.List(ctx, &core.ListContentTypesQuery{
+	result, err := e.plugin.contentTypeSvc.List(reqCtx, &core.ListContentTypesQuery{
 		Search:   searchQuery,
 		Page:     page,
 		PageSize: pageSize,
@@ -822,322 +1833,265 @@ func (e *DashboardExtension) ServeContentTypesList(c forge.Context) error {
 		result = &core.ListContentTypesResponse{ContentTypes: []*core.ContentTypeSummaryDTO{}}
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := pages.ContentTypesListPage(currentApp, basePath, result.ContentTypes, page, pageSize, result.TotalItems, searchQuery)
 
-	pageData := components.PageData{
-		Title:      "Content Types",
-		User:       currentUser,
-		ActivePage: "cms-types",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) ServeCreateContentType(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeCreateContentType(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	errMsg := c.Query("error")
+	basePath := e.getBasePath()
+	errMsg := ctx.Query("error")
 
 	content := pages.CreateContentTypePage(currentApp, basePath, errMsg)
 
-	pageData := components.PageData{
-		Title:      "Create Content Type",
-		User:       currentUser,
-		ActivePage: "cms-type-create",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) HandleCreateContentType(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleCreateContentType(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Parse form
 	req := &core.CreateContentTypeRequest{
-		Title:       c.FormValue("name"),
-		Name:        c.FormValue("slug"),
-		Description: c.FormValue("description"),
-		Icon:        c.FormValue("icon"),
+		Title:       ctx.Request.FormValue("name"),
+		Name:        ctx.Request.FormValue("slug"),
+		Description: ctx.Request.FormValue("description"),
+		Icon:        ctx.Request.FormValue("icon"),
 	}
 
 	// Create content type
-	result, err := e.plugin.contentTypeSvc.Create(ctx, req)
+	result, err := e.plugin.contentTypeSvc.Create(reqCtx, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/create?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/create?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+result.Name)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+result.Name, http.StatusSeeOther)
+	return nil, nil
 }
 
-func (e *DashboardExtension) ServeContentTypeDetail(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeContentTypeDetail(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	// Get stats
 	contentTypeID, _ := xid.FromString(contentType.ID)
-	stats, _ := e.plugin.entrySvc.GetStats(ctx, contentTypeID)
+	stats, _ := e.plugin.entrySvc.GetStats(reqCtx, contentTypeID)
 
 	// Get environment ID from context (set by injectContext)
 	var envIDStr string
-	if envID, ok := contexts.GetEnvironmentID(ctx); ok {
+	if envID, ok := contexts.GetEnvironmentID(reqCtx); ok {
 		envIDStr = envID.String()
 	}
 
 	// Get all content types for relation field dropdown
 	allContentTypes := []*core.ContentTypeSummaryDTO{}
-	ctResult, _ := e.plugin.contentTypeSvc.List(ctx, &core.ListContentTypesQuery{PageSize: 100})
+	ctResult, _ := e.plugin.contentTypeSvc.List(reqCtx, &core.ListContentTypesQuery{PageSize: 100})
 	if ctResult != nil {
 		allContentTypes = ctResult.ContentTypes
 	}
 
 	// Get all component schemas for nested field dropdowns
 	allComponentSchemas := []*core.ComponentSchemaSummaryDTO{}
-	csResult, _ := e.plugin.componentSchemaSvc.List(ctx, &core.ListComponentSchemasQuery{PageSize: 100})
+	csResult, _ := e.plugin.componentSchemaSvc.List(reqCtx, &core.ListComponentSchemasQuery{PageSize: 100})
 	if csResult != nil {
 		allComponentSchemas = csResult.Components
 	}
 
 	content := pages.ContentTypeDetailPage(currentApp, basePath, contentType, stats, envIDStr, allContentTypes, allComponentSchemas)
 
-	pageData := components.PageData{
-		Title:      contentType.Name,
-		User:       currentUser,
-		ActivePage: "cms-type-detail",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
 // HandleAddField handles adding a new field to a content type
-func (e *DashboardExtension) HandleAddField(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleAddField(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Parse form values
 	req := &core.CreateFieldRequest{
-		Title:       c.FormValue("name"),
-		Name:        c.FormValue("slug"),
-		Type:        c.FormValue("type"),
-		Description: c.FormValue("description"),
-		Required:    c.FormValue("required") == "true",
-		Unique:      c.FormValue("unique") == "true",
-		Indexed:     c.FormValue("indexed") == "true",
-		Localized:   c.FormValue("localized") == "true",
-		Options:     e.parseFieldOptions(c),
+		Title:       ctx.Request.FormValue("name"),
+		Name:        ctx.Request.FormValue("slug"),
+		Type:        ctx.Request.FormValue("type"),
+		Description: ctx.Request.FormValue("description"),
+		Required:    ctx.Request.FormValue("required") == "true",
+		Unique:      ctx.Request.FormValue("unique") == "true",
+		Indexed:     ctx.Request.FormValue("indexed") == "true",
+		Localized:   ctx.Request.FormValue("localized") == "true",
+		Options:     e.parseFieldOptionsFromRequest(ctx),
 	}
 
 	// Create the field
-	_, err = e.plugin.fieldSvc.Create(ctx, contentTypeID, req)
+	_, err = e.plugin.fieldSvc.Create(reqCtx, contentTypeID, req)
 	if err != nil {
 		// Redirect back with error
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateField handles updating a field in a content type
-func (e *DashboardExtension) HandleUpdateField(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleUpdateField(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	fieldName := c.Param("fieldName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	fieldName := ctx.Param("fieldName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Parse form values for update
 	req := &core.UpdateFieldRequest{
-		Title:       c.FormValue("name"),
-		Description: c.FormValue("description"),
-		Options:     e.parseFieldOptions(c),
+		Title:       ctx.Request.FormValue("name"),
+		Description: ctx.Request.FormValue("description"),
+		Options:     e.parseFieldOptionsFromRequest(ctx),
 	}
 
 	// Parse boolean fields
-	if c.FormValue("required") != "" {
-		v := c.FormValue("required") == "true"
+	if ctx.Request.FormValue("required") != "" {
+		v := ctx.Request.FormValue("required") == "true"
 		req.Required = &v
 	}
-	if c.FormValue("unique") != "" {
-		v := c.FormValue("unique") == "true"
+	if ctx.Request.FormValue("unique") != "" {
+		v := ctx.Request.FormValue("unique") == "true"
 		req.Unique = &v
 	}
-	if c.FormValue("indexed") != "" {
-		v := c.FormValue("indexed") == "true"
+	if ctx.Request.FormValue("indexed") != "" {
+		v := ctx.Request.FormValue("indexed") == "true"
 		req.Indexed = &v
 	}
-	if c.FormValue("localized") != "" {
-		v := c.FormValue("localized") == "true"
+	if ctx.Request.FormValue("localized") != "" {
+		v := ctx.Request.FormValue("localized") == "true"
 		req.Localized = &v
 	}
 
 	// Update the field
-	_, err = e.plugin.fieldSvc.UpdateByName(ctx, contentTypeID, fieldName, req)
+	_, err = e.plugin.fieldSvc.UpdateByName(reqCtx, contentTypeID, fieldName, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleDeleteField handles deleting a field from a content type
-func (e *DashboardExtension) HandleDeleteField(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleDeleteField(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	fieldName := c.Param("fieldName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	fieldName := ctx.Param("fieldName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Delete the field
-	err = e.plugin.fieldSvc.DeleteByName(ctx, contentTypeID, fieldName)
+	err = e.plugin.fieldSvc.DeleteByName(reqCtx, contentTypeID, fieldName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateDisplaySettings handles updating content type display settings
-func (e *DashboardExtension) HandleUpdateDisplaySettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleUpdateDisplaySettings(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Parse form values
-	titleField := c.FormValue("titleField")
-	descriptionField := c.FormValue("descriptionField")
-	previewField := c.FormValue("previewField")
+	titleField := ctx.Request.FormValue("titleField")
+	descriptionField := ctx.Request.FormValue("descriptionField")
+	previewField := ctx.Request.FormValue("previewField")
 
 	// Get current settings
 	currentSettings := contentType.Settings
@@ -1159,46 +2113,44 @@ func (e *DashboardExtension) HandleUpdateDisplaySettings(c forge.Context) error 
 	}
 
 	// Update content type
-	_, err = e.plugin.contentTypeSvc.Update(ctx, contentTypeID, req)
+	_, err = e.plugin.contentTypeSvc.Update(reqCtx, contentTypeID, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()))
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?success=Display+settings+saved")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?success=Display+settings+saved", http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateFeatureSettings handles updating content type feature settings
-func (e *DashboardExtension) HandleUpdateFeatureSettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleUpdateFeatureSettings(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Parse form values (checkboxes are only sent if checked)
-	enableRevisions := c.FormValue("enableRevisions") == "on"
-	enableDrafts := c.FormValue("enableDrafts") == "on"
-	enableSoftDelete := c.FormValue("enableSoftDelete") == "on"
-	enableSearch := c.FormValue("enableSearch") == "on"
-	enableScheduling := c.FormValue("enableScheduling") == "on"
+	enableRevisions := ctx.Request.FormValue("enableRevisions") == "on"
+	enableDrafts := ctx.Request.FormValue("enableDrafts") == "on"
+	enableSoftDelete := ctx.Request.FormValue("enableSoftDelete") == "on"
+	enableSearch := ctx.Request.FormValue("enableSearch") == "on"
+	enableScheduling := ctx.Request.FormValue("enableScheduling") == "on"
 
 	// Get current settings
 	currentSettings := contentType.Settings
@@ -1220,96 +2172,88 @@ func (e *DashboardExtension) HandleUpdateFeatureSettings(c forge.Context) error 
 	}
 
 	// Update content type
-	_, err = e.plugin.contentTypeSvc.Update(ctx, contentTypeID, req)
+	_, err = e.plugin.contentTypeSvc.Update(reqCtx, contentTypeID, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()))
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Redirect back to content type detail
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?success=Feature+settings+saved")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?success=Feature+settings+saved", http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleDeleteContentType handles deleting a content type
-func (e *DashboardExtension) HandleDeleteContentType(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleDeleteContentType(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type to get its ID
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?error=Content+type+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
 
 	// Check if there are entries - if so, don't allow delete
-	entries, _ := e.plugin.entrySvc.List(ctx, contentTypeID, &core.ListEntriesQuery{PageSize: 1})
+	entries, _ := e.plugin.entrySvc.List(reqCtx, contentTypeID, &core.ListEntriesQuery{PageSize: 1})
 	if entries != nil && entries.TotalItems > 0 {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error=Cannot+delete+content+type+with+existing+entries.+Delete+all+entries+first.")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error=Cannot+delete+content+type+with+existing+entries.+Delete+all+entries+first.", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Delete the content type (this also deletes all fields)
-	err = e.plugin.contentTypeSvc.Delete(ctx, contentTypeID)
+	err = e.plugin.contentTypeSvc.Delete(reqCtx, contentTypeID)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Redirect back to content types list
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types?success=Content+type+deleted+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?success=Content+type+deleted+successfully", http.StatusSeeOther)
+	return nil, nil
 }
 
 // =============================================================================
 // Content Entries Handlers
 // =============================================================================
 
-func (e *DashboardExtension) ServeEntriesList(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeEntriesList(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	searchQuery := c.Query("search")
-	statusFilter := c.Query("status")
-	page, _ := strconv.Atoi(c.Query("page"))
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	searchQuery := ctx.Query("search")
+	statusFilter := ctx.Query("status")
+	page, _ := strconv.Atoi(ctx.Query("page"))
 	if page < 1 {
 		page = 1
 	}
 	pageSize := 20
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	// Get entries
 	contentTypeID, _ := xid.FromString(contentType.ID)
-	result, err := e.plugin.entrySvc.List(ctx, contentTypeID, &core.ListEntriesQuery{
+	result, err := e.plugin.entrySvc.List(reqCtx, contentTypeID, &core.ListEntriesQuery{
 		Search:   searchQuery,
 		Status:   statusFilter,
 		Page:     page,
@@ -1320,84 +2264,54 @@ func (e *DashboardExtension) ServeEntriesList(c forge.Context) error {
 	}
 
 	// Get stats
-	stats, _ := e.plugin.entrySvc.GetStats(ctx, contentTypeID)
+	stats, _ := e.plugin.entrySvc.GetStats(reqCtx, contentTypeID)
 
 	content := pages.EntriesListPage(currentApp, basePath, contentType, result.Entries, stats, page, pageSize, result.TotalItems, searchQuery, statusFilter)
 
-	pageData := components.PageData{
-		Title:      contentType.Name + " Entries",
-		User:       currentUser,
-		ActivePage: "cms-entries",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) ServeCreateEntry(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeCreateEntry(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	errMsg := c.Query("error")
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	errMsg := ctx.Query("error")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	// Resolve component references for object/array fields
-	e.resolveComponentReferences(ctx, contentType)
+	e.resolveComponentReferences(ctx.Request.Context(), contentType)
 
 	content := pages.CreateEntryPage(currentApp, basePath, contentType, errMsg)
 
-	pageData := components.PageData{
-		Title:      "Create " + contentType.Name,
-		User:       currentUser,
-		ActivePage: "cms-entry-create",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleCreateEntry(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	contentTypeID, _ := xid.FromString(contentType.ID)
@@ -1405,7 +2319,7 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 	// Parse form data into map
 	data := make(map[string]any)
 	for _, field := range contentType.Fields {
-		value := c.FormValue("data[" + field.Name + "]")
+		value := ctx.Request.FormValue("data[" + field.Name + "]")
 
 		// Handle boolean fields specially (checkboxes send "true" string or nothing)
 		if field.Type == "boolean" {
@@ -1450,7 +2364,7 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 		Status: "draft",
 	}
 
-	result, err := e.plugin.entrySvc.Create(ctx, contentTypeID, req)
+	result, err := e.plugin.entrySvc.Create(reqCtx, contentTypeID, req)
 	if err != nil {
 		// Format validation errors with field details if available
 		errorMsg := err.Error()
@@ -1467,54 +2381,47 @@ func (e *DashboardExtension) HandleCreateEntry(c forge.Context) error {
 			}
 		}
 
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/create?error="+url.QueryEscape(errorMsg))
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/create?error="+url.QueryEscape(errorMsg), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/"+result.ID)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/"+result.ID, http.StatusSeeOther)
+	return nil, nil
 }
 
-func (e *DashboardExtension) ServeEntryDetail(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeEntryDetail(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	entryIDStr := c.Param("entryId")
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	entryIDStr := ctx.Param("entryId")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	// Get entry
 	entryID, err := xid.FromString(entryIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid entry ID")
+		return nil, errs.BadRequest("Invalid entry ID")
 	}
 
-	entry, err := e.plugin.entrySvc.GetByID(ctx, entryID)
+	entry, err := e.plugin.entrySvc.GetByID(reqCtx, entryID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Entry not found")
+		return nil, errs.NotFound("Entry not found")
 	}
 
 	// Get revisions
 	var revisionDTOs []*core.ContentRevisionDTO
 	if e.plugin.revisionSvc != nil {
-		revisions, _ := e.plugin.revisionSvc.List(ctx, entryID, &core.ListRevisionsQuery{PageSize: 5})
+		revisions, _ := e.plugin.revisionSvc.List(reqCtx, entryID, &core.ListRevisionsQuery{PageSize: 5})
 		if revisions != nil && revisions.Items != nil {
 			revisionDTOs = make([]*core.ContentRevisionDTO, len(revisions.Items))
 			for i, rev := range revisions.Items {
@@ -1533,105 +2440,75 @@ func (e *DashboardExtension) ServeEntryDetail(c forge.Context) error {
 
 	content := pages.EntryDetailPage(currentApp, basePath, contentType, entry, revisionDTOs)
 
-	pageData := components.PageData{
-		Title:      "Entry Details",
-		User:       currentUser,
-		ActivePage: "cms-entry-detail",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) ServeEditEntry(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeEditEntry(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	entryIDStr := c.Param("entryId")
-	errMsg := c.Query("error")
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	entryIDStr := ctx.Param("entryId")
+	errMsg := ctx.Query("error")
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	// Resolve component references for object/array fields
-	e.resolveComponentReferences(ctx, contentType)
+	e.resolveComponentReferences(ctx.Request.Context(), contentType)
 
 	// Get entry
 	entryID, err := xid.FromString(entryIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid entry ID")
+		return nil, errs.BadRequest("Invalid entry ID")
 	}
 
-	entry, err := e.plugin.entrySvc.GetByID(ctx, entryID)
+	entry, err := e.plugin.entrySvc.GetByID(reqCtx, entryID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Entry not found")
+		return nil, errs.NotFound("Entry not found")
 	}
 
 	content := pages.EditEntryPage(currentApp, basePath, contentType, entry, errMsg)
 
-	pageData := components.PageData{
-		Title:      "Edit Entry",
-		User:       currentUser,
-		ActivePage: "cms-entry-edit",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleUpdateEntry(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	entryIDStr := c.Param("entryId")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	entryIDStr := ctx.Param("entryId")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get content type
-	contentType, err := e.plugin.contentTypeSvc.GetByName(ctx, typeName)
+	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Content type not found")
+		return nil, errs.NotFound("Content type not found")
 	}
 
 	// Get entry ID
 	entryID, err := xid.FromString(entryIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid entry ID")
+		return nil, errs.BadRequest("Invalid entry ID")
 	}
 
 	// Parse form data into map
 	data := make(map[string]any)
 	for _, field := range contentType.Fields {
-		value := c.FormValue("data[" + field.Name + "]")
+		value := ctx.Request.FormValue("data[" + field.Name + "]")
 
 		// Handle boolean fields specially (checkboxes send "true" string or nothing)
 		if field.Type == "boolean" {
@@ -1671,13 +2548,13 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 	}
 
 	// Update entry
-	status := c.FormValue("status")
+	status := ctx.Request.FormValue("status")
 	req := &core.UpdateEntryRequest{
 		Data:   data,
 		Status: status,
 	}
 
-	_, err = e.plugin.entrySvc.Update(ctx, entryID, req)
+	_, err = e.plugin.entrySvc.Update(reqCtx, entryID, req)
 	if err != nil {
 		// Format validation errors with field details if available
 		errorMsg := err.Error()
@@ -1694,77 +2571,68 @@ func (e *DashboardExtension) HandleUpdateEntry(c forge.Context) error {
 			}
 		}
 
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr+"/edit?error="+url.QueryEscape(errorMsg))
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr+"/edit?error="+url.QueryEscape(errorMsg), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleDeleteEntry handles deleting a content entry
-func (e *DashboardExtension) HandleDeleteEntry(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleDeleteEntry(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	typeName := c.Param("typeName")
-	entryIDStr := c.Param("entryId")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	typeName := ctx.Param("typeName")
+	entryIDStr := ctx.Param("entryId")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get entry ID
 	entryID, err := xid.FromString(entryIDStr)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries?error=Invalid+entry+ID")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries?error=Invalid+entry+ID", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	// Delete the entry
-	err = e.plugin.entrySvc.Delete(ctx, entryID)
+	err = e.plugin.entrySvc.Delete(reqCtx, entryID)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries?error="+url.QueryEscape(err.Error()))
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/types/"+typeName+"/entries?success=Entry+deleted+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries?success=Entry+deleted+successfully", http.StatusSeeOther)
+	return nil, nil
 }
 
 // =============================================================================
 // Component Schema Handlers
 // =============================================================================
 
-func (e *DashboardExtension) ServeComponentSchemasList(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeComponentSchemasList(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
 
-	searchQuery := c.Query("search")
-	page, _ := strconv.Atoi(c.Query("page"))
+	searchQuery := ctx.Query("search")
+	page, _ := strconv.Atoi(ctx.Query("page"))
 	if page < 1 {
 		page = 1
 	}
 	pageSize := 20
 
 	// Get component schemas
-	result, err := e.plugin.componentSchemaSvc.List(ctx, &core.ListComponentSchemasQuery{
+	result, err := e.plugin.componentSchemaSvc.List(reqCtx, &core.ListComponentSchemasQuery{
 		Search:   searchQuery,
 		Page:     page,
 		PageSize: pageSize,
@@ -1775,212 +2643,165 @@ func (e *DashboardExtension) ServeComponentSchemasList(c forge.Context) error {
 
 	content := pages.ComponentSchemasPage(currentApp, basePath, result.Components, page, pageSize, result.TotalItems, searchQuery)
 
-	pageData := components.PageData{
-		Title:      "Component Schemas",
-		User:       currentUser,
-		ActivePage: "cms-components",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) ServeCreateComponentSchema(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeCreateComponentSchema(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	errMsg := c.Query("error")
+	basePath := e.getBasePath()
+	errMsg := ctx.Query("error")
 
 	content := pages.CreateComponentSchemaPage(currentApp, basePath, errMsg)
 
-	pageData := components.PageData{
-		Title:      "Create Component Schema",
-		User:       currentUser,
-		ActivePage: "cms-components",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) HandleCreateComponentSchema(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleCreateComponentSchema(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Parse nested fields from JSON
 	var fields []core.NestedFieldDefDTO
-	fieldsJSON := c.FormValue("fields")
+	fieldsJSON := ctx.Request.FormValue("fields")
 	if fieldsJSON != "" {
 		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
-			return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/create?error=Invalid+fields+format")
+			http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/create?error=Invalid+fields+format", http.StatusSeeOther)
+			return nil, nil
 		}
 	}
 
 	// Create request
 	req := &core.CreateComponentSchemaRequest{
-		Title:       c.FormValue("name"),
-		Name:        c.FormValue("slug"),
-		Description: c.FormValue("description"),
-		Icon:        c.FormValue("icon"),
+		Title:       ctx.Request.FormValue("name"),
+		Name:        ctx.Request.FormValue("slug"),
+		Description: ctx.Request.FormValue("description"),
+		Icon:        ctx.Request.FormValue("icon"),
 		Fields:      fields,
 	}
 
 	// Create component schema
-	result, err := e.plugin.componentSchemaSvc.Create(ctx, req)
+	result, err := e.plugin.componentSchemaSvc.Create(reqCtx, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/create?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/create?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+result.Name)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+result.Name, http.StatusSeeOther)
+	return nil, nil
 }
 
-func (e *DashboardExtension) ServeComponentSchemaDetail(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeComponentSchemaDetail(ctx *router.PageContext) (g.Node, error) {
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	componentSlug := c.Param("componentSlug")
-	errMsg := c.Query("error")
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	componentSlug := ctx.Param("componentSlug")
+	errMsg := ctx.Query("error")
 
 	// Get component schema
-	component, err := e.plugin.componentSchemaSvc.GetByName(ctx, componentSlug)
+	component, err := e.plugin.componentSchemaSvc.GetByName(reqCtx, componentSlug)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Component schema not found")
+		return nil, errs.NotFound("Component schema not found")
 	}
 
 	content := pages.EditComponentSchemaPage(currentApp, basePath, component, errMsg)
 
-	pageData := components.PageData{
-		Title:      "Edit " + component.Name,
-		User:       currentUser,
-		ActivePage: "cms-components",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	return content, nil
 }
 
-func (e *DashboardExtension) HandleUpdateComponentSchema(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleUpdateComponentSchema(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	componentSlug := c.Param("componentSlug")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	componentSlug := ctx.Param("componentSlug")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get existing component to get its ID
-	component, err := e.plugin.componentSchemaSvc.GetByName(ctx, componentSlug)
+	component, err := e.plugin.componentSchemaSvc.GetByName(reqCtx, componentSlug)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?error=Component+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components?error=Component+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	componentID, _ := xid.FromString(component.ID)
 
 	// Parse nested fields from JSON
 	var fields []core.NestedFieldDefDTO
-	fieldsJSON := c.FormValue("fields")
+	fieldsJSON := ctx.Request.FormValue("fields")
 	if fieldsJSON != "" {
 		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
-			return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?error=Invalid+fields+format")
+			http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?error=Invalid+fields+format", http.StatusSeeOther)
+			return nil, nil
 		}
 	}
 
 	// Create update request
 	req := &core.UpdateComponentSchemaRequest{
-		Title:       c.FormValue("name"),
-		Description: c.FormValue("description"),
-		Icon:        c.FormValue("icon"),
+		Title:       ctx.Request.FormValue("name"),
+		Description: ctx.Request.FormValue("description"),
+		Icon:        ctx.Request.FormValue("icon"),
 		Fields:      fields,
 	}
 
 	// Update component schema
-	_, err = e.plugin.componentSchemaSvc.Update(ctx, componentID, req)
+	_, err = e.plugin.componentSchemaSvc.Update(reqCtx, componentID, req)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?success=Component+updated")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?success=Component+updated", http.StatusSeeOther)
+	return nil, nil
 }
 
-func (e *DashboardExtension) HandleDeleteComponentSchema(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) HandleDeleteComponentSchema(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := e.injectContext(c)
-	basePath := handler.GetBasePath()
-	componentSlug := c.Param("componentSlug")
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	reqCtx := e.injectContext(ctx)
+	basePath := e.getBasePath()
+	componentSlug := ctx.Param("componentSlug")
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Get existing component to get its ID
-	component, err := e.plugin.componentSchemaSvc.GetByName(ctx, componentSlug)
+	component, err := e.plugin.componentSchemaSvc.GetByName(reqCtx, componentSlug)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?error=Component+not+found")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components?error=Component+not+found", http.StatusSeeOther)
+		return nil, nil
 	}
 
 	componentID, _ := xid.FromString(component.ID)
 
 	// Delete component schema
-	err = e.plugin.componentSchemaSvc.Delete(ctx, componentID)
+	err = e.plugin.componentSchemaSvc.Delete(reqCtx, componentID)
 	if err != nil {
-		return c.Redirect(http.StatusSeeOther, appBase+"/cms/components/"+componentSlug+"?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusSeeOther, appBase+"/cms/components?success=Component+deleted")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components?success=Component+deleted", http.StatusSeeOther)
+	return nil, nil
 }
 
 // =============================================================================

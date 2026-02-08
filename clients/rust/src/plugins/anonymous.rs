@@ -47,10 +47,10 @@ impl AnonymousPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct LinkResponse {
-        #[serde(rename = "user")]
-        pub user: ,
         #[serde(rename = "message")]
         pub message: String,
+        #[serde(rename = "user")]
+        pub user: ,
     }
 
     /// Link upgrades an anonymous session to a real account

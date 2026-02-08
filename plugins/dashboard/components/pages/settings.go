@@ -231,7 +231,7 @@ func generalTabContent(data SettingsPageData) g.Node {
 			Div(Class("p-6"),
 				FormEl(
 					Method("POST"),
-					Action(data.BasePath+"/dashboard/settings/general"),
+					Action(data.BasePath+"/settings/general"),
 					Class("space-y-6"),
 
 					Input(Type("hidden"), Name("csrf_token"), Value(data.CSRFToken)),

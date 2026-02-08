@@ -143,7 +143,7 @@ func (e *OrganizationUIExtension) renderSyncStatusWidget(ctx ui.OrgExtensionCont
 
 	statusIcon := lucide.Check(Class("size-5 text-green-500"))
 	statusText := "All systems operational"
-	
+
 	if !stats.IsHealthy {
 		statusIcon = lucide.Octagon(Class("size-5 text-yellow-500"))
 		statusText = stats.Message
@@ -212,7 +212,7 @@ func (e *OrganizationUIExtension) renderProvisioningTab(ctx ui.OrgExtensionConte
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 		// Header
 		Div(
 			Class("bg-white dark:bg-slate-800 rounded-lg shadow p-6"),
@@ -248,7 +248,7 @@ func (e *OrganizationUIExtension) renderProvidersTab(ctx ui.OrgExtensionContext)
 	providers := make([]SCIMProviderInfo, 0)
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 		// Header with action
 		Div(
 			Class("flex items-center justify-between bg-white dark:bg-slate-800 rounded-lg shadow p-6"),
@@ -286,7 +286,7 @@ func (e *OrganizationUIExtension) renderMonitoringTab(ctx ui.OrgExtensionContext
 	stats, _ := e.plugin.service.GetSyncStatsForOrg(ctx.Request.Context(), ctx.OrgID)
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 		// Stats Grid
 		Div(
 			Class("grid grid-cols-1 md:grid-cols-3 gap-4"),

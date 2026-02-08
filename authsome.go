@@ -37,6 +37,7 @@ import (
 	memstore "github.com/xraph/authsome/storage"
 	"github.com/xraph/forge"
 	"github.com/xraph/forge/extensions/database"
+	"github.com/xraph/vessel"
 )
 
 // ServiceImpl name constants for DI container
@@ -144,7 +145,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		return errs.InternalServerError("failed to resolve database", err)
 	}
 
-	a.logger.Info("resolved database", forge.F("database", a.db))
+	a.logger.Debug("resolved database", forge.F("database", a.db))
 
 	// Cast database
 	db, ok := a.db.(*bun.DB)
@@ -295,6 +296,18 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		a.authStrategyRegistry,  // Pass strategy registry for pluggable auth
 	)
 
+	// Log built-in strategies (plugins will add more during initialization)
+	if a.authStrategyRegistry != nil {
+		strategies := a.authStrategyRegistry.List()
+		a.logger.Info("🔐 Built-in authentication strategies registered",
+			forge.F("count", len(strategies)))
+		for _, s := range strategies {
+			a.logger.Info("  ➜ Strategy",
+				forge.F("id", s.ID()),
+				forge.F("priority", s.Priority()))
+		}
+	}
+
 	// App service (platform tenant management)
 	a.appService = app.NewService(
 		a.repo.App(),
@@ -408,7 +421,7 @@ func (a *Auth) Initialize(ctx context.Context) error {
 			if rolePlugin, ok := p.(interface {
 				RegisterRoles(registry interface{}) error
 			}); ok {
-				a.logger.Info("plugin registering roles", forge.F("plugin", p.ID()))
+				a.logger.Debug("plugin registering roles", forge.F("plugin", p.ID()))
 				if err := rolePlugin.RegisterRoles(a.serviceRegistry.RoleRegistry()); err != nil {
 					return errs.InternalServerError("plugin register roles failed", err)
 				}
@@ -441,6 +454,18 @@ func (a *Auth) Initialize(ctx context.Context) error {
 		if a.serviceRegistry.AuthService() != nil {
 			a.authService = a.serviceRegistry.AuthService()
 		}
+
+		// Log final authentication strategies (after plugins have registered theirs)
+		if a.authStrategyRegistry != nil {
+			strategies := a.authStrategyRegistry.List()
+			a.logger.Info("🔐 Final authentication strategies (after plugins)",
+				forge.F("count", len(strategies)))
+			for _, s := range strategies {
+				a.logger.Info("  ➜ Strategy",
+					forge.F("id", s.ID()),
+					forge.F("priority", s.Priority()))
+			}
+		}
 	}
 
 	// Bootstrap roles and permissions to platform organization
@@ -470,7 +495,7 @@ func (a *Auth) ensurePlatformApp(ctx context.Context) (*schema.App, error) {
 
 	if err == nil {
 		// Platform org exists
-		a.logger.Info("platform app found", forge.F("app", platformApp.Name), forge.F("id", platformApp.ID.String()))
+		a.logger.Debug("platform app found", forge.F("app", platformApp.Name), forge.F("id", platformApp.ID.String()))
 		return &platformApp, nil
 	}
 
@@ -507,12 +532,12 @@ func (a *Auth) bootstrapRoles(ctx context.Context, db *bun.DB, platformOrgID xid
 		return errs.InternalServerErrorWithMessage("role registry not initialized")
 	}
 
-	a.logger.Info("starting role bootstrap...")
+	a.logger.Debug("starting role bootstrap...")
 	if err := roleRegistry.Bootstrap(ctx, db, a.rbacService, platformOrgID); err != nil {
 		return errs.InternalServerError("role bootstrap failed", err)
 	}
 
-	a.logger.Info("role bootstrap complete")
+	a.logger.Debug("role bootstrap complete")
 	return nil
 }
 
@@ -569,31 +594,31 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 	routes.Register(excludeableGroupp, basePath, h, a.AuthMiddleware())
 	routes.RegisterAudit(excludeableGroupp, basePath, audH, a.AuthMiddleware())
 
-	// Check if multitenancy plugin is enabled
-	hasMultitenancyPlugin := false
+	// Check if multiapp plugin is enabled
+	hasMultiappPlugin := false
 	if a.pluginRegistry != nil {
 		for _, p := range a.pluginRegistry.List() {
-			if p.ID() == "multitenancy" {
-				hasMultitenancyPlugin = true
+			if p.ID() == "multiapp" {
+				hasMultiappPlugin = true
 				break
 			}
 		}
 	}
 
-	// Only register built-in app routes if multitenancy plugin is NOT enabled
+	// Only register built-in app routes if multiapp plugin is NOT enabled
 	// This prevents route duplication and allows the plugin to fully control app routes
-	if !hasMultitenancyPlugin {
+	if !hasMultiappPlugin {
 		// Mount app routes under basePath (not hardcoded) with authentication middleware
 		routes.RegisterApp(excludeableGroupp, basePath+"/apps", appH, a.AuthMiddleware())
-		a.logger.Info("registered built-in app routes (multitenancy plugin not detected)")
+		a.logger.Debug("registered built-in app routes (multiapp plugin not detected)")
 	} else {
-		a.logger.Info("skipping built-in app routes (multitenancy plugin detected)")
+		a.logger.Debug("skipping built-in app routes (multiapp plugin detected)")
 
-		// Register RBAC-related routes that the multitenancy plugin doesn't handle
-		// These are still needed even with the multitenancy plugin
+		// Register RBAC-related routes that the multiapp plugin doesn't handle
+		// These are still needed even with the multiapp plugin
 		rbacGroup := excludeableGroupp.Group(basePath + "/apps")
 		routes.RegisterAppRBAC(rbacGroup, appH)
-		a.logger.Info("registered app RBAC routes")
+		a.logger.Debug("registered app RBAC routes")
 	}
 
 	authGroup := excludeableGroupp.Group(basePath)
@@ -604,7 +629,7 @@ func (a *Auth) Mount(router forge.Router, basePath string) error {
 		// Pass a group with the basePath so plugins are scoped under the auth mount point
 		pluginGroup := excludeableGroupp.Group(basePath)
 		for _, p := range a.pluginRegistry.List() {
-			a.logger.Info("registering routes for plugin", forge.F("plugin", p.ID()))
+			a.logger.Debug("registering routes for plugin", forge.F("plugin", p.ID()))
 			if err := p.RegisterRoutes(pluginGroup); err != nil {
 				a.logger.Error("error registering routes for plugin", forge.F("plugin", p.ID()), forge.F("error", err))
 			}
@@ -627,11 +652,22 @@ func (a *Auth) RegisterAuthStrategy(strategy middleware.AuthStrategy) error {
 		a.authStrategyRegistry = middleware.NewAuthStrategyRegistry()
 	}
 
-	a.logger.Info("registering authentication strategy",
+	a.logger.Info("📝 Registering authentication strategy",
 		forge.F("strategy_id", strategy.ID()),
 		forge.F("priority", strategy.Priority()))
 
-	return a.authStrategyRegistry.Register(strategy)
+	err := a.authStrategyRegistry.Register(strategy)
+	if err != nil {
+		a.logger.Error("❌ Failed to register authentication strategy",
+			forge.F("strategy_id", strategy.ID()),
+			forge.F("error", err.Error()))
+		return err
+	}
+
+	a.logger.Info("✅ Authentication strategy registered successfully",
+		forge.F("strategy_id", strategy.ID()))
+
+	return nil
 }
 
 // GetConfig returns the auth config
@@ -772,9 +808,8 @@ func (a *Auth) IsPluginEnabled(pluginID string) bool {
 
 // AuthMiddleware returns the optional authentication middleware
 // This middleware populates the auth context with API key and/or session data
-// but does not block unauthenticated requests
 func (a *Auth) AuthMiddleware() forge.Middleware {
-	return a.authMiddleware.Authenticate
+	return a.authMiddleware.HandleAuthentication(false)
 }
 
 // RequireAuth returns middleware that requires authentication
@@ -786,6 +821,11 @@ func (a *Auth) RequireAuth() forge.Middleware {
 // Authenticate returns the authentication middleware
 func (a *Auth) Authenticate() forge.Middleware {
 	return a.authMiddleware.Authenticate
+}
+
+// AuthenticateOptional returns the authentication middleware
+func (a *Auth) AuthenticateOptional() forge.Middleware {
+	return a.authMiddleware.HandleAuthentication(true)
 }
 
 // RequireUser returns middleware that requires user authentication (session)
@@ -865,6 +905,7 @@ func (a *Auth) RequireAllPermissions(permissions ...string) forge.Middleware {
 
 // registerServicesIntoContainer registers all AuthSome services into the Forge DI container
 // This enables dependency injection for handlers, plugins, and middleware
+// Uses vessel.ProvideConstructor for type-safe, constructor-based dependency injection
 func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
 	container := a.forgeApp.Container()
 	if container == nil {
@@ -872,112 +913,126 @@ func (a *Auth) registerServicesIntoContainer(db *bun.DB) error {
 		return nil
 	}
 
-	// Register database as singleton
-	if err := container.Register(ServiceDatabase, func(c forge.Container) (interface{}, error) {
+	// Register database with type-based injection + string alias for backward compatibility
+	if err := forge.ProvideConstructor(container, func() (*bun.DB, error) {
 		return db, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceDatabase)); err != nil {
 		return errs.InternalServerError("failed to register database", err)
 	}
 
-	// Register core services as singletons
-	if err := container.Register(ServiceUser, func(c forge.Container) (interface{}, error) {
+	// Register core services with type-based injection + string aliases for backward compatibility
+	if err := forge.ProvideConstructor(container, func() (user.ServiceInterface, error) {
 		return a.userService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceUser)); err != nil {
 		return errs.InternalServerError("failed to register user service", err)
 	}
 
-	if err := container.Register(ServiceSession, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (session.ServiceInterface, error) {
 		return a.sessionService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceSession)); err != nil {
 		return errs.InternalServerError("failed to register session service", err)
 	}
 
-	if err := container.Register(ServiceAuth, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (auth.ServiceInterface, error) {
 		return a.authService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceAuth)); err != nil {
 		return errs.InternalServerError("failed to register auth service", err)
 	}
 
-	if err := container.Register(ServiceApp, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*app.ServiceImpl, error) {
 		return a.appService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceApp)); err != nil {
 		return errs.InternalServerError("failed to register app service", err)
 	}
 
-	if err := container.Register(ServiceOrganization, func(c forge.Container) (interface{}, error) {
-		return a.orgService, nil
-	}); err != nil {
-		return errs.InternalServerError("failed to register organization service", err)
+	// Only register global organization service if the organization plugin is not being used
+	// The plugin will register its own properly-configured service
+	hasOrgPlugin := false
+	if a.pluginRegistry != nil {
+		for _, plugin := range a.pluginRegistry.List() {
+			if plugin.ID() == "organization" {
+				hasOrgPlugin = true
+				break
+			}
+		}
 	}
 
-	if err := container.Register(ServiceRateLimit, func(c forge.Container) (interface{}, error) {
+	if !hasOrgPlugin {
+		if err := forge.ProvideConstructor(container, func() (*organization.Service, error) {
+			return a.orgService, nil
+		}, vessel.WithAliases(ServiceOrganization)); err != nil {
+			return errs.InternalServerError("failed to register organization service", err)
+		}
+	}
+
+	if err := forge.ProvideConstructor(container, func() (*rl.Service, error) {
 		return a.rateLimitService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceRateLimit)); err != nil {
 		return errs.InternalServerError("failed to register rate limit service", err)
 	}
 
-	if err := container.Register(ServiceDevice, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*dev.Service, error) {
 		return a.deviceService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceDevice)); err != nil {
 		return errs.InternalServerError("failed to register device service", err)
 	}
 
-	if err := container.Register(ServiceSecurity, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*sec.Service, error) {
 		return a.securityService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceSecurity)); err != nil {
 		return errs.InternalServerError("failed to register security service", err)
 	}
 
-	if err := container.Register(ServiceAudit, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*aud.Service, error) {
 		return a.auditService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceAudit)); err != nil {
 		return errs.InternalServerError("failed to register audit service", err)
 	}
 
-	if err := container.Register(ServiceRBAC, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*rbac.Service, error) {
 		return a.rbacService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceRBAC)); err != nil {
 		return errs.InternalServerError("failed to register RBAC service", err)
 	}
 
-	if err := container.Register(ServiceWebhook, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*webhook.Service, error) {
 		return a.webhookService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceWebhook)); err != nil {
 		return errs.InternalServerError("failed to register webhook service", err)
 	}
 
-	if err := container.Register(ServiceNotification, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*notification.Service, error) {
 		return a.notificationService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceNotification)); err != nil {
 		return errs.InternalServerError("failed to register notification service", err)
 	}
 
-	if err := container.Register(ServiceJWT, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*jwt.Service, error) {
 		return a.jwtService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceJWT)); err != nil {
 		return errs.InternalServerError("failed to register JWT service", err)
 	}
 
-	if err := container.Register(ServiceAPIKey, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*apikey.Service, error) {
 		return a.apikeyService, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceAPIKey)); err != nil {
 		return errs.InternalServerError("failed to register API key service", err)
 	}
 
 	// Register registries
-	if err := container.Register(ServiceHookRegistry, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (*hooks.HookRegistry, error) {
 		return a.hookRegistry, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServiceHookRegistry)); err != nil {
 		return errs.InternalServerError("failed to register hook registry", err)
 	}
 
-	if err := container.Register(ServicePluginRegistry, func(c forge.Container) (interface{}, error) {
+	if err := forge.ProvideConstructor(container, func() (plugins.PluginRegistry, error) {
 		return a.pluginRegistry, nil
-	}); err != nil {
+	}, vessel.WithAliases(ServicePluginRegistry)); err != nil {
 		return errs.InternalServerError("failed to register plugin registry", err)
 	}
 
-	a.logger.Info("successfully registered all services into Forge DI container")
+	a.logger.Debug("successfully registered all services into Forge DI container with type-based injection")
 	return nil
 }
 
@@ -989,12 +1044,13 @@ func (a *Auth) resolveDatabase() error {
 		return nil
 	}
 
+	dbName := a.config.DatabaseManagerName
+	if dbName == "" {
+		dbName = "default"
+	}
+
 	// Try DatabaseManager if configured
 	if a.config.DatabaseManager != nil {
-		dbName := a.config.DatabaseManagerName
-		if dbName == "" {
-			dbName = "default"
-		}
 
 		db, err := a.config.DatabaseManager.SQL(dbName)
 		if err != nil {
@@ -1013,7 +1069,7 @@ func (a *Auth) resolveDatabase() error {
 		}
 
 		// Try to resolve from Forge database extension
-		dbInterface, err := database.GetDatabase(container)
+		dbInterface, err := database.GetDatabase(container, dbName)
 		if err != nil {
 			return fmt.Errorf("failed to resolve database from Forge DI: %w", err)
 		}

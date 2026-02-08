@@ -2,59 +2,50 @@ package subscription
 
 import (
 	"fmt"
-	"net/http"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
-	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // ServePlanDetailPage renders the plan detail page
-func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServePlanDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, fmt.Errorf("invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	planID, err := xid.FromString(c.Param("id"))
+	planID, err := xid.FromString(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid plan ID")
+		return nil, fmt.Errorf("invalid plan ID")
 	}
 
-	plan, err := e.plugin.planSvc.GetByID(ctx, planID)
+	plan, err := e.plugin.planSvc.GetByID(reqCtx, planID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Plan not found")
+		return nil, fmt.Errorf("plan not found")
 	}
 
 	// Get subscription count for this plan
-	_, subCount, _ := e.plugin.subscriptionSvc.List(ctx, nil, nil, &planID, "", 1, 1)
+	_, subCount, _ := e.plugin.subscriptionSvc.List(reqCtx, nil, nil, &planID, "", 1, 1)
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button and header
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Plans"),
@@ -78,7 +69,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 				g.If(plan.ProviderPlanID == "" || plan.ProviderPriceID == "",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -92,7 +83,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 				g.If(plan.ProviderPlanID != "" && plan.ProviderPriceID != "",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -106,7 +97,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 				g.If(plan.ProviderPlanID != "",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync-from-provider"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync-from-provider"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -117,7 +108,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 					),
 				),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/edit"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/edit"),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"),
 					lucide.Pencil(Class("size-4")),
 					g.Text("Edit"),
@@ -125,7 +116,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 				g.If(plan.IsActive,
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/archive"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/archive"),
 						Class("inline"),
 						g.Attr("onsubmit", "return confirm('Are you sure you want to archive this plan?')"),
 						Button(
@@ -139,7 +130,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 				// Delete button
 				Form(
 					Method("POST"),
-					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/delete"),
+					Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/delete"),
 					Class("inline"),
 					g.Attr("onsubmit", "return confirm('Are you sure you want to permanently delete this plan? This action cannot be undone.')"),
 					Button(
@@ -171,7 +162,7 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 					Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
 					H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Features")),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features"),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features"),
 						Class("inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"),
 						lucide.Settings(Class("size-4")),
 						g.Text("Manage"),
@@ -225,61 +216,46 @@ func (e *DashboardExtension) ServePlanDetailPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Plan: " + plan.Name,
-		User:       currentUser,
-		ActivePage: "plans",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeSubscriptionDetailPage renders the subscription detail page
-func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	subID, err := xid.FromString(c.Param("id"))
+	subID, err := xid.FromString(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid subscription ID")
+		return nil, errs.BadRequest("Invalid subscription ID")
 	}
 
-	sub, err := e.plugin.subscriptionSvc.GetByID(ctx, subID)
+	sub, err := e.plugin.subscriptionSvc.GetByID(reqCtx, subID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Subscription not found")
+		return nil, fmt.Errorf("subscription not found")
 	}
 
 	// Get usage data
-	usageData, _ := e.plugin.usageSvc.GetCurrentPeriodUsage(ctx, subID)
+	usageData, _ := e.plugin.usageSvc.GetCurrentPeriodUsage(reqCtx, subID)
 
 	// Get recent invoices - fetch directly from provider on-demand
 	var invoices []*core.Invoice
 	if sub.ProviderSubID != "" && e.plugin.provider != nil {
-		providerInvoices, err := e.plugin.provider.ListSubscriptionInvoices(ctx, sub.ProviderSubID, 5)
+		providerInvoices, err := e.plugin.provider.ListSubscriptionInvoices(reqCtx, sub.ProviderSubID, 5)
 		if err == nil {
 			invoices = convertProviderInvoicesToCore(providerInvoices)
 		}
 	}
 	// Fallback to local if provider fetch fails or no provider ID
 	if len(invoices) == 0 {
-		invoices, _, _ = e.plugin.invoiceSvc.List(ctx, nil, &subID, "", 1, 5)
+		invoices, _, _ = e.plugin.invoiceSvc.List(reqCtx, nil, &subID, "", 1, 5)
 	}
 
 	planName := "-"
@@ -288,11 +264,11 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 	}
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/subscriptions"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Subscriptions"),
@@ -351,7 +327,7 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 				g.If(sub.Status == "active" || sub.Status == "trialing",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/subscriptions/"+sub.ID.String()+"/cancel"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions/"+sub.ID.String()+"/cancel"),
 						Class("inline"),
 						g.Attr("onsubmit", "return confirm('Are you sure you want to cancel this subscription?')"),
 						Button(
@@ -474,7 +450,7 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 				Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Recent Invoices")),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices?subscription="+sub.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/invoices?subscription="+sub.ID.String()),
 					Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 					g.Text("View all →"),
 				),
@@ -491,53 +467,38 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(c forge.Context) error 
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Subscription Details",
-		User:       currentUser,
-		ActivePage: "subscriptions",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeAddOnDetailPage renders the add-on detail page
-func (e *DashboardExtension) ServeAddOnDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeAddOnDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	addonID, err := xid.FromString(c.Param("id"))
+	addonID, err := xid.FromString(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid add-on ID")
+		return nil, errs.BadRequest("Invalid add-on ID")
 	}
 
-	addon, err := e.plugin.addOnSvc.GetByID(ctx, addonID)
+	addon, err := e.plugin.addOnSvc.GetByID(reqCtx, addonID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Add-on not found")
+		return nil, fmt.Errorf("add-on not found")
 	}
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Add-ons"),
@@ -556,7 +517,7 @@ func (e *DashboardExtension) ServeAddOnDetailPage(c forge.Context) error {
 				P(Class("mt-2 text-slate-600 dark:text-gray-400"), g.Text(addon.Description)),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons/"+addon.ID.String()+"/edit"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons/"+addon.ID.String()+"/edit"),
 				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"),
 				lucide.Pencil(Class("size-4")),
 				g.Text("Edit"),
@@ -590,53 +551,38 @@ func (e *DashboardExtension) ServeAddOnDetailPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Add-on: " + addon.Name,
-		User:       currentUser,
-		ActivePage: "addons",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeInvoiceDetailPage renders the invoice detail page
-func (e *DashboardExtension) ServeInvoiceDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeInvoiceDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	invoiceID, err := xid.FromString(c.Param("id"))
+	invoiceID, err := xid.FromString(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid invoice ID")
+		return nil, errs.BadRequest("Invalid invoice ID")
 	}
 
-	invoice, err := e.plugin.invoiceSvc.GetByID(ctx, invoiceID)
+	invoice, err := e.plugin.invoiceSvc.GetByID(reqCtx, invoiceID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Invoice not found")
+		return nil, fmt.Errorf("invoice not found")
 	}
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/invoices"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Invoices"),
@@ -675,7 +621,7 @@ func (e *DashboardExtension) ServeInvoiceDetailPage(c forge.Context) error {
 				g.If(invoice.Status != "paid" && invoice.Status != "void",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices/"+invoice.ID.String()+"/mark-paid"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/invoices/"+invoice.ID.String()+"/mark-paid"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -761,15 +707,8 @@ func (e *DashboardExtension) ServeInvoiceDetailPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Invoice: " + invoice.Number,
-		User:       currentUser,
-		ActivePage: "invoices",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // Helper components for detail pages
@@ -936,7 +875,7 @@ func (e *DashboardExtension) renderInvoicesList(invoices []*core.Invoice, curren
 				e.invoiceStatusBadge(inv),
 				Span(Class("font-medium text-slate-900 dark:text-white"), g.Text(formatMoney(inv.Total, inv.Currency))),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices/"+inv.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/invoices/"+inv.ID.String()),
 					Class("text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm"),
 					g.Text("View"),
 				),

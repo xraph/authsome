@@ -128,6 +128,14 @@ func InvalidRole(role string) *errs.AuthsomeError {
 		WithContext("valid_roles", ValidRoles())
 }
 
+// InvalidRoleWithHint creates an invalid role error with a hint message
+func InvalidRoleWithHint(role, hint string) *errs.AuthsomeError {
+	return errs.New(CodeInvalidRole, "Invalid organization member role", http.StatusBadRequest).
+		WithContext("role", role).
+		WithContext("valid_roles", ValidRoles()).
+		WithContext("hint", hint)
+}
+
 func InvalidStatus(status string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidStatus, "Invalid organization member status", http.StatusBadRequest).
 		WithContext("status", status).

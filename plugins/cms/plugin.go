@@ -6,6 +6,7 @@ package cms
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/forge"
@@ -47,8 +48,9 @@ type Plugin struct {
 	revisionSvc        *service.RevisionService
 	componentSchemaSvc *service.ComponentSchemaService
 
-	// Dashboard extension
-	dashboardExt *DashboardExtension
+	// Dashboard extension (lazy initialized)
+	dashboardExt     *DashboardExtension
+	dashboardExtOnce sync.Once
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -206,7 +208,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	forgeApp := auth.GetForgeApp()
 	p.logger = forgeApp.Logger().With(forge.F("plugin", PluginID))
 
-	p.logger.Info("initializing CMS plugin")
+	p.logger.Debug("initializing CMS plugin")
 
 	// Load configuration
 	configManager := forgeApp.Config()
@@ -273,8 +275,8 @@ func (p *Plugin) Init(auth core.Authsome) error {
 		},
 	)
 
-	// Initialize dashboard extension
-	p.dashboardExt = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
+	// This ensures all plugin dependencies are ready before extension creation
 
 	// Register services in DI container if available
 	if container := forgeApp.Container(); container != nil {
@@ -427,7 +429,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// ==========================================================================
 	// Content Entry Routes
 	// ==========================================================================
-	entries := cms.Group("/:type")
+	entries := cms.Group("/:typeSlug")
 
 	// List entries
 	entries.GET("", contentEntryHandler.ListEntries,
@@ -486,7 +488,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	// Individual entry routes
-	entry := entries.Group("/:id")
+	entry := entries.Group("/:entryId")
 
 	entry.GET("", contentEntryHandler.GetEntry,
 		forge.WithName("cms.entries.get"),
@@ -664,7 +666,11 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 }
 
 // DashboardExtension returns the dashboard extension for the plugin
+// Uses lazy initialization to ensure plugin is fully initialized before creating extension
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtOnce.Do(func() {
+		p.dashboardExt = NewDashboardExtension(p)
+	})
 	return p.dashboardExt
 }
 

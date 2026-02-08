@@ -3,40 +3,31 @@ package subscription
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
-	"github.com/xraph/authsome/plugins/dashboard/components"
-	"github.com/xraph/authsome/plugins/subscription/core"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/internal/errs"
+	core "github.com/xraph/authsome/plugins/subscription/core"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // ServeBillingOverviewPage renders the billing overview dashboard
-func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeBillingOverviewPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Get summary data
-	plans, planCount, _ := e.plugin.planSvc.List(ctx, currentApp.ID, false, false, 1, 100)
-	subs, subCount, _ := e.plugin.subscriptionSvc.List(ctx, nil, nil, nil, "", 1, 100)
+	plans, planCount, _ := e.plugin.planSvc.List(reqCtx, currentApp.ID, false, false, 1, 100)
+	subs, subCount, _ := e.plugin.subscriptionSvc.List(reqCtx, nil, nil, nil, "", 1, 100)
 
 	// Count by status
 	var activeCount, trialingCount, canceledCount int
@@ -64,7 +55,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 	arr := mrr * 12
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header
 		Div(
@@ -104,7 +95,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 				Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Recent Subscriptions")),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/subscriptions"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions"),
 					Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 					g.Text("View all →"),
 				),
@@ -119,7 +110,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 					),
 				),
 				g.If(len(subs) > 0,
-					e.renderRecentSubscriptionsTable(ctx, subs[:min(5, len(subs))], currentApp, basePath),
+					e.renderRecentSubscriptionsTable(reqCtx, subs[:min(5, len(subs))], currentApp, basePath),
 				),
 			),
 		),
@@ -131,7 +122,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 				Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Plans Overview")),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans"),
 					Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 					g.Text("Manage plans →"),
 				),
@@ -144,7 +135,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 						lucide.Package(Class("mx-auto h-12 w-12 mb-3")),
 						P(g.Text("No plans created yet")),
 						A(
-							Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/create"),
+							Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/create"),
 							Class("mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 							lucide.Plus(Class("size-4")),
 							g.Text("Create your first plan"),
@@ -164,57 +155,42 @@ func (e *DashboardExtension) ServeBillingOverviewPage(c forge.Context) error {
 				Class("flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800"),
 				H3(Class("text-lg font-semibold text-slate-900 dark:text-white"), g.Text("Payment Methods")),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/payment-methods"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/payment-methods"),
 					Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 					g.Text("Manage all →"),
 				),
 			),
 			Div(
 				Class("px-6 py-4"),
-				e.renderPaymentMethodsOverviewWidget(ctx, currentApp, basePath),
+				e.renderPaymentMethodsOverviewWidget(reqCtx, currentApp, basePath),
 			),
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Subscription Overview",
-		User:       currentUser,
-		ActivePage: "billing",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServePlansListPage renders the plans list page
-func (e *DashboardExtension) ServePlansListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServePlansListPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 20)
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 20)
 
-	plans, total, _ := e.plugin.planSvc.List(ctx, currentApp.ID, false, false, page, pageSize)
+	plans, total, _ := e.plugin.planSvc.List(reqCtx, currentApp.ID, false, false, page, pageSize)
 	totalPages := int((int64(total) + int64(pageSize) - 1) / int64(pageSize))
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header
 		Div(
@@ -230,7 +206,7 @@ func (e *DashboardExtension) ServePlansListPage(c forge.Context) error {
 				// Sync from provider button
 				Form(
 					Method("POST"),
-					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/sync-all-from-provider"),
+					Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/sync-all-from-provider"),
 					Button(
 						Type("submit"),
 						Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
@@ -240,7 +216,7 @@ func (e *DashboardExtension) ServePlansListPage(c forge.Context) error {
 				),
 				// Create plan button
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/create"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/create"),
 					Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 					lucide.Plus(Class("size-4")),
 					g.Text("Create Plan"),
@@ -260,59 +236,44 @@ func (e *DashboardExtension) ServePlansListPage(c forge.Context) error {
 		),
 
 		// Plans table
-		e.renderPlansTable(ctx, plans, currentApp, basePath),
+		e.renderPlansTable(reqCtx, plans, currentApp, basePath),
 
 		// Pagination
-		e.renderPagination(page, totalPages, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans"),
+		e.renderPagination(page, totalPages, basePath+"/app/"+currentApp.ID.String()+"/billing/plans"),
 	)
 
-	pageData := components.PageData{
-		Title:      "Subscription Plans",
-		User:       currentUser,
-		ActivePage: "plans",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeSubscriptionsListPage renders the subscriptions list page
-func (e *DashboardExtension) ServeSubscriptionsListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeSubscriptionsListPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 20)
-	statusFilter := c.Query("status")
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 20)
+	statusFilter := ctx.Request.URL.Query().Get("status")
 
-	subs, total, _ := e.plugin.subscriptionSvc.List(ctx, nil, nil, nil, statusFilter, page, pageSize)
+	subs, total, _ := e.plugin.subscriptionSvc.List(reqCtx, nil, nil, nil, statusFilter, page, pageSize)
 	totalPages := int((int64(total) + int64(pageSize) - 1) / int64(pageSize))
 
 	// Count by status for filters
-	allSubs, _, _ := e.plugin.subscriptionSvc.List(ctx, nil, nil, nil, "", 1, 10000)
+	allSubs, _, _ := e.plugin.subscriptionSvc.List(reqCtx, nil, nil, nil, "", 1, 10000)
 	statusCounts := make(map[string]int)
 	for _, sub := range allSubs {
 		statusCounts[string(sub.Status)]++
 	}
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header
 		Div(
@@ -329,51 +290,36 @@ func (e *DashboardExtension) ServeSubscriptionsListPage(c forge.Context) error {
 		e.renderStatusFilterTabs(statusFilter, statusCounts, currentApp, basePath, "/billing/subscriptions"),
 
 		// Subscriptions table
-		e.renderSubscriptionsTable(ctx, subs, currentApp, basePath),
+		e.renderSubscriptionsTable(reqCtx, subs, currentApp, basePath),
 
 		// Pagination
-		e.renderPagination(page, totalPages, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/subscriptions"),
+		e.renderPagination(page, totalPages, basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions"),
 	)
 
-	pageData := components.PageData{
-		Title:      "Subscriptions",
-		User:       currentUser,
-		ActivePage: "subscriptions",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeAddOnsListPage renders the add-ons list page
-func (e *DashboardExtension) ServeAddOnsListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeAddOnsListPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 20)
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 20)
 
-	addons, total, _ := e.plugin.addOnSvc.List(ctx, currentApp.ID, false, false, page, pageSize)
+	addons, total, _ := e.plugin.addOnSvc.List(reqCtx, currentApp.ID, false, false, page, pageSize)
 	totalPages := int((int64(total) + int64(pageSize) - 1) / int64(pageSize))
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header
 		Div(
@@ -385,7 +331,7 @@ func (e *DashboardExtension) ServeAddOnsListPage(c forge.Context) error {
 					g.Text("Manage additional features and products")),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Add-on"),
@@ -396,57 +342,42 @@ func (e *DashboardExtension) ServeAddOnsListPage(c forge.Context) error {
 		e.renderBillingNav(currentApp, basePath, "addons"),
 
 		// Add-ons table
-		e.renderAddOnsTable(ctx, addons, currentApp, basePath),
+		e.renderAddOnsTable(reqCtx, addons, currentApp, basePath),
 
 		// Pagination
-		e.renderPagination(page, totalPages, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons"),
+		e.renderPagination(page, totalPages, basePath+"/app/"+currentApp.ID.String()+"/billing/addons"),
 	)
 
-	pageData := components.PageData{
-		Title:      "Add-ons",
-		User:       currentUser,
-		ActivePage: "addons",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeInvoicesListPage renders the invoices list page
-func (e *DashboardExtension) ServeInvoicesListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeInvoicesListPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 20)
-	statusFilter := c.Query("status")
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 20)
+	statusFilter := ctx.Request.URL.Query().Get("status")
 
 	// Check for success/error messages
-	successMsg := c.Query("success")
-	errorMsg := c.Query("error")
-	syncCount := c.Query("count")
+	successMsg := ctx.Request.URL.Query().Get("success")
+	errorMsg := ctx.Request.URL.Query().Get("error")
+	syncCount := ctx.Request.URL.Query().Get("count")
 
-	invoices, total, _ := e.plugin.invoiceSvc.List(ctx, nil, nil, statusFilter, page, pageSize)
+	invoices, total, _ := e.plugin.invoiceSvc.List(reqCtx, nil, nil, statusFilter, page, pageSize)
 	totalPages := int((int64(total) + int64(pageSize) - 1) / int64(pageSize))
 
 	// Count by status
-	allInvoices, _, _ := e.plugin.invoiceSvc.List(ctx, nil, nil, "", 1, 10000)
+	allInvoices, _, _ := e.plugin.invoiceSvc.List(reqCtx, nil, nil, "", 1, 10000)
 	statusCounts := make(map[string]int)
 	var totalRevenue int64
 	for _, inv := range allInvoices {
@@ -457,7 +388,7 @@ func (e *DashboardExtension) ServeInvoicesListPage(c forge.Context) error {
 	}
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Success/Error alerts
 		g.If(successMsg == "synced",
@@ -484,7 +415,7 @@ func (e *DashboardExtension) ServeInvoicesListPage(c forge.Context) error {
 			),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices/sync"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/billing/invoices/sync"),
 				Button(
 					Type("submit"),
 					Class("inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"),
@@ -510,58 +441,43 @@ func (e *DashboardExtension) ServeInvoicesListPage(c forge.Context) error {
 		e.renderStatusFilterTabs(statusFilter, statusCounts, currentApp, basePath, "/billing/invoices"),
 
 		// Invoices table
-		e.renderInvoicesTable(ctx, invoices, currentApp, basePath),
+		e.renderInvoicesTable(reqCtx, invoices, currentApp, basePath),
 
 		// Pagination
-		e.renderPagination(page, totalPages, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices"),
+		e.renderPagination(page, totalPages, basePath+"/app/"+currentApp.ID.String()+"/billing/invoices"),
 	)
 
-	pageData := components.PageData{
-		Title:      "Invoices",
-		User:       currentUser,
-		ActivePage: "invoices",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeUsageDashboardPage renders the usage dashboard page
-func (e *DashboardExtension) ServeUsageDashboardPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeUsageDashboardPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Parse date range filter
-	dateRange := c.Query("range")
+	dateRange := ctx.Request.URL.Query().Get("range")
 	if dateRange == "" {
 		dateRange = "30d"
 	}
 	startDate, endDate := calculateDateRange(dateRange)
 
 	// Get real usage data
-	currentUsage, _ := e.plugin.featureUsageRepo.GetCurrentUsageSnapshot(ctx, currentApp.ID)
-	orgStats, _ := e.plugin.featureUsageRepo.GetUsageByOrg(ctx, currentApp.ID, startDate, endDate)
-	typeStats, _ := e.plugin.featureUsageRepo.GetUsageByFeatureType(ctx, currentApp.ID, startDate, endDate)
-	topConsumers, _ := e.plugin.featureUsageRepo.GetTopConsumers(ctx, currentApp.ID, nil, startDate, endDate, 10)
+	currentUsage, _ := e.plugin.featureUsageRepo.GetCurrentUsageSnapshot(reqCtx, currentApp.ID)
+	orgStats, _ := e.plugin.featureUsageRepo.GetUsageByOrg(reqCtx, currentApp.ID, startDate, endDate)
+	typeStats, _ := e.plugin.featureUsageRepo.GetUsageByFeatureType(reqCtx, currentApp.ID, startDate, endDate)
+	topConsumers, _ := e.plugin.featureUsageRepo.GetTopConsumers(reqCtx, currentApp.ID, nil, startDate, endDate, 10)
 
 	// Current path for filters
-	currentPath := basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/usage"
+	currentPath := basePath + "/app/" + currentApp.ID.String() + "/billing/usage"
 
 	content := Div(
 		Class("space-y-6"),
@@ -725,48 +641,33 @@ func (e *DashboardExtension) ServeUsageDashboardPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Usage Dashboard",
-		User:       currentUser,
-		ActivePage: "usage",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeCouponsListPage renders the coupons list page
-func (e *DashboardExtension) ServeCouponsListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeCouponsListPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 20)
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 20)
 
 	// TODO: Add couponSvc to Plugin - for now return empty list
 	var coupons []*core.Coupon
 	var total int64 = 0
-	_ = ctx // suppress unused warning
+	_ = reqCtx // suppress unused warning
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header
 		Div(
@@ -778,7 +679,7 @@ func (e *DashboardExtension) ServeCouponsListPage(c forge.Context) error {
 					g.Text("Manage promotional codes and discounts")),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/coupons/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Coupon"),
@@ -789,53 +690,38 @@ func (e *DashboardExtension) ServeCouponsListPage(c forge.Context) error {
 		e.renderBillingNav(currentApp, basePath, "coupons"),
 
 		// Coupons table
-		e.renderCouponsTable(ctx, coupons, currentApp, basePath),
+		e.renderCouponsTable(reqCtx, coupons, currentApp, basePath),
 
 		// Pagination
-		e.renderPagination(page, totalPages, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons"),
+		e.renderPagination(page, totalPages, basePath+"/app/"+currentApp.ID.String()+"/billing/coupons"),
 	)
 
-	pageData := components.PageData{
-		Title:      "Coupons",
-		User:       currentUser,
-		ActivePage: "coupons",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeAnalyticsDashboardPage renders the analytics dashboard
-func (e *DashboardExtension) ServeAnalyticsDashboardPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Parse date range filter
-	dateRange := c.Query("range")
+	dateRange := ctx.Request.URL.Query().Get("range")
 	if dateRange == "" {
 		dateRange = "30d"
 	}
 	startDate, endDate := calculateDateRange(dateRange)
-	currentPath := basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/analytics"
+	currentPath := basePath + "/app/" + currentApp.ID.String() + "/billing/analytics"
 
 	// Get real analytics data
-	metrics, _ := e.plugin.analyticsSvc.GetDashboardMetrics(ctx, currentApp.ID, startDate, endDate, "USD")
+	metrics, _ := e.plugin.analyticsSvc.GetDashboardMetrics(reqCtx, currentApp.ID, startDate, endDate, "USD")
 	if metrics == nil {
 		metrics = &core.DashboardMetrics{
 			Currency: "USD",
@@ -843,10 +729,10 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(c forge.Context) error 
 	}
 
 	// Get MRR history for chart
-	mrrHistory, _ := e.plugin.analyticsSvc.GetMRRHistory(ctx, currentApp.ID, startDate, endDate, "USD")
+	mrrHistory, _ := e.plugin.analyticsSvc.GetMRRHistory(reqCtx, currentApp.ID, startDate, endDate, "USD")
 
 	// Get per-org revenue breakdown
-	orgRevenue, _ := e.plugin.analyticsSvc.GetRevenueByOrg(ctx, currentApp.ID, startDate, endDate)
+	orgRevenue, _ := e.plugin.analyticsSvc.GetRevenueByOrg(reqCtx, currentApp.ID, startDate, endDate)
 
 	content := Div(
 		Class("space-y-6"),
@@ -1024,35 +910,20 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(c forge.Context) error 
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Billing Analytics",
-		User:       currentUser,
-		ActivePage: "analytics",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeAlertsListPage renders the alerts list page
-func (e *DashboardExtension) ServeAlertsListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeAlertsListPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
 	content := Div(
 		Class("space-y-6"),
@@ -1097,15 +968,8 @@ func (e *DashboardExtension) ServeAlertsListPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Usage Alerts",
-		User:       currentUser,
-		ActivePage: "alerts",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // Helper functions for counting plans
@@ -1154,7 +1018,7 @@ func (e *DashboardExtension) renderRecentSubscriptionsTable(ctx context.Context,
 				g.Text(sub.CreatedAt.Format("Jan 2, 2006"))),
 			Td(Class("px-4 py-3 text-right"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/subscriptions/"+sub.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions/"+sub.ID.String()),
 					Class("text-violet-600 hover:text-violet-700 text-sm"),
 					g.Text("View"),
 				)),
@@ -1194,7 +1058,7 @@ func (e *DashboardExtension) renderPlansOverviewGrid(plans []*core.Plan, current
 					g.Text("/"+string(plan.BillingInterval))),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
 				Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 				g.Text("View details →"),
 			),
@@ -1212,7 +1076,7 @@ func (e *DashboardExtension) renderPlansTable(ctx context.Context, plans []*core
 			H3(Class("text-lg font-medium text-slate-900 dark:text-white mb-2"), g.Text("No plans yet")),
 			P(Class("text-slate-500 dark:text-gray-400 mb-4"), g.Text("Create your first subscription plan to start accepting payments")),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Plan"),
@@ -1246,12 +1110,12 @@ func (e *DashboardExtension) renderPlansTable(ctx context.Context, plans []*core
 				Div(
 					Class("flex items-center justify-end gap-2"),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
 						Class("text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm"),
 						g.Text("View"),
 					),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/edit"),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/edit"),
 						Class("text-slate-600 hover:text-slate-700 dark:text-gray-400 text-sm"),
 						g.Text("Edit"),
 					),
@@ -1259,7 +1123,7 @@ func (e *DashboardExtension) renderPlansTable(ctx context.Context, plans []*core
 					g.If(plan.ProviderPlanID == "" || plan.ProviderPriceID == "",
 						Form(
 							Method("POST"),
-							Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync"),
+							Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/sync"),
 							Class("inline"),
 							Button(
 								Type("submit"),
@@ -1317,7 +1181,7 @@ func (e *DashboardExtension) renderSubscriptionsTable(ctx context.Context, subs 
 			Td(Class("px-6 py-4 text-sm text-slate-600 dark:text-gray-400"), g.Text(sub.CurrentPeriodEnd.Format("Jan 2, 2006"))),
 			Td(Class("px-6 py-4 text-right"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/subscriptions/"+sub.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions/"+sub.ID.String()),
 					Class("text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm"),
 					g.Text("View"),
 				)),
@@ -1352,7 +1216,7 @@ func (e *DashboardExtension) renderAddOnsTable(ctx context.Context, addons []*co
 			H3(Class("text-lg font-medium text-slate-900 dark:text-white mb-2"), g.Text("No add-ons yet")),
 			P(Class("text-slate-500 dark:text-gray-400 mb-4"), g.Text("Create add-ons to offer additional features to your customers")),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Add-on"),
@@ -1380,7 +1244,7 @@ func (e *DashboardExtension) renderAddOnsTable(ctx context.Context, addons []*co
 			),
 			Td(Class("px-6 py-4 text-right"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons/"+addon.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons/"+addon.ID.String()),
 					Class("text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm"),
 					g.Text("View"),
 				),
@@ -1432,7 +1296,7 @@ func (e *DashboardExtension) renderInvoicesTable(ctx context.Context, invoices [
 				g.Text(inv.CreatedAt.Format("Jan 2, 2006"))),
 			Td(Class("px-6 py-4 text-right"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/invoices/"+inv.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/invoices/"+inv.ID.String()),
 					Class("text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm"),
 					g.Text("View"),
 				)),
@@ -1467,7 +1331,7 @@ func (e *DashboardExtension) renderCouponsTable(ctx context.Context, coupons []*
 			H3(Class("text-lg font-medium text-slate-900 dark:text-white mb-2"), g.Text("No coupons yet")),
 			P(Class("text-slate-500 dark:text-gray-400 mb-4"), g.Text("Create coupons to offer discounts to your customers")),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/coupons/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Coupon"),
@@ -1509,7 +1373,7 @@ func (e *DashboardExtension) renderCouponsTable(ctx context.Context, coupons []*
 			),
 			Td(Class("px-6 py-4 text-right"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons/"+coupon.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/coupons/"+coupon.ID.String()),
 					Class("text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm"),
 					g.Text("View"),
 				)),
@@ -1566,7 +1430,7 @@ func (e *DashboardExtension) renderStatusFilterTabs(currentStatus string, counts
 			classes += "text-slate-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-gray-800"
 		}
 
-		href := basePath + "/dashboard/app/" + currentApp.ID.String() + path
+		href := basePath + "/app/" + currentApp.ID.String() + path
 		if s.value != "" {
 			href += "?status=" + s.value
 		}
@@ -1651,7 +1515,7 @@ func (e *DashboardExtension) renderPaymentMethodsOverviewWidget(ctx context.Cont
 			lucide.CreditCard(Class("mx-auto h-12 w-12 mb-3")),
 			P(g.Text("No payment methods added")),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/payment-methods/add"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/payment-methods/add"),
 				Class("mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Add payment method"),

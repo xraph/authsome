@@ -8,7 +8,8 @@ type Config struct {
 	EnableUserCreation        bool `json:"enableUserCreation"`
 	RequireInvitation         bool `json:"requireInvitation"`
 	InvitationExpiryHours     int  `json:"invitationExpiryHours"`
-	EnforceUniqueSlug         bool `json:"enforceUniqueSlug"` // Enforce unique slugs within app+environment scope
+	EnforceUniqueSlug         bool `json:"enforceUniqueSlug"`     // Enforce unique slugs within app+environment scope
+	AllowAppLevelRoles        bool `json:"allowAppLevelRoles"`    // Allow app-level (global) RBAC roles for org membership
 }
 
 // DefaultConfig returns sensible default configuration values
@@ -21,5 +22,6 @@ func DefaultConfig() Config {
 		RequireInvitation:         false,
 		InvitationExpiryHours:     72,   // 3 days
 		EnforceUniqueSlug:         true, // Enforce unique slugs within app+environment by default
+		AllowAppLevelRoles:        true, // Allow app-level roles by default for backward compatibility
 	}
 }

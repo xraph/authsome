@@ -902,69 +902,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Register routes from dashboard extensions
 	extensionRoutes := p.extensionRegistry.GetAllRoutes()
-	p.log.Info("registering extension routes",
+	// Extension routes are now registered as ForgeUI pages in PagesManager.registerExtensionPages()
+	p.log.Info("extension routes registered via ForgeUI",
 		forge.F("count", len(extensionRoutes)),
 		forge.F("basePath", p.basePath))
-
-	for _, route := range extensionRoutes {
-		// Build full path with app context
-		fullPath := "/dashboard/app/:appId" + route.Path
-
-		// Build middleware chain based on route requirements
-		var handler func(forge.Context) error
-		if handlerFunc, ok := route.Handler.(func(forge.Context) error); ok {
-			if route.RequireAuth && route.RequireAdmin {
-				handler = chain(handlerFunc)
-			} else if route.RequireAuth {
-				// Auth but not admin - create custom chain with environment context
-				handler = p.PlatformOrgContext()(p.EnvironmentContext()(p.RequireAuth()(p.AuditLog()(p.RateLimit()(handlerFunc)))))
-			} else {
-				// No auth required
-				handler = authlessChain(handlerFunc)
-			}
-		} else {
-			p.log.Warn("extension route handler is not a valid function",
-				forge.F("path", fullPath),
-				forge.F("name", route.Name),
-				forge.F("handler_type", fmt.Sprintf("%T", route.Handler)))
-			continue
-		}
-
-		// Register route based on method
-		opts := []forge.RouteOption{
-			forge.WithName(route.Name),
-			forge.WithSummary(route.Summary),
-			forge.WithDescription(route.Description),
-		}
-		if len(route.Tags) > 0 {
-			opts = append(opts, forge.WithTags(route.Tags...))
-		}
-
-		switch route.Method {
-		case "GET":
-			router.GET(fullPath, handler, opts...)
-		case "POST":
-			router.POST(fullPath, handler, opts...)
-		case "PUT":
-			router.PUT(fullPath, handler, opts...)
-		case "DELETE":
-			router.DELETE(fullPath, handler, opts...)
-		case "PATCH":
-			router.PATCH(fullPath, handler, opts...)
-		default:
-			p.log.Warn("unsupported HTTP method for extension route",
-				forge.F("method", route.Method),
-				forge.F("path", fullPath))
-		}
-
-		// Log at Info level to ensure visibility
-		p.log.Info("registered extension route",
-			forge.F("method", route.Method),
-			forge.F("path", fullPath),
-			forge.F("name", route.Name),
-			forge.F("requireAuth", route.RequireAuth),
-			forge.F("requireAdmin", route.RequireAdmin))
-	}
 
 	return nil
 }

@@ -42,41 +42,15 @@ routes:
       request_type: ResendRequest
       response_type: ResendResponse
 types:
-    - name: Handler
-      fields:
-        "": core.Authsome
-    - name: VerificationRepository
-      fields:
-        "": '*bun.DB'
-    - name: Service
-      fields:
-        "": '*notificationPlugin.Adapter'
-    - name: SendRequest
-      fields:
-        email: string!
-    - name: ResendResponse
-      fields:
-        status: string!
-    - name: StatusResponse
-      fields:
-        emailVerified: bool!
-        emailVerifiedAt: '*time.Time!'
     - name: Plugin
       fields:
         "": core.Authsome
-    - name: Config
+    - name: Service
       fields:
-        autoLoginAfterVerify: bool!
-        autoSendOnSignup: bool!
-        devExposeToken: bool!
-        expiryHours: int!
-        maxResendPerHour: int!
-        tokenLength: int!
-        verificationURL: string!
-    - name: SendResponse
+        "": session.ServiceInterface
+    - name: SendRequest
       fields:
-        devToken: string!
-        status: string!
+        email: string!
     - name: VerifyRequest
       fields:
         "": string
@@ -89,3 +63,29 @@ types:
     - name: ResendRequest
       fields:
         email: string!
+    - name: ResendResponse
+      fields:
+        status: string!
+    - name: StatusResponse
+      fields:
+        emailVerified: bool!
+        emailVerifiedAt: '*time.Time!'
+    - name: Handler
+      fields:
+        "": core.Authsome
+    - name: Config
+      fields:
+        autoLoginAfterVerify: bool!
+        autoSendOnSignup: bool!
+        devExposeToken: bool!
+        expiryHours: int!
+        maxResendPerHour: int!
+        tokenLength: int!
+        verificationURL: string!
+    - name: VerificationRepository
+      fields:
+        "": '*bun.DB'
+    - name: SendResponse
+      fields:
+        devToken: string!
+        status: string!

@@ -10,10 +10,14 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
+	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/driver/sqliteshim"
+	"github.com/uptrace/bun/migrate"
 
 	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/migrations"
 	"github.com/xraph/authsome/plugins"
 	"github.com/xraph/authsome/plugins/anonymous"
 	"github.com/xraph/authsome/plugins/dashboard"
@@ -65,7 +69,7 @@ func main() {
 
 	// Load configuration
 	config := &Config{
-		DatabaseURL: getEnv("DATABASE_URL", "file:authsome_comprehensive.db?cache=shared&_fk=1"),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/gameframework?sslmode=disable"),
 		Port:        getEnv("PORT", "8081"),
 		EnableDebug: getEnv("DEBUG", "true") == "true",
 	}
@@ -105,14 +109,63 @@ func main() {
 func (app *ComprehensiveApp) initDatabase(config *Config) error {
 	log.Println("🗄️  Initializing database...")
 
-	sqldb, err := sql.Open(sqliteshim.ShimName, config.DatabaseURL)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+	var sqldb *sql.DB
+	var err error
+
+	// Detect database type from URL
+	if len(config.DatabaseURL) > 8 && config.DatabaseURL[:8] == "postgres" {
+		// PostgreSQL
+		log.Println("  📊 Using PostgreSQL")
+		connector := pgdriver.NewConnector(pgdriver.WithDSN(config.DatabaseURL))
+		sqldb = sql.OpenDB(connector)
+		app.db = bun.NewDB(sqldb, pgdialect.New())
+	} else {
+		// SQLite (default)
+		log.Println("  📊 Using SQLite")
+		sqldb, err = sql.Open(sqliteshim.ShimName, config.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		app.db = bun.NewDB(sqldb, sqlitedialect.New())
 	}
 
-	app.db = bun.NewDB(sqldb, sqlitedialect.New())
+	// Test connection
+	if err := sqldb.Ping(); err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	// Run migrations
+	log.Println("🔄 Running database migrations...")
+	if err := app.runMigrations(); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
 
 	log.Println("✅ Database initialized")
+	return nil
+}
+
+// runMigrations runs database migrations
+func (app *ComprehensiveApp) runMigrations() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	migrator := migrate.NewMigrator(app.db, migrations.Migrations)
+	
+	if err := migrator.Init(ctx); err != nil {
+		return fmt.Errorf("failed to init migrator: %w", err)
+	}
+	
+	group, err := migrator.Migrate(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to migrate: %w", err)
+	}
+	
+	if group.IsZero() {
+		log.Println("  ✓ Database is up to date")
+	} else {
+		log.Printf("  ✓ Migrated to %s", group)
+	}
+	
 	return nil
 }
 

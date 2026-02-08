@@ -12,83 +12,83 @@ export class NotificationPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async previewTemplate(params: { id: string }, request: types.PreviewTemplate_req): Promise<types.NotificationPreviewResponse> {
-    const path = `/${params.id}/preview`;
-    return this.client.request<types.NotificationPreviewResponse>('POST', path, {
-      body: request,
-    });
-  }
-
   async createTemplate(request: types.CreateTemplateRequest): Promise<types.NotificationTemplateResponse> {
-    const path = '/createtemplate';
+    const path = '/templates';
     return this.client.request<types.NotificationTemplateResponse>('POST', path, {
       body: request,
     });
   }
 
   async getTemplate(params: { id: string }): Promise<types.NotificationTemplateResponse> {
-    const path = `/${params.id}`;
+    const path = `/templates/${params.id}`;
     return this.client.request<types.NotificationTemplateResponse>('GET', path);
   }
 
   async listTemplates(): Promise<types.NotificationTemplateListResponse> {
-    const path = '/listtemplates';
+    const path = '/templates';
     return this.client.request<types.NotificationTemplateListResponse>('GET', path);
   }
 
   async updateTemplate(params: { id: string }, request: types.UpdateTemplateRequest): Promise<types.NotificationTemplateResponse> {
-    const path = `/${params.id}`;
+    const path = `/templates/${params.id}`;
     return this.client.request<types.NotificationTemplateResponse>('PUT', path, {
       body: request,
     });
   }
 
   async deleteTemplate(params: { id: string }): Promise<types.NotificationStatusResponse> {
-    const path = `/${params.id}`;
+    const path = `/templates/${params.id}`;
     return this.client.request<types.NotificationStatusResponse>('DELETE', path);
   }
 
   async resetTemplate(params: { id: string }): Promise<types.NotificationStatusResponse> {
-    const path = `/${params.id}/reset`;
+    const path = `/templates/${params.id}/reset`;
     return this.client.request<types.NotificationStatusResponse>('POST', path);
   }
 
   async resetAllTemplates(): Promise<types.NotificationStatusResponse> {
-    const path = '/reset-all';
+    const path = '/templates/reset-all';
     return this.client.request<types.NotificationStatusResponse>('POST', path);
   }
 
   async getTemplateDefaults(): Promise<types.NotificationTemplateListResponse> {
-    const path = '/defaults';
+    const path = '/templates/defaults';
     return this.client.request<types.NotificationTemplateListResponse>('GET', path);
   }
 
+  async previewTemplate(params: { id: string }, request: types.PreviewTemplate_req): Promise<types.NotificationPreviewResponse> {
+    const path = `/templates/${params.id}/preview`;
+    return this.client.request<types.NotificationPreviewResponse>('POST', path, {
+      body: request,
+    });
+  }
+
   async renderTemplate(request: types.RenderTemplate_req): Promise<types.NotificationPreviewResponse> {
-    const path = '/render';
+    const path = '/templates/render';
     return this.client.request<types.NotificationPreviewResponse>('POST', path, {
       body: request,
     });
   }
 
   async sendNotification(request: types.SendRequest): Promise<types.NotificationResponse> {
-    const path = '/send';
+    const path = '/notifications/send';
     return this.client.request<types.NotificationResponse>('POST', path, {
       body: request,
     });
   }
 
   async getNotification(params: { id: string }): Promise<types.NotificationResponse> {
-    const path = `/${params.id}`;
+    const path = `/notifications/${params.id}`;
     return this.client.request<types.NotificationResponse>('GET', path);
   }
 
   async listNotifications(): Promise<types.NotificationListResponse> {
-    const path = '/listnotifications';
+    const path = '/notifications';
     return this.client.request<types.NotificationListResponse>('GET', path);
   }
 
   async resendNotification(params: { id: string }): Promise<types.NotificationResponse> {
-    const path = `/${params.id}/resend`;
+    const path = `/notifications/${params.id}/resend`;
     return this.client.request<types.NotificationResponse>('POST', path);
   }
 

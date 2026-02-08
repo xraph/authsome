@@ -36,7 +36,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 	var req ListEntriesRequest
 
 	if err := c.BindRequest(&req); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request"})
+		return c.JSON(400, map[string]interface{}{"error": "invalid request", "details": err.Error()})
 	}
 
 	typeSlug := req.TypeSlug

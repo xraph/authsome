@@ -17,10 +17,10 @@ func CreateSecretPage(
 	prefill *core.CreateSecretRequest,
 	errorMsg string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Header
 		Div(
@@ -79,10 +79,10 @@ func EditSecretPage(
 	secret *core.SecretDTO,
 	errorMsg string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Header
 		Div(
@@ -181,7 +181,7 @@ func secretForm(appBase string, secret *core.SecretDTO, prefill *core.CreateSecr
 	return FormEl(
 		Method("POST"),
 		Action(action),
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Hidden method for edit
 		g.If(isEdit, func() g.Node {
@@ -215,7 +215,7 @@ func secretForm(appBase string, secret *core.SecretDTO, prefill *core.CreateSecr
 
 			// Value type and value section
 			Div(
-				Class("p-6 border-b border-slate-200 dark:border-gray-800 space-y-6"),
+				Class("p-6 border-b border-slate-200 dark:border-gray-800 space-y-2"),
 
 				// Value type selector
 				Div(

@@ -134,7 +134,7 @@ func (e *Extension) Register(app forge.App) error {
 		if err := e.auth.RegisterPlugin(plugin); err != nil {
 			return fmt.Errorf("authsome: failed to register plugin %s: %w", plugin.ID(), err)
 		}
-		e.Logger().Info("authsome: registered plugin", forge.F("plugin", plugin.ID()))
+		e.Logger().Debug("authsome: registered plugin", forge.F("plugin", plugin.ID()))
 	}
 
 	e.Logger().Info("authsome extension registered successfully")

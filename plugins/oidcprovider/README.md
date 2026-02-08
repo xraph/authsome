@@ -12,6 +12,7 @@ Comprehensive enterprise-grade OpenID Connect Provider plugin for AuthSome with 
 - ✅ JWKS Endpoint
 - ✅ UserInfo Endpoint
 - ✅ Discovery Endpoint (.well-known/openid-configuration)
+- ✅ **RFC 8628**: Device Authorization Grant (Device Flow)
 
 ### Enterprise Features (RFC-Compliant)
 - ✅ **RFC 7591**: Dynamic Client Registration
@@ -304,6 +305,16 @@ auth:
       accessTokenExpiry: "1h"
       idTokenExpiry: "1h"
       refreshTokenExpiry: "720h"  # 30 days
+    
+    deviceFlow:
+      enabled: true              # Enable device flow (RFC 8628)
+      codeExpiry: "10m"         # Device code lifetime
+      userCodeLength: 8         # User code characters
+      userCodeFormat: "XXXX-XXXX" # User code format
+      pollingInterval: 5        # Minimum seconds between polls
+      verificationUri: "/device" # Verification page path
+      maxPollAttempts: 120      # Maximum poll attempts
+      cleanupInterval: "5m"     # Cleanup job interval
 ```
 
 ## Usage

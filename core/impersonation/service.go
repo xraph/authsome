@@ -449,5 +449,5 @@ func (s *Service) auditLog(ctx context.Context, impersonationID *xid.ID, action 
 		}
 	}
 
-	_ = s.auditSvc.Log(ctx, &userID, action, resource, ip, ua, metadataStr)
+	_ = s.auditSvc.Log(ctx, &userID, string(audit.ActionImpersonationStarted), resource, ip, ua, metadataStr)
 }

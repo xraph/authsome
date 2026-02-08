@@ -13,29 +13,23 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/secrets/core"
 	"github.com/xraph/authsome/plugins/secrets/pages"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/bridge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // DashboardExtension implements ui.DashboardExtension for the secrets plugin
 type DashboardExtension struct {
-	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
+	plugin *Plugin
 }
 
 // NewDashboardExtension creates a new dashboard extension
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{plugin: plugin}
-}
-
-// SetRegistry sets the extension registry reference
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
 }
 
 // ExtensionID returns the unique identifier for this extension
@@ -54,9 +48,9 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 			Order:    60,
 			URLBuilder: func(basePath string, currentApp *app.App) string {
 				if currentApp == nil {
-					return basePath + "/dashboard/secrets"
+					return basePath + "/secrets"
 				}
-				return basePath + "/dashboard/app/" + currentApp.ID.String() + "/secrets"
+				return basePath + "/app/" + currentApp.ID.String() + "/secrets"
 			},
 			ActiveChecker: func(activePage string) bool {
 				return activePage == "secrets" || activePage == "secret-detail" ||
@@ -69,15 +63,17 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 }
 
 // Routes returns dashboard routes
+// Note: All secrets routes use /secrets/ prefix (not /settings/secrets/) to ensure
+// they get the dashboard layout instead of settings layout
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
-		// Secrets list
+		// Secrets list page
 		{
 			Method:       "GET",
 			Path:         "/secrets",
 			Handler:      e.ServeSecretsListPage,
 			Name:         "secrets.dashboard.list",
-			Summary:      "Secrets list",
+			Summary:      "Secrets management",
 			Description:  "View and manage application secrets",
 			Tags:         []string{"Dashboard", "Secrets"},
 			RequireAuth:  true,
@@ -179,7 +175,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: true,
 		},
-		// Reveal value (AJAX)
+		// Reveal value (legacy POST endpoint - prefer using bridge)
 		{
 			Method:       "POST",
 			Path:         "/secrets/:secretId/reveal",
@@ -200,20 +196,9 @@ func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 }
 
 // SettingsPages returns settings pages
+// Note: Secrets is a main navigation item (not a settings page), so we return nil here
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
-	return []ui.SettingsPage{
-		{
-			ID:            "secrets-settings",
-			Label:         "Secrets Manager",
-			Description:   "Configure secrets and encryption settings",
-			Icon:          lucide.KeyRound(Class("h-5 w-5")),
-			Category:      "security",
-			Order:         40,
-			Path:          "secrets",
-			RequirePlugin: "secrets",
-			RequireAdmin:  true,
-		},
-	}
+	return nil
 }
 
 // DashboardWidgets returns dashboard widgets
@@ -232,22 +217,429 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
+// BridgeFunctions returns bridge functions for the secrets plugin
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	return []ui.BridgeFunction{
+		{
+			Name:        "revealSecret",
+			Handler:     e.bridgeRevealSecret,
+			Description: "Reveal a secret's decrypted value",
+		},
+		{
+			Name:        "getSecrets",
+			Handler:     e.bridgeGetSecrets,
+			Description: "List secrets with pagination",
+		},
+		{
+			Name:        "getSecret",
+			Handler:     e.bridgeGetSecret,
+			Description: "Get secret details by ID",
+		},
+		{
+			Name:        "createSecret",
+			Handler:     e.bridgeCreateSecret,
+			Description: "Create a new secret",
+		},
+		{
+			Name:        "updateSecret",
+			Handler:     e.bridgeUpdateSecret,
+			Description: "Update an existing secret",
+		},
+		{
+			Name:        "deleteSecret",
+			Handler:     e.bridgeDeleteSecret,
+			Description: "Delete a secret",
+		},
+	}
+}
+
+// =============================================================================
+// Bridge Handler Types
+// =============================================================================
+
+// RevealSecretInput is the input for revealing a secret
+type RevealSecretInput struct {
+	AppID    string `json:"appId"`
+	SecretID string `json:"secretId"`
+}
+
+// RevealSecretOutput is the output for revealing a secret
+type RevealSecretOutput struct {
+	Value     interface{} `json:"value"`
+	ValueType string      `json:"valueType"`
+}
+
+// GetSecretsInput is the input for listing secrets
+type GetSecretsInput struct {
+	AppID    string `json:"appId"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+	Search   string `json:"search"`
+}
+
+// SecretItem represents a secret in the list
+type SecretItem struct {
+	ID          string   `json:"id"`
+	Path        string   `json:"path"`
+	Key         string   `json:"key"`
+	Description string   `json:"description"`
+	ValueType   string   `json:"valueType"`
+	Tags        []string `json:"tags"`
+	Version     int      `json:"version"`
+	CreatedAt   string   `json:"createdAt"`
+	UpdatedAt   string   `json:"updatedAt"`
+}
+
+// GetSecretsOutput is the output for listing secrets
+type GetSecretsOutput struct {
+	Secrets    []SecretItem `json:"secrets"`
+	Total      int64        `json:"total"`
+	Page       int          `json:"page"`
+	PageSize   int          `json:"pageSize"`
+	TotalPages int          `json:"totalPages"`
+}
+
+// GetSecretInput is the input for getting a secret
+type GetSecretInput struct {
+	AppID    string `json:"appId"`
+	SecretID string `json:"secretId"`
+}
+
+// GetSecretOutput is the output for getting a secret
+type GetSecretOutput struct {
+	Secret SecretItem `json:"secret"`
+}
+
+// CreateSecretInput is the input for creating a secret
+type CreateSecretInput struct {
+	AppID       string      `json:"appId"`
+	Path        string      `json:"path"`
+	Value       interface{} `json:"value"`
+	Description string      `json:"description"`
+	ValueType   string      `json:"valueType"`
+	Tags        []string    `json:"tags"`
+}
+
+// CreateSecretOutput is the output for creating a secret
+type CreateSecretOutput struct {
+	Secret SecretItem `json:"secret"`
+}
+
+// UpdateSecretInput is the input for updating a secret
+type UpdateSecretInput struct {
+	AppID        string      `json:"appId"`
+	SecretID     string      `json:"secretId"`
+	Value        interface{} `json:"value"`
+	Description  string      `json:"description"`
+	Tags         []string    `json:"tags"`
+	ChangeReason string      `json:"changeReason"`
+}
+
+// UpdateSecretOutput is the output for updating a secret
+type UpdateSecretOutput struct {
+	Secret SecretItem `json:"secret"`
+}
+
+// DeleteSecretInput is the input for deleting a secret
+type DeleteSecretInput struct {
+	AppID    string `json:"appId"`
+	SecretID string `json:"secretId"`
+}
+
+// DeleteSecretOutput is the output for deleting a secret
+type DeleteSecretOutput struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// =============================================================================
+// Bridge Handler Implementations
+// =============================================================================
+
+// bridgeRevealSecret handles the revealSecret bridge call
+func (e *DashboardExtension) bridgeRevealSecret(ctx bridge.Context, input RevealSecretInput) (*RevealSecretOutput, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse secret ID
+	secretID, err := xid.FromString(input.SecretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid secretId")
+	}
+
+	// Get the decrypted value
+	value, err := e.plugin.Service().GetValue(goCtx, secretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to retrieve secret value")
+	}
+
+	// Get secret details for value type
+	secret, err := e.plugin.Service().Get(goCtx, secretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to retrieve secret")
+	}
+
+	return &RevealSecretOutput{
+		Value:     value,
+		ValueType: secret.ValueType,
+	}, nil
+}
+
+// bridgeGetSecrets handles the getSecrets bridge call
+func (e *DashboardExtension) bridgeGetSecrets(ctx bridge.Context, input GetSecretsInput) (*GetSecretsOutput, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set defaults
+	page := input.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := input.PageSize
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 25
+	}
+
+	// Build query
+	query := &core.ListSecretsQuery{
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	if input.Search != "" {
+		query.Search = input.Search
+	}
+
+	// Fetch secrets
+	secretList, pag, err := e.plugin.Service().List(goCtx, query)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch secrets")
+	}
+
+	// Transform to output
+	secrets := make([]SecretItem, 0, len(secretList))
+	for _, s := range secretList {
+		secrets = append(secrets, SecretItem{
+			ID:          s.ID,
+			Path:        s.Path,
+			Key:         s.Key,
+			Description: s.Description,
+			ValueType:   s.ValueType,
+			Tags:        s.Tags,
+			Version:     s.Version,
+			CreatedAt:   s.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:   s.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	totalPages := pag.TotalItems / pageSize
+	if pag.TotalItems%pageSize > 0 {
+		totalPages++
+	}
+
+	return &GetSecretsOutput{
+		Secrets:    secrets,
+		Total:      int64(pag.TotalItems),
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// bridgeGetSecret handles the getSecret bridge call
+func (e *DashboardExtension) bridgeGetSecret(ctx bridge.Context, input GetSecretInput) (*GetSecretOutput, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse secret ID
+	secretID, err := xid.FromString(input.SecretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid secretId")
+	}
+
+	// Fetch secret
+	secret, err := e.plugin.Service().Get(goCtx, secretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "secret not found")
+	}
+
+	return &GetSecretOutput{
+		Secret: SecretItem{
+			ID:          secret.ID,
+			Path:        secret.Path,
+			Key:         secret.Key,
+			Description: secret.Description,
+			ValueType:   secret.ValueType,
+			Tags:        secret.Tags,
+			Version:     secret.Version,
+			CreatedAt:   secret.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:   secret.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		},
+	}, nil
+}
+
+// bridgeCreateSecret handles the createSecret bridge call
+func (e *DashboardExtension) bridgeCreateSecret(ctx bridge.Context, input CreateSecretInput) (*CreateSecretOutput, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create secret (app/env IDs are extracted from context by the service)
+	createReq := &core.CreateSecretRequest{
+		Path:        input.Path,
+		Value:       input.Value,
+		Description: input.Description,
+		ValueType:   input.ValueType,
+		Tags:        input.Tags,
+	}
+
+	secret, err := e.plugin.Service().Create(goCtx, createReq)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to create secret: %s", err.Error()))
+	}
+
+	return &CreateSecretOutput{
+		Secret: SecretItem{
+			ID:          secret.ID,
+			Path:        secret.Path,
+			Key:         secret.Key,
+			Description: secret.Description,
+			ValueType:   secret.ValueType,
+			Tags:        secret.Tags,
+			Version:     secret.Version,
+			CreatedAt:   secret.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:   secret.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		},
+	}, nil
+}
+
+// bridgeUpdateSecret handles the updateSecret bridge call
+func (e *DashboardExtension) bridgeUpdateSecret(ctx bridge.Context, input UpdateSecretInput) (*UpdateSecretOutput, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse secret ID
+	secretID, err := xid.FromString(input.SecretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid secretId")
+	}
+
+	// Update secret
+	updateReq := &core.UpdateSecretRequest{
+		Description:  input.Description,
+		Tags:         input.Tags,
+		ChangeReason: input.ChangeReason,
+	}
+
+	// Only update value if provided
+	if input.Value != nil {
+		updateReq.Value = input.Value
+	}
+
+	secret, err := e.plugin.Service().Update(goCtx, secretID, updateReq)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to update secret: %s", err.Error()))
+	}
+
+	return &UpdateSecretOutput{
+		Secret: SecretItem{
+			ID:          secret.ID,
+			Path:        secret.Path,
+			Key:         secret.Key,
+			Description: secret.Description,
+			ValueType:   secret.ValueType,
+			Tags:        secret.Tags,
+			Version:     secret.Version,
+			CreatedAt:   secret.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:   secret.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		},
+	}, nil
+}
+
+// bridgeDeleteSecret handles the deleteSecret bridge call
+func (e *DashboardExtension) bridgeDeleteSecret(ctx bridge.Context, input DeleteSecretInput) (*DeleteSecretOutput, error) {
+	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse secret ID
+	secretID, err := xid.FromString(input.SecretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid secretId")
+	}
+
+	// Delete secret
+	err = e.plugin.Service().Delete(goCtx, secretID)
+	if err != nil {
+		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to delete secret: %s", err.Error()))
+	}
+
+	return &DeleteSecretOutput{
+		Success: true,
+		Message: "Secret deleted successfully",
+	}, nil
+}
+
+// buildContextFromBridge creates a Go context from a bridge context with app/env IDs
+func (e *DashboardExtension) buildContextFromBridge(ctx bridge.Context, appIDStr string) (context.Context, error) {
+	// Get the context from the HTTP request (already enriched by middleware)
+	var goCtx context.Context
+	if req := ctx.Request(); req != nil {
+		goCtx = req.Context()
+	} else {
+		goCtx = ctx.Context()
+	}
+
+	// Parse and set app ID if provided
+	if appIDStr != "" {
+		appID, err := xid.FromString(appIDStr)
+		if err != nil {
+			return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid appId")
+		}
+		goCtx = contexts.SetAppID(goCtx, appID)
+
+		// Ensure environment ID is set
+		if _, ok := contexts.GetEnvironmentID(goCtx); !ok {
+			// Try to get default environment
+			if e.plugin.authInst != nil {
+				if envSvc := e.plugin.authInst.GetServiceRegistry().EnvironmentService(); envSvc != nil {
+					if defaultEnv, err := envSvc.GetDefaultEnvironment(goCtx, appID); err == nil && defaultEnv != nil {
+						goCtx = contexts.SetEnvironmentID(goCtx, defaultEnv.ID)
+					}
+				}
+			}
+		}
+	}
+
+	return goCtx, nil
+}
+
 // =============================================================================
 // Helper Methods
 // =============================================================================
 
 // getUserFromContext extracts the current user from the request context
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	ctx := c.Request().Context()
-	if u, ok := ctx.Value("user").(*user.User); ok {
+func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
+	reqCtx := ctx.Request.Context()
+	if u, ok := reqCtx.Value("user").(*user.User); ok {
 		return u
 	}
 	return nil
 }
 
 // extractAppFromURL extracts the app from the URL parameter
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	appIDStr := c.Param("appId")
+func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
+	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
 		return nil, fmt.Errorf("app ID is required")
 	}
@@ -262,41 +654,62 @@ func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error
 
 // getBasePath returns the dashboard base path
 func (e *DashboardExtension) getBasePath() string {
-	if e.registry != nil && e.registry.GetHandler() != nil {
-		return e.registry.GetHandler().GetBasePath()
-	}
-	return ""
+	return "/api/identity/ui"
 }
 
-// injectContext injects app and environment IDs into context
-func (e *DashboardExtension) injectContext(c forge.Context) context.Context {
-	ctx := c.Request().Context()
+// injectContext returns the Go context from the HTTP request.
+// The context is already enriched by the dashboard v2 AppContextMiddleware with:
+// - App ID (from URL parameter)
+// - Environment ID (from cookie or default environment)
+// - User ID (from session via AuthMiddleware)
+//
+// This method provides a fallback for cases where the middleware hasn't enriched the context.
+func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Context {
+	// Get the context that's already been enriched by dashboard middleware
+	reqCtx := ctx.Request.Context()
 
-	// Get app ID from URL
-	if appIDStr := c.Param("appId"); appIDStr != "" {
-		if appID, err := xid.FromString(appIDStr); err == nil {
-			ctx = contexts.SetAppID(ctx, appID)
+	// Check if app ID is already set (by dashboard middleware)
+	if appID, ok := contexts.GetAppID(reqCtx); ok && !appID.IsNil() {
+		// Check if environment ID is also set
+		if envID, ok := contexts.GetEnvironmentID(reqCtx); ok && !envID.IsNil() {
+			// Context is fully enriched, return as-is
+			return reqCtx
 		}
 	}
 
-	// Get environment ID from cookie or context
-	if envIDStr := c.Request().Header.Get("X-Environment-ID"); envIDStr != "" {
-		if envID, err := xid.FromString(envIDStr); err == nil {
-			ctx = contexts.SetEnvironmentID(ctx, envID)
+	// Fallback: Manually enrich context if middleware didn't do it
+	// This handles edge cases or direct API access
+	var appID xid.ID
+	if appIDStr := ctx.Param("appId"); appIDStr != "" {
+		if id, err := xid.FromString(appIDStr); err == nil {
+			appID = id
+			reqCtx = contexts.SetAppID(reqCtx, appID)
 		}
 	}
 
-	// Try to get from existing context
-	if envID, ok := contexts.GetEnvironmentID(c.Request().Context()); ok {
-		ctx = contexts.SetEnvironmentID(ctx, envID)
+	// Try to get environment ID from cookie
+	if envCookie, err := ctx.Request.Cookie("authsome_environment"); err == nil && envCookie != nil && envCookie.Value != "" {
+		if envID, err := xid.FromString(envCookie.Value); err == nil && !envID.IsNil() {
+			reqCtx = contexts.SetEnvironmentID(reqCtx, envID)
+			return reqCtx
+		}
 	}
 
-	return ctx
+	// Fall back to default environment for the app
+	if !appID.IsNil() && e.plugin.authInst != nil {
+		if envSvc := e.plugin.authInst.GetServiceRegistry().EnvironmentService(); envSvc != nil {
+			if defaultEnv, err := envSvc.GetDefaultEnvironment(reqCtx, appID); err == nil && defaultEnv != nil {
+				reqCtx = contexts.SetEnvironmentID(reqCtx, defaultEnv.ID)
+			}
+		}
+	}
+
+	return reqCtx
 }
 
 // parseSecretID parses a secret ID from URL parameter
-func (e *DashboardExtension) parseSecretID(c forge.Context) (xid.ID, error) {
-	idStr := c.Param("secretId")
+func (e *DashboardExtension) parseSecretID(ctx *router.PageContext) (xid.ID, error) {
+	idStr := ctx.Param("secretId")
 	if idStr == "" {
 		return xid.NilID(), fmt.Errorf("secret ID is required")
 	}
@@ -477,7 +890,7 @@ func (e *DashboardExtension) renderSecretsNav(currentApp *app.App, basePath, act
 		}
 
 		navItems = append(navItems, A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+item.path),
+			Href(basePath+"/app/"+currentApp.ID.String()+item.path),
 			Class(classes),
 			item.icon,
 			g.Text(item.label),
@@ -495,416 +908,329 @@ func (e *DashboardExtension) renderSecretsNav(currentApp *app.App, basePath, act
 // =============================================================================
 
 // ServeSecretsListPage serves the secrets list page
-func (e *DashboardExtension) ServeSecretsListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeSecretsListPage(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
-
-	ctx := e.injectContext(c)
 
 	// Get query parameters
 	query := &core.ListSecretsQuery{
-		Prefix:   c.QueryDefault("prefix", ""),
-		Search:   c.QueryDefault("search", ""),
+		Prefix: func() string {
+			v := ctx.Request.URL.Query().Get("prefix")
+			if v == "" {
+				return ""
+			}
+			return v
+		}(),
+		Search: func() string {
+			v := ctx.Request.URL.Query().Get("search")
+			if v == "" {
+				return ""
+			}
+			return v
+		}(),
 		PageSize: 20,
 		Page:     1,
 	}
 
-	if p := c.QueryDefault("page", ""); p != "" {
+	if p := func() string {
+		v := ctx.Request.URL.Query().Get("page")
+		if v == "" {
+			return ""
+		}
+		return v
+	}(); p != "" {
 		if parsed, err := strconv.Atoi(p); err == nil {
 			query.Page = parsed
 		}
 	}
 
 	// Get secrets
-	secrets, pag, err := e.plugin.Service().List(ctx, query)
+	secrets, pag, err := e.plugin.Service().List(reqCtx, query)
 	if err != nil {
 		secrets = []*core.SecretDTO{}
 		pag = nil
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := e.renderSecretsListContent(currentApp, basePath, secrets, pag, query)
 
-	pageData := components.PageData{
-		Title:      "Secrets Manager",
-		User:       currentUser,
-		ActivePage: "secrets",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeCreateSecretPage serves the create secret page
-func (e *DashboardExtension) ServeCreateSecretPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeCreateSecretPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := e.renderCreateSecretForm(currentApp, basePath, nil, "")
 
-	pageData := components.PageData{
-		Title:      "Create Secret",
-		User:       currentUser,
-		ActivePage: "secret-create",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // HandleCreateSecret handles the create secret form submission
-func (e *DashboardExtension) HandleCreateSecret(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleCreateSecret(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentUser := e.getUserFromContext(c)
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
-
-	ctx := e.injectContext(c)
 
 	// Parse form
 	req := &core.CreateSecretRequest{
-		Path:        c.FormValue("path"),
-		Value:       c.FormValue("value"),
-		ValueType:   c.FormValue("valueType"),
-		Schema:      c.FormValue("schema"),
-		Description: c.FormValue("description"),
+		Path:        ctx.Request.FormValue("path"),
+		Value:       ctx.Request.FormValue("value"),
+		ValueType:   ctx.Request.FormValue("valueType"),
+		Schema:      ctx.Request.FormValue("schema"),
+		Description: ctx.Request.FormValue("description"),
 	}
 
-	if tags := c.FormValue("tags"); tags != "" {
+	if tags := ctx.Request.FormValue("tags"); tags != "" {
 		req.Tags = splitTags(tags)
 	}
 
 	// Create secret
-	_, err = e.plugin.Service().Create(ctx, req)
+	_, err = e.plugin.Service().Create(reqCtx, req)
 	if err != nil {
-		basePath := handler.GetBasePath()
+		basePath := e.getBasePath()
 		content := e.renderCreateSecretForm(currentApp, basePath, req, err.Error())
-		pageData := components.PageData{
-			Title:      "Create Secret",
-			User:       currentUser,
-			ActivePage: "secret-create",
-			BasePath:   basePath,
-			CurrentApp: currentApp,
-			Error:      err.Error(),
-		}
-		return handler.RenderWithLayout(c, pageData, content)
+		return content, nil
 	}
 
 	// Redirect to list
-	return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/app/"+currentApp.ID.String()+"/secrets")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets", http.StatusFound)
+	return nil, nil
 }
 
 // ServeSecretDetailPage serves the secret detail page
-func (e *DashboardExtension) ServeSecretDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeSecretDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	secretID, err := e.parseSecretID(c)
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid secret ID")
+		return nil, errs.BadRequest("Invalid secret ID")
 	}
-
-	ctx := e.injectContext(c)
 
 	// Get secret
-	secret, err := e.plugin.Service().Get(ctx, secretID)
+	secret, err := e.plugin.Service().Get(reqCtx, secretID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Secret not found")
+		return nil, errs.NotFound("Secret not found")
 	}
 
 	// Get recent versions
-	versions, _, _ := e.plugin.Service().GetVersions(ctx, secretID, 1, 5)
+	versions, _, _ := e.plugin.Service().GetVersions(reqCtx, secretID, 1, 5)
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := e.renderSecretDetailContent(currentApp, basePath, secret, versions)
 
-	pageData := components.PageData{
-		Title:      "Secret Details",
-		User:       currentUser,
-		ActivePage: "secret-detail",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeEditSecretPage serves the edit secret page
-func (e *DashboardExtension) ServeEditSecretPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeEditSecretPage(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	secretID, err := e.parseSecretID(c)
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid secret ID")
+		return nil, errs.BadRequest("Invalid secret ID")
 	}
 
-	ctx := e.injectContext(c)
-
-	secret, err := e.plugin.Service().Get(ctx, secretID)
+	secret, err := e.plugin.Service().Get(reqCtx, secretID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Secret not found")
+		return nil, errs.NotFound("Secret not found")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := e.renderEditSecretForm(currentApp, basePath, secret, "")
 
-	pageData := components.PageData{
-		Title:      "Edit Secret",
-		User:       currentUser,
-		ActivePage: "secret-edit",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // HandleUpdateSecret handles the update secret form submission
-func (e *DashboardExtension) HandleUpdateSecret(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleUpdateSecret(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentUser := e.getUserFromContext(c)
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	secretID, err := e.parseSecretID(c)
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid secret ID")
+		return nil, errs.BadRequest("Invalid secret ID")
 	}
-
-	ctx := e.injectContext(c)
 
 	// Parse form
 	req := &core.UpdateSecretRequest{
-		Description:  c.FormValue("description"),
-		ChangeReason: c.FormValue("changeReason"),
+		Description:  ctx.Request.FormValue("description"),
+		ChangeReason: ctx.Request.FormValue("changeReason"),
 	}
 
-	if value := c.FormValue("value"); value != "" {
+	if value := ctx.Request.FormValue("value"); value != "" {
 		req.Value = value
 	}
-	if valueType := c.FormValue("valueType"); valueType != "" {
+	if valueType := ctx.Request.FormValue("valueType"); valueType != "" {
 		req.ValueType = valueType
 	}
-	if tags := c.FormValue("tags"); tags != "" {
+	if tags := ctx.Request.FormValue("tags"); tags != "" {
 		req.Tags = splitTags(tags)
 	}
 
 	// Update secret
-	_, err = e.plugin.Service().Update(ctx, secretID, req)
+	_, err = e.plugin.Service().Update(reqCtx, secretID, req)
 	if err != nil {
-		secret, _ := e.plugin.Service().Get(ctx, secretID)
-		basePath := handler.GetBasePath()
+		secret, _ := e.plugin.Service().Get(reqCtx, secretID)
+		basePath := e.getBasePath()
 		content := e.renderEditSecretForm(currentApp, basePath, secret, err.Error())
-		pageData := components.PageData{
-			Title:      "Edit Secret",
-			User:       currentUser,
-			ActivePage: "secret-edit",
-			BasePath:   basePath,
-			CurrentApp: currentApp,
-			Error:      err.Error(),
-		}
-		return handler.RenderWithLayout(c, pageData, content)
+		return content, nil
 	}
 
 	// Redirect to detail
-	return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/app/"+currentApp.ID.String()+"/secrets/"+secretID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets/"+secretID.String(), http.StatusFound)
+	return nil, nil
 }
 
 // HandleDeleteSecret handles the delete secret action
-func (e *DashboardExtension) HandleDeleteSecret(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleDeleteSecret(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	secretID, err := e.parseSecretID(c)
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid secret ID")
+		return nil, errs.BadRequest("Invalid secret ID")
 	}
 
-	ctx := e.injectContext(c)
-
-	if err := e.plugin.Service().Delete(ctx, secretID); err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to delete secret: "+err.Error())
+	if err := e.plugin.Service().Delete(reqCtx, secretID); err != nil {
+		return nil, errs.InternalServerError("Failed to delete secret", err)
 	}
 
-	return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/app/"+currentApp.ID.String()+"/secrets")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets", http.StatusFound)
+	return nil, nil
 }
 
 // ServeVersionHistoryPage serves the version history page
-func (e *DashboardExtension) ServeVersionHistoryPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeVersionHistoryPage(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	secretID, err := e.parseSecretID(c)
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid secret ID")
+		return nil, errs.BadRequest("Invalid secret ID")
 	}
 
-	ctx := e.injectContext(c)
-
-	secret, err := e.plugin.Service().Get(ctx, secretID)
+	secret, err := e.plugin.Service().Get(reqCtx, secretID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Secret not found")
+		return nil, errs.NotFound("Secret not found")
 	}
 
 	page := 1
-	if p := c.QueryDefault("page", ""); p != "" {
+	if p := func() string {
+		v := ctx.Request.URL.Query().Get("page")
+		if v == "" {
+			return ""
+		}
+		return v
+	}(); p != "" {
 		if parsed, err := strconv.Atoi(p); err == nil {
 			page = parsed
 		}
 	}
 
-	versions, pag, _ := e.plugin.Service().GetVersions(ctx, secretID, page, 20)
+	versions, pag, _ := e.plugin.Service().GetVersions(reqCtx, secretID, page, 20)
 
-	basePath := handler.GetBasePath()
+	basePath := e.getBasePath()
 	content := e.renderVersionHistoryContent(currentApp, basePath, secret, versions, pag)
 
-	pageData := components.PageData{
-		Title:      "Version History",
-		User:       currentUser,
-		ActivePage: "secret-history",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // HandleRollback handles the rollback action
-func (e *DashboardExtension) HandleRollback(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleRollback(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	secretID, err := e.parseSecretID(c)
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid secret ID")
+		return nil, errs.BadRequest("Invalid secret ID")
 	}
 
-	versionStr := c.Param("version")
+	versionStr := ctx.Param("version")
 	version, err := strconv.Atoi(versionStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid version number")
+		return nil, errs.BadRequest("Invalid version number")
 	}
 
-	ctx := e.injectContext(c)
-
-	_, err = e.plugin.Service().Rollback(ctx, secretID, version, "Rollback from dashboard")
+	_, err = e.plugin.Service().Rollback(reqCtx, secretID, version, "Rollback from dashboard")
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Rollback failed: "+err.Error())
+		return nil, errs.InternalServerError("Rollback failed", err)
 	}
 
-	return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/app/"+currentApp.ID.String()+"/secrets/"+secretID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets/"+secretID.String(), http.StatusFound)
+	return nil, nil
 }
 
 // HandleRevealValue handles the reveal value AJAX request
-func (e *DashboardExtension) HandleRevealValue(c forge.Context) error {
-	secretID, err := e.parseSecretID(c)
+func (e *DashboardExtension) HandleRevealValue(ctx *router.PageContext) (g.Node, error) {
+	// Use injectContext to properly set app/environment IDs in context
+	reqCtx := e.injectContext(ctx)
+
+	secretID, err := e.parseSecretID(ctx)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid secret ID"})
+		return nil, errs.BadRequest("Invalid request")
 	}
 
-	ctx := e.injectContext(c)
-
-	value, err := e.plugin.Service().GetValue(ctx, secretID)
+	value, err := e.plugin.Service().GetValue(reqCtx, secretID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return nil, errs.InternalServerError("Operation failed", nil)
 	}
 
-	secret, _ := e.plugin.Service().Get(ctx, secretID)
+	secret, _ := e.plugin.Service().Get(reqCtx, secretID)
+	_ = value
+	_ = secret
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"value":     value,
-		"valueType": secret.ValueType,
-	})
+	return nil, nil // Success
 }
 
 // =============================================================================

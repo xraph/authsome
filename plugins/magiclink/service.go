@@ -93,7 +93,7 @@ func (s *Service) Send(ctx context.Context, appID xid.ID, email, ip, ua string) 
 	}
 
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "magiclink_sent", "email:"+e, ip, ua, "")
+		_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkSent), "email:"+e, ip, ua, "")
 	}
 
 	if s.config.DevExposeURL || s.notifAdapter == nil {
@@ -126,13 +126,13 @@ func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID
 	rec, err := s.repo.FindByToken(ctx, t, appID, orgID, time.Now())
 	if err != nil {
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "magiclink_verify_failed", "token:"+t, ip, ua, "")
+			_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkVerifyFailed), "token:"+t, ip, ua, "")
 		}
 		return nil, errs.Wrap(err, "MAGIC_LINK_LOOKUP_FAILED", "Failed to lookup magic link", 500)
 	}
 	if rec == nil {
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "magiclink_verify_failed", "token:"+t, ip, ua, "")
+			_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkVerifyFailed), "token:"+t, ip, ua, "")
 		}
 		return nil, errs.MagicLinkExpired()
 	}
@@ -147,7 +147,7 @@ func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID
 		}
 		// Return info for new user - handler will create via authService.SignUp
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "magiclink_verify_success_new_user", "email:"+rec.Email, ip, ua, "")
+			_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkVerifySuccessNewUser), "email:"+rec.Email, ip, ua, "")
 		}
 		return &VerifyResult{
 			Email:     rec.Email,
@@ -162,7 +162,7 @@ func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID
 	// Return existing user info - handler will create session via authService
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "magiclink_verify_success_existing_user", "email:"+rec.Email, ip, ua, "")
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionMagicLinkVerifySuccessExistingUser), "email:"+rec.Email, ip, ua, "")
 	}
 
 	return &VerifyResult{

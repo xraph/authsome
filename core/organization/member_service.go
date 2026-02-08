@@ -8,6 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/schema"
 )
 
 // MemberService handles member aggregate operations
@@ -21,6 +22,20 @@ type MemberService struct {
 
 // NewMemberService creates a new member service
 func NewMemberService(repo MemberRepository, orgRepo OrganizationRepository, cfg Config, rbacSvc *rbac.Service, roleRepo rbac.RoleRepository) *MemberService {
+	// Apply defaults for any zero-valued config fields
+	if cfg.MaxMembersPerOrganization == 0 {
+		cfg.MaxMembersPerOrganization = DefaultConfig().MaxMembersPerOrganization
+	}
+	if cfg.MaxOrganizationsPerUser == 0 {
+		cfg.MaxOrganizationsPerUser = DefaultConfig().MaxOrganizationsPerUser
+	}
+	if cfg.MaxTeamsPerOrganization == 0 {
+		cfg.MaxTeamsPerOrganization = DefaultConfig().MaxTeamsPerOrganization
+	}
+	if cfg.InvitationExpiryHours == 0 {
+		cfg.InvitationExpiryHours = DefaultConfig().InvitationExpiryHours
+	}
+
 	return &MemberService{
 		repo:     repo,
 		orgRepo:  orgRepo,
@@ -34,20 +49,69 @@ func NewMemberService(repo MemberRepository, orgRepo OrganizationRepository, cfg
 // RBAC Validation Helpers
 // =============================================================================
 
-// validateRoleAgainstRBAC validates a role name against RBAC role definitions
+// validateRoleAgainstRBAC validates a role name or ID against RBAC role definitions
+// Supports both role IDs (20 chars alphanumeric) and role names
 // Falls back to static validation if RBAC repository is not available
-func (s *MemberService) validateRoleAgainstRBAC(ctx context.Context, appID xid.ID, roleName string) error {
+//
+// Validation rules:
+// - Always allows hardcoded roles (owner, admin, member)
+// - If AllowAppLevelRoles=true: Allows app-level roles (organization_id IS NULL) and org-specific roles
+// - If AllowAppLevelRoles=false: Only allows hardcoded roles
+func (s *MemberService) validateRoleAgainstRBAC(ctx context.Context, appID xid.ID, roleInput string) error {
 	if s.roleRepo == nil {
 		// Fallback to static validation if no RBAC role repository
-		return validateRole(roleName)
+		return validateRole(roleInput)
 	}
 
-	// Check if role exists in RBAC definitions for the app
-	_, err := s.roleRepo.FindByNameAndApp(ctx, roleName, appID)
-	if err != nil {
-		return InvalidRole(roleName)
+	// Check if roleInput is a hardcoded role name (always allowed)
+	if roleInput == RoleOwner || roleInput == RoleAdmin || roleInput == RoleMember {
+		return nil
 	}
-	return nil
+
+	// Detect if input is a role ID (20 chars alphanumeric) or a role name
+	isRoleID := len(roleInput) == 20 && isAlphanumeric(roleInput)
+
+	var role *schema.Role
+	var err error
+
+	if isRoleID {
+		// Try to find role by ID
+		roleID, parseErr := xid.FromString(roleInput)
+		if parseErr != nil {
+			return InvalidRole(roleInput)
+		}
+		role, err = s.roleRepo.FindByID(ctx, roleID)
+		if err != nil {
+			return InvalidRole(roleInput)
+		}
+
+		// Verify role belongs to this app
+		if role.AppID == nil || *role.AppID != appID {
+			return InvalidRole(roleInput)
+		}
+	} else {
+		// Try to find role by name within the app
+		role, err = s.roleRepo.FindByNameAndApp(ctx, roleInput, appID)
+		if err != nil {
+			return InvalidRole(roleInput)
+		}
+	}
+
+	// Check if it's a hardcoded role by name (always allowed)
+	if role.Name == RoleOwner || role.Name == RoleAdmin || role.Name == RoleMember {
+		return nil
+	}
+
+	// Apply scoping rules based on AllowAppLevelRoles config
+	if s.config.AllowAppLevelRoles {
+		// Allow app-level roles (organization_id IS NULL) or org-specific roles
+		// All roles at this point are valid since they belong to the app
+		return nil
+	}
+
+	// If AllowAppLevelRoles is false, only hardcoded roles are allowed
+	// We've already checked hardcoded roles above, so reject all custom roles
+	return InvalidRoleWithHint(roleInput, "custom roles disabled - enable AllowAppLevelRoles config to use app-level RBAC roles")
 }
 
 // checkPermissionByRole provides fallback permission checking based on role hierarchy

@@ -17,6 +17,7 @@ type AuditEvent struct {
 	UserID         *xid.ID `json:"userID" bun:"user_id,type:varchar(20)"`
 	Action         string  `json:"action" bun:"action,notnull"`
 	Resource       string  `json:"resource" bun:"resource,notnull"`
+	Source         string  `json:"source" bun:"source,notnull,default:'system'"` // Audit source: system, application, plugin
 	IPAddress      string  `json:"ipAddress" bun:"ip_address"`
 	UserAgent      string  `json:"userAgent" bun:"user_agent"`
 	Metadata       string  `json:"metadata" bun:"metadata"`

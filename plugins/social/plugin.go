@@ -3,6 +3,7 @@ package social
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/uptrace/bun"
@@ -21,14 +22,16 @@ import (
 
 // Plugin implements the social OAuth plugin
 type Plugin struct {
-	db            *bun.DB
-	service       *Service
-	handler       *Handler
-	config        Config
-	defaultConfig Config
-	authInst      core.Authsome
-	configRepo    repository.SocialProviderConfigRepository
-	dashboardExt  *DashboardExtension
+	db               *bun.DB
+	service          *Service
+	handler          *Handler
+	config           Config
+	defaultConfig    Config
+	authInst         core.Authsome
+	configRepo       repository.SocialProviderConfigRepository
+	dashboardExt     *DashboardExtension
+	dashboardExtOnce sync.Once
+	logger           forge.Logger
 }
 
 // PluginOption is a functional option for configuring the social plugin
@@ -223,8 +226,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Create handler with centralized completion service
 	p.handler = NewHandler(p.service, rateLimiter, authCompletion)
 
-	// Initialize dashboard extension
-	p.dashboardExt = NewDashboardExtension(p, p.configRepo)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	return nil
 }
@@ -434,6 +436,9 @@ func (p *Plugin) GetService() *Service {
 
 // DashboardExtension returns the dashboard extension for the social plugin
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtOnce.Do(func() {
+		p.dashboardExt = NewDashboardExtension(p, p.configRepo)
+	})
 	return p.dashboardExt
 }
 

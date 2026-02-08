@@ -13,14 +13,14 @@ export class SecretsPlugin implements ClientPlugin {
   }
 
   async list(request?: types.ListSecretsRequest): Promise<types.ListSecretsResponse> {
-    const path = '/secrets/list';
+    const path = '/secrets';
     return this.client.request<types.ListSecretsResponse>('GET', path, {
       query: this.client.toQueryParams(request),
     });
   }
 
   async create(request: types.CreateSecretRequest): Promise<types.SecretDTO> {
-    const path = '/secrets/create';
+    const path = '/secrets';
     return this.client.request<types.SecretDTO>('POST', path, {
       body: request,
     });
@@ -66,7 +66,7 @@ export class SecretsPlugin implements ClientPlugin {
     });
   }
 
-  async rollback(params: { id: string; version: number }, request: types.RollbackRequest): Promise<types.SecretDTO> {
+  async rollback(params: { version: number; id: string }, request: types.RollbackRequest): Promise<types.SecretDTO> {
     const path = `/secrets/${params.id}/rollback/${params.version}`;
     return this.client.request<types.SecretDTO>('POST', path, {
       body: request,

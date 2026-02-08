@@ -23,11 +23,11 @@ func ComponentSchemasPage(
 	page, pageSize, totalItems int,
 	searchQuery string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 	totalPages := (totalItems + pageSize - 1) / pageSize
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Breadcrumbs
 		Breadcrumbs(
@@ -55,7 +55,7 @@ func ComponentSchemasPage(
 
 // componentSchemasTable renders component schemas as a table
 func componentSchemasTable(currentApp *app.App, basePath string, components []*core.ComponentSchemaSummaryDTO, page, totalPages int) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	if len(components) == 0 {
 		return Card(
@@ -165,10 +165,10 @@ func CreateComponentSchemaPage(
 	basePath string,
 	errorMsg string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	return Div(
-		Class("space-y-6 max-w-4xl"),
+		Class("space-y-2 max-w-4xl"),
 
 		// Breadcrumbs
 		Breadcrumbs(
@@ -195,9 +195,26 @@ func CreateComponentSchemaPage(
 				}()),
 
 				FormEl(
-					Method("POST"),
-					Action(appBase+"/cms/components/create"),
-					Class("space-y-6"),
+					g.Attr("@submit.prevent", fmt.Sprintf(`async (event) => {
+						loading = true;
+						try {
+							await $bridge.call('cms.createComponentSchema', {
+								appId: '%s',
+								title: name,
+								name: slug,
+								description: event.target.description.value,
+								icon: event.target.icon.value,
+								fields: fields
+							});
+							$root.notification.success('Component schema created!');
+							window.location.href = '%s/cms/components';
+						} catch (err) {
+							const errorMsg = err.error?.message || err.message || 'Failed to create component schema';
+							$root.notification.error(errorMsg);
+							loading = false;
+						}
+					}`, currentApp.ID.String(), appBase)),
+					Class("space-y-2"),
 					g.Attr("x-data", componentSchemaFormData()),
 
 					// Basic info section
@@ -278,8 +295,37 @@ func CreateComponentSchemaPage(
 						Class("flex items-center gap-4 pt-6 border-t border-slate-200 dark:border-gray-800"),
 						Button(
 							Type("submit"),
-							Class("px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"),
-							g.Text("Create Component Schema"),
+							g.Attr(":disabled", "loading"),
+							Class("px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"),
+							g.El("span",
+								g.Attr("x-show", "!loading"),
+								g.Text("Create Component Schema"),
+							),
+							g.El("span",
+								g.Attr("x-show", "loading"),
+								g.Attr("x-cloak", ""),
+								Class("flex items-center gap-2"),
+								g.El("svg",
+									Class("animate-spin h-4 w-4"),
+									g.Attr("xmlns", "http://www.w3.org/2000/svg"),
+									g.Attr("fill", "none"),
+									g.Attr("viewBox", "0 0 24 24"),
+									g.El("circle",
+										Class("opacity-25"),
+										g.Attr("cx", "12"),
+										g.Attr("cy", "12"),
+										g.Attr("r", "10"),
+										g.Attr("stroke", "currentColor"),
+										g.Attr("stroke-width", "4"),
+									),
+									g.El("path",
+										Class("opacity-75"),
+										g.Attr("fill", "currentColor"),
+										g.Attr("d", "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"),
+									),
+								),
+								g.Text("Creating..."),
+							),
 						),
 						A(
 							Href(appBase+"/cms/components"),
@@ -304,13 +350,13 @@ func EditComponentSchemaPage(
 	component *core.ComponentSchemaDTO,
 	errorMsg string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Serialize fields to JSON for Alpine.js
 	fieldsJSON, _ := json.Marshal(component.Fields)
 
 	return Div(
-		Class("space-y-6 max-w-4xl"),
+		Class("space-y-2 max-w-4xl"),
 
 		// Breadcrumbs
 		Breadcrumbs(
@@ -370,7 +416,7 @@ func EditComponentSchemaPage(
 				FormEl(
 					Method("POST"),
 					Action(appBase+"/cms/components/"+component.Name),
-					Class("space-y-6"),
+					Class("space-y-2"),
 					g.Attr("x-data", componentSchemaFormDataWithValues(component.Name, component.Name, string(fieldsJSON))),
 
 					// Basic info section
@@ -492,6 +538,7 @@ func componentSchemaFormData() string {
 		name: '',
 		slug: '',
 		slugManuallyEdited: false,
+		loading: false,
 		fields: [],
 		
 		generateSlug(name) {

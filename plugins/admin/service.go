@@ -253,7 +253,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	if req.UserOrganizationID != nil {
 		orgIDStr = req.UserOrganizationID.String()
 	}
-	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:create", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionUserCreated), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"created_user_id":"%s","email":"%s","name":"%s","app_id":"%s","organization_id":"%s"}`, newUser.ID.String(), newUser.Email, newUser.Name, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
@@ -340,7 +340,7 @@ func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error 
 	}
 
 	// Log audit event
-	if err := s.getAuditService().Log(ctx, &adminID, "user:delete", "user",
+	if err := s.getAuditService().Log(ctx, &adminID, string(audit.ActionUserDeleted), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"deleted_user_id":"%s","email":"%s","name":"%s"}`, targetUser.ID.String(), targetUser.Email, targetUser.Name)); err != nil {
 		// Log error but don't fail the operation
@@ -375,7 +375,7 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	if req.ExpiresAt != nil {
 		expiresAtStr = fmt.Sprintf(`"%s"`, req.ExpiresAt.Format(time.RFC3339))
 	}
-	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:ban", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionUserBanned), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"banned_user_id":"%s","reason":"%s","expires_at":%s}`, req.UserID.String(), req.Reason, expiresAtStr)); err != nil {
 		// Log error but don't fail the operation
@@ -403,7 +403,7 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 	}
 
 	// Log audit event
-	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:unban", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionUserUnbanned), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"unbanned_user_id":"%s"}`, req.UserID.String())); err != nil {
 		// Log error but don't fail the operation
@@ -473,7 +473,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	}
 
 	// Log audit event
-	if err := s.getAuditService().Log(ctx, &req.AdminID, "user:impersonate", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionUserImpersonate), "user",
 		req.IPAddress, req.UserAgent,
 		fmt.Sprintf(`{"impersonated_user_id":"%s","session_id":"%s","duration":"%s"}`, req.UserID.String(), newSession.ID.String(), duration.String())); err != nil {
 		// Log error but don't fail the operation
@@ -499,7 +499,7 @@ func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) erro
 	}
 
 	// Log audit event
-	if err := s.getAuditService().Log(ctx, &req.AdminID, "role:assign", "user",
+	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionRoleAssigned), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"target_user_id":"%s","role":"%s","app_id":"%s","organization_id":"%s"}`, req.UserID.String(), req.Role, req.AppID.String(), orgIDStr)); err != nil {
 		// Log error but don't fail the operation
@@ -550,7 +550,7 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) 
 	}
 
 	// Log audit event
-	if err := s.getAuditService().Log(ctx, &adminID, "session:revoke", "session",
+	if err := s.getAuditService().Log(ctx, &adminID, string(audit.ActionSessionRevoked), "session",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"revoked_session_id":"%s"}`, sessionID.String())); err != nil {
 		// Log error but don't fail the operation

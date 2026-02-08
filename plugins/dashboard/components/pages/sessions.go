@@ -48,7 +48,7 @@ func SessionsPage(data SessionsPageData) g.Node {
 func searchBar(data SessionsPageData) g.Node {
 	return FormEl(
 		Method("GET"),
-		Action(data.BasePath+"/dashboard/sessions"),
+		Action(data.BasePath+"/sessions"),
 		Class("flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"),
 
 		// Search Input
@@ -73,7 +73,7 @@ func searchBar(data SessionsPageData) g.Node {
 		Div(Class("flex items-center gap-2"),
 			g.If(data.Query != "",
 				A(
-					Href(data.BasePath+"/dashboard/sessions"),
+					Href(data.BasePath+"/sessions"),
 					Class("inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-gray-700 px-2.5 py-1.5 text-sm font-medium text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors"),
 					lucide.X(Class("h-4 w-4")),
 					g.Text("Clear"),

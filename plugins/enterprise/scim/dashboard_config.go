@@ -9,7 +9,8 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -17,32 +18,29 @@ import (
 // Configuration Management Handlers
 
 // ServeConfigPage renders the SCIM configuration page
-func (e *DashboardExtension) ServeConfigPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
+func (e *DashboardExtension) ServeConfigPage(ctx *router.PageContext) (g.Node, error) {
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+		return nil, nil
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Get organization if in org mode
-	orgID, _ := e.getOrgFromContext(c)
+	orgID, _ := e.getOrgFromContext(ctx)
 
-	content := e.renderConfigPageContent(c, currentApp, orgID)
+	content := e.renderConfigPageContent(currentApp, orgID)
 
-	return handler.RenderSettingsPage(c, "scim-config", content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // renderConfigPageContent renders the configuration page content
-func (e *DashboardExtension) renderConfigPageContent(c forge.Context, currentApp interface{}, orgID *xid.ID) g.Node {
+func (e *DashboardExtension) renderConfigPageContent(currentApp interface{}, orgID *xid.ID) g.Node {
 	mode := e.detectMode()
 	config := e.plugin.config
 
@@ -57,7 +55,7 @@ func (e *DashboardExtension) renderConfigPageContent(c forge.Context, currentApp
 
 	return Div(
 		Class("space-y-6"),
-		
+
 		// Header
 		Div(
 			H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
@@ -93,9 +91,9 @@ func (e *DashboardExtension) renderConfigPageContent(c forge.Context, currentApp
 			),
 			Form(
 				Method("POST"),
-				Action(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-config/user-provisioning", basePath, appID.String())),
+				Action(fmt.Sprintf("%s/app/%s/settings/scim-config/user-provisioning", basePath, appID.String())),
 				Class("p-6 space-y-4"),
-				
+
 				// Auto-activate users
 				Div(
 					Class("flex items-start"),
@@ -248,9 +246,9 @@ func (e *DashboardExtension) renderConfigPageContent(c forge.Context, currentApp
 			),
 			Form(
 				Method("POST"),
-				Action(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-config/group-sync", basePath, appID.String())),
+				Action(fmt.Sprintf("%s/app/%s/settings/scim-config/group-sync", basePath, appID.String())),
 				Class("p-6 space-y-4"),
-				
+
 				// Enable group sync
 				Div(
 					Class("flex items-start"),
@@ -418,13 +416,13 @@ func (e *DashboardExtension) renderAttributeMappingSection(basePath string, appI
 		),
 		Form(
 			Method("POST"),
-			Action(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-config/attribute-mapping", basePath, appID.String())),
+			Action(fmt.Sprintf("%s/app/%s/settings/scim-config/attribute-mapping", basePath, appID.String())),
 			Class("p-6 space-y-4"),
-			
+
 			// Standard mappings
 			Div(
 				Class("grid grid-cols-2 gap-4"),
-				
+
 				e.renderMappingField("Username Field", "username_field", config.AttributeMapping.UserNameField),
 				e.renderMappingField("Email Field", "email_field", config.AttributeMapping.EmailField),
 				e.renderMappingField("Given Name", "given_name_field", config.AttributeMapping.GivenNameField),
@@ -499,9 +497,9 @@ func (e *DashboardExtension) renderSecuritySection(basePath string, appID *xid.I
 		),
 		Form(
 			Method("POST"),
-			Action(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-config/security", basePath, appID.String())),
+			Action(fmt.Sprintf("%s/app/%s/settings/scim-config/security", basePath, appID.String())),
 			Class("p-6 space-y-4"),
-			
+
 			// Rate limiting
 			Div(
 				Class("flex items-start"),
@@ -656,13 +654,17 @@ func (e *DashboardExtension) renderSecuritySection(basePath string, appID *xid.I
 }
 
 // HandleUpdateUserProvisioning handles user provisioning settings update
-func (e *DashboardExtension) HandleUpdateUserProvisioning(c forge.Context) error {
+func (e *DashboardExtension) HandleUpdateUserProvisioning(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	autoActivate := c.FormValue("auto_activate") == "on"
-	sendWelcomeEmail := c.FormValue("send_welcome_email") == "on"
-	preventDuplicates := c.FormValue("prevent_duplicates") == "on"
-	softDelete := c.FormValue("soft_delete") == "on"
-	defaultRole := c.FormValue("default_role")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
+	}
+
+	autoActivate := ctx.Request.FormValue("auto_activate") == "on"
+	sendWelcomeEmail := ctx.Request.FormValue("send_welcome_email") == "on"
+	preventDuplicates := ctx.Request.FormValue("prevent_duplicates") == "on"
+	softDelete := ctx.Request.FormValue("soft_delete") == "on"
+	defaultRole := ctx.Request.FormValue("default_role")
 
 	// Update config (in production, persist to config store)
 	e.plugin.config.UserProvisioning.AutoActivate = autoActivate
@@ -671,20 +673,31 @@ func (e *DashboardExtension) HandleUpdateUserProvisioning(c forge.Context) error
 	e.plugin.config.UserProvisioning.SoftDeleteOnDeProvision = softDelete
 	e.plugin.config.UserProvisioning.DefaultRole = defaultRole
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "User provisioning settings updated successfully",
-	})
+	// Extract app from URL for redirect
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	// Redirect back to config page with success message
+	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=user_provisioning",
+		e.baseUIPath, currentApp.ID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateGroupSync handles group sync settings update
-func (e *DashboardExtension) HandleUpdateGroupSync(c forge.Context) error {
+func (e *DashboardExtension) HandleUpdateGroupSync(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	enabled := c.FormValue("enabled") == "on"
-	syncToTeams := c.FormValue("sync_to_teams") == "on"
-	syncToRoles := c.FormValue("sync_to_roles") == "on"
-	createMissing := c.FormValue("create_missing") == "on"
-	deleteEmpty := c.FormValue("delete_empty") == "on"
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
+	}
+
+	enabled := ctx.Request.FormValue("enabled") == "on"
+	syncToTeams := ctx.Request.FormValue("sync_to_teams") == "on"
+	syncToRoles := ctx.Request.FormValue("sync_to_roles") == "on"
+	createMissing := ctx.Request.FormValue("create_missing") == "on"
+	deleteEmpty := ctx.Request.FormValue("delete_empty") == "on"
 
 	// Update config
 	e.plugin.config.GroupSync.Enabled = enabled
@@ -693,40 +706,62 @@ func (e *DashboardExtension) HandleUpdateGroupSync(c forge.Context) error {
 	e.plugin.config.GroupSync.CreateMissingGroups = createMissing
 	e.plugin.config.GroupSync.DeleteEmptyGroups = deleteEmpty
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Group sync settings updated successfully",
-	})
+	// Extract app from URL for redirect
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	// Redirect back to config page with success message
+	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=group_sync",
+		e.baseUIPath, currentApp.ID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateAttributeMapping handles attribute mapping update
-func (e *DashboardExtension) HandleUpdateAttributeMapping(c forge.Context) error {
+func (e *DashboardExtension) HandleUpdateAttributeMapping(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	e.plugin.config.AttributeMapping.UserNameField = c.FormValue("username_field")
-	e.plugin.config.AttributeMapping.EmailField = c.FormValue("email_field")
-	e.plugin.config.AttributeMapping.GivenNameField = c.FormValue("given_name_field")
-	e.plugin.config.AttributeMapping.FamilyNameField = c.FormValue("family_name_field")
-	e.plugin.config.AttributeMapping.DisplayNameField = c.FormValue("display_name_field")
-	e.plugin.config.AttributeMapping.ActiveField = c.FormValue("active_field")
-	e.plugin.config.AttributeMapping.EmployeeNumberField = c.FormValue("employee_number_field")
-	e.plugin.config.AttributeMapping.DepartmentField = c.FormValue("department_field")
-	e.plugin.config.AttributeMapping.ManagerField = c.FormValue("manager_field")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
+	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Attribute mappings updated successfully",
-	})
+	e.plugin.config.AttributeMapping.UserNameField = ctx.Request.FormValue("username_field")
+	e.plugin.config.AttributeMapping.EmailField = ctx.Request.FormValue("email_field")
+	e.plugin.config.AttributeMapping.GivenNameField = ctx.Request.FormValue("given_name_field")
+	e.plugin.config.AttributeMapping.FamilyNameField = ctx.Request.FormValue("family_name_field")
+	e.plugin.config.AttributeMapping.DisplayNameField = ctx.Request.FormValue("display_name_field")
+	e.plugin.config.AttributeMapping.ActiveField = ctx.Request.FormValue("active_field")
+	e.plugin.config.AttributeMapping.EmployeeNumberField = ctx.Request.FormValue("employee_number_field")
+	e.plugin.config.AttributeMapping.DepartmentField = ctx.Request.FormValue("department_field")
+	e.plugin.config.AttributeMapping.ManagerField = ctx.Request.FormValue("manager_field")
+
+	// Extract app from URL for redirect
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	// Redirect back to config page with success message
+	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=attribute_mapping",
+		e.baseUIPath, currentApp.ID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateSecurity handles security settings update
-func (e *DashboardExtension) HandleUpdateSecurity(c forge.Context) error {
+func (e *DashboardExtension) HandleUpdateSecurity(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	rateLimitEnabled := c.FormValue("rate_limit_enabled") == "on"
-	requestsPerMin, _ := strconv.Atoi(c.FormValue("requests_per_min"))
-	burstSize, _ := strconv.Atoi(c.FormValue("burst_size"))
-	requireHTTPS := c.FormValue("require_https") == "on"
-	auditAll := c.FormValue("audit_all") == "on"
-	maskSensitive := c.FormValue("mask_sensitive") == "on"
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
+	}
+
+	rateLimitEnabled := ctx.Request.FormValue("rate_limit_enabled") == "on"
+	requestsPerMin, _ := strconv.Atoi(ctx.Request.FormValue("requests_per_min"))
+	burstSize, _ := strconv.Atoi(ctx.Request.FormValue("burst_size"))
+	requireHTTPS := ctx.Request.FormValue("require_https") == "on"
+	auditAll := ctx.Request.FormValue("audit_all") == "on"
+	maskSensitive := ctx.Request.FormValue("mask_sensitive") == "on"
 
 	// Update config
 	e.plugin.config.RateLimit.Enabled = rateLimitEnabled
@@ -740,20 +775,31 @@ func (e *DashboardExtension) HandleUpdateSecurity(c forge.Context) error {
 	e.plugin.config.Security.AuditAllOperations = auditAll
 	e.plugin.config.Security.MaskSensitiveData = maskSensitive
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Security settings updated successfully",
-	})
+	// Extract app from URL for redirect
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	// Redirect back to config page with success message
+	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=security",
+		e.baseUIPath, currentApp.ID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+	return nil, nil
 }
 
 // HandleUpdateWebhooks handles webhook configuration update
-func (e *DashboardExtension) HandleUpdateWebhooks(c forge.Context) error {
+func (e *DashboardExtension) HandleUpdateWebhooks(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	enabled := c.FormValue("enabled") == "on"
-	notifyOnCreate := c.FormValue("notify_on_create") == "on"
-	notifyOnUpdate := c.FormValue("notify_on_update") == "on"
-	notifyOnDelete := c.FormValue("notify_on_delete") == "on"
-	webhookURLs := c.FormValue("webhook_urls")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
+	}
+
+	enabled := ctx.Request.FormValue("enabled") == "on"
+	notifyOnCreate := ctx.Request.FormValue("notify_on_create") == "on"
+	notifyOnUpdate := ctx.Request.FormValue("notify_on_update") == "on"
+	notifyOnDelete := ctx.Request.FormValue("notify_on_delete") == "on"
+	webhookURLs := ctx.Request.FormValue("webhook_urls")
 
 	// Parse URLs
 	urls := []string{}
@@ -768,9 +814,15 @@ func (e *DashboardExtension) HandleUpdateWebhooks(c forge.Context) error {
 	e.plugin.config.Webhooks.NotifyOnDelete = notifyOnDelete
 	e.plugin.config.Webhooks.WebhookURLs = urls
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Webhook settings updated successfully",
-	})
-}
+	// Extract app from URL for redirect
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
 
+	// Redirect back to config page with success message
+	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=webhooks",
+		e.baseUIPath, currentApp.ID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+	return nil, nil
+}

@@ -44,7 +44,7 @@ func (e *DashboardExtension) renderNotificationSettings(currentApp *app.App, bas
 		// Settings form
 		Form(
 			Method("POST"),
-			Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/notifications/settings"),
+			Action(basePath+"/app/"+currentApp.ID.String()+"/notifications/settings"),
 			Class("space-y-6"),
 
 			// General Settings
@@ -114,7 +114,7 @@ func (e *DashboardExtension) renderNotificationSettings(currentApp *app.App, bas
 			Div(
 				Class("flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-gray-700"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/notifications"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/notifications"),
 					Class("px-4 py-2 text-sm font-medium text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white transition"),
 					g.Text("Cancel"),
 				),

@@ -12,7 +12,8 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -20,46 +21,43 @@ import (
 // Monitoring Handlers
 
 // ServeMonitoringPage renders the main SCIM monitoring dashboard
-func (e *DashboardExtension) ServeMonitoringPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
+func (e *DashboardExtension) ServeMonitoringPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+		return nil, nil
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Get organization if in org mode
-	orgID, _ := e.getOrgFromContext(c)
+	orgID, _ := e.getOrgFromContext(ctx)
 
-	content := e.renderMonitoringPageContent(c, currentApp, orgID)
+	content := e.renderMonitoringPageContent(reqCtx, currentApp, orgID)
 
-	return handler.RenderSettingsPage(c, "scim-monitoring", content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // renderMonitoringPageContent renders the monitoring page content
-func (e *DashboardExtension) renderMonitoringPageContent(c forge.Context, currentApp interface{}, orgID *xid.ID) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
 	appID := app.ID
 
 	// Fetch sync status and stats
-	stats, err := e.plugin.service.GetDashboardStats(ctx, appID, orgID)
+	stats, err := e.plugin.service.GetDashboardStats(reqCtx, appID, orgID)
 	if err != nil {
 		return alertBox("error", "Error", "Failed to load monitoring data: "+err.Error())
 	}
 
 	return Div(
 		Class("space-y-6"),
-		
+
 		// Header
 		Div(
 			H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
@@ -101,19 +99,19 @@ func (e *DashboardExtension) renderMonitoringPageContent(c forge.Context, curren
 		Div(
 			Class("flex gap-3"),
 			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-monitoring/logs", basePath, appID.String())),
+				Href(fmt.Sprintf("%s/app/%s/settings/scim-monitoring/logs", basePath, appID.String())),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.FileText(Class("size-4")),
 				g.Text("View Logs"),
 			),
 			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-monitoring/stats", basePath, appID.String())),
+				Href(fmt.Sprintf("%s/app/%s/settings/scim-monitoring/stats", basePath, appID.String())),
 				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
 				lucide.TrendingUp(Class("size-4")),
 				g.Text("View Statistics"),
 			),
 			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-monitoring/export", basePath, appID.String())),
+				Href(fmt.Sprintf("%s/app/%s/settings/scim-monitoring/export", basePath, appID.String())),
 				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
 				lucide.Download(Class("size-4")),
 				g.Text("Export Logs"),
@@ -121,11 +119,11 @@ func (e *DashboardExtension) renderMonitoringPageContent(c forge.Context, curren
 		),
 
 		// Recent Activity
-		e.renderRecentActivitySection(ctx, &appID, orgID),
+		e.renderRecentActivitySection(reqCtx, &appID, orgID),
 
 		// Failed Operations
 		g.If(stats.FailedSyncs > 0,
-			e.renderFailedOperationsSection(ctx, &appID, orgID),
+			e.renderFailedOperationsSection(reqCtx, &appID, orgID),
 		),
 	)
 }
@@ -253,51 +251,48 @@ func (e *DashboardExtension) renderFailedEventCards(events []*SCIMSyncEvent) []g
 }
 
 // ServeLogsPage renders the SCIM event logs page
-func (e *DashboardExtension) ServeLogsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
+func (e *DashboardExtension) ServeLogsPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+		return nil, nil
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Get organization if in org mode
-	orgID, _ := e.getOrgFromContext(c)
+	orgID, _ := e.getOrgFromContext(ctx)
 
 	// Parse query parameters
 	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
+	if pageStr := ctx.Request.URL.Query().Get("page"); pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
 		}
 	}
 
-	statusFilter := c.Query("status")
-	eventTypeFilter := c.Query("event_type")
+	statusFilter := ctx.Request.URL.Query().Get("status")
+	eventTypeFilter := ctx.Request.URL.Query().Get("event_type")
 
-	content := e.renderLogsPageContent(c, currentApp, orgID, page, statusFilter, eventTypeFilter)
+	content := e.renderLogsPageContent(reqCtx, currentApp, orgID, page, statusFilter, eventTypeFilter)
 
-	return handler.RenderSettingsPage(c, "scim-monitoring", content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // renderLogsPageContent renders the logs page content
-func (e *DashboardExtension) renderLogsPageContent(c forge.Context, currentApp interface{}, orgID *xid.ID, page int, statusFilter, eventTypeFilter string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderLogsPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID, page int, statusFilter, eventTypeFilter string) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
 	appID := app.ID
 
 	// Fetch logs
 	perPage := 50
-	events, total, err := e.plugin.service.GetSyncLogs(ctx, appID, orgID, page, perPage, statusFilter, eventTypeFilter)
+	events, total, err := e.plugin.service.GetSyncLogs(reqCtx, appID, orgID, page, perPage, statusFilter, eventTypeFilter)
 	if err != nil {
 		return alertBox("error", "Error", "Failed to load logs: "+err.Error())
 	}
@@ -306,7 +301,7 @@ func (e *DashboardExtension) renderLogsPageContent(c forge.Context, currentApp i
 
 	return Div(
 		Class("space-y-6"),
-		
+
 		// Header
 		Div(
 			Class("flex items-center justify-between"),
@@ -317,7 +312,7 @@ func (e *DashboardExtension) renderLogsPageContent(c forge.Context, currentApp i
 					g.Textf("Showing %d-%d of %d events", (page-1)*perPage+1, min(page*perPage, total), total)),
 			),
 			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-monitoring", basePath, appID.String())),
+				Href(fmt.Sprintf("%s/app/%s/settings/scim-monitoring", basePath, appID.String())),
 				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
 				lucide.ArrowLeft(Class("size-4")),
 				g.Text("Back to Monitoring"),
@@ -418,51 +413,48 @@ func (e *DashboardExtension) renderLogsPageContent(c forge.Context, currentApp i
 		),
 
 		// Pagination
-		pagination(page, totalPages, fmt.Sprintf("%s/dashboard/app/%s/settings/scim-monitoring/logs", basePath, appID.String())),
+		pagination(page, totalPages, fmt.Sprintf("%s/app/%s/settings/scim-monitoring/logs", basePath, appID.String())),
 	)
 }
 
 // ServeStatsPage renders the SCIM statistics page
-func (e *DashboardExtension) ServeStatsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
+func (e *DashboardExtension) ServeStatsPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+		return nil, nil
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Get organization if in org mode
-	orgID, _ := e.getOrgFromContext(c)
+	orgID, _ := e.getOrgFromContext(ctx)
 
-	content := e.renderStatsPageContent(c, currentApp, orgID)
+	content := e.renderStatsPageContent(reqCtx, currentApp, orgID)
 
-	return handler.RenderSettingsPage(c, "scim-monitoring", content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // renderStatsPageContent renders the statistics page content
-func (e *DashboardExtension) renderStatsPageContent(c forge.Context, currentApp interface{}, orgID *xid.ID) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderStatsPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
 	appID := app.ID
 
 	// Fetch statistics
-	stats, err := e.plugin.service.GetDetailedStats(ctx, appID, orgID)
+	stats, err := e.plugin.service.GetDetailedStats(reqCtx, appID, orgID)
 	if err != nil {
 		return alertBox("error", "Error", "Failed to load statistics: "+err.Error())
 	}
 
 	return Div(
 		Class("space-y-6"),
-		
+
 		// Header
 		Div(
 			Class("flex items-center justify-between"),
@@ -473,21 +465,21 @@ func (e *DashboardExtension) renderStatsPageContent(c forge.Context, currentApp 
 					g.Text("Analytics and metrics for SCIM provisioning")),
 			),
 			A(
-				Href(fmt.Sprintf("%s/dashboard/app/%s/settings/scim-monitoring", basePath, appID.String())),
+				Href(fmt.Sprintf("%s/app/%s/settings/scim-monitoring", basePath, appID.String())),
 				Class("inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
 				lucide.ArrowLeft(Class("size-4")),
 				g.Text("Back to Monitoring"),
 			),
 		),
 
-	// Summary Stats
-	Div(
-		Class("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"),
-		statsCard("Total Operations", fmt.Sprintf("%d", stats.TotalOperations), "All time", lucide.Activity(Class("size-5"))),
-		statsCard("Success Rate", fmt.Sprintf("%.1f%%", stats.SuccessRate), "", lucide.TrendingUp(Class("size-5"))),
-		statsCard("Avg Duration", fmt.Sprintf("%dms", stats.AvgDuration), "Per operation", lucide.Clock(Class("size-5"))),
-		statsCard("Total Errors", fmt.Sprintf("%d", stats.TotalErrors), "", lucide.X(Class("size-5"))),
-	),
+		// Summary Stats
+		Div(
+			Class("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"),
+			statsCard("Total Operations", fmt.Sprintf("%d", stats.TotalOperations), "All time", lucide.Activity(Class("size-5"))),
+			statsCard("Success Rate", fmt.Sprintf("%.1f%%", stats.SuccessRate), "", lucide.TrendingUp(Class("size-5"))),
+			statsCard("Avg Duration", fmt.Sprintf("%dms", stats.AvgDuration), "Per operation", lucide.Clock(Class("size-5"))),
+			statsCard("Total Errors", fmt.Sprintf("%d", stats.TotalErrors), "", lucide.X(Class("size-5"))),
+		),
 
 		// Operations by Type
 		Div(
@@ -520,7 +512,7 @@ func (e *DashboardExtension) renderOperationTypeStats(stats map[string]int) []g.
 	for _, count := range stats {
 		total += count
 	}
-	
+
 	for opType, count := range stats {
 		percentage := 0.0
 		if total > 0 {
@@ -553,13 +545,13 @@ func (e *DashboardExtension) renderStatusStats(stats map[string]int) []g.Node {
 	for _, count := range stats {
 		total += count
 	}
-	
+
 	for status, count := range stats {
 		percentage := 0.0
 		if total > 0 {
 			percentage = float64(count) / float64(total) * 100
 		}
-		
+
 		colorClass := "bg-gray-600"
 		switch status {
 		case "success":
@@ -569,7 +561,7 @@ func (e *DashboardExtension) renderStatusStats(stats map[string]int) []g.Node {
 		case "pending":
 			colorClass = "bg-yellow-600"
 		}
-		
+
 		items = append(items, Div(
 			Class("flex items-center justify-between"),
 			Span(Class("text-sm text-slate-700 dark:text-gray-300"), g.Text(status)),
@@ -591,37 +583,39 @@ func (e *DashboardExtension) renderStatusStats(stats map[string]int) []g.Node {
 }
 
 // HandleExportLogs handles log export
-func (e *DashboardExtension) HandleExportLogs(c forge.Context) error {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	_ = reqCtx // Unused in this handler
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.InternalServerError("Invalid app context", nil)
 	}
 
-	orgID, _ := e.getOrgFromContext(c)
-	format := c.Query("format")
+	orgID, _ := e.getOrgFromContext(ctx)
+	format := ctx.Request.URL.Query().Get("format")
 	if format == "" {
 		format = "csv"
 	}
 
 	// Fetch all logs
-	events, _, err := e.plugin.service.GetSyncLogs(ctx, currentApp.ID, orgID, 1, 10000, "", "")
+	events, _, err := e.plugin.service.GetSyncLogs(reqCtx, currentApp.ID, orgID, 1, 10000, "", "")
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to fetch logs")
+		return nil, errs.InternalServerError("Failed to fetch logs", nil)
 	}
 
 	if format == "json" {
-		c.Response().Header().Set("Content-Type", "application/json")
-		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=scim-logs-%s.json", time.Now().Format("2006-01-02")))
-		return json.NewEncoder(c.Response()).Encode(events)
+		ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
+		ctx.ResponseWriter.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=scim-logs-%s.json", time.Now().Format("2006-01-02")))
+		json.NewEncoder(ctx.ResponseWriter).Encode(events)
+		return nil, nil
 	}
 
 	// Default to CSV
-	c.Response().Header().Set("Content-Type", "text/csv")
-	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=scim-logs-%s.csv", time.Now().Format("2006-01-02")))
-	
-	writer := csv.NewWriter(c.Response())
+	ctx.ResponseWriter.Header().Set("Content-Type", "text/csv")
+	ctx.ResponseWriter.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=scim-logs-%s.csv", time.Now().Format("2006-01-02")))
+
+	writer := csv.NewWriter(ctx.ResponseWriter)
 	defer writer.Flush()
 
 	// Write header
@@ -644,7 +638,7 @@ func (e *DashboardExtension) HandleExportLogs(c forge.Context) error {
 		})
 	}
 
-	return nil
+	return nil, nil
 }
 
 // Helper function
@@ -654,4 +648,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-

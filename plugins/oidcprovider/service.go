@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/plugins/oidcprovider/deviceflow"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 )
@@ -45,6 +47,9 @@ type Service struct {
 	discovery     *DiscoveryService
 	clientAuth    *ClientAuthenticator
 
+	// Device flow service (RFC 8628)
+	deviceFlowService *deviceflow.Service
+
 	config         Config
 	rotationTicker *time.Ticker
 	rotationDone   chan bool
@@ -63,7 +68,7 @@ func NewService(config Config) *Service {
 }
 
 // NewServiceWithRepos creates a new OIDC Provider service with repositories
-func NewServiceWithRepos(clientRepo *repo.OAuthClientRepository, config Config) *Service {
+func NewServiceWithRepos(clientRepo *repo.OAuthClientRepository, config Config, db *bun.DB, appID xid.ID, logger interface{ Printf(string, ...interface{}) }) *Service {
 	s := NewService(config)
 	s.clientRepo = clientRepo
 
@@ -79,25 +84,41 @@ func NewServiceWithRepos(clientRepo *repo.OAuthClientRepository, config Config) 
 			config.Keys.RotationInterval,
 			config.Keys.KeyLifetime,
 		)
-	} else {
-		// Use auto-generated keys (development mode)
-		log.Println("No certificate paths configured, using auto-generated keys for development")
-		jwksService, err = NewJWKSService()
+		if err != nil {
+			logger.Printf("Failed to load keys from files: %v", err)
+		} else {
+			logger.Printf("JWKS service initialized from files")
+		}
+	}
+	
+	// If file-based keys failed or weren't configured, use database-backed keys
+	if jwksService == nil {
+		logger.Printf("Initializing database-backed JWKS service")
+		jwksService, err = NewDatabaseJWKSService(db, appID, logger)
+		if err != nil {
+			logger.Printf("Failed to initialize database JWKS service: %v", err)
+			// Fallback to in-memory keys
+			logger.Printf("Falling back to in-memory keys (not recommended for production)")
+			jwksService, err = NewJWKSService()
+			if err != nil {
+				logger.Printf("Failed to initialize in-memory JWKS service: %v", err)
+				return s
+			}
+		} else {
+			logger.Printf("Database-backed JWKS service initialized")
+		}
 	}
 
-	if err != nil {
-		log.Printf("Failed to initialize JWKS service: %v", err)
-		return s
-	}
 	s.jwksService = jwksService
 
 	// Initialize JWT service
 	jwtService, err := NewJWTService(config.Issuer, jwksService)
 	if err != nil {
-		log.Printf("Failed to initialize JWT service: %v", err)
+		logger.Printf("Failed to initialize JWT service: %v", err)
 		return s
 	}
 	s.jwtService = jwtService
+	logger.Printf("JWT service initialized")
 
 	return s
 }
@@ -137,6 +158,11 @@ func (s *Service) SetSessionService(sessionSvc *session.Service) {
 // SetUserService sets the user service
 func (s *Service) SetUserService(userSvc *user.Service) {
 	s.userSvc = userSvc
+}
+
+// SetDeviceFlowService sets the device flow service
+func (s *Service) SetDeviceFlowService(deviceFlowSvc *deviceflow.Service) {
+	s.deviceFlowService = deviceFlowSvc
 }
 
 // =============================================================================
@@ -412,6 +438,92 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, authCode *schema.Au
 	}, nil
 }
 
+// GenerateTokensForDeviceCode generates tokens for a device code grant
+func (s *Service) GenerateTokensForDeviceCode(ctx context.Context, deviceCode *schema.DeviceCode, client *schema.OAuthClient) (*TokenResponse, error) {
+	if s.jwtService == nil {
+		return nil, errs.InternalError(fmt.Errorf("JWT service not initialized"))
+	}
+
+	// Get user info for ID token
+	user, err := s.userSvc.FindByID(ctx, *deviceCode.UserID)
+	if err != nil {
+		return nil, errs.DatabaseError("find user", err)
+	}
+
+	userInfo := map[string]interface{}{
+		"sub":   user.ID.String(),
+		"email": user.Email,
+		"name":  user.Name,
+	}
+
+	// Generate JTI for token
+	jti := "jti_" + xid.New().String()
+
+	// Generate access token
+	accessToken, err := s.jwtService.GenerateAccessToken(
+		deviceCode.UserID.String(),
+		deviceCode.ClientID,
+		deviceCode.Scope,
+	)
+	if err != nil {
+		return nil, errs.InternalError(fmt.Errorf("failed to generate access token: %w", err))
+	}
+
+	// Generate ID token if openid scope is requested
+	var idToken string
+	if containsScope(deviceCode.Scope, "openid") {
+		idToken, err = s.jwtService.GenerateIDToken(
+			deviceCode.UserID.String(),
+			deviceCode.ClientID,
+			"", // nonce not applicable for device flow
+			deviceCode.CreatedAt,
+			userInfo,
+		)
+		if err != nil {
+			return nil, errs.InternalError(fmt.Errorf("failed to generate ID token: %w", err))
+		}
+	}
+
+	// Generate refresh token
+	refreshToken := "refresh_" + xid.New().String()
+
+	// Store tokens in database
+	refreshExpiresAt := time.Now().Add(30 * 24 * time.Hour) // 30 days
+
+	oauthToken := &schema.OAuthToken{
+		AppID:            deviceCode.AppID,
+		EnvironmentID:    deviceCode.EnvironmentID,
+		OrganizationID:   deviceCode.OrganizationID,
+		SessionID:        deviceCode.SessionID,
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		IDToken:          idToken,
+		TokenType:        "Bearer",
+		TokenClass:       "access_token",
+		ClientID:         deviceCode.ClientID,
+		UserID:           *deviceCode.UserID,
+		Scope:            deviceCode.Scope,
+		JTI:              jti,
+		Issuer:           s.config.Issuer,
+		AuthTime:         &deviceCode.CreatedAt,
+		ExpiresAt:        time.Now().Add(time.Hour), // 1 hour
+		RefreshExpiresAt: &refreshExpiresAt,
+	}
+
+	if err := s.tokenRepo.Create(ctx, oauthToken); err != nil {
+		return nil, errs.DatabaseError("create token", err)
+	}
+
+	return &TokenResponse{
+		AccessToken:  accessToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    3600, // 1 hour in seconds
+		RefreshToken: refreshToken,
+		IDToken:      idToken,
+		Scope:        deviceCode.Scope,
+	}, nil
+}
+
 // =============================================================================
 // JWKS & DISCOVERY
 // =============================================================================
@@ -549,4 +661,97 @@ type userServiceAdapter struct {
 func (a *userServiceAdapter) FindByID(ctx context.Context, userID xid.ID) (interface{}, error) {
 	// FindByID returns a user object which we convert to interface{}
 	return a.svc.FindByID(ctx, userID)
+}
+
+// =============================================================================
+// Configuration and Status Getters
+// =============================================================================
+
+// GetConfig returns the service configuration as interface{} to avoid import cycles
+func (s *Service) GetConfig() interface{} {
+	return s.config
+}
+
+// GetDeviceFlowService returns the device flow service if enabled as interface{}
+func (s *Service) GetDeviceFlowService() interface{} {
+	return s.deviceFlowService
+}
+
+// GetConfigTyped returns the typed configuration (for internal use)
+func (s *Service) GetConfigTyped() Config {
+	return s.config
+}
+
+// deviceFlowServiceAdapter adapts deviceflow.Service to the interface expected by bridge
+type deviceFlowServiceAdapter struct {
+	svc *deviceflow.Service
+}
+
+func (a *deviceFlowServiceAdapter) CleanupExpiredCodes(ctx context.Context) (int, error) {
+	if a.svc == nil {
+		return 0, nil
+	}
+	return a.svc.CleanupExpiredCodes(ctx)
+}
+
+func (a *deviceFlowServiceAdapter) CleanupOldConsumedCodes(ctx context.Context, olderThan time.Duration) (int, error) {
+	if a.svc == nil {
+		return 0, nil
+	}
+	return a.svc.CleanupOldConsumedCodes(ctx, olderThan)
+}
+
+// GetCurrentKeyID returns the current JWT signing key ID
+func (s *Service) GetCurrentKeyID() (string, error) {
+	if s.jwksService == nil {
+		return "", fmt.Errorf("JWKS service not initialized")
+	}
+	keyID := s.jwksService.GetCurrentKeyID()
+	return keyID, nil
+}
+
+// GetLastKeyRotation returns the last key rotation time
+func (s *Service) GetLastKeyRotation() time.Time {
+	if s.jwksService == nil {
+		return time.Time{}
+	}
+	return s.jwksService.GetLastRotation()
+}
+
+// RotateKeys manually triggers a JWT key rotation
+func (s *Service) RotateKeys() error {
+	if s.jwksService == nil {
+		return fmt.Errorf("JWKS service not initialized")
+	}
+	return s.jwksService.RotateKeys()
+}
+
+// serviceAdapter wraps Service to provide bridge-compatible interface
+type serviceAdapter struct {
+	service *Service
+}
+
+// newServiceAdapter creates a new service adapter for bridge
+func newServiceAdapter(service *Service) *serviceAdapter {
+	return &serviceAdapter{service: service}
+}
+
+func (a *serviceAdapter) GetConfig() interface{} {
+	return a.service.GetConfig()
+}
+
+func (a *serviceAdapter) GetCurrentKeyID() (string, error) {
+	return a.service.GetCurrentKeyID()
+}
+
+func (a *serviceAdapter) GetLastKeyRotation() time.Time {
+	return a.service.GetLastKeyRotation()
+}
+
+func (a *serviceAdapter) RotateKeys() error {
+	return a.service.RotateKeys()
+}
+
+func (a *serviceAdapter) GetDeviceFlowService() interface{} {
+	return a.service.GetDeviceFlowService()
 }

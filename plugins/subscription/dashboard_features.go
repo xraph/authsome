@@ -10,53 +10,45 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
-	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // ServeFeaturesListPage renders the features list dashboard
-func (e *DashboardExtension) ServeFeaturesListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeFeaturesListPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	page := queryIntDefault(c, "page", 1)
-	pageSize := queryIntDefault(c, "pageSize", 20)
-	typeFilter := c.Query("type")
-	publicFilter := c.Query("public") == "true"
+	page := queryIntDefault(ctx, "page", 1)
+	pageSize := queryIntDefault(ctx, "pageSize", 20)
+	typeFilter := ctx.Query("type")
+	publicFilter := ctx.Query("public") == "true"
 
-	features, total, _ := e.plugin.featureSvc.List(ctx, currentApp.ID, typeFilter, publicFilter, page, pageSize)
+	features, total, _ := e.plugin.featureSvc.List(reqCtx, currentApp.ID, typeFilter, publicFilter, page, pageSize)
 	totalPages := int((int64(total) + int64(pageSize) - 1) / int64(pageSize))
 
 	// Count by type
-	allFeatures, _, _ := e.plugin.featureSvc.List(ctx, currentApp.ID, "", false, 1, 10000)
+	allFeatures, _, _ := e.plugin.featureSvc.List(reqCtx, currentApp.ID, "", false, 1, 10000)
 	typeCounts := make(map[string]int)
 	for _, f := range allFeatures {
 		typeCounts[string(f.Type)]++
 	}
 
 	// Check for success messages
-	successMsg := c.Query("success")
+	successMsg := ctx.Query("success")
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Success message
 		g.If(successMsg != "",
@@ -83,7 +75,7 @@ func (e *DashboardExtension) ServeFeaturesListPage(c forge.Context) error {
 				Class("flex items-center gap-2"),
 				Form(
 					Method("POST"),
-					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/sync-all-from-provider?productId="+currentApp.ID.String()),
+					Action(basePath+"/app/"+currentApp.ID.String()+"/billing/features/sync-all-from-provider?productId="+currentApp.ID.String()),
 					Class("inline"),
 					Button(
 						Type("submit"),
@@ -93,19 +85,19 @@ func (e *DashboardExtension) ServeFeaturesListPage(c forge.Context) error {
 					),
 				),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/export"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/export"),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"),
 					lucide.Download(Class("size-4")),
 					g.Text("Export"),
 				),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/import"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/import"),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"),
 					lucide.Upload(Class("size-4")),
 					g.Text("Import"),
 				),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/create"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/create"),
 					Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 					lucide.Plus(Class("size-4")),
 					g.Text("Create Feature"),
@@ -120,63 +112,48 @@ func (e *DashboardExtension) ServeFeaturesListPage(c forge.Context) error {
 		e.renderFeatureTypeFilterTabs(typeFilter, typeCounts, currentApp, basePath),
 
 		// Features table
-		e.renderFeaturesTable(ctx, features, currentApp, basePath),
+		e.renderFeaturesTable(reqCtx, features, currentApp, basePath),
 
 		// Pagination
-		e.renderPagination(page, totalPages, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features"),
+		e.renderPagination(page, totalPages, basePath+"/app/"+currentApp.ID.String()+"/billing/features"),
 	)
 
-	pageData := components.PageData{
-		Title:      "Features",
-		User:       currentUser,
-		ActivePage: "features",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeFeatureDetailPage renders the feature detail page
-func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeFeatureDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	featureIDStr := c.Param("featureId")
+	featureIDStr := ctx.Param("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid feature ID")
+		return nil, errs.BadRequest("Invalid feature ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
+	reqCtx := ctx.Request.Context()
 
-	feature, err := e.plugin.featureSvc.GetByID(ctx, featureID)
+	feature, err := e.plugin.featureSvc.GetByID(reqCtx, featureID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Feature not found")
+		return nil, fmt.Errorf("feature not found")
 	}
 
 	// Get plans using this feature
-	planLinks, _ := e.plugin.featureSvc.GetPlanFeatures(ctx, featureID) // This returns plans linked TO the feature
+	planLinks, _ := e.plugin.featureSvc.GetPlanFeatures(reqCtx, featureID) // This returns plans linked TO the feature
 
 	// Check for error/success messages
-	errorMsg := c.Query("error")
-	successMsg := c.Query("success")
+	errorMsg := ctx.Query("error")
+	successMsg := ctx.Query("success")
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Error message
 		g.If(errorMsg != "",
@@ -211,7 +188,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 			Ol(
 				Class("inline-flex items-center space-x-1 md:space-x-3"),
 				Li(Class("inline-flex items-center"),
-					A(Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features"),
+					A(Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features"),
 						Class("text-sm font-medium text-gray-500 hover:text-violet-600"),
 						g.Text("Features"))),
 				Li(Class("flex items-center"),
@@ -240,7 +217,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 				g.If(feature.ProviderFeatureID == "",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -254,7 +231,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 				g.If(feature.ProviderFeatureID != "",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -268,7 +245,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 				g.If(feature.ProviderFeatureID != "",
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync-from-provider"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/sync-from-provider"),
 						Class("inline"),
 						Button(
 							Type("submit"),
@@ -279,7 +256,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 					),
 				),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/edit"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/edit"),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"),
 					lucide.Pencil(Class("size-4")),
 					g.Text("Edit"),
@@ -305,7 +282,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 					// Show active delete button if feature is not in use
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/delete"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/delete"),
 						g.Attr("onsubmit", "return confirm('Are you sure you want to delete this feature? This action cannot be undone.')"),
 						Button(
 							Type("submit"),
@@ -367,7 +344,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 			H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"),
 				g.Text("Plans Using This Feature")),
 			g.If(len(planLinks) > 0,
-				e.renderFeaturePlansTable(ctx, planLinks, currentApp, basePath),
+				e.renderFeaturePlansTable(reqCtx, planLinks, currentApp, basePath),
 			),
 			g.If(len(planLinks) == 0,
 				P(Class("text-slate-400 dark:text-gray-500 italic"),
@@ -376,38 +353,23 @@ func (e *DashboardExtension) ServeFeatureDetailPage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      feature.Name,
-		User:       currentUser,
-		ActivePage: "features",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeFeatureUsagePage renders the feature usage monitoring page
-func (e *DashboardExtension) ServeFeatureUsagePage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeFeatureUsagePage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Page header
 		Div(
@@ -446,15 +408,8 @@ func (e *DashboardExtension) ServeFeatureUsagePage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Feature Usage",
-		User:       currentUser,
-		ActivePage: "usage",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // Helper rendering functions
@@ -483,7 +438,7 @@ func (e *DashboardExtension) renderFeatureTypeFilterTabs(currentType string, cou
 			}
 		}
 
-		href := basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/features"
+		href := basePath + "/app/" + currentApp.ID.String() + "/billing/features"
 		if t.key != "" {
 			href += "?type=" + t.key
 		}
@@ -515,7 +470,7 @@ func (e *DashboardExtension) renderFeaturesTable(ctx context.Context, features [
 			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
 				g.Text("Create your first feature to start managing plan capabilities.")),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/create"),
 				Class("mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Feature"),
@@ -529,7 +484,7 @@ func (e *DashboardExtension) renderFeaturesTable(ctx context.Context, features [
 			Class("hover:bg-slate-50 dark:hover:bg-slate-700"),
 			Td(Class("px-6 py-4"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+f.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+f.ID.String()),
 					Class("font-medium text-slate-900 hover:text-violet-600 dark:text-white"),
 					g.Text(f.Name),
 				),
@@ -547,12 +502,12 @@ func (e *DashboardExtension) renderFeaturesTable(ctx context.Context, features [
 				Div(
 					Class("flex items-center justify-end gap-2"),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+f.ID.String()),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+f.ID.String()),
 						Class("text-slate-400 hover:text-violet-600"),
 						lucide.Eye(Class("size-4")),
 					),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+f.ID.String()+"/edit"),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+f.ID.String()+"/edit"),
 						Class("text-slate-400 hover:text-violet-600"),
 						lucide.Pencil(Class("size-4")),
 					),
@@ -667,7 +622,7 @@ func (e *DashboardExtension) renderFeaturePlansTable(ctx context.Context, links 
 			Class("hover:bg-slate-50 dark:hover:bg-slate-700"),
 			Td(Class("px-6 py-4"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
 					Class("font-medium text-slate-900 hover:text-violet-600 dark:text-white"),
 					g.Text(plan.Name),
 				),
@@ -789,30 +744,22 @@ func (e *DashboardExtension) detailRow(label string, value g.Node) g.Node {
 }
 
 // ServeFeatureCreatePage renders the feature creation form
-func (e *DashboardExtension) ServeFeatureCreatePage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeFeatureCreatePage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
 	content := Div(
 		Class("space-y-6"),
 
 		// Back button and header
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Features"),
@@ -825,46 +772,31 @@ func (e *DashboardExtension) ServeFeatureCreatePage(c forge.Context) error {
 		e.renderFeatureForm(currentApp, basePath, nil, false),
 	)
 
-	pageData := components.PageData{
-		Title:      "Create Feature",
-		User:       currentUser,
-		ActivePage: "features",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeFeatureEditPage renders the feature edit form
-func (e *DashboardExtension) ServeFeatureEditPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeFeatureEditPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	featureIDStr := c.Param("featureId")
+	featureIDStr := ctx.Param("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid feature ID")
+		return nil, errs.BadRequest("Invalid feature ID")
 	}
 
-	ctx := c.Request().Context()
-	basePath := handler.GetBasePath()
+	reqCtx := ctx.Request.Context()
+	basePath := e.baseUIPath
 
-	feature, err := e.plugin.featureSvc.GetByID(ctx, featureID)
+	feature, err := e.plugin.featureSvc.GetByID(reqCtx, featureID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Feature not found")
+		return nil, fmt.Errorf("feature not found")
 	}
 
 	content := Div(
@@ -872,7 +804,7 @@ func (e *DashboardExtension) ServeFeatureEditPage(c forge.Context) error {
 
 		// Back button and header
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Feature"),
@@ -885,42 +817,32 @@ func (e *DashboardExtension) ServeFeatureEditPage(c forge.Context) error {
 		e.renderFeatureForm(currentApp, basePath, feature, true),
 	)
 
-	pageData := components.PageData{
-		Title:      "Edit " + feature.Name,
-		User:       currentUser,
-		ActivePage: "features",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // HandleCreateFeature handles the feature creation form submission
-func (e *DashboardExtension) HandleCreateFeature(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleCreateFeature(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Parse form
-	key := c.FormValue("key")
-	name := c.FormValue("name")
-	description := c.FormValue("description")
-	featureType := c.FormValue("type")
-	unit := c.FormValue("unit")
-	resetPeriod := c.FormValue("resetPeriod")
-	icon := c.FormValue("icon")
-	isPublic := c.FormValue("isPublic") == "on"
-	displayOrder, _ := strconv.Atoi(c.FormValue("displayOrder"))
+	key := ctx.Request.FormValue("key")
+	name := ctx.Request.FormValue("name")
+	description := ctx.Request.FormValue("description")
+	featureType := ctx.Request.FormValue("type")
+	unit := ctx.Request.FormValue("unit")
+	resetPeriod := ctx.Request.FormValue("resetPeriod")
+	icon := ctx.Request.FormValue("icon")
+	isPublic := ctx.Request.FormValue("isPublic") == "on"
+	displayOrder, _ := strconv.Atoi(ctx.Request.FormValue("displayOrder"))
 
 	req := &core.CreateFeatureRequest{
 		Key:          key,
@@ -934,43 +856,42 @@ func (e *DashboardExtension) HandleCreateFeature(c forge.Context) error {
 		Icon:         icon,
 	}
 
-	feature, err := e.plugin.featureSvc.Create(ctx, currentApp.ID, req)
+	feature, err := e.plugin.featureSvc.Create(reqCtx, currentApp.ID, req)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/create?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/create?error="+err.Error(), http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+feature.ID.String())
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+feature.ID.String(), http.StatusFound)
+	return nil, nil
 }
 
 // HandleUpdateFeature handles the feature update form submission
-func (e *DashboardExtension) HandleUpdateFeature(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleUpdateFeature(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	featureIDStr := c.Param("featureId")
+	featureIDStr := ctx.Param("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid feature ID")
+		return nil, errs.BadRequest("Invalid feature ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Parse form
-	name := c.FormValue("name")
-	description := c.FormValue("description")
-	unit := c.FormValue("unit")
-	resetPeriod := c.FormValue("resetPeriod")
-	icon := c.FormValue("icon")
-	isPublic := c.FormValue("isPublic") == "on"
-	displayOrder, _ := strconv.Atoi(c.FormValue("displayOrder"))
+	name := ctx.Request.FormValue("name")
+	description := ctx.Request.FormValue("description")
+	unit := ctx.Request.FormValue("unit")
+	resetPeriod := ctx.Request.FormValue("resetPeriod")
+	icon := ctx.Request.FormValue("icon")
+	isPublic := ctx.Request.FormValue("isPublic") == "on"
+	displayOrder, _ := strconv.Atoi(ctx.Request.FormValue("displayOrder"))
 
 	rp := core.ResetPeriod(resetPeriod)
 	req := &core.UpdateFeatureRequest{
@@ -983,82 +904,75 @@ func (e *DashboardExtension) HandleUpdateFeature(c forge.Context) error {
 		Icon:         &icon,
 	}
 
-	_, err = e.plugin.featureSvc.Update(ctx, featureID, req)
+	_, err = e.plugin.featureSvc.Update(reqCtx, featureID, req)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/edit?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/edit?error="+err.Error(), http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr, http.StatusFound)
+	return nil, nil
 }
 
 // HandleDeleteFeature handles feature deletion
-func (e *DashboardExtension) HandleDeleteFeature(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleDeleteFeature(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	featureIDStr := c.Param("featureId")
+	featureIDStr := ctx.Param("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid feature ID")
+		return nil, errs.BadRequest("Invalid feature ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	err = e.plugin.featureSvc.Delete(ctx, featureID)
+	err = e.plugin.featureSvc.Delete(reqCtx, featureID)
 	if err != nil {
 		// URL encode the error message
 		errorMsg := err.Error()
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"?error="+errorMsg)
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"?error="+errorMsg, http.StatusFound)
+		return nil, nil
 	}
 
 	// Success - redirect to features list with success message
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features?success=Feature+deleted+successfully")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features?success=Feature+deleted+successfully", http.StatusFound)
+	return nil, nil
 }
 
 // ServePlanFeaturesPage renders the plan features management page
-func (e *DashboardExtension) ServePlanFeaturesPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServePlanFeaturesPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	planIDStr := c.Param("id")
+	planIDStr := ctx.Param("id")
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid plan ID")
+		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	plan, err := e.plugin.planSvc.GetByID(ctx, planID)
+	plan, err := e.plugin.planSvc.GetByID(reqCtx, planID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Plan not found")
+		return nil, errs.NotFound("Plan not found")
 	}
 
 	// Get all features for this app
-	allFeatures, _, _ := e.plugin.featureSvc.List(ctx, currentApp.ID, "", false, 1, 1000)
+	allFeatures, _, _ := e.plugin.featureSvc.List(reqCtx, currentApp.ID, "", false, 1, 1000)
 
 	// Get features linked to this plan
-	linkedFeatures, _ := e.plugin.featureSvc.GetPlanFeatures(ctx, planID)
+	linkedFeatures, _ := e.plugin.featureSvc.GetPlanFeatures(reqCtx, planID)
 
 	// Create a map of linked feature IDs
 	linkedMap := make(map[string]*core.PlanFeatureLink)
@@ -1075,12 +989,12 @@ func (e *DashboardExtension) ServePlanFeaturesPage(c forge.Context) error {
 			Ol(
 				Class("inline-flex items-center space-x-1 md:space-x-3"),
 				Li(Class("inline-flex items-center"),
-					A(Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans"),
+					A(Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans"),
 						Class("text-sm font-medium text-gray-500 hover:text-violet-600"),
 						g.Text("Plans"))),
 				Li(Class("flex items-center"),
 					lucide.ChevronRight(Class("size-4 text-gray-400 mx-1")),
-					A(Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr),
+					A(Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr),
 						Class("text-sm font-medium text-gray-500 hover:text-violet-600"),
 						g.Text(plan.Name))),
 				Li(Class("flex items-center"),
@@ -1114,54 +1028,45 @@ func (e *DashboardExtension) ServePlanFeaturesPage(c forge.Context) error {
 					P(Class("text-slate-500"), g.Text("No features defined. Create features first.")),
 				),
 				g.If(len(allFeatures) > 0,
-					e.renderPlanFeatureConfigList(ctx, allFeatures, linkedMap, plan, currentApp, basePath),
+					e.renderPlanFeatureConfigList(reqCtx, allFeatures, linkedMap, plan, currentApp, basePath),
 				),
 			),
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Plan Features - " + plan.Name,
-		User:       currentUser,
-		ActivePage: "plans",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // HandleLinkFeatureToPlan handles linking a feature to a plan
-func (e *DashboardExtension) HandleLinkFeatureToPlan(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleLinkFeatureToPlan(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	planIDStr := c.Param("id")
+	planIDStr := ctx.Param("id")
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid plan ID")
+		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Parse form
-	featureIDStr := c.FormValue("featureId")
+	featureIDStr := ctx.Request.FormValue("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error=Invalid feature ID")
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error=Invalid feature ID", http.StatusFound)
+		return nil, nil
 	}
 
-	value := c.FormValue("value")
-	isBlocked := c.FormValue("isBlocked") == "on"
-	isHighlighted := c.FormValue("isHighlighted") == "on"
+	value := ctx.Request.FormValue("value")
+	isBlocked := ctx.Request.FormValue("isBlocked") == "on"
+	isHighlighted := ctx.Request.FormValue("isHighlighted") == "on"
 
 	req := &core.LinkFeatureRequest{
 		FeatureID:     featureID,
@@ -1170,80 +1075,78 @@ func (e *DashboardExtension) HandleLinkFeatureToPlan(c forge.Context) error {
 		IsHighlighted: isHighlighted,
 	}
 
-	_, err = e.plugin.featureSvc.LinkToPlan(ctx, planID, req)
+	_, err = e.plugin.featureSvc.LinkToPlan(reqCtx, planID, req)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error(), http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features", http.StatusFound)
+	return nil, nil
 }
 
 // HandleUnlinkFeatureFromPlan handles unlinking a feature from a plan
-func (e *DashboardExtension) HandleUnlinkFeatureFromPlan(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleUnlinkFeatureFromPlan(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	planIDStr := c.Param("id")
+	planIDStr := ctx.Param("id")
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid plan ID")
+		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
-	featureIDStr := c.Param("featureId")
+	featureIDStr := ctx.Param("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid feature ID")
+		return nil, errs.BadRequest("Invalid feature ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	err = e.plugin.featureSvc.UnlinkFromPlan(ctx, planID, featureID)
+	err = e.plugin.featureSvc.UnlinkFromPlan(reqCtx, planID, featureID)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error(), http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features", http.StatusFound)
+	return nil, nil
 }
 
 // HandleUpdatePlanFeatureLink handles updating a feature-plan link
-func (e *DashboardExtension) HandleUpdatePlanFeatureLink(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) HandleUpdatePlanFeatureLink(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	planIDStr := c.Param("id")
+	planIDStr := ctx.Param("id")
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid plan ID")
+		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
-	featureIDStr := c.Param("featureId")
+	featureIDStr := ctx.Param("featureId")
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid feature ID")
+		return nil, errs.BadRequest("Invalid feature ID")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Parse form
-	value := c.FormValue("value")
-	isBlocked := c.FormValue("isBlocked") == "on"
-	isHighlighted := c.FormValue("isHighlighted") == "on"
+	value := ctx.Request.FormValue("value")
+	isBlocked := ctx.Request.FormValue("isBlocked") == "on"
+	isHighlighted := ctx.Request.FormValue("isHighlighted") == "on"
 
 	req := &core.UpdateLinkRequest{
 		Value:         &value,
@@ -1251,20 +1154,22 @@ func (e *DashboardExtension) HandleUpdatePlanFeatureLink(c forge.Context) error 
 		IsHighlighted: &isHighlighted,
 	}
 
-	_, err = e.plugin.featureSvc.UpdatePlanLink(ctx, planID, featureID, req)
+	_, err = e.plugin.featureSvc.UpdatePlanLink(reqCtx, planID, featureID, req)
 	if err != nil {
-		return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error())
+		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error(), http.StatusFound)
+		return nil, nil
 	}
 
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features")
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features", http.StatusFound)
+	return nil, nil
 }
 
 // Form rendering helpers
 
 func (e *DashboardExtension) renderFeatureForm(currentApp *app.App, basePath string, feature *core.Feature, isEdit bool) g.Node {
-	formAction := basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/features/create"
+	formAction := basePath + "/app/" + currentApp.ID.String() + "/billing/features/create"
 	if isEdit && feature != nil {
-		formAction = basePath + "/dashboard/app/" + currentApp.ID.String() + "/billing/features/" + feature.ID.String() + "/update"
+		formAction = basePath + "/app/" + currentApp.ID.String() + "/billing/features/" + feature.ID.String() + "/update"
 	}
 
 	// Default values
@@ -1439,7 +1344,7 @@ func (e *DashboardExtension) renderFeatureForm(currentApp *app.App, basePath str
 			Div(
 				Class("flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features"),
 					Class("rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-gray-300"),
 					g.Text("Cancel"),
 				),
@@ -1560,7 +1465,7 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 				g.If(isLinked,
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features/"+feature.ID.String()+"/update"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features/"+feature.ID.String()+"/update"),
 						Class("flex items-center gap-2"),
 						valueInput,
 						Div(
@@ -1588,7 +1493,7 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 				g.If(isLinked,
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features/"+feature.ID.String()+"/unlink"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features/"+feature.ID.String()+"/unlink"),
 						Button(
 							Type("submit"),
 							Class("text-sm text-red-600 hover:text-red-700"),
@@ -1599,7 +1504,7 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 				g.If(!isLinked,
 					Form(
 						Method("POST"),
-						Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features/link"),
+						Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features/link"),
 						Input(Type("hidden"), Name("featureId"), Value(feature.ID.String())),
 						Input(Type("hidden"), Name("value"), Value(e.getDefaultValue(feature.Type))),
 						Button(

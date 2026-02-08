@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/forge"
@@ -47,8 +48,9 @@ type Plugin struct {
 	// ConfigSource integration
 	configSources map[string]*SecretsConfigSource // "appID:envID" -> source
 
-	// Dashboard extension
-	dashboardExt *DashboardExtension
+	// Dashboard extension (lazy initialized)
+	dashboardExt     *DashboardExtension
+	dashboardExtOnce sync.Once
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -228,8 +230,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	// Initialize handler
 	p.handler = NewHandler(p.service, p.logger)
 
-	// Initialize dashboard extension
-	p.dashboardExt = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	p.logger.Info("secrets plugin initialized",
 		forge.F("configSourceEnabled", p.config.ConfigSource.Enabled),
@@ -403,6 +404,9 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 
 // DashboardExtension returns the dashboard extension for the plugin
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtOnce.Do(func() {
+		p.dashboardExt = NewDashboardExtension(p)
+	})
 	return p.dashboardExt
 }
 

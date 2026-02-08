@@ -3,46 +3,37 @@ package subscription
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
-	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
 // ServePlanCreatePage renders the plan creation form
-func (e *DashboardExtension) ServePlanCreatePage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServePlanCreatePage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
 	// Get all features for this app
-	features, _, _ := e.plugin.featureSvc.List(ctx, currentApp.ID, "", false, 1, 1000)
+	features, _, _ := e.plugin.featureSvc.List(reqCtx, currentApp.ID, "", false, 1, 1000)
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button and header
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Plans"),
@@ -54,7 +45,7 @@ func (e *DashboardExtension) ServePlanCreatePage(c forge.Context) error {
 		// Form
 		Form(
 			Method("POST"),
-			Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/create"),
+			Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/create"),
 			ID("plan-form"),
 
 			// Basic Info Card
@@ -201,7 +192,7 @@ func (e *DashboardExtension) ServePlanCreatePage(c forge.Context) error {
 
 			// Features Card
 			Div(
-				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6"),
+				Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-2"),
 
 				// Section header
 				Div(
@@ -214,7 +205,7 @@ func (e *DashboardExtension) ServePlanCreatePage(c forge.Context) error {
 						),
 						g.If(len(features) == 0,
 							A(
-								Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/features/create"),
+								Href(basePath+"/app/"+currentApp.ID.String()+"/billing/features/create"),
 								Class("text-sm text-violet-600 hover:text-violet-700"),
 								g.Text("Create Features"),
 							),
@@ -240,7 +231,7 @@ func (e *DashboardExtension) ServePlanCreatePage(c forge.Context) error {
 			Div(
 				Class("flex justify-end gap-3"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans"),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans"),
 					Class("rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"),
 					g.Text("Cancel"),
 				),
@@ -295,52 +286,37 @@ func (e *DashboardExtension) ServePlanCreatePage(c forge.Context) error {
 		`)),
 	)
 
-	pageData := components.PageData{
-		Title:      "Create Plan",
-		User:       currentUser,
-		ActivePage: "plans",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServePlanEditPage renders the plan edit form
-func (e *DashboardExtension) ServePlanEditPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServePlanEditPage(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
-	ctx := c.Request().Context()
+	basePath := e.baseUIPath
 
-	planID, err := xid.FromString(c.Param("id"))
+	planID, err := xid.FromString(ctx.Param("id"))
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid plan ID")
+		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
-	plan, err := e.plugin.planSvc.GetByID(ctx, planID)
+	plan, err := e.plugin.planSvc.GetByID(reqCtx, planID)
 	if err != nil {
-		return c.String(http.StatusNotFound, "Plan not found")
+		return nil, errs.NotFound("Plan not found")
 	}
 
 	// Get all features for this app
-	features, _, _ := e.plugin.featureSvc.List(ctx, currentApp.ID, "", false, 1, 1000)
+	features, _, _ := e.plugin.featureSvc.List(reqCtx, currentApp.ID, "", false, 1, 1000)
 
 	// Get features linked to this plan
-	linkedFeatures, _ := e.plugin.featureSvc.GetPlanFeatures(ctx, planID)
+	linkedFeatures, _ := e.plugin.featureSvc.GetPlanFeatures(reqCtx, planID)
 
 	// Create a map of linked feature IDs to their link configs
 	linkedMap := make(map[string]*core.PlanFeatureLink)
@@ -349,11 +325,11 @@ func (e *DashboardExtension) ServePlanEditPage(c forge.Context) error {
 	}
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button and header
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Plan"),
@@ -365,9 +341,9 @@ func (e *DashboardExtension) ServePlanEditPage(c forge.Context) error {
 		// Form
 		Form(
 			Method("POST"),
-			Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/update"),
+			Action(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/update"),
 			ID("plan-form"),
-			Class("space-y-6"),
+			Class("space-y-2"),
 
 			// Basic Info Card
 			Div(
@@ -504,7 +480,7 @@ func (e *DashboardExtension) ServePlanEditPage(c forge.Context) error {
 							P(Class("text-sm text-slate-500"), g.Text("Configure features included in this plan")),
 						),
 						A(
-							Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features"),
+							Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()+"/features"),
 							Class("text-sm text-violet-600 hover:text-violet-700"),
 							g.Text("Advanced Feature Config →"),
 						),
@@ -528,7 +504,7 @@ func (e *DashboardExtension) ServePlanEditPage(c forge.Context) error {
 			Div(
 				Class("flex justify-end gap-3"),
 				A(
-					Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
+					Href(basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String()),
 					Class("rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"),
 					g.Text("Cancel"),
 				),
@@ -560,42 +536,27 @@ func (e *DashboardExtension) ServePlanEditPage(c forge.Context) error {
 		`)),
 	)
 
-	pageData := components.PageData{
-		Title:      "Edit Plan: " + plan.Name,
-		User:       currentUser,
-		ActivePage: "plans",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeAddOnCreatePage renders the add-on creation form
-func (e *DashboardExtension) ServeAddOnCreatePage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeAddOnCreatePage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Add-ons"),
@@ -609,8 +570,8 @@ func (e *DashboardExtension) ServeAddOnCreatePage(c forge.Context) error {
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons/create"),
-				Class("space-y-6"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/billing/addons/create"),
+				Class("space-y-2"),
 
 				// Name
 				Div(
@@ -689,7 +650,7 @@ func (e *DashboardExtension) ServeAddOnCreatePage(c forge.Context) error {
 				Div(
 					Class("flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-gray-800"),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/addons"),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/addons"),
 						Class("rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"),
 						g.Text("Cancel"),
 					),
@@ -703,42 +664,27 @@ func (e *DashboardExtension) ServeAddOnCreatePage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Create Add-on",
-		User:       currentUser,
-		ActivePage: "addons",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeCouponCreatePage renders the coupon creation form
-func (e *DashboardExtension) ServeCouponCreatePage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeCouponCreatePage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
 	content := Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons"),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/billing/coupons"),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Coupons"),
@@ -752,8 +698,8 @@ func (e *DashboardExtension) ServeCouponCreatePage(c forge.Context) error {
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons/create"),
-				Class("space-y-6"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/billing/coupons/create"),
+				Class("space-y-2"),
 
 				// Coupon code
 				Div(
@@ -845,7 +791,7 @@ func (e *DashboardExtension) ServeCouponCreatePage(c forge.Context) error {
 				Div(
 					Class("flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-gray-800"),
 					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/billing/coupons"),
+						Href(basePath+"/app/"+currentApp.ID.String()+"/billing/coupons"),
 						Class("rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"),
 						g.Text("Cancel"),
 					),
@@ -859,15 +805,8 @@ func (e *DashboardExtension) ServeCouponCreatePage(c forge.Context) error {
 		),
 	)
 
-	pageData := components.PageData{
-		Title:      "Create Coupon",
-		User:       currentUser,
-		ActivePage: "coupons",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // renderBillingPatternFields renders fields specific to each billing pattern
@@ -915,7 +854,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 		Div(
 			ID("per_seat_fields"),
 			StyleAttr(fmt.Sprintf("display: %s", boolToDisplay(selectedPattern == "per_seat"))),
-			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6"),
+			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-2"),
 
 			Div(
 				Class("border-b border-slate-200 dark:border-gray-700 pb-4 mb-6"),
@@ -960,7 +899,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 		Div(
 			ID("tiered_fields"),
 			StyleAttr(fmt.Sprintf("display: %s", boolToDisplay(selectedPattern == "tiered"))),
-			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6"),
+			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-2"),
 
 			Div(
 				Class("border-b border-slate-200 dark:border-gray-700 pb-4 mb-6"),

@@ -25,13 +25,23 @@ routes:
       request_type: LinkRequest
       response_type: LinkResponse
 types:
+    - name: LinkRequest
+      fields:
+        email: string!
+        name: string!
+        password: string!
+    - name: SignInResponse
+      fields:
+        session: '!'
+        token: string!
+        user: '!'
     - name: LinkResponse
       fields:
         message: string!
         user: '!'
     - name: Plugin
       fields:
-        "": '*bun.DB'
+        "": Config
     - name: Config
       fields:
         autoConvert: bool!
@@ -46,13 +56,3 @@ types:
         "": core.Authsome
     - name: SignInRequest
       fields: {}
-    - name: LinkRequest
-      fields:
-        email: string!
-        name: string!
-        password: string!
-    - name: SignInResponse
-      fields:
-        session: '!'
-        token: string!
-        user: '!'

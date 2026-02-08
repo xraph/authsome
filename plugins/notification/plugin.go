@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/xid"
@@ -24,19 +25,21 @@ import (
 
 // Plugin implements the notification template management plugin
 type Plugin struct {
-	service            *notification.Service
-	templateSvc        *TemplateService
-	db                 *bun.DB
-	config             Config
-	defaultConfig      Config
-	forgeConfig        forge.ConfigManager
-	defaultsAdded      bool
-	dashboardExtension *DashboardExtension
-	authInst           core.Authsome
-	notifAdapter       *Adapter
-	asyncAdapter       *AsyncAdapter
-	dispatcher         *notification.Dispatcher
-	retryService       *notification.RetryService
+	service                *notification.Service
+	templateSvc            *TemplateService
+	db                     *bun.DB
+	config                 Config
+	defaultConfig          Config
+	forgeConfig            forge.ConfigManager
+	defaultsAdded          bool
+	dashboardExtension     *DashboardExtension
+	dashboardExtensionOnce sync.Once
+	authInst               core.Authsome
+	notifAdapter           *Adapter
+	asyncAdapter           *AsyncAdapter
+	dispatcher             *notification.Dispatcher
+	retryService           *notification.RetryService
+	logger                 forge.Logger
 }
 
 // PluginOption is a functional option for configuring the notification plugin
@@ -140,11 +143,16 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get Forge app and config manager
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp != nil {
+		// Initialize logger
+		p.logger = forgeApp.Logger().With(forge.F("plugin", "notification"))
+
 		configManager := forgeApp.Config()
 
 		// Bind configuration using Forge ConfigManager with provided defaults
 		if err := configManager.BindWithDefault("auth.notification", &p.config, p.defaultConfig); err != nil {
 			// Log but don't fail - use defaults
+			p.logger.Warn("failed to bind notification config, using defaults",
+				forge.F("error", err.Error()))
 			p.config = p.defaultConfig
 		}
 	} else {
@@ -183,7 +191,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	p.templateSvc = NewTemplateService(p.service, notificationRepo, p.config)
 
 	// Initialize dashboard extension
-	p.dashboardExtension = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	// Initialize async infrastructure if enabled
 	if p.config.Async.Enabled {
@@ -442,7 +450,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				return nil
 			}
 
-
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
@@ -461,12 +468,12 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			}
 
 			timestamp := time.Now().Format(time.RFC3339)
-			
+
 			// Check if template service is available
 			if p.templateSvc == nil {
 				return nil
 			}
-			
+
 			// Use async adapter for fire-and-forget low priority notification
 			adapter := p.getAsyncAdapter()
 			err = adapter.SendNewDeviceLogin(ctx, appID, user.Email, userName, deviceName, location, timestamp, ipAddress)
@@ -1011,6 +1018,9 @@ func (p *Plugin) GetTemplateService() *TemplateService {
 
 // DashboardExtension returns the dashboard extension interface implementation
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtensionOnce.Do(func() {
+		p.dashboardExtension = NewDashboardExtension(p)
+	})
 	return p.dashboardExtension
 }
 

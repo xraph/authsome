@@ -19,7 +19,7 @@ func SecretDetailPage(
 	secret *core.SecretDTO,
 	versions []*core.SecretVersionDTO,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	return Div(
 		Class("space-y-6"),
@@ -96,7 +96,7 @@ func SecretDetailPage(
 			Div(
 				Class("lg:col-span-2 space-y-6"),
 				// Value section
-				valueSection(appBase, secret),
+				valueSection(currentApp.ID.String(), appBase, secret),
 				// Tags section
 				g.If(len(secret.Tags) > 0, func() g.Node {
 					return tagsSection(secret)
@@ -113,10 +113,70 @@ func SecretDetailPage(
 	)
 }
 
-// valueSection renders the secret value with reveal functionality
-func valueSection(appBase string, secret *core.SecretDTO) g.Node {
+// valueSection renders the secret value with reveal functionality using Alpine.js
+func valueSection(appID string, appBase string, secret *core.SecretDTO) g.Node {
+	// Alpine.js x-data for the reveal functionality
+	alpineData := fmt.Sprintf(`{
+		revealed: false,
+		secretValue: '',
+		loading: false,
+		error: null,
+		copied: false,
+		appId: '%s',
+		secretId: '%s',
+		
+		async toggleReveal() {
+			if (this.revealed) {
+				// Hide
+				this.revealed = false;
+			} else {
+				// Show - fetch if needed
+				if (!this.secretValue) {
+					this.loading = true;
+					this.error = null;
+					try {
+						const data = await $bridge.call('secrets.revealSecret', {
+							appId: this.appId,
+							secretId: this.secretId
+						});
+						this.secretValue = typeof data.value === 'object' 
+							? JSON.stringify(data.value, null, 2) 
+							: String(data.value);
+					} catch (err) {
+						console.error('Failed to reveal:', err);
+						this.error = err.message || 'Failed to reveal secret';
+						this.loading = false;
+						return;
+					}
+					this.loading = false;
+				}
+				this.revealed = true;
+				
+				// Auto-hide after 30 seconds
+				setTimeout(() => {
+					if (this.revealed) this.revealed = false;
+				}, 30000);
+			}
+		},
+		
+		async copyValue() {
+			if (!this.secretValue) {
+				alert('Please reveal the secret first');
+				return;
+			}
+			try {
+				await navigator.clipboard.writeText(this.secretValue);
+				this.copied = true;
+				setTimeout(() => { this.copied = false; }, 2000);
+			} catch (err) {
+				alert('Failed to copy to clipboard');
+			}
+		}
+	}`, appID, secret.ID)
+
 	return Div(
 		Class("bg-white rounded-lg border border-slate-200 dark:bg-gray-900 dark:border-gray-800 overflow-hidden"),
+		g.Attr("x-data", alpineData),
 		Div(
 			Class("p-4 border-b border-slate-200 dark:border-gray-800"),
 			Div(
@@ -134,34 +194,45 @@ func valueSection(appBase string, secret *core.SecretDTO) g.Node {
 					// Copy button
 					Button(
 						Type("button"),
-						ID("copy-btn"),
 						Class("inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 rounded-md hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"),
-						g.Attr("onclick", "copySecretValue()"),
+						g.Attr("@click", "copyValue()"),
+						g.Attr(":disabled", "!secretValue"),
 						lucide.Copy(Class("size-3.5")),
-						g.Text("Copy"),
+						Span(
+							g.Attr("x-text", "copied ? 'Copied!' : 'Copy'"),
+						),
 					),
-					// Reveal button
+					// Reveal button (uses $bridge.call via Alpine.js)
 					Button(
 						Type("button"),
-						ID("reveal-btn"),
-						Class("inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-700 bg-violet-100 rounded-md hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50 transition-colors"),
-						g.Attr("onclick", fmt.Sprintf("toggleReveal('%s')", appBase+"/secrets/"+secret.ID+"/reveal")),
+						Class("inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-700 bg-violet-100 rounded-md hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"),
+						g.Attr("@click", "toggleReveal()"),
+						g.Attr(":disabled", "loading"),
 						lucide.Eye(Class("size-3.5")),
-						Span(ID("reveal-text"), g.Text("Reveal")),
+						Span(
+							g.Attr("x-text", "loading ? 'Loading...' : (revealed ? 'Hide' : 'Reveal')"),
+						),
 					),
 				),
 			),
 		),
 		Div(
 			Class("p-4"),
-			// Masked value display
-			Div(
-				ID("secret-value"),
-				Class("relative"),
-				// Masked overlay
+			// Error message
+			g.El("template",
+				g.Attr("x-if", "error"),
 				Div(
-					ID("masked-overlay"),
+					Class("mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400"),
+					g.Attr("x-text", "error"),
+				),
+			),
+			// Secret value display
+			Div(
+				Class("relative min-h-[100px]"),
+				// Masked overlay (shown when not revealed)
+				Div(
 					Class("absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-gray-800 rounded-lg"),
+					g.Attr("x-show", "!revealed"),
 					Div(
 						Class("text-center"),
 						lucide.EyeOff(Class("size-6 text-slate-400 mx-auto mb-2")),
@@ -171,12 +242,13 @@ func valueSection(appBase string, secret *core.SecretDTO) g.Node {
 						),
 					),
 				),
-				// Actual value (hidden by default)
+				// Actual value (shown when revealed)
 				Pre(
-					ID("actual-value"),
-					Class("hidden p-4 bg-slate-900 dark:bg-gray-950 rounded-lg text-sm font-mono text-green-400 overflow-x-auto"),
+					Class("p-4 bg-slate-900 dark:bg-gray-950 rounded-lg text-sm font-mono text-green-400 overflow-x-auto min-h-[100px]"),
+					g.Attr("x-show", "revealed"),
+					g.Attr("x-cloak", ""),
 					Code(
-						g.Text("********"),
+						g.Attr("x-text", "secretValue"),
 					),
 				),
 			),
@@ -195,72 +267,17 @@ func valueSection(appBase string, secret *core.SecretDTO) g.Node {
 						g.Text("Schema validated"),
 					)
 				}()),
+				// Auto-hide indicator
+				g.El("template",
+					g.Attr("x-if", "revealed"),
+					Div(
+						Class("flex items-center gap-1 text-amber-600 dark:text-amber-400"),
+						lucide.Clock(Class("size-3.5")),
+						g.Text("Auto-hides in 30s"),
+					),
+				),
 			),
 		),
-
-		// JavaScript for reveal functionality
-		Script(g.Raw(`
-			let revealed = false;
-			let secretValue = '';
-			
-			async function toggleReveal(url) {
-				const btn = document.getElementById('reveal-btn');
-				const text = document.getElementById('reveal-text');
-				const masked = document.getElementById('masked-overlay');
-				const actual = document.getElementById('actual-value');
-				
-				if (revealed) {
-					// Hide
-					masked.classList.remove('hidden');
-					actual.classList.add('hidden');
-					text.textContent = 'Reveal';
-					revealed = false;
-				} else {
-					// Show - fetch if needed
-					if (!secretValue) {
-						btn.disabled = true;
-						text.textContent = 'Loading...';
-						try {
-							const response = await fetch(url, { method: 'POST' });
-							const data = await response.json();
-							secretValue = typeof data.value === 'object' 
-								? JSON.stringify(data.value, null, 2) 
-								: String(data.value);
-							actual.querySelector('code').textContent = secretValue;
-						} catch (err) {
-							console.error('Failed to reveal:', err);
-							text.textContent = 'Error';
-							btn.disabled = false;
-							return;
-						}
-						btn.disabled = false;
-					}
-					masked.classList.add('hidden');
-					actual.classList.remove('hidden');
-					text.textContent = 'Hide';
-					revealed = true;
-					
-					// Auto-hide after 30 seconds
-					setTimeout(() => {
-						if (revealed) toggleReveal(url);
-					}, 30000);
-				}
-			}
-			
-			function copySecretValue() {
-				if (!secretValue) {
-					alert('Please reveal the secret first');
-					return;
-				}
-				navigator.clipboard.writeText(secretValue).then(() => {
-					const btn = document.getElementById('copy-btn');
-					btn.textContent = 'Copied!';
-					setTimeout(() => {
-						btn.innerHTML = '<svg class="size-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
-					}, 2000);
-				});
-			}
-		`)),
 	)
 }
 

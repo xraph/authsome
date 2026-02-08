@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/xid"
@@ -30,8 +31,9 @@ type Plugin struct {
 	// Handlers
 	orgHandler *OrganizationHandler
 
-	// Dashboard
-	dashboardExtension *DashboardExtension
+	// Dashboard (lazy initialized)
+	dashboardExtension     *DashboardExtension
+	dashboardExtensionOnce sync.Once
 
 	// UI Registry for organization page extensions
 	uiRegistry *OrganizationUIRegistry
@@ -54,6 +56,9 @@ type Plugin struct {
 
 	// Auth instance (for accessing service registry and hooks)
 	authInst core.Authsome
+
+	// Flag to prevent double initialization
+	initialized bool
 }
 
 // PluginOption is a functional option for configuring the plugin
@@ -101,6 +106,13 @@ func WithRequireInvitation(required bool) PluginOption {
 	}
 }
 
+// WithAllowAppLevelRoles sets whether app-level (global) RBAC roles can be used for organization membership
+func WithAllowAppLevelRoles(allow bool) PluginOption {
+	return func(p *Plugin) {
+		p.defaultConfig.AllowAppLevelRoles = allow
+	}
+}
+
 // WithInvitationExpiryHours sets the invitation expiry hours
 func WithInvitationExpiryHours(hours int) PluginOption {
 	return func(p *Plugin) {
@@ -126,6 +138,7 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 			EnableUserCreation:        true,
 			InvitationExpiryHours:     72,
 			EnforceUniqueSlug:         true,
+			AllowAppLevelRoles:        true, // Allow app-level roles by default
 		},
 	}
 
@@ -146,6 +159,11 @@ func (p *Plugin) ID() string {
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
 		return fmt.Errorf("invalid auth instance type")
+	}
+
+	// Prevent double initialization
+	if p.initialized {
+		return nil
 	}
 
 	// Store auth instance for later use (hooks)
@@ -170,12 +188,12 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if adapter, exists := serviceRegistry.Get("notification.adapter"); exists {
 		if typedAdapter, ok := adapter.(*notificationPlugin.Adapter); ok {
 			p.notifAdapter = typedAdapter
-			p.logger.Info("retrieved notification adapter from service registry")
+			p.logger.Debug("retrieved notification adapter from service registry")
 		} else {
 			p.logger.Warn("notification adapter type assertion failed")
 		}
 	} else {
-		p.logger.Info("notification adapter not available in service registry (graceful degradation)")
+		p.logger.Debug("notification adapter not available in service registry (graceful degradation)")
 	}
 
 	// Register schema models with Bun for relationships to work
@@ -194,18 +212,41 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.logger.Warn("failed to bind organization config", forge.F("error", err.Error()))
 	}
 
-	// Set default values
+	// Apply defaults from p.defaultConfig for any zero values
+	// This ensures functional options (WithAllowAppLevelRoles, etc.) are respected
+	// even when not explicitly set in config file
 	if p.config.MaxOrganizationsPerUser == 0 {
-		p.config.MaxOrganizationsPerUser = 5
+		p.config.MaxOrganizationsPerUser = p.defaultConfig.MaxOrganizationsPerUser
+		if p.config.MaxOrganizationsPerUser == 0 {
+			p.config.MaxOrganizationsPerUser = 5
+		}
 	}
 	if p.config.MaxMembersPerOrganization == 0 {
-		p.config.MaxMembersPerOrganization = 50
+		p.config.MaxMembersPerOrganization = p.defaultConfig.MaxMembersPerOrganization
+		if p.config.MaxMembersPerOrganization == 0 {
+			p.config.MaxMembersPerOrganization = 50
+		}
 	}
 	if p.config.MaxTeamsPerOrganization == 0 {
-		p.config.MaxTeamsPerOrganization = 20
+		p.config.MaxTeamsPerOrganization = p.defaultConfig.MaxTeamsPerOrganization
+		if p.config.MaxTeamsPerOrganization == 0 {
+			p.config.MaxTeamsPerOrganization = 20
+		}
 	}
 	if p.config.InvitationExpiryHours == 0 {
-		p.config.InvitationExpiryHours = 72 // 3 days
+		p.config.InvitationExpiryHours = p.defaultConfig.InvitationExpiryHours
+		if p.config.InvitationExpiryHours == 0 {
+			p.config.InvitationExpiryHours = 72 // 3 days
+		}
+	}
+
+	// For boolean fields, we need special handling since false is a valid value
+	// If AllowAppLevelRoles was set via functional option (in defaultConfig), use it
+	// unless explicitly overridden in config file
+	// Since we can't distinguish between "not set" and "false" in config file,
+	// we prioritize the defaultConfig value set by functional options
+	if p.defaultConfig.AllowAppLevelRoles {
+		p.config.AllowAppLevelRoles = true
 	}
 
 	// Create repositories
@@ -226,7 +267,15 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		RequireInvitation:         p.config.RequireInvitation,
 		InvitationExpiryHours:     p.config.InvitationExpiryHours,
 		EnforceUniqueSlug:         p.config.EnforceUniqueSlug,
+		AllowAppLevelRoles:        p.config.AllowAppLevelRoles,
 	}
+
+	// Log configuration for debugging
+	p.logger.Debug("initializing organization service",
+		forge.F("allow_app_level_roles", orgConfig.AllowAppLevelRoles),
+		forge.F("max_orgs_per_user", orgConfig.MaxOrganizationsPerUser),
+		forge.F("max_members_per_org", orgConfig.MaxMembersPerOrganization),
+	)
 
 	// Create services with actual repositories and RBAC service
 	p.orgService = NewService(
@@ -251,8 +300,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		plugin:     p, // Pass plugin reference for notifications
 	}
 
-	// Initialize dashboard extension
-	p.dashboardExtension = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	// Initialize organization UI registry
 	p.uiRegistry = NewOrganizationUIRegistry()
@@ -262,7 +310,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// until all plugins are loaded. We'll register extensions in a second pass.
 	if pluginRegistry := authInstance.GetPluginRegistry(); pluginRegistry != nil {
 		plugins := pluginRegistry.List()
-		p.logger.Info("scanning for organization UI extensions", forge.F("plugin_count", len(plugins)))
+		p.logger.Debug("scanning for organization UI extensions", forge.F("plugin_count", len(plugins)))
 
 		for _, plugin := range plugins {
 			// Skip self
@@ -277,7 +325,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 						forge.F("plugin", plugin.ID()),
 						forge.F("error", err.Error()))
 				} else {
-					p.logger.Info("registered organization UI extension",
+					p.logger.Debug("registered organization UI extension",
 						forge.F("plugin", plugin.ID()),
 						forge.F("extension_id", orgUIExt.ExtensionID()))
 				}
@@ -291,6 +339,9 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 			p.logger.Warn("failed to register organization services in DI container", forge.F("error", err.Error()))
 		}
 	}
+
+	// Mark as initialized
+	p.initialized = true
 
 	p.logger.Info("organization plugin initialized",
 		forge.F("max_orgs_per_user", p.config.MaxOrganizationsPerUser),
@@ -492,7 +543,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 	// Create wrapper for invitation with notification
 	// We'll wrap the InviteMember call in the plugin to send notifications
-	p.logger.Info("organization plugin will handle invitation notifications via service wrapper")
+	p.logger.Debug("organization plugin will handle invitation notifications via service wrapper")
 
 	// Hook: After member added - send notification
 	hookRegistry.RegisterAfterMemberAdd(func(ctx context.Context, memberInterface interface{}) error {
@@ -651,7 +702,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		return nil
 	})
 
-	p.logger.Info("registered organization notification hooks")
+	p.logger.Debug("registered organization notification hooks")
 	return nil
 }
 
@@ -764,6 +815,9 @@ func (p *Plugin) Migrate() error {
 
 // DashboardExtension returns the dashboard extension interface implementation
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtensionOnce.Do(func() {
+		p.dashboardExtension = NewDashboardExtension(p)
+	})
 	return p.dashboardExtension
 }
 
@@ -774,7 +828,6 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid role registry type")
 	}
-
 
 	// Extend Owner role with full organization management permissions
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{

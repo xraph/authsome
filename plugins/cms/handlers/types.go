@@ -4,11 +4,11 @@ package handlers
 
 // Content Type DTOs
 type ListContentTypesRequest struct {
-	Search    string `query:"search"`
-	SortBy    string `query:"sortBy"`
-	SortOrder string `query:"sortOrder"`
-	Page      int    `query:"page"`
-	PageSize  int    `query:"pageSize"`
+	Search    string `query:"search,omitempty"`
+	SortBy    string `query:"sortBy,omitempty"`
+	SortOrder string `query:"sortOrder,omitempty"`
+	Page      int    `query:"page,omitempty"`
+	PageSize  int    `query:"pageSize,omitempty"`
 }
 
 type GetContentTypeRequest struct {
@@ -60,12 +60,12 @@ type ReorderFieldsRequest struct {
 // Content Entry DTOs
 type ListEntriesRequest struct {
 	TypeSlug  string `path:"typeSlug" validate:"required"`
-	Search    string `query:"search"`
-	Status    string `query:"status"`
-	SortBy    string `query:"sortBy"`
-	SortOrder string `query:"sortOrder"`
-	Page      int    `query:"page"`
-	PageSize  int    `query:"pageSize"`
+	Search    string `query:"search,omitempty"`
+	Status    string `query:"status,omitempty"`
+	SortBy    string `query:"sortBy,omitempty"`
+	SortOrder string `query:"sortOrder,omitempty"`
+	Page      int    `query:"page,omitempty"`
+	PageSize  int    `query:"pageSize,omitempty"`
 }
 
 type CreateEntryRequest struct {
@@ -134,8 +134,8 @@ type GetEntryStatsRequest struct {
 type ListRevisionsRequest struct {
 	TypeSlug string `path:"typeSlug" validate:"required"`
 	EntryID  string `path:"entryId" validate:"required"`
-	Page     int    `query:"page"`
-	PageSize int    `query:"pageSize"`
+	Page     int    `query:"page,omitempty"`
+	PageSize int    `query:"pageSize,omitempty"`
 }
 
 type GetRevisionRequest struct {

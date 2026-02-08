@@ -108,7 +108,7 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 
 	// Audit log: provider registration
 	if h.logger != nil {
-		h.logger.Info("SSO provider registered",
+		h.logger.Debug("SSO provider registered",
 			forge.F("provider_id", prov.ProviderID),
 			forge.F("type", prov.Type),
 			forge.F("app_id", appID.String()),

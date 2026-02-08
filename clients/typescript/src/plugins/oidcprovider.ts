@@ -20,24 +20,24 @@ export class OidcproviderPlugin implements ClientPlugin {
   }
 
   async listClients(): Promise<types.ClientsListResponse> {
-    const path = '/oauth2/listclients';
+    const path = '/oauth2/clients';
     return this.client.request<types.ClientsListResponse>('GET', path);
   }
 
   async getClient(params: { clientId: string }): Promise<types.ClientDetailsResponse> {
-    const path = `/oauth2/${params.clientId}`;
+    const path = `/oauth2/clients/${params.clientId}`;
     return this.client.request<types.ClientDetailsResponse>('GET', path);
   }
 
   async updateClient(params: { clientId: string }, request: types.ClientUpdateRequest): Promise<types.ClientDetailsResponse> {
-    const path = `/oauth2/${params.clientId}`;
+    const path = `/oauth2/clients/${params.clientId}`;
     return this.client.request<types.ClientDetailsResponse>('PUT', path, {
       body: request,
     });
   }
 
   async deleteClient(params: { clientId: string }): Promise<void> {
-    const path = `/oauth2/${params.clientId}`;
+    const path = `/oauth2/clients/${params.clientId}`;
     return this.client.request<void>('DELETE', path);
   }
 
@@ -85,6 +85,32 @@ export class OidcproviderPlugin implements ClientPlugin {
   async revokeToken(request: types.TokenRevocationRequest): Promise<types.StatusResponse> {
     const path = '/oauth2/revoke';
     return this.client.request<types.StatusResponse>('POST', path, {
+      body: request,
+    });
+  }
+
+  async deviceAuthorize(request: types.DeviceAuthorizationRequest): Promise<types.DeviceAuthorizationResponse> {
+    const path = '/oauth2/device_authorization';
+    return this.client.request<types.DeviceAuthorizationResponse>('POST', path, {
+      body: request,
+    });
+  }
+
+  async deviceCodeEntry(): Promise<types.DeviceCodeEntryResponse> {
+    const path = '/oauth2/device';
+    return this.client.request<types.DeviceCodeEntryResponse>('GET', path);
+  }
+
+  async deviceVerify(request: types.DeviceVerificationRequest): Promise<types.DeviceVerifyResponse> {
+    const path = '/oauth2/device/verify';
+    return this.client.request<types.DeviceVerifyResponse>('POST', path, {
+      body: request,
+    });
+  }
+
+  async deviceAuthorizeDecision(request: types.DeviceAuthorizationDecisionRequest): Promise<types.DeviceDecisionResponse> {
+    const path = '/oauth2/device/authorize';
+    return this.client.request<types.DeviceDecisionResponse>('POST', path, {
       body: request,
     });
   }

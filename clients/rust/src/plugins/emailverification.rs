@@ -25,10 +25,10 @@ impl EmailverificationPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct SendResponse {
-        #[serde(rename = "devToken")]
-        pub dev_token: String,
         #[serde(rename = "status")]
         pub status: String,
+        #[serde(rename = "devToken")]
+        pub dev_token: String,
     }
 
     /// Send handles manual verification email sending

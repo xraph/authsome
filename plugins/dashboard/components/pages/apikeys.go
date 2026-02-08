@@ -251,7 +251,7 @@ func createAPIKeyModal(data APIKeysTabPageData) g.Node {
 			// Modal Body
 			FormEl(
 				g.Attr("method", "POST"),
-				g.Attr("action", "/dashboard/api-keys/create"),
+				g.Attr("action", "/api-keys/create"),
 				g.Attr("@submit.prevent", "createAPIKey($event)"),
 
 				Div(Class("p-6 space-y-4"),
@@ -437,7 +437,7 @@ func revokeKeyModal(csrfToken string) g.Node {
 			// Modal Footer
 			FormEl(
 				g.Attr("method", "POST"),
-				g.Attr("action", "/dashboard/api-keys/revoke"),
+				g.Attr("action", "/api-keys/revoke"),
 				g.Attr("@submit.prevent", "revokeAPIKey($event)"),
 
 				Input(Type("hidden"), Name("csrf_token"), Value(csrfToken)),

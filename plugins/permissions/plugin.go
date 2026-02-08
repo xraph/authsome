@@ -883,7 +883,7 @@ func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
 		if err := p.WireMigrationService(rbacAdapter); err != nil {
 			p.logger.Warn("failed to wire migration service", forge.F("error", err.Error()))
 		} else {
-			p.logger.Info("migration service auto-wired with full repository access")
+			p.logger.Debug("migration service auto-wired with full repository access")
 		}
 	}
 
@@ -920,7 +920,7 @@ func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
 		if err := p.WireUserAttributeProvider(userProviderCfg); err != nil {
 			p.logger.Warn("failed to wire user attribute provider", forge.F("error", err.Error()))
 		} else {
-			p.logger.Info("user attribute provider auto-wired")
+			p.logger.Debug("user attribute provider auto-wired")
 		}
 	}
 
@@ -1175,7 +1175,7 @@ func (p *Plugin) WireUserAttributeProvider(cfg providers.AuthsomeUserProviderCon
 	// Re-register (will replace existing)
 	// Note: The AttributeResolver.RegisterProvider returns error if already exists,
 	// so we need to handle replacement differently
-	p.logger.Info("user attribute provider wired",
+	p.logger.Debug("user attribute provider wired",
 		forge.F("hasUserService", cfg.UserService != nil),
 		forge.F("hasMemberService", cfg.MemberService != nil),
 		forge.F("hasRBACService", cfg.RBACService != nil))
@@ -1211,7 +1211,7 @@ func (p *Plugin) WireMigrationService(rbacAdapter *migration.RBACServiceAdapter)
 	// Re-create handler with new service
 	p.migrationHandler = handlers.NewMigrationHandler(p.migrationService)
 
-	p.logger.Info("migration service wired to RBAC")
+	p.logger.Debug("migration service wired to RBAC")
 	return nil
 }
 
@@ -1264,7 +1264,7 @@ func (p *Plugin) WireFromAuthsome() error {
 		}
 	}
 
-	p.logger.Info("services wired from AuthSome")
+	p.logger.Debug("services wired from AuthSome")
 	return nil
 }
 

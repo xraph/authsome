@@ -1,11 +1,10 @@
 plugin_id: jwt
 version: 1.0.0
-base_path: /jwt
 routes:
     - name: CreateJWTKey
       description: CreateJWTKey creates a new JWT signing key
       method: POST
-      path: /createjwtkey
+      path: /jwt/keys
       request:
         algorithm: string!
         curve: string!
@@ -18,7 +17,7 @@ routes:
     - name: ListJWTKeys
       description: ListJWTKeys lists JWT signing keys
       method: GET
-      path: /listjwtkeys
+      path: /jwt/keys
       request:
         "": '*bool'
       request_type: ListJWTKeysRequest
@@ -26,12 +25,12 @@ routes:
     - name: GetJWKS
       description: GetJWKS returns the JSON Web Key Set
       method: GET
-      path: /jwks
+      path: /jwt/jwks
       response_type: JWKSResponse
     - name: GenerateToken
       description: GenerateToken generates a new JWT token
       method: POST
-      path: /generate
+      path: /jwt/generate
       request:
         audience: '[]string!'
         expiresIn: time.Duration!
@@ -46,7 +45,7 @@ routes:
     - name: VerifyToken
       description: VerifyToken verifies a JWT token
       method: POST
-      path: /verify
+      path: /jwt/verify
       request:
         audience: '[]string!'
         token: string!
@@ -54,19 +53,6 @@ routes:
       request_type: VerifyTokenRequest
       response_type: VerifyTokenResponse
 types:
-    - name: Plugin
-      fields:
-        "": '*jwt.Service'
-    - name: Config
-      fields:
-        accessExpirySeconds: int!
-        includeAppIDClaim: bool!
-        issuer: string!
-        refreshExpirySeconds: int!
-        signingAlgorithm: string!
-    - name: Handler
-      fields:
-        "": '*jwt.Service'
     - name: CreateJWTKeyRequest
       fields:
         algorithm: string!
@@ -93,3 +79,16 @@ types:
         audience: '[]string!'
         token: string!
         tokenType: string!
+    - name: Plugin
+      fields:
+        "": '*jwt.Service'
+    - name: Config
+      fields:
+        accessExpirySeconds: int!
+        includeAppIDClaim: bool!
+        issuer: string!
+        refreshExpirySeconds: int!
+        signingAlgorithm: string!
+    - name: Handler
+      fields:
+        "": '*jwt.Service'

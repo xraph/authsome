@@ -25,7 +25,7 @@ func EnvironmentsPage(data EnvironmentsData, basePath string, appIDStr string) g
 				P(Class("mt-1 text-sm text-slate-500 dark:text-gray-400"), g.Text("Manage application environments")),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+appIDStr+"/environments/create"),
+				Href(basePath+"/app/"+appIDStr+"/environments/create"),
 				Class("inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition-colors"),
 				lucide.Plus(Class("h-5 w-5")),
 				g.Text("Create Environment"),
@@ -51,7 +51,7 @@ func environmentsGrid(environments []*environment.Environment, basePath string, 
 }
 
 func environmentCard(env *environment.Environment, basePath string, appIDStr string) g.Node {
-	detailURL := basePath + "/dashboard/app/" + appIDStr + "/environments/" + env.ID.String()
+	detailURL := basePath + "/app/" + appIDStr + "/environments/" + env.ID.String()
 	editURL := detailURL + "/edit"
 
 	// Status badge
@@ -150,7 +150,7 @@ func emptyEnvironmentsState(basePath string, appIDStr string) g.Node {
 			g.Text("Get started by creating your first environment"),
 		),
 		A(
-			Href(basePath+"/dashboard/app/"+appIDStr+"/environments/create"),
+			Href(basePath+"/app/"+appIDStr+"/environments/create"),
 			Class("mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition-colors"),
 			lucide.Plus(Class("h-5 w-5")),
 			g.Text("Create Environment"),
@@ -166,8 +166,8 @@ type EnvironmentDetailData struct {
 // EnvironmentDetailPage renders the environment detail page
 func EnvironmentDetailPage(data EnvironmentDetailData, basePath string, appIDStr string) g.Node {
 	env := data.Environment
-	editURL := basePath + "/dashboard/app/" + appIDStr + "/environments/" + env.ID.String() + "/edit"
-	listURL := basePath + "/dashboard/app/" + appIDStr + "/environments"
+	editURL := basePath + "/app/" + appIDStr + "/environments/" + env.ID.String() + "/edit"
+	listURL := basePath + "/app/" + appIDStr + "/environments"
 
 	return g.Group([]g.Node{
 		// Back button
@@ -233,8 +233,8 @@ func detailRow(label string, value interface{}) g.Node {
 
 // EnvironmentCreatePage renders the create environment page
 func EnvironmentCreatePage(basePath string, appIDStr string, csrfToken string) g.Node {
-	listURL := basePath + "/dashboard/app/" + appIDStr + "/environments"
-	formAction := basePath + "/dashboard/app/" + appIDStr + "/environments/create"
+	listURL := basePath + "/app/" + appIDStr + "/environments"
+	formAction := basePath + "/app/" + appIDStr + "/environments/create"
 
 	return g.Group([]g.Node{
 		// Back button
@@ -294,7 +294,7 @@ type EnvironmentEditData struct {
 // EnvironmentEditPage renders the edit environment page
 func EnvironmentEditPage(data EnvironmentEditData, basePath string, appIDStr string, csrfToken string) g.Node {
 	env := data.Environment
-	detailURL := basePath + "/dashboard/app/" + appIDStr + "/environments/" + env.ID.String()
+	detailURL := basePath + "/app/" + appIDStr + "/environments/" + env.ID.String()
 	formAction := detailURL + "/edit"
 	deleteAction := detailURL + "/delete"
 

@@ -307,7 +307,7 @@ func SettingsActions(saveText string, cancelURL string, extraActions ...g.Node) 
 // BuildSettingsURL builds a settings page URL
 func BuildSettingsURL(basePath string, appID, page string) string {
 	if appID == "" {
-		return fmt.Sprintf("%s/dashboard/settings/%s", basePath, page)
+		return fmt.Sprintf("%s/settings/%s", basePath, page)
 	}
-	return fmt.Sprintf("%s/dashboard/app/%s/settings/%s", basePath, appID, page)
+	return fmt.Sprintf("%s/app/%s/settings/%s", basePath, appID, page)
 }

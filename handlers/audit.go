@@ -295,3 +295,191 @@ func (h *AuditHandler) SearchEvents(c forge.Context) error {
 
 	return c.JSON(http.StatusOK, resp)
 }
+
+// =============================================================================
+// AGGREGATION ENDPOINTS
+// =============================================================================
+
+// GetAggregations returns all aggregations in one call
+// GET /audit/aggregations
+func (h *AuditHandler) GetAggregations(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetAllAggregations(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get aggregations"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctActions returns distinct actions with counts
+// GET /audit/actions
+func (h *AuditHandler) GetDistinctActions(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctActions(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct actions"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctSources returns distinct sources with counts
+// GET /audit/sources
+func (h *AuditHandler) GetDistinctSources(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctSources(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct sources"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctResources returns distinct resources with counts
+// GET /audit/resources
+func (h *AuditHandler) GetDistinctResources(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctResources(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct resources"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctUsers returns distinct users with counts
+// GET /audit/users
+func (h *AuditHandler) GetDistinctUsers(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctUsers(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct users"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctIPs returns distinct IP addresses with counts
+// GET /audit/ips
+func (h *AuditHandler) GetDistinctIPs(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctIPs(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct IPs"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctApps returns distinct apps with counts
+// GET /audit/apps
+func (h *AuditHandler) GetDistinctApps(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctApps(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct apps"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetDistinctOrganizations returns distinct organizations with counts
+// GET /audit/organizations
+func (h *AuditHandler) GetDistinctOrganizations(c forge.Context) error {
+	if h.service == nil {
+		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
+	}
+
+	filter := h.parseAggregationFilter(c)
+
+	result, err := h.service.GetDistinctOrganizations(c.Request().Context(), filter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("Failed to get distinct organizations"))
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// parseAggregationFilter parses query parameters into AggregationFilter
+func (h *AuditHandler) parseAggregationFilter(c forge.Context) *audit.AggregationFilter {
+	q := c.Request().URL.Query()
+
+	filter := &audit.AggregationFilter{}
+
+	// Parse IDs
+	if appID := q.Get("app_id"); appID != "" {
+		if id, err := xid.FromString(appID); err == nil {
+			filter.AppID = &id
+		}
+	}
+
+	if orgID := q.Get("organization_id"); orgID != "" {
+		if id, err := xid.FromString(orgID); err == nil {
+			filter.OrganizationID = &id
+		}
+	}
+
+	if envID := q.Get("environment_id"); envID != "" {
+		if id, err := xid.FromString(envID); err == nil {
+			filter.EnvironmentID = &id
+		}
+	}
+
+	// Parse time range
+	if since := q.Get("since"); since != "" {
+		if t, err := time.Parse(time.RFC3339, since); err == nil {
+			filter.Since = &t
+		}
+	}
+
+	if until := q.Get("until"); until != "" {
+		if t, err := time.Parse(time.RFC3339, until); err == nil {
+			filter.Until = &t
+		}
+	}
+
+	// Parse limit
+	if limitStr := q.Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+			filter.Limit = limit
+		}
+	}
+
+	return filter
+}

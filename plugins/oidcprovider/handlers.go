@@ -7,14 +7,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/internal/errs"
-	"github.com/xraph/authsome/plugins/oidcprovider/components"
+	"github.com/xraph/authsome/plugins/oidcprovider/consent"
 	"github.com/xraph/forge"
+	"maragu.dev/gomponents"
 )
 
 // Handler handles OIDC provider HTTP endpoints
@@ -25,10 +28,17 @@ type Handler struct {
 	consentSvc       *ConsentService
 	discoverySvc     *DiscoveryService
 	clientAuth       *ClientAuthenticator
+	basePath         string // Base path for building URLs (e.g., "/oauth2")
+	loginURL         string // Custom login URL (defaults to "/auth/signin" if not set)
+	apiMode          bool   // If true, return JSON instead of HTML redirects
 }
 
 // NewHandler creates a new OIDC handler
-func NewHandler(svc *Service) *Handler {
+func NewHandler(svc *Service, basePath, loginURL string, apiMode bool) *Handler {
+	// Default to /auth/signin if not provided
+	if loginURL == "" {
+		loginURL = "/auth/signin"
+	}
 	return &Handler{
 		svc:              svc,
 		revocationSvc:    svc.revocation,
@@ -36,6 +46,9 @@ func NewHandler(svc *Service) *Handler {
 		consentSvc:       svc.consent,
 		discoverySvc:     svc.discovery,
 		clientAuth:       svc.clientAuth,
+		basePath:         basePath,
+		loginURL:         loginURL,
+		apiMode:          apiMode,
 	}
 }
 
@@ -54,7 +67,7 @@ func (h *Handler) Discovery(c forge.Context) error {
 	}
 	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
 
-	doc := h.discoverySvc.GetDiscoveryDocument(ctx, baseURL)
+	doc := h.discoverySvc.GetDiscoveryDocument(ctx, baseURL, h.basePath)
 	return c.JSON(http.StatusOK, doc)
 }
 
@@ -94,19 +107,28 @@ func (h *Handler) Authorize(c forge.Context) error {
 	}
 
 	// Check if user is authenticated
-	sessionToken := h.getSessionToken(c)
-	if sessionToken == "" {
-		loginURL := fmt.Sprintf("/auth/signin?return_to=%s", url.QueryEscape(c.Request().URL.String()))
-		c.SetHeader("Location", loginURL)
-		return c.JSON(http.StatusFound, nil)
+	// Priority: Auth context session > Manual session token extraction
+	var sess *session.Session
+	
+	// Try to get session from auth context first (set by middleware)
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx.Session != nil {
+		sess = authCtx.Session
 	}
+	
+	// If no session in auth context, try to load from cookie/header
+	// This handles cases where API key is present but session is not in context
+	if sess == nil {
+		sessionToken := h.getSessionToken(c)
+		if sessionToken == "" {
+			return h.handleAuthRequired(c, c.Request().URL.String())
+		}
 
-	// Validate user session
-	sess, err := h.svc.sessionSvc.FindByToken(ctx, sessionToken)
-	if err != nil || sess == nil {
-		loginURL := fmt.Sprintf("/auth/signin?return_to=%s", url.QueryEscape(c.Request().URL.String()))
-		c.SetHeader("Location", loginURL)
-		return c.JSON(http.StatusFound, nil)
+		// Validate user session
+		var err error
+		sess, err = h.svc.sessionSvc.FindByToken(ctx, sessionToken)
+		if err != nil || sess == nil {
+			return h.handleAuthRequired(c, c.Request().URL.String())
+		}
 	}
 
 	// Check if consent is required
@@ -267,6 +289,7 @@ func (h *Handler) Token(c forge.Context) error {
 		req.CodeVerifier = c.Request().FormValue("code_verifier")
 		req.RefreshToken = c.Request().FormValue("refresh_token")
 		req.Scope = c.Request().FormValue("scope")
+		req.DeviceCode = c.Request().FormValue("device_code")
 	} else {
 		if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid JSON"))
@@ -281,6 +304,8 @@ func (h *Handler) Token(c forge.Context) error {
 		return h.handleRefreshTokenGrant(ctx, c, &req)
 	case "client_credentials":
 		return h.handleClientCredentialsGrant(ctx, c, &req)
+	case "urn:ietf:params:oauth:grant-type:device_code":
+		return h.handleDeviceCodeGrant(ctx, c, &req)
 	default:
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("unsupported grant type: "+req.GrantType))
 	}
@@ -389,6 +414,142 @@ func (h *Handler) handleClientCredentialsGrant(ctx context.Context, c forge.Cont
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
+	}
+
+	return c.JSON(http.StatusOK, tokenResponse)
+}
+
+// handleDeviceCodeGrant handles the device_code grant type (RFC 8628)
+func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, req *TokenRequest) error {
+	// Check if device flow is enabled
+	if h.svc.deviceFlowService == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "unsupported_grant_type",
+			"error_description": "device flow is not enabled",
+		})
+	}
+
+	// Validate required parameters
+	if req.DeviceCode == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "invalid_request",
+			"error_description": "device_code is required",
+		})
+	}
+	if req.ClientID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "invalid_request",
+			"error_description": "client_id is required",
+		})
+	}
+
+	// Poll for device code status
+	deviceCode, shouldSlowDown, err := h.svc.deviceFlowService.PollDeviceCode(ctx, req.DeviceCode)
+	if err != nil {
+		// Return appropriate OAuth error based on the error type
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			errorCode := "invalid_grant"
+			if authErr.HTTPStatus == http.StatusForbidden {
+				errorCode = "access_denied"
+			} else if authErr.HTTPStatus == http.StatusBadRequest {
+				if strings.Contains(authErr.Message, "expired") {
+					errorCode = "expired_token"
+				}
+			}
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error":             errorCode,
+				"error_description": authErr.Message,
+			})
+		}
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "invalid_grant",
+			"error_description": "invalid device code",
+		})
+	}
+
+	// Check if device is polling too frequently
+	if shouldSlowDown {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "slow_down",
+			"error_description": "polling too frequently, slow down by 5 seconds",
+		})
+	}
+
+	// Check if authorization is still pending
+	if deviceCode.Status == "pending" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "authorization_pending",
+			"error_description": "user has not yet authorized the device",
+		})
+	}
+
+	// Check if authorization was denied
+	if deviceCode.Status == "denied" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "access_denied",
+			"error_description": "user denied the authorization request",
+		})
+	}
+
+	// Check if device code was already consumed
+	if deviceCode.Status == "consumed" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "invalid_grant",
+			"error_description": "device code has already been used",
+		})
+	}
+
+	// Verify client_id matches
+	if deviceCode.ClientID != req.ClientID {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "invalid_grant",
+			"error_description": "client_id does not match",
+		})
+	}
+
+	// Device code must be authorized
+	if deviceCode.Status != "authorized" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "authorization_pending",
+			"error_description": "device authorization not yet complete",
+		})
+	}
+
+	// Validate client exists
+	client, err := h.svc.clientRepo.FindByClientID(ctx, req.ClientID)
+	if err != nil || client == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "invalid_client",
+			"error_description": "client not found",
+		})
+	}
+
+	// Get user and session
+	if deviceCode.UserID == nil || deviceCode.SessionID == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":             "server_error",
+			"error_description": "device code missing user or session information",
+		})
+	}
+
+	// Generate tokens
+	tokenResponse, err := h.svc.GenerateTokensForDeviceCode(ctx, deviceCode, client)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, map[string]string{
+				"error":             "server_error",
+				"error_description": authErr.Message,
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":             "server_error",
+			"error_description": "failed to generate tokens",
+		})
+	}
+
+	// Mark device code as consumed
+	if err := h.svc.deviceFlowService.ConsumeDeviceCode(ctx, req.DeviceCode); err != nil {
+		// Log error but don't fail the request since tokens were already generated
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse)
@@ -509,23 +670,516 @@ func (h *Handler) RevokeToken(c forge.Context) error {
 }
 
 // =============================================================================
+// DEVICE FLOW ENDPOINTS (RFC 8628)
+// =============================================================================
+
+// DeviceAuthorize initiates the device authorization flow
+func (h *Handler) DeviceAuthorize(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Parse request
+	var req DeviceAuthorizationRequest
+	if err := c.Request().ParseForm(); err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("failed to parse form data"))
+	}
+	req.ClientID = c.Request().FormValue("client_id")
+	req.Scope = c.Request().FormValue("scope")
+
+	// Validate client_id
+	if req.ClientID == "" {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("client_id is required"))
+	}
+
+	// Validate client exists
+	client, err := h.svc.clientRepo.FindByClientID(ctx, req.ClientID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid client"))
+	}
+	if client == nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("client not found"))
+	}
+
+	// Check if device flow is enabled
+	if h.svc.deviceFlowService == nil {
+		return c.JSON(http.StatusBadRequest, errs.BadRequest("device flow not enabled"))
+	}
+
+	// Use client's context IDs (appID, envID, orgID) instead of request context
+	// OAuth clients are scoped to an app and environment, so we use those values
+	appID := client.AppID
+	envID := client.EnvironmentID
+	orgIDPtr := client.OrganizationID
+
+	// Initiate device authorization
+	deviceCode, err := h.svc.deviceFlowService.InitiateDeviceAuthorization(ctx, req.ClientID, req.Scope, appID, envID, orgIDPtr)
+	if err != nil {
+		if authErr, ok := err.(*errs.AuthsomeError); ok {
+			return c.JSON(authErr.HTTPStatus, authErr)
+		}
+		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
+	}
+
+	// Build verification URI
+	scheme := "https"
+	if c.Request().TLS == nil {
+		scheme = "http"
+	}
+	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
+	// Prepend base path to the verification URI path
+	verificationURI := baseURL + h.basePath + deviceCode.VerificationURI
+
+	// Calculate expires_in
+	expiresIn := int(time.Until(deviceCode.ExpiresAt).Seconds())
+
+	// Build response with formatted user code for display
+	formattedUserCode := deviceCode.FormattedUserCode()
+	verificationURIComplete := fmt.Sprintf("%s?user_code=%s", verificationURI, formattedUserCode)
+	
+	resp := DeviceAuthorizationResponse{
+		DeviceCode:              deviceCode.DeviceCode,
+		UserCode:                formattedUserCode,
+		VerificationURI:         verificationURI,
+		VerificationURIComplete: verificationURIComplete,
+		ExpiresIn:               expiresIn,
+		Interval:                deviceCode.Interval,
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+// DeviceCodeEntry shows the device code entry form
+func (h *Handler) DeviceCodeEntry(c forge.Context) error {
+	// Check if device flow is enabled
+	if h.svc.deviceFlowService == nil {
+		return returnHTML(c, http.StatusNotFound, "<h1>404 Not Found</h1><p>Device flow is not enabled.</p>")
+	}
+
+	// Get optional pre-filled user code and redirect URL from query params
+	userCode := c.Request().URL.Query().Get("user_code")
+	redirectURL := c.Request().URL.Query().Get("redirect")
+
+	// Use default branding (no client info at this point)
+	branding := consent.DefaultBranding()
+
+	page := consent.DeviceCodeEntryPage(consent.CodeEntryPageData{
+		UserCode:    userCode,
+		Branding:    branding,
+		BasePath:    h.basePath,
+		RedirectURL: redirectURL,
+	})
+
+	return renderNode(c, http.StatusOK, page)
+}
+
+// DeviceVerify verifies the user code and shows the consent screen
+func (h *Handler) DeviceVerify(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Default branding for early errors
+	branding := consent.DefaultBranding()
+
+	// Check if device flow is enabled
+	if h.svc.deviceFlowService == nil {
+		if h.apiMode {
+			return c.JSON(http.StatusNotFound, map[string]interface{}{
+				"error":             "not_found",
+				"error_description": "Device flow is not enabled",
+			})
+		}
+		return returnHTML(c, http.StatusNotFound, "<h1>404 Not Found</h1><p>Device flow is not enabled.</p>")
+	}
+
+	// Parse request body (support both JSON and form-encoded)
+	var userCode, redirectURL string
+	contentType := c.Request().Header.Get("Content-Type")
+	
+	if strings.Contains(contentType, "application/json") {
+		// Parse JSON body
+		var body struct {
+			UserCode    string `json:"user_code"`
+			RedirectURL string `json:"redirect"`
+		}
+		if err := c.BindJSON(&body); err != nil {
+			return h.handleDeviceError(c, http.StatusBadRequest, "invalid_request", "Failed to parse JSON body", "")
+		}
+		userCode = body.UserCode
+		redirectURL = body.RedirectURL
+	} else {
+		// Parse form data
+		if err := c.Request().ParseForm(); err != nil {
+			return h.handleDeviceError(c, http.StatusBadRequest, "invalid_request", "Failed to parse form data", "")
+		}
+		userCode = c.Request().FormValue("user_code")
+		redirectURL = c.Request().FormValue("redirect")
+	}
+	
+	if userCode == "" {
+		return h.handleDeviceError(c, http.StatusBadRequest, "invalid_request", "User code is required", redirectURL)
+	}
+
+	// Normalize user code (remove spaces, hyphens, uppercase)
+	userCode = normalizeUserCode(userCode)
+
+	// Get device code from service
+	deviceCode, err := h.svc.deviceFlowService.GetDeviceCodeByUserCode(ctx, userCode)
+	if err != nil {
+		return h.handleDeviceError(c, http.StatusNotFound, "invalid_code", "Invalid or expired verification code", redirectURL)
+	}
+
+	// Check if device code is still pending
+	if !deviceCode.IsPending() {
+		errMsg := "This code has already been used or has expired"
+		errorCode := "code_expired"
+		if deviceCode.Status == "denied" {
+			errMsg = "This authorization has been denied"
+			errorCode = "access_denied"
+		}
+		return h.handleDeviceError(c, http.StatusBadRequest, errorCode, errMsg, redirectURL)
+	}
+
+	// Check if user is authenticated
+	// Priority: Auth context session > Manual session token extraction
+	var sess *session.Session
+	
+	// Try to get session from auth context first (set by middleware)
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx.Session != nil {
+		sess = authCtx.Session
+	}
+	
+	// If no session in auth context, try to load from cookie/header
+	// This handles cases where API key is present but session is not in context
+	if sess == nil {
+		sessionToken := h.getSessionToken(c)
+		formattedCode := deviceCode.FormattedUserCode()
+		if sessionToken == "" {
+			// Build return URL (preserve redirect parameter if present)
+			returnURL := fmt.Sprintf("%s/device/verify?user_code=%s", h.basePath, formattedCode)
+			if redirectURL != "" {
+				returnURL += "&redirect=" + url.QueryEscape(redirectURL)
+			}
+			return h.handleAuthRequired(c, returnURL)
+		}
+
+		// Validate user session
+		var err error
+		sess, err = h.svc.sessionSvc.FindByToken(ctx, sessionToken)
+		if err != nil || sess == nil {
+			returnURL := fmt.Sprintf("%s/device/verify?user_code=%s", h.basePath, formattedCode)
+			if redirectURL != "" {
+				returnURL += "&redirect=" + url.QueryEscape(redirectURL)
+			}
+			return h.handleAuthRequired(c, returnURL)
+		}
+	}
+
+	// Get client information
+	client, err := h.svc.clientRepo.FindByClientID(ctx, deviceCode.ClientID)
+	if err != nil || client == nil {
+		return h.handleDeviceError(c, http.StatusBadRequest, "invalid_client", "Invalid client", redirectURL)
+	}
+
+	// Extract branding from client
+	branding = consent.ExtractBranding(client, nil)
+
+	// Parse scopes for display
+	scopes := h.consentSvc.GetScopeDescriptions(h.consentSvc.ParseScopes(deviceCode.Scope))
+	componentScopes := make([]consent.ScopeInfo, len(scopes))
+	for i, s := range scopes {
+		componentScopes[i] = consent.ScopeInfo{
+			Scope:       s.Name,
+			Description: s.Description,
+		}
+	}
+
+	// In API mode, return JSON with consent data
+	if h.apiMode {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"requireConsent": true,
+			"userCode":       deviceCode.UserCode,
+			"clientName":     client.Name,
+			"clientLogoUri":  client.LogoURI,
+			"scopes":         componentScopes,
+			"authorizeUrl":   h.basePath + "/device/authorize",
+			"redirectUrl":    redirectURL,
+		})
+	}
+
+	// Show verification/consent page (HTML mode)
+	// Pass normalized code for form submission, formatted for display
+	page := consent.DeviceVerificationPage(consent.VerificationPageData{
+		UserCode:          deviceCode.UserCode,              // Normalized (for form field)
+		UserCodeFormatted: deviceCode.FormattedUserCode(),   // Formatted (for display)
+		ClientName:        client.Name,
+		LogoURI:           client.LogoURI,
+		Scopes:            componentScopes,
+		Branding:          branding,
+		BasePath:          h.basePath,
+		RedirectURL:       redirectURL, // Pass through redirect parameter
+	})
+
+	return renderNode(c, http.StatusOK, page)
+}
+
+// DeviceAuthorizeDecision handles the user's authorization decision
+func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
+	ctx := c.Request().Context()
+
+	// Default branding for early errors
+	branding := consent.DefaultBranding()
+
+	// Check if device flow is enabled
+	if h.svc.deviceFlowService == nil {
+		if h.apiMode {
+			return c.JSON(http.StatusNotFound, map[string]interface{}{
+				"error":             "not_found",
+				"error_description": "Device flow is not enabled",
+			})
+		}
+		return returnHTML(c, http.StatusNotFound, "<h1>404 Not Found</h1><p>Device flow is not enabled.</p>")
+	}
+
+	// Parse request body (support both JSON and form-encoded)
+	var userCode, action, redirectURL string
+	contentType := c.Request().Header.Get("Content-Type")
+	
+	if strings.Contains(contentType, "application/json") {
+		// Parse JSON body
+		var body struct {
+			UserCode    string `json:"user_code"`
+			Action      string `json:"action"`
+			RedirectURL string `json:"redirect"`
+		}
+		if err := c.BindJSON(&body); err != nil {
+			if h.apiMode {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error":             "invalid_request",
+					"error_description": "Failed to parse JSON body",
+				})
+			}
+			return returnHTML(c, http.StatusBadRequest, "<h1>400 Bad Request</h1><p>Failed to parse JSON body</p>")
+		}
+		userCode = body.UserCode
+		action = body.Action
+		redirectURL = body.RedirectURL
+	} else {
+		// Parse form data
+		if err := c.Request().ParseForm(); err != nil {
+			if h.apiMode {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error":             "invalid_request",
+					"error_description": "Failed to parse form data",
+				})
+			}
+			return returnHTML(c, http.StatusBadRequest, "<h1>400 Bad Request</h1><p>Failed to parse form data</p>")
+		}
+		userCode = c.Request().FormValue("user_code")
+		action = c.Request().FormValue("action")
+		redirectURL = c.Request().FormValue("redirect")
+	}
+
+	// Normalize user code
+	userCode = normalizeUserCode(userCode)
+
+	// Check if user is authenticated
+	// Priority: Auth context session > Manual session token extraction
+	var sess *session.Session
+	
+	// Try to get session from auth context first (set by middleware)
+	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx.Session != nil {
+		sess = authCtx.Session
+	}
+	
+	// If no session in auth context, try to load from cookie/header
+	// This handles cases where API key is present but session is not in context
+	if sess == nil {
+		sessionToken := h.getSessionToken(c)
+		if sessionToken == "" {
+			if h.apiMode {
+				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+					"error":             "authentication_required",
+					"error_description": "No active session",
+				})
+			}
+			return returnHTML(c, http.StatusUnauthorized, "<h1>401 Unauthorized</h1><p>No active session</p>")
+		}
+
+		var err error
+		sess, err = h.svc.sessionSvc.FindByToken(ctx, sessionToken)
+		if err != nil || sess == nil {
+			if h.apiMode {
+				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+					"error":             "authentication_required",
+					"error_description": "Invalid session",
+				})
+			}
+			return returnHTML(c, http.StatusUnauthorized, "<h1>401 Unauthorized</h1><p>Invalid session</p>")
+		}
+	}
+
+	// Get device code to extract client info for branding
+	deviceCode, err := h.svc.deviceFlowService.GetDeviceCodeByUserCode(ctx, userCode)
+	if err == nil && deviceCode != nil {
+		// Get client information for branding
+		client, err := h.svc.clientRepo.FindByClientID(ctx, deviceCode.ClientID)
+		if err == nil && client != nil {
+			branding = consent.ExtractBranding(client, nil)
+		}
+	}
+
+	// Handle user decision
+	if action == "approve" {
+		// Authorize device
+		if err := h.svc.deviceFlowService.AuthorizeDevice(ctx, userCode, sess.UserID, sess.ID); err != nil {
+			if h.apiMode {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error":             "authorization_failed",
+					"error_description": "Failed to authorize device",
+				})
+			}
+			page := consent.DeviceCodeEntryPage(consent.CodeEntryPageData{
+				ErrorMsg: "Failed to authorize device",
+				Branding: branding,
+				BasePath: h.basePath,
+			})
+			return renderNode(c, http.StatusBadRequest, page)
+		}
+
+		// In API mode, return JSON success
+		if h.apiMode {
+			response := map[string]interface{}{
+				"success": true,
+				"action":  "approved",
+				"message": "Device has been authorized successfully",
+			}
+			if redirectURL != "" {
+				response["redirectUrl"] = redirectURL
+			}
+			return c.JSON(http.StatusOK, response)
+		}
+
+		// HTML mode: If redirect URL is provided, redirect there
+		if redirectURL != "" {
+			c.SetHeader("Location", redirectURL)
+			return c.JSON(http.StatusFound, nil)
+		}
+
+		// Otherwise show success page
+		page := consent.DeviceSuccessPage(true, branding)
+		return renderNode(c, http.StatusOK, page)
+	} else if action == "deny" {
+		// Deny device
+		if err := h.svc.deviceFlowService.DenyDevice(ctx, userCode); err != nil {
+			if h.apiMode {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+					"error":             "denial_failed",
+					"error_description": "Failed to deny device",
+				})
+			}
+			page := consent.DeviceCodeEntryPage(consent.CodeEntryPageData{
+				ErrorMsg: "Failed to deny device",
+				Branding: branding,
+				BasePath: h.basePath,
+			})
+			return renderNode(c, http.StatusBadRequest, page)
+		}
+
+		// In API mode, return JSON success
+		if h.apiMode {
+			response := map[string]interface{}{
+				"success": true,
+				"action":  "denied",
+				"message": "Device authorization has been denied",
+			}
+			if redirectURL != "" {
+				response["redirectUrl"] = redirectURL
+			}
+			return c.JSON(http.StatusOK, response)
+		}
+
+		// HTML mode: If redirect URL is provided, redirect there
+		if redirectURL != "" {
+			c.SetHeader("Location", redirectURL)
+			return c.JSON(http.StatusFound, nil)
+		}
+
+		// Otherwise show denial page
+		page := consent.DeviceSuccessPage(false, branding)
+		return renderNode(c, http.StatusOK, page)
+	}
+
+	if h.apiMode {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"error":             "invalid_action",
+			"error_description": "Invalid action. Must be 'approve' or 'deny'",
+		})
+	}
+	return returnHTML(c, http.StatusBadRequest, "<h1>400 Bad Request</h1><p>Invalid action</p>")
+}
+
+// =============================================================================
 // HELPER METHODS
 // =============================================================================
 
 // getSessionToken extracts session token from cookie or Authorization header
 func (h *Handler) getSessionToken(c forge.Context) string {
-	// Try cookie first
-	if cookie, err := c.Request().Cookie("session_token"); err == nil && cookie != nil {
-		return cookie.Value
+	// Try cookie first - check both default name and legacy name
+	cookieNames := []string{"authsome_session", "session_token"}
+	for _, name := range cookieNames {
+		if cookie, err := c.Request().Cookie(name); err == nil && cookie != nil && cookie.Value != "" {
+			return cookie.Value
+		}
 	}
 
-	// Try Authorization header
+	// Try Authorization header (Bearer token)
 	auth := c.Request().Header.Get("Authorization")
 	if auth != "" && len(auth) > 7 && auth[:7] == "Bearer " {
 		return auth[7:]
 	}
 
 	return ""
+}
+
+// handleAuthRequired handles the case when authentication is required
+// In API mode: returns JSON with loginUrl for client-side handling
+// In redirect mode: performs HTTP redirect to login page
+func (h *Handler) handleAuthRequired(c forge.Context, returnURL string) error {
+	loginRedirectURL := fmt.Sprintf("%s?return_to=%s", h.loginURL, url.QueryEscape(returnURL))
+
+	if h.apiMode {
+		// API mode: return JSON response for client-side handling
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"error":             "authentication_required",
+			"error_description": "User authentication is required to continue",
+			"loginUrl":          loginRedirectURL,
+			"returnUrl":         returnURL,
+		})
+	}
+
+	// Traditional mode: HTTP redirect
+	c.SetHeader("Location", loginRedirectURL)
+	return c.JSON(http.StatusFound, nil)
+}
+
+// handleDeviceError handles device flow errors
+// In API mode: returns JSON error
+// In HTML mode: returns HTML error page
+func (h *Handler) handleDeviceError(c forge.Context, statusCode int, errorCode, errorMsg, redirectURL string) error {
+	if h.apiMode {
+		return c.JSON(statusCode, map[string]interface{}{
+			"error":             errorCode,
+			"error_description": errorMsg,
+		})
+	}
+
+	// HTML mode: render error page
+	branding := consent.DefaultBranding()
+	page := consent.DeviceCodeEntryPage(consent.CodeEntryPageData{
+		ErrorMsg:    errorMsg,
+		Branding:    branding,
+		BasePath:    h.basePath,
+		RedirectURL: redirectURL,
+	})
+	return renderNode(c, statusCode, page)
 }
 
 // redirectWithError redirects to the client with an OAuth error
@@ -555,20 +1209,23 @@ func (h *Handler) showConsentScreen(c forge.Context, req *AuthorizeRequest, sess
 		return h.redirectWithError(c, req.RedirectURI, "server_error", "Failed to load client information", req.State)
 	}
 
+	// Extract branding from client
+	branding := consent.ExtractBranding(client, nil)
+
 	// Parse scopes for display
 	scopes := h.consentSvc.GetScopeDescriptions(h.consentSvc.ParseScopes(req.Scope))
 
 	// Convert to component scopes
-	componentScopes := make([]components.ScopeInfo, len(scopes))
+	componentScopes := make([]consent.ScopeInfo, len(scopes))
 	for i, s := range scopes {
-		componentScopes[i] = components.ScopeInfo{
+		componentScopes[i] = consent.ScopeInfo{
 			Scope:       s.Name,
 			Description: s.Description,
 		}
 	}
 
 	// Build page data
-	data := components.ConsentPageData{
+	data := consent.ConsentPageData{
 		ClientName:          client.Name,
 		ClientID:            req.ClientID,
 		LogoURI:             client.LogoURI,
@@ -578,15 +1235,37 @@ func (h *Handler) showConsentScreen(c forge.Context, req *AuthorizeRequest, sess
 		State:               req.State,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: req.CodeChallengeMethod,
+		Nonce:               req.Nonce,
+		Branding:            branding,
 	}
 
-	// Render component to HTML
-	var buf bytes.Buffer
-	err = components.ConsentPage(data).Render(&buf)
-	if err != nil {
-		return h.redirectWithError(c, req.RedirectURI, "server_error", "Failed to render consent page", req.State)
-	}
+	// Render ForgeUI page
+	page := consent.OAuthConsentPage(data)
+	return renderNode(c, http.StatusOK, page)
+}
 
+// normalizeUserCode normalizes a user code by removing spaces, hyphens, and converting to uppercase
+func normalizeUserCode(code string) string {
+	// Remove spaces and hyphens
+	code = strings.ReplaceAll(code, " ", "")
+	code = strings.ReplaceAll(code, "-", "")
+	// Convert to uppercase
+	return strings.ToUpper(code)
+}
+
+// returnHTML is a helper to return HTML content
+func returnHTML(c forge.Context, statusCode int, html string) error {
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
-	return c.String(http.StatusOK, buf.String())
+	return c.String(statusCode, html)
+}
+
+// renderNode renders a gomponents node to HTML
+func renderNode(c forge.Context, statusCode int, node gomponents.Node) error {
+	var buf bytes.Buffer
+	if err := node.Render(&buf); err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to render page")
+	}
+	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+	_, err := c.Response().Write(buf.Bytes())
+	return err
 }

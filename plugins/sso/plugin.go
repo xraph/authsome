@@ -302,7 +302,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("SSO", "OIDC", "Authentication", "Callback"),
 	)
 
-	p.logger.Info("SSO plugin routes registered",
+	p.logger.Debug("SSO plugin routes registered",
 		forge.F("saml_enabled", p.config.AllowSAML),
 		forge.F("oidc_enabled", p.config.AllowOIDC),
 		forge.F("auto_provision", p.config.AutoProvision))

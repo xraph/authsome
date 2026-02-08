@@ -12,7 +12,7 @@ export class WebhookPlugin implements ClientPlugin {
     this.client = client;
   }
 
-  async create(request: { url: string; events: string[]; secret?: string }): Promise<{ webhook: types.Webhook }> {
+  async create(request: { events: string[]; secret?: string; url: string }): Promise<{ webhook: types.Webhook }> {
     const path = '/api/auth/webhooks';
     return this.client.request<{ webhook: types.Webhook }>('POST', path, {
       body: request,

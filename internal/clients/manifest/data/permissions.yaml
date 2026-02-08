@@ -1,11 +1,10 @@
 plugin_id: permissions
 version: 1.0.0
-base_path: /permissions
 routes:
     - name: MigrateAll
       description: MigrateAll migrates all RBAC policies to the permissions system
       method: POST
-      path: /migrate/all
+      path: /permissions/migrate/all
       request:
         dryRun: bool!
         preserveOriginal: bool!
@@ -14,12 +13,12 @@ routes:
     - name: MigrateRoles
       description: MigrateRoles migrates role-based permissions to policies
       method: POST
-      path: /migrate/roles
+      path: /permissions/migrate/roles
       response_type: ErrorResponse
     - name: PreviewConversion
       description: PreviewConversion previews the conversion of an RBAC policy
       method: POST
-      path: /migrate/preview
+      path: /permissions/migrate/preview
       request:
         actions: '[]string!'
         condition: string!
@@ -28,26 +27,76 @@ routes:
       request_type: PreviewConversionRequest
       response_type: ErrorResponse
 types:
-    - name: UpdateNamespaceRequest
+    - name: UpdatePolicyRequest
       fields:
+        actions: '[]string!'
         description: string!
-        inheritPlatform: '*bool!'
+        enabled: '*bool!'
+        expression: string!
         name: string!
-    - name: NamespaceResponse
+        priority: int!
+        resourceType: string!
+    - name: MigrationStatusResponse
       fields:
-        actionCount: int!
         appId: string!
+        completedAt: '*time.Time!'
+        environmentId: string!
+        errors: '[]string!'
+        failedCount: int!
+        migratedCount: int!
+        progress: float64!
+        startedAt: time.Time!
+        status: string!
+        totalPolicies: int!
+        userOrganizationId: '*string!'
+        validationPassed: bool!
+    - name: ResourceTypeStats
+      fields:
+        allowRate: float64!
+        avgLatencyMs: float64!
+        evaluationCount: int64!
+        resourceType: string!
+    - name: MigrationErrorResponse
+      fields:
+        error: string!
+        policyIndex: int!
+        resource: string!
+        subject: string!
+    - name: ResourceAttributeRequest
+      fields:
+        default: '!'
+        description: string!
+        name: string!
+        required: bool!
+        type: string!
+    - name: ActionResponse
+      fields:
         createdAt: time.Time!
         description: string!
-        environmentId: string!
         id: string!
-        inheritPlatform: bool!
         name: string!
-        policyCount: int!
-        resourceCount: int!
-        templateId: '*string!'
-        updatedAt: time.Time!
-        userOrganizationId: '*string!'
+        namespaceId: string!
+    - name: BatchEvaluateResponse
+      fields:
+        failureCount: int!
+        results: '[]*BatchEvaluationResult!'
+        successCount: int!
+        totalEvaluations: int!
+        totalTimeMs: float64!
+    - name: TemplatesListResponse
+      fields:
+        categories: '[]string!'
+        templates: '[]*TemplateResponse!'
+        totalCount: int!
+    - name: MigrateRBACRequest
+      fields:
+        dryRun: bool!
+        keepRbacPolicies: bool!
+        namespaceId: string!
+        validateEquivalence: bool!
+    - name: MigrationHandler
+      fields:
+        "": '*migration.RBACMigrationService'
     - name: EvaluateRequest
       fields:
         action: string!
@@ -57,74 +106,36 @@ types:
         resource: '!'
         resourceId: string!
         resourceType: string!
-    - name: BatchEvaluateRequest
-      fields:
-        requests: '[]EvaluateRequest!'
-    - name: InstantiateTemplateRequest
-      fields:
-        actions: '[]string!'
-        description: string!
-        enabled: bool!
-        name: string!
-        namespaceId: string!
-        parameters: '!'
-        priority: int!
-        resourceType: string!
-    - name: MigrationResponse
-      fields:
-        message: string!
-        migrationId: string!
-        startedAt: time.Time!
-        status: string!
-    - name: PolicyStats
-      fields:
-        allowCount: int64!
-        avgLatencyMs: float64!
-        denyCount: int64!
-        evaluationCount: int64!
-        policyId: string!
-        policyName: string!
-    - name: CreatePolicyRequest
-      fields:
-        actions: '[]string!'
-        description: string!
-        enabled: bool!
-        expression: string!
-        name: string!
-        namespaceId: string!
-        priority: int!
-        resourceType: string!
-    - name: PoliciesListResponse
-      fields:
-        page: int!
-        pageSize: int!
-        policies: '[]*PolicyResponse!'
-        totalCount: int!
-    - name: ResourcesListResponse
-      fields:
-        resources: '[]*ResourceResponse!'
-        totalCount: int!
-    - name: BatchEvaluateResponse
-      fields:
-        failureCount: int!
-        results: '[]*BatchEvaluationResult!'
-        successCount: int!
-        totalEvaluations: int!
-        totalTimeMs: float64!
-    - name: TestPolicyRequest
-      fields:
-        actions: '[]string!'
-        expression: string!
-        resourceType: string!
-        testCases: '[]TestCase!'
-    - name: TestCase
+    - name: BatchEvaluationResult
       fields:
         action: string!
+        allowed: bool!
+        error: string!
+        evaluationTimeMs: float64!
+        index: int!
+        policies: '[]string!'
+        resourceId: string!
+        resourceType: string!
+    - name: ValidatePolicyRequest
+      fields:
+        expression: string!
+        resourceType: string!
+    - name: ValidatePolicyResponse
+      fields:
+        complexity: int!
+        error: string!
+        errors: '[]string!'
+        message: string!
+        valid: bool!
+        warnings: '[]string!'
+    - name: TestCaseResult
+      fields:
+        actual: bool!
+        error: string!
+        evaluationTimeMs: float64!
         expected: bool!
         name: string!
-        principal: '!'
-        request: '!'
-        resource: '!'
+        passed: bool!
     - name: TemplateResponse
       fields:
         category: string!
@@ -134,11 +145,22 @@ types:
         id: string!
         name: string!
         parameters: '[]core.TemplateParameter!'
-    - name: ResourceTypeStats
+    - name: MigrateAllRequest
       fields:
-        allowRate: float64!
-        avgLatencyMs: float64!
-        evaluationCount: int64!
+        dryRun: bool!
+        preserveOriginal: bool!
+    - name: MigrateRolesRequest
+      fields:
+        dryRun: bool!
+    - name: CreatePolicyRequest
+      fields:
+        actions: '[]string!'
+        description: string!
+        enabled: bool!
+        expression: string!
+        name: string!
+        namespaceId: string!
+        priority: int!
         resourceType: string!
     - name: PolicyResponse
       fields:
@@ -158,68 +180,187 @@ types:
         updatedAt: time.Time!
         userOrganizationId: '*string!'
         version: int!
-    - name: ActionResponse
+    - name: ResourceResponse
       fields:
+        attributes: '[]core.ResourceAttribute!'
         createdAt: time.Time!
         description: string!
         id: string!
-        name: string!
         namespaceId: string!
-    - name: BatchEvaluationResult
-      fields:
-        action: string!
-        allowed: bool!
-        error: string!
-        evaluationTimeMs: float64!
-        index: int!
-        policies: '[]string!'
-        resourceId: string!
-        resourceType: string!
-    - name: ValidatePolicyResponse
-      fields:
-        complexity: int!
-        error: string!
-        errors: '[]string!'
-        message: string!
-        valid: bool!
-        warnings: '[]string!'
-    - name: MigrationHandler
-      fields:
-        "": '*migration.RBACMigrationService'
-    - name: UpdatePolicyRequest
+        type: string!
+    - name: PolicyPreviewResponse
       fields:
         actions: '[]string!'
         description: string!
-        enabled: '*bool!'
         expression: string!
         name: string!
+        resourceType: string!
+    - name: GetMigrationStatusRequest
+      fields: {}
+    - name: CreateActionRequest
+      fields:
+        description: string!
+        name: string!
+        namespaceId: string!
+    - name: UpdateNamespaceRequest
+      fields:
+        description: string!
+        inheritPlatform: '*bool!'
+        name: string!
+    - name: EvaluateResponse
+      fields:
+        allowed: bool!
+        cacheHit: bool!
+        error: string!
+        evaluatedPolicies: int!
+        evaluationTimeMs: float64!
+        matchedPolicies: '[]string!'
+        reason: string!
+    - name: BatchEvaluateRequest
+      fields:
+        requests: '[]EvaluateRequest!'
+    - name: TestPolicyRequest
+      fields:
+        actions: '[]string!'
+        expression: string!
+        resourceType: string!
+        testCases: '[]TestCase!'
+    - name: InstantiateTemplateRequest
+      fields:
+        actions: '[]string!'
+        description: string!
+        enabled: bool!
+        name: string!
+        namespaceId: string!
+        parameters: '!'
         priority: int!
         resourceType: string!
+    - name: PolicyStats
+      fields:
+        allowCount: int64!
+        avgLatencyMs: float64!
+        denyCount: int64!
+        evaluationCount: int64!
+        policyId: string!
+        policyName: string!
     - name: CreateResourceRequest
       fields:
         attributes: '[]ResourceAttributeRequest!'
         description: string!
         namespaceId: string!
         type: string!
-    - name: ResourceAttributeRequest
+    - name: ActionsListResponse
       fields:
-        default: '!'
-        description: string!
+        actions: '[]*ActionResponse!'
+        totalCount: int!
+    - name: TestCase
+      fields:
+        action: string!
+        expected: bool!
         name: string!
-        required: bool!
-        type: string!
-    - name: MigrateRBACRequest
+        principal: '!'
+        request: '!'
+        resource: '!'
+    - name: TestPolicyResponse
       fields:
-        dryRun: bool!
-        keepRbacPolicies: bool!
-        namespaceId: string!
-        validateEquivalence: bool!
+        error: string!
+        failedCount: int!
+        passed: bool!
+        passedCount: int!
+        results: '[]TestCaseResult!'
+        total: int!
+    - name: AuditLogEntry
+      fields:
+        action: string!
+        actorId: string!
+        appId: string!
+        environmentId: string!
+        id: string!
+        ipAddress: string!
+        newValue: '!'
+        oldValue: '!'
+        resourceId: string!
+        resourceType: string!
+        timestamp: time.Time!
+        userAgent: string!
+        userOrganizationId: '*string!'
     - name: AuditLogResponse
       fields:
         entries: '[]*AuditLogEntry!'
         page: int!
         pageSize: int!
         totalCount: int!
+    - name: GetMigrationStatusResponse
+      fields:
+        hasMigratedPolicies: bool!
+        lastMigrationAt: string!
+        migratedCount: int!
+        pendingRbacPolicies: int!
+    - name: PoliciesListResponse
+      fields:
+        page: int!
+        pageSize: int!
+        policies: '[]*PolicyResponse!'
+        totalCount: int!
+    - name: CreateNamespaceRequest
+      fields:
+        description: string!
+        inheritPlatform: bool!
+        name: string!
+        templateId: string!
+    - name: NamespaceResponse
+      fields:
+        actionCount: int!
+        appId: string!
+        createdAt: time.Time!
+        description: string!
+        environmentId: string!
+        id: string!
+        inheritPlatform: bool!
+        name: string!
+        policyCount: int!
+        resourceCount: int!
+        templateId: '*string!'
+        updatedAt: time.Time!
+        userOrganizationId: '*string!'
+    - name: MigrationResponse
+      fields:
+        message: string!
+        migrationId: string!
+        startedAt: time.Time!
+        status: string!
+    - name: AnalyticsSummary
+      fields:
+        activePolicies: int!
+        allowedCount: int64!
+        avgLatencyMs: float64!
+        cacheHitRate: float64!
+        deniedCount: int64!
+        topPolicies: '[]PolicyStats!'
+        topResourceTypes: '[]ResourceTypeStats!'
+        totalEvaluations: int64!
+        totalPolicies: int!
+    - name: PreviewConversionResponse
+      fields:
+        celExpression: string!
+        error: string!
+        policyName: string!
+        resourceId: string!
+        resourceType: string!
+        success: bool!
+    - name: ResourcesListResponse
+      fields:
+        resources: '[]*ResourceResponse!'
+        totalCount: int!
+    - name: NamespacesListResponse
+      fields:
+        namespaces: '[]*NamespaceResponse!'
+        totalCount: int!
+    - name: AnalyticsResponse
+      fields:
+        generatedAt: time.Time!
+        summary: AnalyticsSummary!
+        timeRange: '!'
     - name: MigrateAllResponse
       fields:
         completedAt: string!
@@ -237,145 +378,3 @@ types:
         condition: string!
         resource: string!
         subject: string!
-    - name: GetMigrationStatusResponse
-      fields:
-        hasMigratedPolicies: bool!
-        lastMigrationAt: string!
-        migratedCount: int!
-        pendingRbacPolicies: int!
-    - name: ActionsListResponse
-      fields:
-        actions: '[]*ActionResponse!'
-        totalCount: int!
-    - name: TestPolicyResponse
-      fields:
-        error: string!
-        failedCount: int!
-        passed: bool!
-        passedCount: int!
-        results: '[]TestCaseResult!'
-        total: int!
-    - name: MigrationStatusResponse
-      fields:
-        appId: string!
-        completedAt: '*time.Time!'
-        environmentId: string!
-        errors: '[]string!'
-        failedCount: int!
-        migratedCount: int!
-        progress: float64!
-        startedAt: time.Time!
-        status: string!
-        totalPolicies: int!
-        userOrganizationId: '*string!'
-        validationPassed: bool!
-    - name: AnalyticsResponse
-      fields:
-        generatedAt: time.Time!
-        summary: AnalyticsSummary!
-        timeRange: '!'
-    - name: PreviewConversionResponse
-      fields:
-        celExpression: string!
-        error: string!
-        policyName: string!
-        resourceId: string!
-        resourceType: string!
-        success: bool!
-    - name: TemplatesListResponse
-      fields:
-        categories: '[]string!'
-        templates: '[]*TemplateResponse!'
-        totalCount: int!
-    - name: NamespacesListResponse
-      fields:
-        namespaces: '[]*NamespaceResponse!'
-        totalCount: int!
-    - name: AuditLogEntry
-      fields:
-        action: string!
-        actorId: string!
-        appId: string!
-        environmentId: string!
-        id: string!
-        ipAddress: string!
-        newValue: '!'
-        oldValue: '!'
-        resourceId: string!
-        resourceType: string!
-        timestamp: time.Time!
-        userAgent: string!
-        userOrganizationId: '*string!'
-    - name: AnalyticsSummary
-      fields:
-        activePolicies: int!
-        allowedCount: int64!
-        avgLatencyMs: float64!
-        cacheHitRate: float64!
-        deniedCount: int64!
-        topPolicies: '[]PolicyStats!'
-        topResourceTypes: '[]ResourceTypeStats!'
-        totalEvaluations: int64!
-        totalPolicies: int!
-    - name: ResourceResponse
-      fields:
-        attributes: '[]core.ResourceAttribute!'
-        createdAt: time.Time!
-        description: string!
-        id: string!
-        namespaceId: string!
-        type: string!
-    - name: CreateNamespaceRequest
-      fields:
-        description: string!
-        inheritPlatform: bool!
-        name: string!
-        templateId: string!
-    - name: TestCaseResult
-      fields:
-        actual: bool!
-        error: string!
-        evaluationTimeMs: float64!
-        expected: bool!
-        name: string!
-        passed: bool!
-    - name: MigrateRolesRequest
-      fields:
-        dryRun: bool!
-    - name: EvaluateResponse
-      fields:
-        allowed: bool!
-        cacheHit: bool!
-        error: string!
-        evaluatedPolicies: int!
-        evaluationTimeMs: float64!
-        matchedPolicies: '[]string!'
-        reason: string!
-    - name: ValidatePolicyRequest
-      fields:
-        expression: string!
-        resourceType: string!
-    - name: MigrateAllRequest
-      fields:
-        dryRun: bool!
-        preserveOriginal: bool!
-    - name: MigrationErrorResponse
-      fields:
-        error: string!
-        policyIndex: int!
-        resource: string!
-        subject: string!
-    - name: PolicyPreviewResponse
-      fields:
-        actions: '[]string!'
-        description: string!
-        expression: string!
-        name: string!
-        resourceType: string!
-    - name: GetMigrationStatusRequest
-      fields: {}
-    - name: CreateActionRequest
-      fields:
-        description: string!
-        name: string!
-        namespaceId: string!

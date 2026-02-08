@@ -233,7 +233,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		if ok && notifSvc != nil {
 			if adapter, ok := notifSvc.(*notificationPlugin.Adapter); ok {
 				p.notifAdapter = adapter
-				p.logger.Info("notification adapter loaded for phone plugin")
+				p.logger.Debug("notification adapter loaded for phone plugin")
 			}
 		}
 	}

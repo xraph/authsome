@@ -30,7 +30,7 @@ func (p *Plugin) Init(client *authsome.Client) error {
 	return nil
 }
 
-// List List returns sessions for the current user based on cookie with optional filtering
+// List List returns sessions for the current user with optional filtering
 func (p *Plugin) List(ctx context.Context, req *authsome.ListRequest) error {
 	path := "/multi-session/list"
 	err := p.client.Request(ctx, "GET", path, req, nil, false)

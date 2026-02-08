@@ -40,18 +40,39 @@ type KeyPair struct {
 	Active     bool // Whether this key is used for signing new tokens
 }
 
-// KeyStore manages multiple key pairs for rotation
+// KeyStoreInterface defines the interface for key storage backends
+type KeyStoreInterface interface {
+	GetActiveKey() *KeyPair
+	GetKey(kid string) *KeyPair
+	GetAllValidKeys() []*KeyPair
+	RotateKeys() error
+	ShouldRotate() bool
+	GetLastRotation() time.Time
+}
+
+// KeyStore manages multiple key pairs for rotation (in-memory implementation)
 type KeyStore struct {
 	keys             map[string]*KeyPair
 	activeKey        string
 	mu               sync.RWMutex
 	rotationInterval time.Duration
 	keyLifetime      time.Duration
+	lastRotation     time.Time
+}
+
+// Ensure KeyStore implements KeyStoreInterface
+var _ KeyStoreInterface = (*KeyStore)(nil)
+
+// GetLastRotation returns the last rotation time
+func (ks *KeyStore) GetLastRotation() time.Time {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+	return ks.lastRotation
 }
 
 // JWKSService manages JSON Web Key Sets for the OIDC Provider
 type JWKSService struct {
-	keyStore *KeyStore
+	keyStore KeyStoreInterface // Can be in-memory or database-backed
 }
 
 // NewKeyStore creates a new key store with initial key pair
@@ -171,6 +192,7 @@ func (ks *KeyStore) generateNewKey() error {
 	// Add new key and set as active
 	ks.keys[keyID] = keyPair
 	ks.activeKey = keyID
+	ks.lastRotation = time.Now()
 
 	return nil
 }
@@ -193,6 +215,11 @@ func (ks *KeyStore) GetKeyByID(keyID string) *KeyPair {
 	defer ks.mu.RUnlock()
 
 	return ks.keys[keyID]
+}
+
+// GetKey is an alias for GetKeyByID (implements KeyStoreInterface)
+func (ks *KeyStore) GetKey(kid string) *KeyPair {
+	return ks.GetKeyByID(kid)
 }
 
 // GetAllValidKeys returns all keys that haven't expired
@@ -314,6 +341,11 @@ func (j *JWKSService) GetCurrentKeyID() string {
 	return activeKey.ID
 }
 
+// GetLastRotation returns the last key rotation time
+func (j *JWKSService) GetLastRotation() time.Time {
+	return j.keyStore.GetLastRotation()
+}
+
 // GetCurrentPrivateKey returns the private key of the current active key
 func (j *JWKSService) GetCurrentPrivateKey() *rsa.PrivateKey {
 	activeKey := j.keyStore.GetActiveKey()
@@ -325,7 +357,7 @@ func (j *JWKSService) GetCurrentPrivateKey() *rsa.PrivateKey {
 
 // GetPublicKey returns the public key for a given key ID
 func (j *JWKSService) GetPublicKey(keyID string) (*rsa.PublicKey, error) {
-	keyPair := j.keyStore.GetKeyByID(keyID)
+	keyPair := j.keyStore.GetKey(keyID)
 	if keyPair == nil {
 		return nil, fmt.Errorf("key not found: %s", keyID)
 	}

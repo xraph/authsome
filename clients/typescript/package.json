@@ -1,13 +1,12 @@
 {
   "name": "@authsome/client",
-  "version": "0.0.6",
+  "version": "0.0.9",
   "description": "TypeScript client for AuthSome authentication",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build",
-    "pub": "npm publish --access public"
+    "prepublishOnly": "npm run build"
   },
   "keywords": ["authsome", "authentication", "client"],
   "author": "",

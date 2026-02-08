@@ -21,7 +21,7 @@ func SecretsListPage(
 	pag *pagination.Pagination,
 	query *core.ListSecretsQuery,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Build stats node only if pagination is available
 	var statsNode g.Node
@@ -187,7 +187,7 @@ func secretsTable(
 	pag *pagination.Pagination,
 	query *core.ListSecretsQuery,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	if len(secrets) == 0 {
 		return emptyState(appBase)
@@ -236,7 +236,7 @@ func secretsTable(
 }
 
 func secretRow(currentApp *app.App, basePath string, secret *core.SecretDTO) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	// Determine status
 	status := "active"
@@ -500,7 +500,7 @@ func SecretsTreeView(
 
 func renderTreeNodes(currentApp *app.App, basePath string, nodes []*core.SecretTreeNode, depth int) []g.Node {
 	result := make([]g.Node, 0, len(nodes))
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 
 	for _, node := range nodes {
 		indent := fmt.Sprintf("padding-left: %dpx", depth*20)

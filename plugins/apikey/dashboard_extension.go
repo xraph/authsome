@@ -2,8 +2,8 @@ package apikey
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -12,11 +12,12 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/forge"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -25,17 +26,25 @@ import (
 // This allows the API key plugin to add its own screens to the dashboard
 type DashboardExtension struct {
 	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
+	baseUIPath string
 }
 
 // NewDashboardExtension creates a new dashboard extension for API keys
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
-	return &DashboardExtension{plugin: plugin}
+	return &DashboardExtension{
+		plugin:     plugin,
+		baseUIPath: "/api/identity/ui",
+	}
 }
 
 // SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
+func (e *DashboardExtension) SetRegistry(registry interface{}) {
+	// No longer needed - layout handled by ForgeUI
+}
+
+// getBasePath returns the dashboard base path
+func (e *DashboardExtension) getBasePath() string {
+	return e.baseUIPath
 }
 
 // ExtensionID returns the unique identifier for this extension
@@ -212,126 +221,79 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
+// BridgeFunctions returns bridge functions for the apikey plugin
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	// No bridge functions for this plugin yet
+	return nil
+}
+
 // ServeAPIKeysListPage renders the API keys management page
-func (e *DashboardExtension) ServeAPIKeysListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeAPIKeysListPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	content := e.renderAPIKeysListContent(c, currentApp, currentUser)
+	// Get current user from context
+	currentUser := e.getUserFromContext(ctx)
+	if currentUser == nil {
+		return nil, errs.Unauthorized()
+	}
 
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "api-keys", content)
+	return e.renderAPIKeysListContent(ctx.Request, currentApp, currentUser), nil
 }
 
 // ServeAPIKeysConfigPage renders the configuration page
-func (e *DashboardExtension) ServeAPIKeysConfigPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeAPIKeysConfigPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	content := e.renderConfigContent(c, currentApp)
-
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "api-keys-config", content)
+	return e.renderConfigContent(currentApp), nil
 }
 
 // ServeAPIKeysSecurityPage renders the security settings page
-func (e *DashboardExtension) ServeAPIKeysSecurityPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+func (e *DashboardExtension) ServeAPIKeysSecurityPage(ctx *router.PageContext) (g.Node, error) {
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	content := e.renderSecurityContent(c, currentApp)
-
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "api-keys-security", content)
+	return e.renderSecurityContent(currentApp), nil
 }
 
 // CreateAPIKey handles API key creation
-func (e *DashboardExtension) CreateAPIKey(c forge.Context) error {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	w := ctx.ResponseWriter
+
+	// Helper to write JSON response
+	writeJSON := func(status int, data map[string]interface{}) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(data)
+	}
 
 	// Extract app from URL
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid app context",
-		})
-	}
-
-	// Get current user
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Not authenticated",
-		})
-	}
-
-	// Get handler to access current environment
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Dashboard handler not available",
-		})
-	}
-
-	// Get current environment from handler
-	currentEnv, err := handler.GetCurrentEnvironment(c, currentApp.ID)
-	if err != nil || currentEnv == nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid environment context",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid request"})
+		return nil, nil
 	}
 
 	appID := currentApp.ID
-	envID := currentEnv.ID
-	userID := currentUser.ID
 
 	// Parse form data
-	name := c.FormValue("name")
-	keyTypeStr := c.FormValue("key_type")
-	scopesStr := c.FormValue("scopes")
-	rateLimitStr := c.FormValue("rate_limit")
-	expiresInStr := c.FormValue("expires_in")
+	name := ctx.Request.FormValue("name")
+	keyTypeStr := ctx.Request.FormValue("key_type")
+	scopesStr := ctx.Request.FormValue("scopes")
+	rateLimitStr := ctx.Request.FormValue("rate_limit")
+	expiresInStr := ctx.Request.FormValue("expires_in")
 
 	if name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Name is required",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Name is required"})
+		return nil, nil
 	}
 
 	// Parse key type
@@ -384,8 +346,8 @@ func (e *DashboardExtension) CreateAPIKey(c forge.Context) error {
 	// Create API key
 	req := &apikey.CreateAPIKeyRequest{
 		AppID:         appID,
-		EnvironmentID: envID,
-		UserID:        userID,
+		EnvironmentID: xid.NilID(), // Environment ID if needed
+		UserID:        xid.NilID(), // User ID if needed
 		Name:          name,
 		KeyType:       keyType,
 		Scopes:        scopes,
@@ -395,171 +357,130 @@ func (e *DashboardExtension) CreateAPIKey(c forge.Context) error {
 		Metadata:      make(map[string]string),
 	}
 
-	key, err := e.plugin.service.CreateAPIKey(ctx, req)
+	key, err := e.plugin.service.CreateAPIKey(reqCtx, req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": fmt.Sprintf("Failed to create API key: %v", err),
-		})
+		writeJSON(500, map[string]interface{}{"success": false, "error": "Failed to create API key: " + err.Error()})
+		return nil, nil
 	}
 
 	// Return success with the new key
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	writeJSON(200, map[string]interface{}{
 		"success": true,
-		"key":     key.Key, // Full key only shown once
-		"message": "API key created successfully. Save it securely - it won't be shown again!",
+		"key":     key.Key, // The actual API key value
+		"id":      key.ID.String(),
+		"name":    key.Name,
 	})
+	return nil, nil
 }
 
 // RotateAPIKey handles API key rotation
-func (e *DashboardExtension) RotateAPIKey(c forge.Context) error {
-	ctx := c.Request().Context()
-	keyID := c.Param("keyId")
+func (e *DashboardExtension) RotateAPIKey(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	w := ctx.ResponseWriter
+	keyID := ctx.Param("keyId")
+
+	// Helper to write JSON response
+	writeJSON := func(status int, data map[string]interface{}) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(data)
+	}
 
 	if keyID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Key ID is required",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Key ID is required"})
+		return nil, nil
 	}
 
 	// Extract app from URL
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
-	}
-
-	// Get handler to access current environment
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
-
-	// Get current environment
-	currentEnv, err := handler.GetCurrentEnvironment(c, currentApp.ID)
-	if err != nil || currentEnv == nil {
-		return c.String(http.StatusBadRequest, "Invalid environment context")
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid app context"})
+		return nil, nil
 	}
 
 	appID := currentApp.ID
-	envID := currentEnv.ID
-
-	// Get current user
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Not authenticated",
-		})
-	}
-	userID := currentUser.ID
 
 	parsedKeyID, err := xid.FromString(keyID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid key ID",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid key ID format"})
+		return nil, nil
 	}
 
 	req := &apikey.RotateAPIKeyRequest{
 		ID:            parsedKeyID,
 		AppID:         appID,
-		EnvironmentID: envID,
-		UserID:        userID,
+		EnvironmentID: xid.NilID(),
+		UserID:        xid.NilID(),
 	}
 
-	newKey, err := e.plugin.service.RotateAPIKey(ctx, req)
+	key, err := e.plugin.service.RotateAPIKey(reqCtx, req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": fmt.Sprintf("Failed to rotate API key: %v", err),
-		})
+		writeJSON(500, map[string]interface{}{"success": false, "error": "Failed to rotate API key: " + err.Error()})
+		return nil, nil
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	writeJSON(200, map[string]interface{}{
 		"success": true,
-		"key":     newKey.Key,
-		"message": "API key rotated successfully",
+		"key":     key.Key,
+		"id":      key.ID.String(),
 	})
+	return nil, nil
 }
 
 // RevokeAPIKey handles API key revocation
-func (e *DashboardExtension) RevokeAPIKey(c forge.Context) error {
-	ctx := c.Request().Context()
-	keyID := c.FormValue("key_id")
+func (e *DashboardExtension) RevokeAPIKey(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	w := ctx.ResponseWriter
+	keyID := ctx.Request.FormValue("key_id")
+
+	// Helper to write JSON response
+	writeJSON := func(status int, data map[string]interface{}) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(data)
+	}
 
 	if keyID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Key ID is required",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Key ID is required"})
+		return nil, nil
 	}
 
 	// Extract app from URL
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid app context",
-		})
-	}
-
-	// Get handler to access current environment
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Dashboard handler not available",
-		})
-	}
-
-	// Get current environment
-	currentEnv, err := handler.GetCurrentEnvironment(c, currentApp.ID)
-	if err != nil || currentEnv == nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid environment context",
-		})
-	}
-
-	// Get current user
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Not authenticated",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid app context"})
+		return nil, nil
 	}
 
 	appID := currentApp.ID
-	envID := currentEnv.ID
-	userID := currentUser.ID
 
 	parsedKeyID, err := xid.FromString(keyID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid key ID",
-		})
+		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid key ID format"})
+		return nil, nil
 	}
 
-	var orgIDPtr *xid.ID
-	if !envID.IsNil() {
-		orgIDPtr = &envID // Using envID as placeholder, adjust if org logic is different
-	}
-	err = e.plugin.service.DeleteAPIKey(ctx, appID, parsedKeyID, userID, orgIDPtr)
+	// Delete the API key
+	err = e.plugin.service.DeleteAPIKey(reqCtx, appID, parsedKeyID, xid.NilID(), nil)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": fmt.Sprintf("Failed to revoke API key: %v", err),
-		})
+		writeJSON(500, map[string]interface{}{"success": false, "error": "Failed to revoke API key: " + err.Error()})
+		return nil, nil
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "API key revoked successfully",
-	})
+	writeJSON(200, map[string]interface{}{"success": true, "message": "API key revoked successfully"})
+	return nil, nil
 }
 
 // UpdateConfig handles configuration updates
-func (e *DashboardExtension) UpdateConfig(c forge.Context) error {
+func (e *DashboardExtension) UpdateConfig(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	defaultRateLimit, _ := strconv.Atoi(c.FormValue("default_rate_limit"))
-	maxRateLimit, _ := strconv.Atoi(c.FormValue("max_rate_limit"))
-	maxKeysPerUser, _ := strconv.Atoi(c.FormValue("max_keys_per_user"))
-	maxKeysPerOrg, _ := strconv.Atoi(c.FormValue("max_keys_per_org"))
-	keyLength, _ := strconv.Atoi(c.FormValue("key_length"))
-	autoCleanupEnabled := c.FormValue("auto_cleanup_enabled") == "on"
-	cleanupIntervalHours, _ := strconv.Atoi(c.FormValue("cleanup_interval_hours"))
+	defaultRateLimit, _ := strconv.Atoi(ctx.Request.FormValue("default_rate_limit"))
+	maxRateLimit, _ := strconv.Atoi(ctx.Request.FormValue("max_rate_limit"))
+	maxKeysPerUser, _ := strconv.Atoi(ctx.Request.FormValue("max_keys_per_user"))
+	maxKeysPerOrg, _ := strconv.Atoi(ctx.Request.FormValue("max_keys_per_org"))
+	keyLength, _ := strconv.Atoi(ctx.Request.FormValue("key_length"))
+	autoCleanupEnabled := ctx.Request.FormValue("auto_cleanup_enabled") == "on"
+	cleanupIntervalHours, _ := strconv.Atoi(ctx.Request.FormValue("cleanup_interval_hours"))
 
 	// Update plugin config (in production, this should persist to config store)
 	e.plugin.config.DefaultRateLimit = defaultRateLimit
@@ -576,28 +497,22 @@ func (e *DashboardExtension) UpdateConfig(c forge.Context) error {
 		e.plugin.startCleanupScheduler()
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Configuration updated successfully",
-	})
+	return nil, nil  // Success
 }
 
 // UpdateSecurity handles security settings updates
-func (e *DashboardExtension) UpdateSecurity(c forge.Context) error {
+func (e *DashboardExtension) UpdateSecurity(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
-	allowQueryParam := c.FormValue("allow_query_param") == "on"
-	rateLimitingEnabled := c.FormValue("rate_limiting_enabled") == "on"
-	ipWhitelistingEnabled := c.FormValue("ip_whitelisting_enabled") == "on"
+	allowQueryParam := ctx.Request.FormValue("allow_query_param") == "on"
+	rateLimitingEnabled := ctx.Request.FormValue("rate_limiting_enabled") == "on"
+	ipWhitelistingEnabled := ctx.Request.FormValue("ip_whitelisting_enabled") == "on"
 
 	// Update plugin config
 	e.plugin.config.AllowQueryParam = allowQueryParam
 	e.plugin.config.RateLimiting.Enabled = rateLimitingEnabled
 	e.plugin.config.IPWhitelisting.Enabled = ipWhitelistingEnabled
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Security settings updated successfully",
-	})
+	return nil, nil  // Success
 }
 
 // RenderDashboardWidget renders the API key stats widget
@@ -617,20 +532,52 @@ func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *
 
 // Helper methods
 
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil
+func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
+	// First try to get from PageContext (set by ForgeUI router)
+	if userVal, exists := ctx.Get("user"); exists && userVal != nil {
+		if u, ok := userVal.(*user.User); ok {
+			return u
+		}
 	}
-	return handler.GetUserFromContext(c)
+
+	// Fallback: try request context
+	reqCtx := ctx.Request.Context()
+	if u, ok := reqCtx.Value(contexts.UserContextKey).(*user.User); ok {
+		return u
+	}
+	return nil
 }
 
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil, fmt.Errorf("handler not available")
+func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
+	// First try to extract app from request context (set by middleware)
+	reqCtx := ctx.Request.Context()
+	appVal := reqCtx.Value(contexts.AppContextKey)
+	if appVal != nil {
+		if currentApp, ok := appVal.(*app.App); ok {
+			return currentApp, nil
+		}
 	}
-	return handler.GetCurrentApp(c)
+
+	// Fallback: try to get from PageContext (set by ForgeUI router)
+	if pageAppVal, exists := ctx.Get("currentApp"); exists && pageAppVal != nil {
+		if currentApp, ok := pageAppVal.(*app.App); ok {
+			return currentApp, nil
+		}
+	}
+
+	// Final fallback: parse app ID from URL and create minimal app
+	appIDStr := ctx.Param("appId")
+	if appIDStr == "" {
+		return nil, fmt.Errorf("app ID is required")
+	}
+
+	appID, err := xid.FromString(appIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid app ID: %w", err)
+	}
+
+	// Return minimal app with ID - the dashboard handler will enrich it
+	return &app.App{ID: appID}, nil
 }
 
 // KeyStats holds API key statistics

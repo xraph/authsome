@@ -2,9 +2,9 @@ package impersonation
 
 import (
 	"context"
+	"net/url"
 
-	"github.com/rs/xid"
-	authsome "github.com/xraph/authsome/clients/go"
+	"github.com/xraph/authsome/clients/go"
 )
 
 // Auto-generated impersonation plugin
@@ -83,3 +83,4 @@ func (p *Plugin) VerifyImpersonation(ctx context.Context) (*authsome.VerifyImper
 	}
 	return &result, nil
 }
+

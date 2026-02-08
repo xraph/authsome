@@ -151,6 +151,18 @@ plugins:
   webhooks:
     enabled: false
     endpoints: []
+  
+  # OIDC Provider Plugin
+  oidcprovider:
+    enabled: true
+    issuer: "http://localhost:8080"  # Must match your server URL
+    audience: "your-app"  # Optional audience claim validation
+    enableJwtValidation: true  # Enable JWT validation for Bearer tokens
+    basePath: "/api/identity/oauth2"
+    apiMode: false  # Set to true if you want JSON-only responses
+    # Key configuration (optional, auto-generated if not provided)
+    keys:
+      rotationDays: 30  # Auto-rotate keys every 30 days
 
 # Audit logging
 audit:
@@ -171,8 +183,21 @@ monitoring:
 
 # Redis (optional)
 redis:
-  enabled: false
+  enabled: true
   addr: "localhost:6379"
+
+# Social OAuth Plugin Configuration
+auth:
+  social:
+    baseUrl: http://localhost:8080
+    autoCreateUser: true
+    allowAccountLinking: true
+    stateStorage:
+      useRedis: true
+      redisAddr: "localhost:6379"
+      redisPassword: ""  # Add password if Redis requires auth
+      redisDb: 0
+      stateTtl: 900000000000  # 15 minutes in nanoseconds
 
 # Security settings
 security:

@@ -90,10 +90,10 @@ impl AuthsomeClient {
     /// Response for sign_up
     #[derive(Debug, Deserialize)]
     pub struct SignUpResponse {
-        #[serde(rename = "user")]
-        pub user: User,
         #[serde(rename = "session")]
         pub session: Session,
+        #[serde(rename = "user")]
+        pub user: User,
     }
 
     /// Create a new user account
@@ -167,10 +167,10 @@ impl AuthsomeClient {
     /// Response for get_session
     #[derive(Debug, Deserialize)]
     pub struct GetSessionResponse {
-        #[serde(rename = "user")]
-        pub user: User,
         #[serde(rename = "session")]
         pub session: Session,
+        #[serde(rename = "user")]
+        pub user: User,
     }
 
     /// Get current session information
@@ -274,8 +274,6 @@ impl AuthsomeClient {
     /// Response for refresh_session
     #[derive(Debug, Deserialize)]
     pub struct RefreshSessionResponse {
-        #[serde(rename = "expiresAt")]
-        pub expires_at: String,
         #[serde(rename = "refreshExpiresAt")]
         pub refresh_expires_at: String,
         #[serde(rename = "session")]
@@ -284,6 +282,8 @@ impl AuthsomeClient {
         pub access_token: String,
         #[serde(rename = "refreshToken")]
         pub refresh_token: String,
+        #[serde(rename = "expiresAt")]
+        pub expires_at: String,
     }
 
     /// Refresh access token using refresh token

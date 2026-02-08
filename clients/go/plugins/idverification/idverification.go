@@ -117,7 +117,7 @@ func (p *Plugin) HandleWebhook(ctx context.Context, provider string) (*authsome.
 // AdminBlockUser AdminBlockUser blocks a user from verification (admin only)
 POST /verification/admin/users/:userId/block
 func (p *Plugin) AdminBlockUser(ctx context.Context, req *authsome.AdminBlockUserRequest, userId xid.ID) (*authsome.AdminBlockUserResponse, error) {
-	path := "/verification/users/:userId/block"
+	path := "/verification/admin/users/:userId/block"
 	var result authsome.AdminBlockUserResponse
 	err := p.client.Request(ctx, "POST", path, req, &result, false)
 	if err != nil {
@@ -129,7 +129,7 @@ func (p *Plugin) AdminBlockUser(ctx context.Context, req *authsome.AdminBlockUse
 // AdminUnblockUser AdminUnblockUser unblocks a user (admin only)
 POST /verification/admin/users/:userId/unblock
 func (p *Plugin) AdminUnblockUser(ctx context.Context, userId xid.ID) (*authsome.AdminUnblockUserResponse, error) {
-	path := "/verification/users/:userId/unblock"
+	path := "/verification/admin/users/:userId/unblock"
 	var result authsome.AdminUnblockUserResponse
 	err := p.client.Request(ctx, "POST", path, nil, &result, false)
 	if err != nil {
@@ -141,7 +141,7 @@ func (p *Plugin) AdminUnblockUser(ctx context.Context, userId xid.ID) (*authsome
 // AdminGetUserVerificationStatus AdminGetUserVerificationStatus retrieves verification status for any user (admin only)
 GET /verification/admin/users/:userId/status
 func (p *Plugin) AdminGetUserVerificationStatus(ctx context.Context, userId xid.ID) (*authsome.AdminGetUserVerificationStatusResponse, error) {
-	path := "/verification/users/:userId/status"
+	path := "/verification/admin/users/:userId/status"
 	var result authsome.AdminGetUserVerificationStatusResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {
@@ -153,7 +153,7 @@ func (p *Plugin) AdminGetUserVerificationStatus(ctx context.Context, userId xid.
 // AdminGetUserVerifications AdminGetUserVerifications retrieves all verifications for any user (admin only)
 GET /verification/admin/users/:userId/verifications
 func (p *Plugin) AdminGetUserVerifications(ctx context.Context, userId xid.ID) (*authsome.AdminGetUserVerificationsResponse, error) {
-	path := "/verification/users/:userId/verifications"
+	path := "/verification/admin/users/:userId/verifications"
 	var result authsome.AdminGetUserVerificationsResponse
 	err := p.client.Request(ctx, "GET", path, nil, &result, false)
 	if err != nil {

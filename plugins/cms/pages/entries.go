@@ -26,7 +26,7 @@ func EntriesListPage(
 	page, pageSize, totalItems int,
 	searchQuery, statusFilter string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Name
 	totalPages := (totalItems + pageSize - 1) / pageSize
 
@@ -37,7 +37,7 @@ func EntriesListPage(
 	}
 
 	return Div(
-		Class("space-y-6"),
+		Class("space-y-2"),
 
 		// Breadcrumbs
 		Breadcrumbs(
@@ -242,7 +242,7 @@ func EntryDetailPage(
 	entry *core.ContentEntryDTO,
 	revisions []*core.ContentRevisionDTO,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Name
 	entryBase := typeBase + "/entries/" + entry.ID
 
@@ -554,14 +554,10 @@ func entryForm(
 	entry *core.ContentEntryDTO,
 	err, title string,
 ) g.Node {
-	appBase := basePath + "/dashboard/app/" + currentApp.ID.String()
+	appBase := basePath + "/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + contentType.Name
 
 	isEdit := entry != nil
-	formAction := typeBase + "/entries/create"
-	if isEdit {
-		formAction = typeBase + "/entries/" + entry.ID + "/update"
-	}
 
 	return Div(
 		Class("space-y-6 max-w-3xl"),
@@ -590,8 +586,48 @@ func entryForm(
 			Div(
 				Class("p-6"),
 				FormEl(
-					Method("POST"),
-					Action(formAction),
+					g.Attr("@submit.prevent", fmt.Sprintf(`async (event) => {
+						loading = true;
+						const formData = new FormData(event.target);
+						const data = {};
+						for (const [key, value] of formData.entries()) {
+							if (key.startsWith('data[') && key.endsWith(']')) {
+								const fieldName = key.slice(5, -1);
+								data[fieldName] = value;
+							}
+						}
+						
+						try {
+							%s
+							$root.notification.success('%s');
+							window.location.href = '%s';
+						} catch (err) {
+							const errorMsg = err.error?.message || err.message || 'Failed to save entry';
+							$root.notification.error(errorMsg);
+							loading = false;
+						}
+					}`, func() string {
+						if isEdit {
+							return fmt.Sprintf(`await $bridge.call('cms.updateEntry', {
+								appId: '%s',
+								typeName: '%s',
+								entryId: '%s',
+								data: data,
+								status: formData.get('status') || 'draft'
+							});`, currentApp.ID.String(), contentType.Name, entry.ID)
+						}
+						return fmt.Sprintf(`const result = await $bridge.call('cms.createEntry', {
+							appId: '%s',
+							typeName: '%s',
+							data: data,
+							status: 'draft'
+						});`, currentApp.ID.String(), contentType.Name)
+					}(), func() string {
+						if isEdit {
+							return "Entry updated successfully"
+						}
+						return "Entry created successfully"
+					}(), typeBase+"/entries")),
 					Class("space-y-6"),
 					// Alpine.js form-level state for reactive field management
 					g.Attr("x-data", buildFormAlpineData(contentType, entry)),
@@ -637,9 +673,39 @@ func entryForm(
 						Class("flex items-center gap-4 pt-4"),
 						Button(
 							Type("submit"),
-							Class("px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"),
-							g.If(isEdit, g.Text("Save Changes")),
-							g.If(!isEdit, g.Text("Create Entry")),
+							g.Attr(":disabled", "loading"),
+							Class("px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"),
+							g.El("span",
+								g.Attr("x-show", "!loading"),
+								g.If(isEdit, g.Text("Save Changes")),
+								g.If(!isEdit, g.Text("Create Entry")),
+							),
+							g.El("span",
+								g.Attr("x-show", "loading"),
+								g.Attr("x-cloak", ""),
+								Class("flex items-center gap-2"),
+								g.El("svg",
+									Class("animate-spin h-4 w-4"),
+									g.Attr("xmlns", "http://www.w3.org/2000/svg"),
+									g.Attr("fill", "none"),
+									g.Attr("viewBox", "0 0 24 24"),
+									g.El("circle",
+										Class("opacity-25"),
+										g.Attr("cx", "12"),
+										g.Attr("cy", "12"),
+										g.Attr("r", "10"),
+										g.Attr("stroke", "currentColor"),
+										g.Attr("stroke-width", "4"),
+									),
+									g.El("path",
+										Class("opacity-75"),
+										g.Attr("fill", "currentColor"),
+										g.Attr("d", "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"),
+									),
+								),
+								g.If(isEdit, g.Text("Saving...")),
+								g.If(!isEdit, g.Text("Creating...")),
+							),
 						),
 						A(
 							Href(typeBase+"/entries"),
@@ -666,6 +732,7 @@ func buildFormAlpineData(contentType *core.ContentTypeDTO, entry *core.ContentEn
 
 	return fmt.Sprintf(`{
 		formData: %s,
+		loading: false,
 		init() {
 			// Initialize any watchers or setup needed
 		}

@@ -148,3 +148,28 @@ func (r *OAuthClientRepository) ExistsByClientID(ctx context.Context, clientID s
 		Exists(ctx)
 	return exists, err
 }
+
+// ListByAppAndEnv returns clients with pagination
+func (r *OAuthClientRepository) ListByAppAndEnv(ctx context.Context, appID, envID xid.ID, page, pageSize int) ([]*schema.OAuthClient, error) {
+	var clients []*schema.OAuthClient
+	offset := (page - 1) * pageSize
+	
+	err := r.db.NewSelect().Model(&clients).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Order("created_at DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Scan(ctx)
+	
+	return clients, err
+}
+
+// CountByAppAndEnv returns total count of clients for an app and environment
+func (r *OAuthClientRepository) CountByAppAndEnv(ctx context.Context, appID, envID xid.ID) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthClient)(nil)).
+		Where("app_id = ?", appID).
+		Where("environment_id = ?", envID).
+		Count(ctx)
+	return int64(count), err
+}

@@ -300,7 +300,7 @@ func (h *Handler) redirectToDefaultApp(c forge.Context, ctx context.Context) err
 	}
 
 	// Redirect to the app's dashboard
-	redirectURL := h.basePath + "/dashboard/app/" + platformApp.ID.String() + "/"
+	redirectURL := h.basePath + "/app/" + platformApp.ID.String() + "/"
 	return c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -1063,7 +1063,7 @@ func (h *Handler) HandleEnvironmentSwitch(c forge.Context) error {
 	// Get referrer or redirect to dashboard
 	referer := c.Request().Header.Get("Referer")
 	if referer == "" {
-		referer = h.basePath + "/dashboard/app/" + currentApp.ID.String() + "/"
+		referer = h.basePath + "/app/" + currentApp.ID.String() + "/"
 	}
 
 	return c.Redirect(http.StatusFound, referer)
@@ -1073,7 +1073,7 @@ func (h *Handler) HandleEnvironmentSwitch(c forge.Context) error {
 func (h *Handler) ServeEnvironments(c forge.Context) error {
 	user := h.getUserFromContext(c)
 	if user == nil {
-		return c.Redirect(http.StatusFound, h.basePath+"/dashboard/login")
+		return c.Redirect(http.StatusFound, h.basePath+"/login")
 	}
 
 	// Extract and inject app ID from URL
@@ -1756,7 +1756,7 @@ func (h *Handler) HandleRevokeUserSessions(c forge.Context) error {
 	}
 
 	// Redirect back with success message
-	return c.Redirect(http.StatusFound, h.basePath+"/dashboard/sessions?success=revoked_all&count="+fmt.Sprintf("%d", revokedCount))
+	return c.Redirect(http.StatusFound, h.basePath+"/sessions?success=revoked_all&count="+fmt.Sprintf("%d", revokedCount))
 }
 
 // ServeLogin serves the login page
@@ -1767,7 +1767,7 @@ func (h *Handler) ServeLogin(c forge.Context) error {
 		// Already logged in, redirect to dashboard
 		redirect := c.Query("redirect")
 		if redirect == "" {
-			redirect = h.basePath + "/dashboard/"
+			redirect = h.basePath + "/"
 		}
 		return c.Redirect(http.StatusFound, redirect)
 	}

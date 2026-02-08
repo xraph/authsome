@@ -158,7 +158,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	}
 
 	// Audit log
-	_ = s.auditSvc.Log(ctx, &req.UserID, "api_key.created", "api_key:"+apiKey.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","scopes":["%s"]}`, req.Name, strings.Join(req.Scopes, `","`)))
+	_ = s.auditSvc.Log(ctx, &req.UserID, string(audit.ActionAPIKeyCreated), "api_key:"+apiKey.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","scopes":["%s"]}`, req.Name, strings.Join(req.Scopes, `","`)))
 
 	// Convert to DTO and return the full key only once
 	result := FromSchemaAPIKey(apiKey)
@@ -347,7 +347,7 @@ func (s *Service) UpdateAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	}
 
 	// Audit log
-	_ = s.auditSvc.Log(ctx, &userID, "api_key.updated", "api_key:"+id.String(), "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
+	_ = s.auditSvc.Log(ctx, &userID, string(audit.ActionAPIKeyUpdated), "api_key:"+id.String(), "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
 
 	return FromSchemaAPIKey(apiKey), nil
 }
@@ -377,7 +377,7 @@ func (s *Service) DeleteAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	}
 
 	// Audit log
-	_ = s.auditSvc.Log(ctx, &userID, "api_key.deleted", "api_key:"+id.String(), "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
+	_ = s.auditSvc.Log(ctx, &userID, string(audit.ActionAPIKeyDeleted), "api_key:"+id.String(), "", "", fmt.Sprintf(`{"name":"%s"}`, apiKey.Name))
 
 	return nil
 }
@@ -430,7 +430,7 @@ func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*
 	}
 
 	// Audit log
-	_ = s.auditSvc.Log(ctx, &req.UserID, "api_key.rotated", "api_key:"+req.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","old_key_id":"%s","new_key_id":"%s"}`, existingKey.Name, req.ID.String(), newKey.ID.String()))
+	_ = s.auditSvc.Log(ctx, &req.UserID, string(audit.ActionAPIKeyRotated), "api_key:"+req.ID.String(), "", "", fmt.Sprintf(`{"name":"%s","old_key_id":"%s","new_key_id":"%s"}`, existingKey.Name, req.ID.String(), newKey.ID.String()))
 
 	return newKey, nil
 }
@@ -615,7 +615,7 @@ func (s *Service) AssignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID
 
 	// Audit log
 	if createdBy != nil {
-		_ = s.auditSvc.Log(ctx, createdBy, "api_key.role_assigned", "api_key:"+apiKeyID.String(), "", "",
+		_ = s.auditSvc.Log(ctx, createdBy, string(audit.ActionAPIKeyRoleAssigned), "api_key:"+apiKeyID.String(), "", "",
 			fmt.Sprintf(`{"api_key_id":"%s","role_id":"%s"}`, apiKeyID, roleID))
 	}
 
@@ -634,7 +634,7 @@ func (s *Service) UnassignRole(ctx context.Context, apiKeyID, roleID xid.ID, org
 
 	// Audit log
 	if actorID != nil {
-		_ = s.auditSvc.Log(ctx, actorID, "api_key.role_unassigned", "api_key:"+apiKeyID.String(), "", "",
+		_ = s.auditSvc.Log(ctx, actorID, string(audit.ActionAPIKeyRoleUnassigned), "api_key:"+apiKeyID.String(), "", "",
 			fmt.Sprintf(`{"api_key_id":"%s","role_id":"%s"}`, apiKeyID, roleID))
 	}
 
@@ -813,7 +813,7 @@ func (s *Service) BulkAssignRoles(ctx context.Context, apiKeyID xid.ID, roleIDs 
 
 	// Audit log
 	if createdBy != nil {
-		_ = s.auditSvc.Log(ctx, createdBy, "api_key.roles_bulk_assigned", "api_key:"+apiKeyID.String(), "", "",
+		_ = s.auditSvc.Log(ctx, createdBy, string(audit.ActionAPIKeyRolesBulkAssigned), "api_key:"+apiKeyID.String(), "", "",
 			fmt.Sprintf(`{"api_key_id":"%s","role_count":%d}`, apiKeyID, len(roleIDs)))
 	}
 

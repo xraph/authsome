@@ -19,26 +19,26 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct EnrollFactorRequest {
-        #[serde(rename = "metadata")]
-        pub metadata: ,
         #[serde(rename = "name")]
         pub name: String,
         #[serde(rename = "priority")]
         pub priority: FactorPriority,
         #[serde(rename = "type")]
         pub type: FactorType,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct EnrollFactorResponse {
+        #[serde(rename = "factorId")]
+        pub factor_id: xid.ID,
         #[serde(rename = "provisioningData")]
         pub provisioning_data: ,
         #[serde(rename = "status")]
         pub status: FactorStatus,
         #[serde(rename = "type")]
         pub type: FactorType,
-        #[serde(rename = "factorId")]
-        pub factor_id: xid.ID,
     }
 
     /// EnrollFactor handles POST /mfa/factors/enroll
@@ -68,32 +68,32 @@ impl MfaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetFactorResponse {
-        #[serde(rename = "expiresAt")]
-        pub expires_at: *time.Time,
-        #[serde(rename = "name")]
-        pub name: String,
-        #[serde(rename = "status")]
-        pub status: FactorStatus,
-        #[serde(rename = "type")]
-        pub type: FactorType,
-        #[serde(rename = "verifiedAt")]
-        pub verified_at: *time.Time,
-        #[serde(rename = "-")]
-        pub -: String,
-        #[serde(rename = "createdAt")]
-        pub created_at: time.Time,
-        #[serde(rename = "id")]
-        pub id: xid.ID,
-        #[serde(rename = "lastUsedAt")]
-        pub last_used_at: *time.Time,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "priority")]
-        pub priority: FactorPriority,
         #[serde(rename = "updatedAt")]
         pub updated_at: time.Time,
         #[serde(rename = "userId")]
         pub user_id: xid.ID,
+        #[serde(rename = "-")]
+        pub -: String,
+        #[serde(rename = "createdAt")]
+        pub created_at: time.Time,
+        #[serde(rename = "lastUsedAt")]
+        pub last_used_at: *time.Time,
+        #[serde(rename = "name")]
+        pub name: String,
+        #[serde(rename = "status")]
+        pub status: FactorStatus,
+        #[serde(rename = "verifiedAt")]
+        pub verified_at: *time.Time,
+        #[serde(rename = "expiresAt")]
+        pub expires_at: *time.Time,
+        #[serde(rename = "id")]
+        pub id: xid.ID,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "priority")]
+        pub priority: FactorPriority,
+        #[serde(rename = "type")]
+        pub type: FactorType,
     }
 
     /// GetFactor handles GET /mfa/factors/:id
@@ -130,20 +130,18 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct InitiateChallengeRequest {
-        #[serde(rename = "metadata")]
-        pub metadata: ,
-        #[serde(rename = "userId")]
-        pub user_id: xid.ID,
         #[serde(rename = "context")]
         pub context: String,
         #[serde(rename = "factorTypes")]
         pub factor_types: []FactorType,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
+        #[serde(rename = "userId")]
+        pub user_id: xid.ID,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct InitiateChallengeResponse {
-        #[serde(rename = "sessionId")]
-        pub session_id: xid.ID,
         #[serde(rename = "availableFactors")]
         pub available_factors: []FactorInfo,
         #[serde(rename = "challengeId")]
@@ -152,6 +150,8 @@ impl MfaPlugin {{
         pub expires_at: time.Time,
         #[serde(rename = "factorsRequired")]
         pub factors_required: i32,
+        #[serde(rename = "sessionId")]
+        pub session_id: xid.ID,
     }
 
     /// InitiateChallenge handles POST /mfa/challenge
@@ -165,10 +165,6 @@ impl MfaPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyChallengeRequest {
-        #[serde(rename = "factorId")]
-        pub factor_id: xid.ID,
-        #[serde(rename = "rememberDevice")]
-        pub remember_device: bool,
         #[serde(rename = "challengeId")]
         pub challenge_id: xid.ID,
         #[serde(rename = "code")]
@@ -177,20 +173,24 @@ impl MfaPlugin {{
         pub data: ,
         #[serde(rename = "deviceInfo")]
         pub device_info: *DeviceInfo,
+        #[serde(rename = "factorId")]
+        pub factor_id: xid.ID,
+        #[serde(rename = "rememberDevice")]
+        pub remember_device: bool,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct VerifyChallengeResponse {
-        #[serde(rename = "success")]
-        pub success: bool,
-        #[serde(rename = "token")]
-        pub token: String,
         #[serde(rename = "expiresAt")]
         pub expires_at: *time.Time,
         #[serde(rename = "factorsRemaining")]
         pub factors_remaining: i32,
         #[serde(rename = "sessionComplete")]
         pub session_complete: bool,
+        #[serde(rename = "success")]
+        pub success: bool,
+        #[serde(rename = "token")]
+        pub token: String,
     }
 
     /// VerifyChallenge handles POST /mfa/verify
@@ -204,12 +204,6 @@ impl MfaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetChallengeStatusResponse {
-        #[serde(rename = "status")]
-        pub status: String,
-        #[serde(rename = "completedAt")]
-        pub completed_at: *time.Time,
-        #[serde(rename = "expiresAt")]
-        pub expires_at: time.Time,
         #[serde(rename = "factorsRemaining")]
         pub factors_remaining: i32,
         #[serde(rename = "factorsRequired")]
@@ -218,6 +212,12 @@ impl MfaPlugin {{
         pub factors_verified: i32,
         #[serde(rename = "sessionId")]
         pub session_id: xid.ID,
+        #[serde(rename = "status")]
+        pub status: String,
+        #[serde(rename = "completedAt")]
+        pub completed_at: *time.Time,
+        #[serde(rename = "expiresAt")]
+        pub expires_at: time.Time,
     }
 
     /// GetChallengeStatus handles GET /mfa/challenge/:id
@@ -273,6 +273,10 @@ impl MfaPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct GetStatusResponse {
+        #[serde(rename = "enabled")]
+        pub enabled: bool,
+        #[serde(rename = "enrolledFactors")]
+        pub enrolled_factors: []FactorInfo,
         #[serde(rename = "gracePeriod")]
         pub grace_period: *time.Time,
         #[serde(rename = "policyActive")]
@@ -281,10 +285,6 @@ impl MfaPlugin {{
         pub required_count: i32,
         #[serde(rename = "trustedDevice")]
         pub trusted_device: bool,
-        #[serde(rename = "enabled")]
-        pub enabled: bool,
-        #[serde(rename = "enrolledFactors")]
-        pub enrolled_factors: []FactorInfo,
     }
 
     /// GetStatus handles GET /mfa/status

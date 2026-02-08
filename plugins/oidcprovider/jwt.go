@@ -42,6 +42,7 @@ type AccessTokenClaims struct {
 	Scope     string `json:"scope,omitempty"`
 	ClientID  string `json:"client_id"`
 	TokenType string `json:"token_type"`
+	AppID     string `json:"app_id,omitempty"` // Application ID for AuthSome JWT validation
 }
 
 // GenerateIDToken creates a signed OIDC ID token
@@ -82,6 +83,11 @@ func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime ti
 
 // GenerateAccessToken creates a signed access token
 func (j *JWTService) GenerateAccessToken(userID, clientID, scope string) (string, error) {
+	return j.GenerateAccessTokenWithAppID(userID, clientID, scope, "")
+}
+
+// GenerateAccessTokenWithAppID creates a signed access token with optional app_id
+func (j *JWTService) GenerateAccessTokenWithAppID(userID, clientID, scope, appID string) (string, error) {
 	now := time.Now()
 
 	claims := AccessTokenClaims{
@@ -97,6 +103,7 @@ func (j *JWTService) GenerateAccessToken(userID, clientID, scope string) (string
 		Scope:     scope,
 		ClientID:  clientID,
 		TokenType: "Bearer",
+		AppID:     appID, // Include app_id for AuthSome JWT validation
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)

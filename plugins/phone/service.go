@@ -126,7 +126,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 	if err := s.repo.Create(ctx, p, otp, appID, userOrgID, time.Now().Add(expiryDuration)); err != nil {
 		// Audit failed attempt
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "phone_code_send_failed",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneCodeSendFailed),
 				fmt.Sprintf("phone:%s error:%s", p, err.Error()), ip, ua,
 				fmt.Sprintf(`{"phone":"%s","error":"%s","app_id":"%s"}`, p, err.Error(), appID.String()))
 		}
@@ -139,7 +139,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 		if err != nil {
 			// Audit SMS send failure but don't fail the operation
 			if s.audit != nil {
-				_ = s.audit.Log(ctx, nil, "phone_sms_send_failed",
+				_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneSMSSendFailed),
 					fmt.Sprintf("phone:%s provider:%s error:%s", p, s.config.SMSProvider, err.Error()),
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","provider":"%s","error":"%s","app_id":"%s"}`,
@@ -149,7 +149,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 		} else {
 			// Audit successful SMS send
 			if s.audit != nil {
-				_ = s.audit.Log(ctx, nil, "phone_sms_sent",
+				_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneSMSSent),
 					fmt.Sprintf("phone:%s provider:%s", p, s.config.SMSProvider),
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","provider":"%s","app_id":"%s","org_id":"%s"}`,
@@ -165,7 +165,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 
 	// Audit code creation
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "phone_code_created",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneCodeCreated),
 			fmt.Sprintf("phone:%s expires_in:%dm", p, s.config.ExpiryMinutes),
 			ip, ua,
 			fmt.Sprintf(`{"phone":"%s","expires_in_minutes":%d,"app_id":"%s"}`,
@@ -206,7 +206,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	if err != nil {
 		// Audit database error
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "phone_verify_db_error",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyDBError),
 				fmt.Sprintf("phone:%s error:%s", p, err.Error()),
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","error":"%s"}`, p, e, err.Error()))
@@ -216,7 +216,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	if rec == nil {
 		// Audit expired/not found
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "phone_verify_code_not_found",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyCodeNotFound),
 				fmt.Sprintf("phone:%s email:%s", p, e),
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","reason":"expired_or_not_found"}`, p, e))
@@ -226,7 +226,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	if rec.Attempts >= s.config.MaxAttempts {
 		// Audit too many attempts
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "phone_verify_too_many_attempts",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyTooManyAttempts),
 				fmt.Sprintf("phone:%s email:%s attempts:%d max:%d", p, e, rec.Attempts, s.config.MaxAttempts),
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","attempts":%d,"max_attempts":%d}`,
@@ -238,7 +238,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		_ = s.repo.IncrementAttempts(ctx, rec)
 		// Audit failed verification attempt
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "phone_verify_invalid_code",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyInvalidCode),
 				fmt.Sprintf("phone:%s email:%s attempt:%d", p, e, rec.Attempts+1),
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","attempt":%d,"remaining_attempts":%d}`,
@@ -254,7 +254,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		if !s.config.AllowImplicitSignup {
 			// Audit user not found with implicit signup disabled
 			if s.audit != nil {
-				_ = s.audit.Log(ctx, nil, "phone_verify_user_not_found",
+				_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyUserNotFound),
 					fmt.Sprintf("phone:%s email:%s implicit_signup:disabled", p, e),
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","email":"%s","implicit_signup_enabled":false}`, p, e))
@@ -266,7 +266,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		pwd, genErr := crypto.GenerateToken(16)
 		if genErr != nil {
 			if s.audit != nil {
-				_ = s.audit.Log(ctx, nil, "phone_verify_password_gen_failed",
+				_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyPasswordGenFailed),
 					fmt.Sprintf("phone:%s email:%s error:%s", p, e, genErr.Error()),
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","email":"%s","error":"%s"}`, p, e, genErr.Error()))
@@ -278,7 +278,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		if err != nil {
 			// Audit user creation failure
 			if s.audit != nil {
-				_ = s.audit.Log(ctx, nil, "phone_verify_user_creation_failed",
+				_ = s.audit.Log(ctx, nil, string(audit.ActionPhoneVerifyUserCreationFailed),
 					fmt.Sprintf("phone:%s email:%s error:%s", p, e, err.Error()),
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","email":"%s","error":"%s"}`, p, e, err.Error()))
@@ -289,7 +289,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		// Audit successful implicit signup
 		if s.audit != nil {
 			uid := u.ID
-			_ = s.audit.Log(ctx, &uid, "phone_verify_implicit_signup",
+			_ = s.audit.Log(ctx, &uid, string(audit.ActionPhoneVerifyImplicitSignup),
 				fmt.Sprintf("phone:%s email:%s user_id:%s", p, e, uid.String()),
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","user_id":"%s","method":"implicit_signup"}`,
@@ -300,7 +300,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	// Audit successful verification
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "phone_verify_success",
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionPhoneVerifySuccess),
 			fmt.Sprintf("phone:%s email:%s user_id:%s", p, e, uid.String()),
 			ip, ua,
 			fmt.Sprintf(`{"phone":"%s","email":"%s","user_id":"%s","app_id":"%s"}`,
@@ -313,7 +313,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		// Audit session creation failure
 		if s.audit != nil {
 			uid := u.ID
-			_ = s.audit.Log(ctx, &uid, "phone_verify_session_failed",
+			_ = s.audit.Log(ctx, &uid, string(audit.ActionPhoneVerifySessionFailed),
 				fmt.Sprintf("phone:%s email:%s user_id:%s error:%s", p, e, uid.String(), err.Error()),
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","user_id":"%s","error":"%s"}`,
@@ -325,7 +325,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	// Audit successful login
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "phone_login_success",
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionPhoneLoginSuccess),
 			fmt.Sprintf("phone:%s user_id:%s session_id:%s", p, uid.String(), res.Session.ID.String()),
 			ip, ua,
 			fmt.Sprintf(`{"phone":"%s","user_id":"%s","session_id":"%s","remember":%t}`,

@@ -166,7 +166,7 @@ func (s *Service) handleAccountLockout(ctx context.Context, userID xid.ID, usern
 
 		// Audit the lockout
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, &userID, "username_account_locked_auto",
+			_ = s.audit.Log(ctx, &userID, string(audit.ActionUsernameAccountLockedAuto),
 				fmt.Sprintf("username:%s attempts:%d", username, count),
 				"", "",
 				fmt.Sprintf(`{"username":"%s","attempts":%d,"lockout_minutes":%d}`,
@@ -291,7 +291,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	if disp == "" || strings.TrimSpace(password) == "" {
 		// Audit attempt
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "username_signup_failed",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameSignupFailed),
 				"reason:missing_fields", ip, ua,
 				fmt.Sprintf(`{"username":"%s","reason":"missing_fields"}`, disp))
 		}
@@ -300,7 +300,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 
 	// Audit signup attempt
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "username_signup_attempt",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameSignupAttempt),
 			fmt.Sprintf("username:%s", canonical), ip, ua,
 			fmt.Sprintf(`{"username":"%s","app_id":"%s"}`, canonical, appID.String()))
 	}
@@ -310,7 +310,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	if existing != nil {
 		// Audit username collision
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "username_already_exists",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameAlreadyExists),
 				fmt.Sprintf("username:%s", canonical), ip, ua,
 				fmt.Sprintf(`{"username":"%s"}`, canonical))
 		}
@@ -321,7 +321,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	if err := s.ValidatePassword(password); err != nil {
 		// Audit weak password
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "username_weak_password",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameWeakPassword),
 				fmt.Sprintf("username:%s", canonical), ip, ua,
 				fmt.Sprintf(`{"username":"%s","reason":"%s"}`, canonical, err.Error()))
 		}
@@ -342,7 +342,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	if err != nil {
 		// Audit creation failure
 		if s.audit != nil {
-			_ = s.audit.Log(ctx, nil, "username_signup_failed",
+			_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameSignupFailed),
 				fmt.Sprintf("username:%s error:%s", canonical, err.Error()), ip, ua,
 				fmt.Sprintf(`{"username":"%s","error":"%s"}`, canonical, err.Error()))
 		}
@@ -355,7 +355,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 		// Audit update failure
 		if s.audit != nil {
 			uid := u.ID
-			_ = s.audit.Log(ctx, &uid, "username_signup_failed",
+			_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameSignupFailed),
 				fmt.Sprintf("username:%s user_id:%s error:%s", canonical, uid.String(), err.Error()),
 				ip, ua,
 				fmt.Sprintf(`{"username":"%s","user_id":"%s","error":"%s"}`, canonical, uid.String(), err.Error()))
@@ -371,7 +371,7 @@ func (s *Service) SignUpWithUsername(ctx context.Context, username, password, ip
 	// Audit successful signup
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "username_signup_success",
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameSignupSuccess),
 			fmt.Sprintf("username:%s user_id:%s", canonical, uid.String()),
 			ip, ua,
 			fmt.Sprintf(`{"username":"%s","user_id":"%s","app_id":"%s","org_id":"%s"}`,
@@ -403,7 +403,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 
 	// Audit signin attempt
 	if s.audit != nil {
-		_ = s.audit.Log(ctx, nil, "username_signin_attempt",
+		_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameSigninAttempt),
 			fmt.Sprintf("username:%s", un), ip, ua,
 			fmt.Sprintf(`{"username":"%s","app_id":"%s"}`, un, appID.String()))
 	}
@@ -422,7 +422,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 
 			// Audit invalid credentials
 			if s.audit != nil {
-				_ = s.audit.Log(ctx, nil, "username_invalid_credentials",
+				_ = s.audit.Log(ctx, nil, string(audit.ActionUsernameInvalidCredentials),
 					fmt.Sprintf("username:%s reason:user_not_found attempts:%d remaining:%d", un, count, attemptsRemaining), ip, ua,
 					fmt.Sprintf(`{"username":"%s","reason":"user_not_found","attempts":%d,"remaining":%d}`, un, count, attemptsRemaining))
 			}
@@ -448,7 +448,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 			// Audit lockout attempt
 			if s.audit != nil {
 				uid := u.ID
-				_ = s.audit.Log(ctx, &uid, "username_account_locked",
+				_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameAccountLocked),
 					fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
 					fmt.Sprintf(`{"username":"%s","user_id":"%s","locked_until":"%s"}`,
 						un, uid.String(), lockoutErr.LockedUntil.Format(time.RFC3339)))
@@ -467,7 +467,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 		// Audit password expired
 		if s.audit != nil {
 			uid := u.ID
-			_ = s.audit.Log(ctx, &uid, "username_password_expired",
+			_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernamePasswordExpired),
 				fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
 				fmt.Sprintf(`{"username":"%s","user_id":"%s"}`, un, uid.String()))
 		}
@@ -485,7 +485,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 				// Account was locked
 				if s.audit != nil {
 					uid := u.ID
-					_ = s.audit.Log(ctx, &uid, "username_signin_failed",
+					_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameSigninFailed),
 						fmt.Sprintf("username:%s user_id:%s reason:invalid_password_locked", un, uid.String()),
 						ip, ua,
 						fmt.Sprintf(`{"username":"%s","user_id":"%s","reason":"invalid_password","locked":true}`,
@@ -502,7 +502,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 			// Audit failed attempt recorded
 			if s.audit != nil {
 				uid := u.ID
-				_ = s.audit.Log(ctx, &uid, "username_failed_attempt_recorded",
+				_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameFailedAttemptRecorded),
 					fmt.Sprintf("username:%s user_id:%s attempts:%d remaining:%d", un, uid.String(), count, attemptsRemaining), ip, ua,
 					fmt.Sprintf(`{"username":"%s","user_id":"%s","attempts":%d,"remaining":%d}`, un, uid.String(), count, attemptsRemaining))
 			}
@@ -541,7 +541,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 			// Audit cleared attempts
 			if s.audit != nil {
 				uid := u.ID
-				_ = s.audit.Log(ctx, &uid, "username_failed_attempts_cleared",
+				_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameFailedAttemptsCleared),
 					fmt.Sprintf("username:%s user_id:%s", un, uid.String()), ip, ua,
 					fmt.Sprintf(`{"username":"%s","user_id":"%s"}`, un, uid.String()))
 			}
@@ -565,7 +565,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 	// Audit successful signin
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, "username_signin_success",
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionUsernameSigninSuccess),
 			fmt.Sprintf("username:%s user_id:%s session_id:%s", un, uid.String(), res.Session.ID.String()),
 			ip, ua,
 			fmt.Sprintf(`{"username":"%s","user_id":"%s","session_id":"%s","remember":%t,"app_id":"%s","org_id":"%s"}`,

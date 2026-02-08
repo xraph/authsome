@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/forge"
@@ -409,7 +410,7 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 							// Set AppID in the background context for the audit log
 							ctx = contexts.SetAppID(ctx, appID)
 
-							_ = p.auditSvc.Log(ctx, &userObj.ID, "dashboard.access", c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
+							_ = p.auditSvc.Log(ctx, &userObj.ID, string(audit.ActionDashboardAccess), c.Request().URL.Path, c.Request().RemoteAddr, c.Request().UserAgent(), "default")
 						}()
 					}
 				}

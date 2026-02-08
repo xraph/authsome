@@ -39,7 +39,7 @@ func AppsManagementPage(data AppsManagementData, currentAppIDStr string) g.Node 
 			),
 			g.If(data.CanCreateApps,
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/apps-management/create", currentAppIDStr)),
+					Href(fmt.Sprintf("/app/%s/apps-management/create", currentAppIDStr)),
 					Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 active:bg-violet-800 transition-colors"),
 					lucide.Plus(Class("h-4 w-4")),
 					g.Text("Create App"),
@@ -88,8 +88,8 @@ func renderAppManagementCards(apps []*app.App, currentAppIDStr string) []g.Node 
 }
 
 func appManagementCard(appItem *app.App, currentAppIDStr string) g.Node {
-	appURL := fmt.Sprintf("/dashboard/app/%s/apps-management/%s", currentAppIDStr, appItem.ID.String())
-	editURL := fmt.Sprintf("/dashboard/app/%s/apps-management/%s/edit", currentAppIDStr, appItem.ID.String())
+	appURL := fmt.Sprintf("/app/%s/apps-management/%s", currentAppIDStr, appItem.ID.String())
+	editURL := fmt.Sprintf("/app/%s/apps-management/%s/edit", currentAppIDStr, appItem.ID.String())
 
 	// Generate gradient colors based on app name
 	gradientClass := getAppGradient(appItem.Name)
@@ -186,7 +186,7 @@ func appManagementCard(appItem *app.App, currentAppIDStr string) g.Node {
 }
 
 func createAppManagementCard(currentAppIDStr string) g.Node {
-	createURL := fmt.Sprintf("/dashboard/app/%s/apps-management/create", currentAppIDStr)
+	createURL := fmt.Sprintf("/app/%s/apps-management/create", currentAppIDStr)
 
 	return A(
 		Href(createURL),
@@ -240,7 +240,7 @@ func emptyAppsManagementState(currentAppIDStr string, canCreate bool) g.Node {
 
 		g.If(canCreate,
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/apps-management/create", currentAppIDStr)),
+				Href(fmt.Sprintf("/app/%s/apps-management/create", currentAppIDStr)),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 active:bg-violet-800 transition-colors shadow-lg hover:shadow-xl"),
 				lucide.Plus(Class("h-4 w-4")),
 				g.Text("Create Your First App"),
@@ -265,7 +265,7 @@ func AppManagementDetailPage(data AppManagementDetailData, currentAppIDStr strin
 			Class("flex items-center justify-between"),
 			Div(
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/apps-management", currentAppIDStr)),
+					Href(fmt.Sprintf("/app/%s/apps-management", currentAppIDStr)),
 					Class("inline-flex items-center gap-2 text-sm text-slate-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 mb-4"),
 					lucide.ArrowLeft(Class("h-4 w-4")),
 					g.Text("Back to Apps"),
@@ -298,7 +298,7 @@ func AppManagementDetailPage(data AppManagementDetailData, currentAppIDStr strin
 			Div(
 				Class("flex items-center gap-2"),
 				A(
-					Href(fmt.Sprintf("/dashboard/app/%s/apps-management/%s/edit", currentAppIDStr, data.App.ID.String())),
+					Href(fmt.Sprintf("/app/%s/apps-management/%s/edit", currentAppIDStr, data.App.ID.String())),
 					Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-800 dark:hover:text-violet-400 transition-colors"),
 					lucide.Pencil(Class("h-4 w-4")),
 					g.Text("Edit"),
@@ -339,7 +339,7 @@ func AppManagementCreatePage(currentAppIDStr, csrfToken string) g.Node {
 		Class("space-y-6"),
 		Div(
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/apps-management", currentAppIDStr)),
+				Href(fmt.Sprintf("/app/%s/apps-management", currentAppIDStr)),
 				Class("inline-flex items-center gap-2 text-sm text-slate-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400"),
 				lucide.ArrowLeft(Class("h-4 w-4")),
 				g.Text("Back to Apps"),
@@ -349,7 +349,7 @@ func AppManagementCreatePage(currentAppIDStr, csrfToken string) g.Node {
 				g.Text("Create App"),
 			),
 		),
-		appManagementForm(fmt.Sprintf("/dashboard/app/%s/apps-management/create", currentAppIDStr), currentAppIDStr, nil, csrfToken),
+		appManagementForm(fmt.Sprintf("/app/%s/apps-management/create", currentAppIDStr), currentAppIDStr, nil, csrfToken),
 	)
 }
 
@@ -364,7 +364,7 @@ func AppManagementEditPage(data AppManagementEditData, currentAppIDStr, csrfToke
 		Class("space-y-6"),
 		Div(
 			A(
-				Href(fmt.Sprintf("/dashboard/app/%s/apps-management/%s", currentAppIDStr, data.App.ID.String())),
+				Href(fmt.Sprintf("/app/%s/apps-management/%s", currentAppIDStr, data.App.ID.String())),
 				Class("inline-flex items-center gap-2 text-sm text-slate-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400"),
 				lucide.ArrowLeft(Class("h-4 w-4")),
 				g.Text("Back to App"),
@@ -374,7 +374,7 @@ func AppManagementEditPage(data AppManagementEditData, currentAppIDStr, csrfToke
 				g.Text("Edit App"),
 			),
 		),
-		appManagementForm(fmt.Sprintf("/dashboard/app/%s/apps-management/%s/edit", currentAppIDStr, data.App.ID.String()), currentAppIDStr, data.App, csrfToken),
+		appManagementForm(fmt.Sprintf("/app/%s/apps-management/%s/edit", currentAppIDStr, data.App.ID.String()), currentAppIDStr, data.App, csrfToken),
 	)
 }
 
@@ -443,9 +443,9 @@ func appManagementForm(action string, currentAppIDStr string, appItem *app.App, 
 			A(
 				Href(func() string {
 					if appItem != nil {
-						return fmt.Sprintf("/dashboard/app/%s/apps-management/%s", currentAppIDStr, appItem.ID.String())
+						return fmt.Sprintf("/app/%s/apps-management/%s", currentAppIDStr, appItem.ID.String())
 					}
-					return fmt.Sprintf("/dashboard/app/%s/apps-management", currentAppIDStr)
+					return fmt.Sprintf("/app/%s/apps-management", currentAppIDStr)
 				}()),
 				Class("rounded-lg border border-slate-200 dark:border-gray-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors"),
 				g.Text("Cancel"),
@@ -469,7 +469,7 @@ func appsManagementPagination(page, totalPages int, currentAppIDStr string) g.No
 		return g.Text("")
 	}
 
-	baseURL := fmt.Sprintf("/dashboard/app/%s/apps-management", currentAppIDStr)
+	baseURL := fmt.Sprintf("/app/%s/apps-management", currentAppIDStr)
 
 	return Div(
 		Class("flex items-center justify-center gap-2 pt-2"),

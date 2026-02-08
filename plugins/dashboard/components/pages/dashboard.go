@@ -95,7 +95,7 @@ func statsGrid(stats *DashboardStats, basePath string, appIDStr string) g.Node {
 			"Total Users",
 			stats.TotalUsers,
 			stats.UserGrowth,
-			basePath+"/dashboard/app/"+appIDStr+"/users",
+			basePath+"/app/"+appIDStr+"/users",
 			"violet",
 			lucide.Users(Class("h-6 w-6")),
 		),
@@ -103,7 +103,7 @@ func statsGrid(stats *DashboardStats, basePath string, appIDStr string) g.Node {
 			"Active Sessions",
 			stats.ActiveSessions,
 			stats.SessionGrowth,
-			basePath+"/dashboard/app/"+appIDStr+"/sessions",
+			basePath+"/app/"+appIDStr+"/sessions",
 			"emerald",
 			lucide.ShieldCheck(Class("h-6 w-6")),
 		),
@@ -324,8 +324,8 @@ func quickActionsCard(basePath string, appIDStr string) g.Node {
 			Class("px-6 py-5"),
 			Div(
 				Class("grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"),
-				quickActionButton("Manage Users", "View and manage accounts", basePath+"/dashboard/app/"+appIDStr+"/users", "violet", lucide.Users(Class("h-6 w-6"))),
-				quickActionButton("View Sessions", "Monitor active sessions", basePath+"/dashboard/app/"+appIDStr+"/sessions", "emerald", lucide.ShieldCheck(Class("h-6 w-6"))),
+				quickActionButton("Manage Users", "View and manage accounts", basePath+"/app/"+appIDStr+"/users", "violet", lucide.Users(Class("h-6 w-6"))),
+				quickActionButton("View Sessions", "Monitor active sessions", basePath+"/app/"+appIDStr+"/sessions", "emerald", lucide.ShieldCheck(Class("h-6 w-6"))),
 				quickActionButton("Security Settings", "Coming soon", "", "slate", lucide.Settings(Class("h-6 w-6"))),
 				quickActionButton("View Analytics", "Coming soon", "", "slate", lucide.ChartBar(Class("h-6 w-6"))),
 			),
@@ -421,7 +421,7 @@ func pluginsOverviewCard(plugins []PluginItem, basePath string, appIDStr string)
 			Div(
 				Class("mt-4 pt-4 border-t border-gray-200 dark:border-gray-700"),
 				A(
-					Href(basePath+"/dashboard/app/"+appIDStr+"/plugins"),
+					Href(basePath+"/app/"+appIDStr+"/plugins"),
 					Class("inline-flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"),
 					g.Text("View all plugins"),
 					lucide.ArrowRight(Class("h-4 w-4")),

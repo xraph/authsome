@@ -10,14 +10,18 @@ import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/core/environment"
 	coreorg "github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
-	"github.com/xraph/authsome/plugins/dashboard"
-	"github.com/xraph/authsome/plugins/dashboard/components"
+	"github.com/xraph/authsome/internal/errs"
+	"github.com/xraph/authsome/plugins/organization/pages"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
+	"github.com/xraph/forgeui/bridge"
+	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
@@ -25,20 +29,18 @@ import (
 // DashboardExtension implements the ui.DashboardExtension interface
 // This allows the organization plugin to add its own screens to the dashboard
 type DashboardExtension struct {
-	plugin   *Plugin
-	registry *dashboard.ExtensionRegistry
-	basePath string
+	plugin     *Plugin
+	baseUIPath string
 }
 
 // NewDashboardExtension creates a new dashboard extension for organization
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
-	return &DashboardExtension{plugin: plugin}
+	return &DashboardExtension{
+		plugin:     plugin,
+		baseUIPath: "/api/identity/ui",
+	}
 }
 
-// SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry *dashboard.ExtensionRegistry) {
-	e.registry = registry
-}
 
 // ExtensionID returns the unique identifier for this extension
 func (e *DashboardExtension) ExtensionID() string {
@@ -58,9 +60,9 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 			Order:    45, // Between Users (30) and Sessions (40)
 			URLBuilder: func(basePath string, currentApp *app.App) string {
 				if currentApp != nil {
-					return basePath + "/dashboard/app/" + currentApp.ID.String() + "/organizations"
+					return basePath + "/app/" + currentApp.ID.String() + "/organizations"
 				}
-				return basePath + "/dashboard/"
+				return basePath + "/"
 			},
 			ActiveChecker: func(activePage string) bool {
 				return activePage == "organizations"
@@ -70,7 +72,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns routes to register under /dashboard/app/:appId/
+// Routes returns routes to register under /app/:appId/
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Organization List
@@ -174,7 +176,19 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: false,
 		},
-		// Create Team
+		// Create Team Page
+		{
+			Method:       "GET",
+			Path:         "/organizations/:orgId/teams/create",
+			Handler:      e.ServeCreateTeamPage,
+			Name:         "dashboard.organizations.teams.create.page",
+			Summary:      "Create team page",
+			Description:  "Show team creation form",
+			Tags:         []string{"Dashboard", "Organizations", "Teams"},
+			RequireAuth:  true,
+			RequireAdmin: false,
+		},
+		// Create Team Action
 		{
 			Method:       "POST",
 			Path:         "/organizations/:orgId/teams/create",
@@ -186,7 +200,19 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: false,
 		},
-		// Update Team
+		// Edit Team Page
+		{
+			Method:       "GET",
+			Path:         "/organizations/:orgId/teams/:teamId/edit",
+			Handler:      e.ServeEditTeamPage,
+			Name:         "dashboard.organizations.teams.edit.page",
+			Summary:      "Edit team page",
+			Description:  "Show team edit form",
+			Tags:         []string{"Dashboard", "Organizations", "Teams"},
+			RequireAuth:  true,
+			RequireAdmin: false,
+		},
+		// Update Team Action
 		{
 			Method:       "POST",
 			Path:         "/organizations/:orgId/teams/:teamId/update",
@@ -246,7 +272,19 @@ func (e *DashboardExtension) Routes() []ui.Route {
 			RequireAuth:  true,
 			RequireAdmin: false,
 		},
-		// Update Organization (must be before /organizations/:orgId)
+		// Update Organization Page (must be before /organizations/:orgId)
+		{
+			Method:       "GET",
+			Path:         "/organizations/:orgId/update",
+			Handler:      e.ServeUpdateOrganizationPage,
+			Name:         "dashboard.organizations.update.page",
+			Summary:      "Update organization page",
+			Description:  "Show organization update form",
+			Tags:         []string{"Dashboard", "Organizations"},
+			RequireAuth:  true,
+			RequireAdmin: false,
+		},
+		// Update Organization Action (must be before /organizations/:orgId)
 		{
 			Method:       "POST",
 			Path:         "/organizations/:orgId/update",
@@ -475,43 +513,156 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
+// BridgeFunctions returns bridge functions for the organization plugin
+// Note: The extension registry will prefix these with "organization." to create
+// the full function name (e.g., "organization.getOrganizations")
+func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
+	return []ui.BridgeFunction{
+		// Simple test function to verify bridge is working
+		{
+			Name: "ping",
+			Handler: func(ctx bridge.Context, input struct{}) (map[string]string, error) {
+				return map[string]string{"status": "ok", "message": "Bridge is working!"}, nil
+			},
+			Description: "Simple test function",
+		},
+		{
+			Name:        "getOrganizations",
+			Handler:     e.bridgeGetOrganizations,
+			Description: "Get list of organizations for current user",
+		},
+		{
+			Name:        "getOrganization",
+			Handler:     e.bridgeGetOrganization,
+			Description: "Get organization details with stats",
+		},
+		{
+			Name:        "createOrganization",
+			Handler:     e.bridgeCreateOrganization,
+			Description: "Create a new organization",
+		},
+		{
+			Name:        "updateOrganization",
+			Handler:     e.bridgeUpdateOrganization,
+			Description: "Update organization details",
+		},
+		{
+			Name:        "deleteOrganization",
+			Handler:     e.bridgeDeleteOrganization,
+			Description: "Delete an organization",
+		},
+		{
+			Name:        "getMembers",
+			Handler:     e.bridgeGetMembers,
+			Description: "Get organization members",
+		},
+		{
+			Name:        "inviteMember",
+			Handler:     e.bridgeInviteMember,
+			Description: "Invite a member to the organization",
+		},
+		{
+			Name:        "updateMemberRole",
+			Handler:     e.bridgeUpdateMemberRole,
+			Description: "Update member role",
+		},
+		{
+			Name:        "removeMember",
+			Handler:     e.bridgeRemoveMember,
+			Description: "Remove a member from the organization",
+		},
+		{
+			Name:        "getTeams",
+			Handler:     e.bridgeGetTeams,
+			Description: "Get organization teams",
+		},
+		{
+			Name:        "createTeam",
+			Handler:     e.bridgeCreateTeam,
+			Description: "Create a new team",
+		},
+		{
+			Name:        "updateTeam",
+			Handler:     e.bridgeUpdateTeam,
+			Description: "Update team details",
+		},
+		{
+			Name:        "deleteTeam",
+			Handler:     e.bridgeDeleteTeam,
+			Description: "Delete a team",
+		},
+		{
+			Name:        "getInvitations",
+			Handler:     e.bridgeGetInvitations,
+			Description: "Get organization invitations",
+		},
+		{
+			Name:        "cancelInvitation",
+			Handler:     e.bridgeCancelInvitation,
+			Description: "Cancel a pending invitation",
+		},
+		{
+			Name:        "getExtensionData",
+			Handler:     e.bridgeGetExtensionData,
+			Description: "Get extension widgets, tabs, actions, and quick links",
+		},
+		{
+			Name:        "getRoleTemplates",
+			Handler:     e.bridgeGetRoleTemplates,
+			Description: "Get list of role templates",
+		},
+		{
+			Name:        "getRoleTemplate",
+			Handler:     e.bridgeGetRoleTemplate,
+			Description: "Get a specific role template by ID",
+		},
+		{
+			Name:        "createRoleTemplate",
+			Handler:     e.bridgeCreateRoleTemplate,
+			Description: "Create a new role template",
+		},
+		{
+			Name:        "updateRoleTemplate",
+			Handler:     e.bridgeUpdateRoleTemplate,
+			Description: "Update an existing role template",
+		},
+		{
+			Name:        "deleteRoleTemplate",
+			Handler:     e.bridgeDeleteRoleTemplate,
+			Description: "Delete a role template",
+		},
+		// Settings
+		{
+			Name:        "getSettings",
+			Handler:     e.bridgeGetSettings,
+			Description: "Get organization plugin settings",
+		},
+		{
+			Name:        "updateSettings",
+			Handler:     e.bridgeUpdateSettings,
+			Description: "Update organization plugin settings",
+		},
+	}
+}
+
 // ServeOrganizationsListPage renders the organizations list page
-func (e *DashboardExtension) ServeOrganizationsListPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationsListPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, fmt.Errorf("invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	// Build minimal PageData
-	pageData := components.PageData{
-		Title:      "Organizations",
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   basePath,
-		CurrentApp: currentApp,
-	}
-
-	// Render page content
-	content := e.renderOrganizationsListContent(c, currentApp, currentUser, basePath)
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.OrganizationsListPage(currentApp, basePath), nil
 }
 
 // renderOrganizationsListContent renders the main content for organizations list
-func (e *DashboardExtension) renderOrganizationsListContent(c forge.Context, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderOrganizationsListContent(c *router.PageContext, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
+	ctx := c.Request.Context()
 
 	// Get current environment
 	envID, err := e.extractEnvironmentFromURL(c, currentApp.ID)
@@ -575,7 +726,7 @@ func (e *DashboardExtension) renderOrganizationsListContent(c forge.Context, cur
 					g.Text("Manage user organizations and their members")),
 			),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Organization"),
@@ -596,399 +747,99 @@ func (e *DashboardExtension) renderOrganizationsListContent(c forge.Context, cur
 }
 
 // ServeCreateOrganizationPage renders the create organization page
-func (e *DashboardExtension) ServeCreateOrganizationPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeCreateOrganizationPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, fmt.Errorf("invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	pageData := components.PageData{
-		Title:      "Create Organization",
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
+	// Get error message from query params if any
+	errorMsg := ctx.Request.URL.Query().Get("error")
 
-	content := e.renderCreateOrganizationForm(currentApp, basePath)
-
-	return handler.RenderWithLayout(c, pageData, content)
-}
-
-// renderCreateOrganizationForm renders the organization creation form
-func (e *DashboardExtension) renderCreateOrganizationForm(currentApp *app.App, basePath string) g.Node {
-	return Div(
-		Class("space-y-6"),
-
-		// Back button and header
-		Div(
-			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations"),
-				Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white mb-4"),
-				lucide.ArrowLeft(Class("size-4")),
-				g.Text("Back to Organizations"),
-			),
-			H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
-				g.Text("Create Organization")),
-			P(Class("mt-2 text-slate-600 dark:text-gray-400"),
-				g.Text("Create a new organization workspace for your team")),
-		),
-
-		// Form
-		Div(
-			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
-			Form(
-				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/create"),
-				Class("space-y-6"),
-
-				// Name field
-				Div(
-					Label(
-						For("name"),
-						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-						g.Text("Organization Name"),
-					),
-					Input(
-						Type("text"),
-						Name("name"),
-						ID("name"),
-						Required(),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						Placeholder("Acme Corporation"),
-					),
-					P(Class("mt-1 text-sm text-slate-500 dark:text-gray-400"),
-						g.Text("The display name for your organization")),
-				),
-
-				// Slug field
-				Div(
-					Label(
-						For("slug"),
-						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-						g.Text("URL Slug"),
-					),
-					Input(
-						Type("text"),
-						Name("slug"),
-						ID("slug"),
-						Required(),
-						Pattern("[a-z0-9-]+"),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						Placeholder("acme"),
-					),
-					P(Class("mt-1 text-sm text-slate-500 dark:text-gray-400"),
-						g.Text("Lowercase letters, numbers, and hyphens only")),
-				),
-
-				// Logo URL field (optional)
-				Div(
-					Label(
-						For("logo"),
-						Class("block text-sm font-medium text-slate-700 dark:text-gray-300"),
-						g.Text("Logo URL (Optional)"),
-					),
-					Input(
-						Type("url"),
-						Name("logo"),
-						ID("logo"),
-						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
-						Placeholder("https://example.com/logo.png"),
-					),
-				),
-
-				// Submit buttons
-				Div(
-					Class("flex justify-end gap-3"),
-					A(
-						Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations"),
-						Class("rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"),
-						g.Text("Cancel"),
-					),
-					Button(
-						Type("submit"),
-						Class("rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"),
-						g.Text("Create Organization"),
-					),
-				),
-			),
-		),
-	)
+	return pages.CreateOrganizationPage(currentApp, basePath, errorMsg), nil
 }
 
 // ServeOrganizationDetailPage renders the organization detail page
-func (e *DashboardExtension) ServeOrganizationDetailPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationDetailPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, fmt.Errorf("invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	// Get organization from URL
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, fmt.Errorf("organization ID is required")
 	}
 
-	pageData := components.PageData{
-		Title:      org.Name,
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
-	content := e.renderOrganizationDetailContent(c, org, currentApp, currentUser, basePath)
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.OrganizationDetailPage(currentApp, orgIDStr, basePath), nil
 }
 
-// renderOrganizationDetailContent renders the organization detail content
-func (e *DashboardExtension) renderOrganizationDetailContent(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
-	ctx := c.Request().Context()
+// ServeUpdateOrganizationPage renders the update organization form page
+func (e *DashboardExtension) ServeUpdateOrganizationPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	// Get user's role in this organization
-	userRole := e.getUserRole(ctx, org.ID, currentUser.ID)
-	isAdmin := e.isUserAdmin(ctx, org.ID, currentUser.ID)
-
-	// Get member count
-	membersResp, _ := e.plugin.orgService.ListMembers(ctx, &coreorg.ListMembersFilter{
-		OrganizationID:   org.ID,
-		PaginationParams: pagination.PaginationParams{Limit: 1},
-	})
-	memberCount := int64(0)
-	if membersResp != nil && membersResp.Pagination != nil {
-		memberCount = membersResp.Pagination.Total
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("invalid app context")
 	}
 
-	// Get team count
-	teamsResp, _ := e.plugin.orgService.ListTeams(ctx, &coreorg.ListTeamsFilter{
-		OrganizationID:   org.ID,
-		PaginationParams: pagination.PaginationParams{Limit: 1},
-	})
-	teamCount := int64(0)
-	if teamsResp != nil && teamsResp.Pagination != nil {
-		teamCount = teamsResp.Pagination.Total
+	basePath := e.baseUIPath
+
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, fmt.Errorf("organization ID is required")
 	}
 
-	// Create extension context
-	extCtx := ui.OrgExtensionContext{
-		OrgID:    org.ID,
-		AppID:    currentApp.ID,
-		BasePath: basePath,
-		Request:  c.Request(),
-		GetOrg: func() (interface{}, error) {
-			return org, nil
-		},
-		IsAdmin: isAdmin,
-	}
-
-	// Get extension registry
-	registry := e.plugin.GetOrganizationUIRegistry()
-	var extensionWidgets []ui.OrganizationWidget
-	var extensionActions []ui.OrganizationAction
-	var extensionQuickLinks []ui.OrganizationQuickLink
-	var tabs []ui.OrganizationTab
-
-	if registry != nil {
-		extensionWidgets = registry.GetWidgets(extCtx)
-		extensionActions = registry.GetActions(extCtx)
-		extensionQuickLinks = registry.GetQuickLinks(extCtx)
-		tabs = registry.GetTabs(extCtx)
-	}
-
-	baseURL := fmt.Sprintf("%s/dashboard/app/%s/organizations/%s", basePath, currentApp.ID.String(), org.ID.String())
-
-	// Build default quick links
-	defaultQuickLinks := []ui.OrganizationQuickLink{
-		{
-			ID:          "members",
-			Title:       "Members",
-			Description: fmt.Sprintf("Manage %d members", memberCount),
-			Icon:        lucide.Users(Class("size-6")),
-			Order:       10,
-			URLBuilder: func(bp string, orgID, appID xid.ID) string {
-				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/members", bp, appID.String(), orgID.String())
-			},
-		},
-		{
-			ID:          "teams",
-			Title:       "Teams",
-			Description: fmt.Sprintf("Manage %d teams", teamCount),
-			Icon:        lucide.UsersRound(Class("size-6")),
-			Order:       20,
-			URLBuilder: func(bp string, orgID, appID xid.ID) string {
-				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/teams", bp, appID.String(), orgID.String())
-			},
-		},
-		{
-			ID:          "roles",
-			Title:       "Roles",
-			Description: "Manage roles & permissions",
-			Icon:        lucide.ShieldCheck(Class("size-6")),
-			Order:       30,
-			URLBuilder: func(bp string, orgID, appID xid.ID) string {
-				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/roles", bp, appID.String(), orgID.String())
-			},
-		},
-		{
-			ID:          "invitations",
-			Title:       "Invitations",
-			Description: "View pending invitations",
-			Icon:        lucide.Mail(Class("size-6")),
-			Order:       40,
-			URLBuilder: func(bp string, orgID, appID xid.ID) string {
-				return fmt.Sprintf("%s/dashboard/app/%s/organizations/%s/invitations", bp, appID.String(), orgID.String())
-			},
-		},
-	}
-
-	// Merge quick links
-	allQuickLinks := MergeQuickLinks(defaultQuickLinks, extensionQuickLinks)
-
-	return Div(
-		Class("space-y-6"),
-
-		// Back button
-		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations"),
-			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
-			lucide.ArrowLeft(Class("size-4")),
-			g.Text("Back to Organizations"),
-		),
-
-		// Organization header
-		Div(
-			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
-			Div(
-				Class("flex items-center justify-between"),
-				Div(
-					Class("flex items-center gap-4"),
-					g.If(org.Logo != "",
-						Img(
-							Src(org.Logo),
-							Alt(org.Name),
-							Class("size-16 rounded-lg object-cover"),
-						),
-					),
-					Div(
-						H1(Class("text-2xl font-bold text-slate-900 dark:text-white"),
-							g.Text(org.Name)),
-						P(Class("text-sm text-slate-600 dark:text-gray-400"),
-							g.Text("@"+org.Slug)),
-						Div(
-							Class("mt-2"),
-							e.renderRoleBadge(userRole),
-						),
-					),
-				),
-				Div(
-					Class("flex gap-2"),
-					// Extension actions
-					g.If(len(extensionActions) > 0, ActionButtons(extensionActions)),
-					// Delete button (owner only)
-					g.If(userRole == "owner",
-						g.Group([]g.Node{
-							Button(
-								Type("button"),
-								Class("rounded-lg border border-red-600 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"),
-								g.Attr("onclick", "if(confirm('Are you sure you want to delete this organization? This action cannot be undone.')) { document.getElementById('delete-form-"+org.ID.String()+"').submit(); }"),
-								g.Text("Delete Organization"),
-							),
-							Form(
-								ID("delete-form-"+org.ID.String()),
-								Method("POST"),
-								Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/delete"),
-								Style("display: none;"),
-							),
-						}),
-					),
-				),
-			),
-		),
-
-		// Tab navigation (if tabs exist)
-		g.If(len(tabs) > 0, TabNavigation(tabs, "", baseURL)),
-
-		// Stats cards (default + extensions)
-		Div(
-			Class("grid gap-6 md:grid-cols-3"),
-			e.statsCard("Members", fmt.Sprintf("%d", memberCount), lucide.Users(Class("size-5"))),
-			e.statsCard("Teams", fmt.Sprintf("%d", teamCount), lucide.UsersRound(Class("size-5"))),
-			e.statsCard("Created", org.CreatedAt.Format("Jan 2, 2006"), lucide.Calendar(Class("size-5"))),
-		),
-
-		// Extension widgets
-		g.If(len(extensionWidgets) > 0, WidgetGrid(extensionWidgets, extCtx)),
-
-		// Quick links (merged)
-		QuickLinkGrid(allQuickLinks, basePath, org.ID.String(), currentApp.ID.String()),
-	)
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.UpdateOrganizationPage(currentApp, orgIDStr, basePath), nil
 }
 
 // ServeOrganizationTabContent renders extension tab content
-func (e *DashboardExtension) ServeOrganizationTabContent(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationTabContent(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
 	// Get organization from URL
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
 	// Get tab ID from URL
-	tabID := c.Param("tabId")
+	tabID := ctx.Param("tabId")
 	if tabID == "" {
-		return c.String(http.StatusBadRequest, "Tab ID required")
+		return nil, errs.BadRequest("Tab ID required")
 	}
 
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
+
 	// Check if user is admin
-	isAdmin := e.isUserAdmin(c.Request().Context(), org.ID, currentUser.ID)
+	isAdmin := e.isUserAdmin(ctx.Request.Context(), org.ID, currentUser.ID)
 
 	// Create extension context
 	extCtx := ui.OrgExtensionContext{
 		OrgID:    org.ID,
 		AppID:    currentApp.ID,
 		BasePath: basePath,
-		Request:  c.Request(),
+		Request:  ctx.Request,
 		GetOrg: func() (interface{}, error) {
 			return org, nil
 		},
@@ -998,117 +849,42 @@ func (e *DashboardExtension) ServeOrganizationTabContent(c forge.Context) error 
 	// Get tab from registry
 	registry := e.plugin.GetOrganizationUIRegistry()
 	if registry == nil {
-		return c.String(http.StatusInternalServerError, "UI registry not available")
+		return nil, errs.InternalServerError("UI registry not available", nil)
 	}
 
 	tab := registry.GetTabByPath(extCtx, tabID)
 	if tab == nil {
-		return c.String(http.StatusNotFound, "Tab not found")
+		return nil, errs.NotFound("Tab not found")
 	}
 
-	pageData := components.PageData{
-		Title:      org.Name + " - " + tab.Label,
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
-	// Render tab content with navigation
-	content := e.renderTabContentWithNav(c, org, currentApp, currentUser, basePath, tabID, tab, extCtx)
-
-	return handler.RenderWithLayout(c, pageData, content)
-}
-
-// renderTabContentWithNav renders tab content with tab navigation
-func (e *DashboardExtension) renderTabContentWithNav(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string, activeTab string, tab *ui.OrganizationTab, extCtx ui.OrgExtensionContext) g.Node {
-	// Get all tabs from registry
-	registry := e.plugin.GetOrganizationUIRegistry()
-	tabs := []ui.OrganizationTab{}
-	if registry != nil {
-		tabs = registry.GetTabs(extCtx)
-	}
-
-	baseURL := fmt.Sprintf("%s/dashboard/app/%s/organizations/%s", basePath, currentApp.ID.String(), org.ID.String())
-
-	return Div(
-		Class("space-y-6"),
-
-		// Back button
-		A(
-			Href(baseURL),
-			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
-			lucide.ArrowLeft(Class("size-4")),
-			g.Text("Back to Organization"),
-		),
-
-		// Organization header (minimal)
-		Div(
-			Class("flex items-center gap-3"),
-			g.If(org.Logo != "",
-				Img(
-					Src(org.Logo),
-					Alt(org.Name),
-					Class("size-10 rounded-lg object-cover"),
-				),
-			),
-			Div(
-				H1(Class("text-xl font-bold text-slate-900 dark:text-white"), g.Text(org.Name)),
-				P(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text("@"+org.Slug)),
-			),
-		),
-
-		// Tab navigation
-		TabNavigation(tabs, activeTab, baseURL),
-
-		// Tab content
-		Div(
-			Class("mt-6"),
-			tab.Renderer(extCtx),
-		),
-	)
+	// Render tab content directly
+	return tab.Renderer(extCtx), nil
 }
 
 // ServeOrganizationMembersPage renders the members management page
-func (e *DashboardExtension) ServeOrganizationMembersPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationMembersPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, errs.BadRequest("Organization ID is required")
 	}
 
-	pageData := components.PageData{
-		Title:      org.Name + " - Members",
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
-	content := e.renderMembersPageContent(c, org, currentApp, currentUser, basePath)
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.MembersPage(currentApp, orgIDStr, basePath), nil
 }
 
 // renderMembersPageContent renders the members management content
-func (e *DashboardExtension) renderMembersPageContent(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderMembersPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
+	ctx := c.Request.Context()
 
 	// Get user's role in the organization
 	userRole := e.getUserRole(ctx, org.ID, currentUser.ID)
@@ -1132,7 +908,7 @@ func (e *DashboardExtension) renderMembersPageContent(c forge.Context, org *core
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Organization"),
@@ -1167,45 +943,74 @@ func (e *DashboardExtension) renderMembersPageContent(c forge.Context, org *core
 }
 
 // ServeOrganizationTeamsPage renders the teams management page
-func (e *DashboardExtension) ServeOrganizationTeamsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationTeamsPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	org, err := e.getCurrentOrganization(c)
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, errs.BadRequest("Organization ID is required")
+	}
+
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.TeamsPage(currentApp, orgIDStr, basePath), nil
+}
+
+// ServeCreateTeamPage renders the create team form page
+func (e *DashboardExtension) ServeCreateTeamPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
+
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	pageData := components.PageData{
-		Title:      org.Name + " - Teams",
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
+	basePath := e.baseUIPath
+
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, errs.BadRequest("Organization ID is required")
 	}
 
-	content := e.renderTeamsPageContent(c, org, currentApp, currentUser, basePath)
+	return pages.CreateTeamPage(currentApp, orgIDStr, basePath), nil
+}
 
-	return handler.RenderWithLayout(c, pageData, content)
+// ServeEditTeamPage renders the edit team form page
+func (e *DashboardExtension) ServeEditTeamPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
+	}
+
+	basePath := e.baseUIPath
+
+	// Get organization ID and team ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, errs.BadRequest("Organization ID is required")
+	}
+
+	teamIDStr := ctx.Param("teamId")
+	if teamIDStr == "" {
+		return nil, errs.BadRequest("Team ID is required")
+	}
+
+	return pages.EditTeamPage(currentApp, orgIDStr, teamIDStr, basePath), nil
 }
 
 // renderTeamsPageContent renders the teams management content
-func (e *DashboardExtension) renderTeamsPageContent(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderTeamsPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
+	ctx := c.Request.Context()
 
 	// Get user's role in the organization
 	userRole := e.getUserRole(ctx, org.ID, currentUser.ID)
@@ -1229,7 +1034,7 @@ func (e *DashboardExtension) renderTeamsPageContent(c forge.Context, org *coreor
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Organization"),
@@ -1264,45 +1069,29 @@ func (e *DashboardExtension) renderTeamsPageContent(c forge.Context, org *coreor
 }
 
 // ServeOrganizationRolesPage renders the roles page
-func (e *DashboardExtension) ServeOrganizationRolesPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationRolesPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, errs.BadRequest("Organization ID is required")
 	}
 
-	pageData := components.PageData{
-		Title:      org.Name + " - Roles",
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
-	content := e.renderRolesPageContent(c, org, currentApp, currentUser, basePath)
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.RolesPage(currentApp, orgIDStr, basePath), nil
 }
 
 // renderRolesPageContent renders the roles management content
-func (e *DashboardExtension) renderRolesPageContent(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderRolesPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
+	ctx := c.Request.Context()
 
 	// Check management permission using RBAC
 	canManage := e.canManageOrganization(ctx, org.ID, currentUser.ID)
@@ -1318,7 +1107,7 @@ func (e *DashboardExtension) renderRolesPageContent(c forge.Context, org *coreor
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Organization"),
@@ -1438,45 +1227,29 @@ func (e *DashboardExtension) renderRoleRow(role *schema.Role, org *coreorg.Organ
 }
 
 // ServeOrganizationInvitationsPage renders the invitations page
-func (e *DashboardExtension) ServeOrganizationInvitationsPage(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationInvitationsPage(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	basePath := handler.GetBasePath()
+	basePath := e.baseUIPath
 
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+	// Get organization ID from URL
+	orgIDStr := ctx.Param("orgId")
+	if orgIDStr == "" {
+		return nil, errs.BadRequest("Organization ID is required")
 	}
 
-	pageData := components.PageData{
-		Title:      org.Name + " - Invitations",
-		User:       currentUser,
-		ActivePage: "organizations",
-		BasePath:   handler.GetBasePath(),
-		CurrentApp: currentApp,
-	}
-
-	content := e.renderInvitationsPageContent(c, org, currentApp, currentUser, basePath)
-
-	return handler.RenderWithLayout(c, pageData, content)
+	// Return ForgeUI page (data loaded via bridge)
+	return pages.InvitationsPage(currentApp, orgIDStr, basePath), nil
 }
 
 // renderInvitationsPageContent renders the invitations content
-func (e *DashboardExtension) renderInvitationsPageContent(c forge.Context, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
-	ctx := c.Request().Context()
+func (e *DashboardExtension) renderInvitationsPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
+	ctx := c.Request.Context()
 
 	// Fetch invitations
 	invitationsResp, _ := e.plugin.orgService.ListInvitations(ctx, &coreorg.ListInvitationsFilter{
@@ -1494,7 +1267,7 @@ func (e *DashboardExtension) renderInvitationsPageContent(c forge.Context, org *
 
 		// Back button
 		A(
-			Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
+			Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
 			Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"),
 			lucide.ArrowLeft(Class("size-4")),
 			g.Text("Back to Organization"),
@@ -1514,35 +1287,35 @@ func (e *DashboardExtension) renderInvitationsPageContent(c forge.Context, org *
 // Action Handlers
 
 // CreateOrganization handles organization creation
-func (e *DashboardExtension) CreateOrganization(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
+func (e *DashboardExtension) CreateOrganization(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Get current environment
-	envID, err := e.extractEnvironmentFromURL(c, currentApp.ID)
+	envID, err := e.extractEnvironmentFromURL(ctx, currentApp.ID)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid environment context: "+err.Error())
+		return nil, errs.BadRequest("Invalid environment context: " + err.Error())
 	}
+
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 	name := form.Get("name")
 	slug := form.Get("slug")
 	logoURL := form.Get("logo")
 
 	if name == "" || slug == "" {
-		return c.String(http.StatusBadRequest, "Name and slug are required")
+		return nil, errs.BadRequest("Name and slug are required")
 	}
 
 	// Create organization
@@ -1554,46 +1327,47 @@ func (e *DashboardExtension) CreateOrganization(c forge.Context) error {
 		req.Logo = &logoURL
 	}
 
-	ctx := c.Request().Context()
-	_, err = e.plugin.orgService.CreateOrganization(ctx, req, currentUser.ID, currentApp.ID, envID)
+	reqCtx := ctx.Request.Context()
+	_, err = e.plugin.orgService.CreateOrganization(reqCtx, req, currentUser.ID, currentApp.ID, envID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create organization: "+err.Error())
+		return nil, errs.InternalServerError("Failed to create organization", err)
 	}
 
 	// Redirect to organizations list
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String(), http.StatusFound)
+	return nil, nil
 }
 
 // UpdateOrganization handles organization updates
-func (e *DashboardExtension) UpdateOrganization(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
+func (e *DashboardExtension) UpdateOrganization(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
-	}
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Check permission (owner or admin)
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	reqCtx := ctx.Request.Context()
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("update", "organization")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 	name := form.Get("name")
 	req := &coreorg.UpdateOrganizationRequest{
 		Name: &name,
@@ -1602,81 +1376,83 @@ func (e *DashboardExtension) UpdateOrganization(c forge.Context) error {
 		req.Logo = &logo
 	}
 
-	_, err = e.plugin.orgService.UpdateOrganization(ctx, org.ID, req)
+	_, err = e.plugin.orgService.UpdateOrganization(reqCtx, org.ID, req)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to update organization: "+err.Error())
+		return nil, errs.InternalServerError("Failed to update organization", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String())
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String(), http.StatusFound)
+	return nil, nil
 }
 
 // DeleteOrganization handles organization deletion
-func (e *DashboardExtension) DeleteOrganization(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
+func (e *DashboardExtension) DeleteOrganization(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
-	}
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Check permission (owner only)
-	ctx := c.Request().Context()
-	if !e.checkOrgOwner(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Only owners can delete organizations")
+	reqCtx := ctx.Request.Context()
+	if !e.checkOrgOwner(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("delete", "organization")
 	}
 
-	err = e.plugin.orgService.DeleteOrganization(ctx, org.ID, currentUser.ID)
+	err = e.plugin.orgService.DeleteOrganization(reqCtx, org.ID, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to delete organization: "+err.Error())
+		return nil, errs.InternalServerError("Failed to delete organization", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String(), http.StatusFound)
+	return nil, nil
 }
 
 // InviteMember handles member invitation
-func (e *DashboardExtension) InviteMember(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
+func (e *DashboardExtension) InviteMember(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
+
+	currentApp, err := e.extractAppFromURL(ctx)
+	if err != nil {
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	org, err := e.getCurrentOrganization(c)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
-	}
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	reqCtx := ctx.Request.Context()
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("invite", "member")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 	email := form.Get("email")
 	role := form.Get("role")
 
 	if email == "" || role == "" {
-		return c.String(http.StatusBadRequest, "Email and role are required")
+		return nil, errs.BadRequest("Email and role are required")
 	}
 
 	req := &coreorg.InviteMemberRequest{
@@ -1684,149 +1460,142 @@ func (e *DashboardExtension) InviteMember(c forge.Context) error {
 		Role:  role,
 	}
 
-	_, err = e.plugin.orgService.InviteMember(ctx, org.ID, req, currentUser.ID)
+	_, err = e.plugin.orgService.InviteMember(reqCtx, org.ID, req, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to invite member: "+err.Error())
+		return nil, errs.InternalServerError("Failed to invite member", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/members", http.StatusFound)
+	return nil, nil
 }
 
 // UpdateMemberRole handles member role updates
-func (e *DashboardExtension) UpdateMemberRole(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
+func (e *DashboardExtension) UpdateMemberRole(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	memberIDStr := c.Param("memberId")
+	memberIDStr := ctx.Param("memberId")
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid member ID")
+		return nil, errs.BadRequest("Invalid member ID")
 	}
 
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
+
 	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	reqCtx := ctx.Request.Context()
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("update", "member")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	newRole := c.Request().Form.Get("role")
+	newRole := ctx.Request.Form.Get("role")
 	if newRole == "" {
-		return c.String(http.StatusBadRequest, "Role is required")
+		return nil, errs.BadRequest("Role is required")
 	}
 
 	req := &coreorg.UpdateMemberRequest{
 		Role: &newRole,
 	}
 
-	_, err = e.plugin.orgService.UpdateMember(ctx, memberID, req, currentUser.ID)
+	_, err = e.plugin.orgService.UpdateMember(reqCtx, memberID, req, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to update member: "+err.Error())
+		return nil, errs.InternalServerError("Failed to update member", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/members", http.StatusFound)
+	return nil, nil
 }
 
 // RemoveMember handles member removal
-func (e *DashboardExtension) RemoveMember(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) RemoveMember(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	memberIDStr := c.Param("memberId")
+	memberIDStr := ctx.Param("memberId")
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid member ID")
+		return nil, errs.BadRequest("Invalid member ID")
 	}
+
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	reqCtx := ctx.Request.Context()
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("remove", "member")
 	}
 
-	err = e.plugin.orgService.RemoveMember(ctx, memberID, currentUser.ID)
+	err = e.plugin.orgService.RemoveMember(reqCtx, memberID, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to remove member: "+err.Error())
+		return nil, errs.InternalServerError("Failed to remove member", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/members", http.StatusFound)
+	return nil, nil
 }
 
 // CreateTeam handles team creation
-func (e *DashboardExtension) CreateTeam(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) CreateTeam(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
+
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("create", "team")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 	name := form.Get("name")
 	description := form.Get("description")
 
 	if name == "" {
-		return c.String(http.StatusBadRequest, "Name is required")
+		return nil, errs.BadRequest("Name is required")
 	}
 
 	req := &coreorg.CreateTeamRequest{
@@ -1836,55 +1605,51 @@ func (e *DashboardExtension) CreateTeam(c forge.Context) error {
 		req.Description = &description
 	}
 
-	_, err = e.plugin.orgService.CreateTeam(ctx, org.ID, req, currentUser.ID)
+	_, err = e.plugin.orgService.CreateTeam(reqCtx, org.ID, req, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create team: "+err.Error())
+		return nil, errs.InternalServerError("Failed to create team", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/teams", http.StatusFound)
+	return nil, nil
 }
 
 // UpdateTeam handles team updates
-func (e *DashboardExtension) UpdateTeam(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) UpdateTeam(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	teamIDStr := c.Param("teamId")
+	teamIDStr := ctx.Param("teamId")
 	teamID, err := xid.FromString(teamIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid team ID")
+		return nil, errs.BadRequest("Invalid team ID")
 	}
 
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
+
 	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("update", "team")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 	name := form.Get("name")
 	description := form.Get("description")
 
@@ -1895,218 +1660,169 @@ func (e *DashboardExtension) UpdateTeam(c forge.Context) error {
 		req.Description = &description
 	}
 
-	_, err = e.plugin.orgService.UpdateTeam(ctx, teamID, req, currentUser.ID)
+	_, err = e.plugin.orgService.UpdateTeam(reqCtx, teamID, req, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to update team: "+err.Error())
+		return nil, errs.InternalServerError("Failed to update team", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/teams", http.StatusFound)
+	return nil, nil
 }
 
 // DeleteTeam handles team deletion
-func (e *DashboardExtension) DeleteTeam(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) DeleteTeam(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	teamIDStr := c.Param("teamId")
+	teamIDStr := ctx.Param("teamId")
 	teamID, err := xid.FromString(teamIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid team ID")
+		return nil, errs.BadRequest("Invalid team ID")
 	}
+
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
 
 	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("delete", "team")
 	}
 
-	err = e.plugin.orgService.DeleteTeam(ctx, teamID, currentUser.ID)
+	err = e.plugin.orgService.DeleteTeam(reqCtx, teamID, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to delete team: "+err.Error())
+		return nil, errs.InternalServerError("Failed to delete team", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/teams", http.StatusFound)
+	return nil, nil
 }
 
 // CancelInvitation handles invitation cancellation
-func (e *DashboardExtension) CancelInvitation(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) CancelInvitation(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	org, err := e.getCurrentOrganization(c)
+	org, err := e.getCurrentOrganization(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid organization")
+		return nil, errs.BadRequest("Invalid organization")
 	}
 
-	inviteIDStr := c.Param("inviteId")
+	inviteIDStr := ctx.Param("inviteId")
 	inviteID, err := xid.FromString(inviteIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid invitation ID")
+		return nil, errs.BadRequest("Invalid invitation ID")
 	}
 
-	// Check permission
-	ctx := c.Request().Context()
-	if !e.checkOrgAdmin(ctx, org.ID, currentUser.ID) {
-		return c.String(http.StatusForbidden, "Insufficient permissions")
+	// Get current user
+	currentUser := e.getUserFromContext(ctx)
+	if !e.checkOrgAdmin(reqCtx, org.ID, currentUser.ID) {
+		return nil, errs.PermissionDenied("cancel", "invitation")
 	}
 
-	err = e.plugin.orgService.CancelInvitation(ctx, inviteID, currentUser.ID)
+	err = e.plugin.orgService.CancelInvitation(reqCtx, inviteID, currentUser.ID)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to cancel invitation: "+err.Error())
+		return nil, errs.InternalServerError("Failed to cancel invitation", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/invitations")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/invitations", http.StatusFound)
+	return nil, nil
 }
 
 // ServeRoleTemplatesSettings renders the role templates settings page
-func (e *DashboardExtension) ServeRoleTemplatesSettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+// This is an app-level settings page, not an organization-specific page
+// Note: RequireAuth and RequireAdmin in route config handle authentication/authorization
+func (e *DashboardExtension) ServeRoleTemplatesSettings(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := c.Request().Context()
-	content := e.renderRoleTemplatesContent(ctx, currentApp, handler.GetBasePath())
+	content := e.renderRoleTemplatesContent(reqCtx, currentApp, e.baseUIPath)
 
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "role-templates", content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // ServeCreateRoleTemplate renders the create role template form
-func (e *DashboardExtension) ServeCreateRoleTemplate(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeCreateRoleTemplate(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	ctx := c.Request().Context()
-	content := e.renderCreateRoleTemplateForm(ctx, currentApp, handler.GetBasePath(), nil)
-
-	return handler.RenderSettingsPage(c, "role-templates", content)
+	return pages.RoleTemplateFormPage(currentApp, "", e.baseUIPath, false), nil
 }
 
 // ServeEditRoleTemplate renders the edit role template form
-func (e *DashboardExtension) ServeEditRoleTemplate(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeEditRoleTemplate(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	roleIDStr := c.Param("roleId")
-	roleID, err := xid.FromString(roleIDStr)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid role ID")
+	// Route parameter is :roleId (matches the route definition)
+	templateID := ctx.Param("roleId")
+	if templateID == "" {
+		return nil, errs.BadRequest("Template ID is required")
 	}
 
-	ctx := c.Request().Context()
-	content := e.renderEditRoleTemplateForm(ctx, currentApp, roleID, handler.GetBasePath(), nil)
-
-	return handler.RenderSettingsPage(c, "role-templates", content)
+	return pages.RoleTemplateFormPage(currentApp, templateID, e.baseUIPath, true), nil
 }
 
 // ServeOrganizationSettings renders the organization settings page
-func (e *DashboardExtension) ServeOrganizationSettings(c forge.Context) error {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return c.String(http.StatusInternalServerError, "Dashboard handler not available")
-	}
+func (e *DashboardExtension) ServeOrganizationSettings(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, handler.GetBasePath()+"/dashboard/login")
-	}
-
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	content := e.renderOrganizationSettingsContent(currentApp, handler.GetBasePath())
+	content := pages.OrganizationSettingsPage(currentApp, e.baseUIPath)
 
-	// Use the settings layout with sidebar navigation
-	return handler.RenderSettingsPage(c, "organization-settings", content)
+	// Return content directly (ForgeUI applies layout automatically)
+	return content, nil
 }
 
 // SavePluginSettings handles plugin settings updates
-func (e *DashboardExtension) SavePluginSettings(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
+func (e *DashboardExtension) SavePluginSettings(ctx *router.PageContext) (g.Node, error) {
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	form := c.Request().Form
+	form := ctx.Request.Form
 
 	// Parse numeric fields
 	maxOrgsPerUser, _ := strconv.Atoi(form.Get("maxOrganizationsPerUser"))
@@ -2141,29 +1857,27 @@ func (e *DashboardExtension) SavePluginSettings(c forge.Context) error {
 	e.plugin.config.RequireInvitation = requireInvitation
 	e.plugin.config.InvitationExpiryHours = invitationExpiry
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/organizations?saved=true")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/organizations?saved=true", http.StatusFound)
+	return nil, nil
 }
 
 // CreateRoleTemplate handles role template creation
-func (e *DashboardExtension) CreateRoleTemplate(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
+func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	ctx := c.Request().Context()
-	form := c.Request().Form
+	form := ctx.Request.Form
 
 	name := form.Get("name")
 	description := form.Get("description")
@@ -2180,9 +1894,9 @@ func (e *DashboardExtension) CreateRoleTemplate(c forge.Context) error {
 	}
 
 	if len(errors) > 0 {
-		handler := e.registry.GetHandler()
-		content := e.renderCreateRoleTemplateForm(ctx, currentApp, handler.GetBasePath(), errors)
-		return handler.RenderSettingsPage(c, "role-templates", content)
+		// basePath := e.baseUIPath
+		content := e.renderCreateRoleTemplateForm(reqCtx, currentApp, e.baseUIPath, errors)
+		return content, nil
 	}
 
 	// Convert permission IDs
@@ -2202,7 +1916,7 @@ func (e *DashboardExtension) CreateRoleTemplate(c forge.Context) error {
 		Where("app_id = ?", currentApp.ID).
 		Where("is_default = ?", true).
 		Limit(1).
-		Scan(ctx, &defaultEnvID)
+		Scan(reqCtx, &defaultEnvID)
 
 	if err != nil {
 		// If no default environment, try to get the first one
@@ -2212,49 +1926,47 @@ func (e *DashboardExtension) CreateRoleTemplate(c forge.Context) error {
 			Where("app_id = ?", currentApp.ID).
 			Order("created_at ASC").
 			Limit(1).
-			Scan(ctx, &defaultEnvID)
+			Scan(reqCtx, &defaultEnvID)
 
 		if err != nil {
-			return c.String(http.StatusInternalServerError, "Failed to get environment: "+err.Error())
+			return nil, errs.InternalServerError("Failed to get environment", err)
 		}
 	}
 
 	// Create role template via RBAC service
 	// Display name will be auto-generated from name if empty string is passed
-	_, err = e.plugin.rbacService.CreateRoleTemplate(ctx, currentApp.ID, defaultEnvID, name, "", description, isOwnerRole, permIDs)
+	_, err = e.plugin.rbacService.CreateRoleTemplate(reqCtx, currentApp.ID, defaultEnvID, name, "", description, isOwnerRole, permIDs)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create role template: "+err.Error())
+		return nil, errs.InternalServerError("Failed to create role template", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles?created=true")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/roles?created=true", http.StatusFound)
+	return nil, nil
 }
 
 // UpdateRoleTemplate handles role template updates
-func (e *DashboardExtension) UpdateRoleTemplate(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
+func (e *DashboardExtension) UpdateRoleTemplate(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	roleIDStr := c.Param("roleId")
+	roleIDStr := ctx.Param("roleId")
 	roleID, err := xid.FromString(roleIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid role ID")
+		return nil, errs.BadRequest("Invalid role ID")
 	}
 
 	// Parse form
-	if err := c.Request().ParseForm(); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid form data")
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid form data")
 	}
 
-	ctx := c.Request().Context()
-	form := c.Request().Form
+	form := ctx.Request.Form
 
 	name := form.Get("name")
 	description := form.Get("description")
@@ -2271,9 +1983,9 @@ func (e *DashboardExtension) UpdateRoleTemplate(c forge.Context) error {
 	}
 
 	if len(errors) > 0 {
-		handler := e.registry.GetHandler()
-		content := e.renderEditRoleTemplateForm(ctx, currentApp, roleID, handler.GetBasePath(), errors)
-		return handler.RenderSettingsPage(c, "role-templates", content)
+		// basePath := e.baseUIPath
+		content := e.renderEditRoleTemplateForm(reqCtx, currentApp, roleID, e.baseUIPath, errors)
+		return content, nil
 	}
 
 	// Convert permission IDs
@@ -2287,132 +1999,146 @@ func (e *DashboardExtension) UpdateRoleTemplate(c forge.Context) error {
 
 	// Update role template via RBAC service
 	// Display name will be auto-generated from name if empty string is passed
-	_, err = e.plugin.rbacService.UpdateRoleTemplate(ctx, roleID, name, "", description, isOwnerRole, permIDs)
+	_, err = e.plugin.rbacService.UpdateRoleTemplate(reqCtx, roleID, name, "", description, isOwnerRole, permIDs)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to update role template: "+err.Error())
+		return nil, errs.InternalServerError("Failed to update role template", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles?updated=true")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/roles?updated=true", http.StatusFound)
+	return nil, nil
 }
 
 // DeleteRoleTemplate handles role template deletion
-func (e *DashboardExtension) DeleteRoleTemplate(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
-	if currentUser == nil {
-		return c.Redirect(http.StatusFound, e.registry.GetHandler().GetBasePath()+"/dashboard/login")
-	}
+func (e *DashboardExtension) DeleteRoleTemplate(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	// basePath := e.baseUIPath
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid app context")
+		return nil, errs.BadRequest("Invalid app context")
 	}
 
-	roleIDStr := c.Param("roleId")
+	roleIDStr := ctx.Param("roleId")
 	roleID, err := xid.FromString(roleIDStr)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid role ID")
+		return nil, errs.BadRequest("Invalid role ID")
 	}
-
-	ctx := c.Request().Context()
 
 	// Delete role template via RBAC service
-	if err := e.plugin.rbacService.DeleteRoleTemplate(ctx, roleID); err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to delete role template: "+err.Error())
+	if err := e.plugin.rbacService.DeleteRoleTemplate(reqCtx, roleID); err != nil {
+		return nil, errs.InternalServerError("Failed to delete role template", err)
 	}
 
-	basePath := e.registry.GetHandler().GetBasePath()
-	return c.Redirect(http.StatusFound, basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles?deleted=true")
+	basePath := e.baseUIPath
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/roles?deleted=true", http.StatusFound)
+	return nil, nil
 }
 
 // AddCustomPermission handles creating custom permissions inline
-func (e *DashboardExtension) AddCustomPermission(c forge.Context) error {
-	currentUser := e.getUserFromContext(c)
+func (e *DashboardExtension) AddCustomPermission(ctx *router.PageContext) (g.Node, error) {
+	reqCtx := ctx.Request.Context()
+	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+		return nil, errs.Unauthorized()
 	}
 
-	currentApp, err := e.extractAppFromURL(c)
+	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid app context"})
+		return nil, errs.BadRequest("Invalid request")
 	}
 
-	// Parse JSON request
-	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Category    string `json:"category"`
+	// Parse form data
+	if err := ctx.Request.ParseForm(); err != nil {
+		return nil, errs.BadRequest("Invalid request")
 	}
 
-	if err := c.BindJSON(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
-	}
+	name := ctx.Request.Form.Get("name")
+	description := ctx.Request.Form.Get("description")
+	category := ctx.Request.Form.Get("category")
 
 	// Validate
-	if req.Name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Permission name is required"})
+	if name == "" {
+		return nil, errs.BadRequest("Invalid request")
 	}
-
-	ctx := c.Request().Context()
 
 	// Create permission
 	appID := currentApp.ID
 	permission := &schema.Permission{
 		ID:          xid.New(),
 		AppID:       &appID,
-		Name:        req.Name,
-		Description: req.Description,
-		Category:    req.Category,
+		Name:        name,
+		Description: description,
+		Category:    category,
 		IsCustom:    true,
 	}
 
-	if _, err := e.plugin.db.NewInsert().Model(permission).Exec(ctx); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create permission"})
+	if _, err := e.plugin.db.NewInsert().Model(permission).Exec(reqCtx); err != nil {
+		return nil, errs.InternalServerError("Operation failed", nil)
 	}
 
-	return c.JSON(http.StatusOK, permission)
+	return nil, nil // Success
 }
 
 // Helper Methods
 
 // Context helpers
-func (e *DashboardExtension) getUserFromContext(c forge.Context) *user.User {
-	handler := e.registry.GetHandler()
-	if handler == nil {
+func (e *DashboardExtension) getUserFromContext(c *router.PageContext) *user.User {
+	// Extract user from request context
+	ctx := c.Request.Context()
+	userVal := ctx.Value(contexts.UserContextKey)
+	if userVal == nil {
 		return nil
 	}
-	return handler.GetUserFromContext(c)
+	currentUser, ok := userVal.(*user.User)
+	if !ok {
+		return nil
+	}
+	return currentUser
 }
 
-func (e *DashboardExtension) extractAppFromURL(c forge.Context) (*app.App, error) {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return nil, forge.NewHTTPError(http.StatusInternalServerError, "handler not available")
+func (e *DashboardExtension) extractAppFromURL(c *router.PageContext) (*app.App, error) {
+	// First try to extract app from request context (set by middleware)
+	ctx := c.Request.Context()
+	appVal := ctx.Value(contexts.AppContextKey)
+	if appVal != nil {
+		if currentApp, ok := appVal.(*app.App); ok {
+			return currentApp, nil
+		}
 	}
 
-	currentApp, err := handler.GetCurrentApp(c)
-	if err != nil {
-		return nil, err
+	// Fallback: try to get from PageContext (set by router)
+	if pageAppVal, exists := c.Get("currentApp"); exists && pageAppVal != nil {
+		if currentApp, ok := pageAppVal.(*app.App); ok {
+			return currentApp, nil
+		}
 	}
 
-	return currentApp, nil
+	return nil, errs.BadRequest("app not available")
 }
 
-func (e *DashboardExtension) extractEnvironmentFromURL(c forge.Context, appID xid.ID) (xid.ID, error) {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return xid.NilID(), forge.NewHTTPError(http.StatusInternalServerError, "handler not available")
+func (e *DashboardExtension) extractEnvironmentFromURL(c *router.PageContext, appID xid.ID) (xid.ID, error) {
+	// First try to extract environment from request context (set by middleware)
+	ctx := c.Request.Context()
+	envVal := ctx.Value(contexts.EnvironmentContextKey)
+	if envVal != nil {
+		if currentEnv, ok := envVal.(*environment.Environment); ok {
+			return currentEnv.ID, nil
+		}
 	}
 
-	currentEnv, err := handler.GetCurrentEnvironment(c, appID)
-	if err != nil {
-		return xid.NilID(), err
+	// Fallback: try to get from PageContext (set by router)
+	if pageEnvVal, exists := c.Get("currentEnvironment"); exists && pageEnvVal != nil {
+		if currentEnv, ok := pageEnvVal.(*environment.Environment); ok {
+			return currentEnv.ID, nil
+		}
 	}
 
-	return currentEnv.ID, nil
+	// Return nil ID if environment not available (optional context)
+	return xid.NilID(), nil
 }
 
-func (e *DashboardExtension) getCurrentOrganization(c forge.Context) (*coreorg.Organization, error) {
+func (e *DashboardExtension) getCurrentOrganization(c *router.PageContext) (*coreorg.Organization, error) {
 	orgIDStr := c.Param("orgId")
 	if orgIDStr == "" {
 		return nil, forge.NewHTTPError(http.StatusBadRequest, "organization ID required")
@@ -2423,8 +2149,8 @@ func (e *DashboardExtension) getCurrentOrganization(c forge.Context) (*coreorg.O
 		return nil, forge.NewHTTPError(http.StatusBadRequest, "invalid organization ID")
 	}
 
-	ctx := c.Request().Context()
-	org, err := e.plugin.orgService.FindOrganizationByID(ctx, orgID)
+	reqCtx := c.Request.Context()
+	org, err := e.plugin.orgService.FindOrganizationByID(reqCtx, orgID)
 	if err != nil {
 		return nil, forge.NewHTTPError(http.StatusNotFound, "organization not found")
 	}
@@ -2434,6 +2160,11 @@ func (e *DashboardExtension) getCurrentOrganization(c forge.Context) (*coreorg.O
 
 // Permission helpers
 func (e *DashboardExtension) checkOrgAccess(ctx context.Context, orgID, userID xid.ID) bool {
+	// App admins/owners can access all organizations
+	if e.isAppAdmin(ctx, userID) {
+		return true
+	}
+	// Otherwise, check if user is a member of this specific org
 	isMember, _ := e.plugin.orgService.IsMember(ctx, orgID, userID)
 	return isMember
 }
@@ -2452,6 +2183,10 @@ func (e *DashboardExtension) checkOrgOwner(ctx context.Context, orgID, userID xi
 func (e *DashboardExtension) getUserRole(ctx context.Context, orgID, userID xid.ID) string {
 	member, err := e.plugin.orgService.FindMember(ctx, orgID, userID)
 	if err != nil || member == nil {
+		// If user is not a member but is an app admin, treat them as admin
+		if e.isAppAdmin(ctx, userID) {
+			return "admin"
+		}
 		return ""
 	}
 	return member.Role
@@ -2493,11 +2228,6 @@ func (e *DashboardExtension) canManageOrganization(ctx context.Context, orgID, u
 // isAppAdmin checks if a user has owner/admin/superadmin role at the app level
 // This allows app admins to manage all organizations within their app
 func (e *DashboardExtension) isAppAdmin(ctx context.Context, userID xid.ID) bool {
-	handler := e.registry.GetHandler()
-	if handler == nil {
-		return false
-	}
-
 	// Get the current app from context
 	db := e.plugin.db
 	if db == nil {
@@ -2538,7 +2268,7 @@ func (e *DashboardExtension) RenderSettingsSection(basePath string, currentApp *
 
 	return Form(
 		Method("POST"),
-		Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/plugin-settings"),
+		Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/plugin-settings"),
 		Class("space-y-6"),
 
 		// Max organizations per user
@@ -2703,7 +2433,7 @@ func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *
 		Div(
 			Class("mt-4 pt-4 border-t border-slate-200 dark:border-gray-800"),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/organizations"),
 				Class("text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"),
 				g.Text("View all organizations →"),
 			),
@@ -2816,7 +2546,7 @@ func (e *DashboardExtension) renderOrganizationsTable(ctx context.Context, orgs 
 			P(Class("text-slate-600 dark:text-gray-400 mb-4"),
 				g.Text("Get started by creating your first organization")),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/create"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/create"),
 				Class("inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"),
 				lucide.Plus(Class("size-4")),
 				g.Text("Create Organization"),
@@ -2937,7 +2667,7 @@ func (e *DashboardExtension) renderOrganizationRow(ctx context.Context, org *cor
 		),
 		Td(Class("px-6 py-4 whitespace-nowrap text-right text-sm font-medium"),
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()),
 				Class("text-violet-600 hover:text-violet-900 dark:text-violet-400 dark:hover:text-violet-300"),
 				g.Text("View"),
 			),
@@ -3072,7 +2802,7 @@ func (e *DashboardExtension) renderMemberRow(member *coreorg.Member, org *coreor
 						Class("flex items-center justify-end gap-2"),
 						Form(
 							Method("POST"),
-							Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members/"+member.ID.String()+"/remove"),
+							Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members/"+member.ID.String()+"/remove"),
 							g.Attr("onsubmit", "return confirm('Are you sure you want to remove this member?')"),
 							Class("inline"),
 							Button(
@@ -3178,7 +2908,7 @@ func (e *DashboardExtension) renderTeamRow(ctx context.Context, team *coreorg.Te
 			Td(Class("px-6 py-4 whitespace-nowrap text-right text-sm font-medium"),
 				Form(
 					Method("POST"),
-					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams/"+team.ID.String()+"/delete"),
+					Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams/"+team.ID.String()+"/delete"),
 					g.Attr("onsubmit", "return confirm('Are you sure you want to delete this team?')"),
 					Class("inline"),
 					Button(
@@ -3269,7 +2999,7 @@ func (e *DashboardExtension) renderInvitationRow(invite *coreorg.Invitation, org
 			g.If(invite.Status == "pending",
 				Form(
 					Method("POST"),
-					Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/invitations/"+invite.ID.String()+"/cancel"),
+					Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/invitations/"+invite.ID.String()+"/cancel"),
 					g.Attr("onsubmit", "return confirm('Are you sure you want to cancel this invitation?')"),
 					Class("inline"),
 					Button(
@@ -3296,7 +3026,7 @@ func (e *DashboardExtension) renderInviteMemberModal(org *coreorg.Organization, 
 				g.Text("Invite Member")),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members/invite"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/members/invite"),
 				Class("space-y-4"),
 				Div(
 					Label(
@@ -3358,7 +3088,7 @@ func (e *DashboardExtension) renderCreateTeamModal(org *coreorg.Organization, cu
 				g.Text("Create Team")),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams/create"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/"+org.ID.String()+"/teams/create"),
 				Class("space-y-4"),
 				Div(
 					Label(
@@ -3453,8 +3183,8 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 		Description:   "Manage role templates that can be used when creating new organizations. Each template can have custom permissions and access levels.",
 		Roles:         roleTemplates,
 		IsTemplate:    true,
-		BasePath:      basePath + "/dashboard/app/" + currentApp.ID.String(),
-		CreateRoleURL: basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/roles/create",
+		BasePath:      basePath + "/app/" + currentApp.ID.String(),
+		CreateRoleURL: basePath + "/app/" + currentApp.ID.String() + "/settings/roles/create",
 		AppID:         currentApp.ID,
 		OrgID:         nil,
 		ShowActions:   true,
@@ -3478,7 +3208,7 @@ func (e *DashboardExtension) renderCreateRoleTemplateForm(ctx context.Context, c
 		// Header
 		Div(
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/settings/roles"),
 				Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white mb-4"),
 				lucide.ArrowLeft(Class("size-4")),
 				g.Text("Back to Role Templates"),
@@ -3494,7 +3224,7 @@ func (e *DashboardExtension) renderCreateRoleTemplateForm(ctx context.Context, c
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles/create"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/settings/roles/create"),
 				ui.RoleForm(ui.RoleFormData{
 					Role:            nil,
 					Permissions:     permissions,
@@ -3502,8 +3232,8 @@ func (e *DashboardExtension) renderCreateRoleTemplateForm(ctx context.Context, c
 					IsTemplate:      true,
 					CanSetOwnerRole: true,
 					Errors:          errors,
-					ActionURL:       basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/roles/create",
-					CancelURL:       basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/roles",
+					ActionURL:       basePath + "/app/" + currentApp.ID.String() + "/settings/roles/create",
+					CancelURL:       basePath + "/app/" + currentApp.ID.String() + "/settings/roles",
 				}),
 			),
 		),
@@ -3542,7 +3272,7 @@ func (e *DashboardExtension) renderEditRoleTemplateForm(ctx context.Context, cur
 		// Header
 		Div(
 			A(
-				Href(basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles"),
+				Href(basePath+"/app/"+currentApp.ID.String()+"/settings/roles"),
 				Class("inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white mb-4"),
 				lucide.ArrowLeft(Class("size-4")),
 				g.Text("Back to Role Templates"),
@@ -3558,7 +3288,7 @@ func (e *DashboardExtension) renderEditRoleTemplateForm(ctx context.Context, cur
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/settings/roles/"+roleID.String()+"/edit"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/settings/roles/"+roleID.String()+"/edit"),
 				ui.RoleForm(ui.RoleFormData{
 					Role:            roleWithPerms.Role,
 					Permissions:     permissions,
@@ -3566,8 +3296,8 @@ func (e *DashboardExtension) renderEditRoleTemplateForm(ctx context.Context, cur
 					IsTemplate:      true,
 					CanSetOwnerRole: true,
 					Errors:          errors,
-					ActionURL:       basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/roles/" + roleID.String() + "/edit",
-					CancelURL:       basePath + "/dashboard/app/" + currentApp.ID.String() + "/settings/roles",
+					ActionURL:       basePath + "/app/" + currentApp.ID.String() + "/settings/roles/" + roleID.String() + "/edit",
+					CancelURL:       basePath + "/app/" + currentApp.ID.String() + "/settings/roles",
 				}),
 			),
 		),
@@ -3593,7 +3323,7 @@ func (e *DashboardExtension) renderOrganizationSettingsContent(currentApp *app.A
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
 			Form(
 				Method("POST"),
-				Action(basePath+"/dashboard/app/"+currentApp.ID.String()+"/organizations/plugin-settings"),
+				Action(basePath+"/app/"+currentApp.ID.String()+"/organizations/plugin-settings"),
 				Class("space-y-6"),
 
 				// Limits section

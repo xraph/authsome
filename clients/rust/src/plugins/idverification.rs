@@ -19,18 +19,18 @@ impl IdverificationPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateVerificationSessionRequest {
-        #[serde(rename = "cancelUrl")]
-        pub cancel_url: String,
-        #[serde(rename = "config")]
-        pub config: ,
-        #[serde(rename = "metadata")]
-        pub metadata: ,
         #[serde(rename = "provider")]
         pub provider: String,
         #[serde(rename = "requiredChecks")]
         pub required_checks: []string,
         #[serde(rename = "successUrl")]
         pub success_url: String,
+        #[serde(rename = "cancelUrl")]
+        pub cancel_url: String,
+        #[serde(rename = "config")]
+        pub config: ,
+        #[serde(rename = "metadata")]
+        pub metadata: ,
     }
 
     #[derive(Debug, Deserialize)]

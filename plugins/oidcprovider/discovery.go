@@ -17,7 +17,7 @@ func NewDiscoveryService(config Config) *DiscoveryService {
 }
 
 // GetDiscoveryDocument generates the OIDC discovery document (.well-known/openid-configuration)
-func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL string) *DiscoveryResponse {
+func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL, basePath string) *DiscoveryResponse {
 	// Ensure baseURL doesn't end with slash
 	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
 		baseURL = baseURL[:len(baseURL)-1]
@@ -29,15 +29,30 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL str
 		issuer = baseURL
 	}
 
+	// Build grant types list
+	grantTypes := []string{
+		"authorization_code", // ✅ Implemented
+		"refresh_token",      // ✅ Implemented
+		"client_credentials", // ✅ Implemented
+	}
+
+	// Add device code grant if enabled
+	deviceAuthEndpoint := ""
+	if s.config.DeviceFlow.Enabled {
+		grantTypes = append(grantTypes, "urn:ietf:params:oauth:grant-type:device_code")
+		deviceAuthEndpoint = baseURL + basePath + "/device_authorization"
+	}
+
 	return &DiscoveryResponse{
-		Issuer:                issuer,
-		AuthorizationEndpoint: baseURL + "/oauth2/authorize",
-		TokenEndpoint:         baseURL + "/oauth2/token",
-		UserInfoEndpoint:      baseURL + "/oauth2/userinfo",
-		JwksURI:               baseURL + "/oauth2/jwks",
-		RegistrationEndpoint:  baseURL + "/oauth2/register",
-		IntrospectionEndpoint: baseURL + "/oauth2/introspect",
-		RevocationEndpoint:    baseURL + "/oauth2/revoke",
+		Issuer:                       issuer,
+		AuthorizationEndpoint:        baseURL + basePath + "/authorize",
+		TokenEndpoint:                baseURL + basePath + "/token",
+		UserInfoEndpoint:             baseURL + basePath + "/userinfo",
+		JwksURI:                      baseURL + basePath + "/jwks",
+		RegistrationEndpoint:         baseURL + basePath + "/register",
+		IntrospectionEndpoint:        baseURL + basePath + "/introspect",
+		RevocationEndpoint:           baseURL + basePath + "/revoke",
+		DeviceAuthorizationEndpoint:  deviceAuthEndpoint,
 
 		// Supported response types (only authorization code flow for now)
 		ResponseTypesSupported: []string{
@@ -50,11 +65,7 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL str
 		},
 
 		// Supported grant types (accurately reflects implementation)
-		GrantTypesSupported: []string{
-			"authorization_code", // ✅ Implemented
-			"refresh_token",      // ✅ Implemented
-			"client_credentials", // ✅ Implemented
-		},
+		GrantTypesSupported: grantTypes,
 
 		// Subject types
 		SubjectTypesSupported: []string{

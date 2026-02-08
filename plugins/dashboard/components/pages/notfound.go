@@ -22,10 +22,10 @@ func NotFound(basePath string) g.Node {
 				TitleEl(g.Text("404 - Page Not Found")),
 
 				// Compiled Tailwind CSS + Preline UI styles
-				Link(Rel("stylesheet"), Href(basePath+"/dashboard/static/css/dashboard.css")),
+				Link(Rel("stylesheet"), Href(basePath+"static/css/dashboard.css")),
 
 				// Bundled JavaScript (Preline + custom components)
-				Script(Src(basePath+"/dashboard/static/js/bundle.js")),
+				Script(Src(basePath+"static/js/bundle.js")),
 
 				// Alpine.js - Load LAST
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
@@ -62,7 +62,7 @@ func NotFound(basePath string) g.Node {
 						Div(
 							Class("flex flex-col sm:flex-row gap-4 justify-center items-center"),
 							A(
-								Href(basePath+"/dashboard/"),
+								Href(basePath+""),
 								Class("inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors"),
 								lucide.House(Class("h-5 w-5")),
 								g.Text("Back to Dashboard"),
@@ -103,17 +103,17 @@ func NotFound(basePath string) g.Node {
 							Div(
 								Class("flex flex-wrap gap-6 justify-center text-sm"),
 								A(
-									Href(basePath+"/dashboard/users"),
+									Href(basePath+"users"),
 									Class("text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"),
 									g.Text("Users"),
 								),
 								A(
-									Href(basePath+"/dashboard/sessions"),
+									Href(basePath+"sessions"),
 									Class("text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"),
 									g.Text("Sessions"),
 								),
 								A(
-									Href(basePath+"/dashboard/settings"),
+									Href(basePath+"settings"),
 									Class("text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"),
 									g.Text("Settings"),
 								),

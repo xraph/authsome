@@ -32,14 +32,14 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // List List handles GET /secrets
 func (p *Plugin) List(ctx context.Context, req *authsome.ListRequest) error {
-	path := "/secrets/list"
+	path := "/secrets"
 	err := p.client.Request(ctx, "GET", path, req, nil, false)
 	return err
 }
 
 // Create Create handles POST /secrets
 func (p *Plugin) Create(ctx context.Context, req *authsome.CreateRequest) error {
-	path := "/secrets/create"
+	path := "/secrets"
 	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }

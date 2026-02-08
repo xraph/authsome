@@ -31,14 +31,14 @@ func (p *Plugin) Init(client *authsome.Client) error {
 
 // CreateJWTKey CreateJWTKey creates a new JWT signing key
 func (p *Plugin) CreateJWTKey(ctx context.Context, req *authsome.CreateJWTKeyRequest) error {
-	path := "/jwt/createjwtkey"
+	path := "/jwt/keys"
 	err := p.client.Request(ctx, "POST", path, req, nil, false)
 	return err
 }
 
 // ListJWTKeys ListJWTKeys lists JWT signing keys
 func (p *Plugin) ListJWTKeys(ctx context.Context, req *authsome.ListJWTKeysRequest) error {
-	path := "/jwt/listjwtkeys"
+	path := "/jwt/keys"
 	err := p.client.Request(ctx, "GET", path, req, nil, false)
 	return err
 }

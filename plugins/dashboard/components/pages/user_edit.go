@@ -45,7 +45,7 @@ func editHeader(data UserEditPageData) g.Node {
 				),
 			),
 			A(
-				Href(data.BasePath+"/dashboard/users/"+data.User.UserID),
+				Href(data.BasePath+"/users/"+data.User.UserID),
 				Class("px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"),
 				g.Text("Cancel"),
 			),
@@ -56,7 +56,7 @@ func editHeader(data UserEditPageData) g.Node {
 func editForm(data UserEditPageData) g.Node {
 	return FormEl(
 		Method("POST"),
-		Action(data.BasePath+"/dashboard/users/"+data.User.UserID+"/edit"),
+		Action(data.BasePath+"/users/"+data.User.UserID+"/edit"),
 		Class("space-y-6"),
 
 		Input(Type("hidden"), Name("csrf_token"), Value(data.CSRFToken)),
@@ -188,7 +188,7 @@ func formActions(data UserEditPageData) g.Node {
 				g.Text("Save Changes"),
 			),
 			A(
-				Href(data.BasePath+"/dashboard/users/"+data.User.UserID),
+				Href(data.BasePath+"/users/"+data.User.UserID),
 				Class("px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"),
 				g.Text("Cancel"),
 			),

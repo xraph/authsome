@@ -1,499 +1,89 @@
 // Auto-generated TypeScript types
 
-export interface MockService {
+export interface ConsentStats {
+  grantRate: number;
+  grantedCount: number;
+  revokedCount: number;
+  totalConsents: number;
+  type: string;
+  averageLifetime: number;
+  expiredCount: number;
 }
 
-export interface TemplateParameter {
-  [key: string]: any;
+export interface BackupCodeFactorAdapter {
 }
 
-export interface ListVersionsResponse {
-  [key: string]: any;
-}
-
-export interface PublishContentTypeRequest {
-}
-
-export interface TestSendTemplate_req {
-  recipient: string;
-  variables: any;
-}
-
-export interface AddTrustedContactResponse {
-  email: string;
-  message: string;
-  name: string;
-  phone: string;
-  verified: boolean;
-  addedAt: string;
-  contactId: string;
-}
-
-export interface AuditLog {
-}
-
-export interface ComplianceStatusResponse {
-  status: string;
-}
-
-export interface ReportsConfig {
-  enabled: boolean;
-  formats: string[];
-  includeEvidence: boolean;
-  retentionDays: number;
-  schedule: string;
-  storagePath: string;
-}
-
-export interface LinkRequest {
-  email: string;
-  name: string;
-  password: string;
-}
-
-export interface CookieConsent {
-  expiresAt: string;
-  organizationId: string;
-  createdAt: string;
-  essential: boolean;
-  functional: boolean;
-  id: string;
-  ipAddress: string;
-  personalization: boolean;
-  sessionId: string;
-  thirdParty: boolean;
-  analytics: boolean;
-  marketing: boolean;
-  updatedAt: string;
-  userAgent: string;
-  userId: string;
-  consentBannerVersion: string;
-}
-
-export interface JumioConfig {
-  apiSecret: string;
-  callbackUrl: string;
-  dataCenter: string;
-  enableExtraction: boolean;
-  enableLiveness: boolean;
-  enabledCountries: string[];
-  presetId: string;
-  verificationType: string;
-  apiToken: string;
-  enableAMLScreening: boolean;
-  enabled: boolean;
-  enabledDocumentTypes: string[];
-}
-
-export interface VerificationSessionResponse {
-  session: IdentityVerificationSession | undefined;
-}
-
-export interface GetProviderRequest {
-}
-
-export interface ComplianceStatusDetailsResponse {
-  status: string;
-}
-
-export interface ClientAuthResult {
-}
-
-export interface TestPolicyResponse {
-  total: number;
-  error: string;
-  failedCount: number;
-  passed: boolean;
-  passedCount: number;
-  results: TestCaseResult[];
-}
-
-export interface AuditServiceAdapter {
-}
-
-export interface StepUpRequirementsResponse {
-  requirements: any[];
-}
-
-export interface AddFieldRequest {
-}
-
-export interface SetupSecurityQuestionsResponse {
-  count: number;
-  message: string;
-  setupAt: string;
-}
-
-export interface ListViolationsFilter {
-  appId: string | undefined;
-  profileId: string | undefined;
-  severity: string | undefined;
-  status: string | undefined;
-  userId: string | undefined;
-  violationType: string | undefined;
-}
-
-export interface MockAuditService {
-  [key: string]: any;
-}
-
-export interface PreviewTemplate_req {
-  variables: any;
-}
-
-export interface RateLimitingConfig {
-  lockoutAfterAttempts: number;
-  lockoutDuration: Duration;
-  maxAttemptsPerDay: number;
-  maxAttemptsPerHour: number;
-  maxAttemptsPerIp: number;
-  enabled: boolean;
-  exponentialBackoff: boolean;
-  ipCooldownPeriod: Duration;
-}
-
-export interface MockRepository {
-}
-
-export interface ClientRegistrationResponse {
-  response_types: string[];
-  client_id: string;
-  client_secret_expires_at: number;
-  policy_uri: string;
-  post_logout_redirect_uris: string[];
-  contacts: string[];
-  grant_types: string[];
-  token_endpoint_auth_method: string;
-  redirect_uris: string[];
-  scope: string;
-  application_type: string;
-  client_id_issued_at: number;
-  client_secret: string;
-  logo_uri: string;
-  tos_uri: string;
-  client_name: string;
-}
-
-export interface AccessConfig {
-  requireRbac: boolean;
-  allowApiAccess: boolean;
-  allowDashboardAccess: boolean;
-  rateLimitPerMinute: number;
-  requireAuthentication: boolean;
-}
-
-export interface UnbanUserRequest {
-  user_organization_id: string | undefined;
-  app_id: string;
-  reason: string;
-  user_id: string;
-}
-
-export interface RateLimit {
-  max_requests: number;
-  window: Duration;
-}
-
-export interface ResetTemplateRequest {
-}
-
-export interface NoOpVideoProvider {
-  [key: string]: any;
-}
-
-export interface GetAppRequest {
-}
-
-export interface LoginResponse {
-  passkeyUsed: string;
-  session: any;
-  token: string;
-  user: any;
-}
-
-export interface OrganizationProvider {
-  [key: string]: any;
-}
-
-export interface MigrationHandler {
-}
-
-export interface StatusResponse {
-  status: string;
-}
-
-export interface IDVerificationListResponse {
-  verifications: any[];
-}
-
-export interface KeyStats {
-}
-
-export interface DocumentVerificationResult {
-}
-
-export interface DevicesResponse {
-  count: number;
-  devices: any;
-}
-
-export interface BackupCodesConfig {
-  count: number;
-  enabled: boolean;
-  format: string;
-  length: number;
-  allow_reuse: boolean;
-}
-
-export interface FinishRegisterResponse {
-  name: string;
-  passkeyId: string;
-  status: string;
-  createdAt: string;
-  credentialId: string;
-}
-
-export interface GetTemplateAnalyticsRequest {
-}
-
-export interface CreateNamespaceRequest {
-  description: string;
-  inheritPlatform: boolean;
-  name: string;
-  templateId: string;
-}
-
-export interface ComplianceReportFileResponse {
-  content_type: string;
-  data: number[];
-}
-
-export interface StepUpVerificationResponse {
-  expires_at: string;
-  verified: boolean;
-}
-
-export interface Challenge {
-  userAgent: string;
-  userId: string;
-  verifiedAt: string | undefined;
-  attempts: number;
-  createdAt: string;
-  expiresAt: string;
+export interface VerifyChallengeRequest {
+  code: string;
+  data: any;
+  deviceInfo: DeviceInfo | undefined;
   factorId: string;
-  ipAddress: string;
-  maxAttempts: number;
-  metadata: any;
+  rememberDevice: boolean;
+  challengeId: string;
+}
+
+export interface CancelInvitationInput {
+  orgId: string;
+  appId: string;
+  inviteId: string;
+}
+
+export interface ConsentDeletionResponse {
   id: string;
   status: string;
-  type: string;
 }
 
-export interface CreateTeamRequest {
-  description: string;
-  name: string;
+export interface RiskFactor {
 }
 
-export interface ListAuditEventsRequest {
+export interface UpdateSettingsInput {
+  appId: string;
+  settings: OrganizationSettingsDTO;
 }
 
-export interface BanUserRequestDTO {
-  expires_at: string | undefined;
-  reason: string;
+export interface DeleteAPIKeyRequest {
 }
 
-export interface ListUsersResponse {
-  limit: number;
-  page: number;
-  total: number;
-  total_pages: number;
-  users: User | undefined[];
+export interface CreatePolicy_req {
+  content: string;
+  policyType: string;
+  standard: string;
+  title: string;
+  version: string;
 }
 
-export interface SendOTPRequest {
+export interface StepUpVerification {
+  expires_at: string;
+  method: string;
+  rule_name: string;
   user_id: string;
-}
-
-export interface TrustedContactInfo {
-  phone: string;
-  relationship: string;
-  verified: boolean;
-  verifiedAt: string | undefined;
-  active: boolean;
-  email: string;
+  created_at: string;
   id: string;
-  name: string;
-}
-
-export interface SignUpResponse {
-  message: string;
-  status: string;
-}
-
-export interface ConsentRecordResponse {
-  id: string;
-}
-
-export interface ListSecretsRequest {
-}
-
-export interface ResendRequest {
-  email: string;
-}
-
-export interface RestoreTemplateVersionRequest {
-}
-
-export interface CreateAPIKeyRequest {
-  allowed_ips: string[];
-  description: string;
-  metadata: any;
-  name: string;
-  permissions: any;
-  rate_limit: number;
-  scopes: string[];
-}
-
-export interface InviteMemberRequest {
-  email: string;
-  role: string;
-}
-
-export interface SendCodeResponse {
-  status: string;
-  dev_code: string;
-}
-
-export interface ClientSummary {
-  applicationType: string;
-  clientID: string;
-  createdAt: string;
-  isOrgLevel: boolean;
-  name: string;
-}
-
-export interface UserService {
-  [key: string]: any;
-}
-
-export interface MigrateRBACRequest {
-  dryRun: boolean;
-  keepRbacPolicies: boolean;
-  namespaceId: string;
-  validateEquivalence: boolean;
-}
-
-export interface FacialCheckConfig {
-  enabled: boolean;
-  motionCapture: boolean;
-  variant: string;
-}
-
-export interface CheckSubResult {
-}
-
-export interface ProviderSession {
-}
-
-export interface TwoFAEnableResponse {
-  status: string;
-  totp_uri: string;
-}
-
-export interface StartVideoSessionRequest {
-  videoSessionId: string;
-}
-
-export interface UploadDocumentResponse {
-  processingTime: string;
-  status: string;
-  uploadedAt: string;
-  documentId: string;
-  message: string;
-}
-
-export interface ScheduleVideoSessionRequest {
-  scheduledAt: string;
-  sessionId: string;
-  timeZone: string;
-}
-
-export interface ResourceAttributeRequest {
-  description: string;
-  name: string;
-  required: boolean;
-  type: string;
-  default: any;
-}
-
-export interface StartRecoveryRequest {
-  deviceId: string;
-  email: string;
-  preferredMethod: string;
-  userId: string;
-}
-
-export interface RecoveryCodesConfig {
-  codeCount: number;
-  codeLength: number;
-  enabled: boolean;
-  format: string;
-  regenerateCount: number;
-  allowDownload: boolean;
-  allowPrint: boolean;
-  autoRegenerate: boolean;
-}
-
-export interface VideoSessionInfo {
-}
-
-export interface RetentionConfig {
-  archiveBeforePurge: boolean;
-  archivePath: string;
-  enabled: boolean;
-  gracePeriodDays: number;
-  purgeSchedule: string;
-}
-
-export interface StepUpEvaluationResponse {
+  ip: string;
+  security_level: string;
+  user_agent: string;
+  verified_at: string;
+  device_id: string;
   reason: string;
-  required: boolean;
+  session_id: string;
+  metadata: any;
+  org_id: string;
 }
 
-export interface ComplianceReportsResponse {
-  reports: any[];
-}
-
-export interface ForgetDeviceResponse {
-  message: string;
-  success: boolean;
-}
-
-export interface DeleteEntryRequest {
-}
-
-export interface ProvidersConfig {
-  email: EmailProviderConfig;
-  sms: SMSProviderConfig | undefined;
-}
-
-export interface TemplateEngine {
-}
-
-export interface MFAStatus {
-  enabled: boolean;
-  enrolledFactors: FactorInfo[];
-  gracePeriod: string | undefined;
-  policyActive: boolean;
-  requiredCount: number;
-  trustedDevice: boolean;
-}
-
-export interface MemberHandler {
-}
-
-export interface ConsentAuditLogsResponse {
-  audit_logs: any[];
+export interface MFAPolicy {
+  maxFailedAttempts: number;
+  organizationId: string;
+  requiredFactorCount: number;
+  requiredFactorTypes: string[];
+  updatedAt: string;
+  allowedFactorTypes: string[];
+  gracePeriodDays: number;
+  id: string;
+  stepUpRequired: boolean;
+  trustedDeviceDays: number;
+  adaptiveMfaEnabled: boolean;
+  createdAt: string;
+  lockoutDurationMinutes: number;
 }
 
 export interface PolicyPreviewResponse {
@@ -504,595 +94,114 @@ export interface PolicyPreviewResponse {
   resourceType: string;
 }
 
-export interface DeleteContentTypeRequest {
+export interface FactorPriority {
+  [key: string]: any;
 }
 
-export interface GetAPIKeyRequest {
-}
-
-export interface UpdateRecoveryConfigRequest {
-  enabledMethods: string[];
-  minimumStepsRequired: number;
-  requireAdminReview: boolean;
-  requireMultipleSteps: boolean;
-  riskScoreThreshold: number;
-}
-
-export interface UpdatePolicy_req {
-  version: string | undefined;
-  content: string | undefined;
-  status: string | undefined;
-  title: string | undefined;
-}
-
-export interface StepUpVerification {
-  user_agent: string;
+export interface StepUpAuditLog {
   created_at: string;
-  rule_name: string;
-  verified_at: string;
-  ip: string;
-  reason: string;
-  security_level: string;
-  user_id: string;
-  device_id: string;
   id: string;
-  metadata: any;
-  method: string;
   org_id: string;
-  session_id: string;
-  expires_at: string;
-}
-
-export interface CreateAppRequest {
-  [key: string]: any;
-}
-
-export interface UpdateAppRequest {
-}
-
-export interface HealthCheckResponse {
-  message: string;
-  providersStatus: any;
-  version: string;
-  enabledMethods: string[];
-  healthy: boolean;
-}
-
-export interface CancelRecoveryRequest {
-  reason: string;
-  sessionId: string;
-}
-
-export interface ComplianceProfileResponse {
-  id: string;
-}
-
-export interface TOTPFactorAdapter {
-}
-
-export interface BeginRegisterResponse {
-  challenge: string;
-  options: any;
-  timeout: Duration;
-  userId: string;
-}
-
-export interface AccountLockoutError {
-}
-
-export interface DataDeletionRequestInput {
-  deleteSections: string[];
-  reason: string;
-}
-
-export interface DataExportRequest {
-  completedAt: string | undefined;
-  errorMessage: string;
-  format: string;
-  createdAt: string;
-  exportUrl: string;
-  status: string;
-  updatedAt: string;
-  exportPath: string;
-  id: string;
-  includeSections: string[];
-  userId: string;
-  expiresAt: string | undefined;
-  exportSize: number;
-  ipAddress: string;
-  organizationId: string;
-}
-
-export interface UpdateNamespaceRequest {
-  description: string;
-  inheritPlatform: boolean | undefined;
-  name: string;
-}
-
-export interface ConsentPolicy {
-  active: boolean;
-  consentType: string;
-  content: string;
-  createdAt: string;
-  description: string;
-  metadata: Record<string, any>;
-  publishedAt: string | undefined;
-  validityPeriod: number | undefined;
-  name: string;
-  organizationId: string;
-  renewable: boolean;
-  required: boolean;
-  updatedAt: string;
-  version: string;
-  createdBy: string;
-  id: string;
-}
-
-export interface ClientRegistrationRequest {
-  post_logout_redirect_uris: string[];
-  require_pkce: boolean;
-  response_types: string[];
-  application_type: string;
-  client_name: string;
-  policy_uri: string;
-  redirect_uris: string[];
-  trusted_client: boolean;
-  contacts: string[];
-  grant_types: string[];
-  logo_uri: string;
-  scope: string;
-  require_consent: boolean;
-  token_endpoint_auth_method: string;
-  tos_uri: string;
-}
-
-export interface IntrospectionService {
-}
-
-export interface JWKSResponse {
-  keys: JWK[];
-}
-
-export interface ListOrganizationsRequest {
-}
-
-export interface ProviderInfo {
-  createdAt: string;
-  domain: string;
-  providerId: string;
-  type: string;
-}
-
-export interface StatsResponse {
-  active_sessions: number;
-  active_users: number;
-  banned_users: number;
-  timestamp: string;
-  total_sessions: number;
-  total_users: number;
-}
-
-export interface DashboardExtension {
-}
-
-export interface IPWhitelistConfig {
-  enabled: boolean;
-  strict_mode: boolean;
-}
-
-export interface GetSecurityQuestionsResponse {
-  questions: SecurityQuestionInfo[];
-}
-
-export interface UpdatePasskeyResponse {
-  passkeyId: string;
-  updatedAt: string;
-  name: string;
-}
-
-export interface IDTokenClaims {
-  name: string;
-  nonce: string;
-  auth_time: number;
-  email: string;
-  given_name: string;
-  preferred_username: string;
-  session_state: string;
-  email_verified: boolean;
-  family_name: string;
-}
-
-export interface JWKSService {
-}
-
-export interface InviteMemberHandlerRequest {
-}
-
-export interface GetImpersonationRequest {
-}
-
-export interface ConsentManager {
-}
-
-export interface OrganizationHandler {
-}
-
-export interface SchemaValidator {
-  [key: string]: any;
-}
-
-export interface MockSocialAccountRepository {
-  [key: string]: any;
-}
-
-export interface NotificationType {
-  [key: string]: any;
-}
-
-export interface ListSecretsResponse {
-  [key: string]: any;
-}
-
-export interface Repository {
-  [key: string]: any;
-}
-
-export interface NoOpSMSProvider {
-  [key: string]: any;
-}
-
-export interface FactorEnrollmentResponse {
-  provisioningData: any;
-  status: string;
-  type: string;
-  factorId: string;
-}
-
-export interface UpdateConsentRequest {
-  granted: boolean | undefined;
-  metadata: any;
-  reason: string;
-}
-
-export interface ResendNotificationRequest {
-}
-
-export interface BackupAuthVideoResponse {
-  session_id: string;
-}
-
-export interface SessionStatsResponse {
-  activeSessions: number;
-  deviceCount: number;
-  locationCount: number;
-  newestSession: string | undefined;
-  oldestSession: string | undefined;
-  totalSessions: number;
-}
-
-export interface ConsentDecision {
-}
-
-export interface VersioningConfig {
-  autoCleanup: boolean;
-  cleanupInterval: Duration;
-  maxVersions: number;
-  retentionDays: number;
-}
-
-export interface JWTKey {
-  [key: string]: any;
-}
-
-export interface CreateAPIKeyResponse {
-  message: string;
-  api_key: APIKey | undefined;
-}
-
-export interface ComplianceTemplate {
-  mfaRequired: boolean;
-  name: string;
-  passwordMinLength: number;
-  requiredPolicies: string[];
-  standard: string;
-  auditFrequencyDays: number;
-  dataResidency: string;
-  description: string;
-  requiredTraining: string[];
-  retentionDays: number;
-  sessionMaxAge: number;
-}
-
-export interface CreateEvidenceRequest {
-  controlId: string;
-  description: string;
-  evidenceType: string;
-  fileUrl: string;
-  standard: string;
-  title: string;
-}
-
-export interface LimitResult {
-}
-
-export interface LinkResponse {
-  message: string;
-  user: any;
-}
-
-export interface RedisChallengeStore {
-  [key: string]: any;
-}
-
-export interface MockSessionService {
-  [key: string]: any;
-}
-
-export interface RedisStateStore {
-  [key: string]: any;
-}
-
-export interface ActionResponse {
-  name: string;
-  namespaceId: string;
-  createdAt: string;
-  description: string;
-  id: string;
-}
-
-export interface StripeIdentityProvider {
-}
-
-export interface TrustedContact {
-}
-
-export interface VideoSessionResult {
-}
-
-export interface CreatePolicy_req {
-  policyType: string;
-  standard: string;
-  title: string;
-  version: string;
-  content: string;
-}
-
-export interface ListAppsRequest {
-}
-
-export interface ClientAuthenticator {
-}
-
-export interface OIDCLoginRequest {
-  nonce: string;
-  redirectUri: string;
-  scope: string;
-  state: string;
-}
-
-export interface ApproveRecoveryResponse {
-  sessionId: string;
-  approved: boolean;
-  approvedAt: string;
-  message: string;
-}
-
-export interface BackupAuthContactResponse {
-  id: string;
-}
-
-export interface ComplianceViolation {
-  description: string;
-  id: string;
-  profileId: string;
-  resolvedAt: string | undefined;
-  status: string;
-  violationType: string;
-  appId: string;
-  createdAt: string;
-  metadata: any;
-  resolvedBy: string;
-  severity: string;
-  userId: string;
-}
-
-export interface BackupCodeFactorAdapter {
-}
-
-export interface MFASession {
-  metadata: any;
-  verifiedFactors: string[];
-  expiresAt: string;
-  id: string;
-  riskLevel: string;
-  sessionToken: string;
-  userAgent: string;
-  userId: string;
-  completedAt: string | undefined;
-  createdAt: string;
-  factorsRequired: number;
-  factorsVerified: number;
-  ipAddress: string;
-}
-
-export interface ID {
-  [key: string]: any;
-}
-
-export interface AnalyticsSummary {
-  allowedCount: number;
-  cacheHitRate: number;
-  totalEvaluations: number;
-  totalPolicies: number;
-  activePolicies: number;
-  avgLatencyMs: number;
-  deniedCount: number;
-  topPolicies: PolicyStats[];
-  topResourceTypes: ResourceTypeStats[];
-}
-
-export interface ErrorResponse {
-  code: string;
-  details: any;
-  error: string;
-}
-
-export interface RecoveryConfiguration {
-}
-
-export interface ComplianceEvidencesResponse {
-  evidence: any[];
-}
-
-export interface DeleteSecretRequest {
-}
-
-export interface RBACMigrationService {
-  [key: string]: any;
-}
-
-export interface AnalyticsResponse {
-  generatedAt: string;
-  summary: AnalyticsSummary;
-  timeRange: any;
-}
-
-export interface UpdateContentTypeRequest {
-}
-
-export interface GetContentTypeRequest {
-}
-
-export interface RegenerateCodesRequest {
+  user_agent: string;
   user_id: string;
-  count: number;
+  event_data: any;
+  event_type: string;
+  ip: string;
+  severity: string;
 }
 
-export interface RemoveTrustedContactRequest {
-  contactId: string;
+export interface UpdateTeamHandlerRequest {
 }
 
-export interface AppServiceAdapter {
+export interface AuthAutoSendConfig {
+  magic_link: boolean;
+  mfa_code: boolean;
+  password_reset: boolean;
+  verification_email: boolean;
+  welcome: boolean;
+  email_otp: boolean;
 }
 
-export interface ConsentTypeStatus {
-  expiresAt: string | undefined;
-  granted: boolean;
-  grantedAt: string;
-  needsRenewal: boolean;
-  type: string;
-  version: string;
+export interface ListNotificationsHistoryResult {
+  notifications: NotificationHistoryDTO[];
+  pagination: PaginationDTO;
 }
 
-export interface ImpersonationVerifyResponse {
-  impersonator_id: string;
-  is_impersonating: boolean;
-  target_user_id: string;
+export interface TemplateAnalyticsDTO {
+  deliveryRate: number;
+  templateId: string;
+  templateName: string;
+  clickRate: number;
+  openRate: number;
+  totalClicked: number;
+  totalDelivered: number;
+  totalOpened: number;
+  totalSent: number;
 }
 
-export interface TwoFASendOTPResponse {
-  code: string;
-  status: string;
+export interface GetProvidersResult {
+  providers: ProvidersConfigDTO;
 }
 
-export interface RequestTrustedContactVerificationRequest {
-  contactId: string;
-  sessionId: string;
-}
-
-export interface BunRepository {
-}
-
-export interface DeclineInvitationRequest {
-}
-
-export interface RateLimitRule {
-  max: number;
-  window: Duration;
-}
-
-export interface ABTestService {
-  [key: string]: any;
-}
-
-export interface EvaluationContext {
-}
-
-export interface Adapter {
-}
-
-export interface TwoFAErrorResponse {
-  error: string;
-}
-
-export interface RecoverySessionInfo {
-  totalSteps: number;
-  userEmail: string;
-  method: string;
-  riskScore: number;
-  status: string;
-  userId: string;
-  completedAt: string | undefined;
-  createdAt: string;
-  currentStep: number;
-  expiresAt: string;
+export interface ComplianceEvidenceResponse {
   id: string;
-  requiresReview: boolean;
 }
 
-export interface GenerateReport_req {
-  format: string;
-  period: string;
-  reportType: string;
+export interface DiscoveryService {
+}
+
+export interface ClientRegistrationResponse {
+  application_type: string;
+  client_id_issued_at: number;
+  grant_types: string[];
+  response_types: string[];
+  tos_uri: string;
+  client_secret_expires_at: number;
+  scope: string;
+  client_id: string;
+  contacts: string[];
+  policy_uri: string;
+  token_endpoint_auth_method: string;
+  client_name: string;
+  client_secret: string;
+  logo_uri: string;
+  post_logout_redirect_uris: string[];
+  redirect_uris: string[];
+}
+
+export interface ConsentAuditLogsResponse {
+  audit_logs: any[];
+}
+
+export interface StartImpersonationRequest {
+  duration_minutes: number;
+  reason: string;
+  target_user_id: string;
+  ticket_number: string;
+}
+
+export interface SendVerificationCodeResponse {
+  message: string;
+  sent: boolean;
+  expiresAt: string;
+  maskedTarget: string;
+}
+
+export interface IDVerificationResponse {
+  verification: any;
+}
+
+export interface GetOverviewStatsResult {
+  stats: OverviewStatsDTO;
+}
+
+export interface InvitationResponse {
+  invitation: Invitation | undefined;
+  message: string;
+}
+
+export interface CreateProfileFromTemplate_req {
   standard: string;
-}
-
-export interface NotificationProvider {
-  [key: string]: any;
-}
-
-export interface WebAuthnFactorAdapter {
-}
-
-export interface ConsentReport {
-  usersWithConsent: number;
-  completedDeletions: number;
-  consentsByType: any;
-  dpasExpiringSoon: number;
-  organizationId: string;
-  pendingDeletions: number;
-  reportPeriodStart: string;
-  totalUsers: number;
-  consentRate: number;
-  dataExportsThisPeriod: number;
-  dpasActive: number;
-  reportPeriodEnd: string;
-}
-
-export interface MigrateAllResponse {
-  convertedPolicies: PolicyPreviewResponse[];
-  errors: MigrationErrorResponse[];
-  failedPolicies: number;
-  migratedPolicies: number;
-  skippedPolicies: number;
-  completedAt: string;
-  dryRun: boolean;
-  startedAt: string;
-  totalPolicies: number;
-}
-
-export interface GetMigrationStatusRequest {
-  [key: string]: any;
-}
-
-export interface GetTemplateVersionRequest {
-}
-
-export interface APIKey {
-  [key: string]: any;
-}
-
-export interface UnpublishContentTypeRequest {
 }
 
 export interface ListTrustedContactsResponse {
@@ -1100,670 +209,9 @@ export interface ListTrustedContactsResponse {
   count: number;
 }
 
-export interface ImpersonationEndResponse {
-  status: string;
-  ended_at: string;
-}
-
-export interface DiscoveryService {
-}
-
-export interface UpdateProvider_req {
-  config: any;
-  isActive: boolean;
-  isDefault: boolean;
-}
-
-export interface CompleteVideoSessionResponse {
+export interface RevokeSessionResult {
   message: string;
-  result: string;
-  videoSessionId: string;
-  completedAt: string;
-}
-
-export interface GetRecoveryStatsResponse {
-  successRate: number;
-  successfulRecoveries: number;
-  averageRiskScore: number;
-  methodStats: any;
-  pendingRecoveries: number;
-  totalAttempts: number;
-  adminReviewsRequired: number;
-  failedRecoveries: number;
-  highRiskAttempts: number;
-}
-
-export interface CreateSessionHTTPRequest {
-  cancelUrl: string;
-  config: any;
-  metadata: any;
-  provider: string;
-  requiredChecks: string[];
-  successUrl: string;
-}
-
-export interface ComplianceReportResponse {
-  id: string;
-}
-
-export interface GetTeamRequest {
-}
-
-export interface ResourceAttribute {
-  [key: string]: any;
-}
-
-export interface GetTemplateRequest {
-}
-
-export interface VerificationResponse {
-  verification: IdentityVerification | undefined;
-}
-
-export interface IDVerificationWebhookResponse {
-  status: string;
-}
-
-export interface RemoveTeamMemberRequest {
-}
-
-export interface ListPasskeysRequest {
-}
-
-export interface AdminHandler {
-}
-
-export interface FactorPriority {
-  [key: string]: any;
-}
-
-export interface CreateTrainingRequest {
-  standard: string;
-  trainingType: string;
-  userId: string;
-}
-
-export interface ComplianceTrainingResponse {
-  id: string;
-}
-
-export interface EmailServiceAdapter {
-}
-
-export interface Email {
-}
-
-export interface SessionAutoSendConfig {
-  suspicious_login: boolean;
-  all_revoked: boolean;
-  device_removed: boolean;
-  new_device: boolean;
-  new_location: boolean;
-}
-
-export interface CreateUserRequest {
-  username: string;
-  email: string;
-  email_verified: boolean;
-  name: string;
-  role: string;
-  user_organization_id: string | undefined;
-  app_id: string;
-  metadata: any;
-  password: string;
-}
-
-export interface Session {
-  ipAddress?: string;
-  userAgent?: string;
-  createdAt: string;
-  id: string;
-  userId: string;
-  token: string;
-  expiresAt: string;
-}
-
-export interface CreateSessionRequest {
-}
-
-export interface ListUsersRequest {
-  status: string;
-  user_organization_id: string | undefined;
-  app_id: string;
-  limit: number;
-  page: number;
-  role: string;
-  search: string;
-}
-
-export interface ResourceResponse {
-  attributes: ResourceAttribute[];
-  createdAt: string;
-  description: string;
-  id: string;
-  namespaceId: string;
-  type: string;
-}
-
-export interface UpdateFieldRequest {
-}
-
-export interface NotificationErrorResponse {
-  error: string;
-}
-
-export interface DisableRequest {
-  user_id: string;
-}
-
-export interface TwoFAStatusDetailResponse {
-  enabled: boolean;
-  method: string;
-  trusted: boolean;
-}
-
-export interface VerifyTrustedContactResponse {
-  contactId: string;
-  message: string;
-  verified: boolean;
-  verifiedAt: string;
-}
-
-export interface DocumentVerification {
-}
-
-export interface OnfidoConfig {
-  includeWatchlistReport: boolean;
-  workflowId: string;
-  enabled: boolean;
-  facialCheck: FacialCheckConfig;
-  includeFacialReport: boolean;
-  region: string;
-  webhookToken: string;
-  apiToken: string;
-  documentCheck: DocumentCheckConfig;
-  includeDocumentReport: boolean;
-}
-
-export interface ComplianceCheck {
-  evidence: string[];
-  lastCheckedAt: string;
-  nextCheckAt: string;
-  profileId: string;
-  result: any;
-  status: string;
-  appId: string;
-  id: string;
-  checkType: string;
-  createdAt: string;
-}
-
-export interface UpdateMemberRequest {
-  role: string;
-}
-
-export interface ConsentDashboardConfig {
-  enabled: boolean;
-  path: string;
-  showAuditLog: boolean;
-  showConsentHistory: boolean;
-  showCookiePreferences: boolean;
-  showDataDeletion: boolean;
-  showDataExport: boolean;
-  showPolicies: boolean;
-}
-
-export interface ConfigSourceConfig {
-  autoRefresh: boolean;
-  enabled: boolean;
-  prefix: string;
-  priority: number;
-  refreshInterval: Duration;
-}
-
-export interface ContentTypeService {
-  [key: string]: any;
-}
-
-export interface TwoFARepository {
-  [key: string]: any;
-}
-
-export interface ListJWTKeysResponse {
-  [key: string]: any;
-}
-
-export interface ResourceRule {
-  resource_type: string;
-  security_level: string;
-  sensitivity: string;
-  action: string;
-  description: string;
-  org_id: string;
-}
-
-export interface AsyncConfig {
-  retry_enabled: boolean;
-  worker_pool_size: number;
-  enabled: boolean;
-  max_retries: number;
-  persist_failures: boolean;
-  queue_size: number;
-  retry_backoff: string[];
-}
-
-export interface CompleteRecoveryResponse {
-  completedAt: string;
-  message: string;
-  sessionId: string;
-  status: string;
-  token: string;
-}
-
-export interface ComplianceEvidence {
-  collectedBy: string;
-  createdAt: string;
-  description: string;
-  metadata: any;
-  controlId: string;
-  evidenceType: string;
-  fileHash: string;
-  fileUrl: string;
-  id: string;
-  profileId: string;
-  standard: string;
-  title: string;
-  appId: string;
-}
-
-export interface CookieConsentRequest {
-  marketing: boolean;
-  personalization: boolean;
-  sessionId: string;
-  thirdParty: boolean;
-  analytics: boolean;
-  bannerVersion: string;
-  essential: boolean;
-  functional: boolean;
-}
-
-export interface EndImpersonationRequest {
-  reason: string;
-  impersonation_id: string;
-}
-
-export interface TokenIntrospectionRequest {
-  client_id: string;
-  client_secret: string;
-  token: string;
-  token_type_hint: string;
-}
-
-export interface GetOrganizationRequest {
-}
-
-export interface CompleteTraining_req {
-  score: number;
-}
-
-export interface VerifyCodeRequest {
-  sessionId: string;
-  code: string;
-}
-
-export interface RejectRecoveryRequest {
-  notes: string;
-  reason: string;
-  sessionId: string;
-}
-
-export interface ListProfilesFilter {
-  appId: string | undefined;
-  standard: string | undefined;
-  status: string | undefined;
-}
-
-export interface AdminAddProviderRequest {
-  provider: string;
-  scopes: string[];
-  appId: string;
-  clientId: string;
-  clientSecret: string;
-  enabled: boolean;
-}
-
-export interface MemoryStateStore {
-  [key: string]: any;
-}
-
-export interface SecretTreeNode {
-  [key: string]: any;
-}
-
-export interface FactorStatus {
-  [key: string]: any;
-}
-
-export interface AuthAutoSendConfig {
-  password_reset: boolean;
-  verification_email: boolean;
-  welcome: boolean;
-  email_otp: boolean;
-  magic_link: boolean;
-  mfa_code: boolean;
-}
-
-export interface MigrateAllRequest {
-  dryRun: boolean;
-  preserveOriginal: boolean;
-}
-
-export interface ListMembersRequest {
-}
-
-export interface ServiceImpl {
-  [key: string]: any;
-}
-
-export interface CompliancePolicy {
-  appId: string;
-  approvedAt: string | undefined;
-  profileId: string;
-  standard: string;
-  content: string;
-  status: string;
-  title: string;
-  id: string;
-  policyType: string;
-  reviewDate: string;
-  approvedBy: string;
-  createdAt: string;
-  effectiveDate: string;
-  metadata: any;
-  updatedAt: string;
-  version: string;
-}
-
-export interface Config {
-  max_impersonation_duration: Duration;
-  required_role: string;
-  allow_impersonation: boolean;
-  allow_user_creation: boolean;
-  allow_user_deletion: boolean;
-}
-
-export interface CreateEntryRequest {
-}
-
-export interface Middleware {
-}
-
-export interface DefaultProviderRegistry {
-}
-
-export interface StartRecoveryResponse {
-  completedSteps: number;
-  expiresAt: string;
-  requiredSteps: number;
-  requiresReview: boolean;
-  riskScore: number;
-  sessionId: string;
-  status: string;
-  availableMethods: string[];
-}
-
-export interface MultiStepRecoveryConfig {
-  enabled: boolean;
-  highRiskSteps: string[];
-  lowRiskSteps: string[];
-  mediumRiskSteps: string[];
-  minimumSteps: number;
-  sessionExpiry: Duration;
-  allowStepSkip: boolean;
-  allowUserChoice: boolean;
-  requireAdminApproval: boolean;
-}
-
-export interface UpdateMemberHandlerRequest {
-}
-
-export interface CloneContentTypeRequest {
-}
-
-export interface ContinueRecoveryRequest {
-  method: string;
-  sessionId: string;
-}
-
-export interface MembersResponse {
-  members: Member | undefined[];
-  total: number;
-}
-
-export interface DeleteUserRequestDTO {
-}
-
-export interface RevokeSessionRequestDTO {
-}
-
-export interface AuditLogEntry {
-  action: string;
-  appId: string;
-  newValue: any;
-  resourceType: string;
-  userOrganizationId: string | undefined;
-  actorId: string;
-  environmentId: string;
-  id: string;
-  ipAddress: string;
-  oldValue: any;
-  resourceId: string;
-  timestamp: string;
-  userAgent: string;
-}
-
-export interface TwoFABackupCodesResponse {
-  codes: string[];
-}
-
-export interface ComplianceTemplatesResponse {
-  templates: any[];
-}
-
-export interface StepUpRememberedDevice {
-  created_at: string;
-  last_used_at: string;
-  security_level: string;
-  user_agent: string;
-  device_id: string;
-  device_name: string;
-  expires_at: string;
-  id: string;
-  ip: string;
-  org_id: string;
-  remembered_at: string;
-  user_id: string;
-}
-
-export interface DeletePasskeyRequest {
-}
-
-export interface RegisterProviderRequest {
-  attributeMapping: any;
-  oidcIssuer: string;
-  providerId: string;
-  samlCert: string;
-  samlEntryPoint: string;
-  domain: string;
-  oidcClientID: string;
-  oidcClientSecret: string;
-  oidcRedirectURI: string;
-  samlIssuer: string;
-  type: string;
-}
-
-export interface TestPolicyRequest {
-  testCases: TestCase[];
-  actions: string[];
-  expression: string;
-  resourceType: string;
-}
-
-export interface BulkUnpublishRequest {
-  ids: string[];
-}
-
-export interface AdminBlockUser_req {
-  reason: string;
-}
-
-export interface StepUpErrorResponse {
-  error: string;
-}
-
-export interface MockStateStore {
-}
-
-export interface StateStorageConfig {
-  redisDb: number;
-  redisPassword: string;
-  stateTtl: Duration;
-  useRedis: boolean;
-  redisAddr: string;
-}
-
-export interface IdentityVerification {
-  [key: string]: any;
-}
-
-export interface ExtensionRegistry {
-  [key: string]: any;
-}
-
-export interface ContinueRecoveryResponse {
-  method: string;
-  sessionId: string;
-  totalSteps: number;
-  currentStep: number;
-  data: any;
-  expiresAt: string;
-  instructions: string;
-}
-
-export interface MFABypassResponse {
-  reason: string;
-  userId: string;
-  expiresAt: string;
-  id: string;
-}
-
-export interface TwoFARequiredResponse {
-  device_id: string;
-  require_twofa: boolean;
-  user: User | undefined;
-}
-
-export interface OIDCState {
-}
-
-export interface CreateTemplateRequest {
-  [key: string]: any;
-}
-
-export interface GenerateTokenResponse {
-  [key: string]: any;
-}
-
-export interface BulkRequest {
-  ids: string[];
-}
-
-export interface CreateTemplateVersion_req {
-  changes: string;
-}
-
-export interface VerifyAPIKeyRequest {
-  key: string;
-}
-
-export interface AcceptInvitationRequest {
-}
-
-export interface FinishLoginRequest {
-  response: any;
-  remember: boolean;
-}
-
-export interface MockOrganizationUIExtension {
-}
-
-export interface SecretDTO {
-  [key: string]: any;
-}
-
-export interface SendRequest {
-  email: string;
-}
-
-export interface VerifySecurityAnswersRequest {
-  sessionId: string;
-  answers: any;
-}
-
-export interface RiskAssessmentConfig {
-  mediumRiskThreshold: number;
-  newDeviceWeight: number;
-  requireReviewAbove: number;
-  velocityWeight: number;
-  highRiskThreshold: number;
-  historyWeight: number;
-  lowRiskThreshold: number;
-  newIpWeight: number;
-  newLocationWeight: number;
-  blockHighRisk: boolean;
-  enabled: boolean;
-}
-
-export interface AdminBypassRequest {
-  reason: string;
-  userId: string;
-  duration: number;
-}
-
-export interface RiskFactor {
-}
-
-export interface DataDeletionRequest {
-  rejectedAt: string | undefined;
-  retentionExempt: boolean;
-  userId: string;
-  createdAt: string;
-  id: string;
-  status: string;
-  archivePath: string;
-  completedAt: string | undefined;
-  exemptionReason: string;
-  requestReason: string;
-  updatedAt: string;
-  approvedAt: string | undefined;
-  approvedBy: string;
-  errorMessage: string;
-  deleteSections: string[];
-  ipAddress: string;
-  organizationId: string;
-}
-
-export interface JWK {
-  use: string;
-  alg: string;
-  e: string;
-  kid: string;
-  kty: string;
-  n: string;
-}
-
-export interface RiskLevel {
-  [key: string]: any;
+  success: boolean;
 }
 
 export interface BatchEvaluationResult {
@@ -1777,147 +225,252 @@ export interface BatchEvaluationResult {
   policies: string[];
 }
 
+export interface UpdateOrganizationInput {
+  appId: string;
+  logo: string;
+  metadata: any;
+  name: string;
+  orgId: string;
+}
+
+export interface CreateProfileRequest {
+  encryptionAtRest: boolean;
+  encryptionInTransit: boolean;
+  leastPrivilege: boolean;
+  mfaRequired: boolean;
+  passwordRequireLower: boolean;
+  passwordRequireNumber: boolean;
+  rbacRequired: boolean;
+  appId: string;
+  auditLogExport: boolean;
+  complianceContact: string;
+  dataResidency: string;
+  name: string;
+  passwordRequireSymbol: boolean;
+  regularAccessReview: boolean;
+  retentionDays: number;
+  dpoContact: string;
+  metadata: any;
+  sessionIpBinding: boolean;
+  sessionMaxAge: number;
+  standards: string[];
+  detailedAuditTrail: boolean;
+  passwordExpiryDays: number;
+  passwordMinLength: number;
+  passwordRequireUpper: boolean;
+  sessionIdleTimeout: number;
+}
+
+export interface SAMLLoginRequest {
+  relayState: string;
+}
+
 export interface RestoreRevisionRequest {
 }
 
-export interface BackupAuthStatusResponse {
-  status: string;
+export interface RecoveryCodesConfig {
+  enabled: boolean;
+  format: string;
+  regenerateCount: number;
+  allowDownload: boolean;
+  allowPrint: boolean;
+  autoRegenerate: boolean;
+  codeCount: number;
+  codeLength: number;
 }
 
-export interface RejectRecoveryResponse {
-  message: string;
-  reason: string;
-  rejected: boolean;
-  rejectedAt: string;
+export interface StepUpRememberedDevice {
+  remembered_at: string;
+  user_id: string;
+  created_at: string;
+  id: string;
+  security_level: string;
+  user_agent: string;
+  device_id: string;
+  device_name: string;
+  expires_at: string;
+  ip: string;
+  last_used_at: string;
+  org_id: string;
+}
+
+export interface GetRoleTemplatesInput {
+  appId: string;
+}
+
+export interface GetSessionStatsResult {
+  stats: SessionStatsDTO;
+}
+
+export interface BatchEvaluateResponse {
+  successCount: number;
+  totalEvaluations: number;
+  totalTimeMs: number;
+  failureCount: number;
+  results: BatchEvaluationResult | undefined[];
+}
+
+export interface ProviderSessionRequest {
+}
+
+export interface WebhookPayload {
+}
+
+export interface ActionResponse {
+  id: string;
+  name: string;
+  namespaceId: string;
+  createdAt: string;
+  description: string;
+}
+
+export interface LinkRequest {
+  email: string;
+  name: string;
+  password: string;
+}
+
+export interface Webhook {
+  createdAt: string;
+  id: string;
+  organizationId: string;
+  url: string;
+  events: string[];
+  secret: string;
+  enabled: boolean;
+}
+
+export interface ListImpersonationsRequest {
+}
+
+export interface RequestTrustedContactVerificationRequest {
+  contactId: string;
   sessionId: string;
 }
 
-export interface RecoveryAttemptLog {
+export interface RevokeTrustedDeviceRequest {
 }
 
-export interface GetFactorRequest {
+export interface CreateVerificationSession_req {
+  cancelUrl: string;
+  config: any;
+  metadata: any;
+  provider: string;
+  requiredChecks: string[];
+  successUrl: string;
 }
 
-export interface GetChallengeStatusResponse {
-  attempts: number;
-  availableFactors: FactorInfo[];
-  challengeId: string;
-  factorsRequired: number;
-  factorsVerified: number;
-  maxAttempts: number;
-  status: string;
+export interface ListEntriesRequest {
 }
 
-export interface BeginLoginRequest {
+export interface MockEmailService {
+  [key: string]: any;
+}
+
+export interface StartVideoSessionResponse {
+  expiresAt: string;
+  message: string;
+  sessionUrl: string;
+  startedAt: string;
+  videoSessionId: string;
+}
+
+export interface GenerateTokenRequest {
+  permissions: string[];
+  scopes: string[];
+  sessionId: string;
+  tokenType: string;
   userId: string;
-  userVerification: string;
+  audience: string[];
+  expiresIn: Duration;
+  metadata: any;
 }
 
-export interface Invitation {
+export interface CreateSessionHTTPRequest {
+  config: any;
+  metadata: any;
+  provider: string;
+  requiredChecks: string[];
+  successUrl: string;
+  cancelUrl: string;
+}
+
+export interface ResourceAttribute {
   [key: string]: any;
 }
 
-export interface SocialAccount {
-  [key: string]: any;
+export interface GetInvitationRequest {
 }
 
-export interface CreateUserRequestDTO {
-  email_verified: boolean;
+export interface GetImpersonationRequest {
+}
+
+export interface ContinueRecoveryRequest {
+  method: string;
+  sessionId: string;
+}
+
+export interface DeleteSecretInput {
+  appId: string;
+  secretId: string;
+}
+
+export interface DefaultProviderRegistry {
+}
+
+export interface DevicesResponse {
+  count: number;
+  devices: any;
+}
+
+export interface ResetUserMFARequest {
+  reason: string;
+}
+
+export interface ConsentsResponse {
+  consents: any;
+  count: number;
+}
+
+export interface StepUpPolicy {
+  org_id: string;
+  user_id: string;
+  description: string;
+  priority: number;
+  rules: any;
+  updated_at: string;
+  created_at: string;
+  enabled: boolean;
+  id: string;
   metadata: any;
   name: string;
-  password: string;
-  role: string;
-  username: string;
-  email: string;
 }
 
-export interface SessionStats {
+export interface DeleteRoleTemplateResult {
+  success: boolean;
 }
 
-export interface ConsentStatusResponse {
+export interface GetRolesRequest {
+}
+
+export interface ResolveViolationRequest {
+  notes: string;
+  resolution: string;
+}
+
+export interface FinishRegisterResponse {
+  passkeyId: string;
   status: string;
+  createdAt: string;
+  credentialId: string;
+  name: string;
 }
 
-export interface ConsentStats {
-  type: string;
-  averageLifetime: number;
-  expiredCount: number;
-  grantRate: number;
-  grantedCount: number;
-  revokedCount: number;
-  totalConsents: number;
+export interface SendCodeRequest {
+  phone: string;
 }
 
-export interface CreateConsentRequest {
-  expiresIn: number | undefined;
-  granted: boolean;
-  metadata: any;
-  purpose: string;
-  userId: string;
-  version: string;
-  consentType: string;
-}
-
-export interface ContentEntryService {
-  [key: string]: any;
-}
-
-export interface ChallengeStatus {
-  [key: string]: any;
-}
-
-export interface MockAppService {
-  [key: string]: any;
-}
-
-export interface RiskAssessment {
-  factors: string[];
-  level: string;
-  metadata: any;
-  recommended: string[];
-  score: number;
-}
-
-export interface AppHandler {
-}
-
-export interface ChallengeSession {
-}
-
-export interface ListSessionsRequestDTO {
-}
-
-export interface PhoneVerifyResponse {
-  session: Session | undefined;
-  token: string;
-  user: User | undefined;
-}
-
-export interface Duration {
-  [key: string]: any;
-}
-
-export interface OrganizationAction {
-  [key: string]: any;
-}
-
-export interface StripeIdentityConfig {
-  requireMatchingSelfie: boolean;
-  returnUrl: string;
-  useMock: boolean;
-  webhookSecret: string;
-  allowedTypes: string[];
-  apiKey: string;
-  enabled: boolean;
-  requireLiveCapture: boolean;
-}
-
-export interface NotificationTemplateResponse {
-  template: any;
-}
-
-export interface CreateProfileFromTemplate_req {
-  standard: string;
+export interface UpdateContentTypeRequest {
 }
 
 export interface VerifyEnrolledFactorRequest {
@@ -1925,69 +478,67 @@ export interface VerifyEnrolledFactorRequest {
   data: any;
 }
 
-export interface ListFactorsRequest {
+export interface GenerateReport_req {
+  reportType: string;
+  standard: string;
+  format: string;
+  period: string;
 }
 
-export interface PrivacySettings {
-  allowDataPortability: boolean;
-  contactEmail: string;
-  dataExportExpiryHours: number;
-  dataRetentionDays: number;
-  metadata: Record<string, any>;
-  organizationId: string;
-  requireExplicitConsent: boolean;
-  anonymousConsentEnabled: boolean;
-  autoDeleteAfterDays: number;
-  consentRequired: boolean;
-  cookieConsentStyle: string;
-  dpoEmail: string;
-  exportFormat: string[];
-  id: string;
-  contactPhone: string;
-  cookieConsentEnabled: boolean;
-  requireAdminApprovalForDeletion: boolean;
-  ccpaMode: boolean;
-  createdAt: string;
-  deletionGracePeriodDays: number;
-  gdprMode: boolean;
-  updatedAt: string;
-}
-
-export interface ImpersonationContext {
-  impersonator_id: string | undefined;
-  indicator_message: string;
-  is_impersonating: boolean;
-  target_user_id: string | undefined;
-  impersonation_id: string | undefined;
-}
-
-export interface UserVerificationStatus {
+export interface SecretTreeNode {
   [key: string]: any;
 }
 
-export interface VerificationListResponse {
-  verifications: IdentityVerification | undefined[];
-  limit: number;
-  offset: number;
-  total: number;
+export interface RecoveryCodeUsage {
 }
 
-export interface NotificationResponse {
-  notification: any;
+export interface LimitResult {
 }
 
-export interface SecurityQuestionsConfig {
-  predefinedQuestions: string[];
-  requiredToRecover: number;
-  enabled: boolean;
-  forbidCommonAnswers: boolean;
-  lockoutDuration: Duration;
-  maxAnswerLength: number;
-  minimumQuestions: number;
-  requireMinLength: number;
-  allowCustomQuestions: boolean;
-  caseSensitive: boolean;
-  maxAttempts: number;
+export interface CreateEvidenceRequest {
+  evidenceType: string;
+  fileUrl: string;
+  standard: string;
+  title: string;
+  controlId: string;
+  description: string;
+}
+
+export interface ComplianceStatusResponse {
+  status: string;
+}
+
+export interface ListAppsRequest {
+}
+
+export interface DeleteContentTypeRequest {
+}
+
+export interface ListFactorsResponse {
+  count: number;
+  factors: Factor[];
+}
+
+export interface UpdateRoleTemplateResult {
+  template: RoleTemplateDTO;
+}
+
+export interface TemplateDTO {
+  variables: string[];
+  body: string;
+  isDefault: boolean;
+  templateKey: string;
+  id: string;
+  isModified: boolean;
+  name: string;
+  active: boolean;
+  appId: string;
+  createdAt: string;
+  metadata: any;
+  subject: string;
+  updatedAt: string;
+  language: string;
+  type: string;
 }
 
 export interface UpdateProfileRequest {
@@ -1997,977 +548,236 @@ export interface UpdateProfileRequest {
   status: string | undefined;
 }
 
-export interface StepUpDevicesResponse {
-  devices: any;
-  count: number;
-}
-
-export interface EmailConfig {
-  enabled: boolean;
-  provider: string;
-  rate_limit: RateLimitConfig | undefined;
-  template_id: string;
-  code_expiry_minutes: number;
-  code_length: number;
-}
-
-export interface TeamsResponse {
-  teams: Team | undefined[];
-  total: number;
-}
-
-export interface SetUserRoleRequest {
-  app_id: string;
-  role: string;
-  user_id: string;
-  user_organization_id: string | undefined;
-}
-
-export interface BatchEvaluateRequest {
-  requests: EvaluateRequest[];
-}
-
-export interface RenderTemplateRequest {
-}
-
-export interface WebAuthnWrapper {
-}
-
-export interface MigrationResponse {
-  status: string;
-  message: string;
-  migrationId: string;
-  startedAt: string;
-}
-
-export interface TemplatesListResponse {
-  categories: string[];
-  templates: TemplateResponse | undefined[];
-  totalCount: number;
-}
-
-export interface CompareRevisionsRequest {
-}
-
-export interface ContextRule {
-  condition: string;
-  description: string;
-  name: string;
-  org_id: string;
-  security_level: string;
-}
-
-export interface AdminPolicyRequest {
-  allowedTypes: string[];
-  enabled: boolean;
-  gracePeriod: number;
-  requiredFactors: number;
-}
-
-export interface ConsentReportResponse {
-  id: string;
-}
-
-export interface ConsentSettingsResponse {
-  settings: any;
-}
-
-export interface Webhook {
-  events: string[];
-  secret: string;
-  enabled: boolean;
-  createdAt: string;
-  id: string;
-  organizationId: string;
-  url: string;
-}
-
-export interface ComplianceTraining {
-  standard: string;
-  userId: string;
-  appId: string;
-  createdAt: string;
-  expiresAt: string | undefined;
-  id: string;
-  metadata: any;
-  score: number;
-  status: string;
-  trainingType: string;
-  completedAt: string | undefined;
-  profileId: string;
-}
-
-export interface ResetUserMFAResponse {
-  message: string;
-  success: boolean;
-  devicesRevoked: number;
-  factorsReset: number;
-}
-
-export interface FactorEnrollmentRequest {
-  metadata: any;
-  name: string;
-  priority: string;
-  type: string;
-}
-
-export interface ClientUpdateRequest {
-  trusted_client: boolean | undefined;
-  allowed_scopes: string[];
-  name: string;
-  policy_uri: string;
-  post_logout_redirect_uris: string[];
-  redirect_uris: string[];
-  require_consent: boolean | undefined;
-  response_types: string[];
-  token_endpoint_auth_method: string;
-  contacts: string[];
-  grant_types: string[];
-  logo_uri: string;
-  require_pkce: boolean | undefined;
-  tos_uri: string;
-}
-
-export interface TeamsListResponse {
-  [key: string]: any;
-}
-
-export interface EvaluateRequest {
-  context: any;
-  principal: any;
-  request: any;
-  resource: any;
-  resourceId: string;
-  resourceType: string;
-  action: string;
-}
-
-export interface PoliciesListResponse {
-  page: number;
-  pageSize: number;
-  policies: PolicyResponse | undefined[];
-  totalCount: number;
-}
-
-export interface TestProvider_req {
-  providerType: string;
-  testRecipient: string;
-  providerName: string;
-}
-
-export interface SignUpRequest {
-  username: string;
-  password: string;
-}
-
-export interface CreateOrganizationHandlerRequest {
-  [key: string]: any;
-}
-
-export interface ProviderListResponse {
-  providers: ProviderInfo[];
-  total: number;
-}
-
-export interface CreateJWTKeyRequest {
-  algorithm: string;
-  curve: string;
-  expiresAt: string | undefined;
-  isPlatformKey: boolean;
-  keyType: string;
-  metadata: any;
-}
-
-export interface StatsDTO {
-  [key: string]: any;
-}
-
-export interface ResourceTypeStats {
-  evaluationCount: number;
-  resourceType: string;
-  allowRate: number;
-  avgLatencyMs: number;
-}
-
-export interface MigrateRolesRequest {
-  dryRun: boolean;
-}
-
-export interface CheckRegistry {
-}
-
-export interface AuditEvent {
-}
-
-export interface StepUpVerificationsResponse {
-  verifications: any[];
-}
-
-export interface UpdateOrganizationHandlerRequest {
-}
-
-export interface CallbackDataResponse {
-  user: User | undefined;
-  action: string;
-  isNewUser: boolean;
-}
-
-export interface SuccessResponse {
-  data: any;
-  message: string;
-}
-
-export interface UnassignRoleRequest {
-}
-
-export interface ListTrustedDevicesResponse {
-  count: number;
-  devices: TrustedDevice[];
-}
-
-export interface TokenRequest {
-  redirect_uri: string;
-  refresh_token: string;
-  audience: string;
-  client_id: string;
-  code_verifier: string;
-  grant_type: string;
-  scope: string;
-  client_secret: string;
-  code: string;
-}
-
-export interface ProviderConfig {
-  [key: string]: any;
-}
-
-export interface QueryEntriesRequest {
-}
-
-export interface PolicyEngine {
-}
-
-export interface ComplianceCheckResponse {
-  id: string;
-}
-
-export interface ListFactorsResponse {
-  count: number;
-  factors: Factor[];
-}
-
-export interface TeamHandler {
-}
-
-export interface FinishRegisterRequest {
-  name: string;
-  response: any;
-  userId: string;
-}
-
-export interface StartImpersonationRequest {
-  target_user_id: string;
-  ticket_number: string;
-  duration_minutes: number;
-  reason: string;
-}
-
-export interface VideoVerificationConfig {
-  provider: string;
-  recordSessions: boolean;
-  recordingRetention: Duration;
-  requireLivenessCheck: boolean;
-  livenessThreshold: number;
-  requireAdminReview: boolean;
-  requireScheduling: boolean;
-  sessionDuration: Duration;
-  enabled: boolean;
-  minScheduleAdvance: Duration;
-}
-
-export interface CompleteTrainingRequest {
-  score: number;
-}
-
-export interface ComplianceViolationResponse {
-  id: string;
-}
-
-export interface AddTeamMemberRequest {
-  member_id: string;
-}
-
-export interface Document {
-  [key: string]: any;
-}
-
-export interface RecoveryStatus {
-  [key: string]: any;
-}
-
-export interface MultitenancyStatusResponse {
-  [key: string]: any;
-}
-
-export interface ChannelsResponse {
-  channels: any;
-  count: number;
-}
-
-export interface CreateProfileFromTemplateRequest {
-  standard: string;
-}
-
-export interface StepUpPoliciesResponse {
-  policies: any[];
-}
-
-export interface ChallengeRequest {
-  context: string;
-  factorTypes: string[];
-  metadata: any;
-  userId: string;
-}
-
-export interface FactorType {
-  [key: string]: any;
-}
-
-export interface SaveNotificationSettings_req {
-  cleanupAfter: string;
-  retryAttempts: number;
-  retryDelay: string;
-  autoSendWelcome: boolean;
-}
-
-export interface RecoveryCodeUsage {
-}
-
-export interface ApproveRecoveryRequest {
-  sessionId: string;
-  notes: string;
-}
-
-export interface ComplianceUserTrainingResponse {
-  user_id: string;
-}
-
-export interface StepUpRequirement {
-  currency: string;
-  id: string;
-  org_id: string;
-  required_level: string;
-  risk_score: number;
-  route: string;
-  rule_name: string;
-  method: string;
-  reason: string;
-  resource_action: string;
-  session_id: string;
-  status: string;
-  user_agent: string;
-  amount: number;
-  fulfilled_at: string | undefined;
-  challenge_token: string;
-  current_level: string;
-  expires_at: string;
-  ip: string;
-  metadata: any;
-  resource_type: string;
-  user_id: string;
-  created_at: string;
-}
-
-export interface BeginRegisterRequest {
-  userId: string;
-  userVerification: string;
-  authenticatorType: string;
-  name: string;
-  requireResidentKey: boolean;
-}
-
-export interface KeyPair {
-}
-
-export interface ServiceInterface {
-  [key: string]: any;
-}
-
-export interface UpdatePolicyRequest {
-  name: string;
-  priority: number;
-  resourceType: string;
-  actions: string[];
-  description: string;
-  enabled: boolean | undefined;
-  expression: string;
-}
-
-export interface MigrationErrorResponse {
-  error: string;
-  policyIndex: number;
-  resource: string;
-  subject: string;
-}
-
 export interface VerifyRecoveryCodeRequest {
   code: string;
   sessionId: string;
 }
 
-export interface ListRecoverySessionsRequest {
-  status: string;
-  organizationId: string;
+export interface GetTeamsInput {
+  orgId: string;
   page: number;
-  pageSize: number;
-  requiresReview: boolean;
+  search: string;
+  appId: string;
+  limit: number;
 }
 
-export interface ListJWTKeysRequest {
-}
-
-export interface UserServiceAdapter {
-}
-
-export interface AdaptiveMFAConfig {
-  new_device_risk: number;
-  risk_threshold: number;
-  velocity_risk: number;
-  enabled: boolean;
-  factor_location_change: boolean;
-  require_step_up_threshold: number;
-  factor_ip_reputation: boolean;
-  factor_new_device: boolean;
-  factor_velocity: boolean;
-  location_change_risk: number;
-}
-
-export interface IdentityVerificationSession {
-  [key: string]: any;
-}
-
-export interface Organization {
-  [key: string]: any;
-}
-
-export interface SMSProviderConfig {
-  config: any;
-  from: string;
-  provider: string;
-}
-
-export interface ComplianceTrainingsResponse {
-  training: any[];
-}
-
-export interface ComplianceEvidenceResponse {
+export interface SecurityQuestionInfo {
   id: string;
+  isCustom: boolean;
+  questionId: number;
+  questionText: string;
 }
 
-export interface RouteRule {
-  description: string;
-  method: string;
-  org_id: string;
-  pattern: string;
-  security_level: string;
+export interface InviteMemberResult {
+  invitation: InvitationDTO;
 }
 
-export interface DeleteAppRequest {
+export interface PreviewTemplate_req {
+  variables: any;
 }
 
-export interface KeyStore {
+export interface MigrateAllRequest {
+  dryRun: boolean;
+  preserveOriginal: boolean;
 }
 
-export interface ImpersonateUserRequest {
-  app_id: string;
-  duration: Duration;
+export interface AuditEvent {
+}
+
+export interface RateLimitConfig {
+  redisAddr: string;
+  sendCodePerPhone: RateLimitRule;
+  useRedis: boolean;
+  verifyPerIp: RateLimitRule;
+  verifyPerPhone: RateLimitRule;
+  enabled: boolean;
+  redisDb: number;
+  redisPassword: string;
+  sendCodePerIp: RateLimitRule;
+}
+
+export interface ApproveRecoveryRequest {
+  notes: string;
+  sessionId: string;
+}
+
+export interface CompleteVideoSessionRequest {
+  notes: string;
+  verificationResult: string;
+  videoSessionId: string;
+  livenessPassed: boolean;
+  livenessScore: number;
+}
+
+export interface SetUserRoleRequest {
+  role: string;
   user_id: string;
   user_organization_id: string | undefined;
-}
-
-export interface ValidatePolicyRequest {
-  expression: string;
-  resourceType: string;
-}
-
-export interface DashboardConfig {
-  showReports: boolean;
-  showScore: boolean;
-  showViolations: boolean;
-  enabled: boolean;
-  path: string;
-  showRecentChecks: boolean;
-}
-
-export interface MultiSessionErrorResponse {
-  error: string;
-}
-
-export interface ConsentPolicyResponse {
-  id: string;
-}
-
-export interface GetAuditLogsRequestDTO {
-}
-
-export interface UnpublishEntryRequest {
-}
-
-export interface UnblockUserRequest {
-  [key: string]: any;
-}
-
-export interface TwoFAStatusResponse {
-  enabled: boolean;
-  method: string;
-  trusted: boolean;
-}
-
-export interface EnableRequest2FA {
-  method: string;
-  user_id: string;
-}
-
-export interface FactorInfo {
-  type: string;
-  factorId: string;
-  metadata: any;
-  name: string;
-}
-
-export interface UserAdapter {
-}
-
-export interface TokenIntrospectionResponse {
-  active: boolean;
-  aud: string[];
-  client_id: string;
-  exp: number;
-  iat: number;
-  scope: string;
-  token_type: string;
-  iss: string;
-  jti: string;
-  nbf: number;
-  sub: string;
-  username: string;
-}
-
-export interface GetMigrationStatusResponse {
-  hasMigratedPolicies: boolean;
-  lastMigrationAt: string;
-  migratedCount: number;
-  pendingRbacPolicies: number;
-}
-
-export interface CreateVerificationSession_req {
-  config: any;
-  metadata: any;
-  provider: string;
-  requiredChecks: string[];
-  successUrl: string;
-  cancelUrl: string;
-}
-
-export interface SaveBuilderTemplate_req {
-  document: Document;
-  name: string;
-  subject: string;
-  templateId?: string;
-  templateKey: string;
-}
-
-export interface BackupAuthRecoveryResponse {
-  session_id: string;
-}
-
-export interface TrustDeviceRequest {
-  name: string;
-  deviceId: string;
-  metadata: any;
-}
-
-export interface JWTService {
-}
-
-export interface GenerateTokenRequest {
-  userId: string;
-  audience: string[];
-  expiresIn: Duration;
-  metadata: any;
-  permissions: string[];
-  scopes: string[];
-  sessionId: string;
-  tokenType: string;
-}
-
-export interface Member {
-  [key: string]: any;
-}
-
-export interface NamespacesListResponse {
-  namespaces: NamespaceResponse | undefined[];
-  totalCount: number;
-}
-
-export interface DeviceInfo {
-  deviceId: string;
-  metadata: any;
-  name: string;
-}
-
-export interface FactorsResponse {
-  count: number;
-  factors: any;
-}
-
-export interface UpdateMemberRoleRequest {
-  role: string;
-}
-
-export interface FuncMap {
-  [key: string]: any;
-}
-
-export interface IDVerificationStatusResponse {
-  status: any;
-}
-
-export interface GetStatusRequest {
-  device_id: string;
-  user_id: string;
-}
-
-export interface EnableRequest {
-}
-
-export interface ComplianceReport {
-  expiresAt: string;
-  fileSize: number;
-  fileUrl: string;
-  format: string;
-  generatedBy: string;
-  reportType: string;
-  standard: string;
-  status: string;
-  appId: string;
-  createdAt: string;
-  id: string;
-  period: string;
-  profileId: string;
-  summary: any;
-}
-
-export interface VerificationRequest {
-  challengeId: string;
-  code: string;
-  data: any;
-  deviceInfo: DeviceInfo | undefined;
-  factorId: string;
-  rememberDevice: boolean;
-}
-
-export interface GetEntryStatsRequest {
-}
-
-export interface CreateABTestVariant_req {
-  weight: number;
-  body: string;
-  name: string;
-  subject: string;
-}
-
-export interface ListContentTypesRequest {
-}
-
-export interface BackupAuthSessionsResponse {
-  sessions: any[];
-}
-
-export interface PasskeyInfo {
-  createdAt: string;
-  aaguid: string;
-  credentialId: string;
-  id: string;
-  isResidentKey: boolean;
-  lastUsedAt: string | undefined;
-  name: string;
-  signCount: number;
-  authenticatorType: string;
-}
-
-export interface MemoryChallengeStore {
-}
-
-export interface UpdateTeamHandlerRequest {
-}
-
-export interface DeleteFieldRequest {
-}
-
-export interface VerificationResult {
-}
-
-export interface VerifyTrustedContactRequest {
-  token: string;
-}
-
-export interface SecurityQuestion {
-}
-
-export interface BackupAuthQuestionsResponse {
-  questions: string[];
-}
-
-export interface SessionTokenResponse {
-  session: Session | undefined;
-  token: string;
-}
-
-export interface ProviderRegistry {
-  [key: string]: any;
-}
-
-export interface IDVerificationSessionResponse {
-  session: any;
-}
-
-export interface CodesResponse {
-  codes: string[];
-}
-
-export interface TimeBasedRule {
-  org_id: string;
-  security_level: string;
-  description: string;
-  max_age: Duration;
-  operation: string;
-}
-
-export interface StepUpPolicy {
-  created_at: string;
-  description: string;
-  metadata: any;
-  name: string;
-  org_id: string;
-  priority: number;
-  rules: any;
-  updated_at: string;
-  enabled: boolean;
-  id: string;
-  user_id: string;
-}
-
-export interface WebAuthnConfig {
-  attestation_preference: string;
-  authenticator_selection: any;
-  enabled: boolean;
-  rp_display_name: string;
-  rp_id: string;
-  rp_origins: string[];
-  timeout: number;
-}
-
-export interface AccountLockedResponse {
-  code: string;
-  locked_minutes: number;
-  locked_until: string;
-  message: string;
-}
-
-export interface BatchEvaluateResponse {
-  failureCount: number;
-  results: BatchEvaluationResult | undefined[];
-  successCount: number;
-  totalEvaluations: number;
-  totalTimeMs: number;
-}
-
-export interface UserInfoResponse {
-  gender: string;
-  locale: string;
-  nickname: string;
-  profile: string;
-  zoneinfo: string;
-  name: string;
-  preferred_username: string;
-  website: string;
-  phone_number_verified: boolean;
-  picture: string;
-  email: string;
-  family_name: string;
-  given_name: string;
-  phone_number: string;
-  updated_at: number;
-  email_verified: boolean;
-  middle_name: string;
-  sub: string;
-  birthdate: string;
-}
-
-export interface GetValueRequest {
-}
-
-export interface Credential {
-  [key: string]: any;
+  app_id: string;
 }
 
 export interface CreateFieldRequest {
   [key: string]: any;
 }
 
-export interface UpdateEntryRequest {
+export interface PreviewTemplateRequest {
 }
 
-export interface CheckResult {
-  error: Error;
-  evidence: string[];
-  result: any;
-  score: number;
-  status: string;
-  checkType: string;
+export interface RolesResponse {
+  roles: Role | undefined[];
 }
 
-export interface StepUpPolicyResponse {
-  id: string;
+export interface TeamHandler {
 }
 
-export interface Factor {
-  status: string;
-  type: string;
-  updatedAt: string;
-  userId: string;
-  createdAt: string;
-  expiresAt: string | undefined;
-  id: string;
-  lastUsedAt: string | undefined;
-  name: string;
-  priority: string;
-  verifiedAt: string | undefined;
-  metadata: any;
-}
-
-export interface ListTeamsRequest {
-}
-
-export interface ProvidersResponse {
-  providers: string[];
-}
-
-export interface ComplianceStatus {
-  checksWarning: number;
-  nextAudit: string;
-  profileId: string;
-  standard: string;
-  lastChecked: string;
-  overallStatus: string;
-  score: number;
-  violations: number;
-  appId: string;
-  checksFailed: number;
-  checksPassed: number;
-}
-
-export interface SignInResponse {
-  session: any;
-  token: string;
-  user: any;
-}
-
-export interface SSOAuthResponse {
+export interface CallbackResponse {
+  session: Session | undefined;
   token: string;
   user: User | undefined;
-  session: Session | undefined;
 }
 
-export interface SendResponse {
-  devToken: string;
-  status: string;
+export interface ConsentSettingsResponse {
+  settings: any;
 }
 
-export interface CheckMetadata {
-  autoRun: boolean;
-  category: string;
+export interface StepUpVerificationResponse {
+  expires_at: string;
+  verified: boolean;
+}
+
+export interface AccountLockoutError {
+}
+
+export interface VerificationSessionResponse {
+  session: IdentityVerificationSession | undefined;
+}
+
+export interface AsyncConfig {
+  persist_failures: boolean;
+  queue_size: number;
+  retry_backoff: string[];
+  retry_enabled: boolean;
+  worker_pool_size: number;
+  enabled: boolean;
+  max_retries: number;
+}
+
+export interface Invitation {
+  [key: string]: any;
+}
+
+export interface ResendRequest {
+  email: string;
+}
+
+export interface OIDCState {
+}
+
+export interface AuditLogEntry {
+  actorId: string;
+  appId: string;
+  id: string;
+  resourceType: string;
+  timestamp: string;
+  userAgent: string;
+  userOrganizationId: string | undefined;
+  action: string;
+  environmentId: string;
+  ipAddress: string;
+  newValue: any;
+  oldValue: any;
+  resourceId: string;
+}
+
+export interface ListAPIKeysRequest {
+}
+
+export interface ContinueRecoveryResponse {
+  method: string;
+  sessionId: string;
+  totalSteps: number;
+  currentStep: number;
+  data: any;
+  expiresAt: string;
+  instructions: string;
+}
+
+export interface UpdateRoleTemplateInput {
+  appId: string;
   description: string;
   name: string;
-  severity: string;
-  standards: string[];
+  permissions: string[];
+  templateId: string;
 }
 
-export interface StepUpAttempt {
-  created_at: string;
-  id: string;
-  ip: string;
-  method: string;
-  failure_reason: string;
-  org_id: string;
-  requirement_id: string;
-  success: boolean;
-  user_agent: string;
-  user_id: string;
-}
-
-export interface GetSecretRequest {
-}
-
-export interface ListEntriesRequest {
-}
-
-export interface CompliancePoliciesResponse {
-  policies: any[];
-}
-
-export interface InitiateChallengeRequest {
-  context: string;
-  factorTypes: string[];
-  metadata: any;
-}
-
-export interface AddMemberRequest {
-  role: string;
-  user_id: string;
-}
-
-export interface ConsentNotificationsConfig {
-  channels: string[];
-  notifyDeletionComplete: boolean;
-  notifyOnRevoke: boolean;
+export interface AutoCleanupConfig {
+  interval: Duration;
   enabled: boolean;
-  notifyDeletionApproved: boolean;
-  notifyDpoEmail: string;
-  notifyExportReady: boolean;
-  notifyOnExpiry: boolean;
-  notifyOnGrant: boolean;
 }
 
-export interface MFARepository {
-  [key: string]: any;
+export interface FinishLoginRequest {
+  remember: boolean;
+  response: any;
 }
 
-export interface RevealValueResponse {
-  [key: string]: any;
+export interface ContentTypeHandler {
 }
 
-export interface DeleteAPIKeyRequest {
+export interface ReviewDocumentRequest {
+  notes: string;
+  rejectionReason: string;
+  approved: boolean;
+  documentId: string;
 }
 
-export interface NoOpEmailProvider {
-  [key: string]: any;
+export interface AuthURLResponse {
+  url: string;
 }
 
-export interface StepUpRequirementResponse {
+export interface PrivacySettings {
   id: string;
+  metadata: Record<string, any>;
+  requireAdminApprovalForDeletion: boolean;
+  updatedAt: string;
+  allowDataPortability: boolean;
+  autoDeleteAfterDays: number;
+  contactPhone: string;
+  dpoEmail: string;
+  gdprMode: boolean;
+  organizationId: string;
+  ccpaMode: boolean;
+  consentRequired: boolean;
+  contactEmail: string;
+  cookieConsentStyle: string;
+  dataExportExpiryHours: number;
+  deletionGracePeriodDays: number;
+  exportFormat: string[];
+  requireExplicitConsent: boolean;
+  anonymousConsentEnabled: boolean;
+  cookieConsentEnabled: boolean;
+  createdAt: string;
+  dataRetentionDays: number;
 }
 
-export interface UpdateFactorRequest {
-  metadata: any;
-  name: string | undefined;
-  priority: string | undefined;
-  status: string | undefined;
+export interface IDVerificationListResponse {
+  verifications: any[];
 }
 
-export interface RollbackRequest {
-  reason: string;
+export interface CreateResourceRequest {
+  attributes: ResourceAttributeRequest[];
+  description: string;
+  namespaceId: string;
+  type: string;
+}
+
+export interface VersioningConfig {
+  retentionDays: number;
+  autoCleanup: boolean;
+  cleanupInterval: Duration;
+  maxVersions: number;
+}
+
+export interface GetEntryRequest {
 }
 
 export interface ListSessionsResponse {
@@ -2978,113 +788,668 @@ export interface ListSessionsResponse {
   total_pages: number;
 }
 
-export interface ArchiveEntryRequest {
-}
-
-export interface ListRevisionsRequest {
-}
-
-export interface BackupAuthCodesResponse {
-  codes: string[];
-}
-
-export interface CompliancePolicyResponse {
-  id: string;
-}
-
-export interface MFAConfigResponse {
-  allowed_factor_types: string[];
-  enabled: boolean;
-  required_factor_count: number;
-}
-
-export interface DeleteFactorRequest {
-}
-
-export interface RetryService {
+export interface Authsome {
   [key: string]: any;
 }
 
-export interface ImpersonateUserRequestDTO {
-  duration: Duration;
+export interface UploadDocumentRequest {
+  backImage: string;
+  documentType: string;
+  frontImage: string;
+  selfie: string;
+  sessionId: string;
 }
 
-export interface User {
-  createdAt: string;
-  updatedAt: string;
-  organizationId?: string;
-  id: string;
-  email: string;
-  name?: string;
-  emailVerified: boolean;
+export interface TOTPSecret {
 }
 
-export interface VerifyResponse {
-  user: User | undefined;
-  session: Session | undefined;
-  success: boolean;
+export interface GetFactorRequest {
+}
+
+export interface ListTrainingFilter {
+  appId: string | undefined;
+  profileId: string | undefined;
+  standard: string | undefined;
+  status: string | undefined;
+  trainingType: string | undefined;
+  userId: string | undefined;
+}
+
+export interface CreateABTestVariant_req {
+  body: string;
+  name: string;
+  subject: string;
+  weight: number;
+}
+
+export interface RevokeAllRequest {
+  includeCurrentSession: boolean;
+}
+
+export interface CompleteRecoveryResponse {
+  completedAt: string;
+  message: string;
+  sessionId: string;
+  status: string;
   token: string;
 }
 
-export interface RateLimiter {
+export interface GetSecurityQuestionsResponse {
+  questions: SecurityQuestionInfo[];
+}
+
+export interface CookieConsent {
+  marketing: boolean;
+  updatedAt: string;
+  consentBannerVersion: string;
+  createdAt: string;
+  functional: boolean;
+  analytics: boolean;
+  expiresAt: string;
+  ipAddress: string;
+  organizationId: string;
+  personalization: boolean;
+  sessionId: string;
+  thirdParty: boolean;
+  userId: string;
+  essential: boolean;
+  id: string;
+  userAgent: string;
+}
+
+export interface ErrorResponse {
+  code: string;
+  details: any;
+  error: string;
+}
+
+export interface ResendResponse {
+  status: string;
+}
+
+export interface RevealValueResponse {
+  [key: string]: any;
+}
+
+export interface BackupAuthContactResponse {
+  id: string;
+}
+
+export interface CreateOrganizationResult {
+  organization: OrganizationDetailDTO;
+}
+
+export interface GetPasskeyRequest {
+}
+
+export interface QueryEntriesRequest {
+}
+
+export interface DeviceVerifyResponse {
+  clientId: string;
+  clientName: string;
+  logoUri: string;
+  scopes: ScopeInfo[];
+  userCode: string;
+  userCodeFormatted: string;
+  authorizeUrl: string;
+}
+
+export interface ListTrustedDevicesResponse {
+  count: number;
+  devices: TrustedDevice[];
+}
+
+export interface CreateAPIKeyRequest {
+  metadata: any;
+  name: string;
+  permissions: any;
+  rate_limit: number;
+  scopes: string[];
+  allowed_ips: string[];
+  description: string;
+}
+
+export interface BulkRequest {
+  ids: string[];
+}
+
+export interface UpdateFieldRequest {
+}
+
+export interface UpdateMemberHandlerRequest {
+}
+
+export interface CompleteVideoSessionResponse {
+  completedAt: string;
+  message: string;
+  result: string;
+  videoSessionId: string;
+}
+
+export interface TwoFASendOTPResponse {
+  code: string;
+  status: string;
+}
+
+export interface TestSendTemplateResult {
+  message: string;
+  success: boolean;
+}
+
+export interface TrustedContactsConfig {
+  requireVerification: boolean;
+  requiredToRecover: number;
+  allowEmailContacts: boolean;
+  cooldownPeriod: Duration;
+  enabled: boolean;
+  maxNotificationsPerDay: number;
+  verificationExpiry: Duration;
+  allowPhoneContacts: boolean;
+  maximumContacts: number;
+  minimumContacts: number;
+}
+
+export interface InstantiateTemplateRequest {
+  description: string;
+  enabled: boolean;
+  name: string;
+  namespaceId: string;
+  parameters: any;
+  priority: number;
+  resourceType: string;
+  actions: string[];
+}
+
+export interface StatsResponse {
+  active_sessions: number;
+  active_users: number;
+  banned_users: number;
+  timestamp: string;
+  total_sessions: number;
+  total_users: number;
+}
+
+export interface EvaluationContext {
+}
+
+export interface MFAPolicyResponse {
+  allowedFactorTypes: string[];
+  appId: string;
+  enabled: boolean;
+  gracePeriodDays: number;
+  id: string;
+  organizationId: string | undefined;
+  requiredFactorCount: number;
+}
+
+export interface ComplianceStatus {
+  checksFailed: number;
+  nextAudit: string;
+  overallStatus: string;
+  profileId: string;
+  score: number;
+  standard: string;
+  appId: string;
+  checksPassed: number;
+  checksWarning: number;
+  lastChecked: string;
+  violations: number;
+}
+
+export interface Logger {
+  [key: string]: any;
+}
+
+export interface CreateAppRequest {
+  [key: string]: any;
+}
+
+export interface PublishEntryRequest {
+}
+
+export interface MultiSessionErrorResponse {
+  error: string;
+}
+
+export interface PreviewConversionResponse {
+  celExpression: string;
+  error: string;
+  policyName: string;
+  resourceId: string;
+  resourceType: string;
+  success: boolean;
+}
+
+export interface RemoveTeamMemberRequest {
+}
+
+export interface CreateEntryRequest {
+}
+
+export interface OAuthState {
+  provider: string;
+  redirect_url: string;
+  user_organization_id: string | undefined;
+  app_id: string;
+  created_at: string;
+  extra_scopes: string[];
+  link_user_id: string | undefined;
+}
+
+export interface MigrateRBACRequest {
+  keepRbacPolicies: boolean;
+  namespaceId: string;
+  validateEquivalence: boolean;
+  dryRun: boolean;
+}
+
+export interface Role {
+  [key: string]: any;
+}
+
+export interface ForgetDeviceResponse {
+  message: string;
+  success: boolean;
+}
+
+export interface RemoveMemberInput {
+  appId: string;
+  memberId: string;
+  orgId: string;
+}
+
+export interface DeleteOrganizationRequest {
+}
+
+export interface OrgDetailStatsDTO {
+  invitationCount: number;
+  memberCount: number;
+  teamCount: number;
+}
+
+export interface TwoFAStatusDetailResponse {
+  enabled: boolean;
+  method: string;
+  trusted: boolean;
+}
+
+export interface LinkAccountRequest {
+  provider: string;
+  scopes: string[];
+}
+
+export interface MemoryStateStore {
+  [key: string]: any;
+}
+
+export interface ConsentAuditConfig {
+  signLogs: boolean;
+  logAllChanges: boolean;
+  retentionDays: number;
+  archiveInterval: Duration;
+  archiveOldLogs: boolean;
+  enabled: boolean;
+  exportFormat: string;
+  immutable: boolean;
+  logIpAddress: boolean;
+  logUserAgent: boolean;
+}
+
+export interface CreatePolicyRequest {
+  content: string;
+  name: string;
+  renewable: boolean;
+  validityPeriod: number | undefined;
+  consentType: string;
+  description: string;
+  metadata: any;
+  required: boolean;
+  version: string;
 }
 
 export interface CreateTeamHandlerRequest {
 }
 
-export interface OrganizationUIRegistry {
+export interface JumioProvider {
 }
 
-export interface MembersListResponse {
+export interface RemoveMemberRequest {
+}
+
+export interface UsernameRepository {
   [key: string]: any;
 }
 
-export interface RequestTrustedContactVerificationResponse {
+export interface ListAuditEventsRequest {
+}
+
+export interface GetTemplateRequest {
+}
+
+export interface AdminHandler {
+}
+
+export interface VerifyTrustedContactResponse {
   contactId: string;
-  contactName: string;
-  expiresAt: string;
   message: string;
-  notifiedAt: string;
+  verified: boolean;
+  verifiedAt: string;
 }
 
-export interface NoOpNotificationProvider {
-  [key: string]: any;
-}
-
-export interface ResetUserMFARequest {
-  reason: string;
-}
-
-export interface VerifyTokenResponse {
-  [key: string]: any;
-}
-
-export interface ContentEntryHandler {
-}
-
-export interface ProviderCheckResult {
-}
-
-export interface CreateVerificationRequest {
-}
-
-export interface TrackNotificationEvent_req {
-  templateId: string;
-  event: string;
-  eventData?: any;
-  notificationId: string;
-  organizationId?: string | undefined;
-}
-
-export interface WebhookConfig {
+export interface ConsentNotificationsConfig {
+  channels: string[];
+  notifyDeletionComplete: boolean;
+  notifyDpoEmail: string;
+  notifyOnExpiry: boolean;
+  notifyOnRevoke: boolean;
   enabled: boolean;
-  expiry_warning_days: number;
-  notify_on_created: boolean;
-  notify_on_deleted: boolean;
-  notify_on_expiring: boolean;
-  notify_on_rate_limit: boolean;
-  notify_on_rotated: boolean;
-  webhook_urls: string[];
+  notifyDeletionApproved: boolean;
+  notifyExportReady: boolean;
+  notifyOnGrant: boolean;
+}
+
+export interface UpdateProvider_req {
+  config: any;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
+export interface CheckResult {
+  status: string;
+  checkType: string;
+  error: Error;
+  evidence: string[];
+  result: any;
+  score: number;
+}
+
+export interface TwoFAEnableResponse {
+  totp_uri: string;
+  status: string;
+}
+
+export interface AdminAddProviderRequest {
+  appId: string;
+  clientId: string;
+  clientSecret: string;
+  enabled: boolean;
+  provider: string;
+  scopes: string[];
+}
+
+export interface DataExportConfig {
+  expiryHours: number;
+  includeSections: string[];
+  maxExportSize: number;
+  maxRequests: number;
+  requestPeriod: Duration;
+  autoCleanup: boolean;
+  enabled: boolean;
+  storagePath: string;
+  allowedFormats: string[];
+  cleanupInterval: Duration;
+  defaultFormat: string;
+}
+
+export interface StepUpAttempt {
+  created_at: string;
+  id: string;
+  ip: string;
+  method: string;
+  org_id: string;
+  requirement_id: string;
+  user_agent: string;
+  user_id: string;
+  failure_reason: string;
+  success: boolean;
+}
+
+export interface GetExtensionDataResult {
+  quickLinks: QuickLinkDataDTO[];
+  tabs: TabDataDTO[];
+  widgets: WidgetDataDTO[];
+  actions: ActionDataDTO[];
+}
+
+export interface RunCheckRequest {
+  checkType: string;
+}
+
+export interface TwoFABackupCodesResponse {
+  codes: string[];
+}
+
+export interface GetOrganizationsInput {
+  search: string;
+  appId: string;
+  limit: number;
+  page: number;
+}
+
+export interface UpdateProvidersInput {
+  emailProvider: EmailProviderDTO | undefined;
+  smsProvider: SMSProviderDTO | undefined;
+}
+
+export interface CheckDependencies {
+}
+
+export interface ListUsersRequest {
+  limit: number;
+  page: number;
+  role: string;
+  search: string;
+  status: string;
+  user_organization_id: string | undefined;
+  app_id: string;
+}
+
+export interface ConsentSummary {
+  consentsByType: any;
+  expiredConsents: number;
+  hasPendingDeletion: boolean;
+  pendingRenewals: number;
+  grantedConsents: number;
+  hasPendingExport: boolean;
+  lastConsentUpdate: string | undefined;
+  organizationId: string;
+  revokedConsents: number;
+  totalConsents: number;
+  userId: string;
+}
+
+export interface GetProvidersInput {
+  [key: string]: any;
+}
+
+export interface SetActiveRequest {
+  id: string;
+}
+
+export interface GetSessionInput {
+  appId: string;
+  sessionId: string;
+}
+
+export interface JWKSService {
+}
+
+export interface MFABypassResponse {
+  expiresAt: string;
+  id: string;
+  reason: string;
+  userId: string;
+}
+
+export interface UpdateProvidersResult {
+  message: string;
+  providers: ProvidersConfigDTO;
+  success: boolean;
+}
+
+export interface CreateTemplateInput {
+  metadata: any;
+  name: string;
+  subject: string;
+  templateKey: string;
+  type: string;
+  variables: string[];
+  body: string;
+  language: string;
+}
+
+export interface AppServiceAdapter {
+}
+
+export interface SetUserRoleRequestDTO {
+  role: string;
+}
+
+export interface NotificationChannels {
+  email: boolean;
+  slack: boolean;
+  webhook: boolean;
+}
+
+export interface CompliancePolicy {
+  content: string;
+  metadata: any;
+  reviewDate: string;
+  updatedAt: string;
+  effectiveDate: string;
+  standard: string;
+  status: string;
+  appId: string;
+  approvedAt: string | undefined;
+  createdAt: string;
+  id: string;
+  profileId: string;
+  policyType: string;
+  title: string;
+  version: string;
+  approvedBy: string;
+}
+
+export interface AddTeamMemberRequest {
+  member_id: string;
+}
+
+export interface JWKSResponse {
+  keys: JWK[];
+}
+
+export interface StepUpRequirementResponse {
+  id: string;
+}
+
+export interface MigrateAllResponse {
+  completedAt: string;
+  convertedPolicies: PolicyPreviewResponse[];
+  errors: MigrationErrorResponse[];
+  skippedPolicies: number;
+  totalPolicies: number;
+  dryRun: boolean;
+  failedPolicies: number;
+  migratedPolicies: number;
+  startedAt: string;
+}
+
+export interface ComplianceCheck {
+  checkType: string;
+  createdAt: string;
+  evidence: string[];
+  lastCheckedAt: string;
+  profileId: string;
+  appId: string;
+  id: string;
+  nextCheckAt: string;
+  result: any;
+  status: string;
+}
+
+export interface DeviceVerificationRequest {
+  user_code: string;
+}
+
+export interface DataProcessingAgreement {
+  agreementType: string;
+  effectiveDate: string;
+  expiryDate: string | undefined;
+  signedBy: string;
+  signedByEmail: string;
+  updatedAt: string;
+  version: string;
+  digitalSignature: string;
+  id: string;
+  organizationId: string;
+  status: string;
+  content: string;
+  signedByTitle: string;
+  createdAt: string;
+  ipAddress: string;
+  metadata: Record<string, any>;
+  signedByName: string;
+}
+
+export interface ResetTemplateRequest {
+}
+
+export interface GetNotificationRequest {
+}
+
+export interface AddFieldRequest {
+}
+
+export interface BackupAuthDocumentResponse {
+  id: string;
+}
+
+export interface VerificationsResponse {
+  count: number;
+  verifications: any;
+}
+
+export interface ListFactorsRequest {
+}
+
+export interface NotificationResponse {
+  notification: any;
+}
+
+export interface GetRevisionRequest {
+}
+
+export interface DeviceAuthorizationRequest {
+  client_id: string;
+  scope: string;
+}
+
+export interface RenderTemplate_req {
+  template: string;
+  variables: any;
+}
+
+export interface DeletePasskeyRequest {
+}
+
+export interface UpdateProviderRequest {
+}
+
+export interface NamespaceResponse {
+  userOrganizationId: string | undefined;
+  actionCount: number;
+  createdAt: string;
+  environmentId: string;
+  inheritPlatform: boolean;
+  policyCount: number;
+  resourceCount: number;
+  updatedAt: string;
+  appId: string;
+  description: string;
+  id: string;
+  name: string;
+  templateId: string | undefined;
 }
 
 export interface ListReportsFilter {
@@ -3096,31 +1461,1482 @@ export interface ListReportsFilter {
   standard: string | undefined;
 }
 
-export interface GetInvitationRequest {
+export interface PhoneVerifyResponse {
+  token: string;
+  user: User | undefined;
+  session: Session | undefined;
 }
 
-export interface SetActiveRequest {
+export interface DeviceVerificationInfo {
+}
+
+export interface ChallengeResponse {
+  sessionId: string;
+  availableFactors: FactorInfo[];
+  challengeId: string;
+  expiresAt: string;
+  factorsRequired: number;
+}
+
+export interface SecretItem {
+  version: number;
+  createdAt: string;
+  description: string;
+  id: string;
+  path: string;
+  tags: string[];
+  updatedAt: string;
+  valueType: string;
+  key: string;
+}
+
+export interface CreateVerificationRequest {
+}
+
+export interface NotificationErrorResponse {
+  error: string;
+}
+
+export interface TemplatePerformanceDTO {
+  clickRate: number;
+  openRate: number;
+  templateId: string;
+  templateName: string;
+  totalSent: number;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry | undefined[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
+
+export interface Handler {
+}
+
+export interface GetExtensionDataInput {
+  appId: string;
+  orgId: string;
+}
+
+export interface TestCaseResult {
+  actual: boolean;
+  error: string;
+  evaluationTimeMs: number;
+  expected: boolean;
+  name: string;
+  passed: boolean;
+}
+
+export interface EndImpersonationRequest {
+  impersonation_id: string;
+  reason: string;
+}
+
+export interface AdminBypassRequest {
+  duration: number;
+  reason: string;
+  userId: string;
+}
+
+export interface DeleteSecretOutput {
+  message: string;
+  success: boolean;
+}
+
+export interface ComplianceTrainingsResponse {
+  training: any[];
+}
+
+export interface CreateTrainingRequest {
+  standard: string;
+  trainingType: string;
+  userId: string;
+}
+
+export interface BulkPublishRequest {
+  ids: string[];
+}
+
+export interface ListSessionsRequest {
+  user_organization_id: string | undefined;
+  app_id: string;
+  limit: number;
+  page: number;
+  user_id: string | undefined;
+}
+
+export interface PaginationDTO {
+  currentPage: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export interface NotificationHistoryDTO {
+  createdAt: string;
+  id: string;
+  sentAt: string | undefined;
+  templateId: string | undefined;
+  deliveredAt: string | undefined;
+  updatedAt: string;
+  appId: string;
+  body: string;
+  providerId: string;
+  recipient: string;
+  status: string;
+  type: string;
+  error: string;
+  metadata: any;
+  subject: string;
+}
+
+export interface GetTemplateVersionRequest {
+}
+
+export interface MigrationErrorResponse {
+  resource: string;
+  subject: string;
+  error: string;
+  policyIndex: number;
+}
+
+export interface CompliancePoliciesResponse {
+  policies: any[];
+}
+
+export interface MultitenancyStatusResponse {
+  [key: string]: any;
+}
+
+export interface ComplianceProfile {
+  standards: string[];
+  mfaRequired: boolean;
+  createdAt: string;
+  encryptionInTransit: boolean;
+  metadata: any;
+  appId: string;
+  complianceContact: string;
+  passwordMinLength: number;
+  passwordRequireLower: boolean;
+  rbacRequired: boolean;
+  regularAccessReview: boolean;
+  name: string;
+  auditLogExport: boolean;
+  passwordRequireUpper: boolean;
+  passwordRequireSymbol: boolean;
+  retentionDays: number;
+  sessionIpBinding: boolean;
+  status: string;
+  dataResidency: string;
+  encryptionAtRest: boolean;
+  id: string;
+  passwordExpiryDays: number;
+  detailedAuditTrail: boolean;
+  dpoContact: string;
+  sessionMaxAge: number;
+  updatedAt: string;
+  leastPrivilege: boolean;
+  sessionIdleTimeout: number;
+  passwordRequireNumber: boolean;
+}
+
+export interface CreateProvider_req {
+  providerType: string;
+  config: any;
+  isDefault: boolean;
+  organizationId?: string | undefined;
+  providerName: string;
+}
+
+export interface ApproveRecoveryResponse {
+  approved: boolean;
+  approvedAt: string;
+  message: string;
+  sessionId: string;
+}
+
+export interface CreateAPIKeyResponse {
+  api_key: APIKey | undefined;
+  message: string;
+}
+
+export interface ListPasskeysRequest {
+}
+
+export interface GetRecoveryConfigResponse {
+  riskScoreThreshold: number;
+  enabledMethods: string[];
+  minimumStepsRequired: number;
+  requireAdminReview: boolean;
+  requireMultipleSteps: boolean;
+}
+
+export interface VideoSessionResult {
+}
+
+export interface ListTemplatesResult {
+  pagination: PaginationDTO;
+  templates: TemplateDTO[];
+}
+
+export interface APIKey {
+  [key: string]: any;
+}
+
+export interface UpdateTeamRequest {
+  description: string;
+  name: string;
+}
+
+export interface BulkUnpublishRequest {
+  ids: string[];
+}
+
+export interface StartVideoSessionRequest {
+  videoSessionId: string;
+}
+
+export interface UpdateAppRequest {
+}
+
+export interface ProviderDiscoveredResponse {
+  found: boolean;
+  providerId: string;
+  type: string;
+}
+
+export interface SocialAccount {
+  [key: string]: any;
+}
+
+export interface AddMemberRequest {
+  role: string;
+  user_id: string;
+}
+
+export interface DeviceDecisionResponse {
+  approved: boolean;
+  message: string;
+  success: boolean;
+}
+
+export interface SignInResponse {
+  session: Session | undefined;
+  token: string;
+  user: User | undefined;
+}
+
+export interface UpdateTemplateInput {
+  name: string | undefined;
+  subject: string | undefined;
+  templateId: string;
+  variables: string[];
+  active: boolean | undefined;
+  body: string | undefined;
+  metadata: any;
+}
+
+export interface MigrationResponse {
+  message: string;
+  migrationId: string;
+  startedAt: string;
+  status: string;
+}
+
+export interface AnalyticsResponse {
+  generatedAt: string;
+  summary: AnalyticsSummary;
+  timeRange: any;
+}
+
+export interface UpdatePasskeyResponse {
+  name: string;
+  passkeyId: string;
+  updatedAt: string;
+}
+
+export interface EnableResponse {
+  status: string;
+  totp_uri: string;
+}
+
+export interface SMSFactorAdapter {
+}
+
+export interface QuickLinkDataDTO {
+  description: string;
+  icon: string;
+  id: string;
+  order: number;
+  requireAdmin: boolean;
+  title: string;
+  url: string;
+}
+
+export interface ImpersonateUserRequest {
+  app_id: string;
+  duration: Duration;
+  user_id: string;
+  user_organization_id: string | undefined;
+}
+
+export interface GetSecretsOutput {
+  page: number;
+  pageSize: number;
+  secrets: SecretItem[];
+  total: number;
+  totalPages: number;
+}
+
+export interface GenerateRecoveryCodesRequest {
+  count: number;
+  format: string;
+}
+
+export interface StepUpVerificationsResponse {
+  verifications: any[];
+}
+
+export interface EvaluationResult {
+  metadata: any;
+  reason: string;
+  required: boolean;
+  requirement_id: string;
+  security_level: string;
+  can_remember: boolean;
+  challenge_token: string;
+  expires_at: string;
+  grace_period_ends_at: string;
+  allowed_methods: string[];
+  current_level: string;
+  matched_rules: string[];
+}
+
+export interface StepUpDevicesResponse {
+  count: number;
+  devices: any;
+}
+
+export interface SettingsDTO {
+  allowCrossPlatform: boolean;
+  enableDeviceTracking: boolean;
+  maxSessionsPerUser: number;
+  sessionExpiryHours: number;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  emailVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+  organizationId?: string;
+}
+
+export interface MFASession {
+  id: string;
+  riskLevel: string;
+  sessionToken: string;
+  userAgent: string;
+  createdAt: string;
+  expiresAt: string;
+  factorsRequired: number;
+  ipAddress: string;
+  metadata: any;
+  userId: string;
+  verifiedFactors: string[];
+  completedAt: string | undefined;
+  factorsVerified: number;
+}
+
+export interface ListSecretsResponse {
+  [key: string]: any;
+}
+
+export interface GetSessionResult {
+  session: SessionDetailDTO;
+}
+
+export interface ComplianceEvidencesResponse {
+  evidence: any[];
+}
+
+export interface Member {
+  [key: string]: any;
+}
+
+export interface ImpersonationEndResponse {
+  ended_at: string;
+  status: string;
+}
+
+export interface JWTService {
+}
+
+export interface StepUpStatusResponse {
+  status: string;
+}
+
+export interface TeamDTO {
+  createdAt: string;
+  description: string;
+  id: string;
+  memberCount: number;
+  metadata: any;
+  name: string;
+}
+
+export interface SecretDTO {
+  [key: string]: any;
+}
+
+export interface MockSessionService {
+  [key: string]: any;
+}
+
+export interface SessionStatsResponse {
+  oldestSession: string | undefined;
+  totalSessions: number;
+  activeSessions: number;
+  deviceCount: number;
+  locationCount: number;
+  newestSession: string | undefined;
+}
+
+export interface ComplianceCheckResponse {
   id: string;
 }
 
-export interface ReorderFieldsRequest {
+export interface BackupAuthStatusResponse {
+  status: string;
+}
+
+export interface ListSecretsRequest {
+}
+
+export interface GetRoleTemplateResult {
+  template: RoleTemplateDTO;
+}
+
+export interface ListEvidenceFilter {
+  evidenceType: string | undefined;
+  profileId: string | undefined;
+  standard: string | undefined;
+  appId: string | undefined;
+  controlId: string | undefined;
+}
+
+export interface JSONBMap {
+  [key: string]: any;
+}
+
+export interface RestoreEntryRequest {
+}
+
+export interface DeleteEntryRequest {
+}
+
+export interface RiskAssessmentConfig {
+  requireReviewAbove: number;
+  velocityWeight: number;
+  blockHighRisk: boolean;
+  enabled: boolean;
+  highRiskThreshold: number;
+  historyWeight: number;
+  lowRiskThreshold: number;
+  newDeviceWeight: number;
+  newLocationWeight: number;
+  mediumRiskThreshold: number;
+  newIpWeight: number;
+}
+
+export interface AmountRule {
+  max_amount: number;
+  min_amount: number;
+  org_id: string;
+  security_level: string;
+  currency: string;
+  description: string;
+}
+
+export interface DeleteRoleTemplateInput {
+  appId: string;
+  templateId: string;
+}
+
+export interface StripeIdentityProvider {
+}
+
+export interface CancelRecoveryRequest {
+  reason: string;
+  sessionId: string;
+}
+
+export interface RequestTrustedContactVerificationResponse {
+  notifiedAt: string;
+  contactId: string;
+  contactName: string;
+  expiresAt: string;
+  message: string;
+}
+
+export interface CompleteRecoveryRequest {
+  sessionId: string;
+}
+
+export interface ProviderConfigResponse {
+  appId: string;
+  message: string;
+  provider: string;
+}
+
+export interface CreateDPARequest {
+  content: string;
+  metadata: any;
+  signedByEmail: string;
+  signedByTitle: string;
+  agreementType: string;
+  effectiveDate: string;
+  expiryDate: string | undefined;
+  signedByName: string;
+  version: string;
+}
+
+export interface GetUserSessionsResult {
+  activeCount: number;
+  pagination: PaginationInfoDTO;
+  sessions: SessionDTO[];
+  totalCount: number;
+  userId: string;
+}
+
+export interface GenerateTokenResponse {
+  [key: string]: any;
+}
+
+export interface BackupAuthSessionsResponse {
+  sessions: any[];
+}
+
+export interface DataDeletionRequestInput {
+  deleteSections: string[];
+  reason: string;
+}
+
+export interface SessionAutoSendConfig {
+  device_removed: boolean;
+  new_device: boolean;
+  new_location: boolean;
+  suspicious_login: boolean;
+  all_revoked: boolean;
+}
+
+export interface ResetUserMFAResponse {
+  message: string;
+  success: boolean;
+  devicesRevoked: number;
+  factorsReset: number;
+}
+
+export interface BeginLoginResponse {
+  timeout: Duration;
+  challenge: string;
+  options: any;
+}
+
+export interface UnpublishContentTypeRequest {
+}
+
+export interface TwoFAErrorResponse {
+  error: string;
+}
+
+export interface UpdateConsentRequest {
+  granted: boolean | undefined;
+  metadata: any;
+  reason: string;
+}
+
+export interface TrustDeviceRequest {
+  deviceId: string;
+  metadata: any;
+  name: string;
+}
+
+export interface AddTeamMember_req {
+  member_id: string;
+  role: string;
+}
+
+export interface AuthorizeRequest {
+  state: string;
+  ui_locales: string;
+  acr_values: string;
+  client_id: string;
+  code_challenge_method: string;
+  id_token_hint: string;
+  login_hint: string;
+  nonce: string;
+  prompt: string;
+  redirect_uri: string;
+  code_challenge: string;
+  max_age: number | undefined;
+  response_type: string;
+  scope: string;
+}
+
+export interface ConsentPolicy {
+  createdAt: string;
+  createdBy: string;
+  description: string;
+  renewable: boolean;
+  name: string;
+  publishedAt: string | undefined;
+  validityPeriod: number | undefined;
+  active: boolean;
+  consentType: string;
+  content: string;
+  id: string;
+  metadata: Record<string, any>;
+  organizationId: string;
+  updatedAt: string;
+  required: boolean;
+  version: string;
+}
+
+export interface UpdateFactorRequest {
+  metadata: any;
+  name: string | undefined;
+  priority: string | undefined;
+  status: string | undefined;
+}
+
+export interface ListJWTKeysResponse {
+  [key: string]: any;
+}
+
+export interface SendCodeResponse {
+  dev_code: string;
+  status: string;
+}
+
+export interface MockSocialAccountRepository {
+  [key: string]: any;
+}
+
+export interface ConsentReportResponse {
+  id: string;
+}
+
+export interface SessionDTO {
+  createdAt: string;
+  deviceType: string;
+  expiresAt: string;
+  userEmail: string;
+  userId: string;
+  browser: string;
+  id: string;
+  lastUsed: string;
+  browserVersion: string;
+  deviceInfo: string;
+  ipAddress: string;
+  os: string;
+  osVersion: string;
+  expiresIn: string;
+  isActive: boolean;
+  isExpiring: boolean;
+  status: string;
+  userAgent: string;
+}
+
+export interface VerifySecurityAnswersRequest {
+  answers: any;
+  sessionId: string;
+}
+
+export interface PaginationInfo {
+  currentPage: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface IDVerificationSessionResponse {
+  session: any;
+}
+
+export interface OrganizationAutoSendDTO {
+  roleChanged: boolean;
+  transfer: boolean;
+  deleted: boolean;
+  invite: boolean;
+  memberAdded: boolean;
+  memberLeft: boolean;
+  memberRemoved: boolean;
+}
+
+export interface Client {
+  [key: string]: any;
+}
+
+export interface JWTKey {
+  [key: string]: any;
+}
+
+export interface UpdateSecretInput {
+  appId: string;
+  changeReason: string;
+  description: string;
+  secretId: string;
+  tags: string[];
+  value: any;
+}
+
+export interface RenderTemplateRequest {
+}
+
+export interface ComplianceReportResponse {
+  id: string;
+}
+
+export interface TokenIntrospectionResponse {
+  jti: string;
+  scope: string;
+  token_type: string;
+  username: string;
+  active: boolean;
+  aud: string[];
+  client_id: string;
+  exp: number;
+  iat: number;
+  iss: string;
+  nbf: number;
+  sub: string;
+}
+
+export interface WebhookResponse {
+  received: boolean;
+  status: string;
+}
+
+export interface VideoSessionInfo {
+}
+
+export interface CreateUserRequest {
+  app_id: string;
+  name: string;
+  email: string;
+  email_verified: boolean;
+  metadata: any;
+  password: string;
+  role: string;
+  user_organization_id: string | undefined;
+  username: string;
+}
+
+export interface AutomatedChecksConfig {
+  accessReview: boolean;
+  checkInterval: Duration;
+  inactiveUsers: boolean;
+  passwordPolicy: boolean;
+  sessionPolicy: boolean;
+  suspiciousActivity: boolean;
+  dataRetention: boolean;
+  enabled: boolean;
+  mfaCoverage: boolean;
+}
+
+export interface ChallengeSession {
+}
+
+export interface UnpublishEntryRequest {
+}
+
+export interface AdminBlockUser_req {
+  reason: string;
+}
+
+export interface DocumentVerificationConfig {
+  requireBothSides: boolean;
+  requireSelfie: boolean;
+  storagePath: string;
+  acceptedDocuments: string[];
+  provider: string;
+  requireManualReview: boolean;
+  retentionPeriod: Duration;
+  storageProvider: string;
+  enabled: boolean;
+  encryptAtRest: boolean;
+  encryptionKey: string;
+  minConfidenceScore: number;
+}
+
+export interface JumioConfig {
+  dataCenter: string;
+  enableAMLScreening: boolean;
+  enableExtraction: boolean;
+  enabledDocumentTypes: string[];
+  presetId: string;
+  apiSecret: string;
+  enableLiveness: boolean;
+  enabled: boolean;
+  enabledCountries: string[];
+  verificationType: string;
+  apiToken: string;
+  callbackUrl: string;
+}
+
+export interface ResourceResponse {
+  description: string;
+  id: string;
+  namespaceId: string;
+  type: string;
+  attributes: ResourceAttribute[];
+  createdAt: string;
+}
+
+export interface VerifyAPIKeyRequest {
+  key: string;
+}
+
+export interface CompareRevisionsRequest {
+}
+
+export interface Session {
+  id: string;
+  userId: string;
+  token: string;
+  expiresAt: string;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+}
+
+export interface FactorAdapterRegistry {
+}
+
+export interface TabDataDTO {
+  order: number;
+  path: string;
+  requireAdmin: boolean;
+  icon: string;
+  id: string;
+  label: string;
+}
+
+export interface TemplatesListResponse {
+  categories: string[];
+  templates: TemplateResponse | undefined[];
+  totalCount: number;
+}
+
+export interface GetMigrationStatusRequest {
+  [key: string]: any;
+}
+
+export interface RateLimitingConfig {
+  maxAttemptsPerIp: number;
+  enabled: boolean;
+  exponentialBackoff: boolean;
+  ipCooldownPeriod: Duration;
+  lockoutAfterAttempts: number;
+  lockoutDuration: Duration;
+  maxAttemptsPerDay: number;
+  maxAttemptsPerHour: number;
+}
+
+export interface UnbanUserRequest {
+  app_id: string;
+  reason: string;
+  user_id: string;
+  user_organization_id: string | undefined;
+}
+
+export interface ListSessionsRequestDTO {
+}
+
+export interface StepUpRequirementsResponse {
+  requirements: any[];
+}
+
+export interface InviteMemberHandlerRequest {
+}
+
+export interface VerificationListResponse {
+  limit: number;
+  offset: number;
+  total: number;
+  verifications: IdentityVerification | undefined[];
+}
+
+export interface ComplianceTraining {
+  score: number;
+  status: string;
+  trainingType: string;
+  appId: string;
+  createdAt: string;
+  id: string;
+  metadata: any;
+  standard: string;
+  userId: string;
+  completedAt: string | undefined;
+  expiresAt: string | undefined;
+  profileId: string;
+}
+
+export interface InviteMemberRequest {
+  email: string;
+  role: string;
+}
+
+export interface ClientSummary {
+  name: string;
+  applicationType: string;
+  clientID: string;
+  createdAt: string;
+  isOrgLevel: boolean;
+}
+
+export interface StateStore {
+}
+
+export interface GetNotificationDetailResult {
+  notification: NotificationHistoryDTO;
+}
+
+export interface NamespacesListResponse {
+  namespaces: NamespaceResponse | undefined[];
+  totalCount: number;
+}
+
+export interface MockAuditService {
+  [key: string]: any;
+}
+
+export interface CheckRegistry {
+}
+
+export interface ConsentRequest {
+  action: string;
+  client_id: string;
+  code_challenge: string;
+  code_challenge_method: string;
+  redirect_uri: string;
+  response_type: string;
+  scope: string;
+  state: string;
+}
+
+export interface MFAConfigResponse {
+  allowed_factor_types: string[];
+  enabled: boolean;
+  required_factor_count: number;
+}
+
+export interface GetSettingsInput {
+  appId: string;
+}
+
+export interface UploadDocumentResponse {
+  documentId: string;
+  message: string;
+  processingTime: string;
+  status: string;
+  uploadedAt: string;
+}
+
+export interface CodesResponse {
+  codes: string[];
+}
+
+export interface CreateTemplateRequest {
+  [key: string]: any;
+}
+
+export interface PublishContentTypeRequest {
+}
+
+export interface GetTeamsResult {
+  canManage: boolean;
+  data: TeamDTO[];
+  pagination: PaginationInfo;
+}
+
+export interface UpdateOrganizationResult {
+  organization: OrganizationDetailDTO;
+}
+
+export interface SessionDetailDTO {
+  lastRefreshedAt: string | undefined;
+  osVersion: string;
+  status: string;
+  appId: string;
+  browserVersion: string;
+  deviceInfo: string;
+  expiresAtFormatted: string;
+  id: string;
+  lastRefreshedFormatted: string;
+  organizationId: string;
+  os: string;
+  createdAtFormatted: string;
+  deviceType: string;
+  isActive: boolean;
+  userAgent: string;
+  userEmail: string;
+  browser: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedAtFormatted: string;
+  userId: string;
+  environmentId: string;
+  expiresAt: string;
+  ipAddress: string;
+  isExpiring: boolean;
+}
+
+export interface TestPolicyRequest {
+  actions: string[];
+  expression: string;
+  resourceType: string;
+  testCases: TestCase[];
+}
+
+export interface UpdatePolicy_req {
+  content: string | undefined;
+  status: string | undefined;
+  title: string | undefined;
+  version: string | undefined;
+}
+
+export interface PreviewTemplateInput {
+  variables: any;
+  templateId: string;
+}
+
+export interface SessionStatsDTO {
+  uniqueUsers: number;
+  activeCount: number;
+  desktopCount: number;
+  expiredCount: number;
+  expiringCount: number;
+  mobileCount: number;
+  tabletCount: number;
+  totalSessions: number;
+}
+
+export interface RemoveMemberResult {
+  success: boolean;
+}
+
+export interface GetProviderRequest {
+}
+
+export interface ValidatePolicyRequest {
+  expression: string;
+  resourceType: string;
+}
+
+export interface StartRecoveryRequest {
+  userId: string;
+  deviceId: string;
+  email: string;
+  preferredMethod: string;
+}
+
+export interface AnalyticsSummary {
+  cacheHitRate: number;
+  deniedCount: number;
+  topPolicies: PolicyStats[];
+  topResourceTypes: ResourceTypeStats[];
+  totalEvaluations: number;
+  avgLatencyMs: number;
+  totalPolicies: number;
+  activePolicies: number;
+  allowedCount: number;
+}
+
+export interface UnassignRoleRequest {
+}
+
+export interface UserServiceAdapter {
+}
+
+export interface ProviderConfig {
+  [key: string]: any;
+}
+
+export interface BackupAuthQuestionsResponse {
+  questions: string[];
+}
+
+export interface BunRepository {
+}
+
+export interface OAuthClientRepository {
+  [key: string]: any;
+}
+
+export interface IdentityVerificationSession {
+  [key: string]: any;
+}
+
+export interface AccountAutoSendDTO {
+  usernameChanged: boolean;
+  deleted: boolean;
+  emailChangeRequest: boolean;
+  emailChanged: boolean;
+  passwordChanged: boolean;
+  reactivated: boolean;
+  suspended: boolean;
+}
+
+export interface UpdateTemplateRequest {
+}
+
+export interface ConnectionResponse {
+  connection: SocialAccount | undefined;
+}
+
+export interface FactorInfo {
+  metadata: any;
+  name: string;
+  type: string;
+  factorId: string;
+}
+
+export interface StepUpErrorResponse {
+  error: string;
+}
+
+export interface StepUpAuditLogsResponse {
+  audit_logs: any[];
+}
+
+export interface ReverifyRequest {
+  reason: string;
+}
+
+export interface StripeIdentityConfig {
+  apiKey: string;
+  enabled: boolean;
+  requireLiveCapture: boolean;
+  requireMatchingSelfie: boolean;
+  returnUrl: string;
+  useMock: boolean;
+  webhookSecret: string;
+  allowedTypes: string[];
+}
+
+export interface ScopeResolver {
+}
+
+export interface RedisChallengeStore {
+  [key: string]: any;
+}
+
+export interface OTPSentResponse {
+  code: string;
+  status: string;
+}
+
+export interface RedisStateStore {
+  client?: Client | undefined;
+}
+
+export interface ChallengeRequest {
+  userId: string;
+  context: string;
+  factorTypes: string[];
+  metadata: any;
+}
+
+export interface BackupAuthVideoResponse {
+  session_id: string;
+}
+
+export interface DataDeletionConfig {
+  retentionExemptions: string[];
+  allowPartialDeletion: boolean;
+  archivePath: string;
+  autoProcessAfterGrace: boolean;
+  enabled: boolean;
+  preserveLegalData: boolean;
+  requireAdminApproval: boolean;
+  archiveBeforeDeletion: boolean;
+  gracePeriodDays: number;
+  notifyBeforeDeletion: boolean;
+}
+
+export interface TwoFARequiredResponse {
+  device_id: string;
+  require_twofa: boolean;
+  user: User | undefined;
+}
+
+export interface ListOrganizationsRequest {
+}
+
+export interface EvaluateRequest {
+  action: string;
+  amount: number;
+  currency: string;
+  metadata: any;
+  method: string;
+  resource_type: string;
+  route: string;
+}
+
+export interface GetAPIKeyRequest {
+}
+
+export interface ListUsersResponse {
+  limit: number;
+  page: number;
+  total: number;
+  total_pages: number;
+  users: User | undefined[];
+}
+
+export interface ResourceTypeStats {
+  allowRate: number;
+  avgLatencyMs: number;
+  evaluationCount: number;
+  resourceType: string;
+}
+
+export interface DeleteTeamRequest {
+}
+
+export interface EncryptionService {
+}
+
+export interface AuditServiceAdapter {
+}
+
+export interface NoOpDocumentProvider {
+  [key: string]: any;
+}
+
+export interface GetTreeRequest {
+}
+
+export interface OIDCLoginRequest {
+  nonce: string;
+  redirectUri: string;
+  scope: string;
+  state: string;
+}
+
+export interface VerificationResult {
+}
+
+export interface ProvidersConfigDTO {
+  emailProvider: EmailProviderDTO;
+  smsProvider: SMSProviderDTO;
+}
+
+export interface DeviceInfo {
+  deviceId: string;
+  metadata: any;
+  name: string;
+}
+
+export interface GetVersionsRequest {
+}
+
+export interface GetChallengeStatusResponse {
+  factorsRequired: number;
+  factorsVerified: number;
+  maxAttempts: number;
+  status: string;
+  attempts: number;
+  availableFactors: FactorInfo[];
+  challengeId: string;
+}
+
+export interface GetOrganizationRequest {
 }
 
 export interface EvaluateResponse {
-  reason: string;
-  allowed: boolean;
   cacheHit: boolean;
   error: string;
   evaluatedPolicies: number;
   evaluationTimeMs: number;
   matchedPolicies: string[];
+  reason: string;
+  allowed: boolean;
 }
 
-export interface AddTrustedContactRequest {
-  email: string;
+export interface Factor {
+  createdAt: string;
+  expiresAt: string | undefined;
   name: string;
-  phone: string;
-  relationship: string;
+  priority: string;
+  updatedAt: string;
+  userId: string;
+  id: string;
+  lastUsedAt: string | undefined;
+  metadata: any;
+  status: string;
+  type: string;
+  verifiedAt: string | undefined;
+}
+
+export interface RiskEngine {
+}
+
+export interface BridgeAppInput {
+  appId: string;
+}
+
+export interface TrustedDevicesConfig {
+  max_devices_per_user: number;
+  max_expiry_days: number;
+  default_expiry_days: number;
+  enabled: boolean;
+}
+
+export interface OrganizationAutoSendConfig {
+  role_changed: boolean;
+  transfer: boolean;
+  deleted: boolean;
+  invite: boolean;
+  member_added: boolean;
+  member_left: boolean;
+  member_removed: boolean;
+}
+
+export interface MetadataResponse {
+  metadata: string;
+}
+
+export interface TemplatesResponse {
+  count: number;
+  templates: any;
+}
+
+export interface Credential {
+  [key: string]: any;
+}
+
+export interface Service {
+}
+
+export interface ConsentRecordResponse {
+  id: string;
+}
+
+export interface UpdateSettingsResult {
+  success: boolean;
+}
+
+export interface EmailServiceAdapter {
+}
+
+export interface EmailProvider {
+  [key: string]: any;
+}
+
+export interface UserAdapter {
+}
+
+export interface DataDeletionRequest {
+  userId: string;
+  exemptionReason: string;
+  id: string;
+  completedAt: string | undefined;
+  errorMessage: string;
+  organizationId: string;
+  rejectedAt: string | undefined;
+  retentionExempt: boolean;
+  updatedAt: string;
+  approvedAt: string | undefined;
+  approvedBy: string;
+  createdAt: string;
+  requestReason: string;
+  status: string;
+  archivePath: string;
+  deleteSections: string[];
+  ipAddress: string;
+}
+
+export interface NotificationTemplateListResponse {
+  total: number;
+  templates: any[];
+}
+
+export interface OverviewStatsDTO {
+  openRate: number;
+  totalBounced: number;
+  totalClicked: number;
+  totalDelivered: number;
+  totalFailed: number;
+  totalSent: number;
+  bounceRate: number;
+  clickRate: number;
+  deliveryRate: number;
+  totalOpened: number;
+}
+
+export interface TemplateDefault {
+}
+
+export interface NotificationWebhookResponse {
+  status: string;
+}
+
+export interface DiscoveryResponse {
+  code_challenge_methods_supported: string[];
+  grant_types_supported: string[];
+  introspection_endpoint_auth_methods_supported: string[];
+  issuer: string;
+  claims_supported: string[];
+  require_request_uri_registration: boolean;
+  revocation_endpoint: string;
+  revocation_endpoint_auth_methods_supported: string[];
+  scopes_supported: string[];
+  subject_types_supported: string[];
+  token_endpoint: string;
+  claims_parameter_supported: boolean;
+  introspection_endpoint: string;
+  jwks_uri: string;
+  registration_endpoint: string;
+  request_uri_parameter_supported: boolean;
+  response_modes_supported: string[];
+  userinfo_endpoint: string;
+  authorization_endpoint: string;
+  device_authorization_endpoint: string;
+  id_token_signing_alg_values_supported: string[];
+  request_parameter_supported: boolean;
+  response_types_supported: string[];
+  token_endpoint_auth_methods_supported: string[];
+}
+
+export interface EmailProviderConfig {
+  from: string;
+  from_name: string;
+  provider: string;
+  reply_to: string;
+  config: any;
+}
+
+export interface SecurityLevel {
+  [key: string]: any;
+}
+
+export interface FinishRegisterRequest {
+  name: string;
+  response: any;
+  userId: string;
+}
+
+export interface NoOpEmailProvider {
+  [key: string]: any;
 }
 
 export interface NotificationsConfig {
@@ -3134,627 +2950,407 @@ export interface NotificationsConfig {
   notifyOnRecoveryStart: boolean;
 }
 
-export interface SecurityQuestionInfo {
-  id: string;
-  isCustom: boolean;
-  questionId: number;
-  questionText: string;
+export interface ConsentTypeStatus {
+  granted: boolean;
+  grantedAt: string;
+  needsRenewal: boolean;
+  type: string;
+  version: string;
+  expiresAt: string | undefined;
 }
 
-export interface ConsentAuditLog {
-  userId: string;
-  consentId: string;
-  ipAddress: string;
-  newValue: Record<string, any>;
-  purpose: string;
-  reason: string;
-  action: string;
-  consentType: string;
+export interface StepUpPoliciesResponse {
+  policies: any[];
+}
+
+export interface ComplianceTemplatesResponse {
+  templates: any[];
+}
+
+export interface TrustedContact {
+}
+
+export interface Challenge {
+  attempts: number;
   createdAt: string;
-  id: string;
-  organizationId: string;
-  previousValue: Record<string, any>;
+  factorId: string;
+  metadata: any;
+  type: string;
   userAgent: string;
+  verifiedAt: string | undefined;
+  expiresAt: string;
+  id: string;
+  ipAddress: string;
+  maxAttempts: number;
+  status: string;
+  userId: string;
 }
 
-export interface ConsentExportFileResponse {
+export interface ComplianceProfileResponse {
+  id: string;
+}
+
+export interface DeviceAuthorizationDecisionRequest {
+  action: string;
+  user_code: string;
+}
+
+export interface TokenIntrospectionRequest {
+  client_id: string;
+  client_secret: string;
+  token: string;
+  token_type_hint: string;
+}
+
+export interface MultiStepRecoveryConfig {
+  allowUserChoice: boolean;
+  enabled: boolean;
+  requireAdminApproval: boolean;
+  sessionExpiry: Duration;
+  allowStepSkip: boolean;
+  highRiskSteps: string[];
+  lowRiskSteps: string[];
+  mediumRiskSteps: string[];
+  minimumSteps: number;
+}
+
+export interface UpdateMemberRequest {
+  role: string;
+}
+
+export interface EmailProviderDTO {
+  enabled: boolean;
+  fromEmail: string;
+  fromName: string;
+  type: string;
+  config: any;
+}
+
+export interface CreateTemplateResult {
+  message: string;
+  success: boolean;
+  template: TemplateDTO;
+}
+
+export interface MemberHandler {
+}
+
+export interface Config {
+  userverification: string;
+  authenticatorattachment: string;
+  rpid: string;
+  rporigins: string[];
+  attestationtype: string;
+  challengestorage: string;
+  requireresidentkey: boolean;
+  rpname: string;
+  timeout: Duration;
+}
+
+export interface ImpersonationErrorResponse {
+  error: string;
+}
+
+export interface UpdateEntryRequest {
+}
+
+export interface ConsentService {
+}
+
+export interface TestProviderResult {
+  message: string;
+  success: boolean;
+}
+
+export interface ComplianceReportFileResponse {
   content_type: string;
   data: number[];
 }
 
-export interface VerificationRepository {
+export interface DashboardConfig {
+  enableTreeView: boolean;
+  revealTimeout: Duration;
+  enableExport: boolean;
+  enableImport: boolean;
+  enableReveal: boolean;
 }
 
-export interface DeclareABTestWinnerRequest {
+export interface PolicyStats {
+  avgLatencyMs: number;
+  denyCount: number;
+  evaluationCount: number;
+  policyId: string;
+  policyName: string;
+  allowCount: number;
 }
 
-export interface BackupAuthConfigResponse {
-  config: any;
+export interface ContentEntryHandler {
 }
 
-export interface ListEvidenceFilter {
-  controlId: string | undefined;
-  evidenceType: string | undefined;
-  profileId: string | undefined;
-  standard: string | undefined;
-  appId: string | undefined;
+export interface ClientAuthResult {
 }
 
-export interface RevokeTrustedDeviceRequest {
-}
-
-export interface DeleteOrganizationRequest {
-}
-
-export interface LinkAccountRequest {
-  provider: string;
-  scopes: string[];
-}
-
-export interface ListAPIKeysResponse {
-  [key: string]: any;
-}
-
-export interface ContentTypeHandler {
-}
-
-export interface Device {
-  name?: string;
-  type?: string;
-  lastUsedAt: string;
-  ipAddress?: string;
-  userAgent?: string;
-  id: string;
-  userId: string;
-}
-
-export interface DocumentCheckConfig {
+export interface TwoFAStatusResponse {
   enabled: boolean;
-  extractData: boolean;
-  validateDataConsistency: boolean;
-  validateExpiry: boolean;
+  method: string;
+  trusted: boolean;
 }
 
-export interface DeclareABTestWinner_req {
-  abTestGroup: string;
-  winnerId: string;
+export interface CreateSecretOutput {
+  secret: SecretItem;
 }
 
-export interface ListPoliciesFilter {
-  appId: string | undefined;
-  policyType: string | undefined;
-  profileId: string | undefined;
-  standard: string | undefined;
-  status: string | undefined;
-}
-
-export interface BaseFactorAdapter {
-}
-
-export interface FactorAdapterRegistry {
-}
-
-export interface OAuthErrorResponse {
-  error: string;
-  error_description: string;
-  error_uri: string;
-  state: string;
-}
-
-export interface OnfidoProvider {
-}
-
-export interface UpdateTemplateRequest {
-}
-
-export interface VerifyCodeResponse {
-  attemptsLeft: number;
-  message: string;
-  valid: boolean;
-}
-
-export interface VideoVerificationSession {
-}
-
-export interface CreateEvidence_req {
-  description: string;
-  evidenceType: string;
-  fileUrl: string;
-  standard: string;
-  title: string;
-  controlId: string;
-}
-
-export interface RemoveMemberRequest {
-}
-
-export interface ConsentsResponse {
-  consents: any;
-  count: number;
-}
-
-export interface AuthorizeRequest {
-  id_token_hint: string;
-  redirect_uri: string;
-  response_type: string;
-  state: string;
-  ui_locales: string;
-  client_id: string;
-  code_challenge: string;
-  code_challenge_method: string;
-  login_hint: string;
-  max_age: number | undefined;
-  nonce: string;
-  prompt: string;
-  scope: string;
-  acr_values: string;
-}
-
-export interface PreviewConversionRequest {
-  condition: string;
-  resource: string;
-  subject: string;
-  actions: string[];
-}
-
-export interface TestCaseResult {
-  actual: boolean;
-  error: string;
-  evaluationTimeMs: number;
-  expected: boolean;
-  name: string;
-  passed: boolean;
-}
-
-export interface BulkPublishRequest {
-  ids: string[];
-}
-
-export interface EmailProviderConfig {
-  config: any;
-  from: string;
-  from_name: string;
-  provider: string;
-  reply_to: string;
-}
-
-export interface AsyncAdapter {
-}
-
-export interface UpdateProviderRequest {
-}
-
-export interface BackupAuthContactsResponse {
-  contacts: any[];
-}
-
-export interface ComplianceViolationsResponse {
-  violations: any[];
-}
-
-export interface StepUpAuditLogsResponse {
-  audit_logs: any[];
-}
-
-export interface AuditLogResponse {
-  entries: AuditLogEntry | undefined[];
-  page: number;
-  pageSize: number;
-  totalCount: number;
-}
-
-export interface PreviewTemplateRequest {
-}
-
-export interface RolesResponse {
-  roles: Role | undefined[];
-}
-
-export interface ChallengeStatusResponse {
-  sessionId: string;
-  status: string;
-  completedAt: string | undefined;
-  expiresAt: string;
-  factorsRemaining: number;
-  factorsRequired: number;
-  factorsVerified: number;
-}
-
-export interface UpdateTeamRequest {
-  description: string;
-  name: string;
-}
-
-export interface ImpersonationStartResponse {
-  impersonator_id: string;
-  session_id: string;
-  started_at: string;
-  target_user_id: string;
-}
-
-export interface GetStatsRequestDTO {
-}
-
-export interface NamespaceResponse {
+export interface GetOrganizationInput {
   appId: string;
-  description: string;
-  inheritPlatform: boolean;
-  policyCount: number;
-  templateId: string | undefined;
-  userOrganizationId: string | undefined;
-  actionCount: number;
-  createdAt: string;
-  environmentId: string;
-  id: string;
-  name: string;
-  resourceCount: number;
-  updatedAt: string;
+  orgId: string;
 }
 
-export interface App {
-}
-
-export interface ListTrainingFilter {
-  appId: string | undefined;
-  profileId: string | undefined;
-  standard: string | undefined;
-  status: string | undefined;
-  trainingType: string | undefined;
-  userId: string | undefined;
-}
-
-export interface CheckDependencies {
-}
-
-export interface EnrollFactorRequest {
-  name: string;
-  priority: string;
-  type: string;
-  metadata: any;
-}
-
-export interface ConsentExportResponse {
-  id: string;
-  status: string;
-}
-
-export interface PrivacySettingsRequest {
-  deletionGracePeriodDays: number | undefined;
-  requireAdminApprovalForDeletion: boolean | undefined;
-  ccpaMode: boolean | undefined;
-  contactEmail: string;
-  contactPhone: string;
-  dataExportExpiryHours: number | undefined;
-  gdprMode: boolean | undefined;
-  consentRequired: boolean | undefined;
-  dataRetentionDays: number | undefined;
-  dpoEmail: string;
-  requireExplicitConsent: boolean | undefined;
-  allowDataPortability: boolean | undefined;
-  anonymousConsentEnabled: boolean | undefined;
-  exportFormat: string[];
-  autoDeleteAfterDays: number | undefined;
-  cookieConsentEnabled: boolean | undefined;
-  cookieConsentStyle: string;
-}
-
-export interface MigrationStatusResponse {
-  environmentId: string;
-  migratedCount: number;
-  startedAt: string;
-  userOrganizationId: string | undefined;
-  validationPassed: boolean;
-  completedAt: string | undefined;
-  errors: string[];
-  failedCount: number;
-  progress: number;
-  status: string;
-  totalPolicies: number;
-  appId: string;
-}
-
-export interface CreateActionRequest {
-  description: string;
-  name: string;
-  namespaceId: string;
-}
-
-export interface GetEntryRequest {
-}
-
-export interface EmailFactorAdapter {
-}
-
-export interface AccessTokenClaims {
-  client_id: string;
-  scope: string;
-  token_type: string;
-}
-
-export interface DiscoveryResponse {
-  claims_supported: string[];
-  jwks_uri: string;
-  revocation_endpoint_auth_methods_supported: string[];
-  subject_types_supported: string[];
-  token_endpoint: string;
-  claims_parameter_supported: boolean;
-  grant_types_supported: string[];
-  issuer: string;
-  request_uri_parameter_supported: boolean;
-  require_request_uri_registration: boolean;
-  response_modes_supported: string[];
-  response_types_supported: string[];
-  userinfo_endpoint: string;
-  authorization_endpoint: string;
-  introspection_endpoint: string;
-  introspection_endpoint_auth_methods_supported: string[];
-  request_parameter_supported: boolean;
-  scopes_supported: string[];
-  code_challenge_methods_supported: string[];
-  id_token_signing_alg_values_supported: string[];
-  registration_endpoint: string;
-  revocation_endpoint: string;
-  token_endpoint_auth_methods_supported: string[];
-}
-
-export interface GetVersionsRequest {
-}
-
-export interface SecretsConfigSource {
-}
-
-export interface AccountAutoSendConfig {
-  suspended: boolean;
-  username_changed: boolean;
-  deleted: boolean;
-  email_change_request: boolean;
-  email_changed: boolean;
-  password_changed: boolean;
-  reactivated: boolean;
-}
-
-export interface NoOpDocumentProvider {
-  [key: string]: any;
-}
-
-export interface SendVerificationCodeResponse {
-  expiresAt: string;
-  maskedTarget: string;
-  message: string;
-  sent: boolean;
-}
-
-export interface MFAPolicy {
-  id: string;
-  lockoutDurationMinutes: number;
-  maxFailedAttempts: number;
-  organizationId: string;
-  requiredFactorCount: number;
-  requiredFactorTypes: string[];
-  stepUpRequired: boolean;
-  trustedDeviceDays: number;
-  adaptiveMfaEnabled: boolean;
-  allowedFactorTypes: string[];
-  createdAt: string;
-  gracePeriodDays: number;
-  updatedAt: string;
-}
-
-export interface ImpersonationMiddleware {
-}
-
-export interface EncryptionConfig {
-  masterKey: string;
-  rotateKeyAfter: Duration;
-  testOnStartup: boolean;
-}
-
-export interface AuthURLResponse {
-  url: string;
-}
-
-export interface ProviderConfigResponse {
-  appId: string;
-  message: string;
-  provider: string;
-}
-
-export interface TrustedDevice {
-  deviceId: string;
-  expiresAt: string;
-  id: string;
-  ipAddress: string;
-  name: string;
-  lastUsedAt: string | undefined;
-  metadata: any;
-  userAgent: string;
-  userId: string;
-  createdAt: string;
-}
-
-export interface StateStore {
-}
-
-export interface DiscoverProviderRequest {
-  email: string;
-}
-
-export interface CreateSecretRequest {
-  tags: string[];
-  value: any;
-  valueType: string;
-  description: string;
-  metadata: any;
-  path: string;
-}
-
-export interface VerifyTokenRequest {
-  audience: string[];
+export interface SSOAuthResponse {
+  session: Session | undefined;
   token: string;
-  tokenType: string;
+  user: User | undefined;
 }
 
-export interface Time {
+export interface GetNotificationDetailInput {
+  notificationId: string;
+}
+
+export interface FuncMap {
   [key: string]: any;
-}
-
-export interface DB {
-  [key: string]: any;
-}
-
-export interface RWMutex {
-  [key: string]: any;
-}
-
-export interface PolicyResponse {
-  createdAt: string;
-  enabled: boolean;
-  environmentId: string;
-  priority: number;
-  expression: string;
-  resourceType: string;
-  actions: string[];
-  name: string;
-  namespaceId: string;
-  updatedAt: string;
-  userOrganizationId: string | undefined;
-  version: number;
-  createdBy: string;
-  description: string;
-  id: string;
-  appId: string;
-}
-
-export interface PublishEntryRequest {
-}
-
-export interface RestoreEntryRequest {
-}
-
-export interface IDVerificationResponse {
-  verification: any;
-}
-
-export interface StartVideoSessionResponse {
-  expiresAt: string;
-  message: string;
-  sessionUrl: string;
-  startedAt: string;
-  videoSessionId: string;
-}
-
-export interface GenerateReportRequest {
-  format: string;
-  period: string;
-  reportType: string;
-  standard: string;
-}
-
-export interface DataExportConfig {
-  cleanupInterval: Duration;
-  expiryHours: number;
-  maxExportSize: number;
-  requestPeriod: Duration;
-  allowedFormats: string[];
-  autoCleanup: boolean;
-  defaultFormat: string;
-  enabled: boolean;
-  includeSections: string[];
-  maxRequests: number;
-  storagePath: string;
 }
 
 export interface ConnectionsResponse {
   connections: SocialAccount | undefined[];
 }
 
-export interface CreateProfileRequest {
-  metadata: any;
-  passwordRequireLower: boolean;
-  sessionIpBinding: boolean;
-  standards: string[];
-  dpoContact: string;
-  encryptionInTransit: boolean;
-  leastPrivilege: boolean;
-  passwordRequireSymbol: boolean;
-  passwordRequireUpper: boolean;
-  retentionDays: number;
-  sessionMaxAge: number;
+export interface GetSecretsInput {
+  pageSize: number;
+  search: string;
   appId: string;
-  auditLogExport: boolean;
-  dataResidency: string;
-  mfaRequired: boolean;
-  name: string;
-  passwordExpiryDays: number;
-  passwordRequireNumber: boolean;
-  rbacRequired: boolean;
-  complianceContact: string;
-  detailedAuditTrail: boolean;
-  encryptionAtRest: boolean;
-  passwordMinLength: number;
-  regularAccessReview: boolean;
-  sessionIdleTimeout: number;
+  page: number;
 }
 
-export interface ComplianceProfile {
-  dataResidency: string;
-  dpoContact: string;
-  encryptionInTransit: boolean;
-  sessionMaxAge: number;
-  standards: string[];
-  detailedAuditTrail: boolean;
-  mfaRequired: boolean;
-  rbacRequired: boolean;
-  appId: string;
-  passwordMinLength: number;
-  passwordRequireLower: boolean;
-  passwordRequireNumber: boolean;
-  regularAccessReview: boolean;
-  auditLogExport: boolean;
-  retentionDays: number;
-  sessionIpBinding: boolean;
-  name: string;
-  complianceContact: string;
-  id: string;
-  status: string;
-  encryptionAtRest: boolean;
-  leastPrivilege: boolean;
-  passwordExpiryDays: number;
-  passwordRequireSymbol: boolean;
-  passwordRequireUpper: boolean;
-  sessionIdleTimeout: number;
-  createdAt: string;
-  metadata: any;
-  updatedAt: string;
-}
-
-export interface UnbanUserRequestDTO {
-  reason: string;
-}
-
-export interface CreatePolicyRequest {
-  priority: number;
-  resourceType: string;
-  actions: string[];
+export interface CreateEvidence_req {
+  controlId: string;
   description: string;
+  evidenceType: string;
+  fileUrl: string;
+  standard: string;
+  title: string;
+}
+
+export interface GetStatsRequestDTO {
+}
+
+export interface AuthAutoSendDTO {
+  emailOtp: boolean;
+  magicLink: boolean;
+  mfaCode: boolean;
+  passwordReset: boolean;
+  verificationEmail: boolean;
+  welcome: boolean;
+}
+
+export interface WebhookConfig {
+  expiry_warning_days: number;
+  notify_on_created: boolean;
+  notify_on_deleted: boolean;
+  notify_on_expiring: boolean;
+  notify_on_rate_limit: boolean;
+  notify_on_rotated: boolean;
+  webhook_urls: string[];
   enabled: boolean;
-  expression: string;
+}
+
+export interface AuditServiceInterface {
+  [key: string]: any;
+}
+
+export interface LoginResponse {
+  passkeyUsed: string;
+  session: any;
+  token: string;
+  user: any;
+}
+
+export interface GetChallengeStatusRequest {
+}
+
+export interface ProviderSession {
+}
+
+export interface Team {
+  [key: string]: any;
+}
+
+export interface ConsentExportFileResponse {
+  data: number[];
+  content_type: string;
+}
+
+export interface GetValueRequest {
+}
+
+export interface ConsentDashboardConfig {
+  enabled: boolean;
+  path: string;
+  showAuditLog: boolean;
+  showConsentHistory: boolean;
+  showCookiePreferences: boolean;
+  showDataDeletion: boolean;
+  showDataExport: boolean;
+  showPolicies: boolean;
+}
+
+export interface RiskAssessment {
+  factors: string[];
+  level: string;
+  metadata: any;
+  recommended: string[];
+  score: number;
+}
+
+export interface ComplianceReport {
+  fileSize: number;
+  format: string;
+  generatedBy: string;
+  id: string;
+  reportType: string;
+  standard: string;
+  appId: string;
+  createdAt: string;
+  expiresAt: string;
+  fileUrl: string;
+  period: string;
+  profileId: string;
+  status: string;
+  summary: any;
+}
+
+export interface UpdateTeamResult {
+  team: TeamDTO;
+}
+
+export interface RestoreTemplateVersionRequest {
+}
+
+export interface CreateProfileFromTemplateRequest {
+  standard: string;
+}
+
+export interface ListViolationsFilter {
+  violationType: string | undefined;
+  appId: string | undefined;
+  profileId: string | undefined;
+  severity: string | undefined;
+  status: string | undefined;
+  userId: string | undefined;
+}
+
+export interface OrganizationQuickLink {
+  [key: string]: any;
+}
+
+export interface GetContentTypeRequest {
+}
+
+export interface ResourceRule {
+  org_id: string;
+  resource_type: string;
+  security_level: string;
+  sensitivity: string;
+  action: string;
+  description: string;
+}
+
+export interface CheckMetadata {
+  autoRun: boolean;
+  category: string;
+  description: string;
   name: string;
-  namespaceId: string;
+  severity: string;
+  standards: string[];
 }
 
-export interface MessageResponse {
-  message: string;
+export interface StateStorageConfig {
+  stateTtl: Duration;
+  useRedis: boolean;
+  redisAddr: string;
+  redisDb: number;
+  redisPassword: string;
 }
 
-export interface GetABTestResultsRequest {
+export interface ConsentStatusResponse {
+  status: string;
 }
 
-export interface ListAPIKeysRequest {
+export interface ConsentCookieResponse {
+  preferences: any;
+}
+
+export interface GetAnalyticsInput {
+  days: number | undefined;
+  endDate: string | undefined;
+  startDate: string | undefined;
+  templateId: string | undefined;
+}
+
+export interface ComplianceViolationsResponse {
+  violations: any[];
+}
+
+export interface TemplateParameter {
+  [key: string]: any;
+}
+
+export interface ListPasskeysResponse {
+  count: number;
+  passkeys: PasskeyInfo[];
 }
 
 export interface GetDocumentVerificationRequest {
   documentId: string;
+}
+
+export interface UpdateOrganizationHandlerRequest {
+}
+
+export interface MigrationHandler {
+}
+
+export interface AcceptInvitationRequest {
+}
+
+export interface NoOpNotificationProvider {
+  [key: string]: any;
+}
+
+export interface VerifyResponse {
+  token: string;
+  user: User | undefined;
+  session: Session | undefined;
+  success: boolean;
+}
+
+export interface OrganizationStatsDTO {
+  totalMembers: number;
+  totalOrganizations: number;
+  totalTeams: number;
+}
+
+export interface VerifyImpersonationRequest {
+}
+
+export interface ConsentManager {
+}
+
+export interface SetupSecurityQuestionsResponse {
+  setupAt: string;
+  count: number;
+  message: string;
+}
+
+export interface ListMembersRequest {
 }
 
 export interface GetDocumentVerificationResponse {
@@ -3766,74 +3362,79 @@ export interface GetDocumentVerificationResponse {
   documentId: string;
 }
 
-export interface StepUpStatusResponse {
-  status: string;
+export interface AdminPolicyRequest {
+  allowedTypes: string[];
+  enabled: boolean;
+  gracePeriod: number;
+  requiredFactors: number;
 }
 
-export interface ListImpersonationsRequest {
-}
-
-export interface InvitationResponse {
-  invitation: Invitation | undefined;
-  message: string;
-}
-
-export interface ProviderDiscoveredResponse {
-  found: boolean;
+export interface ProviderInfo {
+  createdAt: string;
+  domain: string;
   providerId: string;
   type: string;
 }
 
-export interface AuditServiceInterface {
+export interface UnblockUserRequest {
   [key: string]: any;
 }
 
-export interface ValidatePolicyResponse {
-  complexity: number;
-  error: string;
-  errors: string[];
+export interface RequestReverification_req {
+  reason: string;
+}
+
+export interface CreateTemplateVersion_req {
+  changes: string;
+}
+
+export interface RiskLevel {
+  [key: string]: any;
+}
+
+export interface EnrollFactorRequest {
+  metadata: any;
+  name: string;
+  priority: string;
+  type: string;
+}
+
+export interface FactorEnrollmentRequest {
+  priority: string;
+  type: string;
+  metadata: any;
+  name: string;
+}
+
+export interface UpdateMemberRoleInput {
+  appId: string;
+  memberId: string;
+  orgId: string;
+  role: string;
+}
+
+export interface PaginationInfoDTO {
+  currentPage: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface VerifyCodeRequest {
+  code: string;
+  sessionId: string;
+}
+
+export interface DocumentVerification {
+}
+
+export interface SignUpResponse {
   message: string;
-  valid: boolean;
-  warnings: string[];
+  status: string;
 }
 
-export interface JumioProvider {
-}
-
-export interface RenderTemplate_req {
-  variables: any;
-  template: string;
-}
-
-export interface VerificationsResponse {
-  count: number;
-  verifications: any;
-}
-
-export interface ConsentService {
-}
-
-export interface SecurityLevel {
-  [key: string]: any;
-}
-
-export interface NotificationTemplateListResponse {
-  templates: any[];
-  total: number;
-}
-
-export interface DeleteProviderRequest {
-}
-
-export interface AssignRoleRequest {
-  roleID: string;
-}
-
-export interface RiskContext {
-}
-
-export interface SendCodeRequest {
-  phone: string;
+export interface GetSettingsResult {
+  settings: OrganizationSettingsDTO;
 }
 
 export interface ProviderRegisteredResponse {
@@ -3842,26 +3443,1549 @@ export interface ProviderRegisteredResponse {
   type: string;
 }
 
-export interface OAuthState {
-  app_id: string;
-  created_at: string;
-  extra_scopes: string[];
-  link_user_id: string | undefined;
+export interface DocumentVerificationRequest {
+}
+
+export interface ContextRule {
+  description: string;
+  name: string;
+  org_id: string;
+  security_level: string;
+  condition: string;
+}
+
+export interface ListJWTKeysRequest {
+}
+
+export interface DeleteProviderRequest {
+}
+
+export interface UpdatePasskeyRequest {
+  name: string;
+}
+
+export interface AddTrustedContactRequest {
+  email: string;
+  name: string;
+  phone: string;
+  relationship: string;
+}
+
+export interface SecretsConfigSource {
+}
+
+export interface TestProviderInput {
+  recipient: string;
+  providerType: string;
+}
+
+export interface SMSProviderConfig {
+  config: any;
+  from: string;
   provider: string;
-  redirect_url: string;
-  user_organization_id: string | undefined;
+}
+
+export interface MigrateRolesRequest {
+  dryRun: boolean;
+}
+
+export interface ComplianceTemplate {
+  auditFrequencyDays: number;
+  dataResidency: string;
+  description: string;
+  name: string;
+  requiredPolicies: string[];
+  requiredTraining: string[];
+  sessionMaxAge: number;
+  standard: string;
+  mfaRequired: boolean;
+  passwordMinLength: number;
+  retentionDays: number;
+}
+
+export interface RouteRule {
+  description: string;
+  method: string;
+  org_id: string;
+  pattern: string;
+  security_level: string;
+}
+
+export interface VerificationResponse {
+  expiresAt: string | undefined;
+  factorsRemaining: number;
+  sessionComplete: boolean;
+  success: boolean;
+  token: string;
+}
+
+export interface UserVerificationStatusResponse {
+  status: UserVerificationStatus | undefined;
+}
+
+export interface GetAnalyticsResult {
+  analytics: AnalyticsDTO;
+}
+
+export interface ComplianceEvidence {
+  fileHash: string;
+  id: string;
+  title: string;
+  collectedBy: string;
+  controlId: string;
+  createdAt: string;
+  fileUrl: string;
+  metadata: any;
+  profileId: string;
+  standard: string;
+  appId: string;
+  description: string;
+  evidenceType: string;
+}
+
+export interface ListChecksFilter {
+  status: string | undefined;
+  appId: string | undefined;
+  checkType: string | undefined;
+  profileId: string | undefined;
+  sinceBefore: string | undefined;
+}
+
+export interface RevokeSessionRequestDTO {
+}
+
+export interface VerificationRequest {
+  challengeId: string;
+  code: string;
+  data: any;
+  deviceInfo: DeviceInfo | undefined;
+  factorId: string;
+  rememberDevice: boolean;
+}
+
+export interface MembersListResponse {
+  [key: string]: any;
+}
+
+export interface CreateContentTypeRequest {
+  [key: string]: any;
+}
+
+export interface CreateNamespaceRequest {
+  description: string;
+  inheritPlatform: boolean;
+  name: string;
+  templateId: string;
+}
+
+export interface ComplianceTrainingResponse {
+  id: string;
+}
+
+export interface Repository {
+  [key: string]: any;
+}
+
+export interface GetEntryStatsRequest {
+}
+
+export interface ValidateContentTypeRequest {
+}
+
+export interface CreateJWTKeyRequest {
+  algorithm: string;
+  curve: string;
+  expiresAt: string | undefined;
+  isPlatformKey: boolean;
+  keyType: string;
+  metadata: any;
+}
+
+export interface MigrationStatusResponse {
+  appId: string;
+  completedAt: string | undefined;
+  environmentId: string;
+  failedCount: number;
+  migratedCount: number;
+  progress: number;
+  userOrganizationId: string | undefined;
+  errors: string[];
+  startedAt: string;
+  status: string;
+  totalPolicies: number;
+  validationPassed: boolean;
+}
+
+export interface MFARepository {
+  [key: string]: any;
+}
+
+export interface AsyncAdapter {
+}
+
+export interface AdminUpdateProviderRequest {
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+  enabled: boolean | undefined;
+  scopes: string[];
+}
+
+export interface RetryService {
+  [key: string]: any;
+}
+
+export interface CreateSecretRequest {
+  metadata: any;
+  path: string;
+  tags: string[];
+  value: any;
+  valueType: string;
+  description: string;
+}
+
+export interface TokenRequest {
+  code: string;
+  code_verifier: string;
+  device_code: string;
+  grant_type: string;
+  redirect_uri: string;
+  refresh_token: string;
+  scope: string;
+  audience: string;
+  client_id: string;
+  client_secret: string;
+}
+
+export interface ValidatePolicyResponse {
+  message: string;
+  valid: boolean;
+  warnings: string[];
+  complexity: number;
+  error: string;
+  errors: string[];
+}
+
+export interface GetAppRequest {
+}
+
+export interface OAuthErrorResponse {
+  error: string;
+  error_description: string;
+  error_uri: string;
+  state: string;
+}
+
+export interface DocumentVerificationResult {
+}
+
+export interface WidgetDataDTO {
+  title: string;
+  content: string;
+  icon: string;
+  id: string;
+  order: number;
+  requireAdmin: boolean;
+  size: number;
+}
+
+export interface SMSProviderDTO {
+  config: any;
+  enabled: boolean;
+  type: string;
+}
+
+export interface Time {
+  [key: string]: any;
+}
+
+export interface OAuthTokenRepository {
+  [key: string]: any;
+}
+
+export interface MockUserRepository {
+  [key: string]: any;
+}
+
+export interface RollbackRequest {
+  reason: string;
+}
+
+export interface InvitationDTO {
+  inviterName: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  email: string;
+  expiresAt: string;
+  id: string;
+  invitedBy: string;
+}
+
+export interface FacialCheckConfig {
+  enabled: boolean;
+  motionCapture: boolean;
+  variant: string;
+}
+
+export interface BackupAuthCodesResponse {
+  codes: string[];
+}
+
+export interface OIDCLoginResponse {
+  authUrl: string;
+  nonce: string;
+  providerId: string;
+  state: string;
+}
+
+export interface ListNotificationsHistoryInput {
+  recipient: string | undefined;
+  status: string | undefined;
+  type: string | undefined;
+  limit: number;
+  page: number;
+}
+
+export interface ComplianceChecksResponse {
+  checks: any[];
+}
+
+export interface BackupAuthRecoveryResponse {
+  session_id: string;
+}
+
+export interface VerifyTokenRequest {
+  tokenType: string;
+  audience: string[];
+  token: string;
+}
+
+export interface GetMembersResult {
+  canManage: boolean;
+  data: MemberDTO[];
+  pagination: PaginationInfo;
+}
+
+export interface OrganizationSettingsDTO {
+  allowUserCreation: boolean;
+  defaultRole: string;
+  maxMembersPerOrg: number;
+  requireInvitation: boolean;
+  allowMultipleMemberships: boolean;
+  enabled: boolean;
+  invitationExpiryDays: number;
+  maxOrgsPerUser: number;
+  maxTeamsPerOrg: number;
+}
+
+export interface GetOrganizationsResult {
+  data: OrganizationSummaryDTO[];
+  pagination: PaginationInfo;
+  stats: OrganizationStatsDTO;
+}
+
+export interface UpdateAPIKeyRequest {
+  metadata: any;
+  name: string | undefined;
+  permissions: any;
+  rate_limit: number | undefined;
+  scopes: string[];
+  allowed_ips: string[];
+  description: string | undefined;
+}
+
+export interface RateLimit {
+}
+
+export interface SignInRequest {
+  provider: string;
+  redirectUrl: string;
+  scopes: string[];
+}
+
+export interface TOTPFactorAdapter {
+}
+
+export interface BackupCodesConfig {
+  allow_reuse: boolean;
+  count: number;
+  enabled: boolean;
+  format: string;
+  length: number;
+}
+
+export interface GetOrganizationBySlugRequest {
+}
+
+export interface RevokeSessionInput {
+  appId: string;
+  sessionId: string;
+}
+
+export interface FactorStatus {
+  [key: string]: any;
+}
+
+export interface BulkDeleteRequest {
+  ids: string[];
+}
+
+export interface VideoVerificationConfig {
+  sessionDuration: Duration;
+  enabled: boolean;
+  livenessThreshold: number;
+  provider: string;
+  recordSessions: boolean;
+  requireScheduling: boolean;
+  minScheduleAdvance: Duration;
+  recordingRetention: Duration;
+  requireAdminReview: boolean;
+  requireLivenessCheck: boolean;
+}
+
+export interface AdaptiveMFAConfig {
+  enabled: boolean;
+  factor_ip_reputation: boolean;
+  factor_location_change: boolean;
+  new_device_risk: number;
+  require_step_up_threshold: number;
+  velocity_risk: number;
+  factor_new_device: boolean;
+  factor_velocity: boolean;
+  location_change_risk: number;
+  risk_threshold: number;
+}
+
+export interface SessionAutoSendDTO {
+  allRevoked: boolean;
+  deviceRemoved: boolean;
+  newDevice: boolean;
+  newLocation: boolean;
+  suspiciousLogin: boolean;
+}
+
+export interface ServiceImpl {
+  [key: string]: any;
+}
+
+export interface ProviderRegistry {
+  [key: string]: any;
+}
+
+export interface CreateTeamRequest {
+  description: string;
+  name: string;
+}
+
+export interface EnableRequest {
+}
+
+export interface TimeBasedRule {
+  description: string;
+  max_age: Duration;
+  operation: string;
+  org_id: string;
+  security_level: string;
+}
+
+export interface DeleteFactorRequest {
+}
+
+export interface ConfigSourceConfig {
+  prefix: string;
+  priority: number;
+  refreshInterval: Duration;
+  autoRefresh: boolean;
+  enabled: boolean;
+}
+
+export interface DB {
+  [key: string]: any;
+}
+
+export interface GetSessionsInput {
+  status: string;
+  userId: string;
+  appId: string;
+  device: string;
+  page: number;
+  pageSize: number;
+  search: string;
+}
+
+export interface GetMembersInput {
+  appId: string;
+  limit: number;
+  orgId: string;
+  page: number;
+  search: string;
+}
+
+export interface ListAPIKeysResponse {
+  [key: string]: any;
+}
+
+export interface RejectRecoveryRequest {
+  reason: string;
+  sessionId: string;
+  notes: string;
+}
+
+export interface DataExportRequestInput {
+  format: string;
+  includeSections: string[];
+}
+
+export interface CreateOrganizationHandlerRequest {
+  [key: string]: any;
+}
+
+export interface AccountAutoSendConfig {
+  deleted: boolean;
+  email_change_request: boolean;
+  email_changed: boolean;
+  password_changed: boolean;
+  reactivated: boolean;
+  suspended: boolean;
+  username_changed: boolean;
+}
+
+export interface InviteMemberInput {
+  appId: string;
+  email: string;
+  orgId: string;
+  role: string;
+}
+
+export interface ImpersonationStartResponse {
+  impersonator_id: string;
+  session_id: string;
+  started_at: string;
+  target_user_id: string;
+}
+
+export interface SendResponse {
+  dev_otp: string;
+  status: string;
+}
+
+export interface RequirementsResponse {
+  count: number;
+  requirements: any;
+}
+
+export interface VerifyTokenResponse {
+  [key: string]: any;
+}
+
+export interface Plugin {
+}
+
+export interface GetRoleTemplatesResult {
+  templates: RoleTemplateDTO[];
+}
+
+export interface CreateSessionRequest {
+}
+
+export interface AppHandler {
+}
+
+export interface GetTeamRequest {
+}
+
+export interface FactorsResponse {
+  factors: any;
+  count: number;
+}
+
+export interface DeleteSecretRequest {
+}
+
+export interface PagesManager {
+  [key: string]: any;
+}
+
+export interface ImpersonationVerifyResponse {
+  impersonator_id: string;
+  is_impersonating: boolean;
+  target_user_id: string;
+}
+
+export interface TemplateResponse {
+  name: string;
+  parameters: TemplateParameter[];
+  category: string;
+  description: string;
+  examples: string[];
+  expression: string;
+  id: string;
+}
+
+export interface App {
+}
+
+export interface ImpersonationMiddleware {
+}
+
+export interface DeviceAuthorizationResponse {
+  device_code: string;
+  expires_in: number;
+  interval: number;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+}
+
+export interface GetStatusRequest {
+  user_id: string;
+  device_id: string;
+}
+
+export interface StepUpPolicyResponse {
+  id: string;
+}
+
+export interface SignUpRequest {
+  password: string;
+  username: string;
+}
+
+export interface IDVerificationStatusResponse {
+  status: any;
+}
+
+export interface IPWhitelistConfig {
+  enabled: boolean;
+  strict_mode: boolean;
+}
+
+export interface StepUpEvaluationResponse {
+  reason: string;
+  required: boolean;
+}
+
+export interface EncryptionConfig {
+  masterKey: string;
+  rotateKeyAfter: Duration;
+  testOnStartup: boolean;
+}
+
+export interface PasskeyInfo {
+  authenticatorType: string;
+  createdAt: string;
+  credentialId: string;
+  isResidentKey: boolean;
+  lastUsedAt: string | undefined;
+  name: string;
+  aaguid: string;
+  id: string;
+  signCount: number;
+}
+
+export interface JWK {
+  e: string;
+  kid: string;
+  kty: string;
+  n: string;
+  use: string;
+  alg: string;
+}
+
+export interface CallbackResult {
+}
+
+export interface StepUpRequirement {
+  currency: string;
+  current_level: string;
+  resource_type: string;
+  amount: number;
+  challenge_token: string;
+  required_level: string;
+  user_agent: string;
+  fulfilled_at: string | undefined;
+  id: string;
+  ip: string;
+  metadata: any;
+  method: string;
+  reason: string;
+  resource_action: string;
+  route: string;
+  created_at: string;
+  expires_at: string;
+  org_id: string;
+  risk_score: number;
+  rule_name: string;
+  session_id: string;
+  status: string;
+  user_id: string;
+}
+
+export interface GetInvitationsInput {
+  appId: string;
+  limit: number;
+  orgId: string;
+  page: number;
+  status: string;
+}
+
+export interface BackupAuthContactsResponse {
+  contacts: any[];
+}
+
+export interface FactorVerificationRequest {
+  code: string;
+  data: any;
+  factorId: string;
+}
+
+export interface RevealSecretOutput {
+  value: any;
+  valueType: string;
+}
+
+export interface NotificationSettingsDTO {
+  account: AccountAutoSendDTO;
+  appName: string;
+  auth: AuthAutoSendDTO;
+  organization: OrganizationAutoSendDTO;
+  session: SessionAutoSendDTO;
+}
+
+export interface NotificationTemplateResponse {
+  template: any;
+}
+
+export interface PreviewTemplateResult {
+  body: string;
+  renderedAt: string;
+  subject: string;
+}
+
+export interface DeviceCodeEntryResponse {
+  basePath: string;
+  formAction: string;
+  placeholder: string;
+}
+
+export interface ReorderFieldsRequest {
+}
+
+export interface BanUserRequestDTO {
+  expires_at: string | undefined;
+  reason: string;
+}
+
+export interface SMSConfig {
+  code_expiry_minutes: number;
+  code_length: number;
+  enabled: boolean;
+  provider: string;
+  rate_limit: RateLimitConfig | undefined;
+  template_id: string;
+}
+
+export interface UpdateTemplateResult {
+  success: boolean;
+  template: TemplateDTO;
+  message: string;
+}
+
+export interface ListUsersRequestDTO {
+}
+
+export interface RoleTemplateDTO {
+  description: string;
+  id: string;
+  name: string;
+  permissions: string[];
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface DeclareABTestWinnerRequest {
+}
+
+export interface ChannelsResponse {
+  channels: any;
+  count: number;
+}
+
+export interface PreviewConversionRequest {
+  actions: string[];
+  condition: string;
+  resource: string;
+  subject: string;
+}
+
+export interface ComplianceViolation {
+  id: string;
+  resolvedBy: string;
+  severity: string;
+  userId: string;
+  violationType: string;
+  appId: string;
+  createdAt: string;
+  metadata: any;
+  profileId: string;
+  resolvedAt: string | undefined;
+  status: string;
+  description: string;
+}
+
+export interface ConsentExpiryConfig {
+  allowRenewal: boolean;
+  autoExpireCheck: boolean;
+  defaultValidityDays: number;
+  enabled: boolean;
+  expireCheckInterval: Duration;
+  renewalReminderDays: number;
+  requireReConsent: boolean;
+}
+
+export interface OrganizationDetailDTO {
+  metadata: any;
+  name: string;
+  slug: string;
+  updatedAt: string;
+  createdAt: string;
+  id: string;
+  logo: string;
+}
+
+export interface TemplateEngine {
+}
+
+export interface RunCheck_req {
+  checkType: string;
+}
+
+export interface FactorType {
+  [key: string]: any;
+}
+
+export interface RecoveryMethod {
+  [key: string]: any;
+}
+
+export interface OrganizationHandler {
+}
+
+export interface TeamsResponse {
+  total: number;
+  teams: Team | undefined[];
+}
+
+export interface DeleteTeamResult {
+  success: boolean;
+}
+
+export interface RetentionConfig {
+  archiveBeforePurge: boolean;
+  archivePath: string;
+  enabled: boolean;
+  gracePeriodDays: number;
+  purgeSchedule: string;
+}
+
+export interface AppsListResponse {
+  [key: string]: any;
+}
+
+export interface VerificationRepository {
+}
+
+export interface BaseFactorAdapter {
+}
+
+export interface DiscoverProviderRequest {
+  email: string;
+}
+
+export interface LinkResponse {
+  user: any;
+  message: string;
+}
+
+export interface DeclineInvitationRequest {
+}
+
+export interface ListContentTypesRequest {
+}
+
+export interface VideoVerificationSession {
+}
+
+export interface ProviderListResponse {
+  providers: ProviderInfo[];
+  total: number;
+}
+
+export interface CreateActionRequest {
+  namespaceId: string;
+  description: string;
+  name: string;
+}
+
+export interface Organization {
+  [key: string]: any;
+}
+
+export interface TestSendTemplateInput {
+  recipient: string;
+  templateId: string;
+  variables: any;
+}
+
+export interface UpdateMemberRoleRequest {
+  role: string;
+}
+
+export interface JWKS {
+  keys: JWK[];
+}
+
+export interface TrackNotificationEvent_req {
+  event: string;
+  eventData?: any;
+  notificationId: string;
+  organizationId?: string | undefined;
+  templateId: string;
+}
+
+export interface ImpersonationListResponse {
+  [key: string]: any;
+}
+
+export interface RecoveryAttemptLog {
+}
+
+export interface DisableRequest {
+  user_id: string;
+}
+
+export interface MockRepository {
+}
+
+export interface ConsentReport {
+  pendingDeletions: number;
+  reportPeriodStart: string;
+  totalUsers: number;
+  completedDeletions: number;
+  consentRate: number;
+  dpasActive: number;
+  dpasExpiringSoon: number;
+  organizationId: string;
+  reportPeriodEnd: string;
+  usersWithConsent: number;
+  consentsByType: any;
+  dataExportsThisPeriod: number;
+}
+
+export interface MockStateStore {
+}
+
+export interface MockUserService {
+  [key: string]: any;
+}
+
+export interface NoOpVideoProvider {
+  [key: string]: any;
+}
+
+export interface ProviderCheckResult {
+}
+
+export interface GetTemplateResult {
+  template: TemplateDTO;
+}
+
+export interface ResourceAttributeRequest {
+  description: string;
+  name: string;
+  required: boolean;
+  type: string;
+  default: any;
+}
+
+export interface GenerateReportRequest {
+  period: string;
+  reportType: string;
+  standard: string;
+  format: string;
+}
+
+export interface RWMutex {
+  [key: string]: any;
+}
+
+export interface UserInfoResponse {
+  family_name: string;
+  given_name: string;
+  nickname: string;
+  preferred_username: string;
+  profile: string;
+  website: string;
+  email: string;
+  locale: string;
+  name: string;
+  updated_at: number;
+  birthdate: string;
+  email_verified: boolean;
+  phone_number: string;
+  picture: string;
+  sub: string;
+  zoneinfo: string;
+  gender: string;
+  middle_name: string;
+  phone_number_verified: boolean;
+}
+
+export interface KeyStore {
+}
+
+export interface GenerateRecoveryCodesResponse {
+  warning: string;
+  codes: string[];
+  count: number;
+  generatedAt: string;
+}
+
+export interface HealthCheckResponse {
+  enabledMethods: string[];
+  healthy: boolean;
+  message: string;
+  providersStatus: any;
+  version: string;
+}
+
+export interface StatusResponse {
+  emailVerified: boolean;
+  emailVerifiedAt: string | undefined;
+}
+
+export interface ConsentRecord {
+  consentType: string;
+  id: string;
+  organizationId: string;
+  createdAt: string;
+  granted: boolean;
+  grantedAt: string;
+  userId: string;
+  version: string;
+  userAgent: string;
+  ipAddress: string;
+  metadata: Record<string, any>;
+  purpose: string;
+  revokedAt: string | undefined;
+  updatedAt: string;
+  expiresAt: string | undefined;
+}
+
+export interface PrivacySettingsRequest {
+  ccpaMode: boolean | undefined;
+  contactEmail: string;
+  dataExportExpiryHours: number | undefined;
+  exportFormat: string[];
+  consentRequired: boolean | undefined;
+  cookieConsentStyle: string;
+  deletionGracePeriodDays: number | undefined;
+  requireAdminApprovalForDeletion: boolean | undefined;
+  requireExplicitConsent: boolean | undefined;
+  anonymousConsentEnabled: boolean | undefined;
+  autoDeleteAfterDays: number | undefined;
+  dpoEmail: string;
+  allowDataPortability: boolean | undefined;
+  contactPhone: string;
+  cookieConsentEnabled: boolean | undefined;
+  dataRetentionDays: number | undefined;
+  gdprMode: boolean | undefined;
+}
+
+export interface CancelInvitationResult {
+  success: boolean;
+}
+
+export interface IntrospectionService {
+}
+
+export interface SMSVerificationConfig {
+  codeExpiry: Duration;
+  codeLength: number;
+  cooldownPeriod: Duration;
+  enabled: boolean;
+  maxAttempts: number;
+  maxSmsPerDay: number;
+  messageTemplate: string;
+  provider: string;
+}
+
+export interface UnbanUserRequestDTO {
+  reason: string;
+}
+
+export interface DeleteTemplateRequest {
+}
+
+export interface ComplianceViolationResponse {
+  id: string;
 }
 
 export interface VerificationMethod {
   [key: string]: any;
 }
 
-export interface Handler {
+export interface ImpersonateUserRequestDTO {
+  duration: Duration;
 }
 
-export interface GenerateRecoveryCodesRequest {
-  count: number;
+export interface ListTemplatesInput {
+  language: string | undefined;
+  limit: number;
+  page: number;
+  type: string | undefined;
+  active: boolean | undefined;
+}
+
+export interface RevokeAllUserSessionsResult {
+  message: string;
+  revokedCount: number;
+  success: boolean;
+}
+
+export interface ComplianceStatusDetailsResponse {
+  status: string;
+}
+
+export interface ClientAuthenticator {
+}
+
+export interface VerifyCodeResponse {
+  attemptsLeft: number;
+  message: string;
+  valid: boolean;
+}
+
+export interface DataExportRequest {
+  includeSections: string[];
+  status: string;
+  createdAt: string;
+  expiresAt: string | undefined;
+  exportUrl: string;
+  updatedAt: string;
+  completedAt: string | undefined;
+  exportPath: string;
   format: string;
+  id: string;
+  ipAddress: string;
+  errorMessage: string;
+  exportSize: number;
+  organizationId: string;
+  userId: string;
+}
+
+export interface OnfidoConfig {
+  workflowId: string;
+  documentCheck: DocumentCheckConfig;
+  enabled: boolean;
+  includeFacialReport: boolean;
+  webhookToken: string;
+  apiToken: string;
+  facialCheck: FacialCheckConfig;
+  includeDocumentReport: boolean;
+  includeWatchlistReport: boolean;
+  region: string;
+}
+
+export interface DeleteFieldRequest {
+}
+
+export interface AuditConfig {
+  logFailed: boolean;
+  logIpAddress: boolean;
+  logUserAgent: boolean;
+  retentionDays: number;
+  archiveInterval: Duration;
+  archiveOldLogs: boolean;
+  enabled: boolean;
+  immutableLogs: boolean;
+  logDeviceInfo: boolean;
+  logSuccessful: boolean;
+  logAllAttempts: boolean;
+}
+
+export interface RejectRecoveryResponse {
+  message: string;
+  reason: string;
+  rejected: boolean;
+  rejectedAt: string;
+  sessionId: string;
+}
+
+export interface SecurityQuestion {
+}
+
+export interface VerifyRecoveryCodeResponse {
+  message: string;
+  remainingCodes: number;
+  valid: boolean;
+}
+
+export interface VerifySecurityAnswersResponse {
+  correctAnswers: number;
+  message: string;
+  requiredAnswers: number;
+  valid: boolean;
+  attemptsLeft: number;
+}
+
+export interface MockService {
+}
+
+export interface CheckSubResult {
+}
+
+export interface GetUserSessionsInput {
+  appId: string;
+  page: number;
+  pageSize: number;
+  userId: string;
+}
+
+export interface ContentTypeService {
+  [key: string]: any;
+}
+
+export interface StatsDTO {
+  [key: string]: any;
+}
+
+export interface CookieConsentConfig {
+  defaultStyle: string;
+  enabled: boolean;
+  requireExplicit: boolean;
+  validityPeriod: Duration;
+  allowAnonymous: boolean;
+  bannerVersion: string;
+  categories: string[];
+}
+
+export interface PoliciesListResponse {
+  policies: PolicyResponse | undefined[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface BeginLoginRequest {
+  userId: string;
+  userVerification: string;
+}
+
+export interface SessionStats {
+}
+
+export interface DashboardExtension {
+}
+
+export interface OrganizationUIRegistry {
+}
+
+export interface Email {
+}
+
+export interface ScopeInfo {
+}
+
+export interface BackupAuthStatsResponse {
+  stats: any;
+}
+
+export interface Device {
+  lastUsedAt: string;
+  ipAddress?: string;
+  userAgent?: string;
+  id: string;
+  userId: string;
+  name?: string;
+  type?: string;
+}
+
+export interface ChallengeStatusResponse {
+  completedAt: string | undefined;
+  expiresAt: string;
+  factorsRemaining: number;
+  factorsRequired: number;
+  factorsVerified: number;
+  sessionId: string;
+  status: string;
+}
+
+export interface AMLMatch {
+}
+
+export interface GetOrganizationResult {
+  organization: OrganizationDetailDTO;
+  stats: OrgDetailStatsDTO;
+  userRole: string;
+}
+
+export interface IDVerificationWebhookResponse {
+  status: string;
+}
+
+export interface VerifyAPIKeyResponse {
+  [key: string]: any;
+}
+
+export interface NoOpSMSProvider {
+  [key: string]: any;
+}
+
+export interface ProvidersConfig {
+  gitlab: ProviderConfig | undefined;
+  google: ProviderConfig | undefined;
+  line: ProviderConfig | undefined;
+  spotify: ProviderConfig | undefined;
+  apple: ProviderConfig | undefined;
+  dropbox: ProviderConfig | undefined;
+  facebook: ProviderConfig | undefined;
+  linkedin: ProviderConfig | undefined;
+  microsoft: ProviderConfig | undefined;
+  slack: ProviderConfig | undefined;
+  twitch: ProviderConfig | undefined;
+  twitter: ProviderConfig | undefined;
+  bitbucket: ProviderConfig | undefined;
+  discord: ProviderConfig | undefined;
+  github: ProviderConfig | undefined;
+  reddit: ProviderConfig | undefined;
+  notion: ProviderConfig | undefined;
+}
+
+export interface ID {
+  [key: string]: any;
+}
+
+export interface MockAppService {
+  [key: string]: any;
+}
+
+export interface GetSecretRequest {
+}
+
+export interface BlockUserRequest {
+  reason: string;
+}
+
+export interface NotificationStatusResponse {
+  status: string;
+}
+
+export interface CreateTraining_req {
+  userId: string;
+  standard: string;
+  trainingType: string;
+}
+
+export interface IdentityVerification {
+  [key: string]: any;
+}
+
+export interface CreateSecretInput {
+  appId: string;
+  description: string;
+  path: string;
+  tags: string[];
+  value: any;
+  valueType: string;
+}
+
+export interface IDVerificationErrorResponse {
+  error: string;
+}
+
+export interface RevokeAllUserSessionsInput {
+  appId: string;
+  userId: string;
+}
+
+export interface CompleteTrainingRequest {
+  score: number;
+}
+
+export interface ClientsListResponse {
+  clients: ClientSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface GetRecoveryStatsResponse {
+  adminReviewsRequired: number;
+  failedRecoveries: number;
+  highRiskAttempts: number;
+  pendingRecoveries: number;
+  successfulRecoveries: number;
+  totalAttempts: number;
+  averageRiskScore: number;
+  methodStats: any;
+  successRate: number;
+}
+
+export interface GetRoleTemplateInput {
+  appId: string;
+  templateId: string;
+}
+
+export interface DeleteTemplateResult {
+  message: string;
+  success: boolean;
+}
+
+export interface EnableRequest2FA {
+  method: string;
+  user_id: string;
+}
+
+export interface WebAuthnFactorAdapter {
+}
+
+export interface AccountLockedResponse {
+  code: string;
+  locked_minutes: number;
+  locked_until: string;
+  message: string;
+}
+
+export interface DeleteOrganizationResult {
+  success: boolean;
+}
+
+export interface NotificationListResponse {
+  total: number;
+  notifications: any[];
+}
+
+export interface ListRecoverySessionsResponse {
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  sessions: RecoverySessionInfo[];
+}
+
+export interface GetByPathRequest {
+}
+
+export interface ImpersonationSession {
+  [key: string]: any;
+}
+
+export interface ConsentDecision {
+}
+
+export interface DeleteTeamInput {
+  teamId: string;
+  appId: string;
+  orgId: string;
+}
+
+export interface ListProfilesFilter {
+  appId: string | undefined;
+  standard: string | undefined;
+  status: string | undefined;
+}
+
+export interface CallbackDataResponse {
+  user: User | undefined;
+  action: string;
+  isNewUser: boolean;
+}
+
+export interface CreateRoleTemplateResult {
+  template: RoleTemplateDTO;
+}
+
+export interface SAMLLoginResponse {
+  providerId: string;
+  redirectUrl: string;
+  requestId: string;
+}
+
+export interface AccessTokenClaims {
+  client_id: string;
+  scope: string;
+  token_type: string;
+}
+
+export interface Status {
+}
+
+export interface ImpersonationContext {
+  impersonation_id: string | undefined;
+  impersonator_id: string | undefined;
+  indicator_message: string;
+  is_impersonating: boolean;
+  target_user_id: string | undefined;
+}
+
+export interface RateLimiter {
+}
+
+export interface CreateTeamResult {
+  team: TeamDTO;
+}
+
+export interface Adapter {
+}
+
+export interface CompliancePolicyResponse {
+  id: string;
+}
+
+export interface AccessConfig {
+  allowApiAccess: boolean;
+  allowDashboardAccess: boolean;
+  rateLimitPerMinute: number;
+  requireAuthentication: boolean;
+  requireRbac: boolean;
+}
+
+export interface RegistrationService {
+}
+
+export interface AddTrustedContactResponse {
+  message: string;
+  name: string;
+  phone: string;
+  verified: boolean;
+  addedAt: string;
+  contactId: string;
+  email: string;
+}
+
+export interface DocumentCheckConfig {
+  validateDataConsistency: boolean;
+  validateExpiry: boolean;
+  enabled: boolean;
+  extractData: boolean;
+}
+
+export interface SecurityQuestionsConfig {
+  forbidCommonAnswers: boolean;
+  lockoutDuration: Duration;
+  minimumQuestions: number;
+  requiredToRecover: number;
+  maxAnswerLength: number;
+  maxAttempts: number;
+  predefinedQuestions: string[];
+  requireMinLength: number;
+  allowCustomQuestions: boolean;
+  caseSensitive: boolean;
+  enabled: boolean;
+}
+
+export interface KeyPair {
 }
 
 export interface SetupSecurityQuestionRequest {
@@ -3870,290 +4994,197 @@ export interface SetupSecurityQuestionRequest {
   questionId: number;
 }
 
-export interface SetupSecurityQuestionsRequest {
-  questions: SetupSecurityQuestionRequest[];
+export interface BackupAuthConfigResponse {
+  config: any;
 }
 
-export interface TrustedDevicesConfig {
-  default_expiry_days: number;
+export interface MemberDTO {
+  userId: string;
+  userName: string;
+  id: string;
+  joinedAt: string;
+  role: string;
+  status: string;
+  userEmail: string;
+}
+
+export interface OrganizationSummaryDTO {
+  userRole: string;
+  createdAt: string;
+  id: string;
+  logo: string;
+  memberCount: number;
+  name: string;
+  slug: string;
+  teamCount: number;
+}
+
+export interface DailyAnalyticsDTO {
+  totalOpened: number;
+  totalSent: number;
+  date: string;
+  deliveryRate: number;
+  openRate: number;
+  totalClicked: number;
+  totalDelivered: number;
+}
+
+export interface GetSessionStatsInput {
+  appId: string;
+}
+
+export interface TeamsListResponse {
+  [key: string]: any;
+}
+
+export interface RecoverySession {
+}
+
+export interface TOTPConfig {
+  algorithm: string;
+  digits: number;
   enabled: boolean;
-  max_devices_per_user: number;
-  max_expiry_days: number;
+  issuer: string;
+  period: number;
+  window_size: number;
 }
 
-export interface GetChallengeStatusRequest {
+export interface ComplianceUserTrainingResponse {
+  user_id: string;
 }
 
-export interface ConnectionResponse {
-  connection: SocialAccount | undefined;
+export interface ListRevisionsRequest {
 }
 
-export interface CallbackResponse {
-  user: User | undefined;
-  session: Session | undefined;
-  token: string;
+export interface RemoveTrustedContactRequest {
+  contactId: string;
+}
+
+export interface GetSecretInput {
+  appId: string;
+  secretId: string;
+}
+
+export interface BatchEvaluateRequest {
+  requests: EvaluateRequest[];
+}
+
+export interface RevokeTokenService {
+}
+
+export interface ListRecoverySessionsRequest {
+  organizationId: string;
+  page: number;
+  pageSize: number;
+  requiresReview: boolean;
+  status: string;
+}
+
+export interface MockOrganizationUIExtension {
 }
 
 export interface TemplateService {
 }
 
-export interface RevisionHandler {
+export interface DeleteTemplateInput {
+  templateId: string;
 }
 
-export interface VerifyRequest {
-}
-
-export interface HandleUpdateSettings_updates {
-  [key: string]: any;
-}
-
-export interface NotificationStatusResponse {
-  status: string;
-}
-
-export interface GetRolesRequest {
-}
-
-export interface SMSFactorAdapter {
-}
-
-export interface ConsentSummary {
-  organizationId: string;
-  pendingRenewals: number;
-  revokedConsents: number;
-  userId: string;
-  consentsByType: any;
-  hasPendingDeletion: boolean;
-  hasPendingExport: boolean;
-  lastConsentUpdate: string | undefined;
-  totalConsents: number;
-  expiredConsents: number;
-  grantedConsents: number;
-}
-
-export interface RunCheckRequest {
-  checkType: string;
-}
-
-export interface CreateResourceRequest {
-  attributes: ResourceAttributeRequest[];
-  description: string;
-  namespaceId: string;
-  type: string;
-}
-
-export interface AmountRule {
-  max_amount: number;
-  min_amount: number;
-  org_id: string;
-  security_level: string;
-  currency: string;
-  description: string;
-}
-
-export interface ConsentRecord {
-  userAgent: string;
-  granted: boolean;
-  ipAddress: string;
-  createdAt: string;
-  expiresAt: string | undefined;
-  grantedAt: string;
-  metadata: Record<string, any>;
-  purpose: string;
-  revokedAt: string | undefined;
-  updatedAt: string;
-  userId: string;
-  consentType: string;
-  id: string;
-  organizationId: string;
-  version: string;
-}
-
-export interface GetOrganizationBySlugRequest {
-}
-
-export interface SAMLLoginRequest {
-  relayState: string;
-}
-
-export interface GetTreeRequest {
-}
-
-export interface OrganizationAutoSendConfig {
-  role_changed: boolean;
-  transfer: boolean;
-  deleted: boolean;
-  invite: boolean;
-  member_added: boolean;
-  member_left: boolean;
-  member_removed: boolean;
-}
-
-export interface RotateAPIKeyResponse {
-  message: string;
-  api_key: APIKey | undefined;
-}
-
-export interface ComplianceChecksResponse {
-  checks: any[];
-}
-
-export interface ScopeResolver {
-}
-
-export interface EvaluationResult {
-  can_remember: boolean;
-  grace_period_ends_at: string;
-  matched_rules: string[];
-  requirement_id: string;
-  security_level: string;
-  allowed_methods: string[];
-  challenge_token: string;
-  current_level: string;
-  expires_at: string;
-  metadata: any;
-  reason: string;
-  required: boolean;
-}
-
-export interface SMSConfig {
-  provider: string;
-  rate_limit: RateLimitConfig | undefined;
-  template_id: string;
-  code_expiry_minutes: number;
-  code_length: number;
-  enabled: boolean;
-}
-
-export interface AdminUpdateProviderRequest {
-  clientSecret: string | undefined;
-  enabled: boolean | undefined;
-  scopes: string[];
-  clientId: string | undefined;
-}
-
-export interface CancelFunc {
-  [key: string]: any;
-}
-
-export interface BanUserRequest {
-  app_id: string;
-  expires_at: string | undefined;
-  reason: string;
-  user_id: string;
-  user_organization_id: string | undefined;
-}
-
-export interface ScopeDefinition {
-}
-
-export interface GenerateRecoveryCodesResponse {
-  codes: string[];
-  count: number;
-  generatedAt: string;
-  warning: string;
-}
-
-export interface NotificationChannels {
-  email: boolean;
-  slack: boolean;
-  webhook: boolean;
-}
-
-export interface ConsentDeletionResponse {
-  id: string;
-  status: string;
-}
-
-export interface ImpersonationAuditResponse {
-  [key: string]: any;
-}
-
-export interface SetUserRoleRequestDTO {
-  role: string;
-}
-
-export interface PreviewConversionResponse {
-  celExpression: string;
+export interface TestPolicyResponse {
   error: string;
-  policyName: string;
-  resourceId: string;
-  resourceType: string;
-  success: boolean;
+  failedCount: number;
+  passed: boolean;
+  passedCount: number;
+  results: TestCaseResult[];
+  total: number;
 }
 
-export interface TemplateDefault {
+export interface RBACMigrationService {
+  [key: string]: any;
 }
 
-export interface SendVerificationCodeRequest {
-  method: string;
+export interface RateLimitRule {
+  window: Duration;
+  max: number;
+}
+
+export interface Middleware {
+}
+
+export interface AutoSendConfig {
+  account: AccountAutoSendConfig;
+  auth: AuthAutoSendConfig;
+  organization: OrganizationAutoSendConfig;
+  session: SessionAutoSendConfig;
+}
+
+export interface ListPoliciesFilter {
+  appId: string | undefined;
+  policyType: string | undefined;
+  profileId: string | undefined;
+  standard: string | undefined;
+  status: string | undefined;
+}
+
+export interface AuditLog {
+}
+
+export interface ListVersionsResponse {
+  [key: string]: any;
+}
+
+export interface RecoveryStatus {
+  [key: string]: any;
+}
+
+export interface StartRecoveryResponse {
+  expiresAt: string;
+  requiredSteps: number;
+  requiresReview: boolean;
+  riskScore: number;
   sessionId: string;
-  target: string;
+  status: string;
+  availableMethods: string[];
+  completedSteps: number;
 }
 
-export interface ConsentCookieResponse {
-  preferences: any;
+export interface OnfidoProvider {
 }
 
-export interface ImpersonationSession {
-  [key: string]: any;
+export interface RotateAPIKeyRequest {
 }
 
-export interface Role {
-  [key: string]: any;
-}
-
-export interface InstantiateTemplateRequest {
+export interface BeginRegisterRequest {
+  authenticatorType: string;
   name: string;
-  namespaceId: string;
-  parameters: any;
-  priority: number;
-  resourceType: string;
-  actions: string[];
-  description: string;
-  enabled: boolean;
+  requireResidentKey: boolean;
+  userId: string;
+  userVerification: string;
 }
 
-export interface GetRevisionRequest {
+export interface ArchiveEntryRequest {
 }
 
-export interface Status {
+export interface SetupSecurityQuestionsRequest {
+  questions: SetupSecurityQuestionRequest[];
 }
 
-export interface DocumentVerificationConfig {
-  encryptionKey: string;
-  provider: string;
-  requireSelfie: boolean;
-  retentionPeriod: Duration;
-  storageProvider: string;
-  minConfidenceScore: number;
-  requireBothSides: boolean;
-  requireManualReview: boolean;
-  storagePath: string;
-  acceptedDocuments: string[];
-  enabled: boolean;
-  encryptAtRest: boolean;
+export interface SendOTPRequest {
+  user_id: string;
 }
 
-export interface ScheduleVideoSessionResponse {
-  instructions: string;
-  joinUrl: string;
-  message: string;
-  scheduledAt: string;
-  videoSessionId: string;
+export interface ProvidersResponse {
+  providers: string[];
 }
 
-export interface ComplianceDashboardResponse {
-  metrics: any;
+export interface RevealSecretInput {
+  appId: string;
+  secretId: string;
 }
 
-export interface VerifyChallengeRequest {
-  data: any;
-  deviceInfo: DeviceInfo | undefined;
-  factorId: string;
-  rememberDevice: boolean;
-  challengeId: string;
-  code: string;
+export interface NotificationPreviewResponse {
+  body: string;
+  subject: string;
 }
 
 export interface TokenRevocationRequest {
@@ -4163,42 +5194,144 @@ export interface TokenRevocationRequest {
   token_type_hint: string;
 }
 
+export interface UpdateMemberRoleResult {
+  member: MemberDTO;
+}
+
+export interface SessionTokenResponse {
+  session: Session | undefined;
+  token: string;
+}
+
+export interface GetMigrationStatusResponse {
+  hasMigratedPolicies: boolean;
+  lastMigrationAt: string;
+  migratedCount: number;
+  pendingRbacPolicies: number;
+}
+
+export interface ComplianceTemplateResponse {
+  standard: string;
+}
+
+export interface NotificationType {
+  [key: string]: any;
+}
+
+export interface BeginRegisterResponse {
+  challenge: string;
+  options: any;
+  timeout: Duration;
+  userId: string;
+}
+
+export interface ConsentPolicyResponse {
+  id: string;
+}
+
+export interface ActionDataDTO {
+  order: number;
+  requireAdmin: boolean;
+  style: string;
+  action: string;
+  icon: string;
+  id: string;
+  label: string;
+}
+
 export interface TestCase {
-  resource: any;
   action: string;
   expected: boolean;
   name: string;
   principal: any;
   request: any;
+  resource: any;
 }
 
-export interface WebhookResponse {
-  status: string;
-  received: boolean;
+export interface ScopeDefinition {
 }
 
-export interface UpdateAPIKeyRequest {
-  name: string | undefined;
-  permissions: any;
-  rate_limit: number | undefined;
-  scopes: string[];
-  allowed_ips: string[];
-  description: string | undefined;
+export interface TrustedContactInfo {
+  name: string;
+  phone: string;
+  relationship: string;
+  verified: boolean;
+  verifiedAt: string | undefined;
+  active: boolean;
+  email: string;
+  id: string;
+}
+
+export interface ScheduleVideoSessionRequest {
+  timeZone: string;
+  scheduledAt: string;
+  sessionId: string;
+}
+
+export interface GetSecretOutput {
+  secret: SecretItem;
+}
+
+export interface SaveBuilderTemplateResult {
+  message: string;
+  success: boolean;
+  templateId: string;
+}
+
+export interface CompleteTraining_req {
+  score: number;
+}
+
+export interface ComplianceStandard {
+  [key: string]: any;
+}
+
+export interface VerifyTrustedContactRequest {
+  token: string;
+}
+
+export interface CreateTeamInput {
+  name: string;
+  orgId: string;
+  appId: string;
+  description: string;
   metadata: any;
-}
-
-export interface OIDCLoginResponse {
-  providerId: string;
-  state: string;
-  authUrl: string;
-  nonce: string;
 }
 
 export interface UpdateSecretRequest {
+  metadata: any;
   tags: string[];
   value: any;
   description: string;
+}
+
+export interface ComplianceReportsResponse {
+  reports: any[];
+}
+
+export interface UserVerificationStatus {
+  [key: string]: any;
+}
+
+export interface MemoryChallengeStore {
+}
+
+export interface CreateConsentRequest {
   metadata: any;
+  purpose: string;
+  userId: string;
+  version: string;
+  consentType: string;
+  expiresIn: number | undefined;
+  granted: boolean;
+}
+
+export interface Duration {
+  [key: string]: any;
+}
+
+export interface ImpersonationAuditResponse {
+  [key: string]: any;
 }
 
 export interface ProvidersAppResponse {
@@ -4206,199 +5339,508 @@ export interface ProvidersAppResponse {
   providers: string[];
 }
 
-export interface ReviewDocumentRequest {
-  approved: boolean;
-  documentId: string;
-  notes: string;
-  rejectionReason: string;
+export interface ConsentAuditLog {
+  userAgent: string;
+  userId: string;
+  consentId: string;
+  consentType: string;
+  id: string;
+  ipAddress: string;
+  organizationId: string;
+  previousValue: Record<string, any>;
+  action: string;
+  createdAt: string;
+  newValue: Record<string, any>;
+  purpose: string;
+  reason: string;
 }
 
-export interface RecoverySession {
-}
-
-export interface RunCheck_req {
-  checkType: string;
-}
-
-export interface ScopeInfo {
-}
-
-export interface SAMLLoginResponse {
-  redirectUrl: string;
-  requestId: string;
-  providerId: string;
-}
-
-export interface CallbackResult {
-}
-
-export interface JSONBMap {
-  [key: string]: any;
-}
-
-export interface UserVerificationStatusResponse {
-  status: UserVerificationStatus | undefined;
-}
-
-export interface VerifyRequest2FA {
-  user_id: string;
-  code: string;
-  device_id: string;
-  remember_device: boolean;
-}
-
-export interface OTPSentResponse {
+export interface ConsentExportResponse {
+  id: string;
   status: string;
-  code: string;
+}
+
+export interface WebAuthnWrapper {
+}
+
+export interface RecoverySessionInfo {
+  userEmail: string;
+  completedAt: string | undefined;
+  createdAt: string;
+  currentStep: number;
+  expiresAt: string;
+  method: string;
+  requiresReview: boolean;
+  userId: string;
+  id: string;
+  riskScore: number;
+  status: string;
+  totalSteps: number;
 }
 
 export interface GetSecurityQuestionsRequest {
   sessionId: string;
 }
 
-export interface RevokeTokenService {
+export interface VerifyRequest2FA {
+  code: string;
+  device_id: string;
+  remember_device: boolean;
+  user_id: string;
+}
+
+export interface BanUserRequest {
+  user_organization_id: string | undefined;
+  app_id: string;
+  expires_at: string | undefined;
+  reason: string;
+  user_id: string;
+}
+
+export interface MembersResponse {
+  members: Member | undefined[];
+  total: number;
+}
+
+export interface AnalyticsDTO {
+  topTemplates: TemplatePerformanceDTO[];
+  byDay: DailyAnalyticsDTO[];
+  byTemplate: TemplateAnalyticsDTO[];
+  overview: OverviewStatsDTO;
+}
+
+export interface ServiceInterface {
+  [key: string]: any;
 }
 
 export interface TokenResponse {
-  access_token: string;
-  expires_in: number;
   id_token: string;
   refresh_token: string;
   scope: string;
   token_type: string;
+  access_token: string;
+  expires_in: number;
 }
 
-export interface ListUsersRequestDTO {
+export interface UpdateRecoveryConfigRequest {
+  minimumStepsRequired: number;
+  requireAdminReview: boolean;
+  requireMultipleSteps: boolean;
+  riskScoreThreshold: number;
+  enabledMethods: string[];
 }
 
-export interface PolicyStats {
-  policyName: string;
-  allowCount: number;
-  avgLatencyMs: number;
-  denyCount: number;
-  evaluationCount: number;
-  policyId: string;
-}
-
-export interface ReverifyRequest {
-  reason: string;
-}
-
-export interface RequestReverification_req {
-  reason: string;
-}
-
-export interface NotificationPreviewResponse {
-  body: string;
-  subject: string;
-}
-
-export interface SignInRequest {
-  [key: string]: any;
-}
-
-export interface ConsentExpiryConfig {
-  expireCheckInterval: Duration;
-  renewalReminderDays: number;
-  requireReConsent: boolean;
-  allowRenewal: boolean;
-  autoExpireCheck: boolean;
-  defaultValidityDays: number;
-  enabled: boolean;
-}
-
-export interface Logger {
-  [key: string]: any;
-}
-
-export interface NotificationListResponse {
-  notifications: any[];
-  total: number;
-}
-
-export interface TemplatesResponse {
-  count: number;
-  templates: any;
-}
-
-export interface AutoSendConfig {
-  auth: AuthAutoSendConfig;
-  organization: OrganizationAutoSendConfig;
-  session: SessionAutoSendConfig;
-  account: AccountAutoSendConfig;
-}
-
-export interface CreateDPARequest {
+export interface TrustedDevice {
+  userId: string;
+  deviceId: string;
+  expiresAt: string;
+  userAgent: string;
+  createdAt: string;
+  id: string;
+  ipAddress: string;
+  lastUsedAt: string | undefined;
   metadata: any;
-  agreementType: string;
-  effectiveDate: string;
-  expiryDate: string | undefined;
-  signedByEmail: string;
-  signedByName: string;
-  signedByTitle: string;
-  version: string;
-  content: string;
+  name: string;
 }
 
-export interface DataDeletionConfig {
-  requireAdminApproval: boolean;
-  archivePath: string;
-  retentionExemptions: string[];
-  allowPartialDeletion: boolean;
-  archiveBeforeDeletion: boolean;
-  autoProcessAfterGrace: boolean;
-  enabled: boolean;
-  gracePeriodDays: number;
-  notifyBeforeDeletion: boolean;
-  preserveLegalData: boolean;
-}
-
-export interface VerifyImpersonationRequest {
-}
-
-export interface VerifyAPIKeyResponse {
+export interface SchemaValidator {
   [key: string]: any;
 }
 
-export interface IDVerificationErrorResponse {
-  error: string;
+export interface CreateRoleTemplateInput {
+  description: string;
+  name: string;
+  permissions: string[];
+  appId: string;
 }
 
-export interface ProviderSessionRequest {
+export interface DeclareABTestWinner_req {
+  abTestGroup: string;
+  winnerId: string;
+}
+
+export interface UpdateSecretOutput {
+  secret: SecretItem;
+}
+
+export interface ActionsListResponse {
+  actions: ActionResponse | undefined[];
+  totalCount: number;
+}
+
+export interface RegenerateCodesRequest {
+  count: number;
+  user_id: string;
+}
+
+export interface GetABTestResultsRequest {
+}
+
+export interface NotificationsResponse {
+  count: number;
+  notifications: any;
+}
+
+export interface ChallengeStatus {
+  [key: string]: any;
+}
+
+export interface ClientDetailsResponse {
+  contacts: string[];
+  grantTypes: string[];
+  isOrgLevel: boolean;
+  organizationID: string;
+  redirectURIs: string[];
+  requireConsent: boolean;
+  tosURI: string;
+  responseTypes: string[];
+  tokenEndpointAuthMethod: string;
+  clientID: string;
+  policyURI: string;
+  requirePKCE: boolean;
+  updatedAt: string;
+  allowedScopes: string[];
+  createdAt: string;
+  logoURI: string;
+  name: string;
+  postLogoutRedirectURIs: string[];
+  trustedClient: boolean;
+  applicationType: string;
+}
+
+export interface DeleteUserRequestDTO {
+}
+
+export interface CloneContentTypeRequest {
+}
+
+export interface ClientRegistrationRequest {
+  client_name: string;
+  require_consent: boolean;
+  require_pkce: boolean;
+  trusted_client: boolean;
+  contacts: string[];
+  grant_types: string[];
+  policy_uri: string;
+  post_logout_redirect_uris: string[];
+  scope: string;
+  application_type: string;
+  logo_uri: string;
+  redirect_uris: string[];
+  token_endpoint_auth_method: string;
+  response_types: string[];
+  tos_uri: string;
+}
+
+export interface UpdateNamespaceRequest {
+  description: string;
+  inheritPlatform: boolean | undefined;
+  name: string;
 }
 
 export interface GetEffectivePermissionsRequest {
 }
 
-export interface BeginLoginResponse {
-  challenge: string;
-  options: any;
-  timeout: Duration;
+export interface EmailVerificationConfig {
+  enabled: boolean;
+  fromAddress: string;
+  fromName: string;
+  maxAttempts: number;
+  requireEmailProof: boolean;
+  codeExpiry: Duration;
+  codeLength: number;
+  emailTemplate: string;
 }
 
-export interface ValidateContentTypeRequest {
+export interface ScheduleVideoSessionResponse {
+  joinUrl: string;
+  message: string;
+  scheduledAt: string;
+  videoSessionId: string;
+  instructions: string;
 }
 
-export interface BlockUserRequest {
-  reason: string;
+export interface GetRecoveryStatsRequest {
+  endDate: string;
+  organizationId: string;
+  startDate: string;
 }
 
-export interface DeleteTemplateRequest {
+export interface CreateOrganizationInput {
+  appId: string;
+  logo: string;
+  metadata: any;
+  name: string;
+  slug: string;
 }
 
-export interface ListChecksFilter {
-  appId: string | undefined;
-  checkType: string | undefined;
-  profileId: string | undefined;
-  sinceBefore: string | undefined;
-  status: string | undefined;
+export interface SaveBuilderTemplateInput {
+  builderJson: string;
+  name: string;
+  subject: string;
+  templateId: string;
+  templateKey: string;
 }
 
-export interface GetByPathRequest {
+export interface ResourcesListResponse {
+  totalCount: number;
+  resources: ResourceResponse | undefined[];
+}
+
+export interface ReportsConfig {
+  enabled: boolean;
+  formats: string[];
+  includeEvidence: boolean;
+  retentionDays: number;
+  schedule: string;
+  storagePath: string;
+}
+
+export interface GetAuditLogsRequestDTO {
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface GetTemplateAnalyticsRequest {
+}
+
+export interface RevokeResponse {
+  revokedCount: number;
+  status: string;
+}
+
+export interface ClientUpdateRequest {
+  require_consent: boolean | undefined;
+  require_pkce: boolean | undefined;
+  token_endpoint_auth_method: string;
+  trusted_client: boolean | undefined;
+  allowed_scopes: string[];
+  contacts: string[];
+  grant_types: string[];
+  logo_uri: string;
+  redirect_uris: string[];
+  response_types: string[];
+  tos_uri: string;
+  name: string;
+  policy_uri: string;
+  post_logout_redirect_uris: string[];
+}
+
+export interface GetTemplateInput {
+  templateId: string;
+}
+
+export interface ComplianceDashboardResponse {
+  metrics: any;
 }
 
 export interface ContentFieldService {
   [key: string]: any;
+}
+
+export interface SuccessResponse {
+  data: any;
+  message: string;
+}
+
+export interface UpdatePolicyRequest {
+  active: boolean | undefined;
+  content: string;
+  description: string;
+  metadata: any;
+  name: string;
+  renewable: boolean | undefined;
+  required: boolean | undefined;
+  validityPeriod: number | undefined;
+}
+
+export interface EmailFactorAdapter {
+}
+
+export interface GetInvitationsResult {
+  pagination: PaginationInfo;
+  data: InvitationDTO[];
+}
+
+export interface GetSessionsResult {
+  pagination: PaginationInfoDTO;
+  sessions: SessionDTO[];
+  stats: SessionStatsDTO;
+}
+
+export interface ListTeamsRequest {
+}
+
+export interface CreateUserRequestDTO {
+  username: string;
+  email: string;
+  email_verified: boolean;
+  metadata: any;
+  name: string;
+  password: string;
+  role: string;
+}
+
+export interface ProviderDetailResponse {
+  oidcClientID: string;
+  samlEntryPoint: string;
+  type: string;
+  attributeMapping: any;
+  createdAt: string;
+  domain: string;
+  oidcIssuer: string;
+  oidcRedirectURI: string;
+  providerId: string;
+  samlIssuer: string;
+  updatedAt: string;
+  hasSamlCert: boolean;
+}
+
+export interface SendRequest {
+  email: string;
+}
+
+export interface EmailConfig {
+  enabled: boolean;
+  provider: string;
+  rate_limit: RateLimitConfig | undefined;
+  template_id: string;
+  code_expiry_minutes: number;
+  code_length: number;
+}
+
+export interface AssignRoleRequest {
+  roleID: string;
+}
+
+export interface VerifyRequest {
+  code: string;
+  email: string;
+  phone: string;
+  remember: boolean;
+}
+
+export interface RecoveryConfiguration {
+}
+
+export interface RiskContext {
+}
+
+export interface DeleteOrganizationInput {
+  appId: string;
+  orgId: string;
+}
+
+export interface ResendNotificationRequest {
+}
+
+export interface IDTokenClaims {
+  name: string;
+  nonce: string;
+  preferred_username: string;
+  session_state: string;
+  auth_time: number;
+  email: string;
+  given_name: string;
+  email_verified: boolean;
+  family_name: string;
+}
+
+export interface SendVerificationCodeRequest {
+  method: string;
+  sessionId: string;
+  target: string;
+}
+
+export interface CookieConsentRequest {
+  bannerVersion: string;
+  essential: boolean;
+  functional: boolean;
+  marketing: boolean;
+  personalization: boolean;
+  sessionId: string;
+  thirdParty: boolean;
+  analytics: boolean;
+}
+
+export interface FactorEnrollmentResponse {
+  provisioningData: any;
+  status: string;
+  type: string;
+  factorId: string;
+}
+
+export interface TwoFARepository {
+  [key: string]: any;
+}
+
+export interface WebAuthnConfig {
+  authenticator_selection: any;
+  enabled: boolean;
+  rp_display_name: string;
+  rp_id: string;
+  rp_origins: string[];
+  timeout: number;
+  attestation_preference: string;
+}
+
+export interface UpdateTeamInput {
+  metadata: any;
+  name: string;
+  orgId: string;
+  teamId: string;
+  appId: string;
+  description: string;
+}
+
+export interface KeyStats {
+}
+
+export interface InitiateChallengeRequest {
+  context: string;
+  factorTypes: string[];
+  metadata: any;
+}
+
+export interface DeleteAppRequest {
+}
+
+export interface RevisionHandler {
+}
+
+export interface PolicyResponse {
+  description: string;
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  userOrganizationId: string | undefined;
+  version: number;
+  appId: string;
+  createdBy: string;
+  enabled: boolean;
+  expression: string;
+  namespaceId: string;
+  priority: number;
+  resourceType: string;
+  actions: string[];
+  environmentId: string;
+  name: string;
+}
+
+export interface RegisterProviderRequest {
+  oidcClientSecret: string;
+  oidcIssuer: string;
+  providerId: string;
+  oidcRedirectURI: string;
+  samlCert: string;
+  samlEntryPoint: string;
+  samlIssuer: string;
+  type: string;
+  attributeMapping: any;
+  domain: string;
+  oidcClientID: string;
 }
 
 export interface SendWithTemplateRequest {
@@ -4411,497 +5853,26 @@ export interface SendWithTemplateRequest {
   recipient: string;
 }
 
-export interface CompleteRecoveryRequest {
-  sessionId: string;
-}
-
-export interface ResolveViolationRequest {
-  notes: string;
-  resolution: string;
-}
-
-export interface RegistrationService {
-}
-
-export interface ProviderDetailResponse {
-  samlEntryPoint: string;
-  samlIssuer: string;
-  type: string;
-  updatedAt: string;
-  createdAt: string;
-  domain: string;
-  hasSamlCert: boolean;
-  oidcRedirectURI: string;
-  attributeMapping: any;
-  oidcClientID: string;
-  oidcIssuer: string;
-  providerId: string;
-}
-
-export interface Team {
-  [key: string]: any;
-}
-
-export interface TrustedContactsConfig {
-  allowEmailContacts: boolean;
-  allowPhoneContacts: boolean;
+export interface MFAStatus {
+  policyActive: boolean;
+  requiredCount: number;
+  trustedDevice: boolean;
   enabled: boolean;
-  maxNotificationsPerDay: number;
-  maximumContacts: number;
-  minimumContacts: number;
-  verificationExpiry: Duration;
-  cooldownPeriod: Duration;
-  requireVerification: boolean;
-  requiredToRecover: number;
+  enrolledFactors: FactorInfo[];
+  gracePeriod: string | undefined;
 }
 
-export interface TOTPConfig {
-  window_size: number;
-  algorithm: string;
-  digits: number;
-  enabled: boolean;
-  issuer: string;
-  period: number;
+export interface GetOverviewStatsInput {
+  days: number | undefined;
+  endDate: string | undefined;
+  startDate: string | undefined;
 }
 
-export interface GetPasskeyRequest {
-}
-
-export interface ConsentRequest {
-  client_id: string;
-  code_challenge: string;
-  code_challenge_method: string;
-  redirect_uri: string;
-  response_type: string;
-  scope: string;
-  state: string;
-  action: string;
-}
-
-export interface CreateContentTypeRequest {
-  [key: string]: any;
-}
-
-export interface AppsListResponse {
-  [key: string]: any;
-}
-
-export interface ImpersonationListResponse {
-  [key: string]: any;
-}
-
-export interface ListSessionsRequest {
-  app_id: string;
-  limit: number;
-  page: number;
-  user_id: string | undefined;
-  user_organization_id: string | undefined;
-}
-
-export interface ActionsListResponse {
-  actions: ActionResponse | undefined[];
-  totalCount: number;
-}
-
-export interface VerifyRecoveryCodeResponse {
+export interface RotateAPIKeyResponse {
+  api_key: APIKey | undefined;
   message: string;
-  remainingCodes: number;
-  valid: boolean;
 }
 
-export interface GetRecoveryStatsRequest {
-  endDate: string;
-  organizationId: string;
-  startDate: string;
-}
-
-export interface UploadDocumentRequest {
-  backImage: string;
-  documentType: string;
-  frontImage: string;
-  selfie: string;
-  sessionId: string;
-}
-
-export interface ListRecoverySessionsResponse {
-  page: number;
-  pageSize: number;
-  sessions: RecoverySessionInfo[];
-  totalCount: number;
-}
-
-export interface RequirementsResponse {
-  count: number;
-  requirements: any;
-}
-
-export interface MFAPolicyResponse {
-  id: string;
-  organizationId: string | undefined;
-  requiredFactorCount: number;
-  allowedFactorTypes: string[];
-  appId: string;
-  enabled: boolean;
-  gracePeriodDays: number;
-}
-
-export interface NotificationWebhookResponse {
-  status: string;
-}
-
-export interface BackupAuthStatsResponse {
-  stats: any;
-}
-
-export interface AutomatedChecksConfig {
-  accessReview: boolean;
-  checkInterval: Duration;
-  dataRetention: boolean;
-  enabled: boolean;
-  inactiveUsers: boolean;
-  mfaCoverage: boolean;
-  suspiciousActivity: boolean;
-  passwordPolicy: boolean;
-  sessionPolicy: boolean;
-}
-
-export interface MockEmailService {
-  [key: string]: any;
-}
-
-export interface ChallengeResponse {
-  factorsRequired: number;
-  sessionId: string;
-  availableFactors: FactorInfo[];
-  challengeId: string;
-  expiresAt: string;
-}
-
-export interface DeleteTeamRequest {
-}
-
-export interface UpdatePasskeyRequest {
-  name: string;
-}
-
-export interface ListPasskeysResponse {
-  count: number;
-  passkeys: PasskeyInfo[];
-}
-
-export interface AutoCleanupConfig {
-  enabled: boolean;
-  interval: Duration;
-}
-
-export interface DocumentVerificationRequest {
-}
-
-export interface SMSVerificationConfig {
-  codeLength: number;
-  cooldownPeriod: Duration;
-  enabled: boolean;
-  maxAttempts: number;
-  maxSmsPerDay: number;
-  messageTemplate: string;
-  provider: string;
-  codeExpiry: Duration;
-}
-
-export interface EmailVerificationConfig {
-  emailTemplate: string;
-  enabled: boolean;
-  fromAddress: string;
-  fromName: string;
-  maxAttempts: number;
-  requireEmailProof: boolean;
-  codeExpiry: Duration;
-  codeLength: number;
-}
-
-export interface CreateTraining_req {
-  standard: string;
-  trainingType: string;
-  userId: string;
-}
-
-export interface AddTeamMember_req {
-  member_id: string;
-  role: string;
-}
-
-export interface ClientsListResponse {
-  clients: ClientSummary[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-}
-
-export interface ClientDetailsResponse {
-  trustedClient: boolean;
-  allowedScopes: string[];
-  createdAt: string;
-  grantTypes: string[];
-  logoURI: string;
-  tosURI: string;
-  name: string;
-  organizationID: string;
-  policyURI: string;
-  updatedAt: string;
-  applicationType: string;
-  clientID: string;
-  requireConsent: boolean;
-  responseTypes: string[];
-  contacts: string[];
-  isOrgLevel: boolean;
-  postLogoutRedirectURIs: string[];
-  redirectURIs: string[];
-  requirePKCE: boolean;
-  tokenEndpointAuthMethod: string;
-}
-
-export interface Service {
-}
-
-export interface NotificationsResponse {
-  count: number;
-  notifications: any;
-}
-
-export interface RotateAPIKeyRequest {
-}
-
-export interface GetRecoveryConfigResponse {
-  riskScoreThreshold: number;
-  enabledMethods: string[];
-  minimumStepsRequired: number;
-  requireAdminReview: boolean;
-  requireMultipleSteps: boolean;
-}
-
-export interface FactorVerificationRequest {
-  data: any;
-  factorId: string;
-  code: string;
-}
-
-export interface RevokeResponse {
-  revokedCount: number;
-  status: string;
-}
-
-export interface MetadataResponse {
-  metadata: string;
-}
-
-export interface MockUserRepository {
-  [key: string]: any;
-}
-
-export interface BulkDeleteRequest {
-  ids: string[];
-}
-
-export interface ResendResponse {
-  status: string;
-}
-
-export interface BackupAuthDocumentResponse {
-  id: string;
-}
-
-export interface DataExportRequestInput {
-  format: string;
-  includeSections: string[];
-}
-
-export interface JWKS {
-  keys: JWK[];
-}
-
-export interface AddCustomPermission_req {
-  category: string;
-  description: string;
-  name: string;
-}
-
-export interface ComplianceStandard {
-  [key: string]: any;
-}
-
-export interface TemplateResponse {
-  category: string;
-  description: string;
-  examples: string[];
-  expression: string;
-  id: string;
-  name: string;
-  parameters: TemplateParameter[];
-}
-
-export interface AMLMatch {
-}
-
-export interface AuditConfig {
-  retentionDays: number;
-  archiveInterval: Duration;
-  archiveOldLogs: boolean;
-  enabled: boolean;
-  immutableLogs: boolean;
-  logAllAttempts: boolean;
-  logSuccessful: boolean;
-  logUserAgent: boolean;
-  logDeviceInfo: boolean;
-  logFailed: boolean;
-  logIpAddress: boolean;
-}
-
-export interface ImpersonationErrorResponse {
-  error: string;
-}
-
-export interface Authsome {
-  [key: string]: any;
-}
-
-export interface OAuthTokenRepository {
-  [key: string]: any;
-}
-
-export interface RecoveryMethod {
-  [key: string]: any;
-}
-
-export interface Plugin {
-}
-
-export interface ComplianceTemplateResponse {
-  standard: string;
-}
-
-export interface ResourcesListResponse {
-  resources: ResourceResponse | undefined[];
-  totalCount: number;
-}
-
-export interface WebhookPayload {
-}
-
-export interface CreateProvider_req {
-  config: any;
-  isDefault: boolean;
-  organizationId?: string | undefined;
-  providerName: string;
-  providerType: string;
-}
-
-export interface TOTPSecret {
-}
-
-export interface RateLimitConfig {
-  enabled: boolean;
-  window: Duration;
-}
-
-export interface MockUserService {
-  [key: string]: any;
-}
-
-export interface RiskEngine {
-}
-
-export interface RevokeAllRequest {
-  includeCurrentSession: boolean;
-}
-
-export interface EnableResponse {
-  status: string;
-  totp_uri: string;
-}
-
-export interface CompleteVideoSessionRequest {
-  livenessPassed: boolean;
-  livenessScore: number;
-  notes: string;
-  verificationResult: string;
-  videoSessionId: string;
-}
-
-export interface StepUpAuditLog {
-  user_agent: string;
-  event_data: any;
-  event_type: string;
-  org_id: string;
-  user_id: string;
-  created_at: string;
-  id: string;
-  ip: string;
-  severity: string;
-}
-
-export interface CookieConsentConfig {
-  allowAnonymous: boolean;
-  bannerVersion: string;
-  categories: string[];
-  defaultStyle: string;
-  enabled: boolean;
-  requireExplicit: boolean;
-  validityPeriod: Duration;
-}
-
-export interface DataProcessingAgreement {
-  content: string;
-  digitalSignature: string;
-  effectiveDate: string;
-  agreementType: string;
-  id: string;
-  signedBy: string;
-  signedByEmail: string;
-  status: string;
-  updatedAt: string;
-  createdAt: string;
-  expiryDate: string | undefined;
-  organizationId: string;
-  signedByTitle: string;
-  version: string;
-  ipAddress: string;
-  metadata: Record<string, any>;
-  signedByName: string;
-}
-
-export interface EncryptionService {
-}
-
-export interface OAuthClientRepository {
-  [key: string]: any;
-}
-
-export interface Client {
-  [key: string]: any;
-}
-
-export interface GetNotificationRequest {
-}
-
-export interface VerifySecurityAnswersResponse {
-  message: string;
-  requiredAnswers: number;
-  valid: boolean;
-  attemptsLeft: number;
-  correctAnswers: number;
-}
-
-export interface ConsentAuditConfig {
-  signLogs: boolean;
-  enabled: boolean;
-  exportFormat: string;
-  immutable: boolean;
-  logUserAgent: boolean;
-  retentionDays: number;
-  archiveInterval: Duration;
-  archiveOldLogs: boolean;
-  logAllChanges: boolean;
-  logIpAddress: boolean;
+export interface PolicyEngine {
 }
 

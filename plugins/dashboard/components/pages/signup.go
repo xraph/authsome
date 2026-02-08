@@ -36,10 +36,10 @@ func Signup(data SignupPageData) g.Node {
 				TitleEl(g.Text(data.Title+" - AuthSome Dashboard")),
 
 				// Compiled Tailwind CSS + Preline UI styles
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
+				Link(Rel("stylesheet"), Href(data.BasePath+"static/css/dashboard.css")),
 
 				// Bundled JavaScript (Preline + custom components)
-				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
+				Script(Src(data.BasePath+"static/js/bundle.js")),
 
 				// Alpine.js - Load LAST
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
@@ -94,7 +94,7 @@ func Signup(data SignupPageData) g.Node {
 
 						// Signup form
 						FormEl(Class("mt-8 space-y-6"),
-							Action(data.BasePath+"/dashboard/signup"),
+							Action(data.BasePath+"signup"),
 							Method("POST"),
 							Input(Type("hidden"), Name("csrf_token"), Value(data.CSRFToken)),
 							Input(Type("hidden"), Name("redirect"), Value(data.Data.Redirect)),
@@ -182,7 +182,7 @@ func Signup(data SignupPageData) g.Node {
 							Div(Class("text-center"),
 								P(Class("text-sm text-gray-600 dark:text-gray-400"),
 									g.Text("Already have an account? "),
-									A(Href(data.BasePath+"/dashboard/login"),
+									A(Href(data.BasePath+"login"),
 										Class("font-medium text-violet-600 hover:text-violet-500 dark:text-violet-400 dark:hover:text-violet-300"),
 										g.Text("Sign in"),
 									),

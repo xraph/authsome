@@ -17,10 +17,10 @@ func TestMapSCIMToAuthSomeUser(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		scimUser  *SCIMUser
-		wantEmail string
-		wantSCIMName  string
+		name         string
+		scimUser     *SCIMUser
+		wantEmail    string
+		wantSCIMName string
 	}{
 		{
 			name: "Basic user with display name",
@@ -32,8 +32,8 @@ func TestMapSCIMToAuthSomeUser(t *testing.T) {
 					{Value: "john.doe@example.com", Primary: true, Type: "work"},
 				},
 			},
-			wantEmail: "john.doe@example.com",
-			wantSCIMName:  "John Doe",
+			wantEmail:    "john.doe@example.com",
+			wantSCIMName: "John Doe",
 		},
 		{
 			name: "User with structured name",
@@ -48,8 +48,8 @@ func TestMapSCIMToAuthSomeUser(t *testing.T) {
 					{Value: "jane.smith@example.com", Primary: true},
 				},
 			},
-			wantEmail: "jane.smith@example.com",
-			wantSCIMName:  "Jane Smith",
+			wantEmail:    "jane.smith@example.com",
+			wantSCIMName: "Jane Smith",
 		},
 		{
 			name: "Inactive user",
@@ -60,8 +60,8 @@ func TestMapSCIMToAuthSomeUser(t *testing.T) {
 					{Value: "inactive@example.com", Primary: true},
 				},
 			},
-			wantEmail: "inactive@example.com",
-			wantSCIMName:  "",
+			wantEmail:    "inactive@example.com",
+			wantSCIMName: "",
 		},
 	}
 

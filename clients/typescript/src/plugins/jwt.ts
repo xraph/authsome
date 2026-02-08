@@ -13,14 +13,14 @@ export class JwtPlugin implements ClientPlugin {
   }
 
   async createJWTKey(request: types.CreateJWTKeyRequest): Promise<types.JWTKey> {
-    const path = '/jwt/createjwtkey';
+    const path = '/jwt/keys';
     return this.client.request<types.JWTKey>('POST', path, {
       body: request,
     });
   }
 
   async listJWTKeys(request?: types.ListJWTKeysRequest): Promise<types.ListJWTKeysResponse> {
-    const path = '/jwt/listjwtkeys';
+    const path = '/jwt/keys';
     return this.client.request<types.ListJWTKeysResponse>('GET', path, {
       query: this.client.toQueryParams(request),
     });

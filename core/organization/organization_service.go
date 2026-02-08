@@ -21,6 +21,20 @@ type OrganizationService struct {
 
 // NewOrganizationService creates a new organization service
 func NewOrganizationService(repo OrganizationRepository, cfg Config, rbacSvc *rbac.Service) *OrganizationService {
+	// Apply defaults for any zero-valued config fields
+	if cfg.MaxMembersPerOrganization == 0 {
+		cfg.MaxMembersPerOrganization = DefaultConfig().MaxMembersPerOrganization
+	}
+	if cfg.MaxOrganizationsPerUser == 0 {
+		cfg.MaxOrganizationsPerUser = DefaultConfig().MaxOrganizationsPerUser
+	}
+	if cfg.MaxTeamsPerOrganization == 0 {
+		cfg.MaxTeamsPerOrganization = DefaultConfig().MaxTeamsPerOrganization
+	}
+	if cfg.InvitationExpiryHours == 0 {
+		cfg.InvitationExpiryHours = DefaultConfig().InvitationExpiryHours
+	}
+	
 	return &OrganizationService{
 		repo:    repo,
 		config:  cfg,

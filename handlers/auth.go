@@ -12,6 +12,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
+	"github.com/xraph/authsome/core/audit"
 	aud "github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/contexts"
@@ -112,7 +113,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 	}
 	if h.aud != nil && res.User != nil {
 		uid := res.User.ID
-		if err := h.aud.Log(c.Request().Context(), &uid, "signup", "user:"+uid.String(), ip, req.UserAgent, ""); err != nil {
+		if err := h.aud.Log(c.Request().Context(), &uid, string(audit.ActionAuthSignup), "user:"+uid.String(), ip, req.UserAgent, ""); err != nil {
 			log.Printf("audit log signup error: %v", err)
 		}
 	}
@@ -190,7 +191,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			_ = h.sec.LogEvent(c.Request().Context(), "signin_failed", nil, ip, req.UserAgent, "")
 		}
 		if h.aud != nil {
-			_ = h.aud.Log(c.Request().Context(), nil, "signin_failed", "auth:signin", ip, req.UserAgent, "")
+			_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionAuthSigninFailed), "auth:signin", ip, req.UserAgent, "")
 		}
 
 		// Check if error is specifically about unverified email
@@ -235,7 +236,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		}
 		if h.aud != nil {
 			uid := u.ID
-			_ = h.aud.Log(c.Request().Context(), &uid, "signin_twofa_required", "user:"+uid.String(), ip, req.UserAgent, "")
+			_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionAuthSigninTwoFARequired), "user:"+uid.String(), ip, req.UserAgent, "")
 		}
 		return c.JSON(http.StatusOK, &TwoFARequiredResponse{User: u, RequireTwoFA: true, DeviceID: fp})
 	}
@@ -261,7 +262,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 	}
 	if h.aud != nil && res.User != nil {
 		uid := res.User.ID
-		if err := h.aud.Log(c.Request().Context(), &uid, "signin", "user:"+uid.String(), ip, req.UserAgent, ""); err != nil {
+		if err := h.aud.Log(c.Request().Context(), &uid, string(audit.ActionAuthSignin), "user:"+uid.String(), ip, req.UserAgent, ""); err != nil {
 			log.Printf("audit log signin error: %v", err)
 		}
 	}
@@ -323,7 +324,7 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 	if h.aud != nil {
 		uid := updated.ID
 		ip := clientIPFromRequest(c.Request(), h.sec)
-		_ = h.aud.Log(c.Request().Context(), &uid, "user_updated", "user:"+uid.String(), ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionUserUpdated), "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
 	return c.JSON(http.StatusOK, updated)
 }
@@ -455,7 +456,7 @@ func (h *AuthHandler) SignOut(c forge.Context) error {
 	// Audit log
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
-		_ = h.aud.Log(c.Request().Context(), userID, "signout", "auth:session", ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), userID, string(audit.ActionAuthSignout), "auth:session", ip, c.Request().UserAgent(), "")
 	}
 
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "signed_out"})
@@ -494,7 +495,7 @@ func (h *AuthHandler) RefreshSession(c forge.Context) error {
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		userID := refreshResp.Session.UserID
-		_ = h.aud.Log(c.Request().Context(), &userID, "session_refreshed", "auth:session", ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), &userID, string(audit.ActionSessionRefreshed), "auth:session", ip, c.Request().UserAgent(), "")
 	}
 
 	// Return response with new tokens
@@ -540,7 +541,7 @@ func (h *AuthHandler) GetSession(c forge.Context) error {
 	if h.aud != nil && res.User != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
-		_ = h.aud.Log(c.Request().Context(), &uid, "session_checked", "session:"+res.Session.ID.String(), ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionSessionChecked), "session:"+res.Session.ID.String(), ip, c.Request().UserAgent(), "")
 	}
 	return c.JSON(http.StatusOK, &SessionResponse{
 		User:    res.User,
@@ -579,7 +580,7 @@ func (h *AuthHandler) ListDevices(c forge.Context) error {
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
-		_ = h.aud.Log(c.Request().Context(), &uid, "devices_listed", "user:"+uid.String(), ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionDevicesListed), "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
 	return c.JSON(http.StatusOK, list)
 }
@@ -614,7 +615,7 @@ func (h *AuthHandler) RevokeDevice(c forge.Context) error {
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
-		_ = h.aud.Log(c.Request().Context(), &uid, "device_revoked", "user:"+uid.String(), ip, c.Request().UserAgent(), "fingerprint="+body.Fingerprint)
+		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionDeviceRevoked), "user:"+uid.String(), ip, c.Request().UserAgent(), "fingerprint="+body.Fingerprint)
 	}
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "device_revoked"})
 }
@@ -691,7 +692,7 @@ func (h *AuthHandler) RequestPasswordReset(c forge.Context) error {
 	// Audit log
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
-		_ = h.aud.Log(c.Request().Context(), nil, "password_reset_requested", "email:"+req.Email, ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionPasswordResetRequested), "email:"+req.Email, ip, c.Request().UserAgent(), "")
 	}
 
 	// Always return success to prevent email enumeration
@@ -747,7 +748,7 @@ func (h *AuthHandler) ResetPassword(c forge.Context) error {
 		if req.Code != "" {
 			method = "code"
 		}
-		_ = h.aud.Log(c.Request().Context(), nil, "password_reset_completed", method, ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionPasswordResetCompleted), method, ip, c.Request().UserAgent(), "")
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -801,7 +802,7 @@ func (h *AuthHandler) ChangePassword(c forge.Context) error {
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
-		_ = h.aud.Log(c.Request().Context(), &uid, "password_changed", "user:"+uid.String(), ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionPasswordChanged), "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -870,7 +871,7 @@ func (h *AuthHandler) RequestEmailChange(c forge.Context) error {
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
-		_ = h.aud.Log(c.Request().Context(), &uid, "email_change_requested", "user:"+uid.String(), ip, c.Request().UserAgent(), "new_email="+req.NewEmail)
+		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionEmailChangeRequested), "user:"+uid.String(), ip, c.Request().UserAgent(), "new_email="+req.NewEmail)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -906,7 +907,7 @@ func (h *AuthHandler) ConfirmEmailChange(c forge.Context) error {
 	// Audit log
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
-		_ = h.aud.Log(c.Request().Context(), nil, "email_change_confirmed", "token", ip, c.Request().UserAgent(), "")
+		_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionEmailChangeConfirmed), "token", ip, c.Request().UserAgent(), "")
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

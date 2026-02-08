@@ -19,38 +19,38 @@ impl SsoPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RegisterProviderRequest {
-        #[serde(rename = "oidcClientID")]
-        pub oidc_client_i_d: String,
-        #[serde(rename = "samlIssuer")]
-        pub saml_issuer: String,
         #[serde(rename = "type")]
         pub type: String,
         #[serde(rename = "attributeMapping")]
         pub attribute_mapping: ,
         #[serde(rename = "domain")]
         pub domain: String,
+        #[serde(rename = "oidcClientID")]
+        pub oidc_client_i_d: String,
         #[serde(rename = "oidcClientSecret")]
         pub oidc_client_secret: String,
         #[serde(rename = "oidcIssuer")]
         pub oidc_issuer: String,
         #[serde(rename = "oidcRedirectURI")]
         pub oidc_redirect_u_r_i: String,
-        #[serde(rename = "providerId")]
-        pub provider_id: String,
         #[serde(rename = "samlCert")]
         pub saml_cert: String,
+        #[serde(rename = "providerId")]
+        pub provider_id: String,
         #[serde(rename = "samlEntryPoint")]
         pub saml_entry_point: String,
+        #[serde(rename = "samlIssuer")]
+        pub saml_issuer: String,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct RegisterProviderResponse {
-        #[serde(rename = "providerId")]
-        pub provider_id: String,
         #[serde(rename = "status")]
         pub status: String,
         #[serde(rename = "type")]
         pub type: String,
+        #[serde(rename = "providerId")]
+        pub provider_id: String,
     }
 
     /// RegisterProvider registers a new SSO provider (SAML or OIDC)

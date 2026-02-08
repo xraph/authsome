@@ -234,42 +234,78 @@ func (h *Handler) auditEventToActivity(event *audit.Event) ActivityItem {
 
 	// Map audit actions to friendly titles and types
 	switch event.Action {
-	case "auth.login":
+	// Auth actions
+	case string(audit.ActionAuthSignin):
 		title = "User login"
 		description = "User logged in successfully"
 		eventType = "success"
-	case "auth.login.failed":
+	case string(audit.ActionAuthSigninFailed):
 		title = "Failed login attempt"
 		description = "Login attempt failed"
 		eventType = "warning"
-	case "auth.logout":
+	case string(audit.ActionAuthSignout):
 		title = "User logout"
 		description = "User logged out"
 		eventType = "info"
-	case "auth.signup":
+	case string(audit.ActionAuthSignup):
 		title = "New user registration"
 		description = "User registered successfully"
 		eventType = "success"
-	case "user.created":
+
+	// User actions
+	case string(audit.ActionUserCreated):
 		title = "User created"
 		description = "New user account created"
 		eventType = "success"
-	case "user.updated":
+	case string(audit.ActionUserUpdated):
 		title = "User updated"
 		description = "User profile updated"
 		eventType = "info"
-	case "user.deleted":
+	case string(audit.ActionUserDeleted):
 		title = "User deleted"
 		description = "User account deleted"
 		eventType = "error"
-	case "session.created":
+
+	// Session actions
+	case string(audit.ActionSessionCreated):
 		title = "New session"
 		description = "New session created"
 		eventType = "info"
-	case "session.revoked":
+	case string(audit.ActionSessionRevoked):
 		title = "Session ended"
 		description = "Session was revoked"
 		eventType = "info"
+
+	// Password actions
+	case string(audit.ActionPasswordChanged):
+		title = "Password changed"
+		description = "User changed their password"
+		eventType = "info"
+	case string(audit.ActionPasswordResetRequested):
+		title = "Password reset requested"
+		description = "User requested password reset"
+		eventType = "info"
+	case string(audit.ActionPasswordResetCompleted):
+		title = "Password reset completed"
+		description = "Password was successfully reset"
+		eventType = "success"
+
+	// API Key actions
+	case string(audit.ActionAPIKeyCreated):
+		title = "API key created"
+		description = "New API key was created"
+		eventType = "success"
+	case string(audit.ActionAPIKeyDeleted):
+		title = "API key deleted"
+		description = "API key was deleted"
+		eventType = "warning"
+
+	// Dashboard access
+	case string(audit.ActionDashboardAccess):
+		title = "Dashboard access"
+		description = "User accessed dashboard"
+		eventType = "info"
+
 	default:
 		title = event.Action
 		description = event.Resource

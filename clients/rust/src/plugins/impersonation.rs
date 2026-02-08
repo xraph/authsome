@@ -19,14 +19,14 @@ impl ImpersonationPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct StartImpersonationResponse {
-        #[serde(rename = "started_at")]
-        pub started_at: String,
-        #[serde(rename = "target_user_id")]
-        pub target_user_id: String,
         #[serde(rename = "impersonator_id")]
         pub impersonator_id: String,
         #[serde(rename = "session_id")]
         pub session_id: String,
+        #[serde(rename = "started_at")]
+        pub started_at: String,
+        #[serde(rename = "target_user_id")]
+        pub target_user_id: String,
     }
 
     /// StartImpersonation handles POST /impersonation/start
@@ -39,10 +39,10 @@ impl ImpersonationPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct EndImpersonationResponse {
-        #[serde(rename = "status")]
-        pub status: String,
         #[serde(rename = "ended_at")]
         pub ended_at: String,
+        #[serde(rename = "status")]
+        pub status: String,
     }
 
     /// EndImpersonation handles POST /impersonation/end

@@ -19,6 +19,8 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateConsentRequest {
+        #[serde(rename = "version")]
+        pub version: String,
         #[serde(rename = "consentType")]
         pub consent_type: String,
         #[serde(rename = "expiresIn")]
@@ -31,8 +33,6 @@ impl ConsentPlugin {{
         pub purpose: String,
         #[serde(rename = "userId")]
         pub user_id: String,
-        #[serde(rename = "version")]
-        pub version: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -116,24 +116,24 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateConsentPolicyRequest {
+        #[serde(rename = "version")]
+        pub version: String,
+        #[serde(rename = "consentType")]
+        pub consent_type: String,
         #[serde(rename = "content")]
         pub content: String,
         #[serde(rename = "description")]
         pub description: String,
         #[serde(rename = "metadata")]
         pub metadata: ,
-        #[serde(rename = "renewable")]
-        pub renewable: bool,
-        #[serde(rename = "validityPeriod")]
-        pub validity_period: *int,
-        #[serde(rename = "consentType")]
-        pub consent_type: String,
         #[serde(rename = "name")]
         pub name: String,
+        #[serde(rename = "renewable")]
+        pub renewable: bool,
         #[serde(rename = "required")]
         pub required: bool,
-        #[serde(rename = "version")]
-        pub version: String,
+        #[serde(rename = "validityPeriod")]
+        pub validity_period: *int,
     }
 
     #[derive(Debug, Deserialize)]
@@ -167,6 +167,8 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct RecordCookieConsentRequest {
+        #[serde(rename = "sessionId")]
+        pub session_id: String,
         #[serde(rename = "thirdParty")]
         pub third_party: bool,
         #[serde(rename = "analytics")]
@@ -181,8 +183,6 @@ impl ConsentPlugin {{
         pub marketing: bool,
         #[serde(rename = "personalization")]
         pub personalization: bool,
-        #[serde(rename = "sessionId")]
-        pub session_id: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -257,10 +257,10 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Deserialize)]
     pub struct DownloadDataExportResponse {
-        #[serde(rename = "data")]
-        pub data: []byte,
         #[serde(rename = "content_type")]
         pub content_type: String,
+        #[serde(rename = "data")]
+        pub data: []byte,
     }
 
     /// DownloadDataExport handles GET /consent/data-exports/:id/download
@@ -342,40 +342,40 @@ impl ConsentPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct UpdatePrivacySettingsRequest {
-        #[serde(rename = "ccpaMode")]
-        pub ccpa_mode: *bool,
-        #[serde(rename = "consentRequired")]
-        pub consent_required: *bool,
-        #[serde(rename = "cookieConsentEnabled")]
-        pub cookie_consent_enabled: *bool,
-        #[serde(rename = "dataExportExpiryHours")]
-        pub data_export_expiry_hours: *int,
-        #[serde(rename = "dataRetentionDays")]
-        pub data_retention_days: *int,
-        #[serde(rename = "requireAdminApprovalForDeletion")]
-        pub require_admin_approval_for_deletion: *bool,
-        #[serde(rename = "requireExplicitConsent")]
-        pub require_explicit_consent: *bool,
+        #[serde(rename = "allowDataPortability")]
+        pub allow_data_portability: *bool,
         #[serde(rename = "anonymousConsentEnabled")]
         pub anonymous_consent_enabled: *bool,
-        #[serde(rename = "dpoEmail")]
-        pub dpo_email: String,
-        #[serde(rename = "gdprMode")]
-        pub gdpr_mode: *bool,
+        #[serde(rename = "contactEmail")]
+        pub contact_email: String,
+        #[serde(rename = "contactPhone")]
+        pub contact_phone: String,
+        #[serde(rename = "dataExportExpiryHours")]
+        pub data_export_expiry_hours: *int,
         #[serde(rename = "deletionGracePeriodDays")]
         pub deletion_grace_period_days: *int,
         #[serde(rename = "exportFormat")]
         pub export_format: []string,
-        #[serde(rename = "allowDataPortability")]
-        pub allow_data_portability: *bool,
-        #[serde(rename = "contactPhone")]
-        pub contact_phone: String,
-        #[serde(rename = "cookieConsentStyle")]
-        pub cookie_consent_style: String,
+        #[serde(rename = "gdprMode")]
+        pub gdpr_mode: *bool,
+        #[serde(rename = "ccpaMode")]
+        pub ccpa_mode: *bool,
+        #[serde(rename = "dataRetentionDays")]
+        pub data_retention_days: *int,
         #[serde(rename = "autoDeleteAfterDays")]
         pub auto_delete_after_days: *int,
-        #[serde(rename = "contactEmail")]
-        pub contact_email: String,
+        #[serde(rename = "cookieConsentEnabled")]
+        pub cookie_consent_enabled: *bool,
+        #[serde(rename = "cookieConsentStyle")]
+        pub cookie_consent_style: String,
+        #[serde(rename = "requireAdminApprovalForDeletion")]
+        pub require_admin_approval_for_deletion: *bool,
+        #[serde(rename = "requireExplicitConsent")]
+        pub require_explicit_consent: *bool,
+        #[serde(rename = "consentRequired")]
+        pub consent_required: *bool,
+        #[serde(rename = "dpoEmail")]
+        pub dpo_email: String,
     }
 
     #[derive(Debug, Deserialize)]

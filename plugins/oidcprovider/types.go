@@ -52,6 +52,8 @@ type TokenRequest struct {
 	Scope        string `json:"scope" form:"scope"`
 	// Client Credentials grant
 	Audience string `json:"audience" form:"audience"`
+	// Device Code grant (RFC 8628)
+	DeviceCode string `json:"device_code" form:"device_code"`
 }
 
 // TokenResponse represents the OAuth2/OIDC token response
@@ -200,6 +202,7 @@ type DiscoveryResponse struct {
 	RegistrationEndpoint                      string   `json:"registration_endpoint,omitempty" example:"https://auth.example.com/oauth2/register"`
 	IntrospectionEndpoint                     string   `json:"introspection_endpoint,omitempty" example:"https://auth.example.com/oauth2/introspect"`
 	RevocationEndpoint                        string   `json:"revocation_endpoint,omitempty" example:"https://auth.example.com/oauth2/revoke"`
+	DeviceAuthorizationEndpoint               string   `json:"device_authorization_endpoint,omitempty" example:"https://auth.example.com/oauth2/device/authorize"`
 	ResponseTypesSupported                    []string `json:"response_types_supported" example:"code,token,id_token"`
 	ResponseModesSupported                    []string `json:"response_modes_supported,omitempty" example:"query,fragment,form_post"`
 	GrantTypesSupported                       []string `json:"grant_types_supported" example:"authorization_code,refresh_token,client_credentials"`
@@ -317,4 +320,67 @@ type ClientAuthResult struct {
 	ClientID      string
 	Authenticated bool
 	Method        string // basic, post, none
+}
+
+// =============================================================================
+// DEVICE FLOW (RFC 8628)
+// =============================================================================
+
+// DeviceAuthorizationRequest represents a device authorization request
+type DeviceAuthorizationRequest struct {
+	ClientID string `json:"client_id" form:"client_id" validate:"required"`
+	Scope    string `json:"scope" form:"scope"`
+}
+
+// DeviceAuthorizationResponse represents the device authorization response
+type DeviceAuthorizationResponse struct {
+	DeviceCode              string `json:"device_code" example:"GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS"`
+	UserCode                string `json:"user_code" example:"WDJB-MJHT"`
+	VerificationURI         string `json:"verification_uri" example:"https://example.com/device"`
+	VerificationURIComplete string `json:"verification_uri_complete,omitempty" example:"https://example.com/device?user_code=WDJB-MJHT"`
+	ExpiresIn               int    `json:"expires_in" example:"600"` // seconds
+	Interval                int    `json:"interval" example:"5"`     // polling interval in seconds
+}
+
+// DeviceVerificationRequest represents the user code verification request
+type DeviceVerificationRequest struct {
+	UserCode string `json:"user_code" form:"user_code" validate:"required"`
+}
+
+// DeviceAuthorizationDecisionRequest represents the user's authorization decision
+type DeviceAuthorizationDecisionRequest struct {
+	UserCode string `json:"user_code" form:"user_code" validate:"required"`
+	Action   string `json:"action" form:"action" validate:"required,oneof=approve deny"`
+}
+
+// DeviceVerificationInfo contains info to display during verification
+type DeviceVerificationInfo struct {
+	UserCode   string
+	ClientName string
+	Scopes     []ScopeInfo
+}
+
+// DeviceCodeEntryResponse is returned for the device code entry endpoint (API mode)
+type DeviceCodeEntryResponse struct {
+	FormAction  string `json:"formAction" example:"/oauth2/device/verify"`
+	Placeholder string `json:"placeholder" example:"XXXX-XXXX"`
+	BasePath    string `json:"basePath" example:"/api/identity/oauth2"`
+}
+
+// DeviceVerifyResponse is returned after verifying a device code (API mode)
+type DeviceVerifyResponse struct {
+	UserCode          string      `json:"userCode" example:"WDJB-MJHT"`
+	UserCodeFormatted string      `json:"userCodeFormatted" example:"WDJB-MJHT"`
+	ClientName        string      `json:"clientName" example:"My Application"`
+	ClientID          string      `json:"clientId" example:"client_01HZ..."`
+	LogoURI           string      `json:"logoUri,omitempty" example:"https://example.com/logo.png"`
+	Scopes            []ScopeInfo `json:"scopes"`
+	AuthorizeURL      string      `json:"authorizeUrl" example:"/oauth2/device/authorize"`
+}
+
+// DeviceDecisionResponse is returned after the authorization decision (API mode)
+type DeviceDecisionResponse struct {
+	Success  bool   `json:"success" example:"true"`
+	Approved bool   `json:"approved" example:"true"`
+	Message  string `json:"message" example:"Device authorized successfully"`
 }

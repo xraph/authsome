@@ -48,7 +48,7 @@ func UserDetailPage(data UserDetailPageData) g.Node {
 func backButton(basePath string) g.Node {
 	return Div(
 		A(
-			Href(basePath+"/dashboard/users"),
+			Href(basePath+"/users"),
 			Class("inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"),
 			lucide.ArrowLeft(Class("h-5 w-5")),
 			g.Text("Back to users"),

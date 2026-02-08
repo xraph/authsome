@@ -223,3 +223,113 @@ func (r *OAuthTokenRepository) Update(ctx context.Context, token *schema.OAuthTo
 	_, err := r.db.NewUpdate().Model(token).WherePK().Exec(ctx)
 	return err
 }
+
+// RevokeByClientID revokes all tokens for a specific client
+func (r *OAuthTokenRepository) RevokeByClientID(ctx context.Context, clientID string) error {
+	now := time.Now()
+	_, err := r.db.NewUpdate().
+		Model((*schema.OAuthToken)(nil)).
+		Set("revoked = ?", true).
+		Set("revoked_at = ?", now).
+		Set("updated_at = ?", now).
+		Where("client_id = ?", clientID).
+		Where("revoked = ?", false).
+		Exec(ctx)
+	return err
+}
+
+// CountByClientID returns total token count for a client
+func (r *OAuthTokenRepository) CountByClientID(ctx context.Context, clientID string) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("client_id = ?", clientID).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountActiveByClientID returns active token count for a client
+func (r *OAuthTokenRepository) CountActiveByClientID(ctx context.Context, clientID string) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("client_id = ?", clientID).
+		Where("revoked = ?", false).
+		Where("expires_at > ?", time.Now()).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountUniqueUsersByClientID returns count of unique users who have tokens for a client
+func (r *OAuthTokenRepository) CountUniqueUsersByClientID(ctx context.Context, clientID string) (int64, error) {
+	var count int64
+	err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		ColumnExpr("COUNT(DISTINCT user_id)").
+		Where("client_id = ?", clientID).
+		Scan(ctx, &count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// CountByClientIDSince returns token count for a client since a specific time
+func (r *OAuthTokenRepository) CountByClientIDSince(ctx context.Context, clientID string, since time.Time) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("client_id = ?", clientID).
+		Where("created_at >= ?", since).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountActiveByApp returns active token count for an app
+func (r *OAuthTokenRepository) CountActiveByApp(ctx context.Context, appID xid.ID) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("app_id = ?", appID).
+		Where("revoked = ?", false).
+		Where("expires_at > ?", time.Now()).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountByApp returns total token count for an app
+func (r *OAuthTokenRepository) CountByApp(ctx context.Context, appID xid.ID) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("app_id = ?", appID).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountByAppSince returns token count for an app since a specific time
+func (r *OAuthTokenRepository) CountByAppSince(ctx context.Context, appID xid.ID, since time.Time) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("app_id = ?", appID).
+		Where("created_at >= ?", since).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountUniqueUsersByApp returns count of unique users who have tokens in an app
+func (r *OAuthTokenRepository) CountUniqueUsersByApp(ctx context.Context, appID xid.ID) (int64, error) {
+	var count int64
+	err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		ColumnExpr("COUNT(DISTINCT user_id)").
+		Where("app_id = ?", appID).
+		Scan(ctx, &count)
+	return count, err
+}
+
+// CountByAppAndType returns token count for an app by token class
+func (r *OAuthTokenRepository) CountByAppAndType(ctx context.Context, appID xid.ID, tokenClass string) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("app_id = ?", appID).
+		Where("token_class = ?", tokenClass).
+		Count(ctx)
+	return int64(count), err
+}
+
+// CountByAppBetween returns token count for an app between two times
+func (r *OAuthTokenRepository) CountByAppBetween(ctx context.Context, appID xid.ID, start, end time.Time) (int64, error) {
+	count, err := r.db.NewSelect().Model((*schema.OAuthToken)(nil)).
+		Where("app_id = ?", appID).
+		Where("created_at >= ?", start).
+		Where("created_at < ?", end).
+		Count(ctx)
+	return int64(count), err
+}

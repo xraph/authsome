@@ -19,6 +19,10 @@ impl JwtPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct CreateJWTKeyRequest {
+        #[serde(rename = "curve")]
+        pub curve: String,
+        #[serde(rename = "expiresAt")]
+        pub expires_at: *time.Time,
         #[serde(rename = "isPlatformKey")]
         pub is_platform_key: bool,
         #[serde(rename = "keyType")]
@@ -27,10 +31,6 @@ impl JwtPlugin {{
         pub metadata: ,
         #[serde(rename = "algorithm")]
         pub algorithm: String,
-        #[serde(rename = "curve")]
-        pub curve: String,
-        #[serde(rename = "expiresAt")]
-        pub expires_at: *time.Time,
     }
 
     /// CreateJWTKey creates a new JWT signing key
@@ -67,6 +67,8 @@ impl JwtPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct GenerateTokenRequest {
+        #[serde(rename = "userId")]
+        pub user_id: String,
         #[serde(rename = "audience")]
         pub audience: []string,
         #[serde(rename = "expiresIn")]
@@ -81,8 +83,6 @@ impl JwtPlugin {{
         pub session_id: String,
         #[serde(rename = "tokenType")]
         pub token_type: String,
-        #[serde(rename = "userId")]
-        pub user_id: String,
     }
 
     /// GenerateToken generates a new JWT token
@@ -96,12 +96,12 @@ impl JwtPlugin {{
 
     #[derive(Debug, Serialize)]
     pub struct VerifyTokenRequest {
+        #[serde(rename = "token")]
+        pub token: String,
         #[serde(rename = "tokenType")]
         pub token_type: String,
         #[serde(rename = "audience")]
         pub audience: []string,
-        #[serde(rename = "token")]
-        pub token: String,
     }
 
     /// VerifyToken verifies a JWT token

@@ -228,4 +228,3 @@ func renderMetricChange(change float64) g.Node {
 		g.Text(fmt.Sprintf("%s%.1f%%", prefix, change)),
 	)
 }
-

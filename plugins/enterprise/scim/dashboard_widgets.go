@@ -140,4 +140,3 @@ func renderMetricValue(value string, change string, positive bool) g.Node {
 		),
 	)
 }
-

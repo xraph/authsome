@@ -73,7 +73,7 @@ func renderAppCards(apps []*AppCardData, basePath string) []g.Node {
 }
 
 func appCard(data *AppCardData, basePath string) g.Node {
-	appURL := basePath + "/dashboard/app/" + data.App.ID.String()
+	appURL := basePath + "app/" + data.App.ID.String()
 
 	// Generate gradient colors based on app name
 	gradientClass := getAppGradient(data.App.Name)
@@ -216,7 +216,7 @@ func appsListEmptyState(basePath string, canCreate bool) g.Node {
 		),
 		g.If(!canCreate,
 			A(
-				Href(basePath+"/dashboard/login"),
+				Href(basePath+"login"),
 				Class("inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 px-6 py-3 text-sm font-semibold text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors"),
 				lucide.LogIn(Class("h-4 w-4")),
 				g.Text("Back to Login"),

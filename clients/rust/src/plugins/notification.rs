@@ -17,29 +17,6 @@ impl NotificationPlugin {{
         Self { client: None }
     }
 
-    #[derive(Debug, Serialize)]
-    pub struct PreviewTemplateRequest {
-        #[serde(rename = "variables")]
-        pub variables: ,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct PreviewTemplateResponse {
-        #[serde(rename = "body")]
-        pub body: String,
-        #[serde(rename = "subject")]
-        pub subject: String,
-    }
-
-    /// PreviewTemplate handles template preview requests
-    pub async fn preview_template(
-        &self,
-        _request: PreviewTemplateRequest,
-    ) -> Result<PreviewTemplateResponse> {{
-        // TODO: Implement plugin method
-        unimplemented!("Plugin methods need client access")
-    }
-
     #[derive(Debug, Deserialize)]
     pub struct CreateTemplateResponse {
         #[serde(rename = "template")]

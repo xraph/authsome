@@ -13,7 +13,7 @@ export class MultiappPlugin implements ClientPlugin {
   }
 
   async createApp(): Promise<types.App> {
-    const path = '/apps/createapp';
+    const path = '/apps';
     return this.client.request<types.App>('POST', path);
   }
 
@@ -33,87 +33,87 @@ export class MultiappPlugin implements ClientPlugin {
   }
 
   async listApps(): Promise<types.AppsListResponse> {
-    const path = '/apps/listapps';
+    const path = '/apps';
     return this.client.request<types.AppsListResponse>('GET', path);
   }
 
-  async removeMember(params: { memberId: string }): Promise<types.MultitenancyStatusResponse> {
-    const path = `/apps/${params.memberId}`;
+  async removeMember(params: { appId: string; memberId: string }): Promise<types.MultitenancyStatusResponse> {
+    const path = `/apps/${params.appId}/members/${params.memberId}`;
     return this.client.request<types.MultitenancyStatusResponse>('DELETE', path);
   }
 
-  async listMembers(): Promise<types.MembersListResponse> {
-    const path = '/apps/listmembers';
+  async listMembers(params: { appId: string }): Promise<types.MembersListResponse> {
+    const path = `/apps/${params.appId}/members`;
     return this.client.request<types.MembersListResponse>('GET', path);
   }
 
-  async inviteMember(request: types.InviteMemberRequest): Promise<types.Invitation> {
-    const path = '/apps/invite';
+  async inviteMember(params: { appId: string }, request: types.InviteMemberRequest): Promise<types.Invitation> {
+    const path = `/apps/${params.appId}/members/invite`;
     return this.client.request<types.Invitation>('POST', path, {
       body: request,
     });
   }
 
-  async updateMember(params: { memberId: string }, request: types.UpdateMemberRequest): Promise<types.Member> {
-    const path = `/apps/${params.memberId}`;
+  async updateMember(params: { appId: string; memberId: string }, request: types.UpdateMemberRequest): Promise<types.Member> {
+    const path = `/apps/${params.appId}/members/${params.memberId}`;
     return this.client.request<types.Member>('PUT', path, {
       body: request,
     });
   }
 
   async getInvitation(params: { token: string }): Promise<types.Invitation> {
-    const path = `/apps/${params.token}`;
+    const path = `/invitations/${params.token}`;
     return this.client.request<types.Invitation>('GET', path);
   }
 
   async acceptInvitation(params: { token: string }): Promise<types.MultitenancyStatusResponse> {
-    const path = `/apps/${params.token}/accept`;
+    const path = `/invitations/${params.token}/accept`;
     return this.client.request<types.MultitenancyStatusResponse>('POST', path);
   }
 
   async declineInvitation(params: { token: string }): Promise<types.MultitenancyStatusResponse> {
-    const path = `/apps/${params.token}/decline`;
+    const path = `/invitations/${params.token}/decline`;
     return this.client.request<types.MultitenancyStatusResponse>('POST', path);
   }
 
-  async createTeam(request: types.CreateTeamRequest): Promise<types.Team> {
-    const path = '/apps/createteam';
+  async createTeam(params: { appId: string }, request: types.CreateTeamRequest): Promise<types.Team> {
+    const path = `/apps/${params.appId}/teams`;
     return this.client.request<types.Team>('POST', path, {
       body: request,
     });
   }
 
-  async getTeam(params: { teamId: string }): Promise<types.Team> {
-    const path = `/apps/${params.teamId}`;
+  async getTeam(params: { appId: string; teamId: string }): Promise<types.Team> {
+    const path = `/apps/${params.appId}/teams/${params.teamId}`;
     return this.client.request<types.Team>('GET', path);
   }
 
-  async updateTeam(params: { teamId: string }, request: types.UpdateTeamRequest): Promise<types.Team> {
-    const path = `/apps/${params.teamId}`;
+  async updateTeam(params: { appId: string; teamId: string }, request: types.UpdateTeamRequest): Promise<types.Team> {
+    const path = `/apps/${params.appId}/teams/${params.teamId}`;
     return this.client.request<types.Team>('PUT', path, {
       body: request,
     });
   }
 
-  async deleteTeam(params: { teamId: string }): Promise<types.MultitenancyStatusResponse> {
-    const path = `/apps/${params.teamId}`;
+  async deleteTeam(params: { appId: string; teamId: string }): Promise<types.MultitenancyStatusResponse> {
+    const path = `/apps/${params.appId}/teams/${params.teamId}`;
     return this.client.request<types.MultitenancyStatusResponse>('DELETE', path);
   }
 
-  async listTeams(): Promise<types.TeamsListResponse> {
-    const path = '/apps/listteams';
+  async listTeams(params: { appId: string }): Promise<types.TeamsListResponse> {
+    const path = `/apps/${params.appId}/teams`;
     return this.client.request<types.TeamsListResponse>('GET', path);
   }
 
-  async addTeamMember(params: { teamId: string }, request: types.AddTeamMember_req): Promise<types.MultitenancyStatusResponse> {
-    const path = `/apps/${params.teamId}/members`;
+  async addTeamMember(params: { teamId: string; appId: string }, request: types.AddTeamMember_req): Promise<types.MultitenancyStatusResponse> {
+    const path = `/apps/${params.appId}/teams/${params.teamId}/members`;
     return this.client.request<types.MultitenancyStatusResponse>('POST', path, {
       body: request,
     });
   }
 
-  async removeTeamMember(params: { teamId: string; memberId: string }): Promise<types.MultitenancyStatusResponse> {
-    const path = `/apps/${params.teamId}/members/${params.memberId}`;
+  async removeTeamMember(params: { appId: string; teamId: string; memberId: string }): Promise<types.MultitenancyStatusResponse> {
+    const path = `/apps/${params.appId}/teams/${params.teamId}/members/${params.memberId}`;
     return this.client.request<types.MultitenancyStatusResponse>('DELETE', path);
   }
 

@@ -24,7 +24,7 @@ type AuthMiddleware struct {
 	userSvc          user.ServiceInterface
 	config           AuthMiddlewareConfig
 	cookieConfig     *session.CookieConfig // For updating session cookies on renewal
-	strategyRegistry *AuthStrategyRegistry  // Pluggable authentication strategies
+	strategyRegistry *AuthStrategyRegistry // Pluggable authentication strategies
 }
 
 // AuthMiddlewareConfig configures the authentication middleware behavior
@@ -123,128 +123,136 @@ func (m *AuthMiddleware) registerBuiltinStrategies() {
 // This middleware is optional by default - it populates context but doesn't block
 // It tries authentication strategies in priority order
 func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
-	return func(c forge.Context) error {
-		ctx := c.Request().Context()
+	return m.HandleAuthentication(m.config.Optional)(next)
+}
 
-		// Initialize empty auth context
-		authCtx := &contexts.AuthContext{
-			Method:          contexts.AuthMethodNone,
-			IsAuthenticated: false,
-			IPAddress:       extractClientIP(c.Request().RemoteAddr),
-			UserAgent:       c.Request().Header.Get("User-Agent"),
-		}
+// Authenticate is the main middleware function that populates auth context
+// It tries authentication strategies in priority order
+func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Handler) forge.Handler {
+	return func(next forge.Handler) forge.Handler {
+		return func(c forge.Context) error {
+			ctx := c.Request().Context()
 
-		// Try pluggable authentication strategies first
-		strategyAuthCtx := m.tryStrategies(c)
-		if strategyAuthCtx != nil {
-			// Strategy succeeded - merge with base context
-			m.mergeAuthContext(authCtx, strategyAuthCtx)
-		} else {
-			// Fallback to legacy authentication methods for backward compatibility
-			// Try API key authentication first
-			apiKeyResult := m.tryAPIKeyAuth(c)
-			if apiKeyResult.Authenticated {
-				authCtx.APIKey = apiKeyResult.APIKey
-				authCtx.APIKeyScopes = apiKeyResult.APIKey.GetAllScopes()
-				authCtx.AppID = apiKeyResult.APIKey.AppID
-				authCtx.EnvironmentID = apiKeyResult.APIKey.EnvironmentID
-				authCtx.OrganizationID = apiKeyResult.APIKey.OrganizationID
-				authCtx.IsAPIKeyAuth = true
-				authCtx.Method = contexts.AuthMethodAPIKey
-
-				// Load RBAC roles and permissions
-				authCtx.APIKeyRoles = apiKeyResult.Roles
-				authCtx.APIKeyPermissions = apiKeyResult.Permissions
-				authCtx.CreatorPermissions = apiKeyResult.CreatorPermissions
+			// Initialize empty auth context
+			authCtx := &contexts.AuthContext{
+				Method:          contexts.AuthMethodNone,
+				IsAuthenticated: false,
+				IPAddress:       extractClientIP(c.Request().RemoteAddr),
+				UserAgent:       c.Request().Header.Get("User-Agent"),
 			}
 
-			// Try session authentication
-			sessionResult := m.trySessionAuth(c)
-			if sessionResult.Authenticated {
-				authCtx.Session = sessionResult.Session
-				authCtx.User = sessionResult.User
-				authCtx.IsUserAuth = true
+			// Try pluggable authentication strategies first
+			strategyAuthCtx := m.tryStrategies(c)
+			if strategyAuthCtx != nil {
+				// Strategy succeeded - merge with base context
+				m.mergeAuthContext(authCtx, strategyAuthCtx)
+			} else {
+				// Fallback to legacy authentication methods for backward compatibility
+				// Try API key authentication first
+				apiKeyResult := m.tryAPIKeyAuth(c)
+				if apiKeyResult.Authenticated {
+					authCtx.APIKey = apiKeyResult.APIKey
+					authCtx.APIKeyScopes = apiKeyResult.APIKey.GetAllScopes()
+					authCtx.AppID = apiKeyResult.APIKey.AppID
+					authCtx.EnvironmentID = apiKeyResult.APIKey.EnvironmentID
+					authCtx.OrganizationID = apiKeyResult.APIKey.OrganizationID
+					authCtx.IsAPIKeyAuth = true
+					authCtx.Method = contexts.AuthMethodAPIKey
 
-				// Load user RBAC roles and permissions
-				authCtx.UserRoles = sessionResult.Roles
-				authCtx.UserPermissions = sessionResult.Permissions
-
-				// Update cookie if session was renewed (sliding window)
-				if sessionResult.SessionRenewed && m.cookieConfig != nil && m.cookieConfig.Enabled {
-					// Update cookie with new expiry time
-					_ = session.SetCookie(c, sessionResult.Session.Token, sessionResult.Session.ExpiresAt, m.cookieConfig)
+					// Load RBAC roles and permissions
+					authCtx.APIKeyRoles = apiKeyResult.Roles
+					authCtx.APIKeyPermissions = apiKeyResult.Permissions
+					authCtx.CreatorPermissions = apiKeyResult.CreatorPermissions
 				}
 
-				// Update method
-				if authCtx.IsAPIKeyAuth {
-					authCtx.Method = contexts.AuthMethodBoth
-				} else {
-					authCtx.Method = contexts.AuthMethodSession
-					// Use session context if no API key
-					authCtx.AppID = sessionResult.Session.AppID
-					if sessionResult.Session.EnvironmentID != nil {
-						authCtx.EnvironmentID = *sessionResult.Session.EnvironmentID
+				// Try session authentication
+				sessionResult := m.trySessionAuth(c)
+				if sessionResult.Authenticated {
+					authCtx.Session = sessionResult.Session
+					authCtx.User = sessionResult.User
+					authCtx.IsUserAuth = true
+
+					// Load user RBAC roles and permissions
+					authCtx.UserRoles = sessionResult.Roles
+					authCtx.UserPermissions = sessionResult.Permissions
+
+					// Update cookie if session was renewed (sliding window)
+					if sessionResult.SessionRenewed && m.cookieConfig != nil && m.cookieConfig.Enabled {
+						// Update cookie with new expiry time
+						_ = session.SetCookie(c, sessionResult.Session.Token, sessionResult.Session.ExpiresAt, m.cookieConfig)
 					}
-					authCtx.OrganizationID = sessionResult.Session.OrganizationID
+
+					// Update method
+					if authCtx.IsAPIKeyAuth {
+						authCtx.Method = contexts.AuthMethodBoth
+					} else {
+						authCtx.Method = contexts.AuthMethodSession
+						// Use session context if no API key
+						authCtx.AppID = sessionResult.Session.AppID
+						if sessionResult.Session.EnvironmentID != nil {
+							authCtx.EnvironmentID = *sessionResult.Session.EnvironmentID
+						}
+						authCtx.OrganizationID = sessionResult.Session.OrganizationID
+					}
 				}
 			}
-		}
 
-		// Set authenticated flag
-		authCtx.IsAuthenticated = authCtx.IsAPIKeyAuth || authCtx.IsUserAuth
+			// Set authenticated flag
+			authCtx.IsAuthenticated = authCtx.IsAPIKeyAuth || authCtx.IsUserAuth
 
-		// Compute effective permissions (union of all applicable permissions)
-		authCtx.EffectivePermissions = m.computeEffectivePermissions(authCtx)
+			// Compute effective permissions (union of all applicable permissions)
+			authCtx.EffectivePermissions = m.computeEffectivePermissions(authCtx)
 
-		// Resolve app and environment context using priority chain
-		resolution := m.resolveContext(c, authCtx)
-		if !resolution.AppID.IsNil() {
-			authCtx.AppID = resolution.AppID
-		}
-		if !resolution.EnvironmentID.IsNil() {
-			authCtx.EnvironmentID = resolution.EnvironmentID
-		}
+			// Resolve app and environment context using priority chain
+			resolution := m.resolveContext(c, authCtx)
+			if !resolution.AppID.IsNil() {
+				authCtx.AppID = resolution.AppID
+			}
+			if !resolution.EnvironmentID.IsNil() {
+				authCtx.EnvironmentID = resolution.EnvironmentID
+			}
 
-		// If not optional and not authenticated, reject with specific error message
-		if !m.config.Optional && !authCtx.IsAuthenticated {
-			// Check if API key was attempted but failed validation
-			apiKeyAttempted := m.extractAPIKey(c)
-			if apiKeyAttempted != "" {
-				// API key was provided but invalid/expired
+			// If not optional and not authenticated, reject with specific error message
+			if !optional && !authCtx.IsAuthenticated {
+				// Check if API key was attempted but failed validation
+				apiKeyAttempted := m.extractAPIKey(c)
+				if apiKeyAttempted != "" {
+					// API key was provided but invalid/expired
+					return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+						"error": "Invalid or expired API key",
+						"code":  "INVALID_API_KEY",
+					})
+				}
+
+				// No authentication provided at all
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-					"error": "Invalid or expired API key",
-					"code":  "INVALID_API_KEY",
+					"error": "API key required for app identification",
+					"code":  "API_KEY_REQUIRED",
 				})
 			}
 
-			// No authentication provided at all
-			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-				"error": "API key required for app identification",
-				"code":  "API_KEY_REQUIRED",
-			})
-		}
+			// Store auth context
+			ctx = contexts.SetAuthContext(ctx, authCtx)
 
-		// Store auth context
-		ctx = contexts.SetAuthContext(ctx, authCtx)
+			// Also set individual context values for backward compatibility
+			if !authCtx.AppID.IsNil() {
+				ctx = contexts.SetAppID(ctx, authCtx.AppID)
+			}
+			if !authCtx.EnvironmentID.IsNil() {
+				ctx = contexts.SetEnvironmentID(ctx, authCtx.EnvironmentID)
+			}
+			if authCtx.OrganizationID != nil && !authCtx.OrganizationID.IsNil() {
+				ctx = contexts.SetOrganizationID(ctx, *authCtx.OrganizationID)
+			}
+			if authCtx.User != nil {
+				ctx = contexts.SetUserID(ctx, authCtx.User.ID)
+			}
 
-		// Also set individual context values for backward compatibility
-		if !authCtx.AppID.IsNil() {
-			ctx = contexts.SetAppID(ctx, authCtx.AppID)
-		}
-		if !authCtx.EnvironmentID.IsNil() {
-			ctx = contexts.SetEnvironmentID(ctx, authCtx.EnvironmentID)
-		}
-		if authCtx.OrganizationID != nil && !authCtx.OrganizationID.IsNil() {
-			ctx = contexts.SetOrganizationID(ctx, *authCtx.OrganizationID)
-		}
-		if authCtx.User != nil {
-			ctx = contexts.SetUserID(ctx, authCtx.User.ID)
-		}
+			// Update forge context
+			*c.Request() = *c.Request().WithContext(ctx)
 
-		// Update forge context
-		*c.Request() = *c.Request().WithContext(ctx)
-
-		return next(c)
+			return next(c)
+		}
 	}
 }
 
@@ -268,11 +276,10 @@ func (m *AuthMiddleware) tryStrategies(c forge.Context) *contexts.AuthContext {
 		// Try to authenticate
 		authCtx, err := strategy.Authenticate(ctx, credentials)
 		if err != nil {
-			// Strategy failed, try next one
 			continue
 		}
 
-		// Success! Populate common fields
+		// Populate common fields
 		if authCtx.IPAddress == "" {
 			authCtx.IPAddress = extractClientIP(c.Request().RemoteAddr)
 		}

@@ -226,7 +226,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		)
 	}
 
-	p.logger.Info("JWT routes registered")
+	p.logger.Debug("JWT routes registered")
 	return nil
 }
 

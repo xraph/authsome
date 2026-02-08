@@ -3,6 +3,7 @@ package scim
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/xid"
@@ -35,12 +36,16 @@ type Plugin struct {
 	orgService     interface{}           // Use interface{} to support both core and multitenancy org services
 	auditService   *audit.Service
 	webhookService *webhook.Service
-	
-	// Dashboard extension
-	dashboardExt *DashboardExtension
-	
+
+	// Dashboard extension (lazy initialized)
+	dashboardExt     *DashboardExtension
+	dashboardExtOnce sync.Once
+
 	// Organization UI extension
 	orgUIExt *OrganizationUIExtension
+	
+	// Logger
+	log forge.Logger
 }
 
 // PluginOption is a functional option for configuring the SCIM plugin
@@ -164,7 +169,7 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	// Initialize UI extensions early so they're available during plugin scanning
 	// These don't depend on any runtime services, just the plugin reference
 	p.orgUIExt = NewOrganizationUIExtension(p)
-	p.dashboardExt = NewDashboardExtension(p)
+	// Dashboard extension is lazy-initialized when first accessed via DashboardExtension()
 
 	return p
 }
@@ -588,7 +593,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("SCIM", "Admin", "Stats"),
 	)
 
-
 	return nil
 }
 
@@ -759,6 +763,9 @@ type SCIMStatsResponse struct {
 // This allows the plugin to extend the dashboard with SCIM-specific UI
 // This implements the PluginWithDashboardExtension interface
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
+	p.dashboardExtOnce.Do(func() {
+		p.dashboardExt = NewDashboardExtension(p)
+	})
 	return p.dashboardExt
 }
 

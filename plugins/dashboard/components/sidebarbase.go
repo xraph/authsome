@@ -48,17 +48,17 @@ func BaseSidebarLayout(data PageData, content g.Node) g.Node {
 				`)),
 
 				// Compiled Tailwind CSS + Preline UI styles
-				Link(Rel("stylesheet"), Href(data.BasePath+"/dashboard/static/css/dashboard.css")),
+				Link(Rel("stylesheet"), Href(data.BasePath+"/static/css/dashboard.css")),
 
 				// Alpine.js x-cloak style
 				StyleEl(g.Raw(`[x-cloak] { display: none !important; }`)),
 
 				// Load Pines Components and Dashboard JS BEFORE Alpine.js
-				Script(Src(data.BasePath+"/dashboard/static/js/pines-components.js")),
-				Script(Src(data.BasePath+"/dashboard/static/js/dashboard.js")),
+				Script(Src(data.BasePath+"/static/js/pines-components.js")),
+				Script(Src(data.BasePath+"/static/js/dashboard.js")),
 
 				// Bundled JavaScript (Preline UI) - loads before Alpine.js
-				Script(Src(data.BasePath+"/dashboard/static/js/bundle.js")),
+				Script(Src(data.BasePath+"/static/js/bundle.js")),
 
 				// Alpine.js - Load LAST (components must be defined before Alpine initializes)
 				Script(Defer(), Src("https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js")),
@@ -135,7 +135,7 @@ func cmsHeader(data PageData) g.Node {
 					Li(
 						Class("inline-flex items-center relative pe-1.5 last:pe-0 last:after:hidden after:absolute after:top-1/2 after:end-0 after:inline-block after:w-px after:h-3.5 after:bg-gray-300 after:rounded-full after:-translate-y-1/2 after:rotate-12 dark:after:bg-neutral-700"),
 						A(
-							Href(data.BasePath+"/dashboard/"),
+							Href(data.BasePath+"/"),
 							Class("shrink-0 inline-flex justify-center items-center bg-violet-600 size-8 rounded-md text-xl font-semibold focus:outline-none focus:opacity-80"),
 							g.Attr("aria-label", "AuthSome"),
 							shieldCheckIcon(),
@@ -187,14 +187,14 @@ func cmsHeader(data PageData) g.Node {
 
 						A(
 							Class("flex items-center gap-x-1.5 py-1.5 px-2 text-sm text-gray-800 rounded-lg hover:bg-gray-200 focus:outline-hidden focus:bg-gray-200 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:text-neutral-200"),
-							Href(data.BasePath+"/dashboard/ai"),
+							Href(data.BasePath+"/ai"),
 							lucide.Brain(Class("shrink-0 size-4")),
 							Span(Class("sr-only"), g.Text("Docs")),
 						),
 
 						A(
 							Class("flex items-center gap-x-1.5 py-1.5 px-2 text-sm text-gray-800 rounded-lg hover:bg-gray-200 focus:outline-hidden focus:bg-gray-200 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:text-neutral-200"),
-							Href(data.BasePath+"/dashboard/api"),
+							Href(data.BasePath+"/api"),
 							lucide.Code(Class("shrink-0 size-4")),
 							Span(Class("sr-only"), g.Text("API")),
 						),
@@ -280,7 +280,7 @@ func cmsAppDropdown(data PageData) g.Node {
 
 // cmsAppDropdownItem renders a single app item in the dropdown
 func cmsAppDropdownItem(appEntity *app.App, basePath string, isActive bool) g.Node {
-	href := basePath + "/dashboard/app/" + appEntity.ID.String() + "/"
+	href := basePath + "/app/" + appEntity.ID.String() + "/"
 
 	return A(
 		Href(href),
@@ -369,7 +369,7 @@ func cmsEnvDropdownItem(env *environment.Environment, basePath, appIDStr string,
 		Form(
 			ID(formID),
 			Method("POST"),
-			Action(basePath+"/dashboard/app/"+appIDStr+"/environment/switch"),
+			Action(basePath+"/app/"+appIDStr+"/environment/switch"),
 			Class("hidden"),
 			Input(Type("hidden"), Name("env_id"), Value(env.ID.String())),
 		),
@@ -494,7 +494,7 @@ func cmsUserDropdown(data PageData) g.Node {
 				Div(
 					Class("p-1 border-t border-gray-200 dark:border-neutral-800"),
 					A(
-						Href(data.BasePath+"/dashboard/users/"+userID),
+						Href(data.BasePath+"/users/"+userID),
 						Class("flex items-center gap-x-3 py-2 px-3 rounded-lg text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:bg-gray-100 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800"),
 						lucide.User(Class("shrink-0 size-4")),
 						g.Text("Profile"),
@@ -506,7 +506,7 @@ func cmsUserDropdown(data PageData) g.Node {
 						g.Text("Settings"),
 					),
 					A(
-						Href(data.BasePath+"/dashboard/logout"),
+						Href(data.BasePath+"/logout"),
 						Class("flex items-center gap-x-3 py-2 px-3 rounded-lg text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:bg-gray-100 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800"),
 						lucide.LogOut(Class("shrink-0 size-4")),
 						g.Text("Log out"),
@@ -705,44 +705,44 @@ func cmsContentHeader(data PageData) g.Node {
 // Helper functions for URL generation (sidebar-specific)
 func getDashboardURL(data PageData) string {
 	if data.CurrentApp != nil {
-		return data.BasePath + "/dashboard/app/" + data.CurrentApp.ID.String() + "/"
+		return data.BasePath + "/app/" + data.CurrentApp.ID.String() + "/"
 	}
-	return data.BasePath + "/dashboard/"
+	return data.BasePath + "/"
 }
 
 func getUsersURL(data PageData) string {
 	if data.CurrentApp != nil {
-		return data.BasePath + "/dashboard/app/" + data.CurrentApp.ID.String() + "/users"
+		return data.BasePath + "/app/" + data.CurrentApp.ID.String() + "/users"
 	}
-	return data.BasePath + "/dashboard/"
+	return data.BasePath + "/"
 }
 
 func getSessionsURL(data PageData) string {
 	if data.CurrentApp != nil {
-		return data.BasePath + "/dashboard/app/" + data.CurrentApp.ID.String() + "/sessions"
+		return data.BasePath + "/app/" + data.CurrentApp.ID.String() + "/sessions"
 	}
-	return data.BasePath + "/dashboard/"
+	return data.BasePath + "/"
 }
 
 func getEnvironmentsURL(data PageData) string {
 	if data.CurrentApp != nil {
-		return data.BasePath + "/dashboard/app/" + data.CurrentApp.ID.String() + "/environments"
+		return data.BasePath + "/app/" + data.CurrentApp.ID.String() + "/environments"
 	}
-	return data.BasePath + "/dashboard/"
+	return data.BasePath + "/"
 }
 
 func getPluginsURL(data PageData) string {
 	if data.CurrentApp != nil {
-		return data.BasePath + "/dashboard/app/" + data.CurrentApp.ID.String() + "/plugins"
+		return data.BasePath + "/app/" + data.CurrentApp.ID.String() + "/plugins"
 	}
-	return data.BasePath + "/dashboard/"
+	return data.BasePath + "/"
 }
 
 func getSettingsURL(data PageData) string {
 	if data.CurrentApp != nil {
-		return data.BasePath + "/dashboard/app/" + data.CurrentApp.ID.String() + "/settings"
+		return data.BasePath + "/app/" + data.CurrentApp.ID.String() + "/settings"
 	}
-	return data.BasePath + "/dashboard/"
+	return data.BasePath + "/"
 }
 
 func getInitials(name string) string {
