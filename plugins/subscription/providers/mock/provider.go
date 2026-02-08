@@ -14,15 +14,15 @@ import (
 
 // Provider implements a mock payment provider for testing
 type Provider struct {
-	mu                 sync.RWMutex
-	customers          map[string]*mockCustomer
-	subscriptions      map[string]*mockSubscription
-	subscriptionItems  map[string]*mockSubscriptionItem
-	products           map[string]*mockProduct
-	prices             map[string]*mockPrice
-	invoices           map[string]*mockInvoice
-	paymentMethods     map[string]*mockPaymentMethod
-	features           map[string]*mockFeature
+	mu                sync.RWMutex
+	customers         map[string]*mockCustomer
+	subscriptions     map[string]*mockSubscription
+	subscriptionItems map[string]*mockSubscriptionItem
+	products          map[string]*mockProduct
+	prices            map[string]*mockPrice
+	invoices          map[string]*mockInvoice
+	paymentMethods    map[string]*mockPaymentMethod
+	features          map[string]*mockFeature
 }
 
 type mockProduct struct {
@@ -535,7 +535,7 @@ func (p *Provider) SyncFeature(ctx context.Context, feature *core.Feature) (stri
 			featureID = providerID
 		}
 	}
-	
+
 	// Generate mock provider ID if creating new
 	if feature.ProviderFeatureID == "" {
 		featureID = "mock_feat_" + feature.ID.String()

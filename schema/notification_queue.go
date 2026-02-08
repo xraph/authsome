@@ -21,15 +21,15 @@ const (
 type NotificationQueue struct {
 	bun.BaseModel `bun:"table:notification_queue,alias:nq"`
 
-	ID       xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
-	AppID    xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	ID    xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
+	AppID xid.ID `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
 
 	// Notification details
-	Type        string `bun:"type,notnull" json:"type"`               // email, sms, push
-	Priority    string `bun:"priority,notnull" json:"priority"`       // critical, high, normal, low
-	Recipient   string `bun:"recipient,notnull" json:"recipient"`     // Email address or phone number
-	Subject     string `bun:"subject" json:"subject,omitempty"`       // Email subject
-	Body        string `bun:"body" json:"body,omitempty"`             // Direct body content
+	Type        string `bun:"type,notnull" json:"type"`                  // email, sms, push
+	Priority    string `bun:"priority,notnull" json:"priority"`          // critical, high, normal, low
+	Recipient   string `bun:"recipient,notnull" json:"recipient"`        // Email address or phone number
+	Subject     string `bun:"subject" json:"subject,omitempty"`          // Email subject
+	Body        string `bun:"body" json:"body,omitempty"`                // Direct body content
 	TemplateKey string `bun:"template_key" json:"templateKey,omitempty"` // Template key if using template
 
 	// Payload for retry (JSON serialized request)
@@ -44,8 +44,8 @@ type NotificationQueue struct {
 	ProcessedAt *time.Time              `bun:"processed_at" json:"processedAt,omitempty"`
 
 	// Audit fields
-	CreatedAt time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
-	UpdatedAt time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updatedAt"`
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
 // NotificationQueueStats holds aggregate statistics for the notification queue
@@ -56,4 +56,3 @@ type NotificationQueueStats struct {
 	FailedCount     int64 `json:"failedCount"`
 	TotalCount      int64 `json:"totalCount"`
 }
-

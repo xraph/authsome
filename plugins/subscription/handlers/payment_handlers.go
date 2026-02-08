@@ -30,9 +30,9 @@ type CreateSetupIntentRequest struct {
 
 // AddPaymentMethodRequest is the request body for adding a payment method
 type AddPaymentMethodRequest struct {
-	OrganizationID    xid.ID `json:"organizationId" validate:"required"`
-	PaymentMethodID   string `json:"paymentMethodId" validate:"required"`
-	SetAsDefault      bool   `json:"setAsDefault"`
+	OrganizationID  xid.ID `json:"organizationId" validate:"required"`
+	PaymentMethodID string `json:"paymentMethodId" validate:"required"`
+	SetAsDefault    bool   `json:"setAsDefault"`
 }
 
 // SetDefaultPaymentMethodRequest is the request body for setting default payment method
@@ -217,4 +217,3 @@ func (h *PaymentHandlers) HandleRemovePaymentMethod(c forge.Context) error {
 		"message": "Payment method removed",
 	})
 }
-

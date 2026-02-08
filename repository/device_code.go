@@ -181,11 +181,11 @@ func (r *DeviceCodeRepository) FindByClientID(ctx context.Context, clientID stri
 		Model(&codes).
 		Where("client_id = ?", clientID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	err := query.Scan(ctx)
 	return codes, err
 }
@@ -197,11 +197,11 @@ func (r *DeviceCodeRepository) FindByUserID(ctx context.Context, userID xid.ID, 
 		Model(&codes).
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	err := query.Scan(ctx)
 	return codes, err
 }
@@ -230,7 +230,7 @@ func (r *DeviceCodeRepository) CountPending(ctx context.Context, clientID string
 func (r *DeviceCodeRepository) ListByAppAndEnv(ctx context.Context, appID, envID xid.ID, page, pageSize int) ([]*schema.DeviceCode, error) {
 	var codes []*schema.DeviceCode
 	offset := (page - 1) * pageSize
-	
+
 	err := r.db.NewSelect().Model(&codes).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
@@ -238,7 +238,7 @@ func (r *DeviceCodeRepository) ListByAppAndEnv(ctx context.Context, appID, envID
 		Limit(pageSize).
 		Offset(offset).
 		Scan(ctx)
-	
+
 	return codes, err
 }
 
@@ -255,7 +255,7 @@ func (r *DeviceCodeRepository) CountByAppAndEnv(ctx context.Context, appID, envI
 func (r *DeviceCodeRepository) ListByAppEnvAndStatus(ctx context.Context, appID, envID xid.ID, status string, page, pageSize int) ([]*schema.DeviceCode, error) {
 	var codes []*schema.DeviceCode
 	offset := (page - 1) * pageSize
-	
+
 	err := r.db.NewSelect().Model(&codes).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
@@ -264,7 +264,7 @@ func (r *DeviceCodeRepository) ListByAppEnvAndStatus(ctx context.Context, appID,
 		Limit(pageSize).
 		Offset(offset).
 		Scan(ctx)
-	
+
 	return codes, err
 }
 

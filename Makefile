@@ -368,21 +368,23 @@ watch-generate: ## Watch manifests and auto-generate clients
 
 ##@ Code Quality
 
-lint: ## Run linters
+lint: ## Run golangci-lint
 	@echo "Running linters..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run; \
+		golangci-lint run --timeout=5m; \
+		echo "✓ Linting passed"; \
 	else \
-		echo "golangci-lint not found, install it: https://golangci-lint.run/usage/install/"; \
+		echo "ERROR: golangci-lint not found. Run 'make install-tools' to install"; \
 		exit 1; \
 	fi
 
-lint-fix: ## Run linters with auto-fix
+lint-fix: ## Run golangci-lint with auto-fix
 	@echo "Running linters with auto-fix..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --fix; \
+		golangci-lint run --fix --timeout=5m; \
+		echo "✓ Linting completed with auto-fixes applied"; \
 	else \
-		echo "golangci-lint not found, install it: https://golangci-lint.run/usage/install/"; \
+		echo "ERROR: golangci-lint not found. Run 'make install-tools' to install"; \
 		exit 1; \
 	fi
 
@@ -391,17 +393,36 @@ fmt: ## Format Go code
 	@go fmt ./...
 	@echo "✓ Code formatted"
 
+format: fmt ## Alias for fmt
+f: fmt ## Short alias for fmt
+
+fmt-check: ## Check if code is formatted (CI-friendly)
+	@echo "Checking code format..."
+	@test -z "$$(gofmt -l . | tee /dev/stderr)" || \
+		(echo "ERROR: Code is not formatted. Run 'make fmt'" && exit 1)
+	@echo "✓ Code format is correct"
+
 vet: ## Run go vet
 	@echo "Running go vet..."
 	@go vet ./...
-	@echo "✓ No issues found"
+	@echo "✓ Vet passed"
 
 tidy: ## Tidy Go modules
 	@echo "Tidying modules..."
 	@go mod tidy
 	@echo "✓ Modules tidied"
 
-check: fmt vet lint ## Run all code quality checks
+tidy-check: ## Check if go.mod is tidy (CI-friendly)
+	@echo "Checking if modules are tidy..."
+	@go mod tidy
+	@git diff --exit-code go.mod go.sum || \
+		(echo "ERROR: go.mod or go.sum is not tidy. Run 'make tidy'" && exit 1)
+	@echo "✓ Modules are tidy"
+
+verify: fmt-check vet tidy-check lint ## Run all verification checks (CI-friendly)
+	@echo "✓ All verification checks passed"
+
+check: fmt vet lint ## Run all code quality checks (with auto-format)
 
 ##@ Security Auditing
 
@@ -664,23 +685,81 @@ godoc: ## Start godoc server
 full-workflow: clean build validate-manifests generate-clients test security-ci ## Complete workflow with security
 	@echo "✓ Full workflow completed successfully!"
 
-pre-commit: fmt vet test-short security-pre-commit ## Pre-commit checks (fast)
-	@echo "✓ Pre-commit checks passed"
-
-pre-push: check test security-ci ## Pre-push checks (comprehensive with security)
-	@echo "✓ Pre-push checks passed"
-
-release-prep: clean build test generate-clients validate-manifests security-audit ## Prepare for release with full security audit
+release-prep: verify test-coverage generate-clients validate-manifests security-audit build ## Prepare for release with full checks
 	@echo "✓ Release preparation complete"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Review security audit reports in .security-reports/"
 	@echo "  2. Review generated clients in clients/"
-	@echo "  3. Update version numbers"
-	@echo "  4. Update CHANGELOG.md"
-	@echo "  5. Update SECURITY.md with any new vulnerabilities"
-	@echo "  6. git tag v<version>"
-	@echo "  7. git push --tags"
+	@echo "  3. Ensure working directory is clean (git status)"
+	@echo "  4. Update CHANGELOG.md with release notes"
+	@echo "  5. Update version: git tag v<version>"
+	@echo "  6. Push tag: git push origin v<version>"
+	@echo "  7. GitHub Actions will run goreleaser automatically"
+	@echo ""
+	@echo "Or run locally with:"
+	@echo "  make release-local VERSION=v<version>"
+
+release-local: ## Build release binaries locally with goreleaser (snapshot mode)
+	@echo "Building release binaries locally..."
+	@if ! command -v goreleaser >/dev/null 2>&1; then \
+		echo "Installing goreleaser..."; \
+		go install github.com/goreleaser/goreleaser@latest; \
+	fi
+	@goreleaser check
+	@goreleaser release --snapshot --clean --skip=publish
+	@echo "✓ Release binaries built in dist/"
+	@ls -lh dist/ 2>/dev/null | grep -E "\.(tar\.gz|zip)$$" || true
+
+release-verify: ## Verify goreleaser configuration
+	@echo "Verifying goreleaser configuration..."
+	@if ! command -v goreleaser >/dev/null 2>&1; then \
+		echo "ERROR: goreleaser not installed. Run: go install github.com/goreleaser/goreleaser@latest"; \
+		exit 1; \
+	fi
+	@goreleaser check
+	@echo "✓ GoReleaser configuration is valid"
+
+release-dry-run: ## Show what would be released (dry-run)
+	@echo "Release dry-run..."
+	@if ! command -v goreleaser >/dev/null 2>&1; then \
+		echo "Installing goreleaser..."; \
+		go install github.com/goreleaser/goreleaser@latest; \
+	fi
+	@goreleaser release --snapshot --skip=publish --clean
+	@echo "✓ Dry-run completed. Check dist/ directory"
+
+release-clean: ## Clean release artifacts
+	@echo "Cleaning release artifacts..."
+	@rm -rf dist/
+	@echo "✓ Release artifacts cleaned"
+
+##@ Development Tools
+
+install-tools: ## Install development and linting tools
+	@echo "Installing development tools..."
+	@echo "→ Installing golangci-lint..."
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "→ Installing gosec..."
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo "→ Installing govulncheck..."
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "→ Installing gitleaks..."
+	@go install github.com/gitleaks/gitleaks/v8@latest
+	@echo "→ Installing go-licenses..."
+	@go install github.com/google/go-licenses@latest
+	@echo "→ Installing cyclonedx-gomod (optional)..."
+	@go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+	@echo "✓ All development tools installed"
+
+check-tools: ## Check if required development tools are installed
+	@echo "Checking installed tools..."
+	@command -v golangci-lint >/dev/null 2>&1 && echo "  ✓ golangci-lint" || echo "  ✗ golangci-lint (run 'make install-tools')"
+	@command -v gosec >/dev/null 2>&1 && echo "  ✓ gosec" || echo "  ✗ gosec (run 'make install-tools')"
+	@command -v govulncheck >/dev/null 2>&1 && echo "  ✓ govulncheck" || echo "  ✗ govulncheck (run 'make install-tools')"
+	@command -v gitleaks >/dev/null 2>&1 && echo "  ✓ gitleaks" || echo "  ✗ gitleaks (run 'make install-tools')"
+	@command -v go-licenses >/dev/null 2>&1 && echo "  ✓ go-licenses" || echo "  ✗ go-licenses (run 'make install-tools')"
+	@command -v cyclonedx-gomod >/dev/null 2>&1 && echo "  ✓ cyclonedx-gomod" || echo "  ✗ cyclonedx-gomod (optional)"
 
 ##@ Utilities
 
@@ -712,21 +791,48 @@ deps: ## Download dependencies
 	@go mod download
 	@echo "✓ Dependencies downloaded"
 
-verify: ## Verify dependencies
+deps-verify: ## Verify dependencies integrity
 	@echo "Verifying dependencies..."
 	@go mod verify
 	@echo "✓ Dependencies verified"
 
 ##@ CI/CD
 
-ci: deps check test generate-clients validate-manifests security-ci ## Run CI pipeline with security
+ci: verify test build ## Run standard CI pipeline (verify, test, build)
 	@echo "✓ CI pipeline completed successfully!"
 
-ci-fast: deps test-short lint security-secrets ## Fast CI checks with secret scanning
+ci-comprehensive: verify test-coverage security-audit build generate-clients validate-manifests ## Run comprehensive CI pipeline with security and client generation
+	@echo "✓ Comprehensive CI pipeline completed successfully!"
+
+ci-fast: fmt lint test-short ## Fast CI checks (format, lint, short tests)
 	@echo "✓ Fast CI checks completed!"
 
-ci-security-only: security-ci ## Run only security checks (for scheduled scans)
+ci-security: security-ci ## Run only security checks (for scheduled scans)
 	@echo "✓ Security-only CI completed!"
+
+pre-commit: fmt lint test-short ## Pre-commit checks (fast)
+	@echo "✓ Pre-commit checks passed"
+
+pre-push: verify test ## Pre-push checks (comprehensive)
+	@echo "✓ Pre-push checks passed"
+
+ci-status: ## Show CI/CD configuration status
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "📊 CI/CD Status"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Tools:"
+	@$(MAKE) check-tools 2>/dev/null | grep "✓\|✗"
+	@echo ""
+	@echo "Git Status:"
+	@git status --short 2>/dev/null || echo "  Working directory clean"
+	@echo ""
+	@echo "Latest Tags:"
+	@git tag -l "v*" --sort=-version:refname 2>/dev/null | head -5
+	@echo ""
+	@echo "Module Info:"
+	@head -1 go.mod 2>/dev/null
+	@echo ""
 
 ##@ Docker (Future)
 

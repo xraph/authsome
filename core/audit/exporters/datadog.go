@@ -23,12 +23,12 @@ type DatadogExporter struct {
 
 // DatadogConfig contains Datadog configuration
 type DatadogConfig struct {
-	APIKey     string        `json:"apiKey"`     // Datadog API key
-	Site       string        `json:"site"`       // Datadog site (e.g., datadoghq.com, datadoghq.eu)
-	Service    string        `json:"service"`    // Service name
-	Source     string        `json:"source"`     // Log source
-	Tags       []string      `json:"tags"`       // Additional tags
-	Timeout    time.Duration `json:"timeout"`
+	APIKey  string        `json:"apiKey"`  // Datadog API key
+	Site    string        `json:"site"`    // Datadog site (e.g., datadoghq.com, datadoghq.eu)
+	Service string        `json:"service"` // Service name
+	Source  string        `json:"source"`  // Log source
+	Tags    []string      `json:"tags"`    // Additional tags
+	Timeout time.Duration `json:"timeout"`
 }
 
 // DefaultDatadogConfig returns default Datadog configuration
@@ -167,7 +167,7 @@ func (e *DatadogExporter) HealthCheck(ctx context.Context) error {
 
 	payload, _ := json.Marshal(testLog)
 	endpoint := fmt.Sprintf("https://http-intake.logs.%s/api/v2/logs", e.config.Site)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
@@ -194,4 +194,3 @@ func (e *DatadogExporter) Close() error {
 	e.client.CloseIdleConnections()
 	return nil
 }
-

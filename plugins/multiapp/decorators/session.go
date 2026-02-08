@@ -41,10 +41,10 @@ func NewMultiTenantSessionService(sessionService session.ServiceInterface, appSe
 		appService:     appService,
 		cacheTTL:       time.Second, // Very short cache to handle concurrent auth attempts
 	}
-	
+
 	// Start background goroutine to clean up stale cache entries
 	go svc.cleanupCache()
-	
+
 	return svc
 }
 
@@ -52,7 +52,7 @@ func NewMultiTenantSessionService(sessionService session.ServiceInterface, appSe
 func (s *MultiTenantSessionService) cleanupCache() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		now := time.Now()
 		s.cache.Range(func(key, value interface{}) bool {

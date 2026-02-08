@@ -48,7 +48,7 @@ func (m *mockAuth) AuthMiddleware() forge.Middleware {
 		return next
 	}
 }
-func (m *mockAuth) GetGlobalRoutesOptions() []forge.RouteOption       { return nil }
+func (m *mockAuth) GetGlobalRoutesOptions() []forge.RouteOption      { return nil }
 func (m *mockAuth) GetGlobalGroupRoutesOptions() []forge.GroupOption { return nil }
 
 func TestPluginID(t *testing.T) {

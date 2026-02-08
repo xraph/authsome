@@ -86,7 +86,6 @@ func main() {
 	// Start server
 	port := 8080
 
-
 	// Start the Forge app (use your actual Forge server start method)
 	log.Printf("Example server ready on port %d", port)
 	log.Println("Note: This is a skeleton example. Adapt to your Forge setup.")

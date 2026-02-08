@@ -38,20 +38,20 @@ func DefaultRetryConfig() RetryConfig {
 
 // RetryItem represents a notification queued for retry
 type RetryItem struct {
-	ID         xid.ID                 `json:"id"`
-	AppID      xid.ID                 `json:"appId"`
-	Type       NotificationType       `json:"type"`
-	Priority   NotificationPriority   `json:"priority"`
-	Recipient  string                 `json:"recipient"`
-	Subject    string                 `json:"subject,omitempty"`
-	Body       string                 `json:"body,omitempty"`
-	TemplateKey string                `json:"templateKey,omitempty"`
-	Variables  map[string]interface{} `json:"variables,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	Attempts   int                    `json:"attempts"`
-	LastError  string                 `json:"lastError"`
-	NextRetry  time.Time              `json:"nextRetry"`
-	CreatedAt  time.Time              `json:"createdAt"`
+	ID          xid.ID                 `json:"id"`
+	AppID       xid.ID                 `json:"appId"`
+	Type        NotificationType       `json:"type"`
+	Priority    NotificationPriority   `json:"priority"`
+	Recipient   string                 `json:"recipient"`
+	Subject     string                 `json:"subject,omitempty"`
+	Body        string                 `json:"body,omitempty"`
+	TemplateKey string                 `json:"templateKey,omitempty"`
+	Variables   map[string]interface{} `json:"variables,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Attempts    int                    `json:"attempts"`
+	LastError   string                 `json:"lastError"`
+	NextRetry   time.Time              `json:"nextRetry"`
+	CreatedAt   time.Time              `json:"createdAt"`
 }
 
 // RetryStorage defines the interface for retry queue storage
@@ -72,17 +72,17 @@ type RetryStorage interface {
 
 // RetryStats holds retry queue statistics
 type RetryStats struct {
-	PendingCount int64 `json:"pendingCount"`
-	FailedCount  int64 `json:"failedCount"`
+	PendingCount   int64 `json:"pendingCount"`
+	FailedCount    int64 `json:"failedCount"`
 	ProcessedCount int64 `json:"processedCount"`
 }
 
 // InMemoryRetryStorage provides an in-memory implementation of RetryStorage
 // Used when Redis is not available
 type InMemoryRetryStorage struct {
-	mu       sync.RWMutex
-	items    map[xid.ID]*RetryItem
-	failed   map[xid.ID]*RetryItem
+	mu        sync.RWMutex
+	items     map[xid.ID]*RetryItem
+	failed    map[xid.ID]*RetryItem
 	processed int64
 }
 
@@ -155,13 +155,13 @@ func (s *InMemoryRetryStorage) GetStats(ctx context.Context) (*RetryStats, error
 
 // RetryService handles notification retry logic
 type RetryService struct {
-	config   RetryConfig
-	storage  RetryStorage
-	sender   NotificationSender
-	mu       sync.RWMutex
-	running  bool
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
+	config  RetryConfig
+	storage RetryStorage
+	sender  NotificationSender
+	mu      sync.RWMutex
+	running bool
+	stopCh  chan struct{}
+	wg      sync.WaitGroup
 }
 
 // NewRetryService creates a new retry service
@@ -341,4 +341,3 @@ func DeserializeRetryItem(data []byte) (*RetryItem, error) {
 	}
 	return &item, nil
 }
-

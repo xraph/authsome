@@ -22,10 +22,10 @@ type GetOverviewInput struct {
 
 // GetOverviewOutput is the output for SCIM overview
 type GetOverviewOutput struct {
-	Stats          OverviewStats          `json:"stats"`
-	RecentActivity []ActivityItem         `json:"recentActivity"`
-	Providers      []ProviderSummaryItem  `json:"providers"`
-	QuickActions   []QuickActionItem      `json:"quickActions"`
+	Stats          OverviewStats         `json:"stats"`
+	RecentActivity []ActivityItem        `json:"recentActivity"`
+	Providers      []ProviderSummaryItem `json:"providers"`
+	QuickActions   []QuickActionItem     `json:"quickActions"`
 }
 
 // OverviewStats contains overview statistics
@@ -52,13 +52,13 @@ type ActivityItem struct {
 
 // ProviderSummaryItem represents a provider summary
 type ProviderSummaryItem struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Type         string `json:"type,omitempty"`
-	Status       string `json:"status"`
-	LastSync     string `json:"lastSync,omitempty"`
-	UserCount    int    `json:"userCount,omitempty"`
-	GroupCount   int    `json:"groupCount,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type,omitempty"`
+	Status     string `json:"status"`
+	LastSync   string `json:"lastSync,omitempty"`
+	UserCount  int    `json:"userCount,omitempty"`
+	GroupCount int    `json:"groupCount,omitempty"`
 }
 
 // QuickActionItem represents a quick action
@@ -81,16 +81,16 @@ type GetProvidersInput struct {
 
 // ProviderItem represents a SCIM provider
 type ProviderItem struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	Type             string `json:"type"`
-	Status           string `json:"status"`
-	EndpointURL      string `json:"endpointUrl,omitempty"`
-	LastSync         string `json:"lastSync,omitempty"`
-	LastSyncStatus   string `json:"lastSyncStatus,omitempty"`
-	UserCount        int    `json:"userCount,omitempty"`
-	GroupCount       int    `json:"groupCount,omitempty"`
-	CreatedAt        string `json:"createdAt"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	Status         string `json:"status"`
+	EndpointURL    string `json:"endpointUrl,omitempty"`
+	LastSync       string `json:"lastSync,omitempty"`
+	LastSyncStatus string `json:"lastSyncStatus,omitempty"`
+	UserCount      int    `json:"userCount,omitempty"`
+	GroupCount     int    `json:"groupCount,omitempty"`
+	CreatedAt      string `json:"createdAt"`
 }
 
 // GetProvidersOutput is the output for listing providers
@@ -110,10 +110,10 @@ type GetProviderInput struct {
 
 // ProviderDetailOutput is the output for provider details
 type ProviderDetailOutput struct {
-	Provider      ProviderItem          `json:"provider"`
-	Configuration ProviderConfig        `json:"configuration"`
-	SyncHistory   []SyncHistoryItem     `json:"syncHistory"`
-	Stats         BridgeProviderStats   `json:"stats"`
+	Provider      ProviderItem        `json:"provider"`
+	Configuration ProviderConfig      `json:"configuration"`
+	SyncHistory   []SyncHistoryItem   `json:"syncHistory"`
+	Stats         BridgeProviderStats `json:"stats"`
 }
 
 // ProviderConfig represents provider configuration
@@ -146,13 +146,13 @@ type SyncHistoryItem struct {
 
 // BridgeProviderStats contains provider statistics for bridge
 type BridgeProviderStats struct {
-	TotalUsers        int    `json:"totalUsers,omitempty"`
-	TotalGroups       int    `json:"totalGroups,omitempty"`
-	TotalSyncs        int    `json:"totalSyncs,omitempty"`
-	SuccessfulSyncs   int    `json:"successfulSyncs,omitempty"`
-	FailedSyncs       int    `json:"failedSyncs,omitempty"`
-	AvgSyncDuration   string `json:"avgSyncDuration,omitempty"`
-	LastSyncDuration  string `json:"lastSyncDuration,omitempty"`
+	TotalUsers       int    `json:"totalUsers,omitempty"`
+	TotalGroups      int    `json:"totalGroups,omitempty"`
+	TotalSyncs       int    `json:"totalSyncs,omitempty"`
+	SuccessfulSyncs  int    `json:"successfulSyncs,omitempty"`
+	FailedSyncs      int    `json:"failedSyncs,omitempty"`
+	AvgSyncDuration  string `json:"avgSyncDuration,omitempty"`
+	LastSyncDuration string `json:"lastSyncDuration,omitempty"`
 }
 
 // CreateProviderInput is the input for creating a provider
@@ -296,15 +296,15 @@ type GetLogsInput struct {
 
 // LogItem represents a SCIM log entry
 type LogItem struct {
-	ID          string `json:"id"`
-	EventType   string `json:"eventType,omitempty"`
-	Status      string `json:"status,omitempty"`
-	Provider    string `json:"provider,omitempty"`
-	Resource    string `json:"resource,omitempty"`
-	ResourceID  string `json:"resourceId,omitempty"`
-	Details     string `json:"details,omitempty"`
-	IPAddress   string `json:"ipAddress,omitempty"`
-	Timestamp   string `json:"timestamp"`
+	ID         string `json:"id"`
+	EventType  string `json:"eventType,omitempty"`
+	Status     string `json:"status,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Resource   string `json:"resource,omitempty"`
+	ResourceID string `json:"resourceId,omitempty"`
+	Details    string `json:"details,omitempty"`
+	IPAddress  string `json:"ipAddress,omitempty"`
+	Timestamp  string `json:"timestamp"`
 }
 
 // GetLogsOutput is the output for getting logs
@@ -323,10 +323,10 @@ type GetConfigInput struct {
 
 // SCIMConfigOutput is the output for SCIM configuration
 type SCIMConfigOutput struct {
-	UserProvisioning  BridgeUserProvisioningConfig  `json:"userProvisioning"`
-	GroupSync         BridgeGroupSyncConfig         `json:"groupSync"`
-	Security          BridgeSecurityConfig          `json:"security"`
-	AttributeMapping  BridgeAttributeMappingConfig  `json:"attributeMapping"`
+	UserProvisioning BridgeUserProvisioningConfig `json:"userProvisioning"`
+	GroupSync        BridgeGroupSyncConfig        `json:"groupSync"`
+	Security         BridgeSecurityConfig         `json:"security"`
+	AttributeMapping BridgeAttributeMappingConfig `json:"attributeMapping"`
 }
 
 // BridgeUserProvisioningConfig contains user provisioning settings for bridge
@@ -349,20 +349,20 @@ type BridgeGroupSyncConfig struct {
 
 // BridgeSecurityConfig contains security settings for bridge
 type BridgeSecurityConfig struct {
-	RequireHTTPS      bool `json:"requireHttps,omitempty"`
-	RateLimitEnabled  bool `json:"rateLimitEnabled,omitempty"`
-	RateLimitPerMin   int  `json:"rateLimitPerMin,omitempty"`
-	RequireSignedReq  bool `json:"requireSignedReq,omitempty"`
-	AuditAllRequests  bool `json:"auditAllRequests,omitempty"`
+	RequireHTTPS     bool `json:"requireHttps,omitempty"`
+	RateLimitEnabled bool `json:"rateLimitEnabled,omitempty"`
+	RateLimitPerMin  int  `json:"rateLimitPerMin,omitempty"`
+	RequireSignedReq bool `json:"requireSignedReq,omitempty"`
+	AuditAllRequests bool `json:"auditAllRequests,omitempty"`
 }
 
 // BridgeAttributeMappingConfig contains attribute mapping settings for bridge
 type BridgeAttributeMappingConfig struct {
-	EmailMapping    string            `json:"emailMapping,omitempty"`
-	NameMapping     string            `json:"nameMapping,omitempty"`
-	PhoneMapping    string            `json:"phoneMapping,omitempty"`
-	RoleMapping     string            `json:"roleMapping,omitempty"`
-	CustomMappings  map[string]string `json:"customMappings,omitempty"`
+	EmailMapping   string            `json:"emailMapping,omitempty"`
+	NameMapping    string            `json:"nameMapping,omitempty"`
+	PhoneMapping   string            `json:"phoneMapping,omitempty"`
+	RoleMapping    string            `json:"roleMapping,omitempty"`
+	CustomMappings map[string]string `json:"customMappings,omitempty"`
 }
 
 // UpdateConfigInput is the input for updating configuration
@@ -398,19 +398,19 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	providers, err := e.plugin.service.ListProviders(goCtx, appID, nil)
 	activeProviders := 0
 	providerSummaries := []ProviderSummaryItem{}
-	
+
 	if err == nil && providers != nil {
 		for _, p := range providers {
 			if p.Status == "active" {
 				activeProviders++
 			}
 			providerSummaries = append(providerSummaries, ProviderSummaryItem{
-				ID:        p.ID.String(),
-				Name:      p.Name,
-				Type:      p.Type,
-				Status:    p.Status,
-				LastSync:  formatTime(p.LastSyncAt),
-				UserCount: 0, // Not stored in schema
+				ID:         p.ID.String(),
+				Name:       p.Name,
+				Type:       p.Type,
+				Status:     p.Status,
+				LastSync:   formatTime(p.LastSyncAt),
+				UserCount:  0, // Not stored in schema
 				GroupCount: 0, // Not stored in schema
 			})
 		}
@@ -434,7 +434,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	recentActivity := []ActivityItem{}
 	syncErrors := 0
 	var lastSyncTime time.Time
-	
+
 	if events != nil {
 		for _, ev := range events {
 			description := ev.EventType
@@ -578,17 +578,17 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 				errCount = 1
 			}
 			syncHistory = append(syncHistory, SyncHistoryItem{
-				ID:           ev.ID.String(),
-				StartTime:    ev.CreatedAt.Format(time.RFC3339),
-				EndTime:      ev.CreatedAt.Format(time.RFC3339), // No end time in schema
-				Status:       ev.Status,
-				UsersAdded:   0,
-				UsersUpdated: 0,
-				UsersRemoved: 0,
-				GroupsAdded:  0,
+				ID:            ev.ID.String(),
+				StartTime:     ev.CreatedAt.Format(time.RFC3339),
+				EndTime:       ev.CreatedAt.Format(time.RFC3339), // No end time in schema
+				Status:        ev.Status,
+				UsersAdded:    0,
+				UsersUpdated:  0,
+				UsersRemoved:  0,
+				GroupsAdded:   0,
 				GroupsUpdated: 0,
-				ErrorCount:   errCount,
-				ErrorMessage: errMsg,
+				ErrorCount:    errCount,
+				ErrorMessage:  errMsg,
 			})
 		}
 	}
@@ -623,11 +623,11 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 		},
 		SyncHistory: syncHistory,
 		Stats: BridgeProviderStats{
-			TotalUsers:   0,
-			TotalGroups:  0,
-			TotalSyncs:   0,
+			TotalUsers:      0,
+			TotalGroups:     0,
+			TotalSyncs:      0,
 			SuccessfulSyncs: 0,
-			FailedSyncs:  0,
+			FailedSyncs:     0,
 		},
 	}, nil
 }

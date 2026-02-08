@@ -28,9 +28,9 @@ func NewValidationError(fieldID, validatorID, format string, args ...interface{}
 
 // ValidationResult holds the result of validating a section or schema
 type ValidationResult struct {
-	Valid        bool                         `json:"valid"`
+	Valid        bool                          `json:"valid"`
 	FieldErrors  map[string][]*ValidationError `json:"fieldErrors,omitempty"`
-	GlobalErrors []string                     `json:"globalErrors,omitempty"`
+	GlobalErrors []string                      `json:"globalErrors,omitempty"`
 }
 
 // NewValidationResult creates a new valid validation result
@@ -163,12 +163,12 @@ func (e *SchemaError) Error() string {
 
 // Common schema errors
 var (
-	ErrSectionNotFound = &SchemaError{Type: "section_not_found", Message: "Section not found"}
-	ErrFieldNotFound   = &SchemaError{Type: "field_not_found", Message: "Field not found"}
-	ErrInvalidFieldType = &SchemaError{Type: "invalid_field_type", Message: "Invalid field type"}
+	ErrSectionNotFound    = &SchemaError{Type: "section_not_found", Message: "Section not found"}
+	ErrFieldNotFound      = &SchemaError{Type: "field_not_found", Message: "Field not found"}
+	ErrInvalidFieldType   = &SchemaError{Type: "invalid_field_type", Message: "Invalid field type"}
 	ErrDuplicateSectionID = &SchemaError{Type: "duplicate_section", Message: "Section ID already exists"}
-	ErrDuplicateFieldID = &SchemaError{Type: "duplicate_field", Message: "Field ID already exists in section"}
-	ErrSchemaNotFound = &SchemaError{Type: "schema_not_found", Message: "Schema not found"}
+	ErrDuplicateFieldID   = &SchemaError{Type: "duplicate_field", Message: "Field ID already exists in section"}
+	ErrSchemaNotFound     = &SchemaError{Type: "schema_not_found", Message: "Schema not found"}
 )
 
 // NewSchemaError creates a new schema error with optional details

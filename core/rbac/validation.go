@@ -71,4 +71,3 @@ func validateUserIDs(userIDs []xid.ID) error {
 	}
 	return nil
 }
-

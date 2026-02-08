@@ -25,7 +25,7 @@ import (
 // DashboardExtension implements the ui.DashboardExtension interface
 // This allows the API key plugin to add its own screens to the dashboard
 type DashboardExtension struct {
-	plugin   *Plugin
+	plugin     *Plugin
 	baseUIPath string
 }
 
@@ -497,7 +497,7 @@ func (e *DashboardExtension) UpdateConfig(ctx *router.PageContext) (g.Node, erro
 		e.plugin.startCleanupScheduler()
 	}
 
-	return nil, nil  // Success
+	return nil, nil // Success
 }
 
 // UpdateSecurity handles security settings updates
@@ -512,7 +512,7 @@ func (e *DashboardExtension) UpdateSecurity(ctx *router.PageContext) (g.Node, er
 	e.plugin.config.RateLimiting.Enabled = rateLimitingEnabled
 	e.plugin.config.IPWhitelisting.Enabled = ipWhitelistingEnabled
 
-	return nil, nil  // Success
+	return nil, nil // Success
 }
 
 // RenderDashboardWidget renders the API key stats widget

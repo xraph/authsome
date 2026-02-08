@@ -239,4 +239,3 @@ func (h *FiberStreamHandler) HandleSSE(c *fiber.Ctx) error {
 
 	return nil
 }
-

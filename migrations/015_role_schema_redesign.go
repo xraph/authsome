@@ -84,21 +84,21 @@ func init() {
 						Table("roles").
 						Where("app_id = ?", app.ID).
 						Count(ctx)
-					
+
 					if countErr == nil && roleCount > 0 {
 						// App has roles but no environment - create a default environment
 						fmt.Printf("Creating default environment for app %s (has %d roles)\n", app.ID, roleCount)
-						
+
 						// Create default environment
 						_, err = db.ExecContext(ctx, `
 							INSERT INTO environments (id, app_id, name, slug, type, status, is_default, created_at, updated_at, created_by, updated_by, version)
 							VALUES (?, ?, 'Default', 'default', 'production', 'active', true, NOW(), NOW(), ?, ?, 1)
 						`, generateXID(), app.ID, app.ID, app.ID)
-						
+
 						if err != nil {
 							return fmt.Errorf("failed to create default environment for app %s: %w", app.ID, err)
 						}
-						
+
 						// Now get the newly created environment
 						err = db.NewSelect().
 							Table("environments").
@@ -106,7 +106,7 @@ func init() {
 							Where("app_id = ?", app.ID).
 							Limit(1).
 							Scan(ctx, &envID)
-							
+
 						if err != nil {
 							return fmt.Errorf("failed to retrieve created environment for app %s: %w", app.ID, err)
 						}
@@ -265,4 +265,3 @@ func toTitleCase(s string) string {
 func generateXID() string {
 	return xid.New().String()
 }
-

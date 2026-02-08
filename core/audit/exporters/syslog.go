@@ -24,15 +24,15 @@ type SyslogExporter struct {
 
 // SyslogConfig contains Syslog configuration
 type SyslogConfig struct {
-	Network   string        `json:"network"`   // tcp, udp, tcp+tls
-	Address   string        `json:"address"`   // host:port
-	Tag       string        `json:"tag"`       // Syslog tag
-	Facility  string        `json:"facility"`  // Syslog facility (e.g., local0)
-	Severity  string        `json:"severity"`  // Default severity (e.g., info)
-	UseTLS    bool          `json:"useTls"`    // Use TLS for TCP
-	TLSConfig *tls.Config   `json:"-"`         // TLS configuration
+	Network   string        `json:"network"`  // tcp, udp, tcp+tls
+	Address   string        `json:"address"`  // host:port
+	Tag       string        `json:"tag"`      // Syslog tag
+	Facility  string        `json:"facility"` // Syslog facility (e.g., local0)
+	Severity  string        `json:"severity"` // Default severity (e.g., info)
+	UseTLS    bool          `json:"useTls"`   // Use TLS for TCP
+	TLSConfig *tls.Config   `json:"-"`        // TLS configuration
 	Timeout   time.Duration `json:"timeout"`
-	Format    string        `json:"format"`    // rfc5424 or rfc3164
+	Format    string        `json:"format"` // rfc5424 or rfc3164
 }
 
 // DefaultSyslogConfig returns default Syslog configuration
@@ -97,7 +97,7 @@ func (e *SyslogExporter) Export(ctx context.Context, events []*audit.Event) erro
 
 	for _, event := range events {
 		msg := e.formatEvent(event)
-		
+
 		// Send to syslog based on severity
 		if err := e.writer.Info(msg); err != nil {
 			return fmt.Errorf("failed to send syslog message: %w", err)
@@ -224,4 +224,3 @@ func parseSeverity(severity string) (syslog.Priority, error) {
 
 	return s, nil
 }
-

@@ -102,4 +102,3 @@ func protectedHandler(c forge.Context) error {
 		"user":    "John Doe", // In real app, get from auth context
 	})
 }
-

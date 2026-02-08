@@ -148,24 +148,24 @@ func (app *ComprehensiveApp) initDatabase(config *Config) error {
 func (app *ComprehensiveApp) runMigrations() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	migrator := migrate.NewMigrator(app.db, migrations.Migrations)
-	
+
 	if err := migrator.Init(ctx); err != nil {
 		return fmt.Errorf("failed to init migrator: %w", err)
 	}
-	
+
 	group, err := migrator.Migrate(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to migrate: %w", err)
 	}
-	
+
 	if group.IsZero() {
 		log.Println("  ✓ Database is up to date")
 	} else {
 		log.Printf("  ✓ Migrated to %s", group)
 	}
-	
+
 	return nil
 }
 

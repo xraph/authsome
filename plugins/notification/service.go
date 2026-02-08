@@ -57,7 +57,7 @@ func (s *TemplateService) SendWithTemplate(ctx context.Context, req *SendWithTem
 		if err := s.notificationSvc.InitializeDefaultTemplates(ctx, req.AppID); err != nil {
 			return nil, notification.TemplateNotFound()
 		}
-		
+
 		// Retry finding the template after initialization
 		schemaTemplate, err = s.repo.FindTemplateByKey(ctx, req.AppID, req.TemplateKey, string(req.Type), language)
 		if err != nil {

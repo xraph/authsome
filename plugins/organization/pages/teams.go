@@ -361,20 +361,20 @@ func createTeamModal() g.Node {
 					Class("p-6 space-y-4"),
 					H3(Class("text-lg font-semibold"), g.Text("Create Team")),
 					P(Class("text-sm text-muted-foreground"), g.Text("Create a new team to organize members")),
-					
+
 					// Error message
 					Div(
 						g.Attr("x-show", "teamForm.error"),
 						Class("bg-destructive/10 border border-destructive/20 rounded-lg p-3"),
 						P(Class("text-sm text-destructive"), g.Attr("x-text", "teamForm.error")),
 					),
-					
+
 					// Name field
 					FormField("team-name", "Team Name", "text", "name", "Engineering Team", true, ""),
-					
+
 					// Description field
 					TextareaField("team-description", "Description", "description", "Brief description of the team", 3, false, ""),
-					
+
 					// Actions
 					Div(
 						Class("flex justify-end gap-2 pt-4"),
@@ -427,14 +427,14 @@ func editTeamModal() g.Node {
 				Div(
 					Class("p-6 space-y-4"),
 					H3(Class("text-lg font-semibold"), g.Text("Edit Team")),
-					
+
 					// Error message
 					Div(
 						g.Attr("x-show", "teamForm.error"),
 						Class("bg-destructive/10 border border-destructive/20 rounded-lg p-3"),
 						P(Class("text-sm text-destructive"), g.Attr("x-text", "teamForm.error")),
 					),
-					
+
 					// Name field with x-model
 					Div(
 						Class("space-y-2"),
@@ -447,7 +447,7 @@ func editTeamModal() g.Node {
 							Class("flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"),
 						),
 					),
-					
+
 					// Description field with x-model
 					Div(
 						Class("space-y-2"),
@@ -459,7 +459,7 @@ func editTeamModal() g.Node {
 							Class("flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"),
 						),
 					),
-					
+
 					// Actions
 					Div(
 						Class("flex justify-end gap-2 pt-4"),

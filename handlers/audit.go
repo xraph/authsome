@@ -25,7 +25,8 @@ func NewAuditHandler(service *audit.Service) *AuditHandler {
 
 // ListEvents returns audit events with pagination and optional filters
 // Query params: q, environmentId, userId, userIds, action, actions, actionPattern, resource, resources, resourcePattern,
-//               ipAddress, ipAddresses, ipRange, since, until, sortBy, sortOrder
+//
+//	ipAddress, ipAddresses, ipRange, since, until, sortBy, sortOrder
 func (h *AuditHandler) ListEvents(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))

@@ -294,10 +294,10 @@ func logDetailsModal() g.Node {
 				Class("w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto"),
 				card.Header(
 					Class("flex items-center justify-between"),
-				Div(
-					Span(Class("text-lg font-semibold"), g.Text("Event Details")),
-					Div(Class("text-sm text-muted-foreground"), g.Attr("x-text", "formatTimestamp(selectedLog.timestamp)")),
-				),
+					Div(
+						Span(Class("text-lg font-semibold"), g.Text("Event Details")),
+						Div(Class("text-sm text-muted-foreground"), g.Attr("x-text", "formatTimestamp(selectedLog.timestamp)")),
+					),
 					button.Button(
 						lucide.X(Class("size-4")),
 						button.WithVariant("ghost"),

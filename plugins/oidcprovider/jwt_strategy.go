@@ -16,7 +16,7 @@ import (
 // JWTValidationStrategy validates OAuth/OIDC JWT access tokens
 // This allows any AuthSome endpoint to accept JWT tokens from the OIDC provider
 type JWTValidationStrategy struct {
-	oidcJWTSvc *JWTService           // OIDC provider's JWT service (has the JWKS keys!)
+	oidcJWTSvc *JWTService // OIDC provider's JWT service (has the JWKS keys!)
 	userSvc    user.ServiceInterface
 	issuer     string // Expected issuer (e.g., "http://localhost:4000")
 	audience   string // Expected audience (optional)

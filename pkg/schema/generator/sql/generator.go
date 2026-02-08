@@ -76,7 +76,6 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 
 	if opts.Verbose {
 
-
 	}
 
 	return nil

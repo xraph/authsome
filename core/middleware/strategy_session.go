@@ -132,4 +132,3 @@ func (s *SessionStrategy) Authenticate(ctx context.Context, credentials interfac
 
 	return authCtx, nil
 }
-

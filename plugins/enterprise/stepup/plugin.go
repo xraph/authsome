@@ -105,7 +105,6 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Initialize middleware
 	p.middleware = NewMiddleware(p.service, p.config)
 
-
 	return nil
 }
 
@@ -232,7 +231,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Audit logs retrieved", StepUpAuditLogsResponse{}),
 		forge.WithTags("Step-Up", "Audit"),
 	)
-
 
 	return nil
 }

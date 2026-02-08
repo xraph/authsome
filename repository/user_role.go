@@ -34,7 +34,7 @@ func (r *UserRoleRepository) AssignBatch(ctx context.Context, userID xid.ID, rol
 
 	userRoles := make([]*schema.UserRole, len(roleIDs))
 	createdBy := xid.New()
-	
+
 	for i, roleID := range roleIDs {
 		userRoles[i] = &schema.UserRole{
 			ID:     xid.New(),
@@ -92,7 +92,7 @@ func (r *UserRoleRepository) AssignAppLevel(ctx context.Context, userID, roleID,
 	// Populate required auditable fields
 	ur.AuditableModel.CreatedBy = xid.New()
 	ur.AuditableModel.UpdatedBy = ur.AuditableModel.CreatedBy
-	
+
 	_, err := r.db.NewInsert().Model(ur).Exec(ctx)
 	return err
 }
@@ -254,7 +254,7 @@ func (r *UserRoleRepository) TransferRoles(ctx context.Context, userID, sourceOr
 		// Insert to target org
 		userRoles := make([]*schema.UserRole, len(roleIDs))
 		createdBy := xid.New()
-		
+
 		for i, roleID := range roleIDs {
 			userRoles[i] = &schema.UserRole{
 				ID:     xid.New(),
@@ -291,7 +291,7 @@ func (r *UserRoleRepository) CopyRoles(ctx context.Context, userID, sourceOrgID,
 	// Build user roles for target org
 	userRoles := make([]*schema.UserRole, len(existingRoles))
 	createdBy := xid.New()
-	
+
 	for i, existing := range existingRoles {
 		userRoles[i] = &schema.UserRole{
 			ID:     xid.New(),
@@ -330,7 +330,7 @@ func (r *UserRoleRepository) ReplaceUserRoles(ctx context.Context, userID, orgID
 
 		userRoles := make([]*schema.UserRole, len(newRoleIDs))
 		createdBy := xid.New()
-		
+
 		for i, roleID := range newRoleIDs {
 			userRoles[i] = &schema.UserRole{
 				ID:     xid.New(),

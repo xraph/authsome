@@ -414,7 +414,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 		// Record failed attempt and calculate remaining
 		if s.config.LockoutEnabled {
 			_ = s.recordFailedLoginAttempt(ctx, un, appID, ip, ua)
-			
+
 			// Get current attempt count and calculate remaining
 			since := time.Now().Add(-s.config.FailedAttemptWindow)
 			count, _ := s.usernameRepo.GetFailedAttempts(ctx, un, appID, since)
@@ -498,7 +498,7 @@ func (s *Service) SignInWithUsername(ctx context.Context, username, password str
 			since := time.Now().Add(-s.config.FailedAttemptWindow)
 			count, _ := s.usernameRepo.GetFailedAttempts(ctx, un, appID, since)
 			attemptsRemaining := s.config.MaxFailedAttempts - count
-			
+
 			// Audit failed attempt recorded
 			if s.audit != nil {
 				uid := u.ID

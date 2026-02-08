@@ -29,8 +29,8 @@ type RequestPasswordResetRequest struct {
 
 // ResetPasswordRequest represents a password reset confirmation
 type ResetPasswordRequest struct {
-	Token       string `json:"token,omitempty"`       // URL token for link-based reset
-	Code        string `json:"code,omitempty"`        // 6-digit code for manual entry
+	Token       string `json:"token,omitempty"` // URL token for link-based reset
+	Code        string `json:"code,omitempty"`  // 6-digit code for manual entry
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 

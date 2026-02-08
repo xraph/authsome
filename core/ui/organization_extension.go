@@ -149,4 +149,3 @@ type OrgExtensionContext struct {
 	// IsAdmin indicates if the current user has admin privileges in this org
 	IsAdmin bool
 }
-

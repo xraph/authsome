@@ -247,4 +247,3 @@ func (r *OrganizationUIRegistry) HasExtension(id string) bool {
 	_, exists := r.extensions[id]
 	return exists
 }
-

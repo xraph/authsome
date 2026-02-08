@@ -214,7 +214,7 @@ func TestGeneratePrefix_EnvironmentTypes(t *testing.T) {
 			require.NotNil(t, key)
 
 			// Verify prefix
-			assert.Contains(t, key.Key, tt.expectedPrefix, 
+			assert.Contains(t, key.Key, tt.expectedPrefix,
 				"Key should have prefix %s, got: %s", tt.expectedPrefix, key.Key)
 
 			// Verify prefix format: {type}_{env}_{random}
@@ -222,9 +222,9 @@ func TestGeneratePrefix_EnvironmentTypes(t *testing.T) {
 			// And prefix should be: {type}_{env}_{random}
 			parts := splitKeyParts(key.Key)
 			assert.Equal(t, 2, len(parts), "Key should have 2 parts (prefix.secret)")
-			
+
 			prefix := parts[0]
-			assert.True(t, len(prefix) > len(tt.expectedPrefix), 
+			assert.True(t, len(prefix) > len(tt.expectedPrefix),
 				"Prefix should include random suffix")
 			assert.True(t, startsWith(prefix, tt.expectedPrefix),
 				"Prefix should start with %s, got: %s", tt.expectedPrefix, prefix)
@@ -357,4 +357,3 @@ func startsWith(s, prefix string) bool {
 	}
 	return s[:len(prefix)] == prefix
 }
-

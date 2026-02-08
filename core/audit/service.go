@@ -1148,13 +1148,13 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 
 	// Query all aggregations in parallel using error group for better error handling
 	type result struct {
-		actions  []DistinctValue
-		sources  []DistinctValue
+		actions   []DistinctValue
+		sources   []DistinctValue
 		resources []DistinctValue
-		users    []DistinctValue
-		ips      []DistinctValue
-		apps     []DistinctValue
-		orgs     []DistinctValue
+		users     []DistinctValue
+		ips       []DistinctValue
+		apps      []DistinctValue
+		orgs      []DistinctValue
 	}
 
 	var res result

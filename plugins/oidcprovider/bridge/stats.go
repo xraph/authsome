@@ -25,14 +25,14 @@ type GetStatsOutput struct {
 
 // OverallStatsDTO represents overall OAuth/OIDC statistics
 type OverallStatsDTO struct {
-	ClientCount          int64            `json:"clientCount"`
-	ActiveTokens         int64            `json:"activeTokens"`
-	TotalTokensIssued    int64            `json:"totalTokensIssued"`
-	TotalUsers           int64            `json:"totalUsers"`
-	ActiveDeviceCodes    int64            `json:"activeDeviceCodes"`
-	TokensByType         TokensByTypeDTO  `json:"tokensByType"`
-	TokensIssuedOverTime []TimeSeriesDTO  `json:"tokensIssuedOverTime"`
-	TopClients           []TopClientDTO   `json:"topClients"`
+	ClientCount          int64           `json:"clientCount"`
+	ActiveTokens         int64           `json:"activeTokens"`
+	TotalTokensIssued    int64           `json:"totalTokensIssued"`
+	TotalUsers           int64           `json:"totalUsers"`
+	ActiveDeviceCodes    int64           `json:"activeDeviceCodes"`
+	TokensByType         TokensByTypeDTO `json:"tokensByType"`
+	TokensIssuedOverTime []TimeSeriesDTO `json:"tokensIssuedOverTime"`
+	TopClients           []TopClientDTO  `json:"topClients"`
 }
 
 // TokensByTypeDTO represents token counts by type
@@ -50,9 +50,9 @@ type TimeSeriesDTO struct {
 
 // TopClientDTO represents a client with token count
 type TopClientDTO struct {
-	ClientID    string `json:"clientId"`
-	ClientName  string `json:"clientName"`
-	TokenCount  int64  `json:"tokenCount"`
+	ClientID   string `json:"clientId"`
+	ClientName string `json:"clientName"`
+	TokenCount int64  `json:"tokenCount"`
 }
 
 // =============================================================================
@@ -139,7 +139,7 @@ func (bm *BridgeManager) GetStats(ctx bridge.Context, input GetStatsInput) (*Get
 			day := now.AddDate(0, 0, -i)
 			dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
 			dayEnd := dayStart.AddDate(0, 0, 1)
-			
+
 			count, _ := bm.tokenRepo.CountByAppBetween(goCtx, appID, dayStart, dayEnd)
 			tokensOverTime = append(tokensOverTime, TimeSeriesDTO{
 				Timestamp: dayStart,

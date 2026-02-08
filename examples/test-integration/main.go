@@ -71,7 +71,6 @@ func (ts *TestSuite) PrintResults() {
 	passed := 0
 	total := len(ts.results)
 
-
 	for _, result := range ts.results {
 		status := "❌ FAIL"
 		if result.Passed {
@@ -87,7 +86,6 @@ func (ts *TestSuite) PrintResults() {
 		}
 	}
 
-
 	if passed == total {
 
 	} else {
@@ -97,11 +95,9 @@ func (ts *TestSuite) PrintResults() {
 
 func main() {
 
-
 	// Check if dev server is running
 
 	if !checkServerHealth() {
-
 
 		os.Exit(1)
 	}

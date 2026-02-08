@@ -42,7 +42,6 @@ func main() {
 	// Setup demo routes
 	setupDemoRoutes(app, auth, nil)
 
-
 	// Start server
 	if err := app.Run(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

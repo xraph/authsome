@@ -24,7 +24,7 @@ type Feature struct {
 	ResetPeriod       string                 `json:"resetPeriod" bun:"reset_period"`                // none, daily, weekly, monthly, yearly, billing_period
 	IsPublic          bool                   `json:"isPublic" bun:"is_public,notnull,default:true"` // Show in pricing pages
 	DisplayOrder      int                    `json:"displayOrder" bun:"display_order,notnull,default:0"`
-	Icon              string                 `json:"icon" bun:"icon"`                  // Icon identifier for UI
+	Icon              string                 `json:"icon" bun:"icon"`                             // Icon identifier for UI
 	ProviderFeatureID string                 `json:"providerFeatureId" bun:"provider_feature_id"` // Provider sync ID
 	LastSyncedAt      *time.Time             `json:"lastSyncedAt" bun:"last_synced_at"`           // Last provider sync time
 	Metadata          map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`

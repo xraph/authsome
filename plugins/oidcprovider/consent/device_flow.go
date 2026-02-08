@@ -176,18 +176,18 @@ func DeviceCodeEntryPage(data CodeEntryPageData) g.Node {
 									),
 								),
 
-							// Code entry form
-							FormEl(
-								Method("POST"),
-								Action(data.BasePath+"/device/verify"),
-								Class("space-y-6"),
+								// Code entry form
+								FormEl(
+									Method("POST"),
+									Action(data.BasePath+"/device/verify"),
+									Class("space-y-6"),
 
-								g.If(data.RedirectURL != "",
-									Input(Type("hidden"), Name("redirect"), Value(data.RedirectURL)),
-								),
+									g.If(data.RedirectURL != "",
+										Input(Type("hidden"), Name("redirect"), Value(data.RedirectURL)),
+									),
 
-								Div(
-										Label(Class("block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2"), 
+									Div(
+										Label(Class("block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2"),
 											g.Text("Verification Code")),
 										Input(
 											Type("text"),
@@ -340,18 +340,18 @@ func DeviceVerificationPage(data VerificationPageData) g.Node {
 									),
 								),
 
-							// Form
-							FormEl(
-								Method("POST"),
-								Action(data.BasePath+"/device/authorize"),
-								Class("space-y-4"),
+								// Form
+								FormEl(
+									Method("POST"),
+									Action(data.BasePath+"/device/authorize"),
+									Class("space-y-4"),
 
-								Input(Type("hidden"), Name("user_code"), Value(data.UserCode)),
-								g.If(data.RedirectURL != "",
-									Input(Type("hidden"), Name("redirect"), Value(data.RedirectURL)),
-								),
+									Input(Type("hidden"), Name("user_code"), Value(data.UserCode)),
+									g.If(data.RedirectURL != "",
+										Input(Type("hidden"), Name("redirect"), Value(data.RedirectURL)),
+									),
 
-								Div(Class("flex gap-3 pt-2"),
+									Div(Class("flex gap-3 pt-2"),
 										Button(
 											Type("submit"),
 											Name("action"),
@@ -464,7 +464,7 @@ func DeviceSuccessPage(approved bool, branding BrandingConfig) g.Node {
 								// Title and message
 								Div(Class("animate-slide-up space-y-4"),
 									H1(Class("text-3xl font-bold "+colorClass), g.Text(title)),
-									P(Class("text-gray-600 dark:text-gray-300 text-lg leading-relaxed max-w-md mx-auto"), 
+									P(Class("text-gray-600 dark:text-gray-300 text-lg leading-relaxed max-w-md mx-auto"),
 										g.Text(message)),
 								),
 

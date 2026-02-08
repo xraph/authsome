@@ -21,17 +21,17 @@ type DeviceCode struct {
 	ClientID string `bun:"client_id,notnull" json:"clientID"` // OAuth client ID
 
 	// Device Flow Fields (RFC 8628)
-	DeviceCode      string    `bun:"device_code,unique,notnull" json:"deviceCode"`           // Long random string (URL-safe)
-	UserCode        string    `bun:"user_code,unique,notnull" json:"userCode"`               // Short human-typable code (e.g., "WDJB-MJHT")
-	VerificationURI string    `bun:"verification_uri,notnull" json:"verificationURI"`        // Where user goes to authorize
-	ExpiresAt       time.Time `bun:"expires_at,notnull" json:"expiresAt"`                    // Code expiration
-	Interval        int       `bun:"interval,notnull,default:5" json:"interval"`             // Polling interval in seconds
-	Scope           string    `bun:"scope" json:"scope,omitempty"`                           // Requested scopes
+	DeviceCode      string    `bun:"device_code,unique,notnull" json:"deviceCode"`    // Long random string (URL-safe)
+	UserCode        string    `bun:"user_code,unique,notnull" json:"userCode"`        // Short human-typable code (e.g., "WDJB-MJHT")
+	VerificationURI string    `bun:"verification_uri,notnull" json:"verificationURI"` // Where user goes to authorize
+	ExpiresAt       time.Time `bun:"expires_at,notnull" json:"expiresAt"`             // Code expiration
+	Interval        int       `bun:"interval,notnull,default:5" json:"interval"`      // Polling interval in seconds
+	Scope           string    `bun:"scope" json:"scope,omitempty"`                    // Requested scopes
 
 	// Authorization State
-	Status    string     `bun:"status,notnull,default:'pending'" json:"status"` // pending, authorized, denied, expired, consumed
-	UserID    *xid.ID    `bun:"user_id,type:varchar(20)" json:"userID,omitempty"`         // Set when user authorizes
-	SessionID *xid.ID    `bun:"session_id,type:varchar(20)" json:"sessionID,omitempty"`   // Set when user authorizes
+	Status    string  `bun:"status,notnull,default:'pending'" json:"status"`         // pending, authorized, denied, expired, consumed
+	UserID    *xid.ID `bun:"user_id,type:varchar(20)" json:"userID,omitempty"`       // Set when user authorizes
+	SessionID *xid.ID `bun:"session_id,type:varchar(20)" json:"sessionID,omitempty"` // Set when user authorizes
 
 	// PKCE Support (optional but recommended)
 	CodeChallenge       string `bun:"code_challenge" json:"codeChallenge,omitempty"`              // PKCE code challenge

@@ -23,7 +23,6 @@ import (
 
 func main() {
 
-
 	// Setup database
 	sqldb, err := sql.Open("sqlite3", "file:integration_test.db?mode=memory&cache=shared")
 	if err != nil {
@@ -37,10 +36,8 @@ func main() {
 	// Create tables
 	createTables(db, ctx)
 
-
 	// Create test organization
 	orgID := createTestOrganization(db, ctx, "acme-corp")
-
 
 	// Start HTTP server with multi-tenancy
 	app := forge.NewApp(forge.AppConfig{
@@ -72,7 +69,6 @@ func main() {
 		log.Fatalf("Failed to mount: %v", err)
 	}
 
-
 	// Start server in background
 	go func() {
 		if err := app.Run(); err != nil {
@@ -83,9 +79,7 @@ func main() {
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
 
-
 	// Run integration tests
-
 
 	// Test 1: Signup with org context
 	testSignupWithOrg(orgID)
@@ -94,7 +88,6 @@ func main() {
 	testSignupWithoutOrg()
 
 	// Test 3: Verify decorator logging
-
 
 	// TODO: Implement graceful shutdown for forge.App
 	// Server will be terminated when the program exits

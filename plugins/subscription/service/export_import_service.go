@@ -33,11 +33,11 @@ func NewExportImportService(
 
 // ExportData represents the exported data structure
 type ExportData struct {
-	Version   string                 `json:"version"`
-	ExportedAt time.Time             `json:"exportedAt"`
-	AppID     string                 `json:"appId"`
-	Features  []ExportFeature        `json:"features"`
-	Plans     []ExportPlan           `json:"plans"`
+	Version    string          `json:"version"`
+	ExportedAt time.Time       `json:"exportedAt"`
+	AppID      string          `json:"appId"`
+	Features   []ExportFeature `json:"features"`
+	Plans      []ExportPlan    `json:"plans"`
 }
 
 // ExportFeature represents a feature in export format
@@ -187,7 +187,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 			if link.Feature != nil {
 				var value interface{}
 				json.Unmarshal([]byte(link.Value), &value)
-				
+
 				// Check if already exported (prefer feature links)
 				found := false
 				for i, f := range exportPlan.Features {
@@ -202,7 +202,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 						break
 					}
 				}
-				
+
 				if !found {
 					exportPlan.Features = append(exportPlan.Features, ExportPlanFeature{
 						FeatureKey:    link.Feature.Key,
@@ -244,7 +244,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 	for _, exportFeature := range data.Features {
 		// Check if feature already exists
 		existing, _ := s.featureRepo.FindByKey(ctx, appID, exportFeature.Key)
-		
+
 		if existing != nil {
 			if !overwriteExisting {
 				result.FeaturesSkipped++
@@ -261,17 +261,17 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 			existing.Icon = exportFeature.Icon
 			existing.Metadata = exportFeature.Metadata
 			existing.UpdatedAt = time.Now()
-			
+
 			if err := s.featureRepo.Update(ctx, existing); err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to update feature %s: %v", exportFeature.Key, err))
 				continue
 			}
-			
+
 			// Update tiers
 			if err := s.featureRepo.DeleteTiers(ctx, existing.ID); err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to delete tiers for feature %s: %v", exportFeature.Key, err))
 			}
-			
+
 			for i, tier := range exportFeature.Tiers {
 				newTier := &schema.FeatureTier{
 					ID:        xid.New(),
@@ -286,7 +286,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 					result.Errors = append(result.Errors, fmt.Sprintf("Failed to create tier for feature %s: %v", exportFeature.Key, err))
 				}
 			}
-			
+
 			featureKeyToID[exportFeature.Key] = existing.ID
 			result.FeaturesCreated++
 		} else {
@@ -343,7 +343,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 	for _, exportPlan := range data.Plans {
 		// Check if plan already exists by slug
 		existing, _ := s.planRepo.FindBySlug(ctx, appID, exportPlan.Slug)
-		
+
 		if existing != nil {
 			if !overwriteExisting {
 				result.PlansSkipped++
@@ -441,4 +441,3 @@ type ImportResult struct {
 	PlansSkipped    int      `json:"plansSkipped"`
 	Errors          []string `json:"errors,omitempty"`
 }
-

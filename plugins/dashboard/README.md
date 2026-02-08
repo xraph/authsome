@@ -1,6 +1,6 @@
 # Dashboard Plugin
 
-A lightweight, server-rendered admin interface for AuthSome built with Alpine.js and Tailwind CSS 4 CDN.
+A server-rendered admin interface for AuthSome built with ForgeUI, gomponents, and Tailwind CSS 4.
 
 ## Quick Start
 
@@ -17,16 +17,17 @@ auth, err := authsome.New(
 )
 ```
 
-Then access the dashboard at `http://localhost:8080/dashboard/` (requires admin role).
+Then access the dashboard at `http://localhost:8080/api/auth/ui/` (or your base path + `/ui/`). Admin role required.
 
 ## Features
 
-✅ Server-side rendering with Go templates  
-✅ ~40KB total bundle size (Alpine.js + Tailwind CSS CDN)  
-✅ Built-in auth, RBAC, CSRF, rate limiting, and audit logging  
-✅ Responsive, mobile-first design  
-✅ Real-time statistics and user management  
-✅ **Dark mode support** with system preference detection and localStorage persistence  
+- Server-side rendering with ForgeUI and gomponents
+- Bridge API for frontend-backend communication
+- Built-in auth, RBAC, CSRF, rate limiting, and audit logging
+- Responsive, mobile-first design
+- Real-time statistics and user management
+- Dark mode support with system preference detection and localStorage persistence
+- Plugin extension system for adding custom dashboard pages and widgets  
 
 ## Access Control
 
@@ -62,73 +63,18 @@ if user.Dashboard().CanAccess() {
 }
 ```
 
-See [DASHBOARD_STATUS.md](./DASHBOARD_STATUS.md) for detailed security documentation.
-
 ## Documentation
 
-- **[DASHBOARD_STATUS.md](./DASHBOARD_STATUS.md)** - Complete current state, architecture, features, and deployment guide
-- **[components/README.md](./components/README.md)** - Component usage and development guide
+- **[EXTENSION_GUIDE.md](./EXTENSION_GUIDE.md)** - How to add dashboard extensions from plugins
+- **BRIDGE_ARCHITECTURE.md**, **BRIDGE_EXTENSIONS.md** (if present) - Bridge API and extension docs
 
-## Pages
+## Pages and Routes
 
-### App-Based Route Structure (Breaking Change v2.0)
+The dashboard is served under the ForgeUI base path (default: `{authBasePath}/ui`). All routes are app-scoped.
 
-All dashboard routes are now app-scoped. You must select an app before accessing dashboard features.
+**Dashboard Index:** App selection (multiapp mode) or redirect to default app (standalone).
 
-**Dashboard Index:**
-- `/dashboard/` - App selection (multiapp mode) or auto-redirect to default app (standalone mode)
-
-**App-Scoped Routes:**
-- `/dashboard/app/:appId/` - Statistics and quick actions for the app
-- `/dashboard/app/:appId/users` - User management within the app
-- `/dashboard/app/:appId/users/:id` - User details
-- `/dashboard/app/:appId/organizations` - User-created organizations (workspaces) within the app
-- `/dashboard/app/:appId/organizations/:orgId` - Organization details
-- `/dashboard/app/:appId/apps-management` - Platform apps management (admin only)
-- `/dashboard/app/:appId/apps-management/:targetAppId` - App details
-- `/dashboard/app/:appId/apps-management/create` - Create new app (requires multiapp plugin)
-- `/dashboard/app/:appId/sessions` - Active sessions in the app
-- `/dashboard/app/:appId/settings` - App-specific settings
-- `/dashboard/app/:appId/plugins` - Plugin management for the app
-
-**App Switcher:**
-In multiapp mode, a dropdown appears in the header allowing quick switching between apps you belong to.
-
-### Breaking Changes from v1.x
-
-**⚠️ IMPORTANT:** This release introduces breaking changes to the URL structure.
-
-1. **Old routes removed:**
-   - `/dashboard/users` → `/dashboard/app/{appId}/users`
-   - `/dashboard/sessions` → `/dashboard/app/{appId}/sessions`
-   - All routes now require an `appId` in the URL path
-
-2. **App vs. Organization distinction:**
-   - **Apps** (platform-level tenants) can be managed via the dashboard "Apps Management" section
-     - List, view, edit, and delete apps are always available
-     - Create new apps is only available when `multiapp` plugin is enabled
-   - **Organizations** (user-created workspaces) are managed via the dashboard "Organizations" section
-   - The dashboard `/` now displays app cards for navigation
-   - Within each app, you can create and manage user organizations
-
-3. **Context requirement:**
-   - All dashboard features now operate within an app context
-   - Users must be members of an app to access its dashboard
-   - Data is automatically scoped to the selected app
-
-### Migration Guide
-
-**If you have bookmarks or hardcoded links:**
-- Update `/dashboard/users` to `/dashboard/app/{appId}/users`
-- Pattern: `/dashboard/{page}` → `/dashboard/app/{appId}/{page}`
-
-**For multiapp mode:**
-- Visit `/dashboard/` to see all your apps
-- Click on an app card to enter its dashboard
-
-**For standalone mode:**
-- `/dashboard/` will auto-redirect to the default app
-- URLs will automatically include the app ID
+**App-scoped routes** (under `/ui/app/:appId/` or equivalent) include: home, users, sessions, organizations, apps management, environments, settings, and plugins. Plugin extensions register their own routes and navigation items.
 
 ## Dark Mode
 

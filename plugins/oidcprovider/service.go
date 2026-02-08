@@ -90,7 +90,7 @@ func NewServiceWithRepos(clientRepo *repo.OAuthClientRepository, config Config, 
 			logger.Printf("JWKS service initialized from files")
 		}
 	}
-	
+
 	// If file-based keys failed or weren't configured, use database-backed keys
 	if jwksService == nil {
 		logger.Printf("Initializing database-backed JWKS service")

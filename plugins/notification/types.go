@@ -73,4 +73,3 @@ type DeclareABTestWinnerRequest struct {
 type GetTemplateAnalyticsRequest struct {
 	TemplateID string `path:"templateId" validate:"required"`
 }
-

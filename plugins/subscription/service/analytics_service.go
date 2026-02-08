@@ -141,7 +141,7 @@ func (s *AnalyticsService) GetMRRHistory(ctx context.Context, appID xid.ID, star
 	// Calculate for each day in the range
 	for d := startDate; d.Before(endDate); d = d.AddDate(0, 0, 1) {
 		nextDay := d.AddDate(0, 0, 1)
-		
+
 		// Get subscriptions active on this day
 		subs, _, err := s.subRepo.List(ctx, &repository.SubscriptionFilter{
 			AppID:  &appID,
@@ -183,12 +183,12 @@ func (s *AnalyticsService) GetMRRHistory(ctx context.Context, appID xid.ID, star
 		}
 
 		breakdown = append(breakdown, &core.MRRBreakdown{
-			Date:         d,
-			Currency:     currency,
-			TotalMRR:     totalMRR,
-			NewMRR:       newMRR,
-			ChurnedMRR:   churnedMRR,
-			NetNewMRR:    newMRR - churnedMRR,
+			Date:       d,
+			Currency:   currency,
+			TotalMRR:   totalMRR,
+			NewMRR:     newMRR,
+			ChurnedMRR: churnedMRR,
+			NetNewMRR:  newMRR - churnedMRR,
 		})
 	}
 

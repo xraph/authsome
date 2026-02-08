@@ -315,4 +315,3 @@ func (s *DatabaseRetryStorage) GetStats(ctx context.Context) (*notification.Retr
 		ProcessedCount: stats.SucceededCount,
 	}, nil
 }
-

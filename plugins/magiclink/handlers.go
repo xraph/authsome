@@ -151,7 +151,7 @@ func (h *Handler) Verify(c forge.Context) error {
 			if pwdErr != nil {
 				return handleError(c, pwdErr, "PASSWORD_GENERATION_FAILED", "Failed to generate password", http.StatusInternalServerError)
 			}
-			
+
 			// Extract name from email
 			name := result.Email
 			if at := strings.Index(result.Email, "@"); at > 0 {

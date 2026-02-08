@@ -96,7 +96,7 @@ func TestPaymentHandlers_CreateSetupIntent(t *testing.T) {
 					Email:              "test@example.com",
 				}
 				cs.On("GetByOrganization", mock.Anything, orgID).Return(customer, nil)
-				
+
 				setupIntent := &core.SetupIntentResult{
 					ClientSecret:   "seti_test_secret",
 					SetupIntentID:  "seti_test123",
@@ -132,7 +132,7 @@ func TestPaymentHandlers_CreateSetupIntent(t *testing.T) {
 
 			// Note: In real tests, you would use a proper Forge context
 			// For now, this demonstrates the test structure
-			
+
 			mockPaymentSvc.AssertExpectations(t)
 			mockCustomerSvc.AssertExpectations(t)
 		})
@@ -193,7 +193,7 @@ func TestPaymentHandlers_AddPaymentMethod(t *testing.T) {
 
 func TestPaymentHandlers_ListPaymentMethods(t *testing.T) {
 	orgID := xid.New()
-	
+
 	mockPaymentSvc := new(MockPaymentService)
 	paymentMethods := []*core.PaymentMethod{
 		{
@@ -215,9 +215,9 @@ func TestPaymentHandlers_ListPaymentMethods(t *testing.T) {
 			CardLast4:        "5555",
 		},
 	}
-	
+
 	mockPaymentSvc.On("ListPaymentMethods", mock.Anything, orgID).Return(paymentMethods, nil)
-	
+
 	// Verify the mock was called correctly
 	mockPaymentSvc.AssertExpectations(t)
 }
@@ -225,20 +225,20 @@ func TestPaymentHandlers_ListPaymentMethods(t *testing.T) {
 func TestPaymentHandlers_SetDefaultPaymentMethod(t *testing.T) {
 	orgID := xid.New()
 	pmID := xid.New()
-	
+
 	mockPaymentSvc := new(MockPaymentService)
 	mockPaymentSvc.On("SetDefaultPaymentMethod", mock.Anything, orgID, pmID).Return(nil)
-	
+
 	// Test would verify the handler correctly calls the service
 	mockPaymentSvc.AssertExpectations(t)
 }
 
 func TestPaymentHandlers_RemovePaymentMethod(t *testing.T) {
 	pmID := xid.New()
-	
+
 	mockPaymentSvc := new(MockPaymentService)
 	mockPaymentSvc.On("RemovePaymentMethod", mock.Anything, pmID).Return(nil)
-	
+
 	// Test would verify the handler correctly calls the service
 	mockPaymentSvc.AssertExpectations(t)
 }
@@ -264,4 +264,3 @@ func TestValidatePaymentMethodID(t *testing.T) {
 		})
 	}
 }
-

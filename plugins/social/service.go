@@ -685,7 +685,6 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 		return nil, fmt.Errorf("failed to load provider configs from database: %w", err)
 	}
 
-
 	// If no configs found in DB, use static providers as fallback
 	if len(configs) == 0 {
 		s.envProviders[envKey] = s.providers

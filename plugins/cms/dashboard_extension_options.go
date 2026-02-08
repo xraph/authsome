@@ -161,7 +161,7 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 
 	// Enums (Choices)
 	choicesMap := make(map[int]core.ChoiceDTO)
-	
+
 	for key, values := range ctx.Request.PostForm {
 		if len(values) == 0 {
 			continue

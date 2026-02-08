@@ -8,12 +8,12 @@ const DefaultAppSettingsSchemaName = "Application Settings"
 
 // Section IDs
 const (
-	SectionIDGeneral       = "general"
-	SectionIDSecurity      = "security"
-	SectionIDSession       = "session"
-	SectionIDNotification  = "notification"
+	SectionIDGeneral        = "general"
+	SectionIDSecurity       = "security"
+	SectionIDSession        = "session"
+	SectionIDNotification   = "notification"
 	SectionIDAuthentication = "authentication"
-	SectionIDBranding      = "branding"
+	SectionIDBranding       = "branding"
 )
 
 // DefaultAppSettingsSchema returns the default schema for app settings

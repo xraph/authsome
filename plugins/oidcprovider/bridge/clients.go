@@ -42,23 +42,23 @@ type PaginationDTO struct {
 
 // ClientDTO represents an OAuth client in API responses
 type ClientDTO struct {
-	ID                   string    `json:"id"`
-	ClientID             string    `json:"clientId"`
-	ClientName           string    `json:"clientName"`
-	ApplicationType      string    `json:"applicationType"`
-	LogoURI              string    `json:"logoUri,omitempty"`
-	GrantTypes           []string  `json:"grantTypes"`
-	ResponseTypes        []string  `json:"responseTypes"`
-	RedirectURIs         []string  `json:"redirectUris"`
-	AllowedScopes        []string  `json:"allowedScopes"`
-	RequirePKCE          bool      `json:"requirePkce"`
-	RequireConsent       bool      `json:"requireConsent"`
-	TrustedClient        bool      `json:"trustedClient"`
-	OrganizationID       string    `json:"organizationId,omitempty"`
-	IsOrgLevel           bool      `json:"isOrgLevel"`
-	TokenEndpointAuth    string    `json:"tokenEndpointAuth"`
-	CreatedAt            time.Time `json:"createdAt"`
-	UpdatedAt            time.Time `json:"updatedAt"`
+	ID                string    `json:"id"`
+	ClientID          string    `json:"clientId"`
+	ClientName        string    `json:"clientName"`
+	ApplicationType   string    `json:"applicationType"`
+	LogoURI           string    `json:"logoUri,omitempty"`
+	GrantTypes        []string  `json:"grantTypes"`
+	ResponseTypes     []string  `json:"responseTypes"`
+	RedirectURIs      []string  `json:"redirectUris"`
+	AllowedScopes     []string  `json:"allowedScopes"`
+	RequirePKCE       bool      `json:"requirePkce"`
+	RequireConsent    bool      `json:"requireConsent"`
+	TrustedClient     bool      `json:"trustedClient"`
+	OrganizationID    string    `json:"organizationId,omitempty"`
+	IsOrgLevel        bool      `json:"isOrgLevel"`
+	TokenEndpointAuth string    `json:"tokenEndpointAuth"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 // GetClientInput is the input for getting a single client
@@ -162,12 +162,12 @@ type GetClientStatsOutput struct {
 
 // ClientStatsDTO represents client usage statistics
 type ClientStatsDTO struct {
-	TotalTokens      int64 `json:"totalTokens"`
-	ActiveTokens     int64 `json:"activeTokens"`
-	TotalUsers       int64 `json:"totalUsers"`
-	TokensToday      int64 `json:"tokensToday"`
-	TokensThisWeek   int64 `json:"tokensThisWeek"`
-	TokensThisMonth  int64 `json:"tokensThisMonth"`
+	TotalTokens     int64 `json:"totalTokens"`
+	ActiveTokens    int64 `json:"activeTokens"`
+	TotalUsers      int64 `json:"totalUsers"`
+	TokensToday     int64 `json:"tokensToday"`
+	TokensThisWeek  int64 `json:"tokensThisWeek"`
+	TokensThisMonth int64 `json:"tokensThisMonth"`
 }
 
 // =============================================================================
@@ -521,21 +521,21 @@ func (bm *BridgeManager) GetClientStats(ctx bridge.Context, input GetClientStats
 // clientToDTO converts a schema.OAuthClient to ClientDTO
 func clientToDTO(client *schema.OAuthClient) ClientDTO {
 	dto := ClientDTO{
-		ID:                   client.ID.String(),
-		ClientID:             client.ClientID,
-		ClientName:           client.Name,
-		ApplicationType:      client.ApplicationType,
-		LogoURI:              client.LogoURI,
-		GrantTypes:           client.GrantTypes,
-		ResponseTypes:        client.ResponseTypes,
-		RedirectURIs:         client.RedirectURIs,
-		AllowedScopes:        client.AllowedScopes,
-		RequirePKCE:          client.RequirePKCE,
-		RequireConsent:       client.RequireConsent,
-		TrustedClient:        client.TrustedClient,
-		TokenEndpointAuth:    client.TokenEndpointAuthMethod,
-		CreatedAt:            client.CreatedAt,
-		UpdatedAt:            client.UpdatedAt,
+		ID:                client.ID.String(),
+		ClientID:          client.ClientID,
+		ClientName:        client.Name,
+		ApplicationType:   client.ApplicationType,
+		LogoURI:           client.LogoURI,
+		GrantTypes:        client.GrantTypes,
+		ResponseTypes:     client.ResponseTypes,
+		RedirectURIs:      client.RedirectURIs,
+		AllowedScopes:     client.AllowedScopes,
+		RequirePKCE:       client.RequirePKCE,
+		RequireConsent:    client.RequireConsent,
+		TrustedClient:     client.TrustedClient,
+		TokenEndpointAuth: client.TokenEndpointAuthMethod,
+		CreatedAt:         client.CreatedAt,
+		UpdatedAt:         client.UpdatedAt,
 	}
 
 	if client.OrganizationID != nil {

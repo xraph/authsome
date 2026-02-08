@@ -17,11 +17,11 @@ import (
 
 // AnalyticsService provides advanced security analytics
 type AnalyticsService struct {
-	repo              Repository
-	baselineCache     *BaselineCache
-	anomalyDetector   *AnomalyDetector
-	riskEngine        *RiskEngine
-	mu                sync.RWMutex
+	repo            Repository
+	baselineCache   *BaselineCache
+	anomalyDetector *AnomalyDetector
+	riskEngine      *RiskEngine
+	mu              sync.RWMutex
 }
 
 // NewAnalyticsService creates a new analytics service
@@ -47,8 +47,8 @@ type Baseline struct {
 	TopActions       map[string]int         `json:"topActions"`
 	TopResources     map[string]int         `json:"topResources"`
 	TopLocations     []string               `json:"topLocations"`
-	TypicalHours     []int                  `json:"typicalHours"`     // Hours of day (0-23)
-	TypicalDays      []time.Weekday         `json:"typicalDays"`      // Days of week
+	TypicalHours     []int                  `json:"typicalHours"` // Hours of day (0-23)
+	TypicalDays      []time.Weekday         `json:"typicalDays"`  // Days of week
 	UniqueIPCount    int                    `json:"uniqueIpCount"`
 	AvgSessionLength time.Duration          `json:"avgSessionLength"`
 	CalculatedAt     time.Time              `json:"calculatedAt"`
@@ -231,9 +231,9 @@ func (bc *BaselineCache) Set(userID xid.ID, baseline *Baseline) {
 
 // Anomaly represents a detected anomaly
 type Anomaly struct {
-	Type        string                 `json:"type"` // geo_velocity, unusual_action, frequency_spike, etc.
+	Type        string                 `json:"type"`     // geo_velocity, unusual_action, frequency_spike, etc.
 	Severity    string                 `json:"severity"` // low, medium, high, critical
-	Score       float64                `json:"score"` // 0-100
+	Score       float64                `json:"score"`    // 0-100
 	Event       *Event                 `json:"event"`
 	Baseline    *Baseline              `json:"baseline,omitempty"`
 	Description string                 `json:"description"`
@@ -439,22 +439,22 @@ type RiskEngine struct {
 func NewRiskEngine() *RiskEngine {
 	return &RiskEngine{
 		weights: map[string]float64{
-			"anomaly_score":     0.4,
-			"user_risk":         0.2,
-			"resource_risk":     0.2,
-			"context_risk":      0.2,
+			"anomaly_score": 0.4,
+			"user_risk":     0.2,
+			"resource_risk": 0.2,
+			"context_risk":  0.2,
 		},
 	}
 }
 
 // RiskScore represents a calculated risk score
 type RiskScore struct {
-	Score       float64                `json:"score"` // 0-100
-	Level       string                 `json:"level"` // low, medium, high, critical
-	Factors     map[string]float64     `json:"factors"`
-	Anomalies   []*Anomaly             `json:"anomalies,omitempty"`
-	Event       *Event                 `json:"event"`
-	CalculatedAt time.Time             `json:"calculatedAt"`
+	Score        float64            `json:"score"` // 0-100
+	Level        string             `json:"level"` // low, medium, high, critical
+	Factors      map[string]float64 `json:"factors"`
+	Anomalies    []*Anomaly         `json:"anomalies,omitempty"`
+	Event        *Event             `json:"event"`
+	CalculatedAt time.Time          `json:"calculatedAt"`
 }
 
 // Calculate calculates risk score for an event
@@ -510,10 +510,10 @@ func (re *RiskEngine) calculateResourceRisk(event *Event) float64 {
 	// Would check resource sensitivity classification
 	// High-risk resources: user deletion, role assignment, config changes
 	highRiskActions := map[string]bool{
-		"user.delete":       true,
-		"role.assign":       true,
-		"config.update":     true,
-		"permission.grant":  true,
+		"user.delete":      true,
+		"role.assign":      true,
+		"config.update":    true,
+		"permission.grant": true,
 	}
 
 	if highRiskActions[event.Action] {
@@ -559,4 +559,3 @@ func (re *RiskEngine) calculateRiskLevel(score float64) string {
 		return "low"
 	}
 }
-

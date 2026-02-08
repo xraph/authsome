@@ -457,4 +457,3 @@ func TestService_CheckUserAccessInApp(t *testing.T) {
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
-

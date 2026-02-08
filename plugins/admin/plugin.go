@@ -119,7 +119,6 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 		return fmt.Errorf("invalid role registry type")
 	}
 
-
 	// Register Admin Role - Platform-level administrative operations
 	if err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:         rbac.RoleAdmin,

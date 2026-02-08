@@ -32,45 +32,45 @@ func OrganizationDetailPage(currentApp *app.App, orgID, basePath string) g.Node 
 				LoadingSpinner(),
 			),
 
-		// Error state
-		ErrorMessage("error && !loading"),
+			// Error state
+			ErrorMessage("error && !loading"),
 
-		// Empty/Not Found state (when no error but organization is null)
-		Div(
-			g.Attr("x-show", "!loading && !error && !organization"),
-			g.Attr("x-cloak", ""),
-			Class("text-center py-12"),
-			Card(
-				Class("max-w-md mx-auto p-8"),
-				EmptyState(
-					lucide.Building2(Class("size-16 mx-auto mb-4 opacity-50")),
-					"Organization Not Found",
-					"The organization you're looking for doesn't exist or you don't have access to it.",
-				),
-				Div(
-					Class("mt-6"),
-					button.Button(
-						Div(
-							lucide.ArrowLeft(Class("size-4")),
-							g.Text("Back to Organizations"),
-						),
-						button.WithVariant("outline"),
-						button.WithAttrs(
-							g.Attr("onclick", fmt.Sprintf("window.location.href='%s/app/%s/organizations'", basePath, currentApp.ID.String())),
+			// Empty/Not Found state (when no error but organization is null)
+			Div(
+				g.Attr("x-show", "!loading && !error && !organization"),
+				g.Attr("x-cloak", ""),
+				Class("text-center py-12"),
+				Card(
+					Class("max-w-md mx-auto p-8"),
+					EmptyState(
+						lucide.Building2(Class("size-16 mx-auto mb-4 opacity-50")),
+						"Organization Not Found",
+						"The organization you're looking for doesn't exist or you don't have access to it.",
+					),
+					Div(
+						Class("mt-6"),
+						button.Button(
+							Div(
+								lucide.ArrowLeft(Class("size-4")),
+								g.Text("Back to Organizations"),
+							),
+							button.WithVariant("outline"),
+							button.WithAttrs(
+								g.Attr("onclick", fmt.Sprintf("window.location.href='%s/app/%s/organizations'", basePath, currentApp.ID.String())),
+							),
 						),
 					),
 				),
 			),
-		),
 
-		// Content
-		Div(
-			g.Attr("x-show", "!loading && !error && organization"),
-			g.Attr("x-cloak", ""),
-			Class("space-y-6"),
+			// Content
+			Div(
+				g.Attr("x-show", "!loading && !error && organization"),
+				g.Attr("x-cloak", ""),
+				Class("space-y-6"),
 
-			// Organization header
-			organizationHeader(appBase, orgID),
+				// Organization header
+				organizationHeader(appBase, orgID),
 
 				// Tabs navigation
 				organizationTabs(appBase, orgID),

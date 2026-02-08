@@ -11,7 +11,6 @@ import (
 
 func main() {
 
-
 	// Test email templates
 
 	testEmailTemplates()
@@ -89,7 +88,6 @@ func testSMSTemplates() {
 			continue
 		}
 
-
 		// Validate template
 		if err := sms.ValidateTemplate(templateName); err != nil {
 
@@ -110,7 +108,6 @@ func testEmailProvider() {
 
 	provider := email.NewSMTPProvider(config)
 
-
 	// Test notification request creation (without actually sending)
 	testAppID := xid.New()
 	notificationReq := &notification.SendRequest{
@@ -120,7 +117,6 @@ func testEmailProvider() {
 		Subject:   "Test Email",
 		Body:      "Hello World\n\nThis is a test email.",
 	}
-
 
 	// Note: We're not actually sending the email in this test
 	// In a real scenario, you would call: provider.Send(context.Background(), notification)
@@ -136,7 +132,6 @@ func testSMSProvider() {
 
 	provider := sms.NewTwilioProvider(config)
 
-
 	// Test SMS notification request creation (without actually sending)
 	testSMSAppID := xid.New()
 	notificationReq := &notification.SendRequest{
@@ -145,7 +140,6 @@ func testSMSProvider() {
 		Recipient: "+1987654321",
 		Body:      "Hello! This is a test SMS from AuthSome.",
 	}
-
 
 	// Note: We're not actually sending the SMS in this test
 	// In a real scenario, you would call: provider.Send(context.Background(), notification)

@@ -146,7 +146,6 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		go p.runCleanupTask()
 	}
 
-
 	return nil
 }
 

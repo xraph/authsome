@@ -249,8 +249,6 @@ func createDemoAPIKey(service *apikey.Service) {
 		return
 	}
 
-
 	// Commented out: Organization field from V2 architecture change
-
 
 }

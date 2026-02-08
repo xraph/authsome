@@ -23,9 +23,9 @@ type ComplianceProfile struct {
 	bun.BaseModel `bun:"table:compliance_profiles,alias:cp"`
 	ID            string               `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	AppID         string               `json:"appId" bun:"app_id,notnull"`
-	Name      string               `json:"name" bun:"name,notnull"`
-	Standards []ComplianceStandard `json:"standards" bun:"standards,array"`
-	Status    string               `json:"status" bun:"status,notnull"` // active, suspended, audit
+	Name          string               `json:"name" bun:"name,notnull"`
+	Standards     []ComplianceStandard `json:"standards" bun:"standards,array"`
+	Status        string               `json:"status" bun:"status,notnull"` // active, suspended, audit
 
 	// Security Requirements
 	MFARequired           bool `json:"mfaRequired" bun:"mfa_required"`
@@ -103,18 +103,18 @@ type ComplianceReport struct {
 	bun.BaseModel `bun:"table:compliance_reports,alias:cr"`
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID       string                 `json:"appId" bun:"app_id,notnull"`
-	ReportType  string                 `json:"reportType" bun:"report_type,notnull"` // soc2, hipaa, audit_export
-	Standard    ComplianceStandard     `json:"standard" bun:"standard"`
-	Period      string                 `json:"period" bun:"period,notnull"` // 2025-Q1, 2025-11
-	Format      string                 `json:"format" bun:"format,notnull"` // pdf, json, csv
-	Status      string                 `json:"status" bun:"status,notnull"` // generating, ready, failed
-	FileURL     string                 `json:"fileUrl" bun:"file_url"`
-	FileSize    int64                  `json:"fileSize" bun:"file_size"`
-	Summary     map[string]interface{} `json:"summary" bun:"summary,type:jsonb"`
-	GeneratedBy string                 `json:"generatedBy" bun:"generated_by"`
-	CreatedAt   time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
-	ExpiresAt   time.Time              `json:"expiresAt" bun:"expires_at"`
+	AppID         string                 `json:"appId" bun:"app_id,notnull"`
+	ReportType    string                 `json:"reportType" bun:"report_type,notnull"` // soc2, hipaa, audit_export
+	Standard      ComplianceStandard     `json:"standard" bun:"standard"`
+	Period        string                 `json:"period" bun:"period,notnull"` // 2025-Q1, 2025-11
+	Format        string                 `json:"format" bun:"format,notnull"` // pdf, json, csv
+	Status        string                 `json:"status" bun:"status,notnull"` // generating, ready, failed
+	FileURL       string                 `json:"fileUrl" bun:"file_url"`
+	FileSize      int64                  `json:"fileSize" bun:"file_size"`
+	Summary       map[string]interface{} `json:"summary" bun:"summary,type:jsonb"`
+	GeneratedBy   string                 `json:"generatedBy" bun:"generated_by"`
+	CreatedAt     time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	ExpiresAt     time.Time              `json:"expiresAt" bun:"expires_at"`
 }
 
 // ComplianceEvidence stores evidence for compliance audits
@@ -122,17 +122,17 @@ type ComplianceEvidence struct {
 	bun.BaseModel `bun:"table:compliance_evidence,alias:ce"`
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID        string                 `json:"appId" bun:"app_id,notnull"`
-	EvidenceType string                 `json:"evidenceType" bun:"evidence_type,notnull"` // audit_log, policy_doc, etc.
-	Standard     ComplianceStandard     `json:"standard" bun:"standard"`
-	ControlID    string                 `json:"controlId" bun:"control_id"` // e.g., SOC2-CC6.1
-	Title        string                 `json:"title" bun:"title,notnull"`
-	Description  string                 `json:"description" bun:"description"`
-	FileURL      string                 `json:"fileUrl" bun:"file_url"`
-	FileHash     string                 `json:"fileHash" bun:"file_hash"` // SHA256 for integrity
-	CollectedBy  string                 `json:"collectedBy" bun:"collected_by"`
-	Metadata     map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt    time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	AppID         string                 `json:"appId" bun:"app_id,notnull"`
+	EvidenceType  string                 `json:"evidenceType" bun:"evidence_type,notnull"` // audit_log, policy_doc, etc.
+	Standard      ComplianceStandard     `json:"standard" bun:"standard"`
+	ControlID     string                 `json:"controlId" bun:"control_id"` // e.g., SOC2-CC6.1
+	Title         string                 `json:"title" bun:"title,notnull"`
+	Description   string                 `json:"description" bun:"description"`
+	FileURL       string                 `json:"fileUrl" bun:"file_url"`
+	FileHash      string                 `json:"fileHash" bun:"file_hash"` // SHA256 for integrity
+	CollectedBy   string                 `json:"collectedBy" bun:"collected_by"`
+	Metadata      map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt     time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
 }
 
 // CompliancePolicy represents a policy document
@@ -161,16 +161,16 @@ type ComplianceTraining struct {
 	bun.BaseModel `bun:"table:compliance_training,alias:ct"`
 	ID            string                 `json:"id" bun:"id,pk,type:uuid,default:gen_random_uuid()"`
 	ProfileID     string                 `json:"profileId" bun:"profile_id,notnull"`
-	AppID        string                 `json:"appId" bun:"app_id,notnull"`
-	UserID       string                 `json:"userId" bun:"user_id,notnull"`
-	TrainingType string                 `json:"trainingType" bun:"training_type,notnull"` // security_awareness, hipaa_basics
-	Standard     ComplianceStandard     `json:"standard" bun:"standard"`
-	Status       string                 `json:"status" bun:"status,notnull"` // required, in_progress, completed
-	CompletedAt  *time.Time             `json:"completedAt" bun:"completed_at"`
-	ExpiresAt    *time.Time             `json:"expiresAt" bun:"expires_at"`
-	Score        int                    `json:"score" bun:"score"` // percentage
-	Metadata     map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt    time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
+	AppID         string                 `json:"appId" bun:"app_id,notnull"`
+	UserID        string                 `json:"userId" bun:"user_id,notnull"`
+	TrainingType  string                 `json:"trainingType" bun:"training_type,notnull"` // security_awareness, hipaa_basics
+	Standard      ComplianceStandard     `json:"standard" bun:"standard"`
+	Status        string                 `json:"status" bun:"status,notnull"` // required, in_progress, completed
+	CompletedAt   *time.Time             `json:"completedAt" bun:"completed_at"`
+	ExpiresAt     *time.Time             `json:"expiresAt" bun:"expires_at"`
+	Score         int                    `json:"score" bun:"score"` // percentage
+	Metadata      map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	CreatedAt     time.Time              `json:"createdAt" bun:"created_at,notnull,default:now()"`
 }
 
 // ComplianceStatus represents overall compliance status

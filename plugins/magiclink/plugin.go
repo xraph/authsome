@@ -222,10 +222,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 	// Router is already scoped to the correct basePath
 	rls := rl.NewService(storage.NewMemoryStorage(), rl.Config{Enabled: true, Rules: map[string]rl.Rule{"/magic-link/send": {Window: time.Minute, Max: 5}}})
-	
+
 	// Create authentication completion service for centralized auth flow
 	authCompletionService := p.createAuthCompletionService()
-	
+
 	h := NewHandler(p.service, rls, p.authInst, authCompletionService)
 
 	// Get authentication middleware for API key validation

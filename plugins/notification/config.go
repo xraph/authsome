@@ -214,13 +214,13 @@ func DefaultConfig() Config {
 			SMS: nil,
 		},
 		Async: AsyncConfig{
-			Enabled:         true,                          // Enable async by default
-			WorkerPoolSize:  5,                             // 5 workers per priority
-			QueueSize:       1000,                          // Buffer 1000 notifications
-			RetryEnabled:    true,                          // Enable retry by default
-			MaxRetries:      3,                             // 3 retry attempts
-			RetryBackoff:    []string{"1m", "5m", "15m"},   // Exponential backoff
-			PersistFailures: true,                          // Persist failed to DB
+			Enabled:         true,                        // Enable async by default
+			WorkerPoolSize:  5,                           // 5 workers per priority
+			QueueSize:       1000,                        // Buffer 1000 notifications
+			RetryEnabled:    true,                        // Enable retry by default
+			MaxRetries:      3,                           // 3 retry attempts
+			RetryBackoff:    []string{"1m", "5m", "15m"}, // Exponential backoff
+			PersistFailures: true,                        // Persist failed to DB
 		},
 	}
 }

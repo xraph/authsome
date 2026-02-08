@@ -25,12 +25,12 @@ type GetSettingsOutput struct {
 
 // SettingsDTO represents OIDC provider configuration
 type SettingsDTO struct {
-	Issuer         string            `json:"issuer"`
-	DiscoveryURL   string            `json:"discoveryUrl"`
-	JWKSURL        string            `json:"jwksUrl"`
-	TokenSettings  TokenSettingsDTO  `json:"tokenSettings"`
-	KeySettings    KeySettingsDTO    `json:"keySettings"`
-	DeviceFlow     DeviceFlowDTO     `json:"deviceFlow"`
+	Issuer        string           `json:"issuer"`
+	DiscoveryURL  string           `json:"discoveryUrl"`
+	JWKSURL       string           `json:"jwksUrl"`
+	TokenSettings TokenSettingsDTO `json:"tokenSettings"`
+	KeySettings   KeySettingsDTO   `json:"keySettings"`
+	DeviceFlow    DeviceFlowDTO    `json:"deviceFlow"`
 }
 
 // TokenSettingsDTO represents token lifetime settings
@@ -51,7 +51,7 @@ type KeySettingsDTO struct {
 // DeviceFlowDTO represents device flow configuration
 type DeviceFlowDTO struct {
 	Enabled         bool   `json:"enabled"`
-	CodeExpiry      string `json:"codeExpiry"`      // Duration string
+	CodeExpiry      string `json:"codeExpiry"` // Duration string
 	UserCodeLength  int    `json:"userCodeLength"`
 	UserCodeFormat  string `json:"userCodeFormat"`
 	PollingInterval int    `json:"pollingInterval"` // Seconds
@@ -94,7 +94,7 @@ type RotateKeysInput struct{}
 
 // RotateKeysOutput is the output for rotating JWT keys
 type RotateKeysOutput struct {
-	Success bool   `json:"success"`
+	Success  bool   `json:"success"`
 	NewKeyID string `json:"newKeyId"`
 }
 
@@ -111,7 +111,7 @@ func (bm *BridgeManager) GetSettings(ctx bridge.Context, input GetSettingsInput)
 
 	// Get service config (type assert to expected structure)
 	serviceConfigIface := bm.service.GetConfig()
-	
+
 	// Type assert to extract config values
 	// Using reflection/interface{} to access config without importing parent package
 	configMap := convertConfigToMap(serviceConfigIface)
@@ -125,7 +125,7 @@ func (bm *BridgeManager) GetSettings(ctx bridge.Context, input GetSettingsInput)
 	tokensMap := getMap(configMap, "tokens")
 	keysMap := getMap(configMap, "keys")
 	deviceFlowMap := getMap(configMap, "deviceFlow")
-	
+
 	settings := SettingsDTO{
 		Issuer:       issuer,
 		DiscoveryURL: issuer + "/.well-known/openid-configuration",
@@ -281,12 +281,12 @@ func convertConfigToMap(config interface{}) map[string]interface{} {
 	if err != nil {
 		return make(map[string]interface{})
 	}
-	
+
 	var result map[string]interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return make(map[string]interface{})
 	}
-	
+
 	return result
 }
 

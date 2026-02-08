@@ -3,8 +3,8 @@ package oidcprovider
 import (
 	"context"
 	"fmt"
-	"time"
 	"github.com/rs/xid"
+	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
@@ -23,10 +23,10 @@ import (
 type Config struct {
 	// Issuer URL for the OIDC Provider
 	Issuer string `json:"issuer"`
-	
+
 	// Audience for JWT validation (optional)
 	Audience string `json:"audience"`
-	
+
 	// Enable JWT validation strategy for Bearer tokens
 	// When enabled, OAuth/OIDC JWTs can be used to authenticate API requests
 	EnableJWTValidation bool `json:"enableJwtValidation"`

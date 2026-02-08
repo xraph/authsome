@@ -21,7 +21,6 @@ import (
 
 func main() {
 
-
 	// Test 1: Standalone Mode (without multi-tenancy plugin)
 
 	testStandaloneMode()
@@ -31,7 +30,6 @@ func main() {
 	testSaaSMode()
 
 	// Test 3: Verify Decorator Chain
-
 
 	testDecoratorChain()
 
@@ -167,7 +165,6 @@ func testSaaSMode() {
 		json.Unmarshal(w.Body.Bytes(), &resp)
 		if user, ok := resp["user"].(map[string]interface{}); ok {
 
-
 		}
 	} else {
 
@@ -201,7 +198,6 @@ func testSaaSMode() {
 	req3.Header.Set("Content-Type", "application/json")
 
 	// Note: We'd need to create an 'acme' org for this to fully work
-
 
 }
 
@@ -284,7 +280,6 @@ func testDecoratorChain() {
 	// Check hook registry
 	hooks := auth.GetHookRegistry()
 	if hooks != nil {
-
 
 	}
 }

@@ -41,7 +41,6 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-
 // ExtensionID returns the unique identifier for this extension
 func (e *DashboardExtension) ExtensionID() string {
 	return "organization"

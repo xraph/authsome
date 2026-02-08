@@ -34,7 +34,7 @@ func NewOrganizationService(repo OrganizationRepository, cfg Config, rbacSvc *rb
 	if cfg.InvitationExpiryHours == 0 {
 		cfg.InvitationExpiryHours = DefaultConfig().InvitationExpiryHours
 	}
-	
+
 	return &OrganizationService{
 		repo:    repo,
 		config:  cfg,

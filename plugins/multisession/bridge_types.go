@@ -21,9 +21,9 @@ type GetSessionsInput struct {
 
 // GetSessionsResult is the output for bridgeGetSessions
 type GetSessionsResult struct {
-	Sessions   []SessionDTO       `json:"sessions"`
-	Stats      SessionStatsDTO    `json:"stats"`
-	Pagination PaginationInfoDTO  `json:"pagination"`
+	Sessions   []SessionDTO      `json:"sessions"`
+	Stats      SessionStatsDTO   `json:"stats"`
+	Pagination PaginationInfoDTO `json:"pagination"`
 }
 
 // GetSessionInput is the input for bridgeGetSession
@@ -121,53 +121,53 @@ type UpdateSettingsResult struct {
 
 // SessionDTO represents a session in list views
 type SessionDTO struct {
-	ID           string    `json:"id"`
-	UserID       string    `json:"userId"`
-	UserEmail    string    `json:"userEmail,omitempty"`
-	IPAddress    string    `json:"ipAddress"`
-	UserAgent    string    `json:"userAgent"`
-	DeviceType   string    `json:"deviceType"`   // mobile, desktop, tablet, bot
-	DeviceInfo   string    `json:"deviceInfo"`   // Short device description
-	Browser      string    `json:"browser"`
-	BrowserVer   string    `json:"browserVersion"`
-	OS           string    `json:"os"`
-	OSVersion    string    `json:"osVersion"`
-	Status       string    `json:"status"`       // active, expiring, expired
-	IsActive     bool      `json:"isActive"`
-	IsExpiring   bool      `json:"isExpiring"`
-	CreatedAt    time.Time `json:"createdAt"`
-	ExpiresAt    time.Time `json:"expiresAt"`
-	LastUsed     string    `json:"lastUsed"`     // Relative time string
-	ExpiresIn    string    `json:"expiresIn"`    // Relative time string
+	ID         string    `json:"id"`
+	UserID     string    `json:"userId"`
+	UserEmail  string    `json:"userEmail,omitempty"`
+	IPAddress  string    `json:"ipAddress"`
+	UserAgent  string    `json:"userAgent"`
+	DeviceType string    `json:"deviceType"` // mobile, desktop, tablet, bot
+	DeviceInfo string    `json:"deviceInfo"` // Short device description
+	Browser    string    `json:"browser"`
+	BrowserVer string    `json:"browserVersion"`
+	OS         string    `json:"os"`
+	OSVersion  string    `json:"osVersion"`
+	Status     string    `json:"status"` // active, expiring, expired
+	IsActive   bool      `json:"isActive"`
+	IsExpiring bool      `json:"isExpiring"`
+	CreatedAt  time.Time `json:"createdAt"`
+	ExpiresAt  time.Time `json:"expiresAt"`
+	LastUsed   string    `json:"lastUsed"`  // Relative time string
+	ExpiresIn  string    `json:"expiresIn"` // Relative time string
 }
 
 // SessionDetailDTO represents detailed session information
 type SessionDetailDTO struct {
-	ID              string    `json:"id"`
-	UserID          string    `json:"userId"`
-	UserEmail       string    `json:"userEmail,omitempty"`
-	AppID           string    `json:"appId"`
-	OrganizationID  string    `json:"organizationId,omitempty"`
-	EnvironmentID   string    `json:"environmentId,omitempty"`
-	IPAddress       string    `json:"ipAddress"`
-	UserAgent       string    `json:"userAgent"`
-	DeviceType      string    `json:"deviceType"`
-	DeviceInfo      string    `json:"deviceInfo"`
-	Browser         string    `json:"browser"`
-	BrowserVer      string    `json:"browserVersion"`
-	OS              string    `json:"os"`
-	OSVersion       string    `json:"osVersion"`
-	Status          string    `json:"status"`
-	IsActive        bool      `json:"isActive"`
-	IsExpiring      bool      `json:"isExpiring"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
-	ExpiresAt       time.Time `json:"expiresAt"`
-	LastRefreshedAt *time.Time `json:"lastRefreshedAt,omitempty"`
-	CreatedAtFmt    string    `json:"createdAtFormatted"`
-	UpdatedAtFmt    string    `json:"updatedAtFormatted"`
-	ExpiresAtFmt    string    `json:"expiresAtFormatted"`
-	LastRefreshedFmt string   `json:"lastRefreshedFormatted,omitempty"`
+	ID               string     `json:"id"`
+	UserID           string     `json:"userId"`
+	UserEmail        string     `json:"userEmail,omitempty"`
+	AppID            string     `json:"appId"`
+	OrganizationID   string     `json:"organizationId,omitempty"`
+	EnvironmentID    string     `json:"environmentId,omitempty"`
+	IPAddress        string     `json:"ipAddress"`
+	UserAgent        string     `json:"userAgent"`
+	DeviceType       string     `json:"deviceType"`
+	DeviceInfo       string     `json:"deviceInfo"`
+	Browser          string     `json:"browser"`
+	BrowserVer       string     `json:"browserVersion"`
+	OS               string     `json:"os"`
+	OSVersion        string     `json:"osVersion"`
+	Status           string     `json:"status"`
+	IsActive         bool       `json:"isActive"`
+	IsExpiring       bool       `json:"isExpiring"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+	ExpiresAt        time.Time  `json:"expiresAt"`
+	LastRefreshedAt  *time.Time `json:"lastRefreshedAt,omitempty"`
+	CreatedAtFmt     string     `json:"createdAtFormatted"`
+	UpdatedAtFmt     string     `json:"updatedAtFormatted"`
+	ExpiresAtFmt     string     `json:"expiresAtFormatted"`
+	LastRefreshedFmt string     `json:"lastRefreshedFormatted,omitempty"`
 }
 
 // SessionStatsDTO contains session statistics

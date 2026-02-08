@@ -109,12 +109,12 @@ func (h *Handler) Authorize(c forge.Context) error {
 	// Check if user is authenticated
 	// Priority: Auth context session > Manual session token extraction
 	var sess *session.Session
-	
+
 	// Try to get session from auth context first (set by middleware)
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx.Session != nil {
 		sess = authCtx.Session
 	}
-	
+
 	// If no session in auth context, try to load from cookie/header
 	// This handles cases where API key is present but session is not in context
 	if sess == nil {
@@ -734,7 +734,7 @@ func (h *Handler) DeviceAuthorize(c forge.Context) error {
 	// Build response with formatted user code for display
 	formattedUserCode := deviceCode.FormattedUserCode()
 	verificationURIComplete := fmt.Sprintf("%s?user_code=%s", verificationURI, formattedUserCode)
-	
+
 	resp := DeviceAuthorizationResponse{
 		DeviceCode:              deviceCode.DeviceCode,
 		UserCode:                formattedUserCode,
@@ -792,7 +792,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	// Parse request body (support both JSON and form-encoded)
 	var userCode, redirectURL string
 	contentType := c.Request().Header.Get("Content-Type")
-	
+
 	if strings.Contains(contentType, "application/json") {
 		// Parse JSON body
 		var body struct {
@@ -812,7 +812,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 		userCode = c.Request().FormValue("user_code")
 		redirectURL = c.Request().FormValue("redirect")
 	}
-	
+
 	if userCode == "" {
 		return h.handleDeviceError(c, http.StatusBadRequest, "invalid_request", "User code is required", redirectURL)
 	}
@@ -840,12 +840,12 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	// Check if user is authenticated
 	// Priority: Auth context session > Manual session token extraction
 	var sess *session.Session
-	
+
 	// Try to get session from auth context first (set by middleware)
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx.Session != nil {
 		sess = authCtx.Session
 	}
-	
+
 	// If no session in auth context, try to load from cookie/header
 	// This handles cases where API key is present but session is not in context
 	if sess == nil {
@@ -907,8 +907,8 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	// Show verification/consent page (HTML mode)
 	// Pass normalized code for form submission, formatted for display
 	page := consent.DeviceVerificationPage(consent.VerificationPageData{
-		UserCode:          deviceCode.UserCode,              // Normalized (for form field)
-		UserCodeFormatted: deviceCode.FormattedUserCode(),   // Formatted (for display)
+		UserCode:          deviceCode.UserCode,            // Normalized (for form field)
+		UserCodeFormatted: deviceCode.FormattedUserCode(), // Formatted (for display)
 		ClientName:        client.Name,
 		LogoURI:           client.LogoURI,
 		Scopes:            componentScopes,
@@ -941,7 +941,7 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 	// Parse request body (support both JSON and form-encoded)
 	var userCode, action, redirectURL string
 	contentType := c.Request().Header.Get("Content-Type")
-	
+
 	if strings.Contains(contentType, "application/json") {
 		// Parse JSON body
 		var body struct {
@@ -983,12 +983,12 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 	// Check if user is authenticated
 	// Priority: Auth context session > Manual session token extraction
 	var sess *session.Session
-	
+
 	// Try to get session from auth context first (set by middleware)
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx.Session != nil {
 		sess = authCtx.Session
 	}
-	
+
 	// If no session in auth context, try to load from cookie/header
 	// This handles cases where API key is present but session is not in context
 	if sess == nil {

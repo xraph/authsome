@@ -28,25 +28,25 @@ func (r *RoleRepository) Create(ctx context.Context, role *schema.Role) error {
 	if role.AuditableModel.UpdatedBy.IsNil() {
 		role.AuditableModel.UpdatedBy = role.AuditableModel.CreatedBy
 	}
-	
+
 	// Ensure environment_id is set
 	if role.EnvironmentID == nil || role.EnvironmentID.IsNil() {
-		return fmt.Errorf("environment_id is required but was nil for role '%s' (app_id: %v, org_id: %v)", 
-			role.Name, 
+		return fmt.Errorf("environment_id is required but was nil for role '%s' (app_id: %v, org_id: %v)",
+			role.Name,
 			role.AppID,
 			role.OrganizationID)
 	}
-	
+
 	// Ensure app_id is set
 	if role.AppID == nil || role.AppID.IsNil() {
 		return fmt.Errorf("app_id is required but was nil for role '%s'", role.Name)
 	}
-	
+
 	// Ensure display_name is set, default from name if empty
 	if role.DisplayName == "" {
 		role.DisplayName = toTitleCase(role.Name)
 	}
-	
+
 	_, err := r.db.NewInsert().Model(role).Exec(ctx)
 	return err
 }
@@ -130,7 +130,6 @@ func (r *RoleRepository) GetRoleTemplates(ctx context.Context, appID, envID xid.
 		Where("organization_id IS NULL").
 		Where("is_template = ?", true).
 		Order("name ASC")
-
 
 	err := query.Scan(ctx)
 	if err != nil {
@@ -221,7 +220,7 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 
 	if err == nil {
 		// Role already exists, return it (idempotent)
-		
+
 		// Load permissions for the existing role
 		err = r.db.NewSelect().
 			Model(&existingRole).
@@ -231,7 +230,7 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 		if err != nil {
 			return nil, fmt.Errorf("failed to load existing role permissions: %w", err)
 		}
-		
+
 		return &existingRole, nil
 	}
 
@@ -297,7 +296,7 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 // FindDuplicateRoles identifies roles that would violate the new uniqueness constraints
 func (r *RoleRepository) FindDuplicateRoles(ctx context.Context) ([]schema.Role, error) {
 	var duplicates []schema.Role
-	
+
 	// Find app-level duplicates
 	err := r.db.NewSelect().
 		Model(&duplicates).

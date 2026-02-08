@@ -110,7 +110,6 @@ func main() {
 	// Display integration methods
 	separator := strings.Repeat("=", 60)
 
-
 	// Run migrations
 
 	// TODO: Add migration runner here

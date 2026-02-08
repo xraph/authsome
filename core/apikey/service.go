@@ -32,9 +32,9 @@ type Service struct {
 	roleRepo RoleRepository // RBAC integration
 	auditSvc *audit.Service
 	config   Config
-	envRepo  EnvironmentRepository  // Environment lookup for prefix generation
-	envCache map[xid.ID]string      // Cache: envID -> prefix string
-	envMutex sync.RWMutex           // Protects envCache
+	envRepo  EnvironmentRepository // Environment lookup for prefix generation
+	envCache map[xid.ID]string     // Cache: envID -> prefix string
+	envMutex sync.RWMutex          // Protects envCache
 }
 
 // NewService creates a new API key service

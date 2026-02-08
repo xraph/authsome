@@ -395,14 +395,14 @@ func (r *featureUsageRepository) GetCurrentUsageSnapshot(ctx context.Context, ap
 // GetUsageByOrg retrieves usage statistics by organization
 func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID, startDate, endDate time.Time) ([]*core.OrgUsageStats, error) {
 	type result struct {
-		OrgID        xid.ID `bun:"organization_id"`
-		OrgName      string `bun:"org_name"`
-		FeatureID    xid.ID `bun:"feature_id"`
-		FeatureName  string `bun:"feature_name"`
-		FeatureType  string `bun:"feature_type"`
-		Unit         string `bun:"unit"`
-		TotalUsage   int64  `bun:"total_usage"`
-		PlanLimit    int64  `bun:"plan_limit"`
+		OrgID       xid.ID `bun:"organization_id"`
+		OrgName     string `bun:"org_name"`
+		FeatureID   xid.ID `bun:"feature_id"`
+		FeatureName string `bun:"feature_name"`
+		FeatureType string `bun:"feature_type"`
+		Unit        string `bun:"unit"`
+		TotalUsage  int64  `bun:"total_usage"`
+		PlanLimit   int64  `bun:"plan_limit"`
 	}
 
 	var results []result
@@ -440,15 +440,15 @@ func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID
 		}
 
 		stats[i] = &core.OrgUsageStats{
-			OrgID:        r.OrgID,
-			OrgName:      r.OrgName,
-			FeatureID:    r.FeatureID,
-			FeatureName:  r.FeatureName,
-			FeatureType:  core.FeatureType(r.FeatureType),
-			Unit:         r.Unit,
-			Usage:        r.TotalUsage,
-			Limit:        r.PlanLimit,
-			PercentUsed:  percentUsed,
+			OrgID:       r.OrgID,
+			OrgName:     r.OrgName,
+			FeatureID:   r.FeatureID,
+			FeatureName: r.FeatureName,
+			FeatureType: core.FeatureType(r.FeatureType),
+			Unit:        r.Unit,
+			Usage:       r.TotalUsage,
+			Limit:       r.PlanLimit,
+			PercentUsed: percentUsed,
 		}
 	}
 
@@ -527,9 +527,9 @@ func (r *featureUsageRepository) GetTopConsumers(ctx context.Context, appID xid.
 // GetUsageByFeatureType retrieves usage aggregated by feature type
 func (r *featureUsageRepository) GetUsageByFeatureType(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (map[core.FeatureType]*core.UsageStats, error) {
 	type result struct {
-		FeatureType  string `bun:"feature_type"`
-		TotalUsage   int64  `bun:"total_usage"`
-		TotalOrgs    int    `bun:"total_orgs"`
+		FeatureType string `bun:"feature_type"`
+		TotalUsage  int64  `bun:"total_usage"`
+		TotalOrgs   int    `bun:"total_orgs"`
 	}
 
 	var results []result

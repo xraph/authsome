@@ -42,11 +42,11 @@ type ListSessionsRequest struct {
 	IPAddress   *string `json:"ipAddress" query:"ip_address"`
 	CreatedFrom *string `json:"createdFrom" query:"created_from"`
 	CreatedTo   *string `json:"createdTo" query:"created_to"`
-	
+
 	// Sorting
 	SortBy    *string `json:"sortBy" query:"sort_by"`
 	SortOrder *string `json:"sortOrder" query:"sort_order"`
-	
+
 	// Pagination
 	Limit  int `json:"limit" query:"limit"`
 	Offset int `json:"offset" query:"offset"`
@@ -63,20 +63,20 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 			Offset: req.Offset,
 		},
 	}
-	
+
 	// Note: UserAgent, IPAddress, CreatedFrom, CreatedTo, SortBy, and SortOrder
 	// are not currently supported by the core session.ListSessionsFilter.
 	// We'll need to filter the results in-memory for now.
 	// TODO: Add these fields to core session.ListSessionsFilter for database-level filtering
-	
+
 	listResp, err := s.sessionSvc.ListSessions(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Apply additional filters in-memory
 	filteredSessions := listResp.Data
-	
+
 	// Filter by UserAgent
 	if req.UserAgent != nil && *req.UserAgent != "" {
 		var filtered []*session.Session
@@ -87,7 +87,7 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 		}
 		filteredSessions = filtered
 	}
-	
+
 	// Filter by IPAddress
 	if req.IPAddress != nil && *req.IPAddress != "" {
 		var filtered []*session.Session
@@ -98,7 +98,7 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 		}
 		filteredSessions = filtered
 	}
-	
+
 	// Filter by CreatedFrom
 	if req.CreatedFrom != nil && *req.CreatedFrom != "" {
 		createdFrom, err := time.Parse(time.RFC3339, *req.CreatedFrom)
@@ -112,7 +112,7 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 			filteredSessions = filtered
 		}
 	}
-	
+
 	// Filter by CreatedTo
 	if req.CreatedTo != nil && *req.CreatedTo != "" {
 		createdTo, err := time.Parse(time.RFC3339, *req.CreatedTo)
@@ -126,18 +126,18 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 			filteredSessions = filtered
 		}
 	}
-	
+
 	// Apply sorting (in-memory)
 	if req.SortBy != nil && *req.SortBy != "" {
 		sortSessions(filteredSessions, *req.SortBy, req.SortOrder)
 	}
-	
+
 	// Update response with filtered data
 	listResp.Data = filteredSessions
 	if listResp.Pagination != nil {
 		listResp.Pagination.Total = int64(len(filteredSessions))
 	}
-	
+
 	return listResp, nil
 }
 
@@ -321,7 +321,7 @@ func sortSessions(sessions []*session.Session, sortBy string, sortOrder *string)
 	if sortOrder != nil && *sortOrder != "" {
 		order = *sortOrder
 	}
-	
+
 	sort.Slice(sessions, func(i, j int) bool {
 		var less bool
 		switch sortBy {
@@ -335,7 +335,7 @@ func sortSessions(sessions []*session.Session, sortBy string, sortOrder *string)
 			// Default to created_at
 			less = sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
 		}
-		
+
 		if order == "asc" {
 			return less
 		}

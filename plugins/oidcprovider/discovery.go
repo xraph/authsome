@@ -44,15 +44,15 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL, ba
 	}
 
 	return &DiscoveryResponse{
-		Issuer:                       issuer,
-		AuthorizationEndpoint:        baseURL + basePath + "/authorize",
-		TokenEndpoint:                baseURL + basePath + "/token",
-		UserInfoEndpoint:             baseURL + basePath + "/userinfo",
-		JwksURI:                      baseURL + basePath + "/jwks",
-		RegistrationEndpoint:         baseURL + basePath + "/register",
-		IntrospectionEndpoint:        baseURL + basePath + "/introspect",
-		RevocationEndpoint:           baseURL + basePath + "/revoke",
-		DeviceAuthorizationEndpoint:  deviceAuthEndpoint,
+		Issuer:                      issuer,
+		AuthorizationEndpoint:       baseURL + basePath + "/authorize",
+		TokenEndpoint:               baseURL + basePath + "/token",
+		UserInfoEndpoint:            baseURL + basePath + "/userinfo",
+		JwksURI:                     baseURL + basePath + "/jwks",
+		RegistrationEndpoint:        baseURL + basePath + "/register",
+		IntrospectionEndpoint:       baseURL + basePath + "/introspect",
+		RevocationEndpoint:          baseURL + basePath + "/revoke",
+		DeviceAuthorizationEndpoint: deviceAuthEndpoint,
 
 		// Supported response types (only authorization code flow for now)
 		ResponseTypesSupported: []string{

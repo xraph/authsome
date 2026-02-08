@@ -63,7 +63,6 @@ func main() {
 
 	app.Router().GET("/api/api-keys/:id/permissions", handleGetEffectivePermissions)
 
-
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -218,7 +217,6 @@ func DemonstratePermissionPatterns(authCtx *contexts.AuthContext) {
 
 	// Check delegation
 	if authCtx.IsDelegatingCreatorPermissions() {
-
 
 	}
 

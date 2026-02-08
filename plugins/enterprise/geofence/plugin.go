@@ -121,7 +121,6 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Initialize middleware
 	p.middleware = NewMiddleware(p.service, p.config)
 
-
 	return nil
 }
 
@@ -400,7 +399,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Geofence", "Analytics"),
 		)
 	}
-
 
 	return nil
 }

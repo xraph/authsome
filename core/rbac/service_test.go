@@ -774,7 +774,7 @@ func TestService_ListAllUserRolesInOrg(t *testing.T) {
 		result, err := service.ListAllUserRolesInOrg(ctx, orgID, envID)
 		assert.NoError(t, err)
 		assert.Len(t, result, 2) // 2 users
-		
+
 		// Verify grouping by user
 		var user1Assignment, user2Assignment *UserRoleAssignment
 		for _, assignment := range result {
@@ -789,7 +789,7 @@ func TestService_ListAllUserRolesInOrg(t *testing.T) {
 		assert.NotNil(t, user2Assignment)
 		assert.Len(t, user1Assignment.Roles, 2) // user1 has 2 roles
 		assert.Len(t, user2Assignment.Roles, 1) // user2 has 1 role
-		
+
 		mockUserRoleRepo.AssertExpectations(t)
 		mockRolePermRepo.AssertExpectations(t)
 	})
@@ -845,9 +845,8 @@ func TestService_ListAllUserRolesInApp(t *testing.T) {
 		result, err := service.ListAllUserRolesInApp(ctx, appID, envID)
 		assert.NoError(t, err)
 		assert.Len(t, result, 2) // 2 org assignments for same user
-		
+
 		mockUserRoleRepo.AssertExpectations(t)
 		mockRolePermRepo.AssertExpectations(t)
 	})
 }
-

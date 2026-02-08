@@ -43,7 +43,7 @@ type Plugin struct {
 
 	// Organization UI extension
 	orgUIExt *OrganizationUIExtension
-	
+
 	// Logger
 	log forge.Logger
 }

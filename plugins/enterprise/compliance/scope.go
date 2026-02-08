@@ -346,4 +346,3 @@ func (r *ScopeResolver) mergeMetadata(parent, child map[string]interface{}) map[
 
 	return merged
 }
-

@@ -353,17 +353,17 @@ func inviteMemberModal() g.Node {
 					Class("p-6 space-y-4"),
 					H3(Class("text-lg font-semibold"), g.Text("Invite Member")),
 					P(Class("text-sm text-muted-foreground"), g.Text("Send an invitation to join this organization")),
-					
+
 					// Error message
 					Div(
 						g.Attr("x-show", "inviteForm.error"),
 						Class("bg-destructive/10 border border-destructive/20 rounded-lg p-3"),
 						P(Class("text-sm text-destructive"), g.Attr("x-text", "inviteForm.error")),
 					),
-					
+
 					// Email field
 					FormField("invite-email", "Email Address", "email", "email", "user@example.com", true, ""),
-					
+
 					// Role field
 					Div(
 						Class("space-y-2"),
@@ -376,7 +376,7 @@ func inviteMemberModal() g.Node {
 							Option(Value("admin"), g.Text("Admin")),
 						),
 					),
-					
+
 					// Actions
 					Div(
 						Class("flex justify-end gap-2 pt-4"),

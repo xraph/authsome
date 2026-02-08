@@ -28,21 +28,21 @@ type ComplianceCheckFunc func(ctx context.Context, scope *audit.Scope, profile *
 
 // CheckDependencies provides access to services needed by checks
 type CheckDependencies struct {
-	AuditSvc       AuditService
-	UserSvc        UserService
-	AppSvc         AppService
-	EmailSvc       EmailService
-	UserProvider   audit.UserProvider
-	OrgProvider    audit.OrganizationProvider
-	ScopeResolver  *ScopeResolver
+	AuditSvc      AuditService
+	UserSvc       UserService
+	AppSvc        AppService
+	EmailSvc      EmailService
+	UserProvider  audit.UserProvider
+	OrgProvider   audit.OrganizationProvider
+	ScopeResolver *ScopeResolver
 }
 
 // CheckMetadata contains metadata about a check
 type CheckMetadata struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
-	Category    string   `json:"category"` // "security", "audit", "access", "data"
-	Severity    string   `json:"severity"` // "low", "medium", "high", "critical"
+	Category    string   `json:"category"`  // "security", "audit", "access", "data"
+	Severity    string   `json:"severity"`  // "low", "medium", "high", "critical"
 	Standards   []string `json:"standards"` // ["SOC2", "HIPAA", "PCI-DSS"]
 	AutoRun     bool     `json:"autoRun"`   // Run automatically on schedule
 }
@@ -165,7 +165,7 @@ func (r *CheckRegistry) ExecuteForStandards(ctx context.Context, standards []Com
 	results := make([]*CheckResult, 0)
 	for checkType, fn := range r.checks {
 		meta := r.metadata[checkType]
-		
+
 		// Check if this check applies to any of the requested standards
 		if meta != nil && len(meta.Standards) > 0 {
 			applies := false
@@ -473,4 +473,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-

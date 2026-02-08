@@ -184,15 +184,15 @@ func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
-			ID:           "oauth-oidc",
-			Label:        "OAuth & OIDC",
-			Description:  "Manage OAuth2/OIDC clients and settings",
-			Icon:         lucide.Shield(Class("size-4")),
-			Category:     "security",
-			Order:        20, // After API Keys
-			Path:         "oauth",
+			ID:            "oauth-oidc",
+			Label:         "OAuth & OIDC",
+			Description:   "Manage OAuth2/OIDC clients and settings",
+			Icon:          lucide.Shield(Class("size-4")),
+			Category:      "security",
+			Order:         20, // After API Keys
+			Path:          "oauth",
 			RequirePlugin: "oidcprovider",
-			RequireAdmin: true,
+			RequireAdmin:  true,
 		},
 	}
 }

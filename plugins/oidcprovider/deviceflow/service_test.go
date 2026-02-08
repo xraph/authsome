@@ -29,13 +29,13 @@ func TestDeviceCode_IsExpired(t *testing.T) {
 			want:      true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dc := &schema.DeviceCode{
 				ExpiresAt: tt.expiresAt,
 			}
-			
+
 			if got := dc.IsExpired(); got != tt.want {
 				t.Errorf("DeviceCode.IsExpired() = %v, want %v", got, tt.want)
 			}
@@ -75,14 +75,14 @@ func TestDeviceCode_IsPending(t *testing.T) {
 			want:      false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dc := &schema.DeviceCode{
 				Status:    tt.status,
 				ExpiresAt: tt.expiresAt,
 			}
-			
+
 			if got := dc.IsPending(); got != tt.want {
 				t.Errorf("DeviceCode.IsPending() = %v, want %v", got, tt.want)
 			}
@@ -92,7 +92,7 @@ func TestDeviceCode_IsPending(t *testing.T) {
 
 func TestDeviceCode_ShouldSlowDown(t *testing.T) {
 	now := time.Now()
-	
+
 	tests := []struct {
 		name         string
 		lastPolledAt *time.Time
@@ -118,14 +118,14 @@ func TestDeviceCode_ShouldSlowDown(t *testing.T) {
 			want:         false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dc := &schema.DeviceCode{
 				LastPolledAt: tt.lastPolledAt,
 				Interval:     tt.interval,
 			}
-			
+
 			if got := dc.ShouldSlowDown(); got != tt.want {
 				t.Errorf("DeviceCode.ShouldSlowDown() = %v, want %v", got, tt.want)
 			}
@@ -135,27 +135,27 @@ func TestDeviceCode_ShouldSlowDown(t *testing.T) {
 
 func TestConfig_Defaults(t *testing.T) {
 	config := DefaultConfig()
-	
+
 	if !config.Enabled {
 		t.Error("DefaultConfig().Enabled = false, want true")
 	}
-	
+
 	if config.DeviceCodeExpiry != 10*time.Minute {
 		t.Errorf("DefaultConfig().DeviceCodeExpiry = %v, want 10m", config.DeviceCodeExpiry)
 	}
-	
+
 	if config.UserCodeLength != 8 {
 		t.Errorf("DefaultConfig().UserCodeLength = %d, want 8", config.UserCodeLength)
 	}
-	
+
 	if config.UserCodeFormat != "XXXX-XXXX" {
 		t.Errorf("DefaultConfig().UserCodeFormat = %s, want XXXX-XXXX", config.UserCodeFormat)
 	}
-	
+
 	if config.PollingInterval != 5 {
 		t.Errorf("DefaultConfig().PollingInterval = %d, want 5", config.PollingInterval)
 	}
-	
+
 	if config.VerificationURI != "/device" {
 		t.Errorf("DefaultConfig().VerificationURI = %s, want /device", config.VerificationURI)
 	}

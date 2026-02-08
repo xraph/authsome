@@ -90,7 +90,7 @@ func Card(children ...g.Node) g.Node {
 func CardWithHeader(headerTitle string, headerActions []g.Node, body ...g.Node) g.Node {
 	headerContent := []g.Node{card.Title(headerTitle)}
 	if len(headerActions) > 0 {
-		headerContent = append(headerContent, 
+		headerContent = append(headerContent,
 			Div(
 				g.Attr("data-slot", "card-action"),
 				primitives.HStack("gap-2", headerActions...),

@@ -104,4 +104,3 @@ type StrategyAlreadyRegisteredError struct {
 func (e *StrategyAlreadyRegisteredError) Error() string {
 	return "auth strategy already registered: " + e.ID
 }
-

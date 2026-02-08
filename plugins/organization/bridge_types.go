@@ -208,8 +208,8 @@ type GetInvitationsResult struct {
 
 // CancelInvitationInput is the input for bridgeCancelInvitation
 type CancelInvitationInput struct {
-	AppID  string `json:"appId"`
-	OrgID  string `json:"orgId"`
+	AppID    string `json:"appId"`
+	OrgID    string `json:"orgId"`
 	InviteID string `json:"inviteId"`
 }
 
@@ -296,14 +296,14 @@ type TeamDTO struct {
 
 // InvitationDTO is a DTO for organization invitation
 type InvitationDTO struct {
-	ID         string    `json:"id"`
-	Email      string    `json:"email"`
-	Role       string    `json:"role"`
-	Status     string    `json:"status"`
-	InvitedBy  string    `json:"invitedBy"`
-	InviterName string   `json:"inviterName"`
-	ExpiresAt  time.Time `json:"expiresAt"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	Email       string    `json:"email"`
+	Role        string    `json:"role"`
+	Status      string    `json:"status"`
+	InvitedBy   string    `json:"invitedBy"`
+	InviterName string    `json:"inviterName"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // PaginationInfo contains pagination metadata
@@ -339,9 +339,9 @@ type TabDataDTO struct {
 type ActionDataDTO struct {
 	ID           string `json:"id"`
 	Label        string `json:"label"`
-	Icon         string `json:"icon"` // Icon name or HTML
+	Icon         string `json:"icon"`   // Icon name or HTML
 	Action       string `json:"action"` // JavaScript action
-	Style        string `json:"style"` // primary, secondary, danger
+	Style        string `json:"style"`  // primary, secondary, danger
 	Order        int    `json:"order"`
 	RequireAdmin bool   `json:"requireAdmin"`
 }
@@ -418,10 +418,10 @@ type DeleteRoleTemplateResult struct {
 
 // RoleTemplateDTO is a DTO for role template
 type RoleTemplateDTO struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Permissions []string `json:"permissions"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Permissions []string  `json:"permissions"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

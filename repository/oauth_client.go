@@ -153,7 +153,7 @@ func (r *OAuthClientRepository) ExistsByClientID(ctx context.Context, clientID s
 func (r *OAuthClientRepository) ListByAppAndEnv(ctx context.Context, appID, envID xid.ID, page, pageSize int) ([]*schema.OAuthClient, error) {
 	var clients []*schema.OAuthClient
 	offset := (page - 1) * pageSize
-	
+
 	err := r.db.NewSelect().Model(&clients).
 		Where("app_id = ?", appID).
 		Where("environment_id = ?", envID).
@@ -161,7 +161,7 @@ func (r *OAuthClientRepository) ListByAppAndEnv(ctx context.Context, appID, envI
 		Limit(pageSize).
 		Offset(offset).
 		Scan(ctx)
-	
+
 	return clients, err
 }
 

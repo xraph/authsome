@@ -23,13 +23,13 @@ type SplunkExporter struct {
 
 // SplunkConfig contains Splunk HEC configuration
 type SplunkConfig struct {
-	Endpoint    string `json:"endpoint"`    // Splunk HEC endpoint (e.g., https://splunk:8088/services/collector)
-	Token       string `json:"token"`       // HEC token
-	Index       string `json:"index"`       // Splunk index
-	Source      string `json:"source"`      // Event source
-	SourceType  string `json:"sourceType"`  // Source type
-	VerifySSL   bool   `json:"verifySSL"`   // Verify SSL certificates
-	Timeout     time.Duration `json:"timeout"`
+	Endpoint   string        `json:"endpoint"`   // Splunk HEC endpoint (e.g., https://splunk:8088/services/collector)
+	Token      string        `json:"token"`      // HEC token
+	Index      string        `json:"index"`      // Splunk index
+	Source     string        `json:"source"`     // Event source
+	SourceType string        `json:"sourceType"` // Source type
+	VerifySSL  bool          `json:"verifySSL"`  // Verify SSL certificates
+	Timeout    time.Duration `json:"timeout"`
 }
 
 // DefaultSplunkConfig returns default Splunk configuration
@@ -170,4 +170,3 @@ func (e *SplunkExporter) Close() error {
 	e.client.CloseIdleConnections()
 	return nil
 }
-

@@ -446,7 +446,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 
 	// Create impersonations - using unique admins to avoid "already impersonating" error
 	sessions := make(map[string]*impersonation.StartResponse)
-	
+
 	// admin1 -> target1
 	startReq := &impersonation.StartRequest{
 		AppID:          orgID,

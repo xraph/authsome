@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package audit_test
@@ -221,7 +222,7 @@ func TestRiskScoring_Integration(t *testing.T) {
 	highRiskEvent := &audit.Event{
 		Action:    "user.delete",
 		Resource:  "/api/v1/users/123",
-		IPAddress: "203.0.113.0", // Different IP
+		IPAddress: "203.0.113.0",                                          // Different IP
 		CreatedAt: time.Now().Truncate(24 * time.Hour).Add(3 * time.Hour), // 3 AM
 	}
 

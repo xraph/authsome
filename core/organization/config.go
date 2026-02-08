@@ -8,8 +8,8 @@ type Config struct {
 	EnableUserCreation        bool `json:"enableUserCreation"`
 	RequireInvitation         bool `json:"requireInvitation"`
 	InvitationExpiryHours     int  `json:"invitationExpiryHours"`
-	EnforceUniqueSlug         bool `json:"enforceUniqueSlug"`     // Enforce unique slugs within app+environment scope
-	AllowAppLevelRoles        bool `json:"allowAppLevelRoles"`    // Allow app-level (global) RBAC roles for org membership
+	EnforceUniqueSlug         bool `json:"enforceUniqueSlug"`  // Enforce unique slugs within app+environment scope
+	AllowAppLevelRoles        bool `json:"allowAppLevelRoles"` // Allow app-level (global) RBAC roles for org membership
 }
 
 // DefaultConfig returns sensible default configuration values

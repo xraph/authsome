@@ -180,7 +180,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 		// Create new repo and service to avoid state from previous subtest
 		freshRepo := consent.NewMockRepository()
 		freshService := consent.NewService(freshRepo, config, nil)
-		
+
 		// Create export request
 		req := &consent.DataExportRequestInput{
 			Format:          "csv",
@@ -202,7 +202,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 			// Create a new repo for each format to avoid "already pending" errors
 			formatRepo := consent.NewMockRepository()
 			formatService := consent.NewService(formatRepo, config, nil)
-			
+
 			req := &consent.DataExportRequestInput{
 				Format:          format,
 				IncludeSections: []string{"consents"},
@@ -250,7 +250,7 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 		// Create new repo and service to avoid state from previous subtest
 		freshRepo := consent.NewMockRepository()
 		freshService := consent.NewService(freshRepo, config, nil)
-		
+
 		// Create deletion request
 		req := &consent.DataDeletionRequestInput{
 			Reason:         "GDPR request",
@@ -272,7 +272,7 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 		// Create new repo and service to avoid state from previous subtests
 		freshRepo := consent.NewMockRepository()
 		freshService := consent.NewService(freshRepo, config, nil)
-		
+
 		req := &consent.DataDeletionRequestInput{
 			Reason:         "User request",
 			DeleteSections: []string{"consents"},

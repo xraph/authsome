@@ -72,7 +72,7 @@ func (a *AuthsomeUserAdapter) convertUser(u *user.User) *audit.GenericUser {
 		Email:            u.Email,
 		Username:         u.Email, // Authsome uses email as username
 		DisplayName:      u.Name,
-		MFAEnabled:       false,    // TODO: Would need MFA tracking
+		MFAEnabled:       false, // TODO: Would need MFA tracking
 		MFAMethods:       []string{},
 		PasswordChanged:  u.UpdatedAt, // Approximate with UpdatedAt
 		LastLogin:        time.Time{}, // TODO: Would need session tracking

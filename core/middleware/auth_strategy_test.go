@@ -10,8 +10,8 @@ import (
 
 // mockStrategy is a test authentication strategy
 type mockStrategy struct {
-	id           string
-	priority     int
+	id            string
+	priority      int
 	shouldExtract bool
 	shouldAuth    bool
 	extractValue  interface{}
@@ -138,4 +138,3 @@ func TestAuthStrategyError(t *testing.T) {
 		t.Error("Expected Unwrap to return inner error")
 	}
 }
-

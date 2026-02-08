@@ -33,7 +33,7 @@ func ParsePath(path string) (segments []string, key string, err error) {
 	if strings.Contains(path, "//") {
 		return nil, "", ErrInvalidPath(path, "path cannot contain consecutive slashes")
 	}
-	
+
 	// Normalize path
 	path = NormalizePath(path)
 

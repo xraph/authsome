@@ -11,13 +11,11 @@ import (
 
 func main() {
 
-
 	// Create a new plugin
 	plugin := geofence.NewPlugin()
 
 	// Test configuration
 	config := geofence.DefaultConfig()
-
 
 	// Validate configuration
 	if err := config.Validate(); err != nil {
@@ -130,7 +128,6 @@ func main() {
 		Timestamp:   time.Now(),
 	}
 
-
 	// Test travel alert
 
 	// Simulate travel from SF to NY in 2 hours (impossible)
@@ -156,7 +153,6 @@ func main() {
 		UpdatedAt:        time.Now(),
 	}
 
-
 	// Test trusted location
 
 	trusted := &geofence.TrustedLocation{
@@ -178,7 +174,6 @@ func main() {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-
 
 }
 

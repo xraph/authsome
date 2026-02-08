@@ -16,8 +16,8 @@ import (
 // - X-API-Key: <key>
 // - Query param (if enabled, not recommended)
 type APIKeyStrategy struct {
-	service          *apikey.Service
-	allowInQuery     bool
+	service           *apikey.Service
+	allowInQuery      bool
 	additionalHeaders []string
 }
 
@@ -60,14 +60,14 @@ func (s *APIKeyStrategy) Extract(c forge.Context) (interface{}, bool) {
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			token = strings.TrimSpace(token)
-			
+
 			// Only accept if it starts with known API key prefixes
 			if strings.HasPrefix(token, "pk_") ||
 				strings.HasPrefix(token, "sk_") ||
 				strings.HasPrefix(token, "rk_") {
 				return token, true
 			}
-			
+
 			// Skip JWTs (3 parts separated by dots)
 			// Let the JWT strategy handle them
 			if strings.Count(token, ".") == 2 {
@@ -113,7 +113,7 @@ func (s *APIKeyStrategy) Authenticate(ctx context.Context, credentials interface
 		Key: apiKeyStr,
 		// IP and UserAgent can be added if needed
 	}
-	
+
 	resp, err := s.service.VerifyAPIKey(ctx, req)
 	if err != nil {
 		return nil, &AuthStrategyError{
@@ -175,4 +175,3 @@ func (e *AuthStrategyError) Error() string {
 func (e *AuthStrategyError) Unwrap() error {
 	return e.Err
 }
-

@@ -35,7 +35,6 @@ func (m *memberWithUser) toMemberWithUserInfo() *organization.Member {
 		member.CreatedAt = m.CreatedAt
 		member.UpdatedAt = m.UpdatedAt
 		member.DeletedAt = m.DeletedAt
-		
 
 		member.User = &organization.UserInfo{
 			ID:              m.UserID,

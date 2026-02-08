@@ -31,20 +31,20 @@ type GetDeviceCodesOutput struct {
 
 // DeviceCodeDTO represents a device code in API responses
 type DeviceCodeDTO struct {
-	ID                  string     `json:"id"`
-	DeviceCode          string     `json:"deviceCode"`          // Masked for security
-	UserCode            string     `json:"userCode"`
-	ClientID            string     `json:"clientId"`
-	ClientName          string     `json:"clientName"`
-	Scope               string     `json:"scope"`
-	Status              string     `json:"status"`
-	VerificationURI     string     `json:"verificationUri"`
-	ExpiresAt           time.Time  `json:"expiresAt"`
-	CreatedAt           time.Time  `json:"createdAt"`
-	AuthorizedAt        *time.Time `json:"authorizedAt,omitempty"`
-	ConsumedAt          *time.Time `json:"consumedAt,omitempty"`
-	PollCount           int        `json:"pollCount"`
-	TimeRemaining       int64      `json:"timeRemaining"` // Seconds until expiration
+	ID              string     `json:"id"`
+	DeviceCode      string     `json:"deviceCode"` // Masked for security
+	UserCode        string     `json:"userCode"`
+	ClientID        string     `json:"clientId"`
+	ClientName      string     `json:"clientName"`
+	Scope           string     `json:"scope"`
+	Status          string     `json:"status"`
+	VerificationURI string     `json:"verificationUri"`
+	ExpiresAt       time.Time  `json:"expiresAt"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	AuthorizedAt    *time.Time `json:"authorizedAt,omitempty"`
+	ConsumedAt      *time.Time `json:"consumedAt,omitempty"`
+	PollCount       int        `json:"pollCount"`
+	TimeRemaining   int64      `json:"timeRemaining"` // Seconds until expiration
 }
 
 // RevokeDeviceCodeInput is the input for revoking a device code
@@ -198,7 +198,7 @@ func (bm *BridgeManager) CleanupExpiredDeviceCodes(ctx bridge.Context, input Cle
 		CleanupExpiredCodes(ctx context.Context) (int, error)
 		CleanupOldConsumedCodes(ctx context.Context, olderThan time.Duration) (int, error)
 	}
-	
+
 	deviceFlowSvc, ok := deviceFlowSvcIface.(deviceFlowService)
 	if !ok {
 		return nil, errs.InternalServerError("invalid device flow service", nil)

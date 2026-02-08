@@ -7,27 +7,27 @@ import (
 
 func TestCodeGenerator_GenerateDeviceCode(t *testing.T) {
 	gen := NewCodeGenerator(8, "XXXX-XXXX")
-	
+
 	// Test that device code is generated
 	code1, err := gen.GenerateDeviceCode()
 	if err != nil {
 		t.Fatalf("GenerateDeviceCode() failed: %v", err)
 	}
-	
+
 	if code1 == "" {
 		t.Error("GenerateDeviceCode() returned empty string")
 	}
-	
+
 	// Test that device codes are unique
 	code2, err := gen.GenerateDeviceCode()
 	if err != nil {
 		t.Fatalf("GenerateDeviceCode() failed: %v", err)
 	}
-	
+
 	if code1 == code2 {
 		t.Error("GenerateDeviceCode() returned duplicate codes")
 	}
-	
+
 	// Test device code length (should be URL-safe base64 of 32 bytes)
 	// 32 bytes = 43 characters in base64 (without padding)
 	if len(code1) < 40 {
@@ -65,25 +65,25 @@ func TestCodeGenerator_GenerateUserCode(t *testing.T) {
 			wantFormat:     true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gen := NewCodeGenerator(tt.userCodeLength, tt.userCodeFormat)
-			
+
 			code, err := gen.GenerateUserCode()
 			if err != nil {
 				t.Fatalf("GenerateUserCode() failed: %v", err)
 			}
-			
+
 			if len(code) != tt.wantLen {
 				t.Errorf("GenerateUserCode() length = %d, want %d (code: %s)", len(code), tt.wantLen, code)
 			}
-			
+
 			// Verify format if hyphen is expected
 			if tt.wantFormat && !strings.Contains(code, "-") {
 				t.Error("GenerateUserCode() missing expected hyphen")
 			}
-			
+
 			// Verify all characters are from the allowed charset
 			allowedChars := "BCDFGHJKLMNPQRSTVWXZ-"
 			for _, ch := range code {
@@ -98,14 +98,14 @@ func TestCodeGenerator_GenerateUserCode(t *testing.T) {
 func TestCodeGenerator_GenerateUserCode_Uniqueness(t *testing.T) {
 	gen := NewCodeGenerator(8, "XXXX-XXXX")
 	codes := make(map[string]bool)
-	
+
 	// Generate 100 codes and check for duplicates
 	for i := 0; i < 100; i++ {
 		code, err := gen.GenerateUserCode()
 		if err != nil {
 			t.Fatalf("GenerateUserCode() failed: %v", err)
 		}
-		
+
 		if codes[code] {
 			t.Errorf("GenerateUserCode() generated duplicate code: %s", code)
 		}
@@ -155,7 +155,7 @@ func TestValidateUserCodeFormat(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateUserCodeFormat(tt.format)

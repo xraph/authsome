@@ -586,7 +586,7 @@ func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID
 	// Update existing feature from provider
 	feature.Name = providerFeature.Name
 	feature.ProviderFeatureID = providerFeature.ID
-	
+
 	// Update metadata fields if present
 	if desc, ok := providerFeature.Metadata["description"].(string); ok {
 		feature.Description = desc
@@ -597,7 +597,7 @@ func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID
 	if unit, ok := providerFeature.Metadata["unit"].(string); ok {
 		feature.Unit = unit
 	}
-	
+
 	syncTime := time.Now()
 	feature.LastSyncedAt = &syncTime
 	feature.UpdatedAt = time.Now()
@@ -616,7 +616,7 @@ func (s *FeatureService) createFeatureFromProvider(ctx context.Context, provider
 	if !ok || appIDStr == "" {
 		return nil, fmt.Errorf("provider feature missing authsome_app_id metadata - cannot determine which app this feature belongs to")
 	}
-	
+
 	appID, err := xid.FromString(appIDStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid app ID in provider metadata: %w", err)
@@ -641,7 +641,7 @@ func (s *FeatureService) createFeatureFromProvider(ctx context.Context, provider
 		// Feature exists with this key - update it with provider data
 		existingFeature.Name = providerFeature.Name
 		existingFeature.ProviderFeatureID = providerFeature.ID
-		
+
 		if desc, ok := providerFeature.Metadata["description"].(string); ok {
 			existingFeature.Description = desc
 		}
@@ -651,15 +651,15 @@ func (s *FeatureService) createFeatureFromProvider(ctx context.Context, provider
 		if unit, ok := providerFeature.Metadata["unit"].(string); ok {
 			existingFeature.Unit = unit
 		}
-		
+
 		syncTime := time.Now()
 		existingFeature.LastSyncedAt = &syncTime
 		existingFeature.UpdatedAt = time.Now()
-		
+
 		if err := s.featureRepo.Update(ctx, existingFeature); err != nil {
 			return nil, fmt.Errorf("failed to update existing feature: %w", err)
 		}
-		
+
 		return s.schemaToCore(existingFeature, nil), nil
 	}
 
@@ -697,7 +697,7 @@ func (s *FeatureService) createFeatureFromProvider(ctx context.Context, provider
 		LastSyncedAt:      &now,
 		Metadata:          providerFeature.Metadata,
 	}
-	
+
 	// CreatedAt and UpdatedAt are set by AuditableModel
 
 	if err := s.featureRepo.Create(ctx, newFeature); err != nil {

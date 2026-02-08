@@ -53,7 +53,6 @@ func (m *MockWebhookEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	// Log the request
 
-
 	// Return configured response
 	w.WriteHeader(m.ResponseCode)
 	if m.ResponseCode >= 200 && m.ResponseCode < 300 {
@@ -106,7 +105,6 @@ func (i *IntermittentEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func main() {
-
 
 	// Start mock webhook servers
 
@@ -217,7 +215,6 @@ func testSuccessfulDelivery(endpoint *MockWebhookEndpoint) {
 
 	if success && callCount == 1 && len(receivedData) == 1 {
 
-
 	} else {
 	}
 }
@@ -297,7 +294,6 @@ func testTimeoutHandling(endpoint *MockWebhookEndpoint) {
 		OccurredAt: time.Now(),
 		CreatedAt:  time.Now(),
 	}
-
 
 	start := time.Now()
 	success := simulateWebhookDeliveryWithTimeout(webhookConfig, event, 500*time.Millisecond)
@@ -400,16 +396,14 @@ func testMultipleWebhooks(successEndpoint, failureEndpoint *MockWebhookEndpoint)
 
 	// Simulate delivery to multiple webhooks
 	successCount := 0
-	for i, webhookConfig := range webhooks {
-
+	for _, webhookConfig := range webhooks {
 		if simulateWebhookDelivery(webhookConfig, event) {
 			successCount++
 		}
 	}
 
-	successCalls, _ := successEndpoint.GetStats()
-	failureCalls, _ := failureEndpoint.GetStats()
-
+	_, _ = successEndpoint.GetStats()
+	_, _ = failureEndpoint.GetStats()
 
 }
 
@@ -463,7 +457,6 @@ func testWebhookEventTypes() {
 	testEnvID := xid.New()
 
 	events := webhook.AllEventTypes()
-
 
 	for _, eventType := range events {
 		event := &webhook.Event{

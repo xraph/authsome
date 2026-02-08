@@ -75,12 +75,12 @@ type GenericUser struct {
 	Username         string                 `json:"username,omitempty"`
 	DisplayName      string                 `json:"displayName,omitempty"`
 	MFAEnabled       bool                   `json:"mfaEnabled"`
-	MFAMethods       []string               `json:"mfaMethods"`         // ["totp", "sms", "webauthn"]
+	MFAMethods       []string               `json:"mfaMethods"` // ["totp", "sms", "webauthn"]
 	PasswordChanged  time.Time              `json:"passwordChanged"`
 	LastLogin        time.Time              `json:"lastLogin"`
 	LoginCount       int                    `json:"loginCount"`
 	FailedLoginCount int                    `json:"failedLoginCount"`
-	Status           string                 `json:"status"`             // "active", "suspended", "deleted", "locked"
+	Status           string                 `json:"status"` // "active", "suspended", "deleted", "locked"
 	Roles            []string               `json:"roles"`
 	Groups           []string               `json:"groups,omitempty"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"` // Extensible
@@ -107,27 +107,27 @@ type UserFilter struct {
 
 // MetricsQuery defines aggregated metrics to retrieve
 type MetricsQuery struct {
-	Metrics      []string   `json:"metrics"` // ["total_users", "mfa_adoption", "inactive_users"]
-	GroupBy      []string   `json:"groupBy,omitempty"`
-	StartDate    *time.Time `json:"startDate,omitempty"`
-	EndDate      *time.Time `json:"endDate,omitempty"`
-	Granularity  string     `json:"granularity,omitempty"` // "day", "week", "month"
+	Metrics     []string   `json:"metrics"` // ["total_users", "mfa_adoption", "inactive_users"]
+	GroupBy     []string   `json:"groupBy,omitempty"`
+	StartDate   *time.Time `json:"startDate,omitempty"`
+	EndDate     *time.Time `json:"endDate,omitempty"`
+	Granularity string     `json:"granularity,omitempty"` // "day", "week", "month"
 }
 
 // UserMetrics contains aggregated user metrics
 type UserMetrics struct {
-	TotalUsers         int                       `json:"totalUsers"`
-	ActiveUsers        int                       `json:"activeUsers"`
-	InactiveUsers      int                       `json:"inactiveUsers"`
-	MFAAdoptionRate    float64                   `json:"mfaAdoptionRate"`    // 0-100
-	UsersWithMFA       int                       `json:"usersWithMFA"`
-	UsersWithoutMFA    int                       `json:"usersWithoutMFA"`
-	ExpiredPasswords   int                       `json:"expiredPasswords"`
-	LockedAccounts     int                       `json:"lockedAccounts"`
-	SuspendedAccounts  int                       `json:"suspendedAccounts"`
-	ByRole             map[string]int            `json:"byRole,omitempty"`
-	ByStatus           map[string]int            `json:"byStatus,omitempty"`
-	CustomMetrics      map[string]interface{}    `json:"customMetrics,omitempty"`
+	TotalUsers        int                    `json:"totalUsers"`
+	ActiveUsers       int                    `json:"activeUsers"`
+	InactiveUsers     int                    `json:"inactiveUsers"`
+	MFAAdoptionRate   float64                `json:"mfaAdoptionRate"` // 0-100
+	UsersWithMFA      int                    `json:"usersWithMFA"`
+	UsersWithoutMFA   int                    `json:"usersWithoutMFA"`
+	ExpiredPasswords  int                    `json:"expiredPasswords"`
+	LockedAccounts    int                    `json:"lockedAccounts"`
+	SuspendedAccounts int                    `json:"suspendedAccounts"`
+	ByRole            map[string]int         `json:"byRole,omitempty"`
+	ByStatus          map[string]int         `json:"byStatus,omitempty"`
+	CustomMetrics     map[string]interface{} `json:"customMetrics,omitempty"`
 }
 
 // =============================================================================
@@ -149,11 +149,11 @@ type GenericOrganization struct {
 
 // OrgFilter defines criteria for filtering organizations
 type OrgFilter struct {
-	IDs      []string  `json:"ids,omitempty"`
-	Status   *string   `json:"status,omitempty"`
-	ParentID *string   `json:"parentId,omitempty"`
-	Limit    int       `json:"limit"`
-	Offset   int       `json:"offset"`
+	IDs      []string `json:"ids,omitempty"`
+	Status   *string  `json:"status,omitempty"`
+	ParentID *string  `json:"parentId,omitempty"`
+	Limit    int      `json:"limit"`
+	Offset   int      `json:"offset"`
 }
 
 // =============================================================================
@@ -162,8 +162,8 @@ type OrgFilter struct {
 
 // ProviderRegistry manages all provider instances
 type ProviderRegistry struct {
-	userProvider UserProvider
-	orgProvider  OrganizationProvider
+	userProvider   UserProvider
+	orgProvider    OrganizationProvider
 	auditProviders []AuditProvider
 }
 
@@ -266,4 +266,3 @@ func WithAuditProvider(provider AuditProvider) ServiceOption {
 		cfg.Providers.AddAuditProvider(provider)
 	}
 }
-

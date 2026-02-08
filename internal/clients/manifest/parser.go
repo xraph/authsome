@@ -126,7 +126,7 @@ func (p *Parser) GetPluginManifests() []*Manifest {
 func enrichManifestWithPathParams(manifest *Manifest) {
 	for i := range manifest.Routes {
 		route := &manifest.Routes[i]
-		
+
 		// Only extract if Params is not already populated
 		if len(route.Params) == 0 {
 			route.Params = extractPathParams(route.Path)
@@ -139,13 +139,13 @@ func enrichManifestWithPathParams(manifest *Manifest) {
 // Returns a map of parameter names to their inferred types
 func extractPathParams(path string) map[string]string {
 	params := make(map[string]string)
-	
+
 	// Split path by '/'
 	segments := strings.Split(path, "/")
-	
+
 	for _, segment := range segments {
 		var paramName string
-		
+
 		// Check for :param style
 		if strings.HasPrefix(segment, ":") {
 			paramName = strings.TrimPrefix(segment, ":")
@@ -153,14 +153,14 @@ func extractPathParams(path string) map[string]string {
 			// Check for {param} style
 			paramName = strings.TrimPrefix(strings.TrimSuffix(segment, "}"), "{")
 		}
-		
+
 		if paramName != "" {
 			// Infer type based on parameter name patterns
 			paramType := inferParamType(paramName)
 			params[paramName] = paramType
 		}
 	}
-	
+
 	return params
 }
 
@@ -168,7 +168,7 @@ func extractPathParams(path string) map[string]string {
 func inferParamType(paramName string) string {
 	// Lowercase for case-insensitive matching
 	lowerName := strings.ToLower(paramName)
-	
+
 	// ID parameters (ending with 'id' or exactly 'id')
 	if lowerName == "id" || strings.HasSuffix(lowerName, "id") {
 		// Special cases that should remain strings
@@ -177,32 +177,32 @@ func inferParamType(paramName string) string {
 		}
 		return "xid.ID!"
 	}
-	
+
 	// Version numbers
 	if lowerName == "version" {
 		return "int!"
 	}
-	
+
 	// Slug parameters (SEO-friendly identifiers)
 	if lowerName == "slug" || strings.HasSuffix(lowerName, "slug") {
 		return "string!"
 	}
-	
+
 	// Provider names (e.g., OAuth providers)
 	if lowerName == "provider" {
 		return "string!"
 	}
-	
+
 	// Token parameters
 	if lowerName == "token" || strings.HasSuffix(lowerName, "token") {
 		return "string!"
 	}
-	
+
 	// Standard parameters
 	if lowerName == "standard" {
 		return "string!"
 	}
-	
+
 	// Default to string for all other parameters
 	return "string!"
 }

@@ -302,15 +302,15 @@ func CalculateLTV(arpu int64, churnRate float64) int64 {
 
 // OrgUsageStats represents usage statistics per organization
 type OrgUsageStats struct {
-	OrgID        xid.ID      `json:"orgId"`
-	OrgName      string      `json:"orgName"`
-	FeatureID    xid.ID      `json:"featureId"`
-	FeatureName  string      `json:"featureName"`
-	FeatureType  FeatureType `json:"featureType"`
-	Unit         string      `json:"unit"`
-	Usage        int64       `json:"usage"`
-	Limit        int64       `json:"limit"`
-	PercentUsed  float64     `json:"percentUsed"`
+	OrgID       xid.ID      `json:"orgId"`
+	OrgName     string      `json:"orgName"`
+	FeatureID   xid.ID      `json:"featureId"`
+	FeatureName string      `json:"featureName"`
+	FeatureType FeatureType `json:"featureType"`
+	Unit        string      `json:"unit"`
+	Usage       int64       `json:"usage"`
+	Limit       int64       `json:"limit"`
+	PercentUsed float64     `json:"percentUsed"`
 }
 
 // UsageTrend represents usage trends over time
@@ -322,14 +322,14 @@ type UsageTrend struct {
 
 // CurrentUsage represents current feature usage state
 type CurrentUsage struct {
-	OrganizationID   xid.ID `json:"organizationId"`
-	OrganizationName string `json:"organizationName"`
-	FeatureID        xid.ID `json:"featureId"`
-	FeatureName      string `json:"featureName"`
-	FeatureType      string `json:"featureType"`
-	Unit             string `json:"unit"`
-	CurrentUsage     int64  `json:"currentUsage"`
-	Limit            int64  `json:"limit"`
+	OrganizationID   xid.ID  `json:"organizationId"`
+	OrganizationName string  `json:"organizationName"`
+	FeatureID        xid.ID  `json:"featureId"`
+	FeatureName      string  `json:"featureName"`
+	FeatureType      string  `json:"featureType"`
+	Unit             string  `json:"unit"`
+	CurrentUsage     int64   `json:"currentUsage"`
+	Limit            int64   `json:"limit"`
 	PercentUsed      float64 `json:"percentUsed"`
 }
 
@@ -355,7 +355,7 @@ type GrowthPoint struct {
 
 // UsageStats aggregates usage statistics
 type UsageStats struct {
-	TotalUsage  int64   `json:"totalUsage"`
-	TotalOrgs   int     `json:"totalOrgs"`
+	TotalUsage   int64   `json:"totalUsage"`
+	TotalOrgs    int     `json:"totalOrgs"`
 	AverageUsage float64 `json:"averageUsage"`
 }

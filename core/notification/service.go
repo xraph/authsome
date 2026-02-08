@@ -17,15 +17,15 @@ type Config struct {
 	CleanupAfter    time.Duration               `json:"cleanupAfter"`
 
 	// Async processing configuration
-	AsyncEnabled    bool          `json:"asyncEnabled"`    // Enable async processing for non-critical notifications
-	WorkerPoolSize  int           `json:"workerPoolSize"`  // Number of workers per priority level
-	QueueSize       int           `json:"queueSize"`       // Buffer size for async queues
+	AsyncEnabled   bool `json:"asyncEnabled"`   // Enable async processing for non-critical notifications
+	WorkerPoolSize int  `json:"workerPoolSize"` // Number of workers per priority level
+	QueueSize      int  `json:"queueSize"`      // Buffer size for async queues
 
 	// Retry configuration
-	RetryEnabled     bool     `json:"retryEnabled"`     // Enable retry for failed notifications
-	MaxRetries       int      `json:"maxRetries"`       // Maximum retry attempts (default: 3)
-	RetryBackoff     []string `json:"retryBackoff"`     // Backoff durations (default: ["1m", "5m", "15m"])
-	PersistFailures  bool     `json:"persistFailures"`  // Persist permanently failed notifications to DB
+	RetryEnabled    bool     `json:"retryEnabled"`    // Enable retry for failed notifications
+	MaxRetries      int      `json:"maxRetries"`      // Maximum retry attempts (default: 3)
+	RetryBackoff    []string `json:"retryBackoff"`    // Backoff durations (default: ["1m", "5m", "15m"])
+	PersistFailures bool     `json:"persistFailures"` // Persist permanently failed notifications to DB
 }
 
 // Service provides notification functionality

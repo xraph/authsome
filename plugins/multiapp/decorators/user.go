@@ -47,7 +47,6 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 		}
 	}
 
-
 	if usersCount == 0 {
 		// No users exist yet - this is the first user (system owner)
 		// Create user without organization membership

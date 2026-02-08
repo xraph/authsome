@@ -40,7 +40,7 @@ func ScopeBadges(scopes []string) []g.Node {
 // StatusBadge renders a status badge
 func StatusBadge(status string) g.Node {
 	var bgClass, textClass, text string
-	
+
 	switch status {
 	case "pending":
 		bgClass = "bg-yellow-100 dark:bg-yellow-900"
@@ -67,7 +67,7 @@ func StatusBadge(status string) g.Node {
 		textClass = "text-gray-700 dark:text-gray-300"
 		text = status
 	}
-	
+
 	return Span(
 		Class("inline-flex items-center rounded-md px-2 py-1 text-xs font-medium "+bgClass+" "+textClass),
 		g.Text(text),

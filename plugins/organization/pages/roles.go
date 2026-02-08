@@ -31,7 +31,7 @@ func RolesPage(currentApp *app.App, orgID, basePath string) g.Node {
 		// Roles info
 		Div(
 			Class("grid gap-6 md:grid-cols-3"),
-			
+
 			// Owner role
 			card.Card(
 				Class("border-primary/50"),
@@ -158,7 +158,7 @@ func RolesPage(currentApp *app.App, orgID, basePath string) g.Node {
 func permissionItem(text string, granted bool) g.Node {
 	var icon g.Node
 	var textClass string
-	
+
 	if granted {
 		icon = lucide.Check(Class("size-4 text-emerald-600 dark:text-emerald-400"))
 		textClass = "text-foreground"

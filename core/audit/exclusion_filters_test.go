@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package audit_test
@@ -547,7 +548,7 @@ func TestComplexExclusionScenario(t *testing.T) {
 		return
 	}
 	appID := createTestApp(t)
-	
+
 	// Create production and test users
 	prodUser := createTestUser(t, appID)
 	testUser := createTestUser(t, appID)
@@ -579,9 +580,9 @@ func TestComplexExclusionScenario(t *testing.T) {
 	// Test: Get production user events, excluding noisy actions and system source
 	excludeSource := audit.SourceSystem
 	filter := &audit.ListEventsFilter{
-		ExcludeUserIDs: []xid.ID{testUser},         // Exclude test user
-		ExcludeSource:  &excludeSource,             // Exclude system events
-		ExcludeActions: []string{                   // Exclude noisy actions
+		ExcludeUserIDs: []xid.ID{testUser}, // Exclude test user
+		ExcludeSource:  &excludeSource,     // Exclude system events
+		ExcludeActions: []string{ // Exclude noisy actions
 			string(audit.ActionSessionChecked),
 		},
 		Limit: 100,
