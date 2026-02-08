@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/rs/xid"
@@ -77,12 +76,12 @@ func (ts *TestSuite) PrintResults() {
 			status = "✅ PASS"
 			passed++
 		}
-
+		fmt.Printf("%s %s\n", status, result.Name)
 		if result.Message != "" {
-
+			fmt.Println("  ", result.Message)
 		}
 		if result.Error != nil {
-
+			fmt.Println("  ", result.Error)
 		}
 	}
 

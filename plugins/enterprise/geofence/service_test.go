@@ -99,14 +99,6 @@ func (m *MockRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID
 	return args.Get(0).(*LocationEvent), args.Error(1)
 }
 
-func (m *MockRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID) (*LocationEvent, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*LocationEvent), args.Error(1)
-}
-
 func (m *MockRepository) DeleteOldLocationEvents(ctx context.Context, before time.Time) (int64, error) {
 	args := m.Called(ctx, before)
 	return args.Get(0).(int64), args.Error(1)
@@ -134,7 +126,7 @@ func (m *MockRepository) GetUserTravelAlerts(ctx context.Context, userID xid.ID,
 }
 
 func (m *MockRepository) GetPendingTravelAlerts(ctx context.Context, appID xid.ID) ([]*TravelAlert, error) {
-	args := m.Called(ctx, orgID)
+	args := m.Called(ctx, appID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -217,7 +209,7 @@ func (m *MockRepository) GetUserViolations(ctx context.Context, userID xid.ID, l
 }
 
 func (m *MockRepository) GetAppViolations(ctx context.Context, appID xid.ID, limit int) ([]*GeofenceViolation, error) {
-	args := m.Called(ctx, orgID, limit)
+	args := m.Called(ctx, appID, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -296,7 +288,7 @@ func TestNewService(t *testing.T) {
 	geoProvider := new(MockGeoProvider)
 	detectionProvider := new(MockDetectionProvider)
 
-	service := NewService(config, repo, geoProvider, detectionProvider, nil, nil)
+	service := NewService(config, repo, geoProvider, detectionProvider, nil, nil, nil)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, config, service.config)
@@ -311,7 +303,7 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 	repo := new(MockRepository)
 	geoProvider := new(MockGeoProvider)
 
-	service := NewService(config, repo, geoProvider, nil, nil, nil)
+	service := NewService(config, repo, geoProvider, nil, nil, nil, nil)
 
 	// Mock geolocation response
 	lat := 39.0392
@@ -328,9 +320,9 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 
 	// Mock rule retrieval
 	rule := &GeofenceRule{
-		ID:               xid.New(),
-		OrganizationID:   xid.New(),
-		Name:             "Block Sanctioned",
+		ID:             xid.New(),
+		AppID:          xid.New(),
+		Name:           "Block Sanctioned",
 		Enabled:          true,
 		Priority:         100,
 		RuleType:         "country",
@@ -346,10 +338,10 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 
 	// Check location
 	req := &LocationCheckRequest{
-		UserID:         userID,
-		OrganizationID: xid.New(),
-		IPAddress:      "1.2.3.4",
-		EventType:      "login",
+		UserID:    userID,
+		AppID:     rule.AppID,
+		IPAddress: "1.2.3.4",
+		EventType:  "login",
 	}
 
 	result, err := service.CheckLocation(context.Background(), req)
@@ -367,7 +359,7 @@ func TestCheckLocation_AllowedCountry(t *testing.T) {
 	repo := new(MockRepository)
 	geoProvider := new(MockGeoProvider)
 
-	service := NewService(config, repo, geoProvider, nil, nil, nil)
+	service := NewService(config, repo, geoProvider, nil, nil, nil, nil)
 
 	// Mock geolocation response
 	lat := 37.7749
@@ -384,6 +376,7 @@ func TestCheckLocation_AllowedCountry(t *testing.T) {
 
 	// Mock no rules
 	userID := xid.New()
+	appID := xid.New()
 	repo.On("ListEnabledRules", mock.Anything, mock.Anything, &userID).Return([]*GeofenceRule{}, nil)
 	repo.On("CreateLocationEvent", mock.Anything, mock.Anything).Return(nil)
 	repo.On("GetCachedGeoData", mock.Anything, "8.8.8.8").Return(nil, assert.AnError)
@@ -392,10 +385,10 @@ func TestCheckLocation_AllowedCountry(t *testing.T) {
 
 	// Check location
 	req := &LocationCheckRequest{
-		UserID:         userID,
-		OrganizationID: xid.New(),
-		IPAddress:      "8.8.8.8",
-		EventType:      "login",
+		UserID:    userID,
+		AppID:     appID,
+		IPAddress: "8.8.8.8",
+		EventType: "login",
 	}
 
 	result, err := service.CheckLocation(context.Background(), req)
@@ -414,7 +407,7 @@ func TestCheckLocation_VPNDetected(t *testing.T) {
 	geoProvider := new(MockGeoProvider)
 	detectionProvider := new(MockDetectionProvider)
 
-	service := NewService(config, repo, geoProvider, detectionProvider, nil, nil)
+	service := NewService(config, repo, geoProvider, detectionProvider, nil, nil, nil)
 
 	// Mock geolocation
 	lat := 37.7749
@@ -438,10 +431,10 @@ func TestCheckLocation_VPNDetected(t *testing.T) {
 
 	// Mock rule with VPN blocking
 	rule := &GeofenceRule{
-		ID:             xid.New(),
-		OrganizationID: xid.New(),
-		Name:           "Block VPNs",
-		Enabled:        true,
+		ID:      xid.New(),
+		AppID:   xid.New(),
+		Name:    "Block VPNs",
+		Enabled: true,
 		Priority:       100,
 		RuleType:       "detection",
 		BlockVPN:       true,
@@ -456,10 +449,10 @@ func TestCheckLocation_VPNDetected(t *testing.T) {
 
 	// Check location
 	req := &LocationCheckRequest{
-		UserID:         userID,
-		OrganizationID: xid.New(),
-		IPAddress:      "1.2.3.4",
-		EventType:      "login",
+		UserID:    userID,
+		AppID:     rule.AppID,
+		IPAddress: "1.2.3.4",
+		EventType: "login",
 	}
 
 	result, err := service.CheckLocation(context.Background(), req)
@@ -518,7 +511,7 @@ func TestGetGeolocation_WithCache(t *testing.T) {
 	repo := new(MockRepository)
 	geoProvider := new(MockGeoProvider)
 
-	service := NewService(config, repo, geoProvider, nil, nil, nil)
+	service := NewService(config, repo, geoProvider, nil, nil, nil, nil)
 
 	lat := 37.7749
 	lon := -122.4194
@@ -554,7 +547,7 @@ func TestGetGeolocation_CacheMiss(t *testing.T) {
 	repo := new(MockRepository)
 	geoProvider := new(MockGeoProvider)
 
-	service := NewService(config, repo, geoProvider, nil, nil, nil)
+	service := NewService(config, repo, geoProvider, nil, nil, nil, nil)
 
 	lat := 37.7749
 	lon := -122.4194

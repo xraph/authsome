@@ -48,6 +48,69 @@ func (m *mockAuditRepo) List(ctx context.Context, filter *audit.ListEventsFilter
 		},
 	}, nil
 }
+func (m *mockAuditRepo) Count(ctx context.Context, filter *audit.ListEventsFilter) (int64, error) {
+	return 0, nil
+}
+func (m *mockAuditRepo) DeleteOlderThan(ctx context.Context, filter *audit.DeleteFilter, before time.Time) (int64, error) {
+	return 0, nil
+}
+func (m *mockAuditRepo) GetStatisticsByAction(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ActionStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByResource(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ResourceStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByUser(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.UserStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetTimeSeries(ctx context.Context, filter *audit.TimeSeriesFilter) ([]*audit.TimeSeriesPoint, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByHour(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.HourStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByDay(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.DayStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByDate(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.DateStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByIPAddress(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.IPStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetUniqueIPCount(ctx context.Context, filter *audit.StatisticsFilter) (int64, error) {
+	return 0, nil
+}
+func (m *mockAuditRepo) GetStatisticsByActionAndUser(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ActionUserStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetStatisticsByResourceAndAction(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ResourceActionStatistic, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetOldestEvent(ctx context.Context, filter *audit.ListEventsFilter) (*schema.AuditEvent, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctActions(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctSources(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctResources(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctUsers(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctIPs(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctApps(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
+func (m *mockAuditRepo) GetDistinctOrganizations(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
+	return nil, nil
+}
 
 // Mock webhook repository for testing
 type mockWebhookRepo struct{}

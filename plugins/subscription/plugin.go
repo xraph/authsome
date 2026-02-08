@@ -82,6 +82,9 @@ type Plugin struct {
 	// Default config (set via options)
 	defaultConfig Config
 
+	// Custom provider (set via options)
+	customProvider providers.PaymentProvider
+
 	// Feature handlers
 	featureHandlers *handlers.FeatureHandlers
 	publicHandlers  *handlers.PublicHandlers
@@ -142,6 +145,14 @@ func WithAutoSyncSeats(enabled bool) PluginOption {
 func WithAutoSyncPlans(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoSyncPlans = enabled
+	}
+}
+
+// WithProvider sets a custom payment provider implementation
+// This allows users to inject their own provider instead of using Stripe or mock provider
+func WithProvider(provider providers.PaymentProvider) PluginOption {
+	return func(p *Plugin) {
+		p.customProvider = provider
 	}
 }
 
@@ -260,7 +271,11 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	p.taxRepo = repository.NewTaxRepository(p.db)
 
 	// Initialize payment provider
-	if p.config.IsStripeConfigured() {
+	// Use custom provider if provided via options, otherwise fall back to configured provider
+	if p.customProvider != nil {
+		p.provider = p.customProvider
+		p.logger.Info("using custom payment provider")
+	} else if p.config.IsStripeConfigured() {
 		var err error
 		p.provider, err = stripe.NewStripeProvider(
 			p.config.StripeConfig.SecretKey,
@@ -907,6 +922,11 @@ func (p *Plugin) GetTaxService() *service.TaxService {
 // GetExportImportService returns the export/import service
 func (p *Plugin) GetExportImportService() *service.ExportImportService {
 	return p.exportImportSvc
+}
+
+// GetProvider returns the payment provider
+func (p *Plugin) GetProvider() providers.PaymentProvider {
+	return p.provider
 }
 
 // registerFeatureRoutes registers feature management routes

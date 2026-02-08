@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 func main() {
 
 	// Create a new plugin
-	plugin := geofence.NewPlugin()
+	_ = geofence.NewPlugin()
 
 	// Test configuration
 	config := geofence.DefaultConfig()
@@ -39,7 +38,7 @@ func main() {
 	// Test geofence rule creation
 
 	// Country blocking rule
-	rule1 := &geofence.GeofenceRule{
+	_ = &geofence.GeofenceRule{
 		ID:               xid.New(),
 		AppID:            xid.New(),
 		Name:             "Block Sanctioned Countries",
@@ -55,7 +54,7 @@ func main() {
 	}
 
 	// VPN detection rule
-	rule2 := &geofence.GeofenceRule{
+	_ = &geofence.GeofenceRule{
 		ID:          xid.New(),
 		AppID:       xid.New(),
 		Name:        "Block VPNs",
@@ -75,7 +74,7 @@ func main() {
 	centerLat := 37.7749
 	centerLon := -122.4194
 	radiusKm := 10.0
-	rule3 := &geofence.GeofenceRule{
+	_ = &geofence.GeofenceRule{
 		ID:           xid.New(),
 		AppID:        xid.New(),
 		Name:         "Office Geofence",
@@ -103,16 +102,16 @@ func main() {
 	}
 
 	testPoint1 := [2]float64{37.75, -122.4}
-	inside1 := pointInPolygon(testPoint1[0], testPoint1[1], polygon)
+	_ = pointInPolygon(testPoint1[0], testPoint1[1], polygon)
 
 	testPoint2 := [2]float64{37.9, -122.4}
-	inside2 := pointInPolygon(testPoint2[0], testPoint2[1], polygon)
+	_ = pointInPolygon(testPoint2[0], testPoint2[1], polygon)
 
 	// Test location event
 
 	lat := 37.7749
 	lon := -122.4194
-	event := &geofence.LocationEvent{
+	_ = &geofence.LocationEvent{
 		ID:          xid.New(),
 		UserID:      xid.New(),
 		AppID:       xid.New(),
@@ -134,7 +133,7 @@ func main() {
 	travelTime := 2 * time.Hour
 	speed := distance / travelTime.Hours()
 
-	alert := &geofence.TravelAlert{
+	_ = &geofence.TravelAlert{
 		ID:               xid.New(),
 		UserID:           xid.New(),
 		AppID:            xid.New(),
@@ -155,7 +154,7 @@ func main() {
 
 	// Test trusted location
 
-	trusted := &geofence.TrustedLocation{
+	_ = &geofence.TrustedLocation{
 		ID:          xid.New(),
 		UserID:      xid.New(),
 		AppID:       xid.New(),

@@ -1,22 +1,38 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/internal/errs"
-	"github.com/xraph/authsome/plugins/subscription/service"
+	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/forge"
 )
 
+// paymentService is the subset of payment operations used by PaymentHandlers (for testability).
+type paymentService interface {
+	CreateSetupIntent(ctx context.Context, orgID xid.ID) (*core.SetupIntentResult, error)
+	AddPaymentMethod(ctx context.Context, orgID xid.ID, providerMethodID string, setDefault bool) (*core.PaymentMethod, error)
+	ListPaymentMethods(ctx context.Context, orgID xid.ID) ([]*core.PaymentMethod, error)
+	SetDefaultPaymentMethod(ctx context.Context, orgID, paymentMethodID xid.ID) error
+	RemovePaymentMethod(ctx context.Context, id xid.ID) error
+	GetDefaultPaymentMethod(ctx context.Context, orgID xid.ID) (*core.PaymentMethod, error)
+}
+
+// customerService is the subset of customer operations used by PaymentHandlers (for testability).
+type customerService interface {
+	GetByOrganizationID(ctx context.Context, orgID xid.ID) (*core.Customer, error)
+}
+
 // PaymentHandlers handles payment method HTTP endpoints
 type PaymentHandlers struct {
-	paymentSvc  *service.PaymentService
-	customerSvc *service.CustomerService
+	paymentSvc  paymentService
+	customerSvc customerService
 }
 
 // NewPaymentHandlers creates a new PaymentHandlers instance
-func NewPaymentHandlers(paymentSvc *service.PaymentService, customerSvc *service.CustomerService) *PaymentHandlers {
+func NewPaymentHandlers(paymentSvc paymentService, customerSvc customerService) *PaymentHandlers {
 	return &PaymentHandlers{
 		paymentSvc:  paymentSvc,
 		customerSvc: customerSvc,

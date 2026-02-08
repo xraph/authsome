@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/providers/email"
@@ -51,13 +49,11 @@ func testEmailTemplates() {
 
 	templates := email.ListTemplates()
 	for _, templateName := range templates {
-
 		rendered, err := email.RenderTemplate(templateName, data)
 		if err != nil {
-
 			continue
 		}
-
+		_ = rendered
 	}
 }
 
@@ -81,16 +77,13 @@ func testSMSTemplates() {
 
 	templates := sms.ListTemplates()
 	for _, templateName := range templates {
-
 		rendered, err := sms.RenderTemplate(templateName, data)
 		if err != nil {
-
 			continue
 		}
-
-		// Validate template
+		_ = rendered
 		if err := sms.ValidateTemplate(templateName); err != nil {
-
+			continue
 		}
 	}
 }
@@ -119,7 +112,8 @@ func testEmailProvider() {
 	}
 
 	// Note: We're not actually sending the email in this test
-	// In a real scenario, you would call: provider.Send(context.Background(), notification)
+	_ = provider
+	_ = notificationReq
 }
 
 func testSMSProvider() {
@@ -142,5 +136,6 @@ func testSMSProvider() {
 	}
 
 	// Note: We're not actually sending the SMS in this test
-	// In a real scenario, you would call: provider.Send(context.Background(), notification)
+	_ = provider
+	_ = notificationReq
 }

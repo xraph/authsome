@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -66,7 +65,7 @@ type MockCustomerService struct {
 	mock.Mock
 }
 
-func (m *MockCustomerService) GetByOrganization(ctx context.Context, orgID xid.ID) (*core.Customer, error) {
+func (m *MockCustomerService) GetByOrganizationID(ctx context.Context, orgID xid.ID) (*core.Customer, error) {
 	args := m.Called(ctx, orgID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -95,7 +94,7 @@ func TestPaymentHandlers_CreateSetupIntent(t *testing.T) {
 					ProviderCustomerID: "cus_test123",
 					Email:              "test@example.com",
 				}
-				cs.On("GetByOrganization", mock.Anything, orgID).Return(customer, nil)
+				cs.On("GetByOrganizationID", mock.Anything, orgID).Return(customer, nil)
 
 				setupIntent := &core.SetupIntentResult{
 					ClientSecret:   "seti_test_secret",
@@ -124,14 +123,15 @@ func TestPaymentHandlers_CreateSetupIntent(t *testing.T) {
 			mockCustomerSvc := new(MockCustomerService)
 			tt.mockSetup(mockPaymentSvc, mockCustomerSvc)
 
-			handlers := NewPaymentHandlers(mockPaymentSvc, mockCustomerSvc)
+			h := NewPaymentHandlers(mockPaymentSvc, mockCustomerSvc)
 
 			req := httptest.NewRequest(http.MethodPost, "/setup-intent", strings.NewReader(tt.requestBody))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			// Note: In real tests, you would use a proper Forge context
-			// For now, this demonstrates the test structure
+			// Note: In real tests, you would use a proper Forge context and call h.HandleCreateSetupIntent(c).
+			// For now, we only assert that mocks were configured and that handler construction succeeds.
+			_, _ = h, w
 
 			mockPaymentSvc.AssertExpectations(t)
 			mockCustomerSvc.AssertExpectations(t)

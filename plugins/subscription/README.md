@@ -44,6 +44,7 @@ A comprehensive SaaS subscription and billing plugin for AuthSome, providing com
 - **Payment Providers**: Pluggable payment gateway integration
   - Stripe (fully implemented)
   - Mock provider for development/testing
+  - Custom provider support via `WithProvider` option
   
 - **Enforcement**: Plan limit enforcement via hooks
   - Seat/member limits
@@ -73,6 +74,13 @@ subPlugin := subscription.NewPlugin(
     subscription.WithAutoSyncSeats(true),
 )
 
+// Or use a custom payment provider
+customProvider := mypackage.NewCustomProvider()
+subPlugin := subscription.NewPlugin(
+    subscription.WithProvider(customProvider),
+    subscription.WithDefaultTrialDays(14),
+)
+
 // Register with AuthSome
 auth, err := authsome.New(
     authsome.WithPlugins(subPlugin),
@@ -98,6 +106,44 @@ auth:
       webhookSecret: ${STRIPE_WEBHOOK_SECRET}
       publishableKey: ${STRIPE_PUBLISHABLE_KEY}
 ```
+
+## Custom Payment Provider
+
+You can implement your own payment provider by implementing the `providers.PaymentProvider` interface:
+
+```go
+import (
+    "github.com/xraph/authsome/plugins/subscription/providers"
+    "github.com/xraph/authsome/plugins/subscription/providers/types"
+)
+
+type CustomProvider struct {
+    // Your custom fields
+}
+
+// Implement all PaymentProvider interface methods
+func (p *CustomProvider) CreateCustomer(ctx context.Context, req *types.CreateCustomerRequest) (*types.ProviderCustomer, error) {
+    // Your implementation
+}
+
+func (p *CustomProvider) CreateProduct(ctx context.Context, req *types.CreateProductRequest) (*types.ProviderProduct, error) {
+    // Your implementation
+}
+
+// ... implement remaining methods
+
+// Use your custom provider
+customProvider := &CustomProvider{}
+subPlugin := subscription.NewPlugin(
+    subscription.WithProvider(customProvider),
+)
+```
+
+This is useful for:
+- Integrating with payment providers other than Stripe (PayPal, Paddle, etc.)
+- Testing with mock providers
+- Custom billing logic specific to your application
+- Migrating from existing billing systems
 
 ## API Endpoints
 

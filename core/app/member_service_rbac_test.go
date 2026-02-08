@@ -132,6 +132,94 @@ func (m *MockUserRoleRepository) ListRolesForUser(ctx context.Context, userID xi
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
+func (m *MockUserRoleRepository) AssignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
+	args := m.Called(ctx, userID, roleIDs, orgID)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) AssignBulk(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (map[xid.ID]error, error) {
+	args := m.Called(ctx, userIDs, roleID, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[xid.ID]error), args.Error(1)
+}
+
+func (m *MockUserRoleRepository) AssignAppLevel(ctx context.Context, userID, roleID, appID xid.ID) error {
+	args := m.Called(ctx, userID, roleID, appID)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) UnassignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
+	args := m.Called(ctx, userID, roleIDs, orgID)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) UnassignBulk(ctx context.Context, userIDs []xid.ID, roleID xid.ID, orgID xid.ID) (map[xid.ID]error, error) {
+	args := m.Called(ctx, userIDs, roleID, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[xid.ID]error), args.Error(1)
+}
+
+func (m *MockUserRoleRepository) ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error {
+	args := m.Called(ctx, userID, orgID)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error {
+	args := m.Called(ctx, userID, appID)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) TransferRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
+	args := m.Called(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) CopyRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
+	args := m.Called(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error {
+	args := m.Called(ctx, userID, orgID, newRoleIDs)
+	return args.Error(0)
+}
+
+func (m *MockUserRoleRepository) ListRolesForUserInOrg(ctx context.Context, userID, orgID, envID xid.ID) ([]schema.Role, error) {
+	args := m.Called(ctx, userID, orgID, envID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]schema.Role), args.Error(1)
+}
+
+func (m *MockUserRoleRepository) ListRolesForUserInApp(ctx context.Context, userID, appID, envID xid.ID) ([]schema.Role, error) {
+	args := m.Called(ctx, userID, appID, envID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]schema.Role), args.Error(1)
+}
+
+func (m *MockUserRoleRepository) ListAllUserRolesInOrg(ctx context.Context, orgID, envID xid.ID) ([]schema.UserRole, error) {
+	args := m.Called(ctx, orgID, envID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]schema.UserRole), args.Error(1)
+}
+
+func (m *MockUserRoleRepository) ListAllUserRolesInApp(ctx context.Context, appID, envID xid.ID) ([]schema.UserRole, error) {
+	args := m.Called(ctx, appID, envID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]schema.UserRole), args.Error(1)
+}
+
 type MockMemberRepository struct {
 	mock.Mock
 }

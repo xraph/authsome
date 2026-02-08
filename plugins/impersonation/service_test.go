@@ -199,6 +199,22 @@ func (s *mockUserService) ListUsers(ctx context.Context, filter *coreuser.ListUs
 	return nil, nil
 }
 
+func (s *mockUserService) GetHookRegistry() interface{} {
+	return nil
+}
+
+func (s *mockUserService) SetHookRegistry(registry interface{}) {}
+
+func (s *mockUserService) GetVerificationRepo() interface{} {
+	return nil
+}
+
+func (s *mockUserService) SetVerificationRepo(repo interface{}) {}
+
+func (s *mockUserService) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
+	return nil
+}
+
 // mockSessionService is a simple mock for testing
 type mockSessionService struct {
 	sessions map[string]*schema.Session
